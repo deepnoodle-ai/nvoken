@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/header.jpg" alt="Nvoken" width="880">
+</p>
+
 # Nvoken
 
 One API call runs a full agent turn. The Session keeps the conversation.
