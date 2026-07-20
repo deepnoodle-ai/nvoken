@@ -85,9 +85,11 @@ The stateful spine of the product:
 - **Sessions.** The ordered message history including tool call inputs and
   results, resolved by your session key, with per-Session serialization so
   concurrent turns cannot interleave one conversation.
-- **Durable turns.** The turn checkpoints as it runs and resumes after
-  crashes, restarts, and deploys, with a lease protocol so exactly one worker
-  drives a turn at a time.
+- **Durable turns.** Admission survives API crashes, restarts, deploys, and
+  client disconnects, with a lease protocol so exactly one worker drives a turn
+  at a time. Before checkpoint recovery ships, engine loss becomes a visible
+  typed failure; checkpointed continuation from the interrupted point is a
+  later durability level.
 - **Streaming that survives disconnects.** Generation and event streams can
   drop and rejoin; the transport is never the source of truth.
 - **History management.** Forking to branch a conversation, compaction
