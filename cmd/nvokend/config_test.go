@@ -7,12 +7,16 @@ import (
 )
 
 func TestLoadDaemonConfigDefaults(t *testing.T) {
+	setServeConfig(t)
 	cfg, err := loadDaemonConfig()
 	if err != nil {
 		t.Fatalf("loadDaemonConfig: %v", err)
 	}
 	if cfg.Port != "8080" {
 		t.Errorf("Port: got %q, want %q", cfg.Port, "8080")
+	}
+	if cfg.DatabaseMaxConns != 10 {
+		t.Errorf("DatabaseMaxConns: got %d, want 10", cfg.DatabaseMaxConns)
 	}
 }
 
@@ -42,7 +46,10 @@ func TestLoadMigrationConfigRequiresDatabaseURL(t *testing.T) {
 }
 
 func TestLoadDaemonConfigFromEnv(t *testing.T) {
+	setServeConfig(t)
 	t.Setenv("PORT", "9090")
+	t.Setenv("DATABASE_MAX_CONNS", "17")
+	t.Setenv("RUNTIME_TENANT_REF", "tenant-acme")
 
 	cfg, err := loadDaemonConfig()
 	if err != nil {
@@ -51,4 +58,37 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	if cfg.Port != "9090" {
 		t.Errorf("Port: got %q, want %q", cfg.Port, "9090")
 	}
+	if cfg.DatabaseMaxConns != 17 || cfg.RuntimeTenantConstraint == nil || *cfg.RuntimeTenantConstraint != "tenant-acme" {
+		t.Fatalf("daemon config = %#v", cfg)
+	}
+}
+
+func TestLoadDaemonConfigRequiresRuntimeDependencies(t *testing.T) {
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("RUNTIME_API_KEY", "")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
+		t.Fatalf("missing database error = %v", err)
+	}
+
+	t.Setenv("DATABASE_URL", "postgres://localhost/nvoken")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "RUNTIME_API_KEY") {
+		t.Fatalf("missing runtime key error = %v", err)
+	}
+
+	t.Setenv("RUNTIME_API_KEY", "short")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "at least 32 bytes") {
+		t.Fatalf("short runtime key error = %v", err)
+	}
+
+	t.Setenv("RUNTIME_API_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("RUNTIME_TENANT_REF", strings.Repeat("界", 256))
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "255 Unicode characters") {
+		t.Fatalf("long tenant constraint error = %v", err)
+	}
+}
+
+func setServeConfig(t *testing.T) {
+	t.Helper()
+	t.Setenv("DATABASE_URL", "postgres://nvoken:secret@localhost/nvoken")
+	t.Setenv("RUNTIME_API_KEY", "0123456789abcdef0123456789abcdef")
 }

@@ -19,6 +19,9 @@ new forward migration rather than editing the old file or migrating down.
 Normal `nvokend` or `nvokend serve` startup never runs migrations. On Cloud Run,
 use this command from one release step or Cloud Run Job before shifting service
 traffic; do not make every service replica perform schema work.
+The serve path checks that the schema is present, clean, and at the exact
+version expected by the binary; it exits rather than modifying an empty, dirty,
+older, or newer database.
 
 For adapter integration tests, point `NVOKEN_TEST_DATABASE_URL` at a disposable
 Postgres database and run:

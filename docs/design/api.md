@@ -61,6 +61,21 @@ Idempotency and concurrency:
   caller-input message, and one queued Invocation commit in one Postgres
   transaction before acknowledgement or execution claim.
 
+Admission accepts at most 1,048,576 encoded JSON bytes and 64 text blocks.
+`agent_ref`, `tenant_ref`, `session_key`, `idempotency_key`, model provider, and
+model name are each limited to 255 Unicode characters. Fingerprint v1 is the
+SHA-256 of compact UTF-8 JSON in fixed member order: `version`,
+`session_selector` (`kind` then `value`), `spec` (`instructions`, then `model`
+with `provider` then `name`), and `input` (`content`, with each block encoded as
+`type` then `text`). The selector kind is `none`, `id`, or `key`; `none` uses an
+empty value. JSON strings escape quotation mark, reverse solidus, and control
+characters only, using the usual short escapes and lowercase `\\u%04x` for
+remaining controls; all other Unicode is emitted directly. Source-object order
+therefore does not matter, while array order and exact string values do. The
+language-neutral canonical bytes and digests in
+[`admission-fingerprint-v1.json`](admission-fingerprint-v1.json) are the
+compatibility fixtures.
+
 Streaming and recovery:
 
 - Background JSON admission and authoritative JSON reads are the frozen launch
