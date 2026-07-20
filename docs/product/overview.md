@@ -29,10 +29,11 @@ the request: instructions, model preferences, tool schemas, output
 contract, budgets. nvoken resolves or creates the Session, runs the turn
 durably, and streams output and tool calls back.
 
-An agent turn may take seconds or tens of minutes, progressing through
-many rounds of tool calls. nvoken checkpoints as it goes and resumes after
-process loss or deploys, so agent work does not get stuck and can be
-reliably cancelled, steered, and inspected.
+An agent turn may take seconds or tens of minutes, progressing through many
+rounds of tool calls. Durable admission means an API disconnect, API process
+loss, or deploy cannot erase accepted work. Before checkpoint recovery ships,
+engine loss may settle the Invocation as a visible typed failure; checkpointed
+continuation from the interrupted point is a later durability level.
 
 ## Boundaries
 

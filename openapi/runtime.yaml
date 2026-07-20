@@ -1,0 +1,588 @@
+openapi: 3.1.0
+info:
+  title: nvoken Runtime API
+  version: 0.1.0
+  summary: Minimum durable Invocation admission and read contract
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  description: |
+    This focused contract freezes the background JSON surface required before
+    nvoken's runtime schema and admission implementation are built. It defines
+    durable Invocation admission and authoritative Invocation and Session reads.
+
+    Model execution, streaming, tools, structured output, budgets, spec
+    references, cancellation, dispatch, and administrative APIs are outside
+    this version of the contract.
+servers:
+  - url: /
+    description: Current nvoken installation
+security:
+  - bearerAuth: []
+tags:
+  - name: Invocations
+    description: Durable agent-turn admission and state.
+  - name: Sessions
+    description: Durable conversation identity and state.
+paths:
+  /v1/invocations:
+    post:
+      tags: [Invocations]
+      operationId: createInvocation
+      summary: Durably admit one background agent turn
+      description: |
+        Resolves or creates the Account-wide Agent identity anchor, resolves or
+        creates a Session, snapshots the inline execution spec, appends exactly
+        one caller-input message, and creates one queued Invocation in a single
+        transaction. The response is sent only after that transaction commits;
+        the request handler never executes the model.
+
+        `session_id` and `session_key` are mutually exclusive. A Session ID must
+        belong to the authenticated Account and named Agent. An Account-wide
+        credential may omit `tenant_ref` and use the Session's stored partition.
+        A tenant-constrained credential cannot cross its partition; an explicit
+        mismatch is rejected with `403 forbidden` before resource lookup.
+
+        `idempotency_key` is scoped to the authenticated Account, effective
+        tenant partition, and `agent_ref`. A same-key replay is checked before
+        the Session's one-nonterminal-Invocation rule. It returns the original
+        records without appending input, even when the Invocation is terminal.
+        Material equality covers the Session selector kind and value, the inline
+        spec, and input after documented defaults are applied. JSON object member
+        order is ignored, array order is significant, and strings are not
+        rewritten. A changed material field returns `idempotency_conflict`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvocationRequest"
+            examples:
+              newSession:
+                summary: First use creates the Agent anchor and a new Session
+                value:
+                  agent_ref: support-triage
+                  tenant_ref: tenant-acme
+                  idempotency_key: ticket-483:first-reply
+                  input:
+                    content:
+                      - type: text
+                        text: Why was I charged twice?
+                  spec:
+                    instructions: You are a concise billing support agent.
+                    model:
+                      provider: anthropic
+                      name: claude-sonnet-5
+              keyedSession:
+                summary: Resolve or create a tenant-partitioned host Session key
+                value:
+                  agent_ref: support-triage
+                  tenant_ref: tenant-acme
+                  session_key: ticket-483
+                  idempotency_key: ticket-483:follow-up-2
+                  input:
+                    content:
+                      - type: text
+                        text: Can you show me the two charge dates?
+                  spec:
+                    instructions: You are a concise billing support agent.
+                    model:
+                      provider: anthropic
+                      name: claude-sonnet-5
+              existingSession:
+                summary: Continue an existing Session by durable ID
+                value:
+                  agent_ref: support-triage
+                  session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                  idempotency_key: ticket-483:follow-up-3
+                  input:
+                    content:
+                      - type: text
+                        text: Please summarize what happened.
+                  spec:
+                    instructions: You are a concise billing support agent.
+                    model:
+                      provider: openai
+                      name: gpt-5.4
+      responses:
+        "202":
+          description: |
+            The Invocation is durably admitted, or an existing Invocation was
+            returned for an equal idempotent replay. A replay remains `202` even
+            when the returned status is terminal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvocationAcknowledgement"
+              examples:
+                admitted:
+                  summary: New durable admission
+                  value:
+                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    status: queued
+                    deduplicated: false
+                replayed:
+                  summary: Lost acknowledgement followed by equal replay
+                  value:
+                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    status: running
+                    deduplicated: true
+                terminalReplay:
+                  summary: Equal replay after settlement still returns 202
+                  value:
+                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    status: completed
+                    deduplicated: true
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The idempotency key conflicts or the Session already has nonterminal work.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                idempotencyConflict:
+                  summary: Same scope and key, changed material request
+                  value:
+                    code: idempotency_conflict
+                    message: The idempotency key was already used with a different request.
+                    request_id: req_01K0NV89D93D0W2V5CGF8BC2R7
+                    details:
+                      conflicting_fields: [input]
+                activeInvocation:
+                  summary: Distinct request races existing nonterminal work
+                  value:
+                    code: session_invocation_active
+                    message: This Session already has a nonterminal Invocation.
+                    request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR3
+                    details:
+                      invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                      status: running
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/invocations/{invocation_id}:
+    parameters:
+      - $ref: "#/components/parameters/InvocationID"
+    get:
+      tags: [Invocations]
+      operationId: getInvocation
+      summary: Read authoritative Invocation identity and state
+      description: |
+        Returns the durable current state. Post-admission failures appear here.
+        A credential authenticated for Runtime but denied this read operation
+        receives `forbidden`.
+        A resource outside the authenticated Account or tenant constraint is
+        reported as `not_found` when disclosure would reveal its existence.
+      responses:
+        "200":
+          description: Authoritative Invocation state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invocation"
+              examples:
+                failedAfterEngineLoss:
+                  value:
+                    id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    status: failed
+                    error:
+                      code: execution_lost
+                      message: The execution process ended before this Invocation could settle.
+                    created_at: "2026-07-20T14:01:02Z"
+                    updated_at: "2026-07-20T14:01:09Z"
+                    completed_at: "2026-07-20T14:01:09Z"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/sessions/{session_id}:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    get:
+      tags: [Sessions]
+      operationId: getSession
+      summary: Read authoritative Session identity and current state
+      description: |
+        An Account-wide credential may resolve a Session in any tenant partition
+        in its Account. A tenant-constrained credential resolves only Sessions
+        in its partition. Missing, incompatible, and undisclosable resources use
+        `not_found`; a credential denied the read operation itself receives
+        `forbidden`.
+      responses:
+        "200":
+          description: Authoritative Session identity and state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+              examples:
+                keyedTenantSession:
+                  value:
+                    id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    tenant_ref: tenant-acme
+                    session_key: ticket-483
+                    active_invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    created_at: "2026-07-20T14:01:02Z"
+                    updated_at: "2026-07-20T14:01:05Z"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    InvocationID:
+      name: invocation_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/InvocationID"
+    SessionID:
+      name: session_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/SessionID"
+  schemas:
+    AgentID:
+      type: string
+      pattern: "^agnt_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      description: UUIDv7 with the public `agnt_` prefix.
+    SessionID:
+      type: string
+      pattern: "^sesn_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      description: UUIDv7 with the public `sesn_` prefix.
+    InvocationID:
+      type: string
+      pattern: "^invk_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      description: UUIDv7 with the public `invk_` prefix.
+    CreateInvocationRequest:
+      type: object
+      additionalProperties: false
+      required: [agent_ref, idempotency_key, input, spec]
+      not:
+        required: [session_id, session_key]
+      properties:
+        agent_ref:
+          type: string
+          minLength: 1
+          description: |
+            Stable caller-controlled Agent reference, unique within the
+            authenticated Account. The resulting Agent anchor stores identity
+            only and is shared across tenant partitions.
+        tenant_ref:
+          type: string
+          minLength: 1
+          description: |
+            Optional tenant partition. For Session-key resolution or a new
+            Session, precedence is credential constraint, this explicit value,
+            then the Account's default partition. For Session-ID resolution, an
+            Account-wide caller may omit it and use the stored partition.
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+          description: Existing Session to continue. Mutually exclusive with session_key.
+        session_key:
+          type: string
+          minLength: 1
+          description: |
+            Caller key resolved within (Account, effective tenant partition,
+            Agent, session_key). Mutually exclusive with session_id.
+        idempotency_key:
+          type: string
+          minLength: 1
+          description: |
+            Stable admission identity scoped to (Account, effective tenant
+            partition, agent_ref). Reuse an unchanged request after any 5xx,
+            timeout, disconnect, or missing acknowledgement. Deduplication is
+            guaranteed while the original Invocation is retained.
+        input:
+          $ref: "#/components/schemas/InvocationInput"
+        spec:
+          $ref: "#/components/schemas/InlineExecutionSpec"
+    InvocationInput:
+      type: object
+      additionalProperties: false
+      required: [content]
+      properties:
+        content:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/TextInputBlock"
+          description: Ordered caller-input blocks. The launch contract supports text only.
+    TextInputBlock:
+      type: object
+      additionalProperties: false
+      required: [type, text]
+      properties:
+        type:
+          const: text
+        text:
+          type: string
+          minLength: 1
+    InlineExecutionSpec:
+      type: object
+      additionalProperties: false
+      required: [instructions, model]
+      properties:
+        instructions:
+          type: string
+          minLength: 1
+        model:
+          $ref: "#/components/schemas/ModelSelection"
+      description: |
+        Minimal immutable launch snapshot. Unknown or deferred fields,
+        including references, tools, structured output, and budgets, are
+        rejected rather than ignored.
+    ModelSelection:
+      type: object
+      additionalProperties: false
+      required: [provider, name]
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+    InvocationStatus:
+      type: string
+      enum: [queued, running, waiting, completed, failed, cancelled]
+      description: |
+        `completed`, `failed`, and `cancelled` are terminal and immutable.
+        Deadline or budget exhaustion settles as `failed`. `waiting` is
+        reserved for later durable ToolCalls.
+    InvocationAcknowledgement:
+      type: object
+      additionalProperties: false
+      required: [agent_id, session_id, invocation_id, status, deduplicated]
+      properties:
+        agent_id:
+          $ref: "#/components/schemas/AgentID"
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        status:
+          $ref: "#/components/schemas/InvocationStatus"
+        deduplicated:
+          type: boolean
+    Invocation:
+      type: object
+      additionalProperties: false
+      required: [id, agent_id, session_id, status, created_at, updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/InvocationID"
+        agent_id:
+          $ref: "#/components/schemas/AgentID"
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        status:
+          $ref: "#/components/schemas/InvocationStatus"
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationFailure"
+            - type: "null"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        completed_at:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+    InvocationFailure:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - deadline_exceeded
+            - budget_exceeded
+            - execution_lost
+            - provider_error
+            - internal
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    Session:
+      type: object
+      additionalProperties: false
+      required: [id, agent_id, tenant_ref, session_key, active_invocation_id, created_at, updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/SessionID"
+        agent_id:
+          $ref: "#/components/schemas/AgentID"
+        tenant_ref:
+          oneOf:
+            - type: string
+            - type: "null"
+          description: Immutable effective tenant partition reference.
+        session_key:
+          oneOf:
+            - type: string
+            - type: "null"
+        active_invocation_id:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationID"
+            - type: "null"
+          description: The queued, running, or waiting Invocation, if one exists.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ErrorCode:
+      type: string
+      enum:
+        - invalid_request
+        - unauthenticated
+        - forbidden
+        - not_found
+        - idempotency_conflict
+        - session_invocation_active
+        - rate_limited
+        - internal
+        - unavailable
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id]
+      properties:
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        message:
+          type: string
+        request_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    InvalidRequest:
+      description: The request is invalid or contains a deferred field.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: invalid_request
+            message: spec.tools is not supported by this contract version.
+            request_id: req_01K0NV9K7Z9WR3Y3Q3RMV2G7H0
+            details:
+              field: spec.tools
+    Unauthenticated:
+      description: Authentication is missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: unauthenticated
+            message: A valid Runtime credential is required.
+            request_id: req_01K0NVA1K5T8Y1MBVX7TZBM21H
+    Forbidden:
+      description: The authenticated credential is not permitted to make this request.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: forbidden
+            message: The requested tenant_ref conflicts with the credential constraint.
+            request_id: req_01K0NVAE24H917QNE9P1QMX95Y
+    NotFound:
+      description: The resource is missing or cannot be disclosed in this scope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: not_found
+            message: The requested resource was not found.
+            request_id: req_01K0NVASB4CF29K41VZA271H23
+    RateLimited:
+      description: The request is rate limited.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 0
+          description: Seconds before the caller should retry.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: rate_limited
+            message: Too many requests.
+            request_id: req_01K0NVB0QFQP0YNSVD3CB7E97S
+    Internal:
+      description: An unexpected server error occurred before acknowledgement.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: internal
+            message: The request could not be completed.
+            request_id: req_01K0NVB8MJPBPQY0WXFJGCXEH3
+    Unavailable:
+      description: The service cannot currently complete admission or the read.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: unavailable
+            message: The service is temporarily unavailable.
+            request_id: req_01K0NVBGWQ1V6JJBVH0Q4WZRS1

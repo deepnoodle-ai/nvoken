@@ -1,0 +1,4 @@
+interface:
+  display_name: "nvoken PRD"
+  short_description: "Write and independently review testable nvoken PRDs"
+  default_prompt: "Use $prd to write the next concise nvoken PRD and independently review it with Claude Code Fable."
