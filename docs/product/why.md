@@ -1,4 +1,4 @@
-# Why Nvoken
+# Why nvoken
 
 Every team shipping an agent inside their product builds a harness, and
 the features a harness needs are not obvious up front. You discover them
@@ -25,7 +25,7 @@ Durable execution combined with provider independence is served today
 mainly by hyperscaler platforms that trade model lock-in for platform
 lock-in.
 
-Nvoken is the vendor-neutral answer: an open source, self-hostable runtime
+nvoken is the vendor-neutral answer: an open source, self-hostable runtime
 that runs the turn durably, keeps the Session, spans providers, and is
 shaped for embedding in a multi-tenant application rather than for a
 single user at a terminal.

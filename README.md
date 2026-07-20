@@ -1,102 +1,122 @@
 <p align="center">
-  <img src="assets/header.jpg" alt="Nvoken" width="880">
+  <img src="assets/header.jpg" alt="nvoken" width="880">
 </p>
 
-# Nvoken
+<div align="center">
 
-Nvoken is an agent runtime deployed as a service. It is built to be used
-by your application, often a SaaS, as its agentic harness. Your app calls
-Nvoken, and Nvoken runs the agent loop for you with all the harness features
-that are needed to build an excellent agentic AI experience in your app.
+**Give your multi-tenant app a great agentic experience without building the harness from scratch.**
 
-No provisioning first. Your application sends the agent specification with
-the request: instructions, model preferences, tool schemas, output
-contract, budgets. Nvoken resolves or creates the Session, runs the turn
-durably, and streams output and tool calls back. Read more at
-[docs/product/overview.md](docs/product/overview.md).
+<sub>Works with&nbsp;**Anthropic · OpenAI · Google · Grok · Mistral · OpenRouter · Ollama**</sub>
 
-The primary operation:
+[![license](https://img.shields.io/badge/license-Apache--2.0-2563eb)](LICENSE)
+[![status](https://img.shields.io/badge/status-early%20development-b7791f)](#how-to-help)
 
-```text
-invoke(execution_spec, input, optional_session) -> durable invocation
+[State Ownership](#your-app-owns-the-state) · [Contract](#the-contract) · [How it Compares](#how-it-compares) · [Docs](docs/README.md) · [Help Shape It](#how-to-help)
+
+</div>
+
+---
+
+nvoken is a lightweight, open-source agent harness-as-a-service and AI gateway.
+Your app sends an agent spec and the input; nvoken runs the whole agent turn.
+Supports a full complement of foundational harness features, including streaming,
+checkpoints, durable sleeps, steering, human-in-the-loop interactions, and more.
+
+Building a complete agentic experience in your app's UI is non-trivial. nvoken
+allows you to focus on the application-specific portions of that problem, rather
+than continually filling in gaps in your own agent loop implementation.
+
+And nvoken stays out of your way by being **stateless** with respect to agent
+instances and configuration data like system prompts and skills. One of the
+reasons the LLM generation APIs are so successful and easy to use is that
+they are **stateless**. nvoken aims to retain that approach as much as possible.
+
+**Your app remains the source of truth, not a heavy agent runtime.**
+
+## The contract
+
+> **Taking shape.** The API is being designed in the open and this is the current
+> sketch, not a shipped endpoint. If it looks wrong for your app, that's exactly
+> the feedback worth [opening an issue](https://github.com/deepnoodle-ai/nvoken/issues)
+> over. Now is when it's cheap to change.
+
+```jsonc
+POST /v1/invocations
+{
+  "session_key": "thread-8813",                  // yours; resolved or created
+  "agent": "support-triage",                     // identity only, no config stored
+  "input": { "text": "why was I charged twice?" },
+  "spec": {
+    "instructions": "You are a billing support agent…",
+    "model": { "provider": "anthropic", "name": "claude-sonnet-5" },
+    "tools": [{ "name": "lookup_charges", "input_schema": { /* … */ } }],
+    "budget": { "max_tokens": 200000, "max_duration": "5m" }
+  }
+}
 ```
 
-## Why
+The response streams events like tool calls as the turn runs. A turn may take
+seconds or tens of minutes. nvoken runs it durably so that long turns never get
+stuck, clients can reconnect without issue, and new clients can join and see the
+activity for each invocation at any time.
 
-Every team shipping an agentic product builds a harness, discovers the features
-it needs one incident at a time, and ends up with thousands of lines of
-plumbing and an AI experience that still trails the leading tools. A few
-hosted agent runtimes are available but they lead to vendor lock-in, lack
-an open-source focus, and are still slim on capabilities.
+## Your app owns the state
 
-Nvoken aims to address these shortcomings. It is open source first,
-self-hostable, and built for embedding in a multi-tenant application. It takes
-care of the agent loop, sessions, durability, streaming, tool call exchange,
-provider portability, cancellation and steering, budgets, usage tracking, and
-observability.
+A multi-tenant app cannot treat agents as fixed config. Instructions, tools,
+and models vary by tenant, by plan, and by user. If those definitions are
+registered into an agent runtime, every variation becomes a record to
+provision, and every product change becomes a migration for each agent instance.
+For an app with thousands of users, this turns into a big pain.
 
-Learn more at [docs/product/why.md](docs/product/why.md) and
+nvoken avoids this by design. Your app composes the spec from its own database
+on every invocation, so tenant customization is just a query. nvoken stores
+sessions and running turns, nothing else. There is nothing to register, sync,
+or migrate when you update your app with new agent customizations.
+
+That is the "your app owns the state" test in the comparison below. Only
+nvoken passes it. This boundary is the design; see
+[docs/product/overview.md](docs/product/overview.md).
+
+## How it compares
+
+Two decisions are hard to reverse once agents are wired into your product:
+**where the runtime runs** and **who owns your state**. Compare on those.
+
+| Project                                                                              | Runs on                                   | Fully open source | Your app owns the state |
+| ------------------------------------------------------------------------------------ | ----------------------------------------- | :---------------: | :---------------------: |
+| **nvoken**                                                                           | anywhere with a binary and a Postgres URL |         ✅         |            ✅            |
+| [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview) | Anthropic's cloud only                    |         ✗         |            ✗            |
+| [AWS Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/)                   | AWS only                                  |         ✗         |            ✗            |
+| [Cloudflare Agents](https://github.com/cloudflare/agents)                            | Cloudflare only                           |         ✗         |            ✗            |
+| [Vercel Open Agents](https://github.com/vercel-labs/open-agents)                     | Vercel only                               |         ✗         |            ✗            |
+| [kagent](https://github.com/kagent-dev/kagent)                                       | any Kubernetes cluster                    |         ✅         |            ✗            |
+| [Google AX](https://github.com/google/ax)                                            | any Kubernetes cluster                    |         ✅         |            ✗            |
+| [Letta](https://github.com/letta-ai/letta)                                           | your infra or Letta Cloud                 |         ✅         |            ✗            |
+
+Several well-known "open source" runtimes are open clients to closed
+infrastructure. The SDK is MIT, but the part that runs your agent cannot leave
+the vendor's cloud. With nvoken, you avoid these limitations. It is bring-your-own-key,
+Apache-2.0 end to end, and built for embedding in a multi-tenant app. It runs
+**anywhere you can put a binary and a Postgres URL**: a laptop, your cloud
+account, or an air-gapped network.
+
+Multi-provider support comes from
+[Dive](https://github.com/deepnoodle-ai/dive), so the contract never assumes a
+single vendor. More in [docs/product/why.md](docs/product/why.md) and
 [docs/product/harness.md](docs/product/harness.md).
 
-Nvoken is carefully designed to avoid becoming a store of too much application
-state. In most areas, your application's state resides there, and Nvoken doesn't
-know or care about it. The primary type that Nvoken does store is the Session,
-which is the message history for each conversation. This is surprisingly hard
-to get right while being LLM provider agnostic and while supporting streaming
-updates with events. Nvoken helps on those fronts.
+A managed version of nvoken is being considered. An earlier version of nvoken powers
+[MobiusOps.ai](https://mobiusops.ai).
 
-## Concepts
+## How to help
 
-- **Session.** A conversation: the ordered sequence of messages, including
-  tool call inputs and tool call results, resolvable by a host-provided
-  session key.
-- **Tool call.** The durable record of what the model requested and what
-  actually happened, across builtin, callback, and client execution modes.
-- **Agent.** An identity, created automatically the first time an
-  Invocation names it. Nvoken tracks which agent each Session and
-  Invocation belongs to, for lookup and observability, but stores no agent
-  configuration.
-- **Agent turn.** One complete unit of agent work: the model is called,
-  requests tools, receives results, and is called again, as many rounds as
-  the work takes, until it produces a final response.
-- **Invocation.** The resource `invoke()` returns: the durable record of
-  one agent turn. It carries the input, resolved spec, model and tool
-  activity, output, usage, and recovery state, and ends in exactly one
-  terminal state. You watch, steer, and cancel a turn through its
-  Invocation.
-- **Memory.** Keep agent memory entirely on your side, or opt into
-  Nvoken-managed memory records.
+Early development, and openly so: the API contract and internals are actively
+being figured out. That's the good part. The design isn't set, so feedback
+right now genuinely changes it.
 
-## Stateless, with two exceptions
-
-Nvoken stores execution state, not product configuration. It is stateless
-with exactly two exceptions, the state it must own to do its job:
-
-1. **Sessions.** The conversations: each is the sequence of messages,
-   including tool call inputs and results, plus its Invocation history.
-2. **The running turn.** Checkpoints, tool calls, and usage for an executing
-   Invocation: this is what makes a turn survivable across crashes and restarts.
-
-Everything else is yours: agent definitions, users and tenants,
-credentials, orchestration, product data. Agent behavior arrives with each
-request as the execution spec; nothing is provisioned or registered first.
-
-## Cross-provider
-
-The execution spec selects the model per Invocation. Multi-provider
-support is built on [dive](https://github.com/deepnoodle-ai/dive); no part
-of the runtime contract assumes a single vendor.
-
-## Deployment
-
-Nvoken is self-hostable and bring-your-own-key. A complete installation is
-one binary plus Postgres.
-
-## Status
-
-Early development. The API contract and internals are actively taking
-shape; expect breaking changes.
+- ⭐ **Star the repo** if the idea is one you want to exist.
+- 💬 **[Open an issue](https://github.com/deepnoodle-ai/nvoken/issues)** with your ideas and feedback.
 
 ## License
 
-[Apache-2.0](LICENSE)
+[Apache-2.0](LICENSE): free to use, modify, and self-host, commercially included.
