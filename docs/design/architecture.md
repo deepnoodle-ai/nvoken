@@ -1,0 +1,356 @@
+# nvoken Runtime: Durable Execution Architecture
+
+**Status:** Proposed
+**Date:** 2026-07-20
+**Scope:** Product boundary, durable execution model, and launch architecture
+**Companions:** `vision.md`, `decisions.md`, `api.md`
+
+---
+
+## Decision summary
+
+Thesis, product law, and the public nouns — Agent, Session, Invocation,
+ToolCall — are canonical in `vision.md`. The design is organized around:
+
+```text
+invoke(execution_spec, input, optional_session, optional_tenant_ref)
+  -> durable invocation
+```
+
+Architectural consequences:
+
+- Agent configuration is not a stored resource; the host supplies an
+  execution specification on every Invocation. Agents exist only as
+  lightweight identity anchors, auto-created on first Invocation.
+- Project is not a provisioning resource; the host supplies an optional
+  `tenant_ref` and nvoken partitions internal state automatically.
+- Registry, Release, deployment-track, integration, OAuth, skill, toolkit,
+  and secret APIs are not part of Runtime; hosts may register named
+  custom tool definitions and opt into agent-memory storage.
+- nvoken hosts no execution environments and executes no host or end-user
+  code; every tool with side effects executes host-side. An Environment
+  sandbox concept is deferred to a possible future version.
+- Identity/admin and internal surfaces are separate from the Runtime API.
+
+State is admitted when durable execution requires it, plus a small set of
+opt-in conveniences: agent memory, custom tool definitions, and indexed
+request metadata. Everything explicitly cut from the runtime is listed in
+`api.md` ("Explicitly absent from the Runtime API").
+
+## Goals
+
+1. First agent response with one Runtime API operation and no provisioning.
+2. An admitted Invocation survives API deploys, API crashes, and connection
+   loss. Before checkpoint recovery ships, engine loss may settle as a visible
+   typed failure rather than continue from the interrupted point.
+3. A Session preserves transcript across Invocations.
+4. Client tools return like generation tool calls; a durable result
+   submission resumes the parked turn.
+5. Callback tools retain signed, durable server-to-server delivery.
+6. The host remains source of truth for definitions, versions, integrations,
+   credentials, tenancy, orchestration, and application data.
+7. The same Runtime API works self-hosted and as nvoken Cloud.
+8. The Runtime, identity/admin, and internal API categories are
+   independently understandable and generated; the engine dispatch seam
+   stays internal.
+9. A small fixed authorization model across console, CLI, and API
+   credentials; bootstrap admin plus optional external OIDC for humans.
+
+## Product boundary
+
+### nvoken owns
+
+| Area                | Responsibility                                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| Agent anchors       | Auto-created identity records grouping Sessions and Invocations                                     |
+| Session state       | Canonical transcript, retention, one nonterminal Invocation, host key, tenant partition, indexed metadata |
+| Invocation state    | Admission, status, output, errors, spec snapshot/digest, usage, provenance                          |
+| Turn execution      | Model calls, tool selection, checkpointing, continuation, cancellation, settlement                  |
+| Tool exchange       | Durable ToolCalls across builtin, callback, and client modes                                        |
+| Recovery            | Leases, fencing, checkpoints, replay cursors, retry policy, stale-engine rejection                  |
+| Trust boundary      | Runtime credentials, signed callbacks, model gateway, budgets, normalized metering                  |
+| Opt-in conveniences | Agent memory (optional), named custom tool definitions                                              |
+
+### The host application owns
+
+| Area                         | Responsibility                                                  |
+| ---------------------------- | --------------------------------------------------------------- |
+| Agent specification          | Instructions, model preference, tools, output contract, limits  |
+| Versioning and rollout       | Git history, CI, environment selection, canaries, rollback      |
+| Tenants and end users        | Authentication, authorization, lifecycle, entitlements          |
+| Integrations and credentials | OAuth clients, connections, refresh tokens, long-lived secrets  |
+| Orchestration                | Schedules, triggers, workflows, retries between Invocations     |
+| Execution environments       | Sandboxes keyed to Sessions, exposed as host-executed tools     |
+| Product state and UX         | Database records, files, host-side memory, chat and approval UI |
+| Rebilling                    | Mapping normalized usage to the host's plans and invoices       |
+
+Deployment and nvoken Cloud control planes own runtime credentials and
+operator identity, provider and database configuration, engine capacity,
+egress and callback policy, and commerce. They may share storage and code
+with the Runtime without becoming Runtime resources.
+
+## Core vocabulary
+
+### Agent
+
+An Account-wide lightweight identity anchor, auto-created when an Invocation
+first names its caller-controlled `agent_ref` — there is no agent provisioning
+call. The reference is unique within the Account. The anchor groups Sessions
+and Invocations across tenant partitions for lookup and observability and
+stores neither execution configuration nor tenant data.
+Its primary key is UUIDv7 with an `agnt_` prefix.
+
+### Session
+
+A UUIDv7 primary key with a `sesn_` prefix; optional host session key, unique
+per (Account, effective tenant partition, Agent, session key); immutable Agent
+and tenant partition; indexed host metadata; ordered `SessionMessage`
+transcript; at most one queued, running, or waiting Invocation; retention
+policy. Invocation creates or resolves Sessions — there is no separate create
+workflow. An Account-wide credential may resolve any Session in its Account by
+ID when no tenant is asserted. A tenant-constrained credential is confined to
+its partition.
+
+### Invocation
+
+One admitted agent turn, identified by UUIDv7 with an `invk_` prefix. Its
+public state is exactly `queued`, `running`,
+`waiting`, `completed`, `failed`, or `cancelled`; the last three are terminal
+and immutable, and the first valid terminal settlement wins. Deadline and
+budget exhaustion are typed failures, not additional lifecycle states.
+`waiting` is reserved for durable ToolCalls. The Invocation owns caller
+context; resolved spec bytes and digest; attempts, leases, and checkpoints;
+model requests and normalized usage; ToolCalls and results; output — including
+structured output, produced by an internal tool call against a host-provided
+schema — and terminal error. Input and output content themselves live only in
+the Session transcript. A new turn is a new Invocation.
+
+| State | Terminal | Meaning |
+| --- | :---: | --- |
+| `queued` | No | Durably admitted and available for a future execution claim. |
+| `running` | No | A fenced engine owns the current execution segment. |
+| `waiting` | No | Reserved for a durable ToolCall wait with no engine held. |
+| `completed` | Yes | The turn settled successfully. |
+| `failed` | Yes | The turn settled unsuccessfully, including deadline, budget, or temporary pre-recovery engine-loss outcomes. |
+| `cancelled` | Yes | Cancellation won terminal settlement. |
+
+Every terminal write is conditional on the stored state remaining nonterminal;
+the first terminal settlement wins and later rewrites are rejected.
+
+### ToolCall
+
+Stable identity, immutable input, execution mode, deadline,
+delivery/attempt history, and exactly one accepted terminal result or
+error — durable because disconnects, retries, engine replacement, and
+crashes can occur while the model waits.
+
+### Execution specification
+
+Supplied inline or by an immutable reference plus expected content digest.
+Includes instructions; model and provider selection, including routing
+steps across providers; tool schemas and modes, inline or referencing named
+custom tool definitions; output requirements, including a structured-output
+schema; token, cost, iteration, and wall-clock ceilings; host metadata.
+nvoken resolves, validates, and digests the spec, may retain the snapshot
+as provenance, and caches by digest so hosts avoid resending large specs.
+There is no registry, publish, pin, or mutable definition API.
+
+## Tool execution model
+
+Every tool declares one mode:
+
+- **`builtin`** — a deliberately small trusted runtime capability executed
+  by the turn engine in process. Broad integrations do not become builtins.
+- **`callback`** — a signed request to a host endpoint with durable result
+  consumption. Delivery carries stable Invocation, ToolCall, tenant,
+  delegated actor, and idempotency identities; URLs must satisfy deployment
+  egress policy; hosts verify with the runtime JWKS or a shared signing
+  secret.
+- **`client`** — the ToolCall is emitted as a generation output item, persisted
+  before delivery; the Invocation parks in a waiting state until the host
+  submits the terminal result through the narrow durable ToolCall command
+  chosen with that feature. The first result per ToolCall ID wins; duplicates
+  return the recorded outcome.
+
+### Two roles, two runtime modes
+
+| Role                      | Responsibility                                                                   | Deploy cadence                        |
+| ------------------------- | -------------------------------------------------------------------------------- | ------------------------------------- |
+| `nvokend` (control plane) | API, admission, Session projections, ToolCall delivery, signing, model gateway, reads | Continuous                            |
+| Turn engine               | Claims admitted Invocations and executes the turn end to end                     | Rare — only when harness code changes |
+
+The engine deploys by drain: stop claiming, finish in-flight turns, exit
+while the new version claims fresh work. A turn executes entirely on one
+harness version.
+
+Two runtime modes implement the internal dispatch seam (claim, lease,
+heartbeat, checkpoint, settle — a version-locked Go interface, never a
+published protocol). The public admission handler owns no model execution:
+
+- **Self-contained** — the engine runs in the same process as the nvoken
+  API; suited for development and small self-hosted installations. One
+  binary plus Postgres (and optionally Redis) is a complete installation.
+- **Split Cloud Run** — engine attempts run outside the API process and Cloud
+  Tasks delivers an authenticated request to a private Cloud Run service. The
+  delivery identifies exact durable work but grants no ownership: the executor
+  must acquire the Postgres claim and fence before model execution. A task may
+  host one bounded execution segment; its delivery identity never appears in
+  the public Runtime contract. Redis may fan ephemeral live previews to API
+  replicas; Postgres remains the only authority.
+
+Both modes share identical semantics; moving between them is configuration
+only.
+
+An executing turn is an I/O-bound state machine: one goroutine per active
+Invocation, thousands per process; a parked Invocation — waiting on a tool
+result — is durable rows and no goroutine. Memory, not CPU, is the scaling
+dimension. There is no isolated vehicle anywhere in the system, because
+nvoken executes no untrusted code.
+
+### Leases and fencing
+
+Bounded lease plus fencing token per claim; heartbeats extend only the current
+lease; checkpoint, ToolCall, usage, and terminal commits verify the fence; a
+stale instance may finish local computation but cannot commit. Before
+checkpoint recovery ships, the reaper may settle expired execution as a typed
+failure. After replay safety ships, a recoverable checkpoint may instead become
+claimable again.
+
+### Checkpoints and resume
+
+The durable transcript is the basis of the future checkpoint system. Once
+checkpoint recovery ships, nvoken may checkpoint progress with each iteration
+of the agent turn and when tool calls finish; a small cursor (pending ToolCall,
+budget consumed, turn position) completes it. Resume rebuilds the turn from
+transcript and cursor — never restores process state.
+
+Before that checkpoint and replay-safety work is complete, engine loss may
+settle the Invocation as a durable typed failure so work cannot remain wedged;
+the runtime does not promise continuation from the interrupted point. After it
+ships, a completed tool call whose result was not yet persisted may be retried
+on resumption; accepted results are not re-applied, and checkpoint data must
+suffice to resume without double-charging usage. Resume also enables parking
+and turns longer than one dispatch window (checkpoint-and-chain).
+
+## Identity and access
+
+The pillars:
+
+- `Account` is the top-level customer and hard security boundary. It is
+  inferred from the authenticated subject, never a request parameter.
+  Self-hosting bootstraps one default Account; nvoken Cloud hosts many.
+- Humans authenticate through a bootstrap admin credential or an optionally
+  configured external OIDC provider (Clerk may serve nvoken Cloud).
+  Operators are keyed by `(issuer, subject)` with a local membership and
+  one fixed role — Owner, Operator, or Viewer — so removal or demotion
+  takes effect even while a provider token remains valid. Owner is
+  human-only; recovery-sensitive operations require an interactive session.
+  Memberships are provisioned by a declarative operator allowlist in
+  installation configuration — matched by issuer and email claim, with the
+  subject bound at first login — or by the nvoken Cloud control plane;
+  there is no portable members CRUD. Browser OIDC login, callback, and
+  logout are installation plumbing outside the generated identity/admin
+  contract.
+- API credentials are one resource with two kinds. A machine credential
+  carries one fixed profile — Operator, Viewer, or Runtime — plus
+  constraints that only narrow (Account, `tenant_ref`, Session, operation
+  subset, expiry). A user credential is issued through device authorization
+  and resolves its effective role at authentication time — the owner's
+  current membership role intersected with an optional Operator/Viewer cap.
+  Raw secrets are returned once; revoked records are retained for
+  attribution.
+- The host backend uses a Runtime-profile credential, Account-wide or
+  pinned to one `tenant_ref`. `tenant_ref` partitions and attributes within
+  the Account and becomes an authorization boundary only when a credential
+  is constrained to it. A delegated actor reference is attribution only,
+  never an authorization input.
+- Embedded end-users do not authenticate to nvoken; the host calls nvoken
+  on their behalf. Direct end-user access with a new credential form is
+  deferred.
+- The CLI uses the OAuth 2.0 Device Authorization Grant, brokered by nvoken
+  even when the provider has no device flow. Approval issues a user-kind
+  API credential representing the approving human, so demotion, removal,
+  expiry, or revocation takes effect immediately. CI uses machine
+  credentials.
+
+## Data and retention
+
+Authoritative data: agent anchors; Sessions and `SessionMessage` transcript
+items; indexed request metadata; Invocations, append-only lifecycle state
+revisions, and spec snapshots/digests; ToolCalls, attempts, and results; change
+view cursors; leases and checkpoints; usage and provenance; opt-in agent memory
+records; named custom tool definitions. Lifecycle revisions and change views
+may reference transcript sequence numbers but never store another copy of
+message or ToolCall-result content. No host tables, business records, OAuth
+connections, business credentials, release catalogs, or durable user files.
+Spec snapshots live no longer than the Invocation/Session trace.
+
+Runtime is not a credential vault: hosts use client tools, callback
+tools, or a credential-broker tool, and custom-tool registration stores
+tool contracts, never business credentials. Self-hosted model credentials
+are installation configuration; nvoken Cloud may offer account-level BYOK
+and platform credits through its control plane, with the Runtime receiving
+only resolved model availability and clamps.
+
+## Heritage
+
+nvoken is built by porting proven internals from its predecessor runtime
+(Mobius) rather than starting from scratch: Dive integration, transcripts,
+callback signing, durable work claims, usage accounting, and fencing all
+have working ancestors there. The predecessor's resource model does not
+carry over; the mapping below records how its concepts land in nvoken.
+
+| Predecessor concept     | nvoken equivalent                                                    |
+| ----------------------- | -------------------------------------------------------------------- |
+| Project                 | Host `tenant_ref`                                                    |
+| Agent config            | Serialize resolved behavior into an execution specification          |
+| Session + turn          | Session + Invocation                                                 |
+| Custom action           | Callback or client tool                                              |
+| Integration             | Host-owned tool implementation or credential broker                  |
+| Worker action/model job | Engine work claim or host-owned callback tool                        |
+| Environment             | Host-owned sandbox exposed as a host-executed tool                   |
+| Loop                    | Not recreated; hosts bring their own scheduler                       |
+| Usage events            | Normalized usage on Invocations plus identity/admin usage monitoring |
+
+## Rollout
+
+- **Phase 0 — contract reset:** freeze noun, ID, spec, transcript, lifecycle,
+  and identity vocabulary; separate Runtime, identity/admin, and internal
+  specs.
+- **Phase 1 — one-call vertical slice:** `POST /v1/invocations` with inline
+  specs and implicit agent/Session creation; drain-deployed engine; status,
+  canonical transcript, cancellation, usage; SDK `invoke()` golden path.
+- **Phase 2 — durable tool exchange:** ToolCall normalization; callback and
+  client modes over the canonical transcript and narrow result commands;
+  idempotency, deadline, and
+  cancellation hardening.
+- **Phase 3 — engine durability:** hardened dispatch seam;
+  transcript-based resume for crashes, parking, and checkpoint-and-chain;
+  prove accepted results and usage never re-apply across recovery.
+- **Phase 4 — distribution:** self-hosted BYOK with no runtime billing
+  dependency; bootstrap admin, operator allowlist, and optional OIDC; CLI
+  device authorization issuing user credentials; docs and SDKs split by
+  audience.
+
+## Open questions
+
+1. Which spec reference schemes ship at launch: signed HTTPS, object
+   storage, OCI artifact, or a subset?
+2. What is the replay guarantee for token deltas versus the durable transcript
+   and lifecycle change view?
+3. Which safety limits are installation configuration versus credential
+   claims?
+4. What credential form should deferred direct end-user access take, and
+   when would host-issued JWT federation justify its complexity?
+5. How many metadata items are indexed per request, and what query surface
+   do they get?
+6. What are the agent-memory data model and scoping (per agent, per
+   `tenant_ref`, per Session)?
+7. How long are idempotency records retained?
+8. Do portable operators need multi-Account selection, or is single-Account
+   operation sufficient outside nvoken Cloud?
+9. Which minimal builtins belong in the portable runtime?
+10. Which operator views does the console need first: session viewer,
+    invocation trace, usage, health?
+11. How far does observability extend beyond the trace: an Account-wide
+    activity feed, OpenTelemetry projection?

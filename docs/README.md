@@ -3,8 +3,10 @@
 This directory is organized by document type:
 
 - [product/](product/) — high level product definition and overview
+- [design/](design/) — the governing design packet: claims register, vision, architecture, API contract, decision log
 - [prds/](prds/) — product requirement documents
-- [guides/](guides/) — developer guides
+- [../openapi/runtime.yaml](../openapi/runtime.yaml) — focused Runtime OpenAPI contract
+- [guides/](guides/) — developer guides, including [database migrations](guides/database-migrations.md)
 - [research/](research/) — market, competitive, and technical research
 - [reviews/](reviews/) — code reviews
 - [testing/](testing/) — test procedures

@@ -31,12 +31,13 @@ Hexagonal architecture for the Go backend:
 - Go; standard library first, dependencies added deliberately.
 - github.com/deepnoodle-ai/wonton for env config parsing (`env.Parse`), CLI building, and test assertions.
 - Multi-provider LLM support via github.com/deepnoodle-ai/dive.
-- Postgres for durable state.
+- Postgres for durable state: pgx for access, sqlc for adapter query generation,
+  and golang-migrate for embedded forward migrations.
 
 ## Pre-commit checks
 
 Run the gate before commit:
 
 ```bash
-make check   # build + vet + test + gofmt
+make check   # build + vet + test + sqlc drift + OpenAPI lint + gofmt
 ```

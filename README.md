@@ -19,8 +19,9 @@
 
 nvoken is a lightweight, open-source agent harness-as-a-service and AI gateway.
 Your app sends an agent spec and the input; nvoken runs the whole agent turn.
-Supports a full complement of foundational harness features, including streaming,
-checkpoints, durable sleeps, steering, human-in-the-loop interactions, and more.
+The design covers foundational harness features including streaming,
+checkpoints, durable waits, steering, human-in-the-loop interactions, and more;
+the repository is still implementing its first durable slice.
 
 Building a complete agentic experience in your app's UI is non-trivial. nvoken
 allows you to focus on the application-specific portions of that problem, rather
@@ -43,22 +44,34 @@ they are **stateless**. nvoken aims to retain that approach as much as possible.
 ```jsonc
 POST /v1/invocations
 {
+  "agent_ref": "support-triage",                 // Account-wide identity only
+  "tenant_ref": "customer-482",                  // optional Session partition
   "session_key": "thread-8813",                  // yours; resolved or created
-  "agent": "support-triage",                     // identity only, no config stored
-  "input": { "text": "why was I charged twice?" },
+  "idempotency_key": "thread-8813:message-7",    // safe retry identity
+  "input": {
+    "content": [{ "type": "text", "text": "why was I charged twice?" }]
+  },
   "spec": {
     "instructions": "You are a billing support agent…",
-    "model": { "provider": "anthropic", "name": "claude-sonnet-5" },
-    "tools": [{ "name": "lookup_charges", "input_schema": { /* … */ } }],
-    "budget": { "max_tokens": 200000, "max_duration": "5m" }
+    "model": { "provider": "anthropic", "name": "claude-sonnet-5" }
   }
+}
+
+202 Accepted
+{
+  "agent_id": "agnt_…",
+  "session_id": "sesn_…",
+  "invocation_id": "invk_…",
+  "status": "queued",
+  "deduplicated": false
 }
 ```
 
-The response streams events like tool calls as the turn runs. A turn may take
-seconds or tens of minutes. nvoken runs it durably so that long turns never get
-stuck, clients can reconnect without issue, and new clients can join and see the
-activity for each invocation at any time.
+The first contract is background JSON: acknowledgement follows durable
+admission, execution does not belong to the request handler, and clients recover
+authoritative state by durable ID. Streaming, tools, budgets, and checkpointed
+crash continuation build on that record in later slices. The exact frozen
+surface is in [openapi/runtime.yaml](openapi/runtime.yaml).
 
 ## Your app owns the state
 

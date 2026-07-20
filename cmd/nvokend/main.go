@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -17,22 +18,31 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	if err := run(); err != nil {
+	if err := run(os.Args[1:]); err != nil {
 		logger.Error("fatal error", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	cfg, err := loadDaemonConfig()
-	if err != nil {
-		return err
-	}
-
+func run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	return daemon.Run(ctx, cfg)
+	if len(args) == 0 || (len(args) == 1 && args[0] == "serve") {
+		cfg, err := loadDaemonConfig()
+		if err != nil {
+			return err
+		}
+		return daemon.Run(ctx, cfg)
+	}
+	if len(args) == 1 && args[0] == "migrate" {
+		cfg, err := loadMigrationConfig()
+		if err != nil {
+			return err
+		}
+		return daemon.Migrate(ctx, cfg)
+	}
+	return fmt.Errorf("usage: nvokend [serve|migrate]")
 }
 
 func cloudLoggingReplaceAttr(groups []string, a slog.Attr) slog.Attr {
