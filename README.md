@@ -4,27 +4,22 @@
 
 # Nvoken
 
-One API call runs a full agent turn. The Session keeps the conversation.
-Durable, observable, cross-provider.
-
-## What it is
-
 Nvoken is an agent runtime deployed as a service. It is built to be used
 by your application, often a SaaS, as its agentic harness. Your app calls
 Nvoken, and Nvoken runs the agent loop for you with all the harness features
 that are needed to build an excellent agentic AI experience in your app.
-
-The primary operation:
-
-```text
-invoke(execution_spec, input, optional_session) -> durable invocation
-```
 
 No provisioning first. Your application sends the agent specification with
 the request: instructions, model preferences, tool schemas, output
 contract, budgets. Nvoken resolves or creates the Session, runs the turn
 durably, and streams output and tool calls back. Read more at
 [docs/product/overview.md](docs/product/overview.md).
+
+The primary operation:
+
+```text
+invoke(execution_spec, input, optional_session) -> durable invocation
+```
 
 ## Why
 
