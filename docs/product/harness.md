@@ -12,10 +12,10 @@ app genuinely pleasant to use, and how nvoken covers it.
 
 ## Two layers
 
-Nvoken builds on [Dive](https://github.com/deepnoodle-ai/dive), Deep Noodle's
+nvoken builds on [Dive](https://github.com/deepnoodle-ai/dive), Deep Noodle's
 Go library for cross-provider LLM support and building AI agents. Dive is the
 in-process harness: the loop, the tool system, context engineering, and the
-model layer. Nvoken runs that harness as a durable service: it owns the
+model layer. nvoken runs that harness as a durable service: it owns the
 Sessions, makes the turn survivable, and manages the exchange of tool calls,
 events, and usage with your application. The catalog below is organized by
 concern; most concerns draw on both layers.
@@ -139,7 +139,7 @@ Answering what the agent did, why, and what it cost:
 
 All of this capability is only worth having if it supports your product
 instead of constraining it. A harness that installs its own persona, policy, or
-data model gets in the way of the application it is meant to serve. Nvoken is
+data model gets in the way of the application it is meant to serve. nvoken is
 carefully designed the other way: agent behavior arrives with each request as
 the execution spec, tools with side effects run on your side of the boundary,
 and approval policy, memory, and product state remain yours to shape. The

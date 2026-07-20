@@ -1,9 +1,9 @@
-# Nvoken
+# nvoken
 
-Nvoken (github.com/deepnoodle-ai/nvoken) is an open-source (Apache-2.0) agent
+nvoken (github.com/deepnoodle-ai/nvoken) is an open-source (Apache-2.0) agent
 runtime as a service: durable agent turn execution, Session ownership and
 persistence, tool execution, and cross-provider model routing. Host applications
-use it as their agentic backend. Nvoken owns the conversations (Sessions) while
+use it as their agentic backend. nvoken owns the conversations (Sessions) while
 the host remains source of truth for agent definitions, orchestration, and
 product data.
 
