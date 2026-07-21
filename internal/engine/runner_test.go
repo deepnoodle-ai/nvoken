@@ -234,6 +234,34 @@ func TestRunnerDrainsBeforeCancellingAndJoinsAfterGrace(t *testing.T) {
 	})
 }
 
+func TestRunnerSettlesInternalFailureAfterResultValidationRejection(t *testing.T) {
+	ownership := newFakeOwnership(1, time.Second)
+	ownership.settleErrors = []error{ports.ErrExecutionResultInvalid}
+	runner := newTestRunner(t, ownership, immediateExecutor{}, nil, testConfig())
+	ctx, cancel := context.WithCancel(context.Background())
+	done := runRunner(runner, ctx)
+	waitUntil(t, time.Second, func() bool { return ownership.settlementCount() == 1 })
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := ownership.settlementCallCount(); got != 2 {
+		t.Fatalf("settlement calls = %d, want rejected result plus internal failure", got)
+	}
+	ownership.mu.Lock()
+	result := ownership.settlements[0]
+	ownership.mu.Unlock()
+	if result.Status != domain.InvocationFailed || result.Usage != nil || result.Provenance != nil {
+		t.Fatalf("fallback result = %#v", result)
+	}
+	var failure struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(result.Error, &failure); err != nil || failure.Code != "internal" {
+		t.Fatalf("fallback error = %s, decoded = %#v, error = %v", result.Error, failure, err)
+	}
+}
+
 func TestRunnerLogsOperationalFieldsWithoutInvocationPayloads(t *testing.T) {
 	ownership := newFakeOwnership(1, time.Second)
 	ownership.mu.Lock()

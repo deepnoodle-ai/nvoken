@@ -72,7 +72,7 @@ func (g *Generator) Generate(ctx context.Context, request domain.GenerationReque
 	for _, message := range request.Messages {
 		converted, err := toDiveMessage(message)
 		if err != nil {
-			return domain.GenerationResponse{}, fmt.Errorf("%w: convert durable message", ports.ErrModelResponseInvalid)
+			return domain.GenerationResponse{}, fmt.Errorf("%w: convert durable message", ports.ErrGenerationInputInvalid)
 		}
 		messages = append(messages, converted)
 	}

@@ -206,7 +206,7 @@ func (s *InvocationExecutionService) Settle(
 	result domain.InvocationExecutionResult,
 ) error {
 	if err := validateExecutionResult(result); err != nil {
-		return err
+		return ports.ErrExecutionResultInvalid
 	}
 	usagePayload, provenancePayload, err := executionEvidencePayloads(result)
 	if err != nil {
@@ -399,6 +399,9 @@ func validateExecutionResult(result domain.InvocationExecutionResult) error {
 	}
 	if result.Status == domain.InvocationFailed && len(result.AssistantMessages) != 0 {
 		return fmt.Errorf("failed execution result cannot contain assistant messages")
+	}
+	if result.Status == domain.InvocationFailed && (result.Usage != nil || result.Provenance != nil) {
+		return fmt.Errorf("failed execution result cannot contain usage or provenance")
 	}
 	for _, message := range result.AssistantMessages {
 		if message.Role != domain.MessageRoleAssistant {

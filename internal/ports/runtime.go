@@ -9,15 +9,17 @@ import (
 )
 
 var (
-	ErrNotFound             = errors.New("not found")
-	ErrUnauthenticated      = errors.New("unauthenticated")
-	ErrRetryable            = errors.New("retryable database conflict")
-	ErrConcurrentAdmission  = errors.New("concurrent admission conflict")
-	ErrLeaseLost            = errors.New("invocation lease lost")
-	ErrProviderUnsupported  = errors.New("model provider unsupported")
-	ErrProviderKeyMissing   = errors.New("model provider credential missing")
-	ErrGenerationFailed     = errors.New("model generation failed")
-	ErrModelResponseInvalid = errors.New("model response invalid")
+	ErrNotFound               = errors.New("not found")
+	ErrUnauthenticated        = errors.New("unauthenticated")
+	ErrRetryable              = errors.New("retryable database conflict")
+	ErrConcurrentAdmission    = errors.New("concurrent admission conflict")
+	ErrLeaseLost              = errors.New("invocation lease lost")
+	ErrProviderUnsupported    = errors.New("model provider unsupported")
+	ErrProviderKeyMissing     = errors.New("model provider credential missing")
+	ErrGenerationFailed       = errors.New("model generation failed")
+	ErrGenerationInputInvalid = errors.New("durable model generation input invalid")
+	ErrModelResponseInvalid   = errors.New("model response invalid")
+	ErrExecutionResultInvalid = errors.New("invocation execution result invalid")
 )
 
 // Clock makes persisted timestamps deterministic in services and tests.

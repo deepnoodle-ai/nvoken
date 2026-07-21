@@ -172,6 +172,28 @@ func TestGenerationExecutorMapsProviderFailuresAndInvalidResponses(t *testing.T)
 	}
 }
 
+func TestGenerationExecutorMapsDurableConversionFailureToInternal(t *testing.T) {
+	claim := generationClaim()
+	generator := &fakeModelGenerator{err: ports.ErrGenerationInputInvalid}
+	result, err := NewGenerationExecutor(generationStoreFixture(claim), generator, nil).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	assertFailureCode(t, result, "internal")
+}
+
+func TestValidateExecutionResultRejectsEvidenceOnFailure(t *testing.T) {
+	result := providerGenerationFailure()
+	result.Usage = &domain.ModelUsage{}
+	result.Provenance = &domain.ModelProvenance{
+		Provider: "anthropic", RequestedModel: "test", ServedModel: "test",
+		CredentialSource: credentialSourceInstallationBYOK,
+	}
+	if err := validateExecutionResult(result); err == nil {
+		t.Fatal("failed result with usage and provenance passed validation")
+	}
+}
+
 func TestGenerationExecutorReturnsCancellationWithoutSemanticResult(t *testing.T) {
 	claim := generationClaim()
 	ctx, cancel := context.WithCancel(context.Background())

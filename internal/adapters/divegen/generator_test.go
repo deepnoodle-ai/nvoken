@@ -128,6 +128,19 @@ func TestGeneratorRejectsInvalidOutputAndProviderErrors(t *testing.T) {
 	}
 }
 
+func TestGeneratorClassifiesDurableInputConversionSeparately(t *testing.T) {
+	model := &fakeLLM{result: successfulDiveResponse()}
+	generator := New(Config{AnthropicAPIKey: "secret"})
+	generator.factory = func(string, string, string) (llm.LLM, error) { return model, nil }
+	request := generationRequest("anthropic")
+	request.Messages[0].Content = []byte(`[{"type":"dynamic","payload":"not-supported"}]`)
+
+	_, err := generator.Generate(context.Background(), request)
+	if !errors.Is(err, ports.ErrGenerationInputInvalid) || errors.Is(err, ports.ErrModelResponseInvalid) {
+		t.Fatalf("Generate error = %v, want durable input classification", err)
+	}
+}
+
 func generationRequest(provider string) domain.GenerationRequest {
 	return domain.GenerationRequest{
 		Instructions: "durable instructions", Provider: provider, Model: "requested-model",

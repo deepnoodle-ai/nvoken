@@ -88,6 +88,9 @@ func (e *GenerationExecutor) Execute(
 		}
 		class := generationErrorClass(err)
 		e.logFailure(claim, class, request.Provider, request.Model)
+		if errors.Is(err, ports.ErrGenerationInputInvalid) {
+			return internalGenerationFailure(), nil
+		}
 		return providerGenerationFailure(), nil
 	}
 	servedModel := response.ServedModel
@@ -289,6 +292,8 @@ func generationErrorClass(err error) string {
 		return "provider_key_missing"
 	case errors.Is(err, ports.ErrModelResponseInvalid):
 		return "invalid_provider_response"
+	case errors.Is(err, ports.ErrGenerationInputInvalid):
+		return "invalid_generation_input"
 	default:
 		return "provider_call_failed"
 	}
