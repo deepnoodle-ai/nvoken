@@ -1,6 +1,6 @@
 # Define two lightweight production-readiness profiles
 
-**Status:** Draft
+**Status:** Complete
 **Sequence:** 017
 **Depends on:** `006-prd-google-cloud-run-paved-deployment.md`,
 `010-prd-cloud-tasks-invocation-execution.md`,
@@ -26,9 +26,10 @@ machinery for later evidence to justify.
 
 ## Outcome
 
-The repository has one authoritative readiness matrix for a single-daemon
-self-hosted profile and the paved Google Cloud profile, with clear boundaries,
-required proof, and current status.
+The repository has one authoritative
+[readiness matrix](../testing/production-readiness-profiles.md) for a
+single-daemon self-hosted profile and the paved Google Cloud profile, with clear
+boundaries, required proof, and current status.
 
 ## Scope
 
@@ -84,16 +85,16 @@ Kubernetes, AWS, or portable multi-daemon profiles.
 
 ## Acceptance
 
-- [ ] **A1 (R1, R2):** The matrix describes both profiles from a clean install
+- [x] **A1 (R1, R2):** The matrix describes both profiles from a clean install
   through execution and restart, and a review finds no implied single-daemon HA
   or conflation of the Google paved path with managed nvoken Cloud.
-- [ ] **A2 (R3):** Every minimum readiness dimension has one profile-specific
+- [x] **A2 (R3):** Every minimum readiness dimension has one profile-specific
   proof row, owner boundary, evidence mode, readiness state, and freshness; no
   row requires a dashboard, console, or policy service merely to satisfy this
   PRD.
-- [ ] **A3 (R4):** The matrix's failure and recovery rows trace durable outcomes
+- [x] **A3 (R4):** The matrix's failure and recovery rows trace durable outcomes
   to Postgres claims, checkpoints, and fences in both execution modes.
-- [ ] **A4 (R5):** The root README, architecture, runtime-admission guide,
+- [x] **A4 (R5):** The root README, architecture, runtime-admission guide,
   Google deployment guide, and PRD roadmap identify the matrix as the readiness
   evidence source and do not make a stronger production claim than it records.
 
