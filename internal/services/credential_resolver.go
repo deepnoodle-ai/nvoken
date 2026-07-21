@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -52,7 +54,7 @@ func (r *ProviderCredentialResolver) ResolveProviderCredential(
 	}
 	binding, err := r.store.GetInvocationProviderCredential(ctx, invocationID, provider)
 	if err != nil {
-		return domain.ResolvedProviderCredential{}, credentialUnavailable(err)
+		return domain.ResolvedProviderCredential{}, credentialStoreError("load Invocation provider credential", err)
 	}
 	if binding.InvocationID != invocationID || binding.Provider != provider || !binding.Source.Valid() {
 		return domain.ResolvedProviderCredential{}, ports.ErrCredentialUnavailable
@@ -92,7 +94,7 @@ func (r *ProviderCredentialResolver) ResolveProviderCredential(
 			binding.InvocationID,
 			binding.Provider,
 		); err != nil {
-			return domain.ResolvedProviderCredential{}, ports.ErrCredentialUnavailable
+			return domain.ResolvedProviderCredential{}, platformFundingError(err)
 		}
 		resolved.APIKey = r.config.PlatformAPIKeys[provider]
 		if resolved.APIKey == "" {
@@ -124,11 +126,11 @@ func (r *ProviderCredentialResolver) resolveReusable(
 	}
 	credential, err := r.store.GetProviderCredential(ctx, *binding.ProviderCredentialID)
 	if err != nil {
-		return domain.ResolvedProviderCredential{}, credentialUnavailable(err)
+		return domain.ResolvedProviderCredential{}, credentialStoreError("load provider credential", err)
 	}
 	version, err := r.store.GetProviderCredentialVersion(ctx, *binding.CredentialVersionID)
 	if err != nil {
-		return domain.ResolvedProviderCredential{}, credentialUnavailable(err)
+		return domain.ResolvedProviderCredential{}, credentialStoreError("load provider credential version", err)
 	}
 	if credential.Status != domain.ProviderCredentialActive ||
 		credential.AccountID != binding.AccountID || credential.Provider != binding.Provider ||
@@ -197,11 +199,32 @@ func cloneProviderKeys(input map[string]string) map[string]string {
 	return cloned
 }
 
-func credentialUnavailable(err error) error {
+func credentialStoreError(operation string, err error) error {
 	if err == nil {
 		return nil
 	}
-	return ports.ErrCredentialUnavailable
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, ports.ErrRetryable) {
+		return err
+	}
+	if errors.Is(err, ports.ErrNotFound) || errors.Is(err, ports.ErrCredentialUnavailable) {
+		return ports.ErrCredentialUnavailable
+	}
+	return fmt.Errorf("%w: %s: %w", ports.ErrRetryable, operation, err)
+}
+
+func platformFundingError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, ports.ErrPlatformFundingDenied) || errors.Is(err, ports.ErrCredentialUnavailable) {
+		return ports.ErrCredentialUnavailable
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, ports.ErrRetryable) {
+		return err
+	}
+	return fmt.Errorf("%w: authorize platform funding: %w", ports.ErrRetryable, err)
 }
 
 var _ ports.ProviderCredentialResolver = (*ProviderCredentialResolver)(nil)

@@ -427,7 +427,7 @@ paths:
       tags: [Provider credentials]
       operationId: listProviderCredentials
       summary: List reusable provider credential metadata
-      description: Returns metadata only; secret material is never readable.
+      description: Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
       parameters:
         - name: provider
           in: query
@@ -506,6 +506,7 @@ paths:
       tags: [Provider credentials]
       operationId: getProviderCredential
       summary: Read provider credential metadata
+      description: Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
       responses:
         "200":
           description: Provider credential metadata without secret material.
@@ -1033,6 +1034,7 @@ components:
         status:
           type: string
           enum: [active, revoked]
+          description: Active roots remain rotatable and revocable even when their current version has expired.
         version:
           type: integer
           minimum: 1
@@ -1045,6 +1047,7 @@ components:
         version_status:
           type: string
           enum: [active, overlap, expired, revoked]
+          description: An expired current version is unusable; rotate the active credential root before any admission or model call can use it.
         expires_at:
           oneOf:
             - type: string

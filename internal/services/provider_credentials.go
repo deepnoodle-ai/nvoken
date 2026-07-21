@@ -130,7 +130,7 @@ func (s *ProviderCredentialService) Create(
 		return ProviderCredentialRead{}, err
 	}
 	if input.Scope == domain.ProviderCredentialScopeAccount &&
-		(effectiveAuthProfile(auth) != domain.AuthProfileOperator || auth.TenantConstraint != nil) {
+		(effectiveCredentialProfile(auth) != domain.CredentialProfileOperator || auth.TenantConstraint != nil) {
 		return ProviderCredentialRead{}, forbidden("Account-scoped provider credentials require unconstrained Operator authority.")
 	}
 	input.Provider = provider
@@ -225,7 +225,7 @@ func (s *ProviderCredentialService) Create(
 				EncryptionKeyID:      &keyID,
 				Nonce:                encrypted.Nonce,
 				Ciphertext:           encrypted.Ciphertext,
-				ExpiresAt:            cloneTime(input.ExpiresAt),
+				ExpiresAt:            cloneProviderCredentialTime(input.ExpiresAt),
 				CreatedBy:            actor,
 				CreatedAt:            now,
 			}
@@ -403,7 +403,7 @@ func (s *ProviderCredentialService) Rotate(
 				EncryptionKeyID:        &keyID,
 				Nonce:                  encrypted.Nonce,
 				Ciphertext:             encrypted.Ciphertext,
-				ExpiresAt:              cloneTime(input.ExpiresAt),
+				ExpiresAt:              cloneProviderCredentialTime(input.ExpiresAt),
 				RotationIdempotencyKey: &rotationKey,
 				RotationFingerprint:    fingerprint[:],
 				CreatedBy:              providerCredentialActor(auth),
@@ -555,7 +555,7 @@ func (s *ProviderCredentialService) resolveCredentialPartition(
 	tenantRef *string,
 ) (*domain.TenantPartition, error) {
 	if scope == domain.ProviderCredentialScopeAccount {
-		if effectiveAuthProfile(auth) != domain.AuthProfileOperator {
+		if effectiveCredentialProfile(auth) != domain.CredentialProfileOperator {
 			return nil, forbidden("Account-scoped provider credentials require Operator authority.")
 		}
 		if auth.TenantConstraint != nil {
@@ -566,11 +566,11 @@ func (s *ProviderCredentialService) resolveCredentialPartition(
 	if auth.TenantConstraint != nil && (tenantRef == nil || *auth.TenantConstraint != *tenantRef) {
 		return nil, forbidden("The requested tenant_ref conflicts with the credential constraint.")
 	}
-	profile := effectiveAuthProfile(auth)
-	if profile != domain.AuthProfileOperator && profile != domain.AuthProfileRuntime {
+	profile := effectiveCredentialProfile(auth)
+	if profile != domain.CredentialProfileOperator && profile != domain.CredentialProfileRuntime {
 		return nil, forbidden("The authenticated profile cannot manage tenant provider credentials.")
 	}
-	if profile == domain.AuthProfileRuntime && auth.TenantConstraint == nil {
+	if profile == domain.CredentialProfileRuntime && auth.TenantConstraint == nil {
 		return nil, forbidden("A Runtime credential must be constrained to the requested tenant_ref.")
 	}
 	id, err := s.ids.NewID(domain.PrefixTenantPartition)
@@ -598,7 +598,8 @@ func (s *ProviderCredentialService) authorizeProviderCredential(
 		return notFound()
 	}
 	if credential.Scope == domain.ProviderCredentialScopeAccount {
-		if effectiveAuthProfile(auth) != domain.AuthProfileOperator || auth.TenantConstraint != nil {
+		profile := effectiveCredentialProfile(auth)
+		if (profile != domain.CredentialProfileOperator && profile != domain.CredentialProfileViewer) || auth.TenantConstraint != nil {
 			return notFound()
 		}
 		return nil
@@ -606,11 +607,11 @@ func (s *ProviderCredentialService) authorizeProviderCredential(
 	if credential.TenantPartitionID == nil {
 		return &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
 	}
-	profile := effectiveAuthProfile(auth)
-	if profile != domain.AuthProfileOperator && profile != domain.AuthProfileRuntime {
-		return forbidden("The authenticated profile cannot manage tenant provider credentials.")
+	profile := effectiveCredentialProfile(auth)
+	if profile != domain.CredentialProfileOperator && profile != domain.CredentialProfileRuntime && profile != domain.CredentialProfileViewer {
+		return forbidden("The authenticated profile cannot access tenant provider credentials.")
 	}
-	if profile == domain.AuthProfileRuntime && auth.TenantConstraint == nil {
+	if profile == domain.CredentialProfileRuntime && auth.TenantConstraint == nil {
 		return forbidden("A Runtime credential must be constrained to one tenant.")
 	}
 	if auth.TenantConstraint != nil {
@@ -656,11 +657,11 @@ func (s *ProviderCredentialService) providerCredentialListQuery(
 		}
 		effectiveTenant = auth.TenantConstraint
 	}
-	profile := effectiveAuthProfile(auth)
-	if profile != domain.AuthProfileOperator && profile != domain.AuthProfileRuntime {
-		return ports.ProviderCredentialListQuery{}, forbidden("The authenticated profile cannot manage provider credentials.")
+	profile := effectiveCredentialProfile(auth)
+	if profile != domain.CredentialProfileOperator && profile != domain.CredentialProfileRuntime && profile != domain.CredentialProfileViewer {
+		return ports.ProviderCredentialListQuery{}, forbidden("The authenticated profile cannot access provider credentials.")
 	}
-	if profile == domain.AuthProfileRuntime && auth.TenantConstraint == nil {
+	if profile == domain.CredentialProfileRuntime && auth.TenantConstraint == nil {
 		return ports.ProviderCredentialListQuery{}, forbidden("A Runtime credential must be constrained to one tenant.")
 	}
 	if effectiveTenant != nil {
@@ -743,12 +744,12 @@ func providerCredentialRead(
 		VersionID:         version.ID,
 		PreviousVersionID: cloneString(version.PreviousVersionID),
 		VersionStatus:     version.Status,
-		ExpiresAt:         cloneTime(version.ExpiresAt),
-		OverlapExpiresAt:  cloneTime(version.OverlapExpiresAt),
+		ExpiresAt:         cloneProviderCredentialTime(version.ExpiresAt),
+		OverlapExpiresAt:  cloneProviderCredentialTime(version.OverlapExpiresAt),
 		CreatedBy:         credential.CreatedBy,
 		CreatedAt:         credential.CreatedAt,
 		UpdatedAt:         credential.UpdatedAt,
-		RevokedAt:         cloneTime(credential.RevokedAt),
+		RevokedAt:         cloneProviderCredentialTime(credential.RevokedAt),
 	}
 }
 
@@ -775,17 +776,20 @@ func providerCredentialVersionAAD(accountID string, partitionID *string, provide
 }
 
 func providerCredentialActor(auth domain.RuntimeAuthContext) string {
-	if strings.TrimSpace(auth.ActorID) != "" {
-		return auth.ActorID
+	if strings.TrimSpace(auth.CredentialID) != "" {
+		return auth.CredentialID
 	}
-	return "profile:" + string(effectiveAuthProfile(auth))
+	if auth.Subject != nil && strings.TrimSpace(auth.Subject.ID) != "" {
+		return auth.Subject.ID
+	}
+	return "profile:" + string(effectiveCredentialProfile(auth))
 }
 
-func effectiveAuthProfile(auth domain.RuntimeAuthContext) domain.AuthProfile {
-	if auth.Profile == "" {
-		return domain.AuthProfileRuntime
+func effectiveCredentialProfile(auth domain.RuntimeAuthContext) domain.CredentialProfile {
+	if auth.EffectiveProfile == "" {
+		return domain.CredentialProfileRuntime
 	}
-	return auth.Profile
+	return auth.EffectiveProfile
 }
 
 func stringValue(value *string) string {
@@ -802,7 +806,7 @@ func timeValue(value *time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
 }
 
-func cloneTime(value *time.Time) *time.Time {
+func cloneProviderCredentialTime(value *time.Time) *time.Time {
 	if value == nil {
 		return nil
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"reflect"
 	"strings"
@@ -544,6 +545,26 @@ func TestGenerationExecutorSettlesCredentialUnavailableDistinctly(t *testing.T) 
 	}
 	if !strings.Contains(logs.String(), `"class":"credential_unavailable"`) {
 		t.Fatalf("credential failure class missing from logs: %s", logs.String())
+	}
+}
+
+func TestGenerationExecutorReturnsRetryableInfrastructureFailureWithoutSettlement(t *testing.T) {
+	claim := generationClaim()
+	generator := &fakeModelGenerator{err: fmt.Errorf("%w: credential store timeout", ports.ErrRetryable)}
+	var logs bytes.Buffer
+	result, err := NewGenerationExecutor(
+		generationStoreFixture(claim),
+		generator,
+		slog.New(slog.NewJSONHandler(&logs, nil)),
+	).Execute(context.Background(), claim)
+	if !errors.Is(err, ports.ErrRetryable) {
+		t.Fatalf("Execute error = %v", err)
+	}
+	if result.Status != "" || len(result.Error) != 0 {
+		t.Fatalf("retryable failure returned terminal result = %#v", result)
+	}
+	if strings.Contains(logs.String(), `"event":"provider_generation"`) {
+		t.Fatalf("pre-provider credential failure logged as a provider call: %s", logs.String())
 	}
 }
 

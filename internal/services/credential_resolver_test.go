@@ -13,9 +13,12 @@ import (
 
 type resolverCredentialStore struct {
 	ports.ProviderCredentialRepository
-	binding    domain.InvocationProviderCredential
-	credential domain.ProviderCredential
-	version    domain.ProviderCredentialVersion
+	bindingErr    error
+	credentialErr error
+	versionErr    error
+	binding       domain.InvocationProviderCredential
+	credential    domain.ProviderCredential
+	version       domain.ProviderCredentialVersion
 }
 
 func (s *resolverCredentialStore) GetInvocationProviderCredential(
@@ -23,6 +26,9 @@ func (s *resolverCredentialStore) GetInvocationProviderCredential(
 	invocationID string,
 	provider string,
 ) (domain.InvocationProviderCredential, error) {
+	if s.bindingErr != nil {
+		return domain.InvocationProviderCredential{}, s.bindingErr
+	}
 	if s.binding.InvocationID != invocationID || s.binding.Provider != provider {
 		return domain.InvocationProviderCredential{}, ports.ErrNotFound
 	}
@@ -30,6 +36,9 @@ func (s *resolverCredentialStore) GetInvocationProviderCredential(
 }
 
 func (s *resolverCredentialStore) GetProviderCredential(_ context.Context, id string) (domain.ProviderCredential, error) {
+	if s.credentialErr != nil {
+		return domain.ProviderCredential{}, s.credentialErr
+	}
 	if s.credential.ID != id {
 		return domain.ProviderCredential{}, ports.ErrNotFound
 	}
@@ -37,6 +46,9 @@ func (s *resolverCredentialStore) GetProviderCredential(_ context.Context, id st
 }
 
 func (s *resolverCredentialStore) GetProviderCredentialVersion(_ context.Context, id string) (domain.ProviderCredentialVersion, error) {
+	if s.versionErr != nil {
+		return domain.ProviderCredentialVersion{}, s.versionErr
+	}
 	if s.version.ID != id {
 		return domain.ProviderCredentialVersion{}, ports.ErrNotFound
 	}
@@ -50,6 +62,7 @@ func (c credentialResolverClock) Now() time.Time { return c.now }
 type recordingFundingGate struct {
 	allowed bool
 	calls   int
+	err     error
 }
 
 func (g *recordingFundingGate) AuthorizePlatformModelCall(
@@ -60,10 +73,105 @@ func (g *recordingFundingGate) AuthorizePlatformModelCall(
 	string,
 ) error {
 	g.calls++
+	if g.err != nil {
+		return g.err
+	}
 	if !g.allowed {
-		return errors.New("funding denied")
+		return ports.ErrPlatformFundingDenied
 	}
 	return nil
+}
+
+func TestProviderCredentialResolverPreservesRetryableInfrastructureFailures(t *testing.T) {
+	now := time.Date(2026, time.July, 21, 18, 0, 0, 0, time.UTC)
+	binding := domain.InvocationProviderCredential{
+		ID:                "binding",
+		InvocationID:      "invocation",
+		AccountID:         "account",
+		TenantPartitionID: "tenant",
+		Provider:          "openai",
+		Source:            domain.ProviderCredentialSourceInstallationBYOK,
+		CreatedAt:         now,
+	}
+	for name, storeErr := range map[string]error{
+		"unexpected store error": errors.New("pool timeout"),
+		"explicit retryable":     ports.ErrRetryable,
+	} {
+		t.Run(name, func(t *testing.T) {
+			resolver := NewProviderCredentialResolver(
+				&resolverCredentialStore{binding: binding, bindingErr: storeErr},
+				nil,
+				credentialResolverClock{now: now},
+				CredentialResolverConfig{DeploymentMode: CredentialDeploymentSelfHosted},
+				nil,
+			)
+			_, err := resolver.ResolveProviderCredential(context.Background(), binding.InvocationID, binding.Provider)
+			if !errors.Is(err, ports.ErrRetryable) || errors.Is(err, ports.ErrCredentialUnavailable) {
+				t.Fatalf("ResolveProviderCredential error = %v", err)
+			}
+		})
+	}
+
+	credentialID := "credential"
+	versionID := "version"
+	reusableBinding := binding
+	reusableBinding.Source = domain.ProviderCredentialSourceAccountBYOK
+	reusableBinding.ProviderCredentialID = &credentialID
+	reusableBinding.CredentialVersionID = &versionID
+	for name, store := range map[string]*resolverCredentialStore{
+		"credential load": {
+			binding:       reusableBinding,
+			credentialErr: errors.New("credential query failed"),
+		},
+		"version load": {
+			binding: reusableBinding,
+			credential: domain.ProviderCredential{
+				ID:               credentialID,
+				AccountID:        binding.AccountID,
+				Provider:         binding.Provider,
+				Scope:            domain.ProviderCredentialScopeAccount,
+				Status:           domain.ProviderCredentialActive,
+				CurrentVersionID: versionID,
+			},
+			versionErr: errors.New("version query failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resolver := NewProviderCredentialResolver(
+				store,
+				&unavailableCredentialCipher{},
+				credentialResolverClock{now: now},
+				CredentialResolverConfig{DeploymentMode: CredentialDeploymentSelfHosted},
+				nil,
+			)
+			_, err := resolver.ResolveProviderCredential(context.Background(), binding.InvocationID, binding.Provider)
+			if !errors.Is(err, ports.ErrRetryable) || errors.Is(err, ports.ErrCredentialUnavailable) {
+				t.Fatalf("ResolveProviderCredential error = %v", err)
+			}
+		})
+	}
+
+	resolver := NewProviderCredentialResolver(
+		&resolverCredentialStore{binding: binding, bindingErr: context.DeadlineExceeded},
+		nil,
+		credentialResolverClock{now: now},
+		CredentialResolverConfig{DeploymentMode: CredentialDeploymentSelfHosted},
+		nil,
+	)
+	if _, err := resolver.ResolveProviderCredential(context.Background(), binding.InvocationID, binding.Provider); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("deadline error = %v", err)
+	}
+
+	resolver = NewProviderCredentialResolver(
+		&resolverCredentialStore{binding: binding, bindingErr: ports.ErrNotFound},
+		nil,
+		credentialResolverClock{now: now},
+		CredentialResolverConfig{DeploymentMode: CredentialDeploymentSelfHosted},
+		nil,
+	)
+	if _, err := resolver.ResolveProviderCredential(context.Background(), binding.InvocationID, binding.Provider); !errors.Is(err, ports.ErrCredentialUnavailable) {
+		t.Fatalf("missing binding error = %v", err)
+	}
 }
 
 func TestProviderCredentialResolverUsesOnlyDurableSelectedSource(t *testing.T) {
@@ -220,6 +328,11 @@ func TestProviderCredentialResolverUsesOnlyDurableSelectedSource(t *testing.T) {
 		if gate.calls != 1 {
 			t.Fatalf("funding calls = %d, want 1", gate.calls)
 		}
+		gate.err = errors.New("funding store timeout")
+		if _, err := resolver.ResolveProviderCredential(context.Background(), store.binding.InvocationID, store.binding.Provider); !errors.Is(err, ports.ErrRetryable) {
+			t.Fatalf("funding infrastructure error = %v", err)
+		}
+		gate.err = nil
 		gate.allowed = true
 		resolved, err := resolver.ResolveProviderCredential(context.Background(), store.binding.InvocationID, store.binding.Provider)
 		if err != nil || resolved.APIKey != "platform-secret" || resolved.Source != domain.ProviderCredentialSourcePlatform {

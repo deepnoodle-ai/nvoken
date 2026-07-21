@@ -3,6 +3,7 @@ import type {
   Invocation,
   InvocationList,
   InvocationStatus,
+  ModelProvider,
   Session,
   SessionList,
   SessionMessageList,
@@ -39,7 +40,7 @@ export class NvokenError extends Error {
 }
 
 export interface Model {
-  provider: string;
+  provider: ModelProvider;
   name: string;
 }
 

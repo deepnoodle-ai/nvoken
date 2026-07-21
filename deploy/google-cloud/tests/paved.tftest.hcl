@@ -67,7 +67,6 @@ run "paved_defaults" {
 
   assert {
     condition = (
-      one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "RUNTIME_API_PROFILE"]) == "operator" &&
       length([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item if item.name == "PROVIDER_CREDENTIAL_ENCRYPTION_KEYS" && item.value_source[0].secret_key_ref[0].secret == var.provider_credential_encryption_keys_secret_id]) == 1 &&
       length([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item if item.name == "PROVIDER_CREDENTIAL_ENCRYPTION_KEYS" && item.value_source[0].secret_key_ref[0].secret == var.provider_credential_encryption_keys_secret_id]) == 1 &&
       one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "PROVIDER_CREDENTIAL_ACTIVE_KEY_ID"]) == "v1" &&
@@ -76,7 +75,7 @@ run "paved_defaults" {
       length(google_secret_manager_secret_iam_member.credential_encryption_executor) == 1 &&
       !contains([for item in google_cloud_run_v2_job.migrate.template[0].template[0].containers[0].env : item.name], "PROVIDER_CREDENTIAL_ENCRYPTION_KEYS")
     )
-    error_message = "Credential encryption keys must reach admission and execution roles, never the migration role, with an explicit active key and Operator lifecycle profile."
+    error_message = "Credential encryption keys must reach admission and execution roles, never the migration role, with an explicit active key."
   }
 
   assert {

@@ -241,8 +241,8 @@ func TestProviderCredentialLifecycleEncryptsSecretsAndReturnsMetadataOnly(t *tes
 			domain.OperationRotateProviderCredential: {},
 			domain.OperationRevokeProviderCredential: {},
 		},
-		Profile: domain.AuthProfileOperator,
-		ActorID: "operator:test",
+		EffectiveProfile: domain.CredentialProfileOperator,
+		CredentialID:     "operator:test",
 	}
 	created, err := service.Create(context.Background(), auth, CreateProviderCredentialInput{
 		Provider: "open-ai",
@@ -271,7 +271,7 @@ func TestProviderCredentialLifecycleEncryptsSecretsAndReturnsMetadataOnly(t *tes
 	}
 	tenantRef := "tenant-a"
 	runtimeAuth := auth
-	runtimeAuth.Profile = domain.AuthProfileRuntime
+	runtimeAuth.EffectiveProfile = domain.CredentialProfileRuntime
 	runtimeAuth.TenantConstraint = &tenantRef
 	for name, attempt := range map[string]func() error{
 		"get": func() error {
@@ -339,6 +339,29 @@ func TestProviderCredentialLifecycleEncryptsSecretsAndReturnsMetadataOnly(t *tes
 	if err != nil || len(listed.Items) != 1 || listed.Items[0].VersionID != rotated.VersionID {
 		t.Fatalf("List = %#v, %v", listed, err)
 	}
+	viewerAuth := domain.RuntimeAuthContext{
+		AccountID: accountID,
+		Operations: map[domain.RuntimeOperation]struct{}{
+			domain.OperationListProviderCredentials: {},
+			domain.OperationGetProviderCredential:   {},
+		},
+		EffectiveProfile: domain.CredentialProfileViewer,
+		CredentialID:     "viewer:test",
+	}
+	viewerList, err := service.List(context.Background(), viewerAuth, ProviderCredentialListInput{})
+	if err != nil || len(viewerList.Items) != 1 || viewerList.Items[0].VersionID != rotated.VersionID {
+		t.Fatalf("Viewer List = %#v, %v", viewerList, err)
+	}
+	viewerRead, err := service.Get(context.Background(), viewerAuth, created.ID)
+	if err != nil || viewerRead.VersionID != rotated.VersionID {
+		t.Fatalf("Viewer Get = %#v, %v", viewerRead, err)
+	}
+	if _, err := service.Rotate(context.Background(), viewerAuth, created.ID, RotateProviderCredentialInput{
+		Credential:     ProviderStaticCredentialInput{APIKey: "viewer-secret"},
+		IdempotencyKey: "viewer-rotation",
+	}); err == nil {
+		t.Fatal("Viewer Rotate succeeded")
+	}
 	revoked, err := service.Revoke(context.Background(), auth, created.ID)
 	if err != nil {
 		t.Fatalf("Revoke: %v", err)
@@ -366,7 +389,7 @@ func TestProviderCredentialAccountScopeRequiresOperator(t *testing.T) {
 		Operations: map[domain.RuntimeOperation]struct{}{
 			domain.OperationCreateProviderCredential: {},
 		},
-		Profile: domain.AuthProfileRuntime,
+		EffectiveProfile: domain.CredentialProfileRuntime,
 	}
 	_, err := service.Create(context.Background(), auth, CreateProviderCredentialInput{
 		Provider: "openai",
@@ -381,7 +404,7 @@ func TestProviderCredentialAccountScopeRequiresOperator(t *testing.T) {
 		t.Fatalf("Runtime Account create error = %v", err)
 	}
 	tenantRef := "tenant-a"
-	auth.Profile = domain.AuthProfileOperator
+	auth.EffectiveProfile = domain.CredentialProfileOperator
 	auth.TenantConstraint = &tenantRef
 	_, err = service.Create(context.Background(), auth, CreateProviderCredentialInput{
 		Provider: "openai",

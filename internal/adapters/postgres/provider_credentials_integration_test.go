@@ -32,8 +32,8 @@ func TestProviderCredentialAdmissionResolutionAndCleanupIntegration(t *testing.T
 		t.Fatalf("create keyring: %v", err)
 	}
 	auth := runtimeAuth(account.ID)
-	auth.Profile = domain.AuthProfileOperator
-	auth.ActorID = "operator:integration"
+	auth.EffectiveProfile = domain.CredentialProfileOperator
+	auth.CredentialID = "operator:integration"
 	for _, operation := range []domain.RuntimeOperation{
 		domain.OperationListProviderCredentials,
 		domain.OperationCreateProviderCredential,
@@ -246,8 +246,8 @@ func TestProviderCredentialAdmissionResolutionAndCleanupIntegration(t *testing.T
 			domain.OperationCreateProviderCredential: {},
 			domain.OperationGetProviderCredential:    {},
 		},
-		Profile: domain.AuthProfileRuntime,
-		ActorID: "runtime:tenant-a",
+		EffectiveProfile: domain.CredentialProfileRuntime,
+		CredentialID:     "runtime:tenant-a",
 	}
 	tenantRuntimeCredential, err := lifecycle.Create(ctx, tenantRuntimeAuth, services.CreateProviderCredentialInput{
 		Provider:  "openai",
@@ -336,8 +336,8 @@ func TestRotateProviderCredentialAfterCurrentVersionExpiresIntegration(t *testin
 	ctx := context.Background()
 	clock := identity.SystemClock{}
 	ids := identity.NewUUIDv7Generator(clock)
-	auth.Profile = domain.AuthProfileOperator
-	auth.ActorID = "operator:rotation-integration"
+	auth.EffectiveProfile = domain.CredentialProfileOperator
+	auth.CredentialID = "operator:rotation-integration"
 	for _, operation := range []domain.RuntimeOperation{
 		domain.OperationCreateProviderCredential,
 		domain.OperationRotateProviderCredential,

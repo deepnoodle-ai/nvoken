@@ -218,6 +218,127 @@ func (c *Client) SubmitToolResults(ctx context.Context, invocationID string, res
 	})
 }
 
+func (c *Client) ListProviderCredentials(
+	ctx context.Context,
+	options ListProviderCredentialsOptions,
+) (*ProviderCredentialList, error) {
+	var status *generated.ListProviderCredentialsParamsStatus
+	if options.Status != nil {
+		value := generated.ListProviderCredentialsParamsStatus(*options.Status)
+		status = &value
+	}
+	params := &generated.ListProviderCredentialsParams{
+		Provider:  options.Provider,
+		Scope:     options.Scope,
+		Status:    status,
+		TenantRef: options.TenantRef,
+		Limit:     options.Limit,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredentialList], error) {
+		response, err := c.raw.ListProviderCredentialsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.ProviderCredentialList]{}, err
+		}
+		return callResult[generated.ProviderCredentialList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) CreateProviderCredential(
+	ctx context.Context,
+	input CreateProviderCredentialInput,
+) (*ProviderCredential, error) {
+	if input.APIKey == "" || input.IdempotencyKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "provider API key and idempotency key are required"}
+	}
+	body := generated.CreateProviderCredentialRequest{
+		Credential: generated.ProviderStaticCredential{
+			APIKey: &input.APIKey,
+		},
+		ExpiresAt:      input.ExpiresAt,
+		IdempotencyKey: input.IdempotencyKey,
+		Provider:       input.Provider,
+		Scope:          input.Scope,
+		TenantRef:      input.TenantRef,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredential], error) {
+		response, err := c.raw.CreateProviderCredentialWithResponse(ctx, body)
+		if err != nil {
+			return callResult[generated.ProviderCredential]{}, err
+		}
+		return callResult[generated.ProviderCredential]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetProviderCredential(ctx context.Context, id string) (*ProviderCredential, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredential], error) {
+		response, err := c.raw.GetProviderCredentialWithResponse(ctx, id)
+		if err != nil {
+			return callResult[generated.ProviderCredential]{}, err
+		}
+		return callResult[generated.ProviderCredential]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) RotateProviderCredential(
+	ctx context.Context,
+	id string,
+	input RotateProviderCredentialInput,
+) (*ProviderCredential, error) {
+	if input.APIKey == "" || input.IdempotencyKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "provider API key and idempotency key are required"}
+	}
+	body := generated.RotateProviderCredentialRequest{
+		Credential: generated.ProviderStaticCredential{
+			APIKey: &input.APIKey,
+		},
+		ExpiresAt:      input.ExpiresAt,
+		IdempotencyKey: input.IdempotencyKey,
+		OverlapSeconds: input.OverlapSeconds,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredential], error) {
+		response, err := c.raw.RotateProviderCredentialWithResponse(ctx, id, body)
+		if err != nil {
+			return callResult[generated.ProviderCredential]{}, err
+		}
+		return callResult[generated.ProviderCredential]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) RevokeProviderCredential(ctx context.Context, id string) (*ProviderCredential, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredential], error) {
+		response, err := c.raw.RevokeProviderCredentialWithResponse(ctx, id)
+		if err != nil {
+			return callResult[generated.ProviderCredential]{}, err
+		}
+		return callResult[generated.ProviderCredential]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
 func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOptions) (*generated.InvocationList, error) {
 	params := &generated.ListInvocationsParams{
 		TenantRef:     options.TenantRef,

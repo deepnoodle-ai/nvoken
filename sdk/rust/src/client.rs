@@ -322,8 +322,16 @@ impl Client {
                 "agent reference, idempotency key, and input are required",
             ));
         }
-        let model =
-            models::ModelSelection::new(request.spec.model.provider, request.spec.model.name);
+        let provider = match request.spec.model.provider.as_str() {
+            "anthropic" => models::ModelProvider::Anthropic,
+            "openai" => models::ModelProvider::Openai,
+            _ => {
+                return Err(NvokenError::validation(
+                    "model provider must be anthropic or openai",
+                ))
+            }
+        };
+        let model = models::ModelSelection::new(provider, request.spec.model.name);
         let mut spec = models::InlineExecutionSpec::new(request.spec.instructions, model);
         spec.budgets = request
             .spec

@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline client tools, callback tools, and structured output are included. Spec references and administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -11,6 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
+/// ModelProvenance : Reusable BYOK sources include safe credential and version IDs. Caller, platform, and installation sources omit them. No secret material is included.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ModelProvenance {
     #[serde(rename = "provider")]
@@ -19,22 +20,57 @@ pub struct ModelProvenance {
     pub requested_model: String,
     #[serde(rename = "served_model")]
     pub served_model: String,
-    #[serde(rename = "credential_source", deserialize_with = "Option::deserialize")]
-    pub credential_source: Option<serde_json::Value>,
+    #[serde(rename = "credential_source")]
+    pub credential_source: CredentialSource,
+    /// UUIDv7 with the public `pcrd_` prefix.
+    #[serde(
+        rename = "provider_credential_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub provider_credential_id: Option<String>,
+    /// UUIDv7 with the public `pcvr_` prefix.
+    #[serde(
+        rename = "credential_version_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub credential_version_id: Option<String>,
 }
 
 impl ModelProvenance {
+    /// Reusable BYOK sources include safe credential and version IDs. Caller, platform, and installation sources omit them. No secret material is included.
     pub fn new(
         provider: String,
         requested_model: String,
         served_model: String,
-        credential_source: Option<serde_json::Value>,
+        credential_source: CredentialSource,
     ) -> ModelProvenance {
         ModelProvenance {
             provider,
             requested_model,
             served_model,
             credential_source,
+            provider_credential_id: None,
+            credential_version_id: None,
         }
+    }
+}
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum CredentialSource {
+    #[serde(rename = "caller_ephemeral")]
+    CallerEphemeral,
+    #[serde(rename = "account_byok")]
+    AccountByok,
+    #[serde(rename = "tenant_byok")]
+    TenantByok,
+    #[serde(rename = "platform")]
+    Platform,
+    #[serde(rename = "installation_byok")]
+    InstallationByok,
+}
+
+impl Default for CredentialSource {
+    fn default() -> CredentialSource {
+        Self::CallerEphemeral
     }
 }

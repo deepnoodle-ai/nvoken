@@ -155,6 +155,36 @@ func TestGeneratorPreservesCredentialUnavailableForDurableSettlement(t *testing.
 	}
 }
 
+func TestGeneratorPreservesCredentialInfrastructureFailures(t *testing.T) {
+	for name, resolverErr := range map[string]error{
+		"retryable": ports.ErrRetryable,
+		"deadline":  context.DeadlineExceeded,
+	} {
+		t.Run(name, func(t *testing.T) {
+			resolver := &sequenceCredentialResolver{err: resolverErr}
+			generator := New(
+				Config{},
+				WithCredentialResolver(resolver),
+				WithToolCoordinator(&recordingToolCoordinator{}),
+			)
+			factoryCalls := 0
+			generator.factory = func(_, _, _ string) (llm.LLM, error) {
+				factoryCalls++
+				return &sequenceLLM{}, nil
+			}
+			request := generationRequest("anthropic")
+			request.Claim = generationClaim()
+			_, err := generator.Generate(context.Background(), request)
+			if !errors.Is(err, resolverErr) {
+				t.Fatalf("Generate error = %v", err)
+			}
+			if factoryCalls != 0 {
+				t.Fatalf("model factory calls = %d, want 0", factoryCalls)
+			}
+		})
+	}
+}
+
 type recordingToolCoordinator struct {
 	mu             sync.Mutex
 	events         []string

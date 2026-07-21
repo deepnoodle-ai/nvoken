@@ -3,10 +3,9 @@ package funding
 
 import (
 	"context"
-	"errors"
-)
 
-var ErrFundingDenied = errors.New("platform funding denied")
+	"github.com/deepnoodle-ai/nvoken/internal/ports"
+)
 
 type StaticGate struct {
 	Allowed bool
@@ -20,7 +19,7 @@ func (g StaticGate) AuthorizePlatformModelCall(
 	string,
 ) error {
 	if !g.Allowed {
-		return ErrFundingDenied
+		return ports.ErrPlatformFundingDenied
 	}
 	return nil
 }

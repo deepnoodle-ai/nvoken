@@ -245,7 +245,9 @@ func (e *GenerationExecutor) Execute(
 		}
 		if providerCalled &&
 			!errors.Is(err, ports.ErrGenerationInputInvalid) &&
-			!errors.Is(err, ports.ErrGenerationRecoveryInvalid) {
+			!errors.Is(err, ports.ErrGenerationRecoveryInvalid) &&
+			!errors.Is(err, ports.ErrCredentialUnavailable) &&
+			!errors.Is(err, ports.ErrRetryable) {
 			e.logProviderFailure(
 				claim,
 				class,
@@ -259,6 +261,9 @@ func (e *GenerationExecutor) Execute(
 			return domain.InvocationExecutionResult{}, ctx.Err()
 		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return domain.InvocationExecutionResult{}, err
+		}
+		if errors.Is(err, ports.ErrRetryable) {
 			return domain.InvocationExecutionResult{}, err
 		}
 		if errors.Is(err, ports.ErrCredentialUnavailable) {
@@ -904,6 +909,8 @@ func generationErrorClass(err error) string {
 		return "provider_deadline_exceeded"
 	case errors.Is(err, ports.ErrCredentialUnavailable):
 		return "credential_unavailable"
+	case errors.Is(err, ports.ErrRetryable):
+		return "retryable_infrastructure_failure"
 	case errors.Is(err, ports.ErrProviderUnsupported):
 		return "provider_unsupported"
 	case errors.Is(err, ports.ErrProviderKeyMissing):

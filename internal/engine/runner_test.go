@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -107,6 +108,28 @@ func TestRunnerTreatsExecutorLeaseLossAsStaleOwnership(t *testing.T) {
 	}
 	if !outcome.LeaseLost || outcome.Settled || ownership.settlementCount() != 0 {
 		t.Fatalf("outcome = %#v, settlements = %d", outcome, ownership.settlementCount())
+	}
+}
+
+func TestRunnerLeavesRetryableExecutorFailureNonterminal(t *testing.T) {
+	ownership := newFakeOwnership(1, time.Second)
+	runner := newTestRunner(
+		t,
+		ownership,
+		errorExecutor{err: fmt.Errorf("%w: credential store timeout", ports.ErrRetryable)},
+		nil,
+		testConfig(),
+	)
+	claim, ok, err := ownership.ClaimNext(context.Background(), "runner-1", time.Second)
+	if err != nil || !ok {
+		t.Fatalf("claim = %#v, ok = %v, error = %v", claim, ok, err)
+	}
+	outcome, err := runner.ExecuteClaim(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("execute claim: %v", err)
+	}
+	if outcome.Settled || outcome.LeaseLost || ownership.settlementCallCount() != 0 {
+		t.Fatalf("outcome = %#v, settlement calls = %d", outcome, ownership.settlementCallCount())
 	}
 }
 

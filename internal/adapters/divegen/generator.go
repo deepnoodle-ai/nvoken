@@ -341,7 +341,7 @@ func (g *Generator) generate(
 	}
 	response, err := agent.CreateResponse(ctx, options...)
 	if err != nil {
-		if errors.Is(err, ports.ErrCredentialUnavailable) {
+		if errors.Is(err, ports.ErrCredentialUnavailable) || errors.Is(err, ports.ErrRetryable) {
 			servedModel := evidence.servedModel()
 			if servedModel == "" {
 				servedModel = request.Model
@@ -366,6 +366,9 @@ func (g *Generator) generate(
 		}
 		if ctx.Err() != nil {
 			return domain.GenerationResponse{}, ctx.Err()
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return domain.GenerationResponse{}, err
 		}
 		return domain.GenerationResponse{}, fmt.Errorf("%w: Dive provider call", ports.ErrGenerationFailed)
 	}

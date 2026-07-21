@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline client tools, callback tools, and structured output are included. Spec references and administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -24,6 +24,8 @@ pub enum ErrorCode {
     NotFound,
     #[serde(rename = "idempotency_conflict")]
     IdempotencyConflict,
+    #[serde(rename = "provider_credential_conflict")]
+    ProviderCredentialConflict,
     #[serde(rename = "session_invocation_active")]
     SessionInvocationActive,
     #[serde(rename = "invocation_not_waiting")]
@@ -48,6 +50,7 @@ impl std::fmt::Display for ErrorCode {
             Self::Forbidden => write!(f, "forbidden"),
             Self::NotFound => write!(f, "not_found"),
             Self::IdempotencyConflict => write!(f, "idempotency_conflict"),
+            Self::ProviderCredentialConflict => write!(f, "provider_credential_conflict"),
             Self::SessionInvocationActive => write!(f, "session_invocation_active"),
             Self::InvocationNotWaiting => write!(f, "invocation_not_waiting"),
             Self::ToolResultConflict => write!(f, "tool_result_conflict"),

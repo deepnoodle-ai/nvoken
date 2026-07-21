@@ -952,11 +952,6 @@ resource "google_cloud_run_v2_service" "runtime" {
         }
       }
 
-      env {
-        name  = "RUNTIME_API_PROFILE"
-        value = var.runtime_api_profile
-      }
-
       dynamic "env" {
         for_each = var.invocation_execution_mode == "embedded" ? local.provider_secrets : {}
 

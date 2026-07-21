@@ -110,17 +110,6 @@ variable "provider_credential_active_key_id" {
   }
 }
 
-variable "runtime_api_profile" {
-  description = "Authorization profile assigned to the generated Runtime bearer key. Operator enables Account BYOK lifecycle; runtime is Invocation-oriented."
-  type        = string
-  default     = "operator"
-
-  validation {
-    condition     = contains(["runtime", "viewer", "operator"], var.runtime_api_profile)
-    error_message = "runtime_api_profile must be runtime, viewer, or operator."
-  }
-}
-
 variable "callback_signing_key_secret_id" {
   description = "Existing Secret Manager secret ID whose latest version contains the installation callback HMAC key. Null disables callback admission."
   type        = string
