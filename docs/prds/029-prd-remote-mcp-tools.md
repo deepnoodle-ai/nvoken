@@ -37,12 +37,15 @@ ports the proven client seam (config shape, per-call sessions, annotation
 mapping), not Mobius's integration and catalog resource model or its OAuth
 broker.
 
-The durable ToolCall spine, checkpoint crash recovery, tool declarations and
-fingerprinting, guarded public egress, and encrypted per-Invocation credential
-bindings now exist, so a server-executed remote tool call can be an ordinary
+The durable ToolCall spine, checkpoint crash recovery, tool declarations,
+fingerprinting, the parked external-tool wait, guarded public egress, and
+encrypted per-Invocation credential bindings now exist, so a server-executed
+remote tool call can be an ordinary
 fenced, checkpointed boundary instead of a new trust or recovery mechanism.
 This is a deliberate, host-opt-in amendment to the "every tool with side
 effects executes on your side" boundary, and it goes through the decision log.
+The exception covers remote MCP servers the host explicitly attaches, nothing
+broader: nvoken still executes no host or end-user code.
 
 ## Outcome
 
@@ -109,7 +112,9 @@ staging proof.
   persist only as one credential binding per server per Invocation, sealed
   with the application-layer authenticated encryption and versioned external
   key introduced by `028-prd-per-provider-credential-modes.md`, and readable
-  only by the execution path. No read, list, transcript, fixed-cut snapshot,
+  only by the execution path. It is a distinct MCP binding record that reuses
+  028's encryption machinery, not an extension of the model-provider binding
+  schema or lifecycle. No read, list, transcript, fixed-cut snapshot,
   SSE frame, error, or log surface ever discloses them. Terminal settlement
   destroys the bindings in the same transaction, and the 028 cleanup sweeper
   covers the crash window. There is no stored credential resource and no
@@ -119,10 +124,14 @@ staging proof.
 - **R4 — One durable discovery per Invocation.** Before the first model
   iteration that could observe MCP tools, the owning engine performs one
   discovery per declared server: a fresh MCP session (initialize, `tools/list`,
-  close) through guarded egress under the discovery deadline. With
-  `allowed_tools`, every listed name must be discovered and projectable or the
-  Invocation settles `failed` with terminal error `mcp_discovery_failed`
-  before any provider call. Without it, all discovered tools project, and
+  close) through guarded egress under the discovery deadline, draining any
+  `tools/list` pagination cursors to completion within it. Every declared
+  server must complete discovery: an unreachable, guard-rejected, timed-out,
+  or protocol-failed server settles the Invocation `failed` with terminal
+  error `mcp_discovery_failed` before any provider call, and there is no
+  partial success across declared servers. With `allowed_tools`, every listed
+  name must additionally be discovered and projectable, or the Invocation
+  settles the same way. Without it, all discovered tools project, and
   non-projectable tools are excluded with recorded reasons. Projection exposes
   `{server}__{tool}`; the projected name must fit the existing tool-name
   charset within 64 characters and be unique across projected tools, declared
@@ -145,7 +154,9 @@ staging proof.
   a fenced attempt row commits before dispatch, one fresh MCP session serves
   the single `tools/call` against the snapshot's pinned remote name, and the
   per-call deadline is the minimum of `call_seconds`, the remaining segment
-  ceiling less the settlement reserve, and the Invocation wall deadline.
+  ceiling less the settlement reserve, and the Invocation wall deadline. MCP
+  siblings in one model batch execute serially in batch order; nvoken never
+  dispatches concurrent MCP calls under a single lease.
   Result acceptance appends the canonical tool message, settles the call with
   origin `mcp`, and appends a tool checkpoint in one fenced transaction under
   the first-accepted-result rule. MCP time is active execution time and
@@ -182,7 +193,8 @@ staging proof.
   appear wherever ToolCall lifecycle is already exposed; the canonical
   transcript remains the single content record and no new pending projection
   is added, because MCP calls require no host action. OpenAPI documents the
-  `McpServerSpec` shape and the error surface: admission failures are
+  `McpServerSpec` shape, extends the tools-bearing spec definition to cover
+  `mcp_servers`, and documents the error surface: admission failures are
   `400 invalid_request`, discovery failure is the terminal
   `mcp_discovery_failed`, and per-call failures surface as tool results, not
   Invocation errors. Structured logs record server name, ToolCall ID,
@@ -225,7 +237,12 @@ staging proof.
 - [ ] **A3 (R4):** Against a scripted MCP server, the discovery snapshot
   commits before the first model call; a missing allowlisted tool settles
   `mcp_discovery_failed` with no provider call; without an allowlist,
-  non-projectable tools are excluded with recorded reasons; killing the
+  non-projectable tools are excluded with recorded reasons; a declared tool
+  named `alpha__beta` colliding with server `alpha` tool `beta` resolves at
+  snapshot time (allowlisted: `mcp_discovery_failed`; otherwise excluded with
+  reason), never at model selection; an unreachable second server fails the
+  whole Invocation with no partial catalog; a paginated `tools/list` is
+  drained across cursors; killing the
   engine before and after snapshot commit yields exactly one durable catalog;
   and mutating the server's tools mid-Invocation does not change the
   model-visible catalog.
@@ -282,6 +299,18 @@ staging proof.
 - Discovery pinning versus server drift: the snapshot guarantees a stable
   model-visible catalog, but the server executes its current tool. A tool
   renamed or removed after discovery settles as an error result. Accepted.
+- Retry gating trusts server-asserted annotations: a server that wrongly
+  marks a destructive tool read-only or idempotent can obtain a double
+  effect after lease loss. This is a sharper trust assumption than callback
+  tools, where the host owns the effect and its idempotency. The host
+  chooses its servers, and nvoken cannot promise exactly-once over HTTP
+  regardless. A host-controlled override (all tools non-retryable unless
+  allowlisted as safe) is the natural follow-up if this proves too trusting.
+- Effective call deadlines can sit far below `call_seconds`: on Cloud Tasks
+  segments the remaining segment ceiling less the settlement reserve often
+  dominates, and nvoken never checkpoints and chains mid `tools/call`.
+  Hosts must size `call_seconds` and wall deadlines against the installation
+  segment ceiling; the guides call this out explicitly.
 - Tool descriptions and results are untrusted model input from a third
   party, a prompt-injection surface like any tool result. nvoken bounds and
   never executes this content; the host chooses which servers to attach.
