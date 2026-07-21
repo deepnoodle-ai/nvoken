@@ -18,6 +18,12 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 	if cfg.DatabaseMaxConns != 10 {
 		t.Errorf("DatabaseMaxConns: got %d, want 10", cfg.DatabaseMaxConns)
 	}
+	if cfg.Engine.Concurrency != 8 || cfg.Engine.PollInterval != time.Second ||
+		cfg.Engine.LeaseDuration != 30*time.Second || cfg.Engine.HeartbeatInterval != 10*time.Second ||
+		cfg.Engine.ReaperInterval != 10*time.Second || cfg.Engine.ReaperBatchLimit != 100 ||
+		cfg.Engine.DrainGrace != 30*time.Second {
+		t.Fatalf("Engine defaults: %#v", cfg.Engine)
+	}
 }
 
 func TestLoadMigrationConfig(t *testing.T) {
@@ -50,6 +56,10 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	t.Setenv("PORT", "9090")
 	t.Setenv("DATABASE_MAX_CONNS", "17")
 	t.Setenv("RUNTIME_TENANT_REF", "tenant-acme")
+	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret")
+	t.Setenv("OPENAI_API_KEY", "openai-secret")
+	t.Setenv("ENGINE_CONCURRENCY", "3")
+	t.Setenv("ENGINE_POLL_INTERVAL", "250ms")
 
 	cfg, err := loadDaemonConfig()
 	if err != nil {
@@ -60,6 +70,21 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	}
 	if cfg.DatabaseMaxConns != 17 || cfg.RuntimeTenantConstraint == nil || *cfg.RuntimeTenantConstraint != "tenant-acme" {
 		t.Fatalf("daemon config = %#v", cfg)
+	}
+	if cfg.AnthropicAPIKey != "anthropic-secret" || cfg.OpenAIAPIKey != "openai-secret" ||
+		cfg.Engine.Concurrency != 3 || cfg.Engine.PollInterval != 250*time.Millisecond {
+		t.Fatalf("generation config = %#v", cfg)
+	}
+}
+
+func TestLoadDaemonConfigRejectsInvalidEngineConfiguration(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("ENGINE_LEASE_DURATION", "10s")
+	t.Setenv("ENGINE_HEARTBEAT_INTERVAL", "5s")
+
+	_, err := loadDaemonConfig()
+	if err == nil || !strings.Contains(err.Error(), "heartbeat interval") {
+		t.Fatalf("invalid engine error = %v", err)
 	}
 }
 

@@ -78,6 +78,8 @@ type Invocation struct {
 	LeaseExpiresAt       *time.Time
 	LeaseAttempt         int64
 	Error                json.RawMessage
+	Usage                json.RawMessage
+	Provenance           json.RawMessage
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	CompletedAt          *time.Time
@@ -126,6 +128,57 @@ type InvocationClaim struct {
 }
 
 type InvocationExecutionResult struct {
-	Status InvocationStatus
-	Error  json.RawMessage
+	Status            InvocationStatus
+	Error             json.RawMessage
+	AssistantMessages []GenerationMessage
+	Usage             *ModelUsage
+	Provenance        *ModelProvenance
+}
+
+// GenerationMessage is the provider-neutral message shape exchanged with the
+// model adapter. Content is the same ordered block array stored in the Session
+// transcript; no provider request or response envelope crosses this boundary.
+type GenerationMessage struct {
+	Role    MessageRole
+	Content json.RawMessage
+}
+
+type GenerationRequest struct {
+	Instructions string
+	Provider     string
+	Model        string
+	Messages     []GenerationMessage
+}
+
+type GenerationResponse struct {
+	Messages    []GenerationMessage
+	Usage       ModelUsage
+	ServedModel string
+}
+
+type ModelUsage struct {
+	InputTokens              int        `json:"input_tokens"`
+	OutputTokens             int        `json:"output_tokens"`
+	CacheCreationInputTokens int        `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int        `json:"cache_read_input_tokens,omitempty"`
+	ReasoningTokens          int        `json:"reasoning_tokens,omitempty"`
+	EstimatedCost            *ModelCost `json:"estimated_cost,omitempty"`
+}
+
+// ModelCost is Dive's normalized list-price estimate, not a billing ledger.
+type ModelCost struct {
+	Input      float64 `json:"input"`
+	Output     float64 `json:"output"`
+	CacheRead  float64 `json:"cache_read"`
+	CacheWrite float64 `json:"cache_write"`
+	Total      float64 `json:"total"`
+	Currency   string  `json:"currency,omitempty"`
+	Model      string  `json:"model,omitempty"`
+}
+
+type ModelProvenance struct {
+	Provider         string `json:"provider"`
+	RequestedModel   string `json:"requested_model"`
+	ServedModel      string `json:"served_model"`
+	CredentialSource string `json:"credential_source"`
 }

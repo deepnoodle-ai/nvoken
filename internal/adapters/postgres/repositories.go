@@ -347,6 +347,8 @@ func invocationFromRow(row postgresdb.Invocation) domain.Invocation {
 		LeaseExpiresAt:       row.LeaseExpiresAt,
 		LeaseAttempt:         row.LeaseAttempt,
 		Error:                row.Error,
+		Usage:                row.Usage,
+		Provenance:           row.Provenance,
 		CreatedAt:            row.CreatedAt, UpdatedAt: row.UpdatedAt, CompletedAt: row.CompletedAt,
 	}
 }
@@ -393,13 +395,14 @@ func (s *Store) SettleInvocation(
 	attempt int64,
 	status domain.InvocationStatus,
 	stateRevision int64,
-	errorPayload []byte,
+	errorPayload, usagePayload, provenancePayload []byte,
 	observedAt time.Time,
 ) (domain.Invocation, error) {
 	row, err := s.q(ctx).SettleInvocation(ctx, postgresdb.SettleInvocationParams{
 		ID: id, LeaseOwner: &owner, LeaseAttempt: attempt,
 		Status: string(status), StateRevision: stateRevision,
-		ErrorPayload: errorPayload, ObservedAt: &observedAt,
+		ErrorPayload: errorPayload, UsagePayload: usagePayload,
+		ProvenancePayload: provenancePayload, ObservedAt: &observedAt,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Invocation{}, ports.ErrLeaseLost

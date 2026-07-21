@@ -37,7 +37,9 @@ they are **stateless**. nvoken aims to retain that approach as much as possible.
 ## The contract
 
 > **Early implementation.** Durable JSON admission and authoritative
-> Invocation/Session reads now work; the queued turn engine is the next slice.
+> Invocation/Session reads now work, and the self-contained service executes
+> generation-only Anthropic and OpenAI turns. Tools, transcript reads, and
+> checkpointed crash continuation remain future slices.
 > If the contract looks wrong for your app, please
 > [open an issue](https://github.com/deepnoodle-ai/nvoken/issues).
 

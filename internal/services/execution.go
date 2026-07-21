@@ -27,6 +27,7 @@ const (
 
 type executionStore interface {
 	ports.SessionRepository
+	ports.SessionMessageRepository
 	ports.InvocationRepository
 	ports.InvocationStateRepository
 }
@@ -205,6 +206,10 @@ func (s *InvocationExecutionService) Settle(
 	result domain.InvocationExecutionResult,
 ) error {
 	if err := validateExecutionResult(result); err != nil {
+		return ports.ErrExecutionResultInvalid
+	}
+	usagePayload, provenancePayload, err := executionEvidencePayloads(result)
+	if err != nil {
 		return err
 	}
 	observed, err := s.store.GetInvocation(ctx, claim.Invocation.ID)
@@ -234,6 +239,28 @@ func (s *InvocationExecutionService) Settle(
 		if err != nil {
 			return err
 		}
+		throughMessageSequence := currentState.ThroughMessageSequence
+		for _, output := range result.AssistantMessages {
+			messageID, err := s.ids.NewID(domain.PrefixSessionMessage)
+			if err != nil {
+				return err
+			}
+			sequence, err := s.store.ReserveMessageSequence(txCtx, invocation.SessionID)
+			if err != nil {
+				return err
+			}
+			if err := s.store.AppendSessionMessage(txCtx, domain.SessionMessage{
+				ID: messageID, SessionID: invocation.SessionID,
+				AccountID: invocation.AccountID, TenantPartitionID: invocation.TenantPartitionID,
+				AgentID: invocation.AgentID, InvocationID: invocation.ID,
+				Sequence: sequence, Role: domain.MessageRoleAssistant,
+				Content: output.Content, CreatedAt: now,
+			}); err != nil {
+				return err
+			}
+			sequenceCopy := sequence
+			throughMessageSequence = &sequenceCopy
+		}
 		stateID, err := s.ids.NewID(domain.PrefixInvocationState)
 		if err != nil {
 			return err
@@ -244,13 +271,13 @@ func (s *InvocationExecutionService) Settle(
 		}
 		settled, err := s.store.SettleInvocation(
 			txCtx, invocation.ID, claim.Owner, claim.Attempt,
-			result.Status, revision, result.Error, now,
+			result.Status, revision, result.Error, usagePayload, provenancePayload, now,
 		)
 		if err != nil {
 			return err
 		}
 		return s.store.AppendInvocationState(txCtx, lifecycleState(
-			settled, stateID, revision, result.Status, currentState.ThroughMessageSequence, now,
+			settled, stateID, revision, result.Status, throughMessageSequence, now,
 		))
 	})
 }
@@ -361,10 +388,58 @@ func validateExecutionResult(result domain.InvocationExecutionResult) error {
 	if result.Status == domain.InvocationCompleted && len(result.Error) != 0 {
 		return fmt.Errorf("completed execution result cannot contain an error")
 	}
+	if result.Status == domain.InvocationCompleted && len(result.AssistantMessages) == 0 {
+		return fmt.Errorf("completed execution result requires an assistant message")
+	}
+	if result.Status == domain.InvocationCompleted && (result.Usage == nil || result.Provenance == nil) {
+		return fmt.Errorf("completed execution result requires usage and provenance")
+	}
 	if result.Status == domain.InvocationFailed && (len(result.Error) == 0 || !json.Valid(result.Error)) {
 		return fmt.Errorf("failed execution result requires a valid JSON error")
 	}
+	if result.Status == domain.InvocationFailed && len(result.AssistantMessages) != 0 {
+		return fmt.Errorf("failed execution result cannot contain assistant messages")
+	}
+	if result.Status == domain.InvocationFailed && (result.Usage != nil || result.Provenance != nil) {
+		return fmt.Errorf("failed execution result cannot contain usage or provenance")
+	}
+	for _, message := range result.AssistantMessages {
+		if message.Role != domain.MessageRoleAssistant {
+			return fmt.Errorf("execution output message role must be assistant")
+		}
+		if err := validateGenerationMessage(message, true); err != nil {
+			return err
+		}
+	}
+	if result.Usage != nil {
+		if err := validateModelUsage(*result.Usage); err != nil {
+			return err
+		}
+	}
+	if result.Provenance != nil {
+		if err := validateModelProvenance(*result.Provenance); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func executionEvidencePayloads(result domain.InvocationExecutionResult) ([]byte, []byte, error) {
+	var usagePayload, provenancePayload []byte
+	var err error
+	if result.Usage != nil {
+		usagePayload, err = json.Marshal(result.Usage)
+		if err != nil {
+			return nil, nil, fmt.Errorf("encode model usage: %w", err)
+		}
+	}
+	if result.Provenance != nil {
+		provenancePayload, err = json.Marshal(result.Provenance)
+		if err != nil {
+			return nil, nil, fmt.Errorf("encode model provenance: %w", err)
+		}
+	}
+	return usagePayload, provenancePayload, nil
 }
 
 func claimOwns(invocation domain.Invocation, claim domain.InvocationClaim, now time.Time) bool {
