@@ -96,6 +96,8 @@ func redisOptions(rawURL, password, caCertificate string) (*redis.Options, error
 		if options.TLSConfig == nil {
 			options.TLSConfig = &tls.Config{}
 		} else {
+			// ParseURL carries the rediss host (including a Memorystore IP) as
+			// ServerName. Preserve it while replacing the trust roots.
 			options.TLSConfig = options.TLSConfig.Clone()
 		}
 		options.TLSConfig.MinVersion = tls.VersionTLS12
@@ -189,6 +191,7 @@ func (r *Redis) publishOne(event ports.LiveEvent) {
 func (r *Redis) recordPublishGap(event ports.LiveEvent) {
 	r.gapsMu.Lock()
 	key := liveScope(event.AccountID, event.SessionID)
+	_, alreadyPending := r.gaps[key]
 	payload, _ := json.Marshal(domain.StreamResyncEvent{
 		EventType: domain.LiveEventStreamResync, SessionID: event.SessionID, Reason: "live_delivery_gap",
 	})
@@ -196,6 +199,9 @@ func (r *Redis) recordPublishGap(event ports.LiveEvent) {
 		Type: domain.LiveEventStreamResync, AccountID: event.AccountID, SessionID: event.SessionID, Payload: payload,
 	}
 	r.gapsMu.Unlock()
+	if !alreadyPending {
+		r.markScopeGapped(event.AccountID, event.SessionID)
+	}
 }
 
 func (r *Redis) takePublishGaps() []ports.LiveEvent {
@@ -331,6 +337,19 @@ func (r *Redis) markAccountGapped(accountID string) {
 				targets = append(targets, sub)
 			}
 		}
+	}
+	r.local.mu.RUnlock()
+	for _, target := range targets {
+		target.gapped.Store(true)
+	}
+}
+
+func (r *Redis) markScopeGapped(accountID, sessionID string) {
+	r.local.mu.RLock()
+	current := r.local.byScope[liveScope(accountID, sessionID)]
+	targets := make([]*subscription, 0, len(current))
+	for _, sub := range current {
+		targets = append(targets, sub)
 	}
 	r.local.mu.RUnlock()
 	for _, target := range targets {

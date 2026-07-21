@@ -201,9 +201,11 @@ durability claim for Redis Pub/Sub.
   complete the still-pending PRD 009/010 Cloud Tasks and revision-drain proofs;
   then a real
   authenticated Invocation streams at least one live delta across Cloud Tasks
-  and separate Cloud Run services, survives one forced stream reconnect, and
-  finishes with transcript and terminal status matching JSON recovery. This
-  cloud proof may remain unchecked at merge, but production readiness may not.
+  and separate Cloud Run services over a verified Redis AUTH/TLS connection to
+  the exact Terraform-provided IP, port, and CA bundle, survives one forced
+  stream reconnect, and finishes with transcript and terminal status matching
+  JSON recovery. This cloud proof may remain unchecked at merge, but production
+  readiness may not.
 
 - [x] **A9 (R9):** API design, architecture, decision log, OpenAPI, and
   operator guidance state one consistent durable-versus-live replay contract

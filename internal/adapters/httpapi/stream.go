@@ -99,6 +99,9 @@ func (h *handler) streamSessionTranscript(w http.ResponseWriter, r *http.Request
 					return err
 				}
 			}
+			// Empty pages echo the delivered watermark under the PRD 007
+			// contract. Updating the in-memory position is safe, but only a
+			// nonempty frame exposes that position as an SSE ID.
 			delivered = snapshot.ResumeCursor
 			if len(snapshot.Messages) != 0 || len(snapshot.InvocationChanges) != 0 {
 				response := transcriptSnapshotResponseFromService(snapshot)
