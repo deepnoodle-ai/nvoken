@@ -22,6 +22,13 @@ mock_provider "google" {
       }]
     }
   }
+
+  mock_resource "google_monitoring_uptime_check_config" {
+    defaults = {
+      uptime_check_id = "nvoken-test-public-health"
+    }
+    override_during = plan
+  }
 }
 
 mock_provider "random" {
@@ -261,6 +268,58 @@ run "paved_defaults" {
     )
     error_message = "Aged dispatch alerts must require sustained evidence without delaying discrete failure alerts."
   }
+
+  assert {
+    condition = (
+      length(google_monitoring_dashboard.runtime) == 1 &&
+      google_monitoring_uptime_check_config.runtime.http_check[0].path == "/health" &&
+      google_monitoring_uptime_check_config.runtime.http_check[0].use_ssl == true &&
+      strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, google_cloud_run_v2_service.runtime.name) &&
+      strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, google_cloud_run_v2_service.executor.name) &&
+      strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, google_cloud_tasks_queue.execution.name) &&
+      strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, google_sql_database_instance.runtime.name) &&
+      strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, google_redis_instance.live_events.name) &&
+      strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, "run.googleapis.com/request_count") &&
+      strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, "cloudtasks.googleapis.com/queue/task_attempt_delays") &&
+      strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, "cloudsql.googleapis.com/database/instance_state") &&
+      strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, "redis.googleapis.com/server/uptime") &&
+      !strcontains(google_monitoring_dashboard.runtime[0].dashboard_json, "cloudtasks.googleapis.com/queue/oldest")
+    )
+    error_message = "The one operations dashboard must be wired to deployed Runtime, executor, queue, Cloud SQL, and Redis resources without inventing an oldest-task metric."
+  }
+
+  assert {
+    condition = (
+      keys(google_logging_metric.invocation_outcomes.label_extractors) == tolist(["status"]) &&
+      keys(google_logging_metric.provider_outcomes.label_extractors) == tolist(["outcome"]) &&
+      keys(google_logging_metric.callback_events.label_extractors) == tolist(["delivery_status", "event"]) &&
+      keys(google_logging_metric.executor_attempts.label_extractors) == tolist(["handler_outcome"]) &&
+      keys(google_logging_metric.dispatch_age.label_extractors) == tolist(["event"]) &&
+      strcontains(google_logging_metric.provider_outcomes.filter, "jsonPayload.event=\"provider_generation\"") &&
+      strcontains(google_logging_metric.invocation_outcomes.filter, "jsonPayload.event=\"invocation_settled\"") &&
+      strcontains(google_logging_metric.executor_attempts.filter, "jsonPayload.event=\"dispatch_attempt_decided\"")
+    )
+    error_message = "Application metrics must use fixed events and extract only bounded status/outcome labels, never correlation IDs or payload fields."
+  }
+
+  assert {
+    condition = (
+      length(google_monitoring_alert_policy.runtime_health.notification_channels) == 0 &&
+      google_monitoring_alert_policy.provider_failures.conditions[0].condition_threshold[0].threshold_value == 5 &&
+      google_monitoring_alert_policy.provider_failures.conditions[0].condition_threshold[0].duration == "300s" &&
+      strcontains(google_monitoring_alert_policy.provider_failures.conditions[0].condition_threshold[0].filter, "metric.label.outcome=\"failed\"") &&
+      google_monitoring_alert_policy.callback_failures.conditions[0].condition_threshold[0].duration == "0s" &&
+      google_monitoring_alert_policy.database_capacity.conditions[1].condition_threshold[0].threshold_value == 0.85 &&
+      strcontains(google_monitoring_alert_policy.runtime_health.documentation[0].content, "runbooks.md#runtime-unavailable-or-5xx") &&
+      strcontains(google_monitoring_alert_policy.provider_failures.documentation[0].content, "runbooks.md#repeated-provider-failure") &&
+      strcontains(google_monitoring_alert_policy.callback_failures.documentation[0].content, "runbooks.md#callback-exhaustion-or-worker-failure") &&
+      strcontains(google_monitoring_alert_policy.database_capacity.documentation[0].content, "runbooks.md#cloud-sql-capacity-exhaustion") &&
+      strcontains(google_monitoring_alert_policy.database_health.documentation[0].content, "runbooks.md#cloud-sql-failed-or-unknown") &&
+      strcontains(google_monitoring_alert_policy.task_delivery_rejections.documentation[0].content, "runbooks.md#executor-delivery-rejections") &&
+      alltrue([for policy in google_monitoring_alert_policy.dispatch_failures : strcontains(policy.documentation[0].content, "runbooks.md#")])
+    )
+    error_message = "High-signal alerts must retain conservative defaults, allow immediate discrete failures, and link their alert-specific runbooks."
+  }
 }
 
 run "embedded_mode_moves_provider_secrets" {
@@ -310,11 +369,37 @@ run "notification_channels_are_wired" {
   }
 
   assert {
-    condition = alltrue([
-      for policy in google_monitoring_alert_policy.dispatch_failures :
-      policy.notification_channels == tolist(["projects/example-project/notificationChannels/123456789"])
-    ])
-    error_message = "Every dispatch alert policy must attach the configured notification channels."
+    condition = alltrue(concat(
+      [for policy in google_monitoring_alert_policy.dispatch_failures : policy.notification_channels == tolist(["projects/example-project/notificationChannels/123456789"])],
+      [
+        google_monitoring_alert_policy.runtime_health.notification_channels == tolist(["projects/example-project/notificationChannels/123456789"]),
+        google_monitoring_alert_policy.task_delivery_rejections.notification_channels == tolist(["projects/example-project/notificationChannels/123456789"]),
+        google_monitoring_alert_policy.provider_failures.notification_channels == tolist(["projects/example-project/notificationChannels/123456789"]),
+        google_monitoring_alert_policy.callback_failures.notification_channels == tolist(["projects/example-project/notificationChannels/123456789"]),
+        google_monitoring_alert_policy.database_capacity.notification_channels == tolist(["projects/example-project/notificationChannels/123456789"]),
+        google_monitoring_alert_policy.database_health.notification_channels == tolist(["projects/example-project/notificationChannels/123456789"]),
+      ],
+    ))
+    error_message = "Every nvoken alert policy must attach the configured notification channels."
+  }
+}
+
+run "dashboard_can_be_disabled" {
+  command = plan
+
+  variables {
+    project_id                   = "example-project"
+    environment                  = "test"
+    image_tag                    = "0123456789abcdef"
+    anthropic_api_key_secret_id  = "nvoken-test-anthropic"
+    database_deletion_protection = false
+    service_deletion_protection  = false
+    enable_monitoring_dashboard  = false
+  }
+
+  assert {
+    condition     = length(google_monitoring_dashboard.runtime) == 0
+    error_message = "Disposable deployments must be able to disable the one managed dashboard without disabling alert policies."
   }
 }
 

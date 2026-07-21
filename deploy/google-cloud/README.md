@@ -40,7 +40,11 @@ stale writers.
   reconciler, and a dedicated OIDC caller identity; and
 - an internal-ingress, IAM-protected executor Cloud Run service that receives
   the database and configured provider credentials, uses request-based CPU, and
-  scales to zero.
+  scales to zero;
+- one Cloud Monitoring operations dashboard spanning Runtime, execution,
+  callbacks, providers, Cloud Tasks, Cloud SQL, and Redis; and
+- a public health uptime check plus conservative alert policies linked to
+  [alert-specific runbooks](runbooks.md).
 
 The default Cloud Tasks mode caps the queue at 40 concurrent requests, matching
 ten executor instances at concurrency four. The combined service keeps one
@@ -142,16 +146,55 @@ the dedicated VPC remains the peer-access boundary for this small-installation
 topology.
 
 Set `NVOKEN_DEPLOY_AUTO_APPROVE=1` only in a reviewed CI release. Override the
-unique image tag with `TF_VAR_image_tag`; `latest` is rejected. For production,
-consider `TF_VAR_database_availability_type=REGIONAL` and retain both database
-and service deletion protection. Provider secret versions use `latest`, so
-rotating a key requires a service revision to refresh its environment.
+unique image tag with `TF_VAR_image_tag`; `latest` is rejected. Provider secret
+versions use `latest`, so rotating a key requires a service revision to refresh
+its environment.
 
 The Terraform root uses a GCS backend prefix of
 `nvoken/${TF_VAR_environment}`. Set `NVOKEN_TF_STATE_LOCATION` before the first
 bootstrap to place the bucket somewhere other than `TF_VAR_region` (which
 defaults to `us-central1`). Bucket location cannot be changed later. Keep each
 environment isolated, and serialize release jobs against its state lock.
+
+## Production baseline
+
+The cheap development defaults are deliberately not a production claim. Before
+the Google profile is marked production ready, record all required rows below
+in the PRD 017 readiness matrix. Until that matrix and the PRD 020 restore drill
+exist, the corresponding rows remain `pending`.
+
+| Setting or proof | Production baseline | Classification |
+| --- | --- | --- |
+| Cloud SQL availability | `database_availability_type = "REGIONAL"` | Required safety setting |
+| Cloud SQL deletion protection | `database_deletion_protection = true` | Required safety setting |
+| Cloud Run deletion protection | `service_deletion_protection = true` | Required safety setting |
+| Alert delivery | At least one channel in `monitoring_notification_channels`, tested end to end | Required safety setting |
+| Capacity reconciliation | Review the `configured_capacity_totals` output against Cloud SQL connections, queue concurrency, quotas, and provider limits | Required safety setting |
+| Backup and recovery | Exercise the PRD 020 Cloud SQL backup/PITR restore into isolation and record the verified recovery point | Required safety proof |
+| Service, executor, queue, database, and Redis sizing | Choose from observed workload and qualification evidence | Workload-dependent advice |
+| Alert thresholds and windows | Tune only from incident/volume evidence; preserve a sustained window for noisy provider and callback failures | Workload-dependent advice |
+
+The defaults use zonal Cloud SQL, leave Cloud Run deletion protection off, and
+permit an empty notification list so a disposable deployment stays usable.
+For production, set the three required Terraform values explicitly even where a
+current default happens to match:
+
+```bash
+export TF_VAR_database_availability_type='REGIONAL'
+export TF_VAR_database_deletion_protection='true'
+export TF_VAR_service_deletion_protection='true'
+export TF_VAR_monitoring_notification_channels='["projects/PROJECT/notificationChannels/CHANNEL"]'
+```
+
+The default database connection alert opens above 80 connections. Confirm that
+this remains below the selected instance's actual `max_connections`, with room
+for the summed runtime/executor pool ceilings, migrations, and operator access.
+The alert threshold is independent of `configured_capacity_totals`; Terraform
+does not derive it from the declared pools or the selected Cloud SQL tier. Any
+pool, instance-count, queue-concurrency, or database-tier change therefore
+requires an explicit capacity reconciliation and threshold review.
+Change `monitoring_alert_thresholds` and `monitoring_alert_windows_seconds` as
+reviewed objects when the deployment needs different conservative bounds.
 
 ## End-to-end smoke
 
@@ -236,20 +279,58 @@ with `Retry-After`; once the authoritative attempt is terminal, redelivery is a
 sustained executor-retry alert as a capacity or durability incident rather than
 lost work.
 
-Terraform creates alert policies for aged pending dispatches, stale published
-dispatches, repeated publication failure, sustained executor retries, and
-executor `401`/`403` responses.
-A published Invocation with a running, unexpired Postgres lease is excluded
-from stale-dispatch warnings because the dispatch row does not change while its
-request legitimately runs. Once that lease expires, the dispatch becomes
-alertable until the reaper or executor makes a durable decision.
-Aged-state policies require five minutes of sustained observations, while
-publication and authentication failures alert immediately. Set
-`monitoring_notification_channels` to existing full Monitoring channel resource
-names (for example,
-`["projects/PROJECT/notificationChannels/CHANNEL"]`) before a production
-rollout. The default empty list creates observable incidents but does not notify
-an operator.
+## Dashboard, alerts, and notifications
+
+Terraform creates one dashboard by default. Set
+`enable_monitoring_dashboard = false` only when another managed view replaces
+it. The dashboard shows public request volume/5xx/latency, uptime checks,
+Invocation settlement outcomes, provider outcome/latency, callback activity,
+aged dispatch evidence, dispatch/executor outcomes, Cloud Tasks depth/attempt
+delay, Cloud SQL connections/storage, and Redis memory/clients. Empty charts
+mean **unknown or no events**, not healthy. Log-based metrics begin collecting
+only after Terraform creates them.
+
+Google Cloud Tasks exposes queue depth, attempt count, and attempt delay but no
+native oldest-task-age time series. The dashboard therefore composes runnable
+delivery evidence from nvoken's `oldest_age_ms` on bounded aged-dispatch events,
+Cloud Tasks depth, and p95 attempt delay. A published Invocation with a running,
+unexpired Postgres lease is excluded from stale-dispatch warnings because the
+dispatch row does not change while its request legitimately runs. Once that
+lease expires, the dispatch becomes alertable until the reaper or executor
+makes a durable decision.
+
+The alert set covers:
+
+- sustained public 5xx or failed `/health` uptime checks;
+- aged pending/published work and dispatch publication failure;
+- repeated executor/task rejection, including immediate executor `401`/`403`;
+- sustained provider failure, with one ordinary failure below threshold;
+- callback exhaustion or repeated worker failure; and
+- imminent Cloud SQL connection/storage exhaustion plus sustained
+  `FAILED`/`UNKNOWN_STATE` instance health.
+
+Every policy links its procedure in [runbooks.md](runbooks.md). Terraform does
+not add a backup-success alert because Cloud SQL does not expose a reliable
+per-instance backup-success time series for this package; the exercised PRD 020
+backup/PITR procedure remains the proof.
+
+`monitoring_notification_channels` accepts existing full Monitoring channel
+resource names. The default empty list still creates dashboards, incidents, and
+runbook links but not operator notification. Confirm this boundary after apply:
+
+```bash
+terraform -chdir=deploy/google-cloud output monitoring_notifications_configured
+terraform -chdir=deploy/google-cloud output monitoring_notification_channels
+terraform -chdir=deploy/google-cloud output monitoring_dashboard_id
+```
+
+Cloud Monitoring has no generic test operation for every channel type. In a
+disposable environment, use temporary safe thresholds or the controlled
+failures in the [Google Cloud qualification procedure](../../docs/testing/google-cloud-qualification.md),
+observe both the open and recovery notification, then restore the reviewed
+threshold object through Terraform. Do not call a channel tested merely because
+it appears in Terraform state. At least one attached channel must have recorded
+delivery evidence before the profile's notification row can leave `pending`.
 
 For planned rollback, first pause the execution queue and let active executor
 requests drain when possible. Apply with

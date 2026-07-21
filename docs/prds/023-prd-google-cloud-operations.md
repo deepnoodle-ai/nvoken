@@ -1,6 +1,6 @@
 # Add the minimum Google Cloud operations package
 
-**Status:** Draft
+**Status:** Implemented; Google Cloud proof and readiness matrix pending
 **Sequence:** 023
 **Depends on:** `010-prd-cloud-tasks-invocation-execution.md`,
 `011-prd-resumable-streaming.md`,
@@ -48,9 +48,10 @@ cross-project fleet views; a web console.
   and terminal outcomes, provider outcomes/latency, callback retries/failures,
   dispatch health, executor attempts, Cloud Tasks depth/age, and essential Cloud
   SQL/Redis resource health. For this profile, runnable-delivery age is composed
-  from existing aged-dispatch events and Cloud Tasks oldest-task age; it is not a
-  new direct Invocation-age metric. Empty or unavailable signals must be labeled
-  rather than interpreted as success.
+  from existing aged-dispatch events, Cloud Tasks queue depth, and Cloud Tasks
+  attempt delay; Cloud Tasks does not expose a native oldest-task-age metric, and
+  this slice does not add a direct Invocation-age metric. Empty or unavailable
+  signals must be labeled rather than interpreted as success.
 
 - **R2 — Small high-signal alert set.** The profile must alert on sustained
   public 5xx/unavailability, aged runnable work, repeated provider failure,

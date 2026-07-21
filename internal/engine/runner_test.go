@@ -410,6 +410,9 @@ func TestRunnerLogsOperationalFieldsWithoutInvocationPayloads(t *testing.T) {
 	if !strings.Contains(logs, "invocation_id") || !strings.Contains(logs, "lease_attempt") {
 		t.Fatalf("logs omitted operational claim fields: %s", logs)
 	}
+	if !strings.Contains(logs, `"event":"invocation_settled"`) {
+		t.Fatalf("logs omitted bounded settlement event: %s", logs)
+	}
 }
 
 type fakeOwnership struct {

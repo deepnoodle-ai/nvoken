@@ -200,7 +200,8 @@ func (e *GenerationExecutor) Execute(
 	if err := ctx.Err(); err != nil {
 		return domain.InvocationExecutionResult{}, err
 	}
-	started := time.Now()
+	var providerStarted time.Time
+	providerCalled := false
 	var response domain.GenerationResponse
 	if recovery.ExternalToolsPending {
 		response = domain.GenerationResponse{
@@ -225,19 +226,38 @@ func (e *GenerationExecutor) Execute(
 				return failed, nil
 			}
 		}
+		providerStarted = time.Now()
+		providerCalled = true
 		response, err = e.generate(ctx, claim, request)
 	}
 	if err != nil {
+		class := generationErrorClass(err)
+		interrupted := false
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			class = generationErrorClass(ctxErr)
+			interrupted = true
+		}
+		if providerCalled &&
+			!errors.Is(err, ports.ErrGenerationInputInvalid) &&
+			!errors.Is(err, ports.ErrGenerationRecoveryInvalid) {
+			e.logProviderFailure(
+				claim,
+				class,
+				request.Provider,
+				request.Model,
+				time.Since(providerStarted),
+				interrupted,
+			)
+		}
 		if ctx.Err() != nil {
 			return domain.InvocationExecutionResult{}, ctx.Err()
 		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return domain.InvocationExecutionResult{}, err
 		}
-		class := generationErrorClass(err)
-		e.logFailure(claim, class, request.Provider, request.Model)
 		if errors.Is(err, ports.ErrGenerationInputInvalid) ||
 			errors.Is(err, ports.ErrGenerationRecoveryInvalid) {
+			e.logFailure(claim, class, request.Provider, request.Model)
 			return internalGenerationFailure(), nil
 		}
 		return providerGenerationFailure(), nil
@@ -245,6 +265,20 @@ func (e *GenerationExecutor) Execute(
 	servedModel := response.ServedModel
 	if strings.TrimSpace(servedModel) == "" {
 		servedModel = request.Model
+	}
+	logProviderSuccess := func() {
+		if !providerCalled {
+			return
+		}
+		e.logProviderSuccess(
+			claim,
+			request.Provider,
+			request.Model,
+			servedModel,
+			response.Usage,
+			time.Since(providerStarted),
+		)
+		providerCalled = false
 	}
 	provenance := &domain.ModelProvenance{
 		Provider:         request.Provider,
@@ -260,9 +294,21 @@ func (e *GenerationExecutor) Execute(
 			Provenance:           provenance,
 		}
 		if err := validateExecutionResult(result); err != nil {
-			e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
+			if providerCalled {
+				e.logProviderFailure(
+					claim,
+					"invalid_provider_response",
+					request.Provider,
+					request.Model,
+					time.Since(providerStarted),
+					false,
+				)
+			} else {
+				e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
+			}
 			return providerGenerationFailure(), nil
 		}
+		logProviderSuccess()
 		e.logger.Info(
 			"Model generation parked for external tools",
 			"invocation_id",
@@ -284,6 +330,7 @@ func (e *GenerationExecutor) Execute(
 		result.AssistantMessages = nil
 	}
 	if response.BudgetExceeded != "" {
+		logProviderSuccess()
 		e.logger.Warn("Model generation budget exceeded",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt, "budget_kind", response.BudgetExceeded)
 		failed := budgetGenerationFailure(response.BudgetExceeded, response.Usage, *result.Provenance)
@@ -291,6 +338,7 @@ func (e *GenerationExecutor) Execute(
 		return failed, nil
 	}
 	if response.StructuredOutputFailure != "" {
+		logProviderSuccess()
 		failed := structuredOutputGenerationFailure(
 			response.StructuredOutputFailure,
 			response.Usage,
@@ -300,9 +348,21 @@ func (e *GenerationExecutor) Execute(
 		return failed, nil
 	}
 	if err := validateExecutionResult(result); err != nil {
-		e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
+		if providerCalled {
+			e.logProviderFailure(
+				claim,
+				"invalid_provider_response",
+				request.Provider,
+				request.Model,
+				time.Since(providerStarted),
+				false,
+			)
+		} else {
+			e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
+		}
 		return providerGenerationFailure(), nil
 	}
+	logProviderSuccess()
 	if ctx.Err() != nil {
 		failed := deadlineGenerationFailure(claim, &response.Usage, result.Provenance)
 		failed.MessagesCheckpointed = response.MessagesCheckpointed
@@ -315,15 +375,6 @@ func (e *GenerationExecutor) Execute(
 		failed.MessagesCheckpointed = response.MessagesCheckpointed
 		return failed, nil
 	}
-	e.logger.Info("Model generation completed",
-		"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
-		"provider", request.Provider, "requested_model", request.Model,
-		"served_model", servedModel, "input_tokens", response.Usage.InputTokens,
-		"output_tokens", response.Usage.OutputTokens,
-		"cache_creation_input_tokens", response.Usage.CacheCreationInputTokens,
-		"cache_read_input_tokens", response.Usage.CacheReadInputTokens,
-		"reasoning_tokens", response.Usage.ReasoningTokens,
-		"generation_latency_ms", time.Since(started).Milliseconds())
 	return result, nil
 }
 
@@ -380,6 +431,82 @@ func (e *GenerationExecutor) logFailure(claim domain.InvocationClaim, class, pro
 	e.logger.Warn("Model generation failed",
 		"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
 		"class", class, "provider", provider, "requested_model", model)
+}
+
+func (e *GenerationExecutor) logProviderSuccess(
+	claim domain.InvocationClaim,
+	provider string,
+	requestedModel string,
+	servedModel string,
+	usage domain.ModelUsage,
+	latency time.Duration,
+) {
+	e.logger.Info(
+		"Provider generation completed",
+		"event",
+		"provider_generation",
+		"outcome",
+		"success",
+		"invocation_id",
+		claim.Invocation.ID,
+		"lease_attempt",
+		claim.Attempt,
+		"provider",
+		provider,
+		"requested_model",
+		requestedModel,
+		"served_model",
+		servedModel,
+		"iterations",
+		usage.Iterations,
+		"input_tokens",
+		usage.InputTokens,
+		"output_tokens",
+		usage.OutputTokens,
+		"cache_creation_input_tokens",
+		usage.CacheCreationInputTokens,
+		"cache_read_input_tokens",
+		usage.CacheReadInputTokens,
+		"reasoning_tokens",
+		usage.ReasoningTokens,
+		"generation_latency_ms",
+		latency.Milliseconds(),
+	)
+}
+
+func (e *GenerationExecutor) logProviderFailure(
+	claim domain.InvocationClaim,
+	class string,
+	provider string,
+	requestedModel string,
+	latency time.Duration,
+	interrupted bool,
+) {
+	message := "Provider generation failed"
+	outcome := "failed"
+	if interrupted {
+		message = "Provider generation canceled"
+		outcome = "canceled"
+	}
+	e.logger.Warn(
+		message,
+		"event",
+		"provider_generation",
+		"outcome",
+		outcome,
+		"invocation_id",
+		claim.Invocation.ID,
+		"lease_attempt",
+		claim.Attempt,
+		"class",
+		class,
+		"provider",
+		provider,
+		"requested_model",
+		requestedModel,
+		"generation_latency_ms",
+		latency.Milliseconds(),
+	)
 }
 
 func decodeInlineSpec(payload []byte) (InlineExecutionSpec, error) {
@@ -753,6 +880,10 @@ func validateModelProvenance(provenance domain.ModelProvenance) error {
 
 func generationErrorClass(err error) string {
 	switch {
+	case errors.Is(err, context.Canceled):
+		return "provider_canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "provider_deadline_exceeded"
 	case errors.Is(err, ports.ErrProviderUnsupported):
 		return "provider_unsupported"
 	case errors.Is(err, ports.ErrProviderKeyMissing):
