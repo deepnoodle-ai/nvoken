@@ -13,7 +13,9 @@ Memorystore, Secret Manager, callbacks, and Monitoring behave together.
 A passing run makes the Google qualification row `proven` for the exact
 recorded topology. It does not prove every Google failure mode, an availability
 percentage, production traffic safety, backup/restore, sustained capacity, or
-all future revisions. The PRD 017 readiness matrix remains the status source.
+all future revisions. The
+[production-readiness profiles and evidence matrix](production-readiness-profiles.md)
+remains the status source.
 
 ## One runner, not a script collection
 
