@@ -13,10 +13,54 @@ type Account struct {
 	CreatedAt time.Time
 }
 
+type AccountMembership struct {
+	ID        string
+	AccountID string
+	SubjectID string
+	Role      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Agent struct {
 	ID        string
 	AccountID string
 	AgentRef  string
+	CreatedAt time.Time
+}
+
+type ApiCredential struct {
+	ID                    string
+	AccountID             string
+	Kind                  string
+	Name                  string
+	Prefix                string
+	Verifier              []byte
+	Status                string
+	Profile               *string
+	RoleCap               *string
+	OwnerSubjectID        *string
+	CreatorSubjectID      *string
+	CreatorCredentialID   *string
+	TenantConstraint      *string
+	SessionConstraint     *string
+	OperationConstraints  []string
+	ExpiresAt             *time.Time
+	RotatedFromID         *string
+	RotationOverlapEndsAt *time.Time
+	RevokedAt             *time.Time
+	LastUsedAt            *time.Time
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+type BrowserSession struct {
+	ID        string
+	AccountID string
+	SubjectID string
+	TokenHash []byte
+	CsrfHash  []byte
+	ExpiresAt time.Time
 	CreatedAt time.Time
 }
 
@@ -39,6 +83,40 @@ type CallbackDelivery struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	TerminalAt        *time.Time
+}
+
+type CredentialIssuance struct {
+	AccountID      string
+	Scope          string
+	IdempotencyKey string
+	RequestHash    []byte
+	CredentialID   string
+	Ciphertext     []byte
+	Nonce          []byte
+	ExpiresAt      time.Time
+	CreatedAt      time.Time
+}
+
+type DeviceAuthorization struct {
+	ID                   string
+	AccountID            string
+	DeviceCodeHash       []byte
+	UserCodeHash         []byte
+	UserCodeDisplay      string
+	DeviceLabel          string
+	RoleCap              string
+	TenantConstraint     *string
+	SessionConstraint    *string
+	Status               string
+	PollIntervalSeconds  int32
+	NextPollAt           time.Time
+	ConfirmationAttempts int32
+	ApprovedBySubjectID  *string
+	CredentialID         *string
+	ExpiresAt            time.Time
+	DeliveryExpiresAt    *time.Time
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 type ExecutionDispatch struct {
@@ -154,6 +232,14 @@ type ModelUsageReceipt struct {
 	CreatedAt         time.Time
 }
 
+type OperatorSubject struct {
+	ID        string
+	AccountID string
+	Issuer    string
+	Subject   string
+	CreatedAt time.Time
+}
+
 type Session struct {
 	ID                    string
 	AccountID             string
@@ -177,6 +263,13 @@ type SessionMessage struct {
 	Role              string
 	Content           []byte
 	CreatedAt         time.Time
+}
+
+type StaticCredentialImport struct {
+	AccountID    string
+	ImportKey    string
+	CredentialID string
+	ImportedAt   time.Time
 }
 
 type SyntheticDispatchWork struct {

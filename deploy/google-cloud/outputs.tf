@@ -54,8 +54,18 @@ output "migration_job_name" {
 }
 
 output "runtime_api_key_secret_id" {
-  description = "Secret Manager secret containing the generated Runtime bearer key."
+  description = "Secret Manager secret containing the legacy Runtime bearer retained for rollback until explicit cutover."
   value       = google_secret_manager_secret.runtime_api_key.secret_id
+}
+
+output "bootstrap_owner_secret_id" {
+  description = "Secret Manager secret containing the installation bootstrap Owner secret."
+  value       = google_secret_manager_secret.bootstrap_owner_secret.secret_id
+}
+
+output "credential_delivery_key_secret_id" {
+  description = "Secret Manager secret protecting bounded one-time credential delivery."
+  value       = google_secret_manager_secret.credential_delivery_key.secret_id
 }
 
 output "service_account_email" {

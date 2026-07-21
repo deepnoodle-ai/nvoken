@@ -205,7 +205,7 @@ func (s *RuntimeService) CancelInvocation(ctx context.Context, auth domain.Runti
 		return InvocationRead{}, invalidRequest("invocation_id is invalid.")
 	}
 	observed, err := s.store.GetInvocation(ctx, invocationID)
-	if errors.Is(err, ports.ErrNotFound) || (err == nil && observed.AccountID != auth.AccountID) {
+	if errors.Is(err, ports.ErrNotFound) || (err == nil && (observed.AccountID != auth.AccountID || !auth.AllowsSession(observed.SessionID))) {
 		return InvocationRead{}, notFound()
 	}
 	if err != nil {

@@ -8,15 +8,19 @@ This guide explains the runtime, not a production-readiness claim. The exact
 single-daemon operating boundary and its current proof status live in the
 [production-readiness profiles and evidence matrix](../testing/production-readiness-profiles.md).
 
-Apply migrations explicitly, then start the service with a Postgres URL and a
-random bearer secret of at least 32 bytes. Supply the installation key for each
-provider your admitted specs may select:
+Apply migrations explicitly, then start the service with Postgres, the initial
+Runtime bearer, and the separate bootstrap and delivery-protection secrets
+described in [Machine credentials and CLI authentication](credentials-and-cli-auth.md).
+Supply the installation key for each provider your admitted specs may select:
 
 ```bash
 DATABASE_URL='postgres://…' go run ./cmd/nvokend migrate
 
 DATABASE_URL='postgres://…' \
 RUNTIME_API_KEY='replace-with-a-random-32-byte-or-longer-secret' \
+BOOTSTRAP_OWNER_SECRET='replace-with-a-separate-random-32-byte-secret' \
+CREDENTIAL_DELIVERY_KEY='replace-with-32-bytes-as-unpadded-base64url' \
+NVOKEN_PUBLIC_BASE_URL='http://localhost:8080' \
 ANTHROPIC_API_KEY='replace-with-an-Anthropic-key' \
 OPENAI_API_KEY='' \
 go run ./cmd/nvokend serve
@@ -65,12 +69,15 @@ Patterns are limited to 1,024 UTF-8 bytes. The accepted ToolCall is internal
 checkpoint evidence; public `output` remains null until fenced terminal
 settlement commits the final object and provenance together.
 
-On its first start, the static self-hosted authenticator serializes creation of
-one installation Account and its default tenant partition. Later starts resolve
-that same Account and fail closed if the database contains more than one.
-`RUNTIME_TENANT_REF` optionally confines the installation credential to one
-tenant partition. The bearer secret remains installation configuration and is
-never stored or logged.
+On its first start, nvoken serializes creation of one installation Account, its
+default tenant partition, the local bootstrap Owner membership, and one durable
+`Runtime` machine credential derived from `RUNTIME_API_KEY`.
+`RUNTIME_TENANT_REF` optionally confines that imported credential to one tenant
+partition. Later starts resolve the import marker rather than configuration, so
+changing the environment cannot create a second credential and revocation is
+never undone. Keep the configured value only for the documented rollback
+window; after explicit cutover a current binary starts without it. The durable
+row stores only a nonreversible verifier, not the bearer secret.
 
 Submit one turn:
 

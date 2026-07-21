@@ -1548,7 +1548,7 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             code: unauthenticated
-            message: A valid Runtime credential is required.
+            message: A valid API credential is required.
             request_id: req_01K0NVA1K5T8Y1MBVX7TZBM21H
     Forbidden:
       description: The authenticated credential is not permitted to make this request.

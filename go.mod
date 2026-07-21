@@ -13,6 +13,8 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/googleapis/gax-go/v2 v2.21.0
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/oapi-codegen/runtime v1.6.0
+	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/redis/go-redis/v9 v9.17.2
 	google.golang.org/api v0.274.0
 	google.golang.org/grpc v1.80.0

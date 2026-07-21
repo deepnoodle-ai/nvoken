@@ -13,9 +13,9 @@ type bootstrapStore interface {
 	ports.TenantPartitionRepository
 }
 
-// BootstrapInstallation resolves the only Account owned by the static
-// self-hosted authenticator. A transaction-scoped database lock makes startup
-// safe when several replicas begin together.
+// BootstrapInstallation resolves the only Account owned by the self-hosted
+// installation. A transaction-scoped database lock makes startup safe when
+// several replicas begin together.
 func BootstrapInstallation(
 	ctx context.Context,
 	store bootstrapStore,
@@ -61,7 +61,7 @@ func BootstrapInstallation(
 				return fmt.Errorf("resolve installation default tenant partition: %w", err)
 			}
 		default:
-			return fmt.Errorf("static installation requires exactly one Account; found at least %d", len(accounts))
+			return fmt.Errorf("self-hosted installation requires exactly one Account; found at least %d", len(accounts))
 		}
 		return nil
 	})

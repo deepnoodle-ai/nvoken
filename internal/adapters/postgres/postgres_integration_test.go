@@ -24,6 +24,7 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
+	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
 var testSchemaCounter atomic.Uint64
@@ -110,16 +111,104 @@ func TestMigratorIsIdempotentAndSerialized(t *testing.T) {
 	}
 }
 
+func TestIdentityCredentialAndDeviceFlowPersistsInPostgres(t *testing.T) {
+	pool, _ := testDatabase(t, true)
+	store := NewStore(pool)
+	txm := NewTransactionManager(pool)
+	ctx := context.Background()
+	fixture := createRuntimeFixture(t, ctx, store, txm)
+	clock := identity.SystemClock{}
+	ids := identity.NewUUIDv7Generator(clock)
+	service, err := services.NewIdentityService(store, store, txm, clock, ids, services.IdentityConfig{
+		AccountID:             fixture.account.ID,
+		VerificationBaseURL:   "http://localhost:8080",
+		DeliveryEncryptionKey: make([]byte, 32),
+		BootstrapOwnerSecret:  "bootstrap-owner-secret-0123456789",
+	})
+	if err != nil {
+		t.Fatalf("new identity service: %v", err)
+	}
+	owner, err := service.BootstrapOwner(ctx)
+	if err != nil {
+		t.Fatalf("bootstrap Owner: %v", err)
+	}
+
+	legacyToken := "0123456789abcdef0123456789abcdef"
+	legacy, err := service.ImportStaticRuntimeCredential(ctx, legacyToken, nil)
+	if err != nil {
+		t.Fatalf("import Runtime credential: %v", err)
+	}
+	if _, err := service.Authenticate(ctx, legacyToken); err != nil {
+		t.Fatalf("authenticate imported credential: %v", err)
+	}
+
+	challenge, err := service.StartDeviceAuthorization(ctx, services.DeviceCodeInput{DeviceLabel: "integration-test"})
+	if err != nil {
+		t.Fatalf("start device flow: %v", err)
+	}
+	browser, err := service.CreateBootstrapBrowserSession(ctx, "bootstrap-owner-secret-0123456789")
+	if err != nil {
+		t.Fatalf("create bootstrap browser session: %v", err)
+	}
+	session, err := service.ResolveBrowserSession(ctx, browser.Token, browser.CSRFToken)
+	if err != nil {
+		t.Fatalf("resolve bootstrap browser session: %v", err)
+	}
+	if err := service.ConfirmDeviceAuthorization(ctx, challenge.UserCode, true, session); err != nil {
+		t.Fatalf("approve device flow: %v", err)
+	}
+	userIssuance, err := service.PollDeviceAuthorization(ctx, challenge.DeviceCode)
+	if err != nil {
+		t.Fatalf("exchange device flow: %v", err)
+	}
+	operator, err := service.Authenticate(ctx, userIssuance.Secret)
+	if err != nil || operator.Subject == nil || operator.Subject.ID != owner.ID {
+		t.Fatalf("authenticate user credential = %#v, %v", operator, err)
+	}
+
+	machineIssuance, err := service.CreateMachineCredential(ctx, operator, "postgres-integration", services.CredentialCreateInput{
+		Name:    "CI integration",
+		Profile: domain.CredentialProfileRuntime,
+	})
+	if err != nil {
+		t.Fatalf("create machine credential: %v", err)
+	}
+	if machineIssuance.Credential.CreatorCredentialID == nil || *machineIssuance.Credential.CreatorCredentialID != operator.CredentialID || machineIssuance.Credential.CreatorSubjectID == nil || *machineIssuance.Credential.CreatorSubjectID != owner.ID {
+		t.Fatalf("machine creator attribution = %#v", machineIssuance.Credential)
+	}
+	if _, err := service.Authenticate(ctx, machineIssuance.Secret); err != nil {
+		t.Fatalf("authenticate machine credential: %v", err)
+	}
+	if _, err := service.RevokeCredential(ctx, operator, machineIssuance.Credential.ID); err != nil {
+		t.Fatalf("revoke machine credential: %v", err)
+	}
+	if _, err := service.Authenticate(ctx, machineIssuance.Secret); !errors.Is(err, ports.ErrUnauthenticated) {
+		t.Fatalf("revoked credential authentication error = %v", err)
+	}
+
+	var rawVerifierRows, rawIssuanceRows int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM api_credentials WHERE verifier = $1::bytea", []byte(legacyToken)).Scan(&rawVerifierRows); err != nil {
+		t.Fatalf("inspect verifier storage: %v", err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM credential_issuances WHERE ciphertext = $1::bytea", []byte(machineIssuance.Secret)).Scan(&rawIssuanceRows); err != nil {
+		t.Fatalf("inspect issuance storage: %v", err)
+	}
+	if rawVerifierRows != 0 || rawIssuanceRows != 0 {
+		t.Fatalf("raw secret persisted: verifier rows = %d, issuance rows = %d", rawVerifierRows, rawIssuanceRows)
+	}
+	assertPostgresCode(t, execError(ctx, pool, "UPDATE api_credentials SET verifier = repeat('x', 32)::bytea WHERE id = $1", legacy.ID), "23514")
+}
+
 func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("dirty version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = 11",
+			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = 12",
 		); err != nil {
 			t.Fatalf("mark migration dirty: %v", err)
 		}
 		err := NewMigrator(databaseURL, 2*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil))).Apply(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "000011 is dirty") {
+		if err == nil || !strings.Contains(err.Error(), "000012 is dirty") {
 			t.Fatalf("migrate error = %v", err)
 		}
 	})
@@ -127,7 +216,7 @@ func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("unknown version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false WHERE version = 11",
+			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false WHERE version = 12",
 		); err != nil {
 			t.Fatalf("set future migration: %v", err)
 		}
