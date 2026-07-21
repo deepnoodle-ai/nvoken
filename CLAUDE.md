@@ -34,6 +34,11 @@ Hexagonal architecture for the Go backend:
 - Postgres for durable state: pgx for access, sqlc for adapter query generation,
   and golang-migrate for embedded forward migrations.
 
+## Go style
+
+- In multiline keyed struct literals, put exactly one field assignment on each
+  line.
+
 ## Pre-commit checks
 
 Run the gate before commit:

@@ -97,6 +97,7 @@ func (e *GenerationExecutor) Execute(
 		Messages:        messages,
 		MaxOutputTokens: claim.Invocation.MaxOutputTokens,
 		MaxIterations:   claim.Invocation.MaxIterations,
+		Claim:           &claim,
 	}
 	if err := ctx.Err(); err != nil {
 		return domain.InvocationExecutionResult{}, err
@@ -122,13 +123,26 @@ func (e *GenerationExecutor) Execute(
 		servedModel = request.Model
 	}
 	result := domain.InvocationExecutionResult{
-		Status:            domain.InvocationCompleted,
-		AssistantMessages: response.Messages,
-		Usage:             &response.Usage,
+		Status:               domain.InvocationCompleted,
+		AssistantMessages:    response.Messages,
+		MessagesCheckpointed: response.MessagesCheckpointed,
+		Usage:                &response.Usage,
 		Provenance: &domain.ModelProvenance{
-			Provider: request.Provider, RequestedModel: request.Model,
-			ServedModel: servedModel, CredentialSource: credentialSourceInstallationBYOK,
+			Provider:         request.Provider,
+			RequestedModel:   request.Model,
+			ServedModel:      servedModel,
+			CredentialSource: credentialSourceInstallationBYOK,
 		},
+	}
+	if response.MessagesCheckpointed {
+		result.AssistantMessages = nil
+	}
+	if response.BudgetExceeded != "" {
+		e.logger.Warn("Model generation budget exceeded",
+			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt, "budget_kind", response.BudgetExceeded)
+		failed := budgetGenerationFailure(response.BudgetExceeded, response.Usage, *result.Provenance)
+		failed.MessagesCheckpointed = response.MessagesCheckpointed
+		return failed, nil
 	}
 	if err := validateExecutionResult(result); err != nil {
 		e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
@@ -256,7 +270,7 @@ func transcriptForClaim(claim domain.InvocationClaim, stored []domain.SessionMes
 }
 
 func validateGenerationMessage(message domain.GenerationMessage, output bool) error {
-	if message.Role != domain.MessageRoleUser && message.Role != domain.MessageRoleAssistant {
+	if message.Role != domain.MessageRoleUser && message.Role != domain.MessageRoleAssistant && message.Role != domain.MessageRoleTool {
 		return fmt.Errorf("generation message role is unsupported")
 	}
 	if output && message.Role != domain.MessageRoleAssistant {
@@ -294,8 +308,23 @@ func validateGenerationMessage(message domain.GenerationMessage, output bool) er
 			case "text", "refusal":
 				visible = true
 			case "thinking", "redacted_thinking", "summary":
+			case "tool_use":
+				var id, name string
+				if json.Unmarshal(block["id"], &id) != nil || strings.TrimSpace(id) == "" ||
+					json.Unmarshal(block["name"], &name) != nil || strings.TrimSpace(name) == "" ||
+					len(block["input"]) == 0 || !json.Valid(block["input"]) {
+					return fmt.Errorf("assistant tool_use content is invalid")
+				}
 			default:
 				return fmt.Errorf("assistant generation content type %q is unsupported", blockType)
+			}
+		case domain.MessageRoleTool:
+			if blockType != "tool_result" {
+				return fmt.Errorf("tool generation content must be tool_result")
+			}
+			var toolUseID string
+			if json.Unmarshal(block["tool_use_id"], &toolUseID) != nil || strings.TrimSpace(toolUseID) == "" || len(block["content"]) == 0 {
+				return fmt.Errorf("tool_result content is invalid")
 			}
 		}
 		if blockType == "text" || blockType == "refusal" {
@@ -353,9 +382,10 @@ func exceededGenerationBudget(invocation domain.Invocation, usage domain.ModelUs
 
 func budgetGenerationFailure(kind string, usage domain.ModelUsage, provenance domain.ModelProvenance) domain.InvocationExecutionResult {
 	return domain.InvocationExecutionResult{
-		Status: domain.InvocationFailed,
-		Error:  invocationFailureWithDetails("budget_exceeded", "The execution budget was exceeded.", map[string]string{"kind": kind}),
-		Usage:  &usage, Provenance: &provenance,
+		Status:     domain.InvocationFailed,
+		Error:      invocationFailureWithDetails("budget_exceeded", "The execution budget was exceeded.", map[string]string{"kind": kind}),
+		Usage:      &usage,
+		Provenance: &provenance,
 	}
 }
 
@@ -365,9 +395,10 @@ func deadlineGenerationFailure(claim domain.InvocationClaim, usage *domain.Model
 		scope = *claim.Invocation.ExecutionDeadlineScope
 	}
 	return domain.InvocationExecutionResult{
-		Status: domain.InvocationFailed,
-		Error:  invocationFailureWithDetails("deadline_exceeded", "The execution deadline was exceeded.", map[string]string{"scope": scope}),
-		Usage:  usage, Provenance: provenance,
+		Status:     domain.InvocationFailed,
+		Error:      invocationFailureWithDetails("deadline_exceeded", "The execution deadline was exceeded.", map[string]string{"scope": scope}),
+		Usage:      usage,
+		Provenance: provenance,
 	}
 }
 

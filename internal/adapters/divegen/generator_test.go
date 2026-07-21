@@ -2,16 +2,95 @@ package divegen
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/deepnoodle-ai/dive/llm"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
+
+type sequenceLLM struct {
+	mu        sync.Mutex
+	responses []*llm.Response
+	events    *[]string
+	calls     int
+}
+
+func (*sequenceLLM) Name() string { return "sequence" }
+
+func (m *sequenceLLM) Generate(_ context.Context, options ...llm.Option) (*llm.Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.calls >= len(m.responses) {
+		return nil, errors.New("unexpected model call")
+	}
+	config := llm.Config{}
+	config.Apply(options...)
+	m.calls++
+	if m.events != nil {
+		*m.events = append(*m.events, "model")
+	}
+	return m.responses[m.calls-1], nil
+}
+
+type recordingToolCoordinator struct {
+	mu          sync.Mutex
+	events      []string
+	checkpoints []domain.ModelCheckpointInput
+	starts      int
+}
+
+func (c *recordingToolCoordinator) RecordModelCheckpoint(_ context.Context, claim domain.InvocationClaim, input domain.ModelCheckpointInput) (domain.ModelCheckpointResult, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, "checkpoint")
+	c.checkpoints = append(c.checkpoints, input)
+	return domain.ModelCheckpointResult{}, nil
+}
+
+func (c *recordingToolCoordinator) StartBuiltinToolCall(_ context.Context, claim domain.InvocationClaim, iteration int, providerCallID string) (domain.ToolCallExecution, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.checkpoints) == 0 || c.checkpoints[len(c.checkpoints)-1].Iteration != iteration {
+		return domain.ToolCallExecution{}, errors.New("builtin started before request checkpoint")
+	}
+	c.events = append(c.events, "start")
+	c.starts++
+	return domain.ToolCallExecution{
+		Call: domain.ToolCall{
+			ID:             "tcal_019f84a5-7838-7b57-a180-5f74a0b65be0",
+			ProviderCallID: providerCallID,
+			Iteration:      iteration,
+		},
+		Attempt: domain.ToolCallAttempt{
+			ID:      "tcat_019f84a5-7838-7b57-a180-5f74a0b65be1",
+			Attempt: 1,
+		},
+	}, nil
+}
+
+func (c *recordingToolCoordinator) AcceptBuiltinToolResult(_ context.Context, _ domain.InvocationClaim, execution domain.ToolCallExecution, content json.RawMessage, isError bool) (domain.ToolCall, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if execution.Call.ID == "" || len(content) == 0 || isError {
+		return domain.ToolCall{}, errors.New("invalid deterministic result")
+	}
+	c.events = append(c.events, "result")
+	return execution.Call, nil
+}
+
+func (c *recordingToolCoordinator) snapshot() ([]string, []domain.ModelCheckpointInput, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.events...), append([]domain.ModelCheckpointInput(nil), c.checkpoints...), c.starts
+}
 
 type fakeLLM struct {
 	config llm.Config
@@ -103,6 +182,152 @@ func TestGeneratorUsesExplicitProviderKeyAndToolFreeDiveCall(t *testing.T) {
 				t.Fatalf("normalized messages = %#v", response.Messages)
 			}
 		})
+	}
+}
+
+func TestDeterministicBuiltinCheckpointsBeforeExecutionAndNextModelCall(t *testing.T) {
+	coordinator := &recordingToolCoordinator{}
+	model := &sequenceLLM{
+		responses: []*llm.Response{
+			{
+				Model: "served-model",
+				Role:  llm.Assistant,
+				Content: []llm.Content{
+					&llm.ToolUseContent{
+						ID:    "provider-call-1",
+						Name:  deterministicEchoToolName,
+						Input: json.RawMessage(`{"value":"hello"}`),
+					},
+				},
+				Usage: llm.Usage{
+					InputTokens:  3,
+					OutputTokens: 1,
+				},
+			},
+			{
+				Model: "served-model",
+				Role:  llm.Assistant,
+				Content: []llm.Content{
+					&llm.TextContent{Text: "done"},
+				},
+				Usage: llm.Usage{
+					InputTokens:  5,
+					OutputTokens: 2,
+				},
+			},
+		},
+	}
+	generator := New(
+		Config{
+			AnthropicAPIKey: "secret",
+		},
+		WithDeterministicTestBuiltin(coordinator),
+	)
+	generator.factory = func(string, string, string) (llm.LLM, error) {
+		return model, nil
+	}
+	request := generationRequest("anthropic")
+	request.Messages = request.Messages[:1]
+	request.Claim = generationClaim()
+	request.MaxIterations = 2
+	response, err := generator.Generate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	events, checkpoints, starts := coordinator.snapshot()
+	if !reflect.DeepEqual(events, []string{"checkpoint", "start", "result", "checkpoint"}) || starts != 1 {
+		t.Fatalf("durable builtin events = %#v, starts = %d", events, starts)
+	}
+	if len(checkpoints) != 2 || len(checkpoints[0].ToolCalls) != 1 || len(checkpoints[1].ToolCalls) != 0 {
+		t.Fatalf("model checkpoints = %#v", checkpoints)
+	}
+	if !response.MessagesCheckpointed || len(response.Messages) != 0 || response.BudgetExceeded != "" ||
+		response.Usage.InputTokens != 8 || response.Usage.OutputTokens != 3 || response.Usage.Iterations != 2 {
+		t.Fatalf("checkpointed response = %#v", response)
+	}
+}
+
+func TestDeterministicBuiltinStopsAtCheckpointBudgetBeforeToolRuns(t *testing.T) {
+	coordinator := &recordingToolCoordinator{}
+	model := &sequenceLLM{
+		responses: []*llm.Response{
+			{
+				Model: "served-model",
+				Role:  llm.Assistant,
+				Content: []llm.Content{
+					&llm.ToolUseContent{
+						ID:    "provider-call-1",
+						Name:  deterministicEchoToolName,
+						Input: json.RawMessage(`{"value":"hello"}`),
+					},
+				},
+				Usage: llm.Usage{
+					InputTokens:  3,
+					OutputTokens: 1,
+				},
+			},
+		},
+	}
+	generator := New(
+		Config{
+			AnthropicAPIKey: "secret",
+		},
+		WithDeterministicTestBuiltin(coordinator),
+	)
+	generator.factory = func(string, string, string) (llm.LLM, error) {
+		return model, nil
+	}
+	request := generationRequest("anthropic")
+	request.Messages = request.Messages[:1]
+	request.Claim = generationClaim()
+	request.MaxIterations = 1
+	response, err := generator.Generate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	events, checkpoints, starts := coordinator.snapshot()
+	if !reflect.DeepEqual(events, []string{"checkpoint"}) || len(checkpoints) != 1 || starts != 0 {
+		t.Fatalf("budget events = %#v, checkpoints = %d, starts = %d", events, len(checkpoints), starts)
+	}
+	if response.BudgetExceeded != "iterations" || !response.MessagesCheckpointed {
+		t.Fatalf("budget response = %#v", response)
+	}
+}
+
+func TestCheckpointBudgetUsesInjectedObservationTime(t *testing.T) {
+	deadline := time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC)
+	request := generationRequest("anthropic")
+	request.Claim = &domain.InvocationClaim{
+		Invocation: domain.Invocation{
+			WallClockDeadlineAt: deadline,
+		},
+	}
+	if got := checkpointBudgetExceeded(request, domain.ModelUsage{}, false, deadline.Add(-time.Nanosecond)); got != "" {
+		t.Fatalf("budget before deadline = %q", got)
+	}
+	if got := checkpointBudgetExceeded(request, domain.ModelUsage{}, false, deadline); got != "wall_clock" {
+		t.Fatalf("budget at deadline = %q, want wall_clock", got)
+	}
+}
+
+func generationClaim() *domain.InvocationClaim {
+	now := time.Now().UTC()
+	owner := "test-owner"
+	leaseExpiresAt := now.Add(time.Minute)
+	executionDeadlineAt := now.Add(time.Minute)
+	return &domain.InvocationClaim{
+		Invocation: domain.Invocation{
+			ID:                  "invk_019f84a5-7838-7b57-a180-5f74a0b65be2",
+			Status:              domain.InvocationRunning,
+			LeaseOwner:          &owner,
+			LeaseExpiresAt:      &leaseExpiresAt,
+			LeaseAttempt:        1,
+			WallClockDeadlineAt: now.Add(time.Hour),
+			ExecutionDeadlineAt: &executionDeadlineAt,
+		},
+		Owner:          owner,
+		Attempt:        1,
+		LeaseExpiresAt: leaseExpiresAt,
 	}
 }
 

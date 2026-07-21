@@ -168,3 +168,23 @@ precedent while omitting its separate live-transcript accumulator and legacy
 event surfaces. It resolves architecture open question 2: token/thinking deltas
 have no replay guarantee; canonical messages and Invocation lifecycle changes
 do.
+
+25. Durable ToolCall and checkpoint evidence precedes resume (2026-07-21):
+each accepted model iteration now atomically appends its normalized assistant
+message, immutable normalized usage/provenance receipt, prepared ToolCalls, and
+one monotonic Invocation checkpoint before any trusted builtin runs. ToolCall
+identity is nvoken-owned and stable; provider call IDs are correlation keys
+unique within an Invocation iteration. Request and result payloads exist only
+in canonical `SessionMessage` rows, while ToolCall and checkpoint rows retain
+scope, hashes, status, attempts, transcript references, and watermarks. A
+current Invocation fence controls builtin start/result writes; the competing
+legitimate writer is the first terminal Invocation transaction, which closes
+open calls with one bounded synthetic tool-result message and advances the
+terminal lifecycle watermark. Equal result replay converges and changed or
+stale replay fails closed. Normalized receipts sum to any terminal usage
+projection that is present, but cancellation and `execution_lost` keep their
+existing no-aggregate public contract. This establishes evidence, not crash
+resume: expired claims still fail as `execution_lost` until the later recovery
+slice makes recorded prefixes reclaimable. It replaces Mobius Cloud's mutable
+checkpoint blob with first-class lifecycle records and keeps all new business
+evidence under the owning Invocation/Session retention trace.

@@ -220,13 +220,24 @@ func (s *RuntimeService) CancelInvocation(ctx context.Context, auth domain.Runti
 			return err
 		}
 		now := s.clock.Now().UTC()
+		throughMessageSequence := currentState.ThroughMessageSequence
+		checkpointWatermark, err := closeOpenToolCallsForTerminal(
+			txCtx, s.store, s.ids, invocation, domain.InvocationCancelled,
+			"Tool execution stopped because the Invocation was cancelled.", now,
+		)
+		if err != nil {
+			return err
+		}
+		if checkpointWatermark != nil && (throughMessageSequence == nil || *checkpointWatermark > *throughMessageSequence) {
+			throughMessageSequence = checkpointWatermark
+		}
 		result, err = s.store.CancelInvocation(txCtx, invocation.ID, revision, now)
 		if err != nil {
 			return err
 		}
 		transitioned = true
 		if err := s.store.AppendInvocationState(txCtx, lifecycleState(
-			result, stateID, revision, domain.InvocationCancelled, currentState.ThroughMessageSequence, now,
+			result, stateID, revision, domain.InvocationCancelled, throughMessageSequence, now,
 		)); err != nil {
 			return err
 		}

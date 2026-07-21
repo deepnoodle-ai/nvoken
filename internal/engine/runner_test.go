@@ -607,6 +607,37 @@ func completed() domain.InvocationExecutionResult {
 	}
 }
 
+func TestValidResultAcceptsCheckpointedCompletion(t *testing.T) {
+	usage := domain.ModelUsage{
+		InputTokens:  1,
+		OutputTokens: 1,
+		Iterations:   1,
+	}
+	provenance := domain.ModelProvenance{
+		Provider:         "test",
+		RequestedModel:   "test",
+		ServedModel:      "test",
+		CredentialSource: "installation_byok",
+	}
+	if !validResult(domain.InvocationExecutionResult{
+		Status:               domain.InvocationCompleted,
+		MessagesCheckpointed: true,
+		Usage:                &usage,
+		Provenance:           &provenance,
+	}) {
+		t.Fatal("checkpointed completion was rejected")
+	}
+	if validResult(domain.InvocationExecutionResult{
+		Status: domain.InvocationCompleted,
+		Usage:  &usage,
+		Provenance: &domain.ModelProvenance{
+			Provider: "test",
+		},
+	}) {
+		t.Fatal("completion without a message or checkpoint was accepted")
+	}
+}
+
 func testConfig() Config {
 	return Config{
 		Concurrency: 2, PollInterval: 10 * time.Millisecond,

@@ -64,36 +64,38 @@ func (s InvocationStatus) Terminal() bool {
 }
 
 type Invocation struct {
-	ID                     string
-	SessionID              string
-	AccountID              string
-	TenantPartitionID      string
-	AgentID                string
-	SpecSnapshotID         string
-	IdempotencyKey         string
-	RequestFingerprint     []byte
-	FingerprintVersion     int
-	Status                 InvocationStatus
-	CurrentStateRevision   int64
-	LeaseOwner             *string
-	LeaseExpiresAt         *time.Time
-	LeaseAttempt           int64
-	WallClockTimeoutMS     int64
-	ActiveTimeoutMS        int64
-	MaxOutputTokens        *int
-	MaxEstimatedCostMicros *int64
-	MaxIterations          int
-	ActiveExecutionMS      int64
-	WallClockDeadlineAt    time.Time
-	ActiveSegmentStartedAt *time.Time
-	ExecutionDeadlineAt    *time.Time
-	ExecutionDeadlineScope *string
-	Error                  json.RawMessage
-	Usage                  json.RawMessage
-	Provenance             json.RawMessage
-	CreatedAt              time.Time
-	UpdatedAt              time.Time
-	CompletedAt            *time.Time
+	ID                        string
+	SessionID                 string
+	AccountID                 string
+	TenantPartitionID         string
+	AgentID                   string
+	SpecSnapshotID            string
+	IdempotencyKey            string
+	RequestFingerprint        []byte
+	FingerprintVersion        int
+	Status                    InvocationStatus
+	CurrentStateRevision      int64
+	LeaseOwner                *string
+	LeaseExpiresAt            *time.Time
+	LeaseAttempt              int64
+	WallClockTimeoutMS        int64
+	ActiveTimeoutMS           int64
+	MaxOutputTokens           *int
+	MaxEstimatedCostMicros    *int64
+	MaxIterations             int
+	ActiveExecutionMS         int64
+	WallClockDeadlineAt       time.Time
+	ActiveSegmentStartedAt    *time.Time
+	ExecutionDeadlineAt       *time.Time
+	ExecutionDeadlineScope    *string
+	CurrentCheckpointSequence int64
+	CurrentIteration          int
+	Error                     json.RawMessage
+	Usage                     json.RawMessage
+	Provenance                json.RawMessage
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+	CompletedAt               *time.Time
 }
 
 type MessageRole string
@@ -149,11 +151,12 @@ type InvocationClaim struct {
 }
 
 type InvocationExecutionResult struct {
-	Status            InvocationStatus
-	Error             json.RawMessage
-	AssistantMessages []GenerationMessage
-	Usage             *ModelUsage
-	Provenance        *ModelProvenance
+	Status               InvocationStatus
+	Error                json.RawMessage
+	AssistantMessages    []GenerationMessage
+	MessagesCheckpointed bool
+	Usage                *ModelUsage
+	Provenance           *ModelProvenance
 }
 
 // GenerationMessage is the provider-neutral message shape exchanged with the
@@ -171,12 +174,15 @@ type GenerationRequest struct {
 	Messages        []GenerationMessage
 	MaxOutputTokens *int
 	MaxIterations   int
+	Claim           *InvocationClaim
 }
 
 type GenerationResponse struct {
-	Messages    []GenerationMessage
-	Usage       ModelUsage
-	ServedModel string
+	Messages             []GenerationMessage
+	Usage                ModelUsage
+	ServedModel          string
+	MessagesCheckpointed bool
+	BudgetExceeded       string
 }
 
 type ModelUsage struct {

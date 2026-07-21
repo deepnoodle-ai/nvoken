@@ -79,6 +79,25 @@ type Invocation struct {
 	ActiveSegmentStartedAt    *time.Time
 	ExecutionDeadlineAt       *time.Time
 	ExecutionDeadlineScope    *string
+	CurrentCheckpointSequence int64
+	CurrentIteration          int32
+}
+
+type InvocationCheckpoint struct {
+	ID                     string
+	InvocationID           string
+	SessionID              string
+	AccountID              string
+	TenantPartitionID      string
+	AgentID                string
+	Sequence               int64
+	Iteration              int32
+	Kind                   string
+	LeaseAttempt           int64
+	ThroughMessageSequence int64
+	UsageReceiptID         *string
+	ToolCallID             *string
+	CreatedAt              time.Time
 }
 
 type InvocationState struct {
@@ -93,6 +112,22 @@ type InvocationState struct {
 	ThroughMessageSequence *int64
 	CreatedAt              time.Time
 	LeaseAttempt           int64
+}
+
+type ModelUsageReceipt struct {
+	ID                string
+	InvocationID      string
+	SessionID         string
+	AccountID         string
+	TenantPartitionID string
+	AgentID           string
+	Iteration         int32
+	MessageID         string
+	MessageSequence   int64
+	Usage             []byte
+	Provenance        []byte
+	EvidenceDigest    []byte
+	CreatedAt         time.Time
 }
 
 type Session struct {
@@ -134,4 +169,44 @@ type TenantPartition struct {
 	AccountID string
 	TenantRef *string
 	CreatedAt time.Time
+}
+
+type ToolCall struct {
+	ID                     string
+	InvocationID           string
+	SessionID              string
+	AccountID              string
+	TenantPartitionID      string
+	AgentID                string
+	Iteration              int32
+	BatchOrdinal           int32
+	ProviderCallID         string
+	Name                   string
+	Mode                   string
+	RequestMessageID       string
+	RequestMessageSequence int64
+	RequestDigest          []byte
+	Status                 string
+	DeadlineAt             time.Time
+	CurrentAttempt         int32
+	ResultMessageID        *string
+	ResultMessageSequence  *int64
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	CompletedAt            *time.Time
+}
+
+type ToolCallAttempt struct {
+	ID                     string
+	ToolCallID             string
+	InvocationID           string
+	SessionID              string
+	AccountID              string
+	TenantPartitionID      string
+	AgentID                string
+	Attempt                int32
+	InvocationLeaseAttempt int64
+	Status                 string
+	StartedAt              time.Time
+	CompletedAt            *time.Time
 }

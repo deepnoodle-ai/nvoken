@@ -31,6 +31,7 @@ var (
 	_ ports.SessionMessageRepository        = (*Store)(nil)
 	_ ports.InvocationRepository            = (*Store)(nil)
 	_ ports.InvocationStateRepository       = (*Store)(nil)
+	_ ports.ToolCallRepository              = (*Store)(nil)
 	_ ports.RecoveryRepository              = (*Store)(nil)
 	_ ports.ExecutionDispatchRepository     = (*Store)(nil)
 	_ ports.TransactionManager              = (*TransactionManager)(nil)
@@ -596,28 +597,38 @@ func invocationFromRow(row postgresdb.Invocation) domain.Invocation {
 		maxOutputTokens = &value
 	}
 	return domain.Invocation{
-		ID: row.ID, SessionID: row.SessionID, AccountID: row.AccountID,
-		TenantPartitionID: row.TenantPartitionID, AgentID: row.AgentID,
-		SpecSnapshotID: row.SpecSnapshotID, IdempotencyKey: row.IdempotencyKey,
-		RequestFingerprint: row.RequestFingerprint, Status: domain.InvocationStatus(row.Status),
-		FingerprintVersion:     int(row.RequestFingerprintVersion),
-		CurrentStateRevision:   row.CurrentStateRevision,
-		LeaseOwner:             row.LeaseOwner,
-		LeaseExpiresAt:         row.LeaseExpiresAt,
-		LeaseAttempt:           row.LeaseAttempt,
-		WallClockTimeoutMS:     row.WallClockTimeoutMs,
-		ActiveTimeoutMS:        row.ActiveExecutionTimeoutMs,
-		MaxOutputTokens:        maxOutputTokens,
-		MaxEstimatedCostMicros: row.MaxEstimatedCostMicrousd,
-		MaxIterations:          int(row.MaxIterations), ActiveExecutionMS: row.ActiveExecutionMs,
-		WallClockDeadlineAt:    row.WallClockDeadlineAt,
-		ActiveSegmentStartedAt: row.ActiveSegmentStartedAt,
-		ExecutionDeadlineAt:    row.ExecutionDeadlineAt,
-		ExecutionDeadlineScope: row.ExecutionDeadlineScope,
-		Error:                  row.Error,
-		Usage:                  row.Usage,
-		Provenance:             row.Provenance,
-		CreatedAt:              row.CreatedAt, UpdatedAt: row.UpdatedAt, CompletedAt: row.CompletedAt,
+		ID:                        row.ID,
+		SessionID:                 row.SessionID,
+		AccountID:                 row.AccountID,
+		TenantPartitionID:         row.TenantPartitionID,
+		AgentID:                   row.AgentID,
+		SpecSnapshotID:            row.SpecSnapshotID,
+		IdempotencyKey:            row.IdempotencyKey,
+		RequestFingerprint:        row.RequestFingerprint,
+		Status:                    domain.InvocationStatus(row.Status),
+		FingerprintVersion:        int(row.RequestFingerprintVersion),
+		CurrentStateRevision:      row.CurrentStateRevision,
+		LeaseOwner:                row.LeaseOwner,
+		LeaseExpiresAt:            row.LeaseExpiresAt,
+		LeaseAttempt:              row.LeaseAttempt,
+		WallClockTimeoutMS:        row.WallClockTimeoutMs,
+		ActiveTimeoutMS:           row.ActiveExecutionTimeoutMs,
+		MaxOutputTokens:           maxOutputTokens,
+		MaxEstimatedCostMicros:    row.MaxEstimatedCostMicrousd,
+		MaxIterations:             int(row.MaxIterations),
+		ActiveExecutionMS:         row.ActiveExecutionMs,
+		WallClockDeadlineAt:       row.WallClockDeadlineAt,
+		ActiveSegmentStartedAt:    row.ActiveSegmentStartedAt,
+		ExecutionDeadlineAt:       row.ExecutionDeadlineAt,
+		ExecutionDeadlineScope:    row.ExecutionDeadlineScope,
+		CurrentCheckpointSequence: row.CurrentCheckpointSequence,
+		CurrentIteration:          int(row.CurrentIteration),
+		Error:                     row.Error,
+		Usage:                     row.Usage,
+		Provenance:                row.Provenance,
+		CreatedAt:                 row.CreatedAt,
+		UpdatedAt:                 row.UpdatedAt,
+		CompletedAt:               row.CompletedAt,
 	}
 }
 
