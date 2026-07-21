@@ -147,3 +147,24 @@ service continues non-request-bound publication, reconciliation, repair, and
 reaping with instance CPU and nonzero minimum capacity. Until checkpoint replay
 ships, an abruptly lost model segment fails visibly as `execution_lost` rather
 than being regenerated.
+
+24. Resumable Session streaming and ephemeral delta boundary (2026-07-21):
+the Session transcript SSE endpoint projects the fixed-cut JSON recovery model.
+Each nonempty authoritative snapshot frame carries its opaque composite
+`resume_cursor` as the SSE ID, while provider-normalized generation deltas,
+resync instructions, and deliberate end frames carry no ID and are never
+replayed or persisted. The handler subscribes before its first Postgres drain,
+polls Postgres as a correctness fallback, and derives terminal close through a
+drain/read/drain/read reconciliation. Buffer overflow or Redis loss may discard
+provisional output and triggers client resync; it cannot lose committed state or
+affect execution. Embedded mode uses the same fan-out port in process, while the
+split Google path uses private Redis Pub/Sub between executor and API replicas.
+That paved Redis trust boundary requires private VPC access, Redis AUTH, and
+server-authenticated TLS; its generated AUTH string is exposed to only the two
+service identities through Secret Manager, and clients trust all active
+instance CAs so rotation can overlap safely.
+This carries forward Mobius Cloud's cursor, subscribe-before-drain, and rotation
+precedent while omitting its separate live-transcript accumulator and legacy
+event surfaces. It resolves architecture open question 2: token/thinking deltas
+have no replay guarantee; canonical messages and Invocation lifecycle changes
+do.

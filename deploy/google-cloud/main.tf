@@ -38,6 +38,7 @@ resource "google_project_service" "required" {
     "iam.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
+    "redis.googleapis.com",
     "run.googleapis.com",
     "secretmanager.googleapis.com",
     "servicenetworking.googleapis.com",
@@ -155,6 +156,23 @@ resource "google_service_networking_connection" "private_services" {
   depends_on = [google_project_service.required]
 }
 
+resource "google_redis_instance" "live_events" {
+  project                 = var.project_id
+  name                    = "${local.resource_name}-live"
+  display_name            = "${local.resource_name} live event fan-out"
+  region                  = var.region
+  tier                    = "BASIC"
+  memory_size_gb          = var.redis_memory_size_gb
+  redis_version           = "REDIS_7_2"
+  authorized_network      = google_compute_network.runtime.id
+  connect_mode            = "DIRECT_PEERING"
+  auth_enabled            = true
+  transit_encryption_mode = "SERVER_AUTHENTICATION"
+  labels                  = local.labels
+
+  depends_on = [google_project_service.required]
+}
+
 resource "google_sql_database_instance" "runtime" {
   project             = var.project_id
   name                = "${local.resource_name}-postgres"
@@ -263,6 +281,23 @@ resource "google_secret_manager_secret_version" "runtime_api_key" {
   secret_data = random_password.runtime_api_key.result
 }
 
+resource "google_secret_manager_secret" "redis_auth" {
+  project   = var.project_id
+  secret_id = "${local.resource_name}-redis-auth"
+  labels    = local.labels
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.required]
+}
+
+resource "google_secret_manager_secret_version" "redis_auth" {
+  secret      = google_secret_manager_secret.redis_auth.id
+  secret_data = google_redis_instance.live_events.auth_string
+}
+
 resource "google_service_account" "runtime" {
   project      = var.project_id
   account_id   = local.runtime_account_id
@@ -291,6 +326,7 @@ resource "google_secret_manager_secret_iam_member" "generated" {
   for_each = {
     database_url    = google_secret_manager_secret.database_url.secret_id
     runtime_api_key = google_secret_manager_secret.runtime_api_key.secret_id
+    redis_auth      = google_secret_manager_secret.redis_auth.secret_id
   }
 
   project   = var.project_id
@@ -327,6 +363,13 @@ resource "google_secret_manager_secret_iam_member" "migration_database" {
 resource "google_secret_manager_secret_iam_member" "executor_database" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.database_url.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "executor_redis_auth" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.redis_auth.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.executor.email}"
 }
@@ -528,6 +571,31 @@ resource "google_cloud_run_v2_service" "executor" {
       }
 
       env {
+        name  = "REDIS_URL"
+        value = "rediss://${google_redis_instance.live_events.host}:${google_redis_instance.live_events.port}/0"
+      }
+
+      env {
+        name = "REDIS_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.redis_auth.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "REDIS_CA_CERT"
+        value = join("\n", [for certificate in google_redis_instance.live_events.server_ca_certs : certificate.cert])
+      }
+
+      env {
+        name  = "LIVE_EVENT_BUFFER"
+        value = tostring(var.live_event_buffer)
+      }
+
+      env {
         name  = "DISPATCH_QUEUE"
         value = "execution"
       }
@@ -614,8 +682,10 @@ resource "google_cloud_run_v2_service" "executor" {
     google_cloud_run_v2_job.migrate,
     google_project_service.required,
     google_secret_manager_secret_iam_member.executor_database,
+    google_secret_manager_secret_iam_member.executor_redis_auth,
     google_secret_manager_secret_iam_member.provider_executor,
     google_secret_manager_secret_version.database_url,
+    google_secret_manager_secret_version.redis_auth,
   ]
 }
 
@@ -655,6 +725,14 @@ resource "google_cloud_run_v2_service" "runtime" {
     }
     precondition {
       condition = (
+        var.stream_max_lifetime_seconds + var.stream_write_timeout_seconds < var.runtime_request_timeout_seconds &&
+        var.stream_keepalive_interval_seconds < var.stream_max_lifetime_seconds &&
+        var.stream_poll_interval_seconds < var.stream_max_lifetime_seconds
+      )
+      error_message = "SSE rotation plus its write bound must fit inside the Cloud Run request timeout, and polling/keepalive intervals must be shorter than the rotation lifetime."
+    }
+    precondition {
+      condition = (
         var.invocation_default_wall_clock_timeout_seconds >= 1 &&
         var.invocation_default_wall_clock_timeout_seconds == floor(var.invocation_default_wall_clock_timeout_seconds) &&
         var.invocation_default_wall_clock_timeout_seconds <= var.invocation_max_wall_clock_timeout_seconds &&
@@ -689,7 +767,7 @@ resource "google_cloud_run_v2_service" "runtime" {
 
   template {
     service_account                  = google_service_account.runtime.email
-    timeout                          = "300s"
+    timeout                          = "${var.runtime_request_timeout_seconds}s"
     max_instance_request_concurrency = var.request_concurrency
 
     containers {
@@ -758,6 +836,51 @@ resource "google_cloud_run_v2_service" "runtime" {
       env {
         name  = "DATABASE_MAX_CONNS"
         value = tostring(var.database_max_connections)
+      }
+
+      env {
+        name  = "REDIS_URL"
+        value = "rediss://${google_redis_instance.live_events.host}:${google_redis_instance.live_events.port}/0"
+      }
+
+      env {
+        name = "REDIS_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.redis_auth.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "REDIS_CA_CERT"
+        value = join("\n", [for certificate in google_redis_instance.live_events.server_ca_certs : certificate.cert])
+      }
+
+      env {
+        name  = "LIVE_EVENT_BUFFER"
+        value = tostring(var.live_event_buffer)
+      }
+
+      env {
+        name  = "STREAM_POLL_INTERVAL"
+        value = "${var.stream_poll_interval_seconds}s"
+      }
+
+      env {
+        name  = "STREAM_KEEPALIVE_INTERVAL"
+        value = "${var.stream_keepalive_interval_seconds}s"
+      }
+
+      env {
+        name  = "STREAM_MAX_LIFETIME"
+        value = "${var.stream_max_lifetime_seconds}s"
+      }
+
+      env {
+        name  = "STREAM_WRITE_TIMEOUT"
+        value = "${var.stream_write_timeout_seconds}s"
       }
 
       env {
@@ -914,6 +1037,7 @@ resource "google_cloud_run_v2_service" "runtime" {
     google_secret_manager_secret_iam_member.generated,
     google_secret_manager_secret_iam_member.provider_runtime,
     google_secret_manager_secret_version.database_url,
+    google_secret_manager_secret_version.redis_auth,
     google_secret_manager_secret_version.runtime_api_key,
   ]
 }

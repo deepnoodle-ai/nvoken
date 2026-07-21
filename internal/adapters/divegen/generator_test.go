@@ -19,6 +19,31 @@ type fakeLLM struct {
 	err    error
 }
 
+type fakeStreamingLLM struct {
+	fakeLLM
+	events    []*llm.Event
+	streamErr error
+}
+
+func (f *fakeStreamingLLM) Stream(_ context.Context, options ...llm.Option) (llm.StreamIterator, error) {
+	f.config.Apply(options...)
+	return &fakeStreamIterator{events: f.events, err: f.streamErr, index: -1}, nil
+}
+
+type fakeStreamIterator struct {
+	events []*llm.Event
+	err    error
+	index  int
+}
+
+func (i *fakeStreamIterator) Next() bool {
+	i.index++
+	return i.index < len(i.events)
+}
+func (i *fakeStreamIterator) Event() *llm.Event { return i.events[i.index] }
+func (i *fakeStreamIterator) Err() error        { return i.err }
+func (i *fakeStreamIterator) Close() error      { return nil }
+
 func (*fakeLLM) Name() string { return "fake" }
 
 func (f *fakeLLM) Generate(_ context.Context, options ...llm.Option) (*llm.Response, error) {
@@ -78,6 +103,39 @@ func TestGeneratorUsesExplicitProviderKeyAndToolFreeDiveCall(t *testing.T) {
 				t.Fatalf("normalized messages = %#v", response.Messages)
 			}
 		})
+	}
+}
+
+func TestGeneratorStreamsNormalizedDeltasAndReturnsCompleteEvidence(t *testing.T) {
+	index := 0
+	model := &fakeStreamingLLM{events: []*llm.Event{
+		{Type: llm.EventTypeMessageStart, Message: &llm.Response{
+			ID: "message-1", Model: "served-stream-model", Role: llm.Assistant, Type: "message",
+			Usage: llm.Usage{InputTokens: 4},
+		}},
+		{Type: llm.EventTypeContentBlockStart, Index: &index, ContentBlock: &llm.EventContentBlock{Type: llm.ContentTypeText}},
+		{Type: llm.EventTypeContentBlockDelta, Index: &index, Delta: &llm.EventDelta{Type: llm.EventDeltaTypeText, Text: "hello"}},
+		{Type: llm.EventTypeMessageDelta, Delta: &llm.EventDelta{StopReason: "end_turn"}, Usage: &llm.Usage{OutputTokens: 2}},
+		{Type: llm.EventTypeMessageStop},
+	}}
+	generator := New(Config{AnthropicAPIKey: "secret"})
+	generator.factory = func(string, string, string) (llm.LLM, error) { return model, nil }
+	var deltas []domain.GenerationDelta
+	response, err := generator.GenerateStream(context.Background(), generationRequest("anthropic"), func(delta domain.GenerationDelta) {
+		deltas = append(deltas, delta)
+	})
+	if err != nil {
+		t.Fatalf("GenerateStream: %v", err)
+	}
+	if len(deltas) != 1 || deltas[0].Type != "text" || deltas[0].Text != "hello" || deltas[0].ContentIndex != 0 {
+		t.Fatalf("deltas = %#v", deltas)
+	}
+	if response.ServedModel != "served-stream-model" || response.Usage.InputTokens != 4 ||
+		response.Usage.OutputTokens != 2 || response.Usage.Iterations != 1 {
+		t.Fatalf("stream evidence = %#v", response)
+	}
+	if len(response.Messages) != 1 || string(response.Messages[0].Content) != `[{"type":"text","text":"hello"}]` {
+		t.Fatalf("stream messages = %#v", response.Messages)
 	}
 }
 

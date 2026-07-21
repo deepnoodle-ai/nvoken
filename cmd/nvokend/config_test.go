@@ -37,6 +37,11 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 		cfg.ExecutorAttemptTimeout != 29*time.Minute+55*time.Second {
 		t.Fatalf("dispatch defaults: %#v", cfg)
 	}
+	if cfg.LiveEventBuffer != 64 || cfg.Stream.PollInterval != time.Second ||
+		cfg.Stream.KeepaliveInterval != 15*time.Second || cfg.Stream.MaxLifetime != 55*time.Minute ||
+		cfg.Stream.WriteTimeout != 10*time.Second {
+		t.Fatalf("stream defaults: %#v", cfg)
+	}
 }
 
 func TestLoadDaemonConfigExecutorDoesNotRequirePublicRuntimeSecrets(t *testing.T) {
@@ -85,6 +90,10 @@ func TestLoadDaemonConfigCloudTasksModeRequiresIdentityAndEnablesRepair(t *testi
 	t.Setenv("CLOUD_TASKS_EXECUTOR_URL", "https://executor.example.run.app")
 	t.Setenv("CLOUD_TASKS_OIDC_SERVICE_ACCOUNT", "task-caller@example-project.iam.gserviceaccount.com")
 	t.Setenv("CLOUD_TASKS_OIDC_AUDIENCE", "https://executor.example.run.app")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "requires REDIS_URL") {
+		t.Fatalf("missing Redis mode error = %v", err)
+	}
+	t.Setenv("REDIS_URL", "redis://10.0.0.2:6379")
 	cfg, err := loadDaemonConfig()
 	if err != nil {
 		t.Fatalf("load Cloud Tasks mode: %v", err)
@@ -105,6 +114,7 @@ func TestLoadDaemonConfigCloudExecutorRequiresCapacityTimeoutAndProvider(t *test
 	}
 
 	t.Setenv("DATABASE_MAX_CONNS", "2")
+	t.Setenv("REDIS_URL", "redis://10.0.0.2:6379")
 	t.Setenv("ENGINE_EXECUTION_SEGMENT_CEILING", "10m")
 	t.Setenv("EXECUTOR_ATTEMPT_TIMEOUT", "9m")
 	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "must not exceed") {
@@ -164,6 +174,14 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	t.Setenv("ENGINE_POLL_INTERVAL", "250ms")
 	t.Setenv("SHUTDOWN_TIMEOUT", "8s")
 	t.Setenv("ENGINE_DRAIN_GRACE", "7s")
+	t.Setenv("REDIS_URL", "rediss://10.0.0.2:6378/0")
+	t.Setenv("REDIS_PASSWORD", "redis-secret")
+	t.Setenv("REDIS_CA_CERT", "test-ca")
+	t.Setenv("LIVE_EVENT_BUFFER", "12")
+	t.Setenv("STREAM_POLL_INTERVAL", "200ms")
+	t.Setenv("STREAM_KEEPALIVE_INTERVAL", "3s")
+	t.Setenv("STREAM_MAX_LIFETIME", "4m")
+	t.Setenv("STREAM_WRITE_TIMEOUT", "2s")
 
 	cfg, err := loadDaemonConfig()
 	if err != nil {
@@ -177,8 +195,27 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	}
 	if cfg.AnthropicAPIKey != "anthropic-secret" || cfg.OpenAIAPIKey != "openai-secret" ||
 		cfg.Engine.Concurrency != 3 || cfg.Engine.PollInterval != 250*time.Millisecond ||
-		cfg.ShutdownTimeout != 8*time.Second || cfg.Engine.DrainGrace != 7*time.Second {
+		cfg.ShutdownTimeout != 8*time.Second || cfg.Engine.DrainGrace != 7*time.Second ||
+		cfg.RedisURL != "rediss://10.0.0.2:6378/0" || cfg.RedisPassword != "redis-secret" ||
+		cfg.RedisCACertificate != "test-ca" ||
+		cfg.LiveEventBuffer != 12 || cfg.Stream.PollInterval != 200*time.Millisecond ||
+		cfg.Stream.KeepaliveInterval != 3*time.Second || cfg.Stream.MaxLifetime != 4*time.Minute ||
+		cfg.Stream.WriteTimeout != 2*time.Second {
 		t.Fatalf("generation config = %#v", cfg)
+	}
+}
+
+func TestLoadDaemonConfigRejectsInvalidStreamBounds(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("LIVE_EVENT_BUFFER", "0")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "LIVE_EVENT_BUFFER") {
+		t.Fatalf("live-event buffer error = %v", err)
+	}
+	t.Setenv("LIVE_EVENT_BUFFER", "1")
+	t.Setenv("STREAM_MAX_LIFETIME", "5s")
+	t.Setenv("STREAM_WRITE_TIMEOUT", "5s")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "less than") {
+		t.Fatalf("stream lifetime error = %v", err)
 	}
 }
 

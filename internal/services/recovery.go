@@ -71,6 +71,38 @@ type TranscriptSnapshot struct {
 	NextPageToken     *string
 }
 
+type TranscriptStreamState struct {
+	Active bool
+}
+
+// GetSessionTranscriptStreamState authorizes with the transcript operation so
+// streaming does not require the broader Session-read permission merely to
+// derive its terminal condition.
+func (s *RuntimeService) GetSessionTranscriptStreamState(
+	ctx context.Context,
+	auth domain.RuntimeAuthContext,
+	sessionID string,
+) (TranscriptStreamState, error) {
+	if err := s.ready(); err != nil {
+		return TranscriptStreamState{}, err
+	}
+	if err := authorize(auth, domain.OperationGetTranscript); err != nil {
+		return TranscriptStreamState{}, err
+	}
+	session, _, err := s.authorizedSession(ctx, auth, sessionID)
+	if err != nil {
+		return TranscriptStreamState{}, err
+	}
+	_, err = s.store.GetNonterminalInvocationBySession(ctx, session.ID)
+	if errors.Is(err, ports.ErrNotFound) {
+		return TranscriptStreamState{}, nil
+	}
+	if err != nil {
+		return TranscriptStreamState{}, err
+	}
+	return TranscriptStreamState{Active: true}, nil
+}
+
 func (s *RuntimeService) ListInvocations(ctx context.Context, auth domain.RuntimeAuthContext, input InvocationListInput) (InvocationList, error) {
 	if err := s.ready(); err != nil {
 		return InvocationList{}, err
