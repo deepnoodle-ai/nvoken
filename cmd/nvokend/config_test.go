@@ -354,6 +354,7 @@ func TestLoadDaemonConfigRequiresRuntimeDependencies(t *testing.T) {
 	}
 
 	t.Setenv("RUNTIME_API_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret")
 	t.Setenv("RUNTIME_TENANT_REF", strings.Repeat("界", 256))
 	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "255 Unicode characters") {
 		t.Fatalf("long tenant constraint error = %v", err)

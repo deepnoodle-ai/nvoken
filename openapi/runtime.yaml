@@ -16,8 +16,8 @@ info:
     complete inventory and any future ordered-deletion contract are governed by
     the design packet's Data and retention section.
 
-    Inline client tools and structured output are included. Callback tools,
-    spec references, and administrative APIs remain outside this version.
+    Inline client tools, callback tools, and structured output are included.
+    Spec references and administrative APIs remain outside this version.
 servers:
   - url: /
     description: Current nvoken installation

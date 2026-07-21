@@ -1,0 +1,23 @@
+{
+  "name": "@deepnoodle-ai/nvoken",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the nvoken durable agent runtime",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/test/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.15",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

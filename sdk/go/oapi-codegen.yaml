@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/v2.8.0/configuration-schema.json
+package: generated
+generate:
+  client: true
+  models: true
+output-options:
+  response-type-suffix: HTTPResponse
+  name-normalizer: ToCamelCaseWithInitialisms
+  additional-initialisms:
+    - ID
+    - JSON
+    - SSE
+    - URL
+  streaming-content-types:
+    - text/event-stream

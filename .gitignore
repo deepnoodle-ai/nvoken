@@ -34,6 +34,14 @@ go.work.sum
 # Build output
 /bin/
 
+# SDK build output and local environments
+sdk/typescript/node_modules/
+sdk/typescript/dist/
+sdk/python/.venv/
+sdk/python/.pytest_cache/
+sdk/python/**/__pycache__/
+sdk/rust/target/
+
 # Terraform working data and saved plans (state contains generated secrets)
 **/.terraform/
 *.tfstate
