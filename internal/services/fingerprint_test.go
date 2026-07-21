@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/deepnoodle-ai/nvoken/internal/structuredoutput"
 )
 
 type fingerprintVector struct {
@@ -29,6 +31,10 @@ func TestInvocationFingerprintV1DesignVectors(t *testing.T) {
 
 func TestInvocationFingerprintV2DesignVectors(t *testing.T) {
 	testFingerprintDesignVectors(t, "admission-fingerprint-v2.json", 2)
+}
+
+func TestInvocationFingerprintV3DesignVectors(t *testing.T) {
+	testFingerprintDesignVectors(t, "admission-fingerprint-v3.json", 3)
 }
 
 func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
@@ -61,9 +67,12 @@ func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
 			if version == 1 {
 				canonical, err = invocationFingerprintBytesV1(input)
 				fingerprint, _ = InvocationFingerprintV1(input)
-			} else {
+			} else if version == 2 {
 				canonical, err = invocationFingerprintBytesV2(input)
 				fingerprint, _ = InvocationFingerprintV2(input)
+			} else {
+				canonical, err = invocationFingerprintBytesV3(input)
+				fingerprint, _ = InvocationFingerprintV3(input)
 			}
 			if err != nil {
 				t.Fatalf("canonicalize: %v", err)
@@ -185,6 +194,23 @@ func TestValidateCreateInvocationUnicodeAndBlockBoundaries(t *testing.T) {
 	input.Input.Content = append(input.Input.Content, TextInputBlock{Type: "text", Text: "x"})
 	if err := ValidateCreateInvocation(input); err == nil {
 		t.Fatal("65 input blocks accepted")
+	}
+}
+
+func TestValidateCreateInvocationStructuredSchemaSizeBoundary(t *testing.T) {
+	const prefix = `{"type":"object","description":"`
+	const suffix = `"}`
+	input := validServiceInput()
+	exact := prefix + strings.Repeat("x", structuredoutput.MaxSchemaBytes-len(prefix)-len(suffix)) + suffix
+	input.Spec.Output = &StructuredOutputSpec{
+		Schema: json.RawMessage(exact),
+	}
+	if err := ValidateCreateInvocation(input); err != nil {
+		t.Fatalf("schema at compact size limit: %v", err)
+	}
+	input.Spec.Output.Schema = json.RawMessage(prefix + strings.Repeat("x", structuredoutput.MaxSchemaBytes-len(prefix)-len(suffix)+1) + suffix)
+	if err := ValidateCreateInvocation(input); err == nil {
+		t.Fatal("schema above compact size limit was accepted")
 	}
 }
 

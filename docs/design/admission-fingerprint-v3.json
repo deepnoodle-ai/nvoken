@@ -1,0 +1,36 @@
+[
+  {
+    "name": "omitted-output",
+    "selector": { "kind": "none", "value": "" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "anthropic", "name": "test-model" }
+    },
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":3,\"session_selector\":{\"kind\":\"none\",\"value\":\"\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"name\":\"test-model\"},\"budgets\":null,\"output\":null},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "c4fde1550468527defa5f850fadcfee58c693956d9eeee58340a489c44ac46b3"
+  },
+  {
+    "name": "structured-output-request",
+    "selector": { "kind": "key", "value": "ticket-1" },
+    "spec": {
+      "instructions": "classify",
+      "model": { "provider": "openai", "name": "gpt-test" },
+      "budgets": { "max_iterations": 3 },
+      "output": {
+        "schema": {
+          "required": ["status"],
+          "type": "object",
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "failed"] },
+            "score": { "type": "number", "minimum": 0, "maximum": 1.0 }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "input": { "content": [{ "type": "text", "text": "classify this" }] },
+    "canonical": "{\"version\":3,\"session_selector\":{\"kind\":\"key\",\"value\":\"ticket-1\"},\"spec\":{\"instructions\":\"classify\",\"model\":{\"provider\":\"openai\",\"name\":\"gpt-test\"},\"budgets\":{\"wall_clock_timeout_seconds\":null,\"active_execution_timeout_seconds\":null,\"max_output_tokens\":null,\"max_estimated_cost_microusd\":null,\"max_iterations\":3},\"output\":{\"schema\":{\"additionalProperties\":false,\"properties\":{\"score\":{\"maximum\":1,\"minimum\":0,\"type\":\"number\"},\"status\":{\"enum\":[\"ok\",\"failed\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"}}},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"classify this\"}]}}",
+    "sha256": "256afcc58d3e50b1d95ebfb4946f5f1d55b10cbacd41d08d88a43e3e239d4da3"
+  }
+]

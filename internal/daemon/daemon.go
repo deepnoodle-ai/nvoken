@@ -135,6 +135,7 @@ func Run(ctx context.Context, cfg Config) error {
 	ids := identity.NewUUIDv7Generator(clock)
 	store := postgres.NewStore(pool)
 	txm := postgres.NewTransactionManager(pool)
+	toolCoordinator := services.NewToolCheckpointService(store, txm, clock, ids)
 	var liveBus interface {
 		ports.LiveEventBus
 		Close() error
@@ -161,8 +162,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if topology.privateExecutor {
 		generator := divegen.New(divegen.Config{
-			AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
-		})
+			AnthropicAPIKey: cfg.AnthropicAPIKey,
+			OpenAIAPIKey:    cfg.OpenAIAPIKey,
+		}, divegen.WithToolCoordinator(toolCoordinator))
 		invocationExecutor := services.NewGenerationExecutor(
 			store, generator, slog.Default(), services.WithGenerationLiveEvents(liveBus),
 		)
@@ -224,8 +226,9 @@ func Run(ctx context.Context, cfg Config) error {
 	components := []component{srv}
 	if topology.embeddedRunner {
 		generator := divegen.New(divegen.Config{
-			AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
-		})
+			AnthropicAPIKey: cfg.AnthropicAPIKey,
+			OpenAIAPIKey:    cfg.OpenAIAPIKey,
+		}, divegen.WithToolCoordinator(toolCoordinator))
 		executor := services.NewGenerationExecutor(
 			store, generator, slog.Default(), services.WithGenerationLiveEvents(liveBus),
 		)

@@ -636,6 +636,7 @@ func (s *faultingExecutionStore) SettleInvocation(
 	status domain.InvocationStatus,
 	stateRevision int64,
 	errorPayload, usagePayload, provenancePayload []byte,
+	outputPayload, outputProvenancePayload []byte,
 	observedAt time.Time,
 ) (domain.Invocation, error) {
 	if s.failSettlement {
@@ -643,7 +644,8 @@ func (s *faultingExecutionStore) SettleInvocation(
 	}
 	return s.Store.SettleInvocation(
 		ctx, id, owner, attempt, status, stateRevision,
-		errorPayload, usagePayload, provenancePayload, observedAt,
+		errorPayload, usagePayload, provenancePayload,
+		outputPayload, outputProvenancePayload, observedAt,
 	)
 }
 

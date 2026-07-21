@@ -41,6 +41,11 @@ type InlineExecutionSpec struct {
 	Instructions string                 `json:"instructions"`
 	Model        ModelSelection         `json:"model"`
 	Budgets      *InvocationBudgetInput `json:"budgets,omitempty"`
+	Output       *StructuredOutputSpec  `json:"output,omitempty"`
+}
+
+type StructuredOutputSpec struct {
+	Schema json.RawMessage `json:"schema"`
 }
 
 type CreateInvocationInput struct {
@@ -69,6 +74,8 @@ type InvocationRead struct {
 	Error               json.RawMessage
 	Usage               json.RawMessage
 	Provenance          json.RawMessage
+	Output              json.RawMessage
+	OutputProvenance    json.RawMessage
 	Budgets             InvocationBudgetRead
 	ActiveExecutionMS   int64
 	WallClockDeadlineAt time.Time
@@ -213,7 +220,15 @@ func ValidateCreateInvocation(input CreateInvocationInput) error {
 	if err := validateBoundedString("spec.model.name", input.Spec.Model.Name, MaxReferenceCharacters); err != nil {
 		return err
 	}
-	return validateRequestedBudgets(input.Spec.Budgets)
+	if err := validateRequestedBudgets(input.Spec.Budgets); err != nil {
+		return err
+	}
+	if input.Spec.Output != nil {
+		if _, err := structuredOutputSchemaDigest(input.Spec.Output.Schema); err != nil {
+			return invalidRequest("spec.output.schema is invalid: " + err.Error() + ".")
+		}
+	}
+	return nil
 }
 
 func validateBoundedString(field, value string, maximum int) error {
@@ -239,11 +254,18 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 	if auth.TenantConstraint != nil && input.TenantRef != nil && *auth.TenantConstraint != *input.TenantRef {
 		return InvocationAcknowledgement{}, forbidden("The requested tenant_ref conflicts with the credential constraint.")
 	}
-	resolvedBudgets, err := s.budgetPolicy.Resolve(input.Spec.Budgets)
+	resolvedBudgets, err := s.budgetPolicy.ResolveForOutput(input.Spec.Budgets, input.Spec.Output != nil)
 	if err != nil {
 		return InvocationAcknowledgement{}, err
 	}
-	fingerprint, err := InvocationFingerprintV2(input)
+	var outputSchemaDigest []byte
+	if input.Spec.Output != nil {
+		outputSchemaDigest, err = structuredOutputSchemaDigest(input.Spec.Output.Schema)
+		if err != nil {
+			return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
+		}
+	}
+	fingerprint, err := InvocationFingerprintV3(input)
 	if err != nil {
 		return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 	}
@@ -329,29 +351,57 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			if err != nil {
 				return err
 			}
-			snapshot := domain.ExecutionSpecSnapshot{ID: ids.snapshot, AccountID: account.ID, Spec: specJSON, CreatedAt: now}
+			snapshot := domain.ExecutionSpecSnapshot{
+				ID:        ids.snapshot,
+				AccountID: account.ID,
+				Spec:      specJSON,
+				CreatedAt: now,
+			}
 			invocation := domain.Invocation{
-				ID: ids.invocation, SessionID: session.ID, AccountID: account.ID,
-				TenantPartitionID: partition.ID, AgentID: agent.ID, SpecSnapshotID: snapshot.ID,
-				IdempotencyKey: input.IdempotencyKey, RequestFingerprint: fingerprint[:],
-				FingerprintVersion: 2, Status: domain.InvocationQueued, CurrentStateRevision: revision,
+				ID:                     ids.invocation,
+				SessionID:              session.ID,
+				AccountID:              account.ID,
+				TenantPartitionID:      partition.ID,
+				AgentID:                agent.ID,
+				SpecSnapshotID:         snapshot.ID,
+				IdempotencyKey:         input.IdempotencyKey,
+				RequestFingerprint:     fingerprint[:],
+				FingerprintVersion:     3,
+				Status:                 domain.InvocationQueued,
+				CurrentStateRevision:   revision,
 				WallClockTimeoutMS:     resolvedBudgets.WallClockTimeout.Milliseconds(),
 				ActiveTimeoutMS:        resolvedBudgets.ActiveExecutionTimeout.Milliseconds(),
 				MaxOutputTokens:        resolvedBudgets.MaxOutputTokens,
 				MaxEstimatedCostMicros: resolvedBudgets.MaxEstimatedCostMicros,
 				MaxIterations:          resolvedBudgets.MaxIterations,
+				OutputSchemaDigest:     outputSchemaDigest,
 				WallClockDeadlineAt:    now.Add(resolvedBudgets.WallClockTimeout),
-				CreatedAt:              now, UpdatedAt: now,
+				CreatedAt:              now,
+				UpdatedAt:              now,
 			}
 			message := domain.SessionMessage{
-				ID: ids.message, SessionID: session.ID, AccountID: account.ID,
-				TenantPartitionID: partition.ID, AgentID: agent.ID, InvocationID: invocation.ID,
-				Sequence: sequence, Role: domain.MessageRoleUser, Content: contentJSON, CreatedAt: now,
+				ID:                ids.message,
+				SessionID:         session.ID,
+				AccountID:         account.ID,
+				TenantPartitionID: partition.ID,
+				AgentID:           agent.ID,
+				InvocationID:      invocation.ID,
+				Sequence:          sequence,
+				Role:              domain.MessageRoleUser,
+				Content:           contentJSON,
+				CreatedAt:         now,
 			}
 			state := domain.InvocationState{
-				ID: ids.state, InvocationID: invocation.ID, SessionID: session.ID, AccountID: account.ID,
-				TenantPartitionID: partition.ID, AgentID: agent.ID, Revision: revision,
-				Status: domain.InvocationQueued, ThroughMessageSequence: &sequence, CreatedAt: now,
+				ID:                     ids.state,
+				InvocationID:           invocation.ID,
+				SessionID:              session.ID,
+				AccountID:              account.ID,
+				TenantPartitionID:      partition.ID,
+				AgentID:                agent.ID,
+				Revision:               revision,
+				Status:                 domain.InvocationQueued,
+				ThroughMessageSequence: &sequence,
+				CreatedAt:              now,
 			}
 			if err := s.store.CreateExecutionSpecSnapshot(txCtx, snapshot); err != nil {
 				return err
@@ -557,12 +607,21 @@ func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuth
 
 func invocationReadFromDomain(invocation domain.Invocation) InvocationRead {
 	return InvocationRead{
-		ID: invocation.ID, AgentID: invocation.AgentID, SessionID: invocation.SessionID,
-		Status: invocation.Status, Error: invocation.Error, Usage: invocation.Usage,
-		Provenance: invocation.Provenance, Budgets: budgetReadFromDomain(invocation),
+		ID:                  invocation.ID,
+		AgentID:             invocation.AgentID,
+		SessionID:           invocation.SessionID,
+		Status:              invocation.Status,
+		Error:               invocation.Error,
+		Usage:               invocation.Usage,
+		Provenance:          invocation.Provenance,
+		Output:              invocation.Output,
+		OutputProvenance:    invocation.OutputProvenance,
+		Budgets:             budgetReadFromDomain(invocation),
 		ActiveExecutionMS:   invocation.ActiveExecutionMS,
-		WallClockDeadlineAt: invocation.WallClockDeadlineAt, CreatedAt: invocation.CreatedAt,
-		UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
+		WallClockDeadlineAt: invocation.WallClockDeadlineAt,
+		CreatedAt:           invocation.CreatedAt,
+		UpdatedAt:           invocation.UpdatedAt,
+		CompletedAt:         invocation.CompletedAt,
 	}
 }
 
@@ -614,7 +673,7 @@ func (s *RuntimeService) findIdempotent(
 	expected := fingerprint[:]
 	switch existing.FingerprintVersion {
 	case 1:
-		if input.Spec.Budgets != nil {
+		if input.Spec.Budgets != nil || input.Spec.Output != nil {
 			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
 		}
 		legacy, legacyErr := InvocationFingerprintV1(input)
@@ -623,6 +682,15 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 2:
+		if input.Spec.Output != nil {
+			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
+		}
+		legacy, legacyErr := InvocationFingerprintV2(input)
+		if legacyErr != nil {
+			return domain.Invocation{}, false, legacyErr
+		}
+		expected = legacy[:]
+	case 3:
 	default:
 		return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
 	}

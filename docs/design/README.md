@@ -38,7 +38,9 @@ inputs and decisions that shaped the packet. It is useful background, but it
 is not required reading once the four active documents are understood.
 Language-neutral compatibility fixtures for the admission idempotency hash
 live in [`admission-fingerprint-v1.json`](admission-fingerprint-v1.json) and
-[`admission-fingerprint-v2.json`](admission-fingerprint-v2.json).
+[`admission-fingerprint-v2.json`](admission-fingerprint-v2.json). New
+structured-output admissions use the v3 vectors in
+[`admission-fingerprint-v3.json`](admission-fingerprint-v3.json).
 
 ## Document authority
 
