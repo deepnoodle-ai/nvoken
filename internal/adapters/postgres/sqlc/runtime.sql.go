@@ -1099,6 +1099,97 @@ func (q *Queries) ListExpiredInvocationLeases(ctx context.Context, arg ListExpir
 	return items, nil
 }
 
+const listInvocationLifecycleChanges = `-- name: ListInvocationLifecycleChanges :many
+SELECT st.id, st.invocation_id, st.session_id, st.account_id,
+       st.tenant_partition_id, st.agent_id, st.revision, st.status,
+       st.lease_attempt, st.through_message_sequence, st.created_at,
+       i.error, i.usage, i.provenance
+FROM invocation_states AS st
+JOIN invocations AS i ON i.id = st.invocation_id
+WHERE st.session_id = $1
+  AND st.revision > $2
+  AND st.revision <= $3
+ORDER BY st.revision
+LIMIT $4
+`
+
+type ListInvocationLifecycleChangesParams struct {
+	SessionID       string
+	AfterRevision   int64
+	ThroughRevision int64
+	BatchLimit      int32
+}
+
+type ListInvocationLifecycleChangesRow struct {
+	ID                     string
+	InvocationID           string
+	SessionID              string
+	AccountID              string
+	TenantPartitionID      string
+	AgentID                string
+	Revision               int64
+	Status                 string
+	LeaseAttempt           int64
+	ThroughMessageSequence *int64
+	CreatedAt              time.Time
+	Error                  []byte
+	Usage                  []byte
+	Provenance             []byte
+}
+
+// ListInvocationLifecycleChanges
+//
+//	SELECT st.id, st.invocation_id, st.session_id, st.account_id,
+//	       st.tenant_partition_id, st.agent_id, st.revision, st.status,
+//	       st.lease_attempt, st.through_message_sequence, st.created_at,
+//	       i.error, i.usage, i.provenance
+//	FROM invocation_states AS st
+//	JOIN invocations AS i ON i.id = st.invocation_id
+//	WHERE st.session_id = $1
+//	  AND st.revision > $2
+//	  AND st.revision <= $3
+//	ORDER BY st.revision
+//	LIMIT $4
+func (q *Queries) ListInvocationLifecycleChanges(ctx context.Context, arg ListInvocationLifecycleChangesParams) ([]ListInvocationLifecycleChangesRow, error) {
+	rows, err := q.db.Query(ctx, listInvocationLifecycleChanges,
+		arg.SessionID,
+		arg.AfterRevision,
+		arg.ThroughRevision,
+		arg.BatchLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInvocationLifecycleChangesRow{}
+	for rows.Next() {
+		var i ListInvocationLifecycleChangesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.InvocationID,
+			&i.SessionID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.AgentID,
+			&i.Revision,
+			&i.Status,
+			&i.LeaseAttempt,
+			&i.ThroughMessageSequence,
+			&i.CreatedAt,
+			&i.Error,
+			&i.Usage,
+			&i.Provenance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listInvocationStates = `-- name: ListInvocationStates :many
 SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, revision, status, through_message_sequence, created_at, lease_attempt
 FROM invocation_states
@@ -1133,6 +1224,97 @@ func (q *Queries) ListInvocationStates(ctx context.Context, sessionID string) ([
 			&i.ThroughMessageSequence,
 			&i.CreatedAt,
 			&i.LeaseAttempt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvocationsForRecovery = `-- name: ListInvocationsForRecovery :many
+SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance
+FROM invocations AS i
+WHERE i.account_id = $1
+  AND ($2::text IS NULL OR i.tenant_partition_id = $2::text)
+  AND ($3::text IS NULL OR i.session_id = $3::text)
+  AND ($4::text IS NULL OR i.agent_id = $4::text)
+  AND ($5::text IS NULL OR i.status = $5::text)
+  AND (
+      $6::timestamptz IS NULL
+      OR (i.created_at, i.id) < ($6::timestamptz, $7::text)
+  )
+ORDER BY i.created_at DESC, i.id DESC
+LIMIT $8
+`
+
+type ListInvocationsForRecoveryParams struct {
+	AccountID         string
+	TenantPartitionID *string
+	SessionID         *string
+	AgentID           *string
+	Status            *string
+	BeforeCreatedAt   *time.Time
+	BeforeID          *string
+	BatchLimit        int32
+}
+
+// ListInvocationsForRecovery
+//
+//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance
+//	FROM invocations AS i
+//	WHERE i.account_id = $1
+//	  AND ($2::text IS NULL OR i.tenant_partition_id = $2::text)
+//	  AND ($3::text IS NULL OR i.session_id = $3::text)
+//	  AND ($4::text IS NULL OR i.agent_id = $4::text)
+//	  AND ($5::text IS NULL OR i.status = $5::text)
+//	  AND (
+//	      $6::timestamptz IS NULL
+//	      OR (i.created_at, i.id) < ($6::timestamptz, $7::text)
+//	  )
+//	ORDER BY i.created_at DESC, i.id DESC
+//	LIMIT $8
+func (q *Queries) ListInvocationsForRecovery(ctx context.Context, arg ListInvocationsForRecoveryParams) ([]Invocation, error) {
+	rows, err := q.db.Query(ctx, listInvocationsForRecovery,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.SessionID,
+		arg.AgentID,
+		arg.Status,
+		arg.BeforeCreatedAt,
+		arg.BeforeID,
+		arg.BatchLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Invocation{}
+	for rows.Next() {
+		var i Invocation
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.AgentID,
+			&i.SpecSnapshotID,
+			&i.IdempotencyKey,
+			&i.RequestFingerprint,
+			&i.Status,
+			&i.CurrentStateRevision,
+			&i.Error,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CompletedAt,
+			&i.LeaseOwner,
+			&i.LeaseExpiresAt,
+			&i.LeaseAttempt,
+			&i.Usage,
+			&i.Provenance,
 		); err != nil {
 			return nil, err
 		}
@@ -1179,6 +1361,189 @@ func (q *Queries) ListSessionMessages(ctx context.Context, sessionID string) ([]
 			&i.Role,
 			&i.Content,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSessionMessagesRange = `-- name: ListSessionMessagesRange :many
+SELECT id, session_id, account_id, tenant_partition_id, agent_id,
+       invocation_id, sequence, role, content, created_at
+FROM session_messages
+WHERE session_id = $1
+  AND sequence > $2
+  AND sequence <= $3
+ORDER BY sequence
+LIMIT $4
+`
+
+type ListSessionMessagesRangeParams struct {
+	SessionID       string
+	AfterSequence   int64
+	ThroughSequence int64
+	BatchLimit      int32
+}
+
+// ListSessionMessagesRange
+//
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id,
+//	       invocation_id, sequence, role, content, created_at
+//	FROM session_messages
+//	WHERE session_id = $1
+//	  AND sequence > $2
+//	  AND sequence <= $3
+//	ORDER BY sequence
+//	LIMIT $4
+func (q *Queries) ListSessionMessagesRange(ctx context.Context, arg ListSessionMessagesRangeParams) ([]SessionMessage, error) {
+	rows, err := q.db.Query(ctx, listSessionMessagesRange,
+		arg.SessionID,
+		arg.AfterSequence,
+		arg.ThroughSequence,
+		arg.BatchLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SessionMessage{}
+	for rows.Next() {
+		var i SessionMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.AgentID,
+			&i.InvocationID,
+			&i.Sequence,
+			&i.Role,
+			&i.Content,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSessionsForRecovery = `-- name: ListSessionsForRecovery :many
+SELECT s.id, s.account_id, s.tenant_partition_id, s.agent_id, s.session_key,
+       s.next_message_sequence, s.next_lifecycle_revision, s.created_at, s.updated_at,
+       tp.tenant_ref,
+       COALESCE(active.id, '') AS active_invocation_id,
+       COALESCE(active.status, '') AS active_invocation_status
+FROM sessions AS s
+JOIN tenant_partitions AS tp ON tp.id = s.tenant_partition_id
+LEFT JOIN LATERAL (
+    SELECT i.id, i.status
+    FROM invocations AS i
+    WHERE i.session_id = s.id
+      AND i.status IN ('queued', 'running', 'waiting')
+    LIMIT 1
+) AS active ON true
+WHERE s.account_id = $1
+  AND ($2::text IS NULL OR s.tenant_partition_id = $2::text)
+  AND ($3::text IS NULL OR s.agent_id = $3::text)
+  AND ($4::text IS NULL OR s.session_key = $4::text)
+  AND (
+      $5::timestamptz IS NULL
+      OR (s.created_at, s.id) < ($5::timestamptz, $6::text)
+  )
+ORDER BY s.created_at DESC, s.id DESC
+LIMIT $7
+`
+
+type ListSessionsForRecoveryParams struct {
+	AccountID         string
+	TenantPartitionID *string
+	AgentID           *string
+	SessionKey        *string
+	BeforeCreatedAt   *time.Time
+	BeforeID          *string
+	BatchLimit        int32
+}
+
+type ListSessionsForRecoveryRow struct {
+	ID                     string
+	AccountID              string
+	TenantPartitionID      string
+	AgentID                string
+	SessionKey             *string
+	NextMessageSequence    int64
+	NextLifecycleRevision  int64
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	TenantRef              *string
+	ActiveInvocationID     string
+	ActiveInvocationStatus string
+}
+
+// ListSessionsForRecovery
+//
+//	SELECT s.id, s.account_id, s.tenant_partition_id, s.agent_id, s.session_key,
+//	       s.next_message_sequence, s.next_lifecycle_revision, s.created_at, s.updated_at,
+//	       tp.tenant_ref,
+//	       COALESCE(active.id, '') AS active_invocation_id,
+//	       COALESCE(active.status, '') AS active_invocation_status
+//	FROM sessions AS s
+//	JOIN tenant_partitions AS tp ON tp.id = s.tenant_partition_id
+//	LEFT JOIN LATERAL (
+//	    SELECT i.id, i.status
+//	    FROM invocations AS i
+//	    WHERE i.session_id = s.id
+//	      AND i.status IN ('queued', 'running', 'waiting')
+//	    LIMIT 1
+//	) AS active ON true
+//	WHERE s.account_id = $1
+//	  AND ($2::text IS NULL OR s.tenant_partition_id = $2::text)
+//	  AND ($3::text IS NULL OR s.agent_id = $3::text)
+//	  AND ($4::text IS NULL OR s.session_key = $4::text)
+//	  AND (
+//	      $5::timestamptz IS NULL
+//	      OR (s.created_at, s.id) < ($5::timestamptz, $6::text)
+//	  )
+//	ORDER BY s.created_at DESC, s.id DESC
+//	LIMIT $7
+func (q *Queries) ListSessionsForRecovery(ctx context.Context, arg ListSessionsForRecoveryParams) ([]ListSessionsForRecoveryRow, error) {
+	rows, err := q.db.Query(ctx, listSessionsForRecovery,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.AgentID,
+		arg.SessionKey,
+		arg.BeforeCreatedAt,
+		arg.BeforeID,
+		arg.BatchLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSessionsForRecoveryRow{}
+	for rows.Next() {
+		var i ListSessionsForRecoveryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.AgentID,
+			&i.SessionKey,
+			&i.NextMessageSequence,
+			&i.NextLifecycleRevision,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.TenantRef,
+			&i.ActiveInvocationID,
+			&i.ActiveInvocationStatus,
 		); err != nil {
 			return nil, err
 		}

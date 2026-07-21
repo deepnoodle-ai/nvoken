@@ -2,17 +2,18 @@ openapi: 3.1.0
 info:
   title: nvoken Runtime API
   version: 0.1.0
-  summary: Minimum durable Invocation admission and read contract
+  summary: Durable Invocation admission, execution, and recovery contract
   license:
     name: Apache-2.0
     identifier: Apache-2.0
   description: |
     This focused contract defines nvoken's implemented background JSON surface:
-    durable Invocation admission and authoritative Invocation and Session reads.
+    durable Invocation admission, authoritative Invocation and Session reads,
+    and cursor-based transcript recovery.
 
-    Model execution, streaming, tools, structured output, budgets, spec
-    references, cancellation, dispatch, and administrative APIs are outside
-    this version of the contract.
+    Streaming, tools, structured output, budgets, spec references,
+    cancellation, external dispatch, and administrative APIs are outside this
+    version of the contract.
 servers:
   - url: /
     description: Current nvoken installation
@@ -25,6 +26,53 @@ tags:
     description: Durable conversation identity and state.
 paths:
   /v1/invocations:
+    get:
+      tags: [Invocations]
+      operationId: listInvocations
+      summary: List authoritative Invocations
+      description: |
+        Returns newest-first durable Invocation state. Exact filters combine
+        with AND. An Account-wide caller may list all tenant partitions, one
+        named partition with `tenant_ref`, or the default partition with
+        `default_tenant=true`. A tenant-constrained credential is always scoped
+        to its partition. The opaque cursor is bound to the normalized filter
+        set and credential tenant scope.
+      parameters:
+        - $ref: "#/components/parameters/TenantRefFilter"
+        - $ref: "#/components/parameters/DefaultTenantFilter"
+        - name: session_id
+          in: query
+          schema:
+            $ref: "#/components/schemas/SessionID"
+        - name: agent_id
+          in: query
+          schema:
+            $ref: "#/components/schemas/AgentID"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/InvocationStatus"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One bounded page of Invocations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvocationList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
     post:
       tags: [Invocations]
       operationId: createInvocation
@@ -209,6 +257,8 @@ paths:
                     error:
                       code: execution_lost
                       message: The execution process ended before this Invocation could settle.
+                    usage: null
+                    provenance: null
                     created_at: "2026-07-20T14:01:02Z"
                     updated_at: "2026-07-20T14:01:09Z"
                     completed_at: "2026-07-20T14:01:09Z"
@@ -220,6 +270,49 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/sessions:
+    get:
+      tags: [Sessions]
+      operationId: listSessions
+      summary: List authoritative Sessions
+      description: |
+        Returns newest-first Session identity and current nonterminal
+        Invocation state. Exact filters combine with AND. Tenant filtering and
+        cursor binding follow the Invocation-list rules.
+      parameters:
+        - $ref: "#/components/parameters/TenantRefFilter"
+        - $ref: "#/components/parameters/DefaultTenantFilter"
+        - name: agent_id
+          in: query
+          schema:
+            $ref: "#/components/schemas/AgentID"
+        - name: session_key
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One bounded page of Sessions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -254,8 +347,90 @@ paths:
                     tenant_ref: tenant-acme
                     session_key: ticket-483
                     active_invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    active_invocation_status: running
                     created_at: "2026-07-20T14:01:02Z"
                     updated_at: "2026-07-20T14:01:05Z"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/sessions/{session_id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    get:
+      tags: [Sessions]
+      operationId: listSessionMessages
+      summary: Page through the canonical Session transcript
+      description: |
+        Returns persisted SessionMessage rows in ascending sequence order.
+        The opaque forward cursor is bound to the authenticated Account and
+        Session. This history endpoint contains no lifecycle or live-preview
+        copies.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One bounded page of canonical messages.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionMessageList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/sessions/{session_id}/transcript:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    get:
+      tags: [Sessions]
+      operationId: getSessionTranscript
+      summary: Drain a fixed-cut incremental transcript snapshot
+      description: |
+        Projects canonical messages and append-only Invocation lifecycle
+        changes. Supply a prior `resume_cursor` as `cursor` to drain newer
+        durable state. Continue a multi-page fixed cut with `page_token` until
+        `has_more` is false. Each page contains one phase: all message pages are
+        delivered before lifecycle-change pages, so terminal state cannot
+        precede the transcript rows committed with it. Omitting both positions
+        starts at the beginning of the retained Session.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - name: page_token
+          in: query
+          description: Opaque fixed-cut continuation from `next_page_token`.
+          schema:
+            type: string
+            minLength: 1
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One phase of a fixed-cut transcript snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptSnapshot"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -288,6 +463,37 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/SessionID"
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor returned by the same operation and filter set.
+      schema:
+        type: string
+        minLength: 1
+    Limit:
+      name: limit
+      in: query
+      description: Maximum items in this page. Defaults to 100.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 100
+    TenantRefFilter:
+      name: tenant_ref
+      in: query
+      description: Exact non-default tenant partition reference.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    DefaultTenantFilter:
+      name: default_tenant
+      in: query
+      description: Select only the default tenant partition. Mutually exclusive with tenant_ref.
+      schema:
+        type: boolean
+        default: false
   schemas:
     AgentID:
       type: string
@@ -422,7 +628,7 @@ components:
     Invocation:
       type: object
       additionalProperties: false
-      required: [id, agent_id, session_id, status, created_at, updated_at]
+      required: [id, agent_id, session_id, status, error, usage, provenance, created_at, updated_at, completed_at]
       properties:
         id:
           $ref: "#/components/schemas/InvocationID"
@@ -436,6 +642,15 @@ components:
           oneOf:
             - $ref: "#/components/schemas/InvocationFailure"
             - type: "null"
+        usage:
+          oneOf:
+            - $ref: "#/components/schemas/ModelUsage"
+            - type: "null"
+          description: One normalized terminal aggregate, not a billing ledger.
+        provenance:
+          oneOf:
+            - $ref: "#/components/schemas/ModelProvenance"
+            - type: "null"
         created_at:
           type: string
           format: date-time
@@ -447,6 +662,80 @@ components:
             - type: string
               format: date-time
             - type: "null"
+    InvocationList:
+      type: object
+      additionalProperties: false
+      required: [items, has_more, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invocation"
+        has_more:
+          type: boolean
+        next_cursor:
+          oneOf:
+            - type: string
+            - type: "null"
+    ModelUsage:
+      type: object
+      additionalProperties: false
+      required: [input_tokens, output_tokens]
+      properties:
+        input_tokens:
+          type: integer
+          minimum: 0
+        output_tokens:
+          type: integer
+          minimum: 0
+        cache_creation_input_tokens:
+          type: integer
+          minimum: 0
+        cache_read_input_tokens:
+          type: integer
+          minimum: 0
+        reasoning_tokens:
+          type: integer
+          minimum: 0
+        estimated_cost:
+          $ref: "#/components/schemas/ModelCost"
+    ModelCost:
+      type: object
+      additionalProperties: false
+      required: [input, output, cache_read, cache_write, total]
+      properties:
+        input:
+          type: number
+          minimum: 0
+        output:
+          type: number
+          minimum: 0
+        cache_read:
+          type: number
+          minimum: 0
+        cache_write:
+          type: number
+          minimum: 0
+        total:
+          type: number
+          minimum: 0
+        currency:
+          type: string
+        model:
+          type: string
+    ModelProvenance:
+      type: object
+      additionalProperties: false
+      required: [provider, requested_model, served_model, credential_source]
+      properties:
+        provider:
+          type: string
+        requested_model:
+          type: string
+        served_model:
+          type: string
+        credential_source:
+          const: installation_byok
     InvocationFailure:
       type: object
       additionalProperties: false
@@ -468,7 +757,7 @@ components:
     Session:
       type: object
       additionalProperties: false
-      required: [id, agent_id, tenant_ref, session_key, active_invocation_id, created_at, updated_at]
+      required: [id, agent_id, tenant_ref, session_key, active_invocation_id, active_invocation_status, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/SessionID"
@@ -488,12 +777,144 @@ components:
             - $ref: "#/components/schemas/InvocationID"
             - type: "null"
           description: The queued, running, or waiting Invocation, if one exists.
+        active_invocation_status:
+          oneOf:
+            - type: string
+              enum: [queued, running, waiting]
+            - type: "null"
+          description: Status of active_invocation_id; null exactly when that ID is null.
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    SessionList:
+      type: object
+      additionalProperties: false
+      required: [items, has_more, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Session"
+        has_more:
+          type: boolean
+        next_cursor:
+          oneOf:
+            - type: string
+            - type: "null"
+    SessionMessageRole:
+      type: string
+      enum: [user, assistant, tool]
+    SessionContentBlock:
+      type: object
+      additionalProperties: true
+      required: [type]
+      properties:
+        type:
+          type: string
+      description: A canonical provider-neutral content block preserved losslessly.
+    SessionMessage:
+      type: object
+      additionalProperties: false
+      required: [id, session_id, agent_id, invocation_id, sequence, role, content, created_at]
+      properties:
+        id:
+          type: string
+          pattern: "^smsg_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        agent_id:
+          $ref: "#/components/schemas/AgentID"
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        sequence:
+          type: integer
+          format: int64
+          minimum: 1
+        role:
+          $ref: "#/components/schemas/SessionMessageRole"
+        content:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SessionContentBlock"
+        created_at:
+          type: string
+          format: date-time
+    SessionMessageList:
+      type: object
+      additionalProperties: false
+      required: [items, has_more, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionMessage"
+        has_more:
+          type: boolean
+        next_cursor:
+          oneOf:
+            - type: string
+            - type: "null"
+    InvocationChange:
+      type: object
+      additionalProperties: false
+      required: [invocation_id, revision, status, through_message_sequence, error, usage, provenance, occurred_at]
+      properties:
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          $ref: "#/components/schemas/InvocationStatus"
+        through_message_sequence:
+          oneOf:
+            - type: integer
+              format: int64
+              minimum: 1
+            - type: "null"
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationFailure"
+            - type: "null"
+        usage:
+          oneOf:
+            - $ref: "#/components/schemas/ModelUsage"
+            - type: "null"
+        provenance:
+          oneOf:
+            - $ref: "#/components/schemas/ModelProvenance"
+            - type: "null"
+        occurred_at:
+          type: string
+          format: date-time
+    TranscriptSnapshot:
+      type: object
+      additionalProperties: false
+      required: [messages, invocation_changes, has_more, resume_cursor, next_page_token]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionMessage"
+        invocation_changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvocationChange"
+        has_more:
+          type: boolean
+        resume_cursor:
+          type: string
+          minLength: 1
+          description: Delivered composite message-sequence and lifecycle-revision watermark.
+        next_page_token:
+          oneOf:
+            - type: string
+            - type: "null"
     ErrorCode:
       type: string
       enum:
