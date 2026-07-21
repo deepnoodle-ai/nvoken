@@ -131,7 +131,10 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 
 - No Runtime contract assumes a single LLM model vendor
 - Self-hosted nvoken uses a bring-your-own-key (BYOK) approach.
-- nvoken Cloud offers BYOK and platform credits to pay for usage. Platform credits carry a small markup on tokens.
+- nvoken Cloud resolves model credentials per provider from an Invocation-supplied
+  ephemeral credential, reusable Account BYOK, reusable tenant BYOK, or a
+  platform-funded credential. Platform credentials never silently replace an
+  explicitly selected BYOK source and carry a small markup on tokens.
 - Our library deepnoodle-ai/dive is used for multi-provider support in nvoken.
 - Execution specs carry token, cost, iteration, and wall-clock ceilings, and budget consumption is visible while the turn runs.
 

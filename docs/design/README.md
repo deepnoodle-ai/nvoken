@@ -43,6 +43,8 @@ structured-output admissions use the v3 vectors in
 [`admission-fingerprint-v3.json`](admission-fingerprint-v3.json). New
 client-tool admissions use the v4 vectors in
 [`admission-fingerprint-v4.json`](admission-fingerprint-v4.json).
+New callback-tool admissions use the v5 vectors in
+[`admission-fingerprint-v5.json`](admission-fingerprint-v5.json).
 
 ## Document authority
 

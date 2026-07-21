@@ -365,6 +365,25 @@ secrets, callback-signing keys, and browser sessions are not API
 credentials. Direct end-user credentials are deferred (`vision.md`
 section 7).
 
+### Model-provider credentials
+
+| Method   | Endpoint                                                   | Purpose                                                                                         |
+| -------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `GET`    | `/v1/provider-credentials`                                 | List safe metadata for Account- and tenant-scoped model-provider credentials.                   |
+| `POST`   | `/v1/provider-credentials`                                 | Store one encrypted Account or tenant BYOK credential for a canonical provider.                 |
+| `GET`    | `/v1/provider-credentials/{provider_credential_id}`        | Read scope, provider, version, status, and audit metadata without secret material.               |
+| `POST`   | `/v1/provider-credentials/{provider_credential_id}/rotate` | Replace credential material with a versioned, explicitly bounded overlap.                       |
+| `DELETE` | `/v1/provider-credentials/{provider_credential_id}`        | Revoke future use and destroy live credential material while retaining nonsecret audit metadata. |
+
+These resources are model-provider credentials, not nvoken authentication
+credentials or general integrations. Account BYOK is available to the
+Account's Invocations; tenant BYOK is bound to one effective tenant partition.
+Embedded end-users never call these endpoints directly: the authenticated host
+manages credentials on their behalf. Invocation admission may instead carry a
+provider credential for `caller_ephemeral` use; the secret is encrypted into
+the Invocation binding, excluded from its spec and idempotency fingerprint,
+and destroyed when the Invocation settles or its credential lease expires.
+
 ### CLI device authorization
 
 | Method | Endpoint                  | Purpose                                                                                                                 |
@@ -395,7 +414,7 @@ Invocation lifecycle projection; they serve reconciliation and rebilling.
 | Registry, Releases, pins, deployment tracks         | Host Git/CI selects an immutable spec reference and digest.                                                             |
 | Skills and toolkits                                 | Resolved into the execution specification; named custom tool definitions (section 5) are the only registration surface. |
 | Integration and OAuth resources                     | Host-owned integrations as client or callback tools.                                                                    |
-| Runtime secret store                                | Deployment secrets, short-lived input, or a host credential broker.                                                     |
+| General Runtime secret store                        | Model-provider credentials use the narrow surface above; all other secrets remain deployment input or host-brokered.    |
 | Environments, Session compute, runner inventory     | Host-owned sandboxes as host-executed tools; Environment concept deferred to a possible future version.                 |
 | Loops, schedules, triggers, source events, waits    | Host scheduler invokes nvoken.                                                                                          |
 | Tables, artifacts, files                            | Host application storage; agent memory is an optional runtime resource (section 6).                                     |

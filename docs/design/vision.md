@@ -51,15 +51,16 @@ Success is a team saying:
 nvoken stores what execution, recovery, inspection, and accounting require:
 Sessions and transcripts; Invocations, lifecycle revisions, and output;
 ToolCalls and results; checkpoints, leases, and fences; execution-spec
-snapshots and digests; normalized usage and provenance. Three opt-in conveniences extend
+snapshots and digests; normalized usage and provenance. Four opt-in conveniences extend
 this: agent memory (a host may instead keep memory entirely on its side —
-either mode is supported), named custom tool definitions, and a limited
-number of indexed metadata items per request that link Sessions and
-Invocations to host resources for fast lookup.
+either mode is supported), named custom tool definitions, reusable
+model-provider credentials at Account or tenant scope, and a limited number of
+indexed metadata items per request that link Sessions and Invocations to host
+resources for fast lookup.
 
 nvoken is never the source of truth for agent definitions or releases; host
-tenants, users, or permissions; integrations, OAuth connections, or business
-credentials; workflows, schedules, or triggers; tables, files, or
+tenants, users, or permissions; integrations, OAuth connections, or non-model
+business credentials; workflows, schedules, or triggers; tables, files, or
 application records; rollout selection or product entitlements.
 
 ## 3. The product at 100% embedded
@@ -192,10 +193,13 @@ the source of truth.
 steps of one turn across providers. Multi-provider support is built on our
 deepnoodle-ai/dive library. No Runtime contract assumes a single vendor.
 
-**Cost alignment.** Self-hosted nvoken is bring-your-own-key. nvoken Cloud
-offers BYOK and platform credits; platform credits carry a small markup on
-tokens. The spec carries token, cost, iteration, and wall-clock
-ceilings; budget consumption is visible in usage events while the turn runs.
+**Cost alignment.** Self-hosted nvoken is bring-your-own-key. For each model
+provider, nvoken Cloud accepts an Invocation-supplied ephemeral credential,
+reusable Account BYOK, reusable tenant BYOK, or a platform-funded credential.
+Platform credentials never silently replace an explicitly selected BYOK
+source and carry a small markup on tokens. The spec carries token, cost,
+iteration, and wall-clock ceilings; budget consumption is visible in usage
+events while the turn runs.
 
 **Observability.** The session viewer and the invocation trace are primary
 product surfaces: transcript, ToolCall attempts and results, spec digest,
