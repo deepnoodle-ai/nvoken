@@ -61,6 +61,73 @@ func TestSchemaRejectsUnsupportedAndMalformedConstraints(t *testing.T) {
 	}
 }
 
+func TestSchemaPatternSizeBoundary(t *testing.T) {
+	pattern := strings.Repeat("a", MaxPatternBytes)
+	schema := json.RawMessage(`{"type":"object","properties":{"value":{"type":"string","pattern":"` + pattern + `"}}}`)
+	if _, err := CompileSchema(schema); err != nil {
+		t.Fatalf("compile schema at pattern limit: %v", err)
+	}
+
+	pattern += "a"
+	schema = json.RawMessage(`{"type":"object","properties":{"value":{"type":"string","pattern":"` + pattern + `"}}}`)
+	if _, err := CompileSchema(schema); err == nil || !strings.Contains(err.Error(), "pattern") {
+		t.Fatalf("schema past pattern limit error = %v", err)
+	}
+}
+
+func TestValueValidationPreservesExactNumbers(t *testing.T) {
+	compiled, err := CompileSchema(json.RawMessage(`{
+		"type":"object",
+		"properties":{
+			"value":{
+				"type":"integer",
+				"enum":[9007199254740993],
+				"minimum":9007199254740993,
+				"maximum":9007199254740993
+			}
+		},
+		"required":["value"],
+		"additionalProperties":false
+	}`))
+	if err != nil {
+		t.Fatalf("compile schema: %v", err)
+	}
+	if err := compiled.ValidateValue(json.RawMessage(`{"value":9007199254740993}`)); err != nil {
+		t.Fatalf("validate exact value: %v", err)
+	}
+	for _, value := range []json.RawMessage{
+		json.RawMessage(`{"value":9007199254740992}`),
+		json.RawMessage(`{"value":9007199254740994}`),
+		json.RawMessage(`{"value":9007199254740993.5}`),
+	} {
+		if err := compiled.ValidateValue(value); err == nil {
+			t.Fatalf("validation succeeded for %s", value)
+		}
+	}
+}
+
+func TestValueValidationPreservesExactNestedEnum(t *testing.T) {
+	compiled, err := CompileSchema(json.RawMessage(`{
+		"type":"object",
+		"properties":{
+			"value":{
+				"type":"object",
+				"enum":[{"number":1,"label":"one"}],
+				"additionalProperties":true
+			}
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("compile schema: %v", err)
+	}
+	if err := compiled.ValidateValue(json.RawMessage(`{"value":{"label":"one","number":1.0}}`)); err != nil {
+		t.Fatalf("validate semantically equal enum: %v", err)
+	}
+	if err := compiled.ValidateValue(json.RawMessage(`{"value":{"label":"one","number":2}}`)); err == nil {
+		t.Fatal("validation succeeded for unequal enum")
+	}
+}
+
 func TestSchemaAndValueDepthBoundaries(t *testing.T) {
 	atLimit := nestedSchema(MaxSchemaDepth)
 	compiled, err := CompileSchema(atLimit)

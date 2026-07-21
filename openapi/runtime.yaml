@@ -734,7 +734,8 @@ components:
             keywords are type, title, description, properties, required,
             additionalProperties, items, enum, pattern, minLength, maxLength,
             minItems, maxItems, minimum, and maximum. Every schema position has
-            one string type; references and other keywords are rejected.
+            one string type; pattern values are limited to 1,024 UTF-8 bytes;
+            references and other keywords are rejected.
       description: |
         Optional per-Invocation structured-output contract. nvoken exposes a
         reserved durable submit tool and publishes only a server-validated

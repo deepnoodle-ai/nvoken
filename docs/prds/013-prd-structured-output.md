@@ -62,7 +62,8 @@ Invocation retry; crash resumption; output indexing or querying.
   schemas may use only the documented self-contained subset: `type`,
   `title`, `description`, `properties`, `required`, `additionalProperties`,
   `items`, `enum`, `pattern`, `minLength`, `maxLength`, `minItems`,
-  `maxItems`, `minimum`, and `maximum`. Keywords outside that list, malformed
+  `maxItems`, `minimum`, and `maximum`. A `pattern` is limited to 1,024 UTF-8
+  bytes. Keywords outside that list, malformed
   constraints, non-object roots, references, and empty schemas must be rejected
   before any durable admission write. Property names that equal keyword text
   remain valid.

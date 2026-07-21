@@ -18,6 +18,7 @@ import (
 const (
 	MaxSchemaBytes   = 32 * 1024
 	MaxSchemaDepth   = 16
+	MaxPatternBytes  = 1024
 	MaxValueBytes    = 256 * 1024
 	MaxValueDepth    = 32
 	ReservedToolName = "nvoken_submit_output"
@@ -43,7 +44,8 @@ var allowedKeywords = map[string]struct{}{
 }
 
 type Compiled struct {
-	schema *openapi3.Schema
+	schema      *openapi3.Schema
+	exactSchema map[string]any
 }
 
 func CompileSchema(raw json.RawMessage) (*Compiled, error) {
@@ -66,14 +68,21 @@ func CompileSchema(raw json.RawMessage) (*Compiled, error) {
 	if err := validateSchemaNode(root, 1, true); err != nil {
 		return nil, err
 	}
+	validationSchema, err := json.Marshal(schemaForOpenAPI(root))
+	if err != nil {
+		return nil, errors.New("schema is invalid")
+	}
 	var schema openapi3.Schema
-	if err := json.Unmarshal(raw, &schema); err != nil {
+	if err := json.Unmarshal(validationSchema, &schema); err != nil {
 		return nil, fmt.Errorf("schema is invalid: %w", err)
 	}
 	if err := schema.Validate(context.Background()); err != nil {
 		return nil, fmt.Errorf("schema is invalid: %w", err)
 	}
-	return &Compiled{schema: &schema}, nil
+	return &Compiled{
+		schema:      &schema,
+		exactSchema: root,
+	}, nil
 }
 
 func (c *Compiled) ValidateValue(raw json.RawMessage) error {
@@ -98,11 +107,10 @@ func (c *Compiled) ValidateValue(raw json.RawMessage) error {
 	if depth := jsonDepth(exact); depth > MaxValueDepth {
 		return fmt.Errorf("structured output exceeds the maximum nesting depth of %d", MaxValueDepth)
 	}
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return errors.New("structured output is not valid JSON")
+	if err := validateExactConstraints(c.exactSchema, exact); err != nil {
+		return fmt.Errorf("structured output does not match schema: %w", err)
 	}
-	if err := c.schema.VisitJSON(value); err != nil {
+	if err := c.schema.VisitJSON(openAPIValue(exact)); err != nil {
 		return fmt.Errorf("structured output does not match schema: %w", err)
 	}
 	return nil
@@ -137,6 +145,9 @@ func validateSchemaNode(node map[string]any, depth int, root bool) error {
 		text, ok := pattern.(string)
 		if !ok {
 			return errors.New("schema pattern must be a string")
+		}
+		if len(text) > MaxPatternBytes {
+			return fmt.Errorf("schema pattern exceeds the maximum size of %d bytes", MaxPatternBytes)
 		}
 		if _, err := regexp.Compile(text); err != nil {
 			return errors.New("schema pattern must be a valid regular expression")
@@ -316,6 +327,209 @@ func numberKeyword(node map[string]any, keyword string) (*big.Float, bool) {
 	precision := uint(len(number.String())*4 + 16)
 	value, _, err := big.ParseFloat(number.String(), 10, precision, big.ToNearestEven)
 	return value, err == nil
+}
+
+// schemaForOpenAPI removes constraints that kin-openapi evaluates through
+// float64 or reflect.DeepEqual. Those constraints are checked against the
+// decoder's exact json.Number tree before the remaining schema is evaluated.
+func schemaForOpenAPI(node map[string]any) map[string]any {
+	result := make(map[string]any, len(node))
+	for keyword, value := range node {
+		switch keyword {
+		case "enum", "minimum", "maximum":
+			continue
+		case "properties":
+			properties := value.(map[string]any)
+			children := make(map[string]any, len(properties))
+			for name, child := range properties {
+				children[name] = schemaForOpenAPI(child.(map[string]any))
+			}
+			result[keyword] = children
+		case "items":
+			result[keyword] = schemaForOpenAPI(value.(map[string]any))
+		case "additionalProperties":
+			if child, ok := value.(map[string]any); ok {
+				result[keyword] = schemaForOpenAPI(child)
+			} else {
+				result[keyword] = value
+			}
+		default:
+			result[keyword] = value
+		}
+	}
+	return result
+}
+
+func validateExactConstraints(schema map[string]any, value any) error {
+	if enum, ok := schema["enum"].([]any); ok {
+		matched := false
+		for _, candidate := range enum {
+			if exactJSONEqual(candidate, value) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return errors.New("value is not one of the allowed enum values")
+		}
+	}
+
+	switch schema["type"] {
+	case "number", "integer":
+		number, ok := value.(json.Number)
+		if !ok {
+			return nil
+		}
+		if schema["type"] == "integer" && !exactNumberIsInteger(number) {
+			return errors.New("value is not an integer")
+		}
+		if minimum, ok := schema["minimum"].(json.Number); ok {
+			comparison, valid := compareExactNumbers(number, minimum)
+			if !valid {
+				return errors.New("numeric value is outside the supported exact range")
+			}
+			if comparison < 0 {
+				return errors.New("numeric value is below minimum")
+			}
+		}
+		if maximum, ok := schema["maximum"].(json.Number); ok {
+			comparison, valid := compareExactNumbers(number, maximum)
+			if !valid {
+				return errors.New("numeric value is outside the supported exact range")
+			}
+			if comparison > 0 {
+				return errors.New("numeric value is above maximum")
+			}
+		}
+	case "object":
+		object, ok := value.(map[string]any)
+		if !ok {
+			return nil
+		}
+		properties, _ := schema["properties"].(map[string]any)
+		for name, child := range properties {
+			if childValue, exists := object[name]; exists {
+				if err := validateExactConstraints(child.(map[string]any), childValue); err != nil {
+					return fmt.Errorf("property %q: %w", name, err)
+				}
+			}
+		}
+		additional, hasAdditional := schema["additionalProperties"].(map[string]any)
+		if hasAdditional {
+			for name, childValue := range object {
+				if _, declared := properties[name]; declared {
+					continue
+				}
+				if err := validateExactConstraints(additional, childValue); err != nil {
+					return fmt.Errorf("property %q: %w", name, err)
+				}
+			}
+		}
+	case "array":
+		array, ok := value.([]any)
+		if !ok {
+			return nil
+		}
+		items := schema["items"].(map[string]any)
+		for index, item := range array {
+			if err := validateExactConstraints(items, item); err != nil {
+				return fmt.Errorf("item %d: %w", index, err)
+			}
+		}
+	}
+	return nil
+}
+
+func exactJSONEqual(left, right any) bool {
+	switch left := left.(type) {
+	case nil:
+		return right == nil
+	case bool:
+		right, ok := right.(bool)
+		return ok && left == right
+	case string:
+		right, ok := right.(string)
+		return ok && left == right
+	case json.Number:
+		right, ok := right.(json.Number)
+		if !ok {
+			return false
+		}
+		comparison, valid := compareExactNumbers(left, right)
+		return valid && comparison == 0
+	case []any:
+		right, ok := right.([]any)
+		if !ok || len(left) != len(right) {
+			return false
+		}
+		for index := range left {
+			if !exactJSONEqual(left[index], right[index]) {
+				return false
+			}
+		}
+		return true
+	case map[string]any:
+		right, ok := right.(map[string]any)
+		if !ok || len(left) != len(right) {
+			return false
+		}
+		for name, value := range left {
+			other, exists := right[name]
+			if !exists || !exactJSONEqual(value, other) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func compareExactNumbers(left, right json.Number) (int, bool) {
+	precision := uint((len(left.String())+len(right.String()))*4 + 32)
+	leftValue, _, err := big.ParseFloat(left.String(), 10, precision, big.ToNearestEven)
+	if err != nil {
+		return 0, false
+	}
+	rightValue, _, err := big.ParseFloat(right.String(), 10, precision, big.ToNearestEven)
+	if err != nil {
+		return 0, false
+	}
+	return leftValue.Cmp(rightValue), true
+}
+
+func exactNumberIsInteger(number json.Number) bool {
+	precision := uint(len(number.String())*4 + 16)
+	value, _, err := big.ParseFloat(number.String(), 10, precision, big.ToNearestEven)
+	if err != nil {
+		return false
+	}
+	_, accuracy := value.Int(nil)
+	return accuracy == big.Exact
+}
+
+// openAPIValue preserves the JSON shape but substitutes a representative
+// numeric value. Exact integer, enum, minimum, and maximum semantics have
+// already been enforced without float64 conversion.
+func openAPIValue(value any) any {
+	switch value := value.(type) {
+	case json.Number:
+		return float64(0)
+	case []any:
+		result := make([]any, len(value))
+		for index, item := range value {
+			result[index] = openAPIValue(item)
+		}
+		return result
+	case map[string]any:
+		result := make(map[string]any, len(value))
+		for name, item := range value {
+			result[name] = openAPIValue(item)
+		}
+		return result
+	default:
+		return value
+	}
 }
 
 func supportedType(value string) bool {

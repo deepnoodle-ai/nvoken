@@ -56,6 +56,9 @@ normal durable ToolCall path. An omitted iteration budget resolves to three (or
 the lower installation maximum); an explicit value below two is rejected. The
 model must submit a valid object and then finish with a normal assistant
 response. Prose or fenced JSON never substitutes for the tool submission.
+Patterns are limited to 1,024 UTF-8 bytes. The accepted ToolCall is internal
+checkpoint evidence; public `output` remains null until fenced terminal
+settlement commits the final object and provenance together.
 
 On its first start, the static self-hosted authenticator serializes creation of
 one installation Account and its default tenant partition. Later starts resolve
