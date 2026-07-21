@@ -120,13 +120,16 @@ type InvocationRepository interface {
 	GetInvocationForUpdate(context.Context, string) (domain.Invocation, error)
 	FindNextQueuedInvocationForUpdate(context.Context) (domain.Invocation, error)
 	ListExpiredInvocationLeases(context.Context, time.Time, int) ([]domain.Invocation, error)
+	ListExpiredInvocationDeadlines(context.Context, time.Time, int) ([]domain.Invocation, error)
 	GetInvocationByIdempotencyKey(context.Context, string, string, string, string) (domain.Invocation, error)
 	GetNonterminalInvocationBySession(context.Context, string) (domain.Invocation, error)
 	LockInvocationAdmissionKey(context.Context, string) error
-	ClaimInvocation(context.Context, string, string, time.Time, int64, time.Time) (domain.Invocation, error)
+	ClaimInvocation(context.Context, string, string, time.Time, int64, time.Time, time.Time, string) (domain.Invocation, error)
 	RenewInvocationLease(context.Context, string, string, int64, time.Time, time.Time) (domain.Invocation, error)
 	SettleInvocation(context.Context, string, string, int64, domain.InvocationStatus, int64, []byte, []byte, []byte, time.Time) (domain.Invocation, error)
 	ReapInvocationLease(context.Context, string, int64, int64, []byte, time.Time) (domain.Invocation, error)
+	CancelInvocation(context.Context, string, int64, time.Time) (domain.Invocation, error)
+	ReapInvocationDeadline(context.Context, string, int64, []byte, time.Time) (domain.Invocation, error)
 }
 
 // RuntimeAuthenticator turns a presented bearer secret into the durable scope
@@ -153,6 +156,19 @@ type WorkSignaller interface {
 
 type WorkSubscription interface {
 	Wait(context.Context, time.Duration) bool
+	Close()
+}
+
+// CancellationSignaller lowers cancellation latency across service instances.
+// The Invocation row and lease fence remain authoritative when a notification
+// is lost, duplicated, or delivered to a process without the active claim.
+type CancellationSignaller interface {
+	NotifyCancellation(context.Context, string)
+	SubscribeCancellations(context.Context) CancellationSubscription
+}
+
+type CancellationSubscription interface {
+	Wait(context.Context, time.Duration) (string, bool)
 	Close()
 }
 

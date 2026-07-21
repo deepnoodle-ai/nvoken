@@ -126,13 +126,20 @@ WHERE id = $1;
 INSERT INTO invocations (
     id, session_id, account_id, tenant_partition_id, agent_id,
     spec_snapshot_id, idempotency_key, request_fingerprint, status,
-    current_state_revision, error, created_at, updated_at, completed_at
+    request_fingerprint_version, current_state_revision, error,
+    wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens,
+    max_estimated_cost_microusd, max_iterations, active_execution_ms,
+    wall_clock_deadline_at, created_at, updated_at, completed_at
 ) VALUES (
     sqlc.arg(id), sqlc.arg(session_id), sqlc.arg(account_id),
     sqlc.arg(tenant_partition_id), sqlc.arg(agent_id),
     sqlc.arg(spec_snapshot_id), sqlc.arg(idempotency_key),
-    sqlc.arg(request_fingerprint), sqlc.arg(status),
+    sqlc.arg(request_fingerprint), sqlc.arg(status), sqlc.arg(request_fingerprint_version),
     sqlc.arg(current_state_revision), sqlc.narg(error_payload),
+    sqlc.arg(wall_clock_timeout_ms), sqlc.arg(active_execution_timeout_ms),
+    sqlc.narg(max_output_tokens), sqlc.narg(max_estimated_cost_microusd),
+    sqlc.arg(max_iterations), sqlc.arg(active_execution_ms),
+    sqlc.arg(wall_clock_deadline_at),
     sqlc.arg(created_at), sqlc.arg(updated_at), sqlc.narg(completed_at)
 );
 
@@ -164,6 +171,17 @@ WHERE status = 'running'
 ORDER BY lease_expires_at, id
 LIMIT sqlc.arg(batch_limit);
 
+-- name: ListExpiredInvocationDeadlines :many
+SELECT *
+FROM invocations
+WHERE status IN ('queued', 'running', 'waiting')
+  AND (
+      wall_clock_deadline_at <= sqlc.arg(observed_at)
+      OR (status = 'running' AND execution_deadline_at <= sqlc.arg(observed_at))
+  )
+ORDER BY LEAST(wall_clock_deadline_at, COALESCE(execution_deadline_at, wall_clock_deadline_at)), id
+LIMIT sqlc.arg(batch_limit);
+
 -- name: GetInvocationByIdempotencyKey :one
 SELECT *
 FROM invocations
@@ -189,9 +207,13 @@ SET status = 'running',
     lease_owner = sqlc.arg(lease_owner),
     lease_expires_at = sqlc.arg(lease_expires_at),
     lease_attempt = lease_attempt + 1,
+    active_segment_started_at = sqlc.arg(observed_at),
+    execution_deadline_at = sqlc.arg(execution_deadline_at),
+    execution_deadline_scope = sqlc.arg(execution_deadline_scope),
     updated_at = sqlc.arg(observed_at)
 WHERE id = sqlc.arg(id)
   AND status = 'queued'
+  AND wall_clock_deadline_at > sqlc.arg(observed_at)
 RETURNING *;
 
 -- name: RenewInvocationLease :one
@@ -203,6 +225,7 @@ WHERE id = sqlc.arg(id)
   AND lease_owner = sqlc.arg(lease_owner)
   AND lease_attempt = sqlc.arg(lease_attempt)
   AND lease_expires_at > sqlc.arg(observed_at)
+  AND execution_deadline_at > sqlc.arg(observed_at)
 RETURNING *;
 
 -- name: SettleInvocation :one
@@ -211,6 +234,14 @@ SET status = sqlc.arg(status),
     current_state_revision = sqlc.arg(state_revision),
     lease_owner = NULL,
     lease_expires_at = NULL,
+    active_execution_ms = LEAST(
+        active_execution_timeout_ms,
+        active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+            (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
+    ),
+    active_segment_started_at = NULL,
+    execution_deadline_at = NULL,
+    execution_deadline_scope = NULL,
     error = sqlc.narg(error_payload),
     usage = sqlc.narg(usage_payload),
     provenance = sqlc.narg(provenance_payload),
@@ -221,6 +252,7 @@ WHERE id = sqlc.arg(id)
   AND lease_owner = sqlc.arg(lease_owner)
   AND lease_attempt = sqlc.arg(lease_attempt)
   AND lease_expires_at > sqlc.arg(observed_at)
+  AND execution_deadline_at > sqlc.arg(observed_at)
 RETURNING *;
 
 -- name: ReapInvocationLease :one
@@ -229,6 +261,14 @@ SET status = 'failed',
     current_state_revision = sqlc.arg(state_revision),
     lease_owner = NULL,
     lease_expires_at = NULL,
+    active_execution_ms = LEAST(
+        active_execution_timeout_ms,
+        active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+            (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
+    ),
+    active_segment_started_at = NULL,
+    execution_deadline_at = NULL,
+    execution_deadline_scope = NULL,
     error = sqlc.arg(error_payload),
     completed_at = sqlc.arg(observed_at),
     updated_at = sqlc.arg(observed_at)
@@ -236,6 +276,60 @@ WHERE id = sqlc.arg(id)
   AND status = 'running'
   AND lease_attempt = sqlc.arg(lease_attempt)
   AND lease_expires_at <= sqlc.arg(observed_at)
+RETURNING *;
+
+-- name: CancelInvocation :one
+UPDATE invocations
+SET status = 'cancelled',
+    current_state_revision = sqlc.arg(state_revision),
+    lease_owner = NULL,
+    lease_expires_at = NULL,
+    active_execution_ms = LEAST(
+        active_execution_timeout_ms,
+        active_execution_ms + CASE WHEN active_segment_started_at IS NULL THEN 0 ELSE
+            GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+                (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
+        END
+    ),
+    active_segment_started_at = NULL,
+    execution_deadline_at = NULL,
+    execution_deadline_scope = NULL,
+    error = NULL,
+    usage = NULL,
+    provenance = NULL,
+    completed_at = sqlc.arg(observed_at),
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id)
+  AND status IN ('queued', 'running', 'waiting')
+RETURNING *;
+
+-- name: ReapInvocationDeadline :one
+UPDATE invocations
+SET status = 'failed',
+    current_state_revision = sqlc.arg(state_revision),
+    lease_owner = NULL,
+    lease_expires_at = NULL,
+    active_execution_ms = LEAST(
+        active_execution_timeout_ms,
+        active_execution_ms + CASE WHEN active_segment_started_at IS NULL THEN 0 ELSE
+            GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+                (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
+        END
+    ),
+    active_segment_started_at = NULL,
+    execution_deadline_at = NULL,
+    execution_deadline_scope = NULL,
+    error = sqlc.arg(error_payload),
+    usage = NULL,
+    provenance = NULL,
+    completed_at = sqlc.arg(observed_at),
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id)
+  AND status IN ('queued', 'running', 'waiting')
+  AND (
+      wall_clock_deadline_at <= sqlc.arg(observed_at)
+      OR (status = 'running' AND execution_deadline_at <= sqlc.arg(observed_at))
+  )
 RETURNING *;
 
 -- name: AppendSessionMessage :exec

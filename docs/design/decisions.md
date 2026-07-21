@@ -119,3 +119,18 @@ the caller's own traversal. Session reads retain the frozen nullable
 field, present and null together. This carries forward Mobius Cloud's useful
 fixed-cut ordering while omitting its separate turn model, interactions, live
 preview state, and project namespace.
+
+22. Durable Invocation controls and bounded execution (2026-07-21): a host may
+idempotently cancel an Invocation, and an inline spec may request wall-clock,
+active-execution, output-token, estimated-cost, and iteration limits. Admission
+resolves and persists all limits and a wall deadline; claims persist one active
+segment whose deadline is the earliest logical or installation segment limit.
+Postgres terminal settlement is first-writer-wins and accrues the active segment
+once. PostgreSQL LISTEN/NOTIFY lowers cross-instance cancellation latency but
+grants no authority; lease renewal and settlement fences remain the loss-safe
+fallback. Failed budget or deadline outcomes may retain paired normalized usage
+and provenance when a provider result produced them, while cancellation retains
+neither. New requests use fingerprint v2 with requested budgets as material
+input; retained v1 budgetless work remains replay-compatible. This adopts
+Mobius Cloud's cancellation and active-segment invariants without importing its
+turn/run ownership or wait/job tables.

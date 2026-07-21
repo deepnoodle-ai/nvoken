@@ -72,10 +72,15 @@ func (e *GenerationExecutor) Execute(
 	}
 
 	request := domain.GenerationRequest{
-		Instructions: spec.Instructions,
-		Provider:     strings.ToLower(spec.Model.Provider),
-		Model:        spec.Model.Name,
-		Messages:     messages,
+		Instructions:    spec.Instructions,
+		Provider:        strings.ToLower(spec.Model.Provider),
+		Model:           spec.Model.Name,
+		Messages:        messages,
+		MaxOutputTokens: claim.Invocation.MaxOutputTokens,
+		MaxIterations:   claim.Invocation.MaxIterations,
+	}
+	if err := ctx.Err(); err != nil {
+		return domain.InvocationExecutionResult{}, err
 	}
 	started := time.Now()
 	response, err := e.generator.Generate(ctx, request)
@@ -109,6 +114,14 @@ func (e *GenerationExecutor) Execute(
 	if err := validateExecutionResult(result); err != nil {
 		e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
 		return providerGenerationFailure(), nil
+	}
+	if ctx.Err() != nil {
+		return deadlineGenerationFailure(claim, &response.Usage, result.Provenance), nil
+	}
+	if kind := exceededGenerationBudget(claim.Invocation, response.Usage); kind != "" {
+		e.logger.Warn("Model generation budget exceeded",
+			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt, "budget_kind", kind)
+		return budgetGenerationFailure(kind, response.Usage, *result.Provenance), nil
 	}
 	e.logger.Info("Model generation completed",
 		"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
@@ -251,7 +264,7 @@ func validateGenerationMessage(message domain.GenerationMessage, output bool) er
 
 func validateModelUsage(usage domain.ModelUsage) error {
 	if usage.InputTokens < 0 || usage.OutputTokens < 0 || usage.CacheCreationInputTokens < 0 ||
-		usage.CacheReadInputTokens < 0 || usage.ReasoningTokens < 0 {
+		usage.CacheReadInputTokens < 0 || usage.ReasoningTokens < 0 || usage.Iterations < 0 {
 		return fmt.Errorf("model usage token counts cannot be negative")
 	}
 	if usage.EstimatedCost == nil {
@@ -267,6 +280,45 @@ func validateModelUsage(usage domain.ModelUsage) error {
 		return fmt.Errorf("model cost metadata is too long")
 	}
 	return nil
+}
+
+func exceededGenerationBudget(invocation domain.Invocation, usage domain.ModelUsage) string {
+	if usage.Iterations > invocation.MaxIterations {
+		return "iterations"
+	}
+	if invocation.MaxOutputTokens != nil && usage.OutputTokens > *invocation.MaxOutputTokens {
+		return "output_tokens"
+	}
+	if invocation.MaxEstimatedCostMicros != nil {
+		if usage.EstimatedCost == nil || (usage.EstimatedCost.Currency != "" && !strings.EqualFold(usage.EstimatedCost.Currency, "USD")) {
+			return "estimated_cost_unavailable"
+		}
+		micros := int64(math.Ceil(usage.EstimatedCost.Total * 1_000_000))
+		if micros > *invocation.MaxEstimatedCostMicros {
+			return "estimated_cost"
+		}
+	}
+	return ""
+}
+
+func budgetGenerationFailure(kind string, usage domain.ModelUsage, provenance domain.ModelProvenance) domain.InvocationExecutionResult {
+	return domain.InvocationExecutionResult{
+		Status: domain.InvocationFailed,
+		Error:  invocationFailureWithDetails("budget_exceeded", "The execution budget was exceeded.", map[string]string{"kind": kind}),
+		Usage:  &usage, Provenance: &provenance,
+	}
+}
+
+func deadlineGenerationFailure(claim domain.InvocationClaim, usage *domain.ModelUsage, provenance *domain.ModelProvenance) domain.InvocationExecutionResult {
+	scope := "execution_segment"
+	if claim.Invocation.ExecutionDeadlineScope != nil {
+		scope = *claim.Invocation.ExecutionDeadlineScope
+	}
+	return domain.InvocationExecutionResult{
+		Status: domain.InvocationFailed,
+		Error:  invocationFailureWithDetails("deadline_exceeded", "The execution deadline was exceeded.", map[string]string{"scope": scope}),
+		Usage:  usage, Provenance: provenance,
+	}
 }
 
 func validateModelProvenance(provenance domain.ModelProvenance) error {

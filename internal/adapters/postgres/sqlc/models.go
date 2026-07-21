@@ -28,25 +28,36 @@ type ExecutionSpecSnapshot struct {
 }
 
 type Invocation struct {
-	ID                   string
-	SessionID            string
-	AccountID            string
-	TenantPartitionID    string
-	AgentID              string
-	SpecSnapshotID       string
-	IdempotencyKey       string
-	RequestFingerprint   []byte
-	Status               string
-	CurrentStateRevision int64
-	Error                []byte
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	CompletedAt          *time.Time
-	LeaseOwner           *string
-	LeaseExpiresAt       *time.Time
-	LeaseAttempt         int64
-	Usage                []byte
-	Provenance           []byte
+	ID                        string
+	SessionID                 string
+	AccountID                 string
+	TenantPartitionID         string
+	AgentID                   string
+	SpecSnapshotID            string
+	IdempotencyKey            string
+	RequestFingerprint        []byte
+	Status                    string
+	CurrentStateRevision      int64
+	Error                     []byte
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+	CompletedAt               *time.Time
+	LeaseOwner                *string
+	LeaseExpiresAt            *time.Time
+	LeaseAttempt              int64
+	Usage                     []byte
+	Provenance                []byte
+	RequestFingerprintVersion int16
+	WallClockTimeoutMs        int64
+	ActiveExecutionTimeoutMs  int64
+	MaxOutputTokens           *int32
+	MaxEstimatedCostMicrousd  *int64
+	MaxIterations             int32
+	ActiveExecutionMs         int64
+	WallClockDeadlineAt       time.Time
+	ActiveSegmentStartedAt    *time.Time
+	ExecutionDeadlineAt       *time.Time
+	ExecutionDeadlineScope    *string
 }
 
 type InvocationState struct {

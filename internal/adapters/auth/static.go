@@ -65,6 +65,7 @@ func (a *StaticAuthenticator) Authenticate(_ context.Context, token string) (dom
 		Operations: map[domain.RuntimeOperation]struct{}{
 			domain.OperationCreateInvocation: {},
 			domain.OperationGetInvocation:    {},
+			domain.OperationCancelInvocation: {},
 			domain.OperationListInvocations:  {},
 			domain.OperationGetSession:       {},
 			domain.OperationListSessions:     {},

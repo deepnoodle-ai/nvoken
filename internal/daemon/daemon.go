@@ -32,6 +32,7 @@ type Config struct {
 	OpenAIAPIKey            string
 	ShutdownTimeout         time.Duration
 	Engine                  engine.Config
+	Budgets                 services.BudgetPolicy
 }
 
 type component interface {
@@ -70,17 +71,22 @@ func Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("configure runtime authentication: %w", err)
 	}
 	signaller := worksignal.NewInProcess()
-	runtime := services.NewRuntimeService(store, txm, clock, ids, services.WithWorkSignaller(signaller))
+	cancellations := worksignal.NewPostgresCancellation(pool)
+	runtime := services.NewRuntimeService(store, txm, clock, ids,
+		services.WithWorkSignaller(signaller), services.WithCancellationSignaller(cancellations),
+		services.WithBudgetPolicy(cfg.Budgets), services.WithRuntimeLogger(slog.Default()))
 	generator := divegen.New(divegen.Config{
 		AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
 	})
 	executor := services.NewGenerationExecutor(store, generator, slog.Default())
-	ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+	ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
+		services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
 	owner, err := executionOwner()
 	if err != nil {
 		return fmt.Errorf("create execution owner: %w", err)
 	}
-	runner, err := engine.NewRunner(owner, ownership, executor, signaller, slog.Default(), cfg.Engine)
+	runner, err := engine.NewRunner(owner, ownership, executor, signaller, slog.Default(), cfg.Engine,
+		engine.WithCancellationSignaller(cancellations))
 	if err != nil {
 		return fmt.Errorf("configure Invocation engine: %w", err)
 	}

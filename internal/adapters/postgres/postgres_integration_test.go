@@ -114,12 +114,12 @@ func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("dirty version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = 4",
+			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = 5",
 		); err != nil {
 			t.Fatalf("mark migration dirty: %v", err)
 		}
 		err := NewMigrator(databaseURL, 2*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil))).Apply(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "000004 is dirty") {
+		if err == nil || !strings.Contains(err.Error(), "000005 is dirty") {
 			t.Fatalf("migrate error = %v", err)
 		}
 	})
@@ -127,7 +127,7 @@ func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("unknown version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false WHERE version = 4",
+			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false WHERE version = 5",
 		); err != nil {
 			t.Fatalf("set future migration: %v", err)
 		}
@@ -237,6 +237,7 @@ func TestRuntimeRepositoriesCommitRollbackAndReadback(t *testing.T) {
 		SpecSnapshotID: snapshot.ID, IdempotencyKey: "request-1", RequestFingerprint: make([]byte, 32),
 		Status: domain.InvocationQueued, CurrentStateRevision: 1, CreatedAt: now, UpdatedAt: now,
 	}
+	setTestInvocationControls(&invocation, now)
 	message := domain.SessionMessage{
 		ID: "smsg_019b0a12-0000-7000-8000-0000000000ff", SessionID: fixture.session.ID,
 		AccountID: fixture.account.ID, TenantPartitionID: fixture.partition.ID, AgentID: fixture.agent.ID,
@@ -778,10 +779,19 @@ func createInvocationRecords(
 		SpecSnapshotID: snapshot.ID, IdempotencyKey: idempotencyKey, RequestFingerprint: make([]byte, 32),
 		Status: status, CurrentStateRevision: 1, CreatedAt: now, UpdatedAt: now,
 	}
+	setTestInvocationControls(&invocation, now)
 	if status.Terminal() {
 		invocation.CompletedAt = &now
 	}
 	return snapshot, invocation
+}
+
+func setTestInvocationControls(invocation *domain.Invocation, createdAt time.Time) {
+	invocation.FingerprintVersion = 1
+	invocation.WallClockTimeoutMS = int64((30 * time.Minute) / time.Millisecond)
+	invocation.ActiveTimeoutMS = int64((30 * time.Minute) / time.Millisecond)
+	invocation.MaxIterations = 1
+	invocation.WallClockDeadlineAt = createdAt.Add(30 * time.Minute)
 }
 
 func testID(t *testing.T, prefix domain.StableIDPrefix) string {

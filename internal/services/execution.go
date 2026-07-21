@@ -15,6 +15,7 @@ import (
 const MaxExecutionOwnerCharacters = 255
 
 var errQueuedInvocationChanged = errors.New("queued Invocation changed after its Session was locked")
+var errQueuedInvocationExpired = errors.New("queued Invocation reached its wall-clock deadline")
 
 type ClaimDisposition string
 
@@ -33,10 +34,17 @@ type executionStore interface {
 }
 
 type InvocationExecutionService struct {
-	store executionStore
-	txm   ports.TransactionManager
-	clock ports.Clock
-	ids   ports.IDGenerator
+	store          executionStore
+	txm            ports.TransactionManager
+	clock          ports.Clock
+	ids            ports.IDGenerator
+	segmentCeiling time.Duration
+}
+
+type InvocationExecutionOption func(*InvocationExecutionService)
+
+func WithExecutionSegmentCeiling(ceiling time.Duration) InvocationExecutionOption {
+	return func(service *InvocationExecutionService) { service.segmentCeiling = ceiling }
 }
 
 func NewInvocationExecutionService(
@@ -44,8 +52,15 @@ func NewInvocationExecutionService(
 	txm ports.TransactionManager,
 	clock ports.Clock,
 	ids ports.IDGenerator,
+	options ...InvocationExecutionOption,
 ) *InvocationExecutionService {
-	return &InvocationExecutionService{store: store, txm: txm, clock: clock, ids: ids}
+	service := &InvocationExecutionService{store: store, txm: txm, clock: clock, ids: ids, segmentCeiling: 15 * time.Minute}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	return service
 }
 
 func (s *InvocationExecutionService) ClaimNext(
@@ -75,6 +90,9 @@ func (s *InvocationExecutionService) ClaimNext(
 				if err := txCtx.Err(); err != nil {
 					return err
 				}
+				continue
+			}
+			if errors.Is(err, errQueuedInvocationExpired) {
 				continue
 			}
 			if err != nil {
@@ -124,6 +142,10 @@ func (s *InvocationExecutionService) ClaimExact(
 			return nil
 		}
 		claim, err = s.claimWithSessionLocked(txCtx, invocation, owner, leaseDuration)
+		if errors.Is(err, errQueuedInvocationExpired) {
+			disposition = ClaimNotRunnable
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -149,6 +171,13 @@ func (s *InvocationExecutionService) claimWithSessionLocked(
 	if invocation.Status != domain.InvocationQueued {
 		return domain.InvocationClaim{}, errQueuedInvocationChanged
 	}
+	now := s.clock.Now().UTC()
+	if !invocation.WallClockDeadlineAt.After(now) {
+		if _, _, err := s.reapDeadlineWithSessionLocked(ctx, invocation, now); err != nil {
+			return domain.InvocationClaim{}, err
+		}
+		return domain.InvocationClaim{}, errQueuedInvocationExpired
+	}
 	currentState, err := s.store.GetCurrentInvocationState(ctx, invocation.ID)
 	if err != nil {
 		return domain.InvocationClaim{}, err
@@ -161,8 +190,11 @@ func (s *InvocationExecutionService) claimWithSessionLocked(
 	if err != nil {
 		return domain.InvocationClaim{}, err
 	}
-	now := s.clock.Now().UTC()
-	claimed, err := s.store.ClaimInvocation(ctx, invocation.ID, owner, now.Add(leaseDuration), revision, now)
+	executionDeadlineAt, deadlineScope, err := executionDeadline(invocation, now, s.segmentCeiling)
+	if err != nil {
+		return domain.InvocationClaim{}, err
+	}
+	claimed, err := s.store.ClaimInvocation(ctx, invocation.ID, owner, now.Add(leaseDuration), revision, now, executionDeadlineAt, deadlineScope)
 	if errors.Is(err, ports.ErrNotFound) {
 		return domain.InvocationClaim{}, fmt.Errorf("claim queued Invocation after row lock: %w", err)
 	}
@@ -290,12 +322,36 @@ func (s *InvocationExecutionService) ReapExpired(ctx context.Context, limit int)
 		return nil, fmt.Errorf("reaper batch limit must be positive")
 	}
 	now := s.clock.Now().UTC()
-	candidates, err := s.store.ListExpiredInvocationLeases(ctx, now, limit)
+	deadlineCandidates, err := s.store.ListExpiredInvocationDeadlines(ctx, now, limit)
 	if err != nil {
 		return nil, err
 	}
-	reaped := make([]domain.Invocation, 0, len(candidates))
+	reaped := make([]domain.Invocation, 0, limit)
 	var candidateErrors []error
+	for _, candidate := range deadlineCandidates {
+		invocation, changed, err := s.reapDeadlineCandidate(ctx, candidate, now)
+		if err != nil {
+			candidateErrors = append(candidateErrors, fmt.Errorf("reap Invocation deadline %s: %w", candidate.ID, err))
+			continue
+		}
+		if changed {
+			reaped = append(reaped, invocation)
+		}
+	}
+	if len(candidateErrors) != 0 {
+		// Do not let the lease-only fallback turn a logical deadline into
+		// execution_lost after its deadline transaction failed. Retry the
+		// authoritative deadline outcome on the next scan.
+		return reaped, errors.Join(candidateErrors...)
+	}
+	remaining := limit - len(reaped)
+	if remaining <= 0 {
+		return reaped, errors.Join(candidateErrors...)
+	}
+	candidates, err := s.store.ListExpiredInvocationLeases(ctx, now, remaining)
+	if err != nil {
+		return reaped, errors.Join(append(candidateErrors, err)...)
+	}
 	for _, candidate := range candidates {
 		invocation, changed, err := s.reapCandidate(ctx, candidate, now)
 		if err != nil {
@@ -310,6 +366,66 @@ func (s *InvocationExecutionService) ReapExpired(ctx context.Context, limit int)
 		}
 	}
 	return reaped, errors.Join(candidateErrors...)
+}
+
+func (s *InvocationExecutionService) reapDeadlineCandidate(ctx context.Context, candidate domain.Invocation, now time.Time) (domain.Invocation, bool, error) {
+	var reaped domain.Invocation
+	changed := false
+	err := s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
+		if _, err := s.store.GetSessionForUpdate(txCtx, candidate.SessionID); err != nil {
+			return err
+		}
+		invocation, err := s.store.GetInvocationForUpdate(txCtx, candidate.ID)
+		if errors.Is(err, ports.ErrNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		reaped, changed, err = s.reapDeadlineWithSessionLocked(txCtx, invocation, now)
+		return err
+	})
+	return reaped, changed, err
+}
+
+func (s *InvocationExecutionService) reapDeadlineWithSessionLocked(ctx context.Context, invocation domain.Invocation, now time.Time) (domain.Invocation, bool, error) {
+	scope := ""
+	if !invocation.WallClockDeadlineAt.After(now) {
+		scope = "wall_clock"
+	} else if invocation.Status == domain.InvocationRunning && invocation.ExecutionDeadlineAt != nil && !invocation.ExecutionDeadlineAt.After(now) {
+		if invocation.ExecutionDeadlineScope != nil {
+			scope = *invocation.ExecutionDeadlineScope
+		}
+	}
+	if scope == "" || invocation.Status.Terminal() {
+		return domain.Invocation{}, false, nil
+	}
+	currentState, err := s.store.GetCurrentInvocationState(ctx, invocation.ID)
+	if err != nil {
+		return domain.Invocation{}, false, err
+	}
+	stateID, err := s.ids.NewID(domain.PrefixInvocationState)
+	if err != nil {
+		return domain.Invocation{}, false, err
+	}
+	revision, err := s.store.ReserveLifecycleRevision(ctx, invocation.SessionID)
+	if err != nil {
+		return domain.Invocation{}, false, err
+	}
+	payload := invocationFailureWithDetails("deadline_exceeded", "The execution deadline was exceeded.", map[string]string{"scope": scope})
+	reaped, err := s.store.ReapInvocationDeadline(ctx, invocation.ID, revision, payload, now)
+	if errors.Is(err, ports.ErrLeaseLost) {
+		return domain.Invocation{}, false, nil
+	}
+	if err != nil {
+		return domain.Invocation{}, false, err
+	}
+	if err := s.store.AppendInvocationState(ctx, lifecycleState(
+		reaped, stateID, revision, domain.InvocationFailed, currentState.ThroughMessageSequence, now,
+	)); err != nil {
+		return domain.Invocation{}, false, err
+	}
+	return reaped, true, nil
 }
 
 func (s *InvocationExecutionService) reapCandidate(
@@ -369,7 +485,7 @@ func (s *InvocationExecutionService) reapCandidate(
 }
 
 func (s *InvocationExecutionService) ready(owner string, leaseDuration time.Duration) error {
-	if s == nil || s.store == nil || s.txm == nil || s.clock == nil || s.ids == nil {
+	if s == nil || s.store == nil || s.txm == nil || s.clock == nil || s.ids == nil || s.segmentCeiling <= 0 {
 		return fmt.Errorf("Invocation execution service is not configured")
 	}
 	if strings.TrimSpace(owner) == "" || len(owner) > MaxExecutionOwnerCharacters {
@@ -400,8 +516,8 @@ func validateExecutionResult(result domain.InvocationExecutionResult) error {
 	if result.Status == domain.InvocationFailed && len(result.AssistantMessages) != 0 {
 		return fmt.Errorf("failed execution result cannot contain assistant messages")
 	}
-	if result.Status == domain.InvocationFailed && (result.Usage != nil || result.Provenance != nil) {
-		return fmt.Errorf("failed execution result cannot contain usage or provenance")
+	if (result.Usage == nil) != (result.Provenance == nil) {
+		return fmt.Errorf("execution evidence must contain both usage and provenance")
 	}
 	for _, message := range result.AssistantMessages {
 		if message.Role != domain.MessageRoleAssistant {
@@ -476,4 +592,32 @@ func lifecycleState(
 func invocationFailure(code, message string) json.RawMessage {
 	payload, _ := json.Marshal(map[string]string{"code": code, "message": message})
 	return payload
+}
+
+func invocationFailureWithDetails(code, message string, details map[string]string) json.RawMessage {
+	payload, _ := json.Marshal(struct {
+		Code    string            `json:"code"`
+		Message string            `json:"message"`
+		Details map[string]string `json:"details"`
+	}{Code: code, Message: message, Details: details})
+	return payload
+}
+
+func executionDeadline(invocation domain.Invocation, startedAt time.Time, segmentCeiling time.Duration) (time.Time, string, error) {
+	if segmentCeiling <= 0 || invocation.ActiveTimeoutMS <= 0 {
+		return time.Time{}, "", fmt.Errorf("Invocation execution controls are invalid")
+	}
+	remainingActive := time.Duration(invocation.ActiveTimeoutMS-invocation.ActiveExecutionMS) * time.Millisecond
+	if remainingActive <= 0 {
+		return startedAt, "active_execution", nil
+	}
+	deadline := startedAt.Add(segmentCeiling)
+	scope := "execution_segment"
+	if activeDeadline := startedAt.Add(remainingActive); activeDeadline.Before(deadline) {
+		deadline, scope = activeDeadline, "active_execution"
+	}
+	if invocation.WallClockDeadlineAt.Before(deadline) {
+		deadline, scope = invocation.WallClockDeadlineAt, "wall_clock"
+	}
+	return deadline, scope, nil
 }

@@ -48,6 +48,16 @@ type fakeModelGenerator struct {
 	err      error
 }
 
+type cancellingModelGenerator struct {
+	cancel   context.CancelFunc
+	response domain.GenerationResponse
+}
+
+func (g cancellingModelGenerator) Generate(context.Context, domain.GenerationRequest) (domain.GenerationResponse, error) {
+	g.cancel()
+	return g.response, nil
+}
+
 func (g *fakeModelGenerator) Generate(ctx context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
 	g.requests = append(g.requests, request)
 	if g.err != nil {
@@ -182,15 +192,64 @@ func TestGenerationExecutorMapsDurableConversionFailureToInternal(t *testing.T) 
 	assertFailureCode(t, result, "internal")
 }
 
-func TestValidateExecutionResultRejectsEvidenceOnFailure(t *testing.T) {
+func TestGenerationExecutorEnforcesResolvedBudgetsAndRetainsEvidence(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		configure func(*domain.Invocation, *domain.GenerationResponse)
+		wantKind  string
+	}{
+		{"output tokens", func(invocation *domain.Invocation, _ *domain.GenerationResponse) {
+			limit := 3
+			invocation.MaxOutputTokens = &limit
+		}, "output_tokens"},
+		{"estimated cost", func(invocation *domain.Invocation, _ *domain.GenerationResponse) {
+			limit := int64(100_000)
+			invocation.MaxEstimatedCostMicros = &limit
+		}, "estimated_cost"},
+		{"missing estimated cost", func(invocation *domain.Invocation, response *domain.GenerationResponse) {
+			limit := int64(100_000)
+			invocation.MaxEstimatedCostMicros = &limit
+			response.Usage.EstimatedCost = nil
+		}, "estimated_cost_unavailable"},
+		{"iterations", func(invocation *domain.Invocation, response *domain.GenerationResponse) {
+			invocation.MaxIterations = 1
+			response.Usage.Iterations = 2
+		}, "iterations"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			claim := generationClaim()
+			claim.Invocation.MaxIterations = 3
+			response := successfulGenerationResponse()
+			response.Usage.Iterations = 1
+			test.configure(&claim.Invocation, &response)
+			generator := &fakeModelGenerator{response: response}
+			result, err := NewGenerationExecutor(generationStoreFixture(claim), generator, nil).Execute(context.Background(), claim)
+			if err != nil || result.Status != domain.InvocationFailed || len(result.AssistantMessages) != 0 || result.Usage == nil || result.Provenance == nil {
+				t.Fatalf("budget result = %#v, error = %v", result, err)
+			}
+			var failure struct {
+				Details map[string]string `json:"details"`
+			}
+			if json.Unmarshal(result.Error, &failure) != nil || failure.Details["kind"] != test.wantKind {
+				t.Fatalf("failure = %s, want kind %q", result.Error, test.wantKind)
+			}
+		})
+	}
+}
+
+func TestValidateExecutionResultAcceptsPairedEvidenceOnFailure(t *testing.T) {
 	result := providerGenerationFailure()
 	result.Usage = &domain.ModelUsage{}
 	result.Provenance = &domain.ModelProvenance{
 		Provider: "anthropic", RequestedModel: "test", ServedModel: "test",
 		CredentialSource: credentialSourceInstallationBYOK,
 	}
+	if err := validateExecutionResult(result); err != nil {
+		t.Fatalf("failed result with paired evidence: %v", err)
+	}
+	result.Provenance = nil
 	if err := validateExecutionResult(result); err == nil {
-		t.Fatal("failed result with usage and provenance passed validation")
+		t.Fatal("failed result with unpaired evidence passed validation")
 	}
 }
 
@@ -203,6 +262,23 @@ func TestGenerationExecutorReturnsCancellationWithoutSemanticResult(t *testing.T
 	if !errors.Is(err, context.Canceled) || result.Status != "" {
 		t.Fatalf("result = %#v, error = %v", result, err)
 	}
+}
+
+func TestGenerationExecutorRetainsEvidenceWhenDeadlineFiresAfterResponse(t *testing.T) {
+	claim := generationClaim()
+	scope := "wall_clock"
+	claim.Invocation.ExecutionDeadlineScope = &scope
+	claim.Invocation.MaxIterations = 1
+	ctx, cancel := context.WithCancel(context.Background())
+	response := successfulGenerationResponse()
+	response.Usage.Iterations = 1
+	result, err := NewGenerationExecutor(
+		generationStoreFixture(claim), cancellingModelGenerator{cancel: cancel, response: response}, nil,
+	).Execute(ctx, claim)
+	if err != nil || result.Status != domain.InvocationFailed || result.Usage == nil || result.Provenance == nil || len(result.AssistantMessages) != 0 {
+		t.Fatalf("deadline result = %#v, error = %v", result, err)
+	}
+	assertFailureCode(t, result, "deadline_exceeded")
 }
 
 func generationClaim() domain.InvocationClaim {

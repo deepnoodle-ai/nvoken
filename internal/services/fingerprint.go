@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"math"
+	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
-const fingerprintVersion = 1
+const fingerprintVersionV1 = 1
+const fingerprintVersionV2 = 2
 
 // InvocationFingerprintV1 hashes a fixed JSON representation whose object-key
 // order is part of the versioned contract. Values are already typed, so source
@@ -30,7 +34,7 @@ func invocationFingerprintBytesV1(input CreateInvocationInput) ([]byte, error) {
 
 	var buffer bytes.Buffer
 	buffer.WriteString(`{"version":`)
-	buffer.WriteString(fmt.Sprint(fingerprintVersion))
+	buffer.WriteString(fmt.Sprint(fingerprintVersionV1))
 	buffer.WriteString(`,"session_selector":{"kind":`)
 	if err := writeJSONString(&buffer, kind); err != nil {
 		return nil, err
@@ -64,6 +68,75 @@ func invocationFingerprintBytesV1(input CreateInvocationInput) ([]byte, error) {
 	}
 	buffer.WriteString(`]}}`)
 	return buffer.Bytes(), nil
+}
+
+// InvocationFingerprintV2 extends the fixed v1 representation with the
+// requested budget object. Null means omitted; explicit defaults therefore
+// remain material input even when admission resolves to the same limit.
+func InvocationFingerprintV2(input CreateInvocationInput) ([sha256.Size]byte, error) {
+	canonical, err := invocationFingerprintBytesV2(input)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(canonical), nil
+}
+
+func invocationFingerprintBytesV2(input CreateInvocationInput) ([]byte, error) {
+	v1, err := invocationFingerprintBytesV1(input)
+	if err != nil {
+		return nil, err
+	}
+	// Reuse v1's language-neutral string encoding while changing the version
+	// and inserting budgets at the end of spec before input.
+	canonical := string(v1)
+	canonical = strings.Replace(canonical, `{"version":1`, `{"version":2`, 1)
+	needle := `}},"input":`
+	index := strings.Index(canonical, needle)
+	if index < 0 {
+		return nil, fmt.Errorf("v1 fingerprint shape is invalid")
+	}
+	var budgets bytes.Buffer
+	budgets.WriteString(`},"budgets":`)
+	if input.Spec.Budgets == nil {
+		budgets.WriteString("null")
+	} else {
+		budgets.WriteString(`{"wall_clock_timeout_seconds":`)
+		writeOptionalInt64(&budgets, input.Spec.Budgets.WallClockTimeoutSeconds)
+		budgets.WriteString(`,"active_execution_timeout_seconds":`)
+		writeOptionalInt64(&budgets, input.Spec.Budgets.ActiveExecutionTimeoutSeconds)
+		budgets.WriteString(`,"max_output_tokens":`)
+		writeOptionalInt(&budgets, input.Spec.Budgets.MaxOutputTokens)
+		budgets.WriteString(`,"max_estimated_cost_microusd":`)
+		if input.Spec.Budgets.MaxEstimatedCostUSD == nil {
+			budgets.WriteString("null")
+		} else {
+			value := *input.Spec.Budgets.MaxEstimatedCostUSD
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return nil, fmt.Errorf("budget cost is not finite")
+			}
+			budgets.WriteString(strconv.FormatInt(int64(math.Round(value*1_000_000)), 10))
+		}
+		budgets.WriteString(`,"max_iterations":`)
+		writeOptionalInt(&budgets, input.Spec.Budgets.MaxIterations)
+		budgets.WriteByte('}')
+	}
+	return []byte(canonical[:index] + budgets.String() + canonical[index+1:]), nil
+}
+
+func writeOptionalInt(buffer *bytes.Buffer, value *int) {
+	if value == nil {
+		buffer.WriteString("null")
+		return
+	}
+	buffer.WriteString(strconv.Itoa(*value))
+}
+
+func writeOptionalInt64(buffer *bytes.Buffer, value *int64) {
+	if value == nil {
+		buffer.WriteString("null")
+		return
+	}
+	buffer.WriteString(strconv.FormatInt(*value, 10))
 }
 
 func writeJSONString(buffer *bytes.Buffer, value string) error {

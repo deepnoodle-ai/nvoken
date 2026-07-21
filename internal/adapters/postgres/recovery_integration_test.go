@@ -121,7 +121,7 @@ func TestRecoveryReadsPageFilterAndPreserveTranscriptOrdering(t *testing.T) {
 		t.Fatalf("align Session timestamps: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
-		"UPDATE invocations SET created_at = $1 WHERE id = ANY($2::text[])",
+		"UPDATE invocations SET created_at = $1::timestamptz, wall_clock_deadline_at = $1::timestamptz + wall_clock_timeout_ms * interval '1 millisecond' WHERE id = ANY($2::text[])",
 		equalCreatedAt, []string{first.InvocationID, second.InvocationID},
 	); err != nil {
 		t.Fatalf("align Invocation timestamps: %v", err)
