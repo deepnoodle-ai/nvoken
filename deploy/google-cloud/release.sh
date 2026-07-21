@@ -70,11 +70,13 @@ terraform -chdir="${nvoken_deploy_dir}" apply \
 nvoken_repository="$(terraform -chdir="${nvoken_deploy_dir}" output -raw artifact_repository)"
 nvoken_image="${nvoken_repository}/nvokend:${TF_VAR_image_tag}"
 nvoken_build_service_account="$(terraform -chdir="${nvoken_deploy_dir}" output -raw build_service_account_name)"
+nvoken_build_source_bucket="$(terraform -chdir="${nvoken_deploy_dir}" output -raw build_source_bucket)"
 gcloud builds submit "${nvoken_repo_root}" \
   --project="${TF_VAR_project_id}" \
   --region="${TF_VAR_region:-us-central1}" \
   --config="${nvoken_deploy_dir}/cloudbuild.yaml" \
   --service-account="${nvoken_build_service_account}" \
+  --gcs-source-staging-dir="gs://${nvoken_build_source_bucket}/source" \
   --substitutions="_IMAGE=${nvoken_image}"
 
 # Update only the release job and its prerequisites. The serving revision still

@@ -1,6 +1,12 @@
 locals {
-  resource_name = "${var.name}-${var.environment}"
-  image         = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}/nvokend:${var.image_tag}"
+  resource_name        = "${var.name}-${var.environment}"
+  runtime_account_id   = length(local.resource_name) <= 30 ? local.resource_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.resource_name), 0, 8)}"
+  build_account_name   = "${local.resource_name}-build"
+  build_account_id     = length(local.build_account_name) <= 30 ? local.build_account_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.build_account_name), 0, 8)}"
+  migrate_account_name = "${local.resource_name}-migrate"
+  migrate_account_id   = length(local.migrate_account_name) <= 30 ? local.migrate_account_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.migrate_account_name), 0, 8)}"
+  build_source_bucket  = "${var.project_id}-${substr(sha256("${var.project_id}/${local.resource_name}"), 0, 12)}-nvoken-build"
+  image                = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}/nvokend:${var.image_tag}"
   labels = merge(var.labels, {
     application = "nvoken"
     environment = var.environment
@@ -11,7 +17,7 @@ locals {
     var.openai_api_key_secret_id == null ? {} : { OPENAI_API_KEY = var.openai_api_key_secret_id },
   )
   database_url = format(
-    "postgres://%s:%s@%s:5432/%s?sslmode=disable",
+    "postgres://%s:%s@%s:5432/%s?sslmode=require",
     urlencode(var.database_user),
     urlencode(random_password.database.result),
     google_sql_database_instance.runtime.private_ip_address,
@@ -29,6 +35,7 @@ resource "google_project_service" "required" {
     "secretmanager.googleapis.com",
     "servicenetworking.googleapis.com",
     "sqladmin.googleapis.com",
+    "storage.googleapis.com",
   ])
 
   project            = var.project_id
@@ -49,13 +56,27 @@ resource "google_artifact_registry_repository" "images" {
 
 resource "google_service_account" "build" {
   project      = var.project_id
-  account_id   = "${local.resource_name}-build"
+  account_id   = local.build_account_id
   display_name = "${local.resource_name} Cloud Build"
 
-  lifecycle {
-    precondition {
-      condition     = length("${local.resource_name}-build") <= 30
-      error_message = "The combined name and environment must fit the 30-character build service-account ID limit."
+  depends_on = [google_project_service.required]
+}
+
+resource "google_storage_bucket" "build_source" {
+  project                     = var.project_id
+  name                        = local.build_source_bucket
+  location                    = var.region
+  force_destroy               = false
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  labels                      = local.labels
+
+  lifecycle_rule {
+    condition {
+      age = 7
+    }
+    action {
+      type = "Delete"
     }
   }
 
@@ -76,10 +97,10 @@ resource "google_project_iam_member" "build_logging" {
   member  = "serviceAccount:${google_service_account.build.email}"
 }
 
-resource "google_project_iam_member" "build_source" {
-  project = var.project_id
-  role    = "roles/storage.objectViewer"
-  member  = "serviceAccount:${google_service_account.build.email}"
+resource "google_storage_bucket_iam_member" "build_source_reader" {
+  bucket = google_storage_bucket.build_source.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.build.email}"
 }
 
 resource "terraform_data" "build_ready" {
@@ -88,7 +109,7 @@ resource "terraform_data" "build_ready" {
   depends_on = [
     google_artifact_registry_repository_iam_member.build_writer,
     google_project_iam_member.build_logging,
-    google_project_iam_member.build_source,
+    google_storage_bucket_iam_member.build_source_reader,
   ]
 }
 
@@ -164,6 +185,7 @@ resource "google_sql_database_instance" "runtime" {
     ip_configuration {
       ipv4_enabled    = false
       private_network = google_compute_network.runtime.id
+      ssl_mode        = "ENCRYPTED_ONLY"
     }
 
     user_labels = local.labels
@@ -236,15 +258,14 @@ resource "google_secret_manager_secret_version" "runtime_api_key" {
 
 resource "google_service_account" "runtime" {
   project      = var.project_id
-  account_id   = local.resource_name
+  account_id   = local.runtime_account_id
   display_name = "${local.resource_name} Cloud Run runtime"
+}
 
-  lifecycle {
-    precondition {
-      condition     = length(local.resource_name) <= 30
-      error_message = "The combined name and environment must fit the 30-character service-account ID limit."
-    }
-  }
+resource "google_service_account" "migrate" {
+  project      = var.project_id
+  account_id   = local.migrate_account_id
+  display_name = "${local.resource_name} database migration"
 }
 
 resource "google_secret_manager_secret_iam_member" "generated" {
@@ -268,6 +289,13 @@ resource "google_secret_manager_secret_iam_member" "provider" {
   member    = "serviceAccount:${google_service_account.runtime.email}"
 }
 
+resource "google_secret_manager_secret_iam_member" "migration_database" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.database_url.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.migrate.email}"
+}
+
 resource "google_cloud_run_v2_job" "migrate" {
   project             = var.project_id
   name                = "${local.resource_name}-migrate"
@@ -280,7 +308,7 @@ resource "google_cloud_run_v2_job" "migrate" {
     parallelism = 1
 
     template {
-      service_account = google_service_account.runtime.email
+      service_account = google_service_account.migrate.email
       timeout         = "600s"
       max_retries     = 0
 
@@ -325,7 +353,7 @@ resource "google_cloud_run_v2_job" "migrate" {
 
   depends_on = [
     google_project_service.required,
-    google_secret_manager_secret_iam_member.generated,
+    google_secret_manager_secret_iam_member.migration_database,
     google_secret_manager_secret_version.database_url,
   ]
 }

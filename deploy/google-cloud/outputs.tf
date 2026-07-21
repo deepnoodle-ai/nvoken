@@ -48,6 +48,11 @@ output "build_service_account_name" {
   value       = google_service_account.build.name
 }
 
+output "build_source_bucket" {
+  description = "Restricted Cloud Storage bucket used to stage Cloud Build source archives."
+  value       = google_storage_bucket.build_source.name
+}
+
 output "cloud_sql_instance" {
   description = "Private Cloud SQL instance connection name."
   value       = google_sql_database_instance.runtime.connection_name

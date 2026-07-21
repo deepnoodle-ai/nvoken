@@ -39,6 +39,29 @@ run "paved_defaults" {
   }
 
   assert {
+    condition     = google_sql_database_instance.runtime.settings[0].ip_configuration[0].ssl_mode == "ENCRYPTED_ONLY"
+    error_message = "Cloud SQL must reject unencrypted database connections."
+  }
+
+  assert {
+    condition = (
+      google_storage_bucket.build_source.uniform_bucket_level_access == true &&
+      google_storage_bucket.build_source.public_access_prevention == "enforced" &&
+      google_storage_bucket_iam_member.build_source_reader.bucket == google_storage_bucket.build_source.name
+    )
+    error_message = "Cloud Build source access must be scoped to a private, uniform-access bucket."
+  }
+
+  assert {
+    condition = (
+      length(google_service_account.runtime.account_id) <= 30 &&
+      length(google_service_account.build.account_id) <= 30 &&
+      length(google_service_account.migrate.account_id) <= 30
+    )
+    error_message = "Runtime, migration, and build identities must be valid and purpose-specific."
+  }
+
+  assert {
     condition     = google_cloud_run_v2_service.runtime.scaling[0].min_instance_count == 1
     error_message = "Combined mode must retain at least one poller."
   }
@@ -91,6 +114,28 @@ run "paved_defaults" {
   assert {
     condition     = google_cloud_run_v2_service.runtime.template[0].containers[0].args == tolist(["serve"])
     error_message = "The service must use the same image's serve command."
+  }
+}
+
+run "long_names_produce_valid_service_accounts" {
+  command = plan
+
+  variables {
+    project_id                   = "example-project"
+    name                         = "nvoken-application-x"
+    environment                  = "production"
+    image_tag                    = "8899aabbccddeeff"
+    openai_api_key_secret_id     = "nvoken-production-openai"
+    database_deletion_protection = false
+  }
+
+  assert {
+    condition = alltrue([
+      length(google_service_account.runtime.account_id) <= 30,
+      length(google_service_account.build.account_id) <= 30,
+      length(google_service_account.migrate.account_id) <= 30,
+    ])
+    error_message = "Every derived service-account ID must fit Google's 30-character limit."
   }
 }
 

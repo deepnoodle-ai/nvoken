@@ -20,7 +20,7 @@ func TestReleaseOrdersMigrationBeforeServiceApply(t *testing.T) {
 		"gcloud storage buckets update gs://nvoken-test-state",
 		"terraform -chdir=", "init -input=false -reconfigure",
 		"terraform -chdir=", "apply -auto-approve -target=terraform_data.build_ready",
-		"gcloud builds submit",
+		"gcloud builds submit", "--gcs-source-staging-dir=gs://example-project-nvoken-test-build-source/source",
 		"apply -auto-approve -target=google_cloud_run_v2_job.migrate",
 		"gcloud run jobs execute nvoken-test-migrate",
 		"plan -out=",
@@ -94,6 +94,24 @@ exit 0
 	}
 }
 
+func TestPavedTerraformRequiresDatabaseTLSAndDedicatedMigrationIdentity(t *testing.T) {
+	contents, err := os.ReadFile(filepath.Join(repoRoot(t), "deploy/google-cloud/main.tf"))
+	if err != nil {
+		t.Fatalf("read Terraform root: %v", err)
+	}
+	configuration := string(contents)
+	for _, required := range []string{
+		`ssl_mode        = "ENCRYPTED_ONLY"`,
+		`?sslmode=require`,
+		`service_account = google_service_account.migrate.email`,
+		`member    = "serviceAccount:${google_service_account.migrate.email}"`,
+	} {
+		if !strings.Contains(configuration, required) {
+			t.Errorf("Terraform root does not contain %q", required)
+		}
+	}
+}
+
 func TestReleaseStopsBeforeServiceApplyWhenMigrationFails(t *testing.T) {
 	_, log := runRelease(t, true)
 	if strings.Contains(log, "terraform -chdir="+repoRoot(t)+"/deploy/google-cloud plan -out=") {
@@ -118,6 +136,7 @@ printf 'terraform %s\n' "$*" >>"${NVOKEN_TEST_COMMAND_LOG}"
 case "$*" in
   *"output -raw artifact_repository"*) echo 'us-central1-docker.pkg.dev/example-project/nvoken-test' ;;
   *"output -raw build_service_account_name"*) echo 'projects/example-project/serviceAccounts/nvoken-test-build@example-project.iam.gserviceaccount.com' ;;
+  *"output -raw build_source_bucket"*) echo 'example-project-nvoken-test-build-source' ;;
   *"output -raw migration_job_name"*) echo 'nvoken-test-migrate' ;;
   *"output -raw region"*) echo 'us-central1' ;;
   *"output -raw service_url"*) echo 'https://nvoken-test.example.run.app' ;;

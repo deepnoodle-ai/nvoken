@@ -14,13 +14,14 @@ the later request-bound Cloud Tasks executor is available.
 
 ## What it creates
 
-- Artifact Registry, a least-privilege Cloud Build identity, and the APIs
-  required by this root;
+- Artifact Registry, a least-privilege Cloud Build identity, a private
+  short-lived source-staging bucket, and the APIs required by this root;
 - a dedicated VPC, subnet, and private services connection;
 - a private-IP-only Cloud SQL for PostgreSQL 17 instance with backups and PITR;
 - generated database and Runtime credentials in Secret Manager;
 - Secret Manager access for existing Anthropic and/or OpenAI key secrets;
-- one dedicated service account with no project-wide application role;
+- separate runtime and database-migration service accounts with no project-wide
+  application role;
 - a one-task Cloud Run migration Job; and
 - a public Cloud Run service with Runtime bearer authentication, a startup
   probe, instance-based CPU, one minimum instance, and explicit capacity caps.
@@ -35,7 +36,11 @@ an autoscaling guarantee.
 Install `gcloud`, Terraform 1.9 or newer, `curl`, and `jq`. Authenticate `gcloud`
 to a disposable or deliberately selected project with permission to enable
 services and create IAM, networking, Cloud SQL, Secret Manager, Artifact
-Registry, Cloud Build, and Cloud Run resources. Cloud SQL and the continuously
+Registry, Cloud Storage, Cloud Build, and Cloud Run resources. The release
+caller must also be allowed to act as the generated Cloud Build service account.
+The automatically managed, same-project Cloud Build service agent already has
+the token permissions required by Cloud Build; an extra cross-project service
+agent grant is neither required nor created. Cloud SQL and the continuously
 allocated Cloud Run minimum instance incur ongoing cost.
 
 Terraform state contains the generated database password, database URL, and
@@ -99,6 +104,15 @@ A migration failure exits before step 5, leaving serving traffic on the prior
 image. The job has one task, no retries, a bounded migration timeout, and the
 database advisory lock already enforced by `nvokend migrate`. Ordinary service
 startup checks the exact schema and never runs DDL.
+
+Cloud Build reads uploaded source only from its dedicated bucket, whose objects
+expire after seven days; it has no project-wide Storage Viewer role. The
+migration job likewise uses a distinct identity that can read only the database
+URL secret. Direct private-IP Postgres connections require TLS, and the Cloud
+SQL instance rejects unencrypted clients. This direct-IP `sslmode=require` path
+encrypts transport but does not verify a DNS hostname against the server CA;
+the dedicated VPC remains the peer-access boundary for this small-installation
+topology.
 
 Set `NVOKEN_DEPLOY_AUTO_APPROVE=1` only in a reviewed CI release. Override the
 unique image tag with `TF_VAR_image_tag`; `latest` is rejected. For production,

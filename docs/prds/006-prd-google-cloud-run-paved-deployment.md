@@ -64,10 +64,13 @@ topology. PRDs 009 and 010 add the split execution path.
 - **R2 — Reproducible least-privilege foundation.** The paved infrastructure
   must declaratively provision the required Google APIs, Artifact Registry,
   a dedicated VPC and subnet, private services access, a private-IP Cloud SQL
-  Postgres database, Secret Manager configuration, one dedicated runtime
-  service account, the migration job, and the public Cloud Run service. The
-  runtime identity must receive only the secret access required by these two
-  process roles; database credentials must not be exposed through a public IP.
+  Postgres database, Secret Manager configuration, purpose-specific build,
+  migration, and runtime service accounts, the migration job, and the public
+  Cloud Run service. Each identity must receive only the access required by its
+  process role; database credentials must not be exposed through a public IP,
+  and database clients must require TLS while Cloud SQL rejects unencrypted
+  connections. Derived account IDs must remain valid for every accepted
+  `name`/`environment` combination.
   An idempotent pre-Terraform bootstrap must create or harden the GCS backend
   bucket with object versioning, uniform bucket-level access, and public access
   prevention; the root must use a distinct prefix per environment.
@@ -78,6 +81,13 @@ topology. PRDs 009 and 010 add the split execution path.
   execution must remain bounded and advisory-lock serialized. A failed, dirty,
   older, or newer schema must prevent the service revision from becoming ready;
   service startup must never apply schema changes.
+
+- **R3a — Build source is narrowly scoped.** The release caller must be able to
+  act as the same-project Cloud Build identity. Uploaded source must be staged
+  in a non-public, uniform-access bucket with automatic expiry, and the build
+  identity's source read access must be scoped to that bucket rather than every
+  bucket in the project. The deployment must not add cross-project service-agent
+  impersonation grants to the same-project paved path.
 
 - **R4 — Background execution has capacity.** The combined service must use
   instance-based CPU allocation and a service-level minimum of at least one
@@ -132,9 +142,12 @@ topology. PRDs 009 and 010 add the split execution path.
   inspection shows a non-root runtime user, and the same image successfully
   invokes both `serve` and `migrate` without build tools in the final layer.
 
-- [x] **A2 (R2, R4, R5, R6):** Automated Terraform validation plans the VPC,
+- [x] **A2 (R2, R3a, R4, R5, R6):** Automated Terraform validation plans the VPC,
   private-only Cloud SQL instance, generated database/Runtime secrets, provider
-  secret bindings, dedicated service account, migration job, and public service.
+  secret bindings, purpose-specific service accounts, migration job, private
+  build-source bucket, and public service. The plan proves database TLS is
+  enforced, source access is bucket-scoped, and every accepted long resource
+  name produces valid service-account IDs.
   The plan proves instance-based CPU, minimum instances `>= 1`, bounded maximum
   instances, explicit request/engine/database concurrency, and the `/healthz`
   startup probe. Validation rejects zero provider secrets and accepts Anthropic,
@@ -187,6 +200,9 @@ topology. PRDs 009 and 010 add the split execution path.
 - The paved release orders migrations before service rollout. Future migrations
   that are not compatible with the still-running prior revision require their
   own expand/contract rollout; this PRD does not claim otherwise.
+- Direct-IP Postgres uses required TLS without hostname verification. The
+  dedicated private VPC is still the peer-access boundary; authenticated Cloud
+  SQL connectors or DNS-verified server identity remain a future hardening path.
 - Combined-mode Cloud Run cannot drain a turn longer than the platform's
   termination window. Routine revision rollouts and scale-in above the minimum
   may therefore produce durable `execution_lost` failures; operators should
