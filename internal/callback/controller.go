@@ -33,9 +33,17 @@ func ValidateConfig(config Config) error {
 	if config.Concurrency < 1 || config.Concurrency > 100 {
 		return fmt.Errorf("callback concurrency must be between 1 and 100")
 	}
-	if config.PollInterval <= 0 || config.RecoveryInterval <= 0 ||
-		config.RetentionInterval <= 0 || config.DrainGrace <= 0 {
-		return fmt.Errorf("callback controller intervals must be positive")
+	if config.PollInterval <= 0 {
+		return fmt.Errorf("callback poll interval must be positive")
+	}
+	if config.RecoveryInterval <= 0 {
+		return fmt.Errorf("callback recovery interval must be positive")
+	}
+	if config.RetentionInterval <= 0 {
+		return fmt.Errorf("callback retention interval must be positive")
+	}
+	if config.DrainGrace <= 0 {
+		return fmt.Errorf("callback drain grace must be positive")
 	}
 	return nil
 }

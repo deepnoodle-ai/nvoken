@@ -358,6 +358,16 @@ tables, business records, OAuth connections, non-model business credentials,
 release catalogs, or durable user files.
 Spec snapshots live no longer than the Invocation/Session trace.
 
+The initial production profiles retain this authoritative data indefinitely.
+They expose no automatic compaction or deletion path until a later ordered
+contract defines Session and tenant deletion, cursor behavior, backup expiry,
+and any archive/export boundary. Only terminal `execution_dispatches` and
+`callback_deliveries` are pruned as finite transport diagnostics; pruning them
+does not remove their authoritative owners or evidence. Redis previews and Cloud
+Tasks requests are ephemeral delivery mechanisms, not retention stores. The
+operator policy, defaults, and storage-growth queries are documented in the
+[data-retention guide](../guides/data-retention.md).
+
 Runtime is not a general credential vault: hosts use client tools, callback
 tools, or a credential-broker tool for integrations and business credentials,
 and custom-tool registration stores tool contracts, never secrets. The narrow

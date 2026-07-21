@@ -48,8 +48,11 @@ func ValidateCallbackDeliveryConfig(config CallbackDeliveryConfig) error {
 	if config.MaxAttempts < 1 || config.MaxAttempts > 20 {
 		return fmt.Errorf("callback max attempts must be between 1 and 20")
 	}
-	if config.Retention <= 0 || config.BatchLimit < 1 || config.BatchLimit > 1000 {
-		return fmt.Errorf("callback retention and batch limit are invalid")
+	if config.Retention <= 0 {
+		return fmt.Errorf("callback retention must be positive")
+	}
+	if config.BatchLimit < 1 || config.BatchLimit > 1000 {
+		return fmt.Errorf("callback batch limit must be from 1 through 1000")
 	}
 	if config.ExecutionMode != InvocationExecutionEmbedded && config.ExecutionMode != InvocationExecutionCloudTasks {
 		return fmt.Errorf("callback Invocation execution mode is invalid")

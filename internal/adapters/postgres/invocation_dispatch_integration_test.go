@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
 	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
@@ -112,6 +114,45 @@ func TestInvocationDispatchSemanticFailureAcknowledgesDurably(t *testing.T) {
 		t.Fatalf("semantic failure outcome = %q, error = %v", outcome, err)
 	}
 	assertInvocationDispatchTerminal(t, fixture.store, fixture.ack, fixture.dispatch.ID, domain.InvocationFailed)
+}
+
+func TestInvocationDispatchRetentionPrunesOnlyTransportRows(t *testing.T) {
+	fixture := newInvocationDispatchFixture(t, &postgresModelGenerator{})
+	ctx := context.Background()
+	if _, err := fixture.attempts.Attempt(ctx, fixture.dispatch.ID); err != nil {
+		t.Fatalf("execute Invocation dispatch: %v", err)
+	}
+	if _, err := fixture.pool.Exec(
+		ctx,
+		"UPDATE execution_dispatches SET settled_at = now() - interval '8 days' WHERE id = $1",
+		fixture.dispatch.ID,
+	); err != nil {
+		t.Fatalf("age terminal dispatch: %v", err)
+	}
+
+	pruned, err := fixture.dispatches.Prune(ctx)
+	if err != nil || pruned != 1 {
+		t.Fatalf("prune terminal dispatch = %d, %v", pruned, err)
+	}
+	if _, err := fixture.store.GetExecutionDispatch(ctx, fixture.dispatch.ID); !errors.Is(err, ports.ErrNotFound) {
+		t.Fatalf("pruned dispatch error = %v", err)
+	}
+	invocation, err := fixture.runtime.GetInvocation(ctx, fixture.auth, fixture.ack.InvocationID)
+	if err != nil || invocation.Status != domain.InvocationCompleted {
+		t.Fatalf("retained Invocation = %#v, %v", invocation, err)
+	}
+	session, err := fixture.runtime.GetSession(ctx, fixture.auth, fixture.ack.SessionID)
+	if err != nil || session.ID != fixture.ack.SessionID {
+		t.Fatalf("retained Session = %#v, %v", session, err)
+	}
+	messages, err := fixture.store.ListSessionMessages(ctx, fixture.ack.SessionID)
+	if err != nil || len(messages) != 2 {
+		t.Fatalf("retained transcript = %#v, %v", messages, err)
+	}
+	states, err := fixture.store.ListInvocationStates(ctx, fixture.ack.SessionID)
+	if err != nil || len(states) == 0 {
+		t.Fatalf("retained Invocation states = %#v, %v", states, err)
+	}
 }
 
 func TestInvocationDispatchCancellationAndLostOwnerDoNotReplay(t *testing.T) {
@@ -571,6 +612,7 @@ func (f invocationReconcileFixture) publishAndLoseTask(t *testing.T) {
 }
 
 type invocationDispatchFixture struct {
+	pool       *pgxpool.Pool
 	store      *Store
 	txm        *TransactionManager
 	clock      identity.SystemClock
@@ -613,8 +655,17 @@ func newInvocationDispatchFixture(t *testing.T, generator ports.ModelGenerator) 
 		t.Fatal(err)
 	}
 	return invocationDispatchFixture{
-		store: store, txm: txm, clock: clock, ids: ids, runtime: runtime, auth: auth,
-		ack: ack, dispatch: dispatch, dispatches: dispatches, attempts: attempts,
+		pool:       pool,
+		store:      store,
+		txm:        txm,
+		clock:      clock,
+		ids:        ids,
+		runtime:    runtime,
+		auth:       auth,
+		ack:        ack,
+		dispatch:   dispatch,
+		dispatches: dispatches,
+		attempts:   attempts,
 	}
 }
 

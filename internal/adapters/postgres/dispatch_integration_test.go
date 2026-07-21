@@ -323,8 +323,12 @@ func TestDispatchReconciliationAndRetention(t *testing.T) {
 
 	clock.Advance(5 * time.Second)
 	pruned, err := service.Prune(context.Background())
-	if err != nil || pruned < 3 {
+	if err != nil || pruned != 2 {
 		t.Fatalf("prune = %d, %v", pruned, err)
+	}
+	pruned, err = service.Prune(context.Background())
+	if err != nil || pruned != 1 {
+		t.Fatalf("second prune = %d, %v", pruned, err)
 	}
 	if _, err := store.GetSyntheticDispatchWork(context.Background(), work.ID); err != nil {
 		t.Fatalf("retention deleted authoritative work: %v", err)
@@ -339,6 +343,7 @@ func newDispatchTestService(t *testing.T, store *Store, txm *TransactionManager,
 	cfg.PublishRetryMax = 2 * time.Second
 	cfg.StaleAfter = 2 * time.Second
 	cfg.Retention = 4 * time.Second
+	cfg.BatchLimit = 2
 	service, err := services.NewDispatchService(
 		store, txm, clock, identity.NewUUIDv7Generator(clock), cfg,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
