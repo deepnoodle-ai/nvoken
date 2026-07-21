@@ -66,7 +66,7 @@ func NewRunner(
 	if ownership == nil || executor == nil {
 		return nil, fmt.Errorf("engine ownership and executor are required")
 	}
-	if err := validateConfig(config); err != nil {
+	if err := ValidateConfig(config); err != nil {
 		return nil, err
 	}
 	if logger == nil {
@@ -78,7 +78,7 @@ func NewRunner(
 	}, nil
 }
 
-func validateConfig(config Config) error {
+func ValidateConfig(config Config) error {
 	if config.Concurrency <= 0 {
 		return fmt.Errorf("engine concurrency must be positive")
 	}
@@ -355,9 +355,11 @@ func internalFailureResult() domain.InvocationExecutionResult {
 
 func validResult(result domain.InvocationExecutionResult) bool {
 	if result.Status == domain.InvocationCompleted {
-		return len(result.Error) == 0
+		return len(result.Error) == 0 && len(result.AssistantMessages) > 0 &&
+			result.Usage != nil && result.Provenance != nil
 	}
-	return result.Status == domain.InvocationFailed && len(result.Error) > 0 && json.Valid(result.Error)
+	return result.Status == domain.InvocationFailed && len(result.Error) > 0 && json.Valid(result.Error) &&
+		len(result.AssistantMessages) == 0
 }
 
 func waitFor(ctx context.Context, duration time.Duration) bool {

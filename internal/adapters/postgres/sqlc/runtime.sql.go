@@ -106,7 +106,7 @@ SET status = 'running',
     updated_at = $4
 WHERE id = $5
   AND status = 'queued'
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 `
 
 type ClaimInvocationParams struct {
@@ -128,7 +128,7 @@ type ClaimInvocationParams struct {
 //	    updated_at = $4
 //	WHERE id = $5
 //	  AND status = 'queued'
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 func (q *Queries) ClaimInvocation(ctx context.Context, arg ClaimInvocationParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, claimInvocation,
 		arg.StateRevision,
@@ -156,6 +156,8 @@ func (q *Queries) ClaimInvocation(ctx context.Context, arg ClaimInvocationParams
 		&i.LeaseOwner,
 		&i.LeaseExpiresAt,
 		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
 	)
 	return i, err
 }
@@ -492,7 +494,7 @@ func (q *Queries) CreateTenantPartitionByRefIfAbsent(ctx context.Context, arg Cr
 }
 
 const findNextQueuedInvocationForUpdate = `-- name: FindNextQueuedInvocationForUpdate :one
-SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt
+SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance
 FROM invocations AS i
 JOIN sessions AS s ON s.id = i.session_id
 WHERE i.status = 'queued'
@@ -503,7 +505,7 @@ LIMIT 1
 
 // FindNextQueuedInvocationForUpdate
 //
-//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt
+//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance
 //	FROM invocations AS i
 //	JOIN sessions AS s ON s.id = i.session_id
 //	WHERE i.status = 'queued'
@@ -531,6 +533,8 @@ func (q *Queries) FindNextQueuedInvocationForUpdate(ctx context.Context) (Invoca
 		&i.LeaseOwner,
 		&i.LeaseExpiresAt,
 		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
 	)
 	return i, err
 }
@@ -662,14 +666,14 @@ func (q *Queries) GetExecutionSpecSnapshot(ctx context.Context, id string) (Exec
 }
 
 const getInvocation = `-- name: GetInvocation :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 FROM invocations
 WHERE id = $1
 `
 
 // GetInvocation
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 //	FROM invocations
 //	WHERE id = $1
 func (q *Queries) GetInvocation(ctx context.Context, id string) (Invocation, error) {
@@ -693,12 +697,14 @@ func (q *Queries) GetInvocation(ctx context.Context, id string) (Invocation, err
 		&i.LeaseOwner,
 		&i.LeaseExpiresAt,
 		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
 	)
 	return i, err
 }
 
 const getInvocationByIdempotencyKey = `-- name: GetInvocationByIdempotencyKey :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 FROM invocations
 WHERE account_id = $1
   AND tenant_partition_id = $2
@@ -715,7 +721,7 @@ type GetInvocationByIdempotencyKeyParams struct {
 
 // GetInvocationByIdempotencyKey
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 //	FROM invocations
 //	WHERE account_id = $1
 //	  AND tenant_partition_id = $2
@@ -747,12 +753,14 @@ func (q *Queries) GetInvocationByIdempotencyKey(ctx context.Context, arg GetInvo
 		&i.LeaseOwner,
 		&i.LeaseExpiresAt,
 		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
 	)
 	return i, err
 }
 
 const getInvocationForUpdate = `-- name: GetInvocationForUpdate :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 FROM invocations
 WHERE id = $1
 FOR UPDATE
@@ -760,7 +768,7 @@ FOR UPDATE
 
 // GetInvocationForUpdate
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 //	FROM invocations
 //	WHERE id = $1
 //	FOR UPDATE
@@ -785,12 +793,14 @@ func (q *Queries) GetInvocationForUpdate(ctx context.Context, id string) (Invoca
 		&i.LeaseOwner,
 		&i.LeaseExpiresAt,
 		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
 	)
 	return i, err
 }
 
 const getNonterminalInvocationBySession = `-- name: GetNonterminalInvocationBySession :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 FROM invocations
 WHERE session_id = $1
   AND status IN ('queued', 'running', 'waiting')
@@ -799,7 +809,7 @@ LIMIT 1
 
 // GetNonterminalInvocationBySession
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 //	FROM invocations
 //	WHERE session_id = $1
 //	  AND status IN ('queued', 'running', 'waiting')
@@ -825,6 +835,8 @@ func (q *Queries) GetNonterminalInvocationBySession(ctx context.Context, session
 		&i.LeaseOwner,
 		&i.LeaseExpiresAt,
 		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
 	)
 	return i, err
 }
@@ -1026,7 +1038,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 }
 
 const listExpiredInvocationLeases = `-- name: ListExpiredInvocationLeases :many
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 FROM invocations
 WHERE status = 'running'
   AND lease_expires_at <= $1
@@ -1041,7 +1053,7 @@ type ListExpiredInvocationLeasesParams struct {
 
 // ListExpiredInvocationLeases
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 //	FROM invocations
 //	WHERE status = 'running'
 //	  AND lease_expires_at <= $1
@@ -1074,6 +1086,8 @@ func (q *Queries) ListExpiredInvocationLeases(ctx context.Context, arg ListExpir
 			&i.LeaseOwner,
 			&i.LeaseExpiresAt,
 			&i.LeaseAttempt,
+			&i.Usage,
+			&i.Provenance,
 		); err != nil {
 			return nil, err
 		}
@@ -1217,7 +1231,7 @@ WHERE id = $4
   AND status = 'running'
   AND lease_attempt = $5
   AND lease_expires_at <= $3
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 `
 
 type ReapInvocationLeaseParams struct {
@@ -1242,7 +1256,7 @@ type ReapInvocationLeaseParams struct {
 //	  AND status = 'running'
 //	  AND lease_attempt = $5
 //	  AND lease_expires_at <= $3
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 func (q *Queries) ReapInvocationLease(ctx context.Context, arg ReapInvocationLeaseParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, reapInvocationLease,
 		arg.StateRevision,
@@ -1270,6 +1284,8 @@ func (q *Queries) ReapInvocationLease(ctx context.Context, arg ReapInvocationLea
 		&i.LeaseOwner,
 		&i.LeaseExpiresAt,
 		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
 	)
 	return i, err
 }
@@ -1283,7 +1299,7 @@ WHERE id = $3
   AND lease_owner = $4
   AND lease_attempt = $5
   AND lease_expires_at > $2
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 `
 
 type RenewInvocationLeaseParams struct {
@@ -1304,7 +1320,7 @@ type RenewInvocationLeaseParams struct {
 //	  AND lease_owner = $4
 //	  AND lease_attempt = $5
 //	  AND lease_expires_at > $2
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 func (q *Queries) RenewInvocationLease(ctx context.Context, arg RenewInvocationLeaseParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, renewInvocationLease,
 		arg.LeaseExpiresAt,
@@ -1332,6 +1348,8 @@ func (q *Queries) RenewInvocationLease(ctx context.Context, arg RenewInvocationL
 		&i.LeaseOwner,
 		&i.LeaseExpiresAt,
 		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
 	)
 	return i, err
 }
@@ -1387,24 +1405,28 @@ SET status = $1,
     lease_owner = NULL,
     lease_expires_at = NULL,
     error = $3,
-    completed_at = $4,
-    updated_at = $4
-WHERE id = $5
+    usage = $4,
+    provenance = $5,
+    completed_at = $6,
+    updated_at = $6
+WHERE id = $7
   AND status = 'running'
-  AND lease_owner = $6
-  AND lease_attempt = $7
-  AND lease_expires_at > $4
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+  AND lease_owner = $8
+  AND lease_attempt = $9
+  AND lease_expires_at > $6
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 `
 
 type SettleInvocationParams struct {
-	Status        string
-	StateRevision int64
-	ErrorPayload  []byte
-	ObservedAt    *time.Time
-	ID            string
-	LeaseOwner    *string
-	LeaseAttempt  int64
+	Status            string
+	StateRevision     int64
+	ErrorPayload      []byte
+	UsagePayload      []byte
+	ProvenancePayload []byte
+	ObservedAt        *time.Time
+	ID                string
+	LeaseOwner        *string
+	LeaseAttempt      int64
 }
 
 // SettleInvocation
@@ -1415,19 +1437,23 @@ type SettleInvocationParams struct {
 //	    lease_owner = NULL,
 //	    lease_expires_at = NULL,
 //	    error = $3,
-//	    completed_at = $4,
-//	    updated_at = $4
-//	WHERE id = $5
+//	    usage = $4,
+//	    provenance = $5,
+//	    completed_at = $6,
+//	    updated_at = $6
+//	WHERE id = $7
 //	  AND status = 'running'
-//	  AND lease_owner = $6
-//	  AND lease_attempt = $7
-//	  AND lease_expires_at > $4
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
+//	  AND lease_owner = $8
+//	  AND lease_attempt = $9
+//	  AND lease_expires_at > $6
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance
 func (q *Queries) SettleInvocation(ctx context.Context, arg SettleInvocationParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, settleInvocation,
 		arg.Status,
 		arg.StateRevision,
 		arg.ErrorPayload,
+		arg.UsagePayload,
+		arg.ProvenancePayload,
 		arg.ObservedAt,
 		arg.ID,
 		arg.LeaseOwner,
@@ -1452,6 +1478,8 @@ func (q *Queries) SettleInvocation(ctx context.Context, arg SettleInvocationPara
 		&i.LeaseOwner,
 		&i.LeaseExpiresAt,
 		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
 	)
 	return i, err
 }

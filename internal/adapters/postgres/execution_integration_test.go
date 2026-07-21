@@ -44,6 +44,10 @@ func TestInvocationRunnerPollsQueuedWorkAfterRestart(t *testing.T) {
 	execution := services.NewInvocationExecutionService(
 		restartedStore, NewTransactionManager(restartedPool), clock, identity.NewUUIDv7Generator(clock),
 	)
+	generator := &postgresModelGenerator{}
+	executor := services.NewGenerationExecutor(
+		restartedStore, generator, slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
 	config := engine.Config{
 		Concurrency: 1, PollInterval: 10 * time.Millisecond,
 		LeaseDuration: time.Second, HeartbeatInterval: 100 * time.Millisecond,
@@ -51,7 +55,7 @@ func TestInvocationRunnerPollsQueuedWorkAfterRestart(t *testing.T) {
 		DrainGrace: time.Second,
 	}
 	runner, err := engine.NewRunner(
-		"restarted-runner", execution, postgresSyntheticExecutor{}, nil,
+		"restarted-runner", execution, executor, nil,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), config,
 	)
 	if err != nil {
@@ -64,6 +68,70 @@ func TestInvocationRunnerPollsQueuedWorkAfterRestart(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("run: %v", err)
+	}
+	requests := generator.Requests()
+	if len(requests) != 1 || requests[0].Instructions != "help" || requests[0].Provider != "anthropic" ||
+		requests[0].Model != "test-model" || len(requests[0].Messages) != 1 {
+		t.Fatalf("durable generation requests = %#v", requests)
+	}
+	messages, err := restartedStore.ListSessionMessages(context.Background(), ack.SessionID)
+	if err != nil || len(messages) != 2 || messages[1].Role != domain.MessageRoleAssistant {
+		t.Fatalf("terminal transcript = %#v, error = %v", messages, err)
+	}
+}
+
+func TestInvocationRunnerSettlesProviderFailureAndFreesSession(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ack, err := runtime.Admit(context.Background(), auth, runtimeInput())
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := identity.SystemClock{}
+	execution := services.NewInvocationExecutionService(
+		store, NewTransactionManager(pool), clock, identity.NewUUIDv7Generator(clock),
+	)
+	generator := &postgresModelGenerator{err: ports.ErrProviderKeyMissing}
+	executor := services.NewGenerationExecutor(store, generator, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	runner, err := engine.NewRunner(
+		"failure-runner", execution, executor, nil, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		engine.Config{
+			Concurrency: 1, PollInterval: 10 * time.Millisecond, LeaseDuration: time.Second,
+			HeartbeatInterval: 100 * time.Millisecond, ReaperInterval: 100 * time.Millisecond,
+			ReaperBatchLimit: 10, DrainGrace: time.Second,
+		},
+	)
+	if err != nil {
+		t.Fatalf("new runner: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- runner.Run(ctx) }()
+	waitForInvocationStatus(t, store, ack.InvocationID, domain.InvocationFailed)
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	invocation, err := store.GetInvocation(context.Background(), ack.InvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failure struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(invocation.Error, &failure); err != nil || failure.Code != "provider_error" ||
+		len(invocation.Usage) != 0 || len(invocation.Provenance) != 0 {
+		t.Fatalf("provider failure Invocation = %#v, decoded = %#v, error = %v", invocation, failure, err)
+	}
+	messages, err := store.ListSessionMessages(context.Background(), ack.SessionID)
+	if err != nil || len(messages) != 1 {
+		t.Fatalf("failed transcript = %#v, error = %v", messages, err)
+	}
+	next := runtimeInput()
+	next.SessionKey = nil
+	next.SessionID = &ack.SessionID
+	next.IdempotencyKey = "after-provider-failure"
+	if _, err := runtime.Admit(context.Background(), auth, next); err != nil {
+		t.Fatalf("admit after provider failure: %v", err)
 	}
 }
 
@@ -238,6 +306,14 @@ func TestInvocationExecutionClaimFenceAndSettlement(t *testing.T) {
 	if claimed != 1 || alreadyHeld != 19 || winner.Attempt != 1 {
 		t.Fatalf("claimed = %d, already held = %d, winner = %#v", claimed, alreadyHeld, winner)
 	}
+	assertPostgresCode(t, execError(
+		context.Background(), pool,
+		"UPDATE invocations SET usage = '{}'::jsonb, provenance = '{}'::jsonb WHERE id = $1", ack.InvocationID,
+	), "23514")
+	assertPostgresCode(t, execError(
+		context.Background(), pool,
+		"UPDATE invocations SET usage = '{}'::jsonb WHERE id = $1", ack.InvocationID,
+	), "23514")
 
 	stored, err := store.GetInvocation(context.Background(), ack.InvocationID)
 	if err != nil || stored.Status != domain.InvocationRunning || stored.LeaseOwner == nil ||
@@ -277,9 +353,24 @@ func TestInvocationExecutionClaimFenceAndSettlement(t *testing.T) {
 	}
 	stored, err = store.GetInvocation(context.Background(), ack.InvocationID)
 	if err != nil || stored.Status != domain.InvocationCompleted || stored.CompletedAt == nil ||
-		stored.LeaseOwner != nil || stored.LeaseExpiresAt != nil || stored.LeaseAttempt != 1 {
+		stored.LeaseOwner != nil || stored.LeaseExpiresAt != nil || stored.LeaseAttempt != 1 ||
+		len(stored.Usage) == 0 || len(stored.Provenance) == 0 {
 		t.Fatalf("settled Invocation = %#v, error = %v", stored, err)
 	}
+	messages, err := store.ListSessionMessages(context.Background(), ack.SessionID)
+	if err != nil || len(messages) != 2 || messages[1].InvocationID != ack.InvocationID ||
+		messages[1].Role != domain.MessageRoleAssistant {
+		t.Fatalf("settled transcript = %#v, error = %v", messages, err)
+	}
+	states, err = store.ListInvocationStates(context.Background(), ack.SessionID)
+	if err != nil || len(states) != 3 || states[2].ThroughMessageSequence == nil ||
+		*states[2].ThroughMessageSequence != messages[1].Sequence {
+		t.Fatalf("settled states = %#v, error = %v", states, err)
+	}
+	assertPostgresCode(t, execError(
+		context.Background(), pool,
+		"UPDATE invocations SET usage = '{}'::jsonb WHERE id = $1", ack.InvocationID,
+	), "23514")
 	if err := execution.Settle(context.Background(), winner, completedResult()); !errors.Is(err, ports.ErrLeaseLost) {
 		t.Fatalf("duplicate settlement = %v, want lease lost", err)
 	}
@@ -448,6 +539,50 @@ func TestInvocationExecutionTransitionsRollBackWithLifecycleState(t *testing.T) 
 	assertInvocationExecutionShape(t, store, ack, domain.InvocationCompleted, 1, 3)
 }
 
+func TestInvocationExecutionSettlementFaultsRollBackAllOutputs(t *testing.T) {
+	for _, stage := range []string{"first_assistant_append", "second_assistant_append", "invocation_update", "lifecycle_append"} {
+		t.Run(stage, func(t *testing.T) {
+			pool, runtime, store, auth := newRuntimeFixture(t)
+			ack, err := runtime.Admit(context.Background(), auth, runtimeInput())
+			if err != nil {
+				t.Fatalf("admit: %v", err)
+			}
+			clock := identity.SystemClock{}
+			ids := identity.NewUUIDv7Generator(clock)
+			execution := services.NewInvocationExecutionService(store, NewTransactionManager(pool), clock, ids)
+			claim, disposition, err := execution.ClaimExact(context.Background(), ack.InvocationID, "owner", time.Minute)
+			if err != nil || disposition != services.Claimed {
+				t.Fatalf("claim disposition = %q, error = %v", disposition, err)
+			}
+			faults := &faultingExecutionStore{Store: store}
+			result := completedResult()
+			switch stage {
+			case "first_assistant_append":
+				faults.failAssistantAppendAt = 1
+				result = completedResultWithMessages(2)
+			case "second_assistant_append":
+				faults.failAssistantAppendAt = 2
+				result = completedResultWithMessages(2)
+			case "invocation_update":
+				faults.failSettlement = true
+			case "lifecycle_append":
+				faults.failStatus = domain.InvocationCompleted
+			}
+			faulty := services.NewInvocationExecutionService(faults, NewTransactionManager(pool), clock, ids)
+			if err := faulty.Settle(context.Background(), claim, result); err == nil {
+				t.Fatal("faulted settlement succeeded")
+			}
+			assertInvocationExecutionShape(t, store, ack, domain.InvocationRunning, 1, 2)
+			if err := execution.Settle(context.Background(), claim, result); err != nil {
+				t.Fatalf("settle retry: %v", err)
+			}
+			assertInvocationExecutionShapeWithMessages(
+				t, store, ack, domain.InvocationCompleted, 1, 3, len(result.AssistantMessages),
+			)
+		})
+	}
+}
+
 func TestAdmissionWakeOccursOnlyAfterFreshCommit(t *testing.T) {
 	pool, _ := testDatabase(t, true)
 	store := NewStore(pool)
@@ -477,8 +612,39 @@ func TestAdmissionWakeOccursOnlyAfterFreshCommit(t *testing.T) {
 
 type faultingExecutionStore struct {
 	*Store
-	failStatus       domain.InvocationStatus
-	failInvocationID string
+	failStatus            domain.InvocationStatus
+	failInvocationID      string
+	failAssistantAppendAt int
+	assistantAppendCount  int
+	failSettlement        bool
+}
+
+func (s *faultingExecutionStore) AppendSessionMessage(ctx context.Context, message domain.SessionMessage) error {
+	if message.Role == domain.MessageRoleAssistant {
+		s.assistantAppendCount++
+		if s.failAssistantAppendAt == s.assistantAppendCount {
+			return errors.New("injected assistant-message failure")
+		}
+	}
+	return s.Store.AppendSessionMessage(ctx, message)
+}
+
+func (s *faultingExecutionStore) SettleInvocation(
+	ctx context.Context,
+	id, owner string,
+	attempt int64,
+	status domain.InvocationStatus,
+	stateRevision int64,
+	errorPayload, usagePayload, provenancePayload []byte,
+	observedAt time.Time,
+) (domain.Invocation, error) {
+	if s.failSettlement {
+		return domain.Invocation{}, errors.New("injected Invocation settlement failure")
+	}
+	return s.Store.SettleInvocation(
+		ctx, id, owner, attempt, status, stateRevision,
+		errorPayload, usagePayload, provenancePayload, observedAt,
+	)
 }
 
 func (s *faultingExecutionStore) AppendInvocationState(ctx context.Context, state domain.InvocationState) error {
@@ -508,7 +674,26 @@ func (c *mutableClock) Advance(duration time.Duration) {
 }
 
 func completedResult() domain.InvocationExecutionResult {
-	return domain.InvocationExecutionResult{Status: domain.InvocationCompleted}
+	return completedResultWithMessages(1)
+}
+
+func completedResultWithMessages(count int) domain.InvocationExecutionResult {
+	messages := make([]domain.GenerationMessage, 0, count)
+	for index := range count {
+		messages = append(messages, domain.GenerationMessage{
+			Role:    domain.MessageRoleAssistant,
+			Content: json.RawMessage(fmt.Sprintf(`[{"type":"text","text":"done %d"}]`, index+1)),
+		})
+	}
+	return domain.InvocationExecutionResult{
+		Status:            domain.InvocationCompleted,
+		AssistantMessages: messages,
+		Usage:             &domain.ModelUsage{InputTokens: 3, OutputTokens: 1},
+		Provenance: &domain.ModelProvenance{
+			Provider: "anthropic", RequestedModel: "test-model", ServedModel: "test-model",
+			CredentialSource: "installation_byok",
+		},
+	}
 }
 
 func assertInvocationExecutionShape(
@@ -519,6 +704,22 @@ func assertInvocationExecutionShape(
 	attempt int64,
 	stateCount int,
 ) {
+	outputMessages := 0
+	if status == domain.InvocationCompleted {
+		outputMessages = 1
+	}
+	assertInvocationExecutionShapeWithMessages(t, store, ack, status, attempt, stateCount, outputMessages)
+}
+
+func assertInvocationExecutionShapeWithMessages(
+	t *testing.T,
+	store *Store,
+	ack services.InvocationAcknowledgement,
+	status domain.InvocationStatus,
+	attempt int64,
+	stateCount int,
+	outputMessages int,
+) {
 	t.Helper()
 	invocation, err := store.GetInvocation(context.Background(), ack.InvocationID)
 	if err != nil || invocation.Status != status || invocation.LeaseAttempt != attempt {
@@ -527,6 +728,20 @@ func assertInvocationExecutionShape(
 	states, err := store.ListInvocationStates(context.Background(), ack.SessionID)
 	if err != nil || len(states) != stateCount {
 		t.Fatalf("states = %#v, error = %v; want %d", states, err, stateCount)
+	}
+	messages, err := store.ListSessionMessages(context.Background(), ack.SessionID)
+	wantMessages := 1 + outputMessages
+	if err != nil || len(messages) != wantMessages {
+		t.Fatalf("messages = %#v, error = %v; want %d", messages, err, wantMessages)
+	}
+	if status == domain.InvocationCompleted {
+		if len(invocation.Usage) == 0 || len(invocation.Provenance) == 0 ||
+			states[len(states)-1].ThroughMessageSequence == nil ||
+			*states[len(states)-1].ThroughMessageSequence != messages[len(messages)-1].Sequence {
+			t.Fatalf("completed execution evidence = Invocation %#v, states %#v", invocation, states)
+		}
+	} else if len(invocation.Usage) != 0 || len(invocation.Provenance) != 0 {
+		t.Fatalf("noncompleted Invocation has evidence: %#v", invocation)
 	}
 }
 
@@ -547,13 +762,32 @@ type noopSubscription struct{}
 func (noopSubscription) Wait(context.Context, time.Duration) bool { return false }
 func (noopSubscription) Close()                                   {}
 
-type postgresSyntheticExecutor struct{}
+type postgresModelGenerator struct {
+	mu       sync.Mutex
+	requests []domain.GenerationRequest
+	err      error
+}
 
-func (postgresSyntheticExecutor) Execute(
-	context.Context,
-	domain.InvocationClaim,
-) (domain.InvocationExecutionResult, error) {
-	return completedResult(), nil
+func (g *postgresModelGenerator) Generate(_ context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
+	g.mu.Lock()
+	g.requests = append(g.requests, request)
+	g.mu.Unlock()
+	if g.err != nil {
+		return domain.GenerationResponse{}, g.err
+	}
+	return domain.GenerationResponse{
+		Messages: []domain.GenerationMessage{{
+			Role:    domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[{"type":"text","text":"generated"}]`),
+		}},
+		Usage: domain.ModelUsage{InputTokens: 2, OutputTokens: 1}, ServedModel: "test-model-served",
+	}, nil
+}
+
+func (g *postgresModelGenerator) Requests() []domain.GenerationRequest {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return append([]domain.GenerationRequest(nil), g.requests...)
 }
 
 func waitForInvocationStatus(t *testing.T, store *Store, invocationID string, status domain.InvocationStatus) {

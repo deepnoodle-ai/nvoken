@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -464,7 +465,18 @@ func (immediateExecutor) Execute(context.Context, domain.InvocationClaim) (domai
 }
 
 func completed() domain.InvocationExecutionResult {
-	return domain.InvocationExecutionResult{Status: domain.InvocationCompleted}
+	return domain.InvocationExecutionResult{
+		Status: domain.InvocationCompleted,
+		AssistantMessages: []domain.GenerationMessage{{
+			Role:    domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[{"type":"text","text":"done"}]`),
+		}},
+		Usage: &domain.ModelUsage{InputTokens: 1, OutputTokens: 1},
+		Provenance: &domain.ModelProvenance{
+			Provider: "test", RequestedModel: "test", ServedModel: "test",
+			CredentialSource: "installation_byok",
+		},
+	}
 }
 
 func testConfig() Config {

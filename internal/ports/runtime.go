@@ -9,11 +9,15 @@ import (
 )
 
 var (
-	ErrNotFound            = errors.New("not found")
-	ErrUnauthenticated     = errors.New("unauthenticated")
-	ErrRetryable           = errors.New("retryable database conflict")
-	ErrConcurrentAdmission = errors.New("concurrent admission conflict")
-	ErrLeaseLost           = errors.New("invocation lease lost")
+	ErrNotFound             = errors.New("not found")
+	ErrUnauthenticated      = errors.New("unauthenticated")
+	ErrRetryable            = errors.New("retryable database conflict")
+	ErrConcurrentAdmission  = errors.New("concurrent admission conflict")
+	ErrLeaseLost            = errors.New("invocation lease lost")
+	ErrProviderUnsupported  = errors.New("model provider unsupported")
+	ErrProviderKeyMissing   = errors.New("model provider credential missing")
+	ErrGenerationFailed     = errors.New("model generation failed")
+	ErrModelResponseInvalid = errors.New("model response invalid")
 )
 
 // Clock makes persisted timestamps deterministic in services and tests.
@@ -84,7 +88,7 @@ type InvocationRepository interface {
 	LockInvocationAdmissionKey(context.Context, string) error
 	ClaimInvocation(context.Context, string, string, time.Time, int64, time.Time) (domain.Invocation, error)
 	RenewInvocationLease(context.Context, string, string, int64, time.Time, time.Time) (domain.Invocation, error)
-	SettleInvocation(context.Context, string, string, int64, domain.InvocationStatus, int64, []byte, time.Time) (domain.Invocation, error)
+	SettleInvocation(context.Context, string, string, int64, domain.InvocationStatus, int64, []byte, []byte, []byte, time.Time) (domain.Invocation, error)
 	ReapInvocationLease(context.Context, string, int64, int64, []byte, time.Time) (domain.Invocation, error)
 }
 
@@ -120,4 +124,10 @@ type WorkSubscription interface {
 // ownership service performs the fenced durable settlement.
 type InvocationExecutor interface {
 	Execute(context.Context, domain.InvocationClaim) (domain.InvocationExecutionResult, error)
+}
+
+// ModelGenerator performs one tool-free provider call. Implementations receive
+// only normalized durable inputs and return no raw provider envelope.
+type ModelGenerator interface {
+	Generate(context.Context, domain.GenerationRequest) (domain.GenerationResponse, error)
 }
