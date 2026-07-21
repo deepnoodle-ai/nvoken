@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -23,6 +24,50 @@ import (
 
 type durableCheckpointGenerator struct {
 	coordinator ports.ToolCallCoordinator
+}
+
+type durableResumeContinuationGenerator struct {
+	coordinator ports.ToolCallCoordinator
+}
+
+func (g durableResumeContinuationGenerator) Generate(
+	ctx context.Context,
+	request domain.GenerationRequest,
+) (domain.GenerationResponse, error) {
+	if request.Claim == nil || request.Resume == nil || request.Resume.Iteration != 1 ||
+		len(request.Resume.OpenToolCalls) != 0 || len(request.Messages) != 3 ||
+		request.Messages[2].Role != domain.MessageRoleTool {
+		return domain.GenerationResponse{}, ports.ErrGenerationRecoveryInvalid
+	}
+	continuationUsage := domain.ModelUsage{
+		InputTokens:  5,
+		OutputTokens: 2,
+		Iterations:   1,
+	}
+	if _, err := g.coordinator.RecordModelCheckpoint(
+		ctx,
+		*request.Claim,
+		domain.ModelCheckpointInput{
+			Iteration: 2,
+			Message: domain.GenerationMessage{
+				Role:    domain.MessageRoleAssistant,
+				Content: json.RawMessage(`[{"type":"text","text":"continued after accepted result"}]`),
+			},
+			Usage:      continuationUsage,
+			Provenance: testModelProvenance(),
+		},
+	); err != nil {
+		return domain.GenerationResponse{}, err
+	}
+	usage := request.Resume.Usage
+	usage.InputTokens += continuationUsage.InputTokens
+	usage.OutputTokens += continuationUsage.OutputTokens
+	usage.Iterations += continuationUsage.Iterations
+	return domain.GenerationResponse{
+		Usage:                usage,
+		ServedModel:          "test-model-served",
+		MessagesCheckpointed: true,
+	}, nil
 }
 
 func (g durableCheckpointGenerator) Generate(ctx context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
@@ -422,16 +467,6 @@ func TestTerminalInvocationClosesOpenToolCalls(t *testing.T) {
 				return err
 			},
 		},
-		{
-			name:       "lease loss",
-			terminal:   domain.InvocationFailed,
-			toolStatus: domain.ToolCallFailed,
-			finish: func(ctx context.Context, _ *services.RuntimeService, execution *services.InvocationExecutionService, _ domain.RuntimeAuthContext, _ services.InvocationAcknowledgement, clock *mutableClock) error {
-				clock.Advance(time.Minute + time.Second)
-				_, err := execution.ReapExpired(ctx, 10)
-				return err
-			},
-		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			pool, runtime, store, auth := newRuntimeFixture(t)
@@ -499,6 +534,289 @@ func TestTerminalInvocationClosesOpenToolCalls(t *testing.T) {
 				t.Fatalf("attempt status = %q, error = %v", attemptStatus, err)
 			}
 		})
+	}
+}
+
+func TestExpiredLeasePreservesAndRestartsOpenBuiltin(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ctx := context.Background()
+	ack, err := runtime.Admit(ctx, auth, runtimeInput())
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := newMutableClock(time.Now().UTC())
+	ids := identity.NewUUIDv7Generator(clock)
+	txm := NewTransactionManager(pool)
+	executionService := services.NewInvocationExecutionService(store, txm, clock, ids)
+	firstClaim, disposition, err := executionService.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"lost-tool-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("first claim = %#v, disposition = %q, error = %v", firstClaim, disposition, err)
+	}
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	recorded, err := coordinator.RecordModelCheckpoint(
+		ctx,
+		firstClaim,
+		modelToolCheckpoint("resumed-provider-call", 2, 1),
+	)
+	if err != nil {
+		t.Fatalf("record checkpoint: %v", err)
+	}
+	firstExecution, err := coordinator.StartBuiltinToolCall(
+		ctx,
+		firstClaim,
+		1,
+		"resumed-provider-call",
+	)
+	if err != nil {
+		t.Fatalf("start first attempt: %v", err)
+	}
+	clock.Advance(time.Minute + time.Nanosecond)
+	recovered, err := executionService.ReapExpired(ctx, 10)
+	if err != nil || len(recovered) != 1 || recovered[0].Status != domain.InvocationQueued {
+		t.Fatalf("recovered = %#v, error = %v", recovered, err)
+	}
+	open, err := store.GetToolCall(ctx, recorded.ToolCalls[0].ID)
+	if err != nil || open.Status != domain.ToolCallRunning || open.CurrentAttempt != 1 {
+		t.Fatalf("preserved ToolCall = %#v, error = %v", open, err)
+	}
+	secondClaim, disposition, err := executionService.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"replacement-tool-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed || secondClaim.Attempt != 2 {
+		t.Fatalf("replacement claim = %#v, disposition = %q, error = %v", secondClaim, disposition, err)
+	}
+	secondExecution, err := coordinator.StartBuiltinToolCall(
+		ctx,
+		secondClaim,
+		1,
+		"resumed-provider-call",
+	)
+	if err != nil {
+		t.Fatalf("restart builtin: %v", err)
+	}
+	if secondExecution.Call.ID != firstExecution.Call.ID || secondExecution.Attempt.Attempt != 2 {
+		t.Fatalf("restarted execution = %#v, first = %#v", secondExecution, firstExecution)
+	}
+	if _, err := coordinator.AcceptBuiltinToolResult(
+		ctx,
+		secondClaim,
+		secondExecution,
+		json.RawMessage(`"resumed"`),
+		false,
+	); err != nil {
+		t.Fatalf("accept replacement result: %v", err)
+	}
+	if _, err := coordinator.AcceptBuiltinToolResult(
+		ctx,
+		firstClaim,
+		firstExecution,
+		json.RawMessage(`"late"`),
+		false,
+	); !errors.Is(err, ports.ErrLeaseLost) {
+		t.Fatalf("stale result error = %v", err)
+	}
+	rows, err := pool.Query(
+		ctx,
+		"SELECT attempt, status FROM tool_call_attempts WHERE tool_call_id = $1 ORDER BY attempt",
+		firstExecution.Call.ID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var attempts []string
+	for rows.Next() {
+		var attempt int
+		var status string
+		if err := rows.Scan(&attempt, &status); err != nil {
+			t.Fatal(err)
+		}
+		attempts = append(attempts, fmt.Sprintf("%d:%s", attempt, status))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(attempts, []string{"1:failed", "2:completed"}) {
+		t.Fatalf("attempts = %#v", attempts)
+	}
+}
+
+func TestExpiredLeaseReplaysCommittedFinalCheckpointWithoutProviderCall(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ctx := context.Background()
+	ack, err := runtime.Admit(ctx, auth, runtimeInput())
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := newMutableClock(time.Now().UTC())
+	ids := identity.NewUUIDv7Generator(clock)
+	txm := NewTransactionManager(pool)
+	executionService := services.NewInvocationExecutionService(store, txm, clock, ids)
+	firstClaim, disposition, err := executionService.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"lost-final-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("first claim = %#v, disposition = %q, error = %v", firstClaim, disposition, err)
+	}
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	recorded, err := coordinator.RecordModelCheckpoint(ctx, firstClaim, domain.ModelCheckpointInput{
+		Iteration: 1,
+		Message: domain.GenerationMessage{
+			Role:    domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[{"type":"text","text":"durable final"}]`),
+		},
+		Usage: domain.ModelUsage{
+			InputTokens:  4,
+			OutputTokens: 2,
+			Iterations:   1,
+		},
+		Provenance: domain.ModelProvenance{
+			Provider:         "anthropic",
+			RequestedModel:   "claude-test",
+			ServedModel:      "claude-served",
+			CredentialSource: "installation_byok",
+		},
+	})
+	if err != nil {
+		t.Fatalf("record final checkpoint: %v", err)
+	}
+	clock.Advance(time.Minute + time.Nanosecond)
+	recovered, err := executionService.ReapExpired(ctx, 10)
+	if err != nil || len(recovered) != 1 || recovered[0].Status != domain.InvocationQueued {
+		t.Fatalf("recovered = %#v, error = %v", recovered, err)
+	}
+	secondClaim, disposition, err := executionService.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"replacement-final-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed || secondClaim.Attempt != 2 {
+		t.Fatalf("replacement claim = %#v, disposition = %q, error = %v", secondClaim, disposition, err)
+	}
+	generator := &postgresModelGenerator{}
+	result, err := services.NewGenerationExecutor(store, generator, nil).Execute(ctx, secondClaim)
+	if err != nil {
+		t.Fatalf("replay final checkpoint: %v", err)
+	}
+	if len(generator.Requests()) != 0 || result.Status != domain.InvocationCompleted || !result.MessagesCheckpointed {
+		t.Fatalf("terminal replay = %#v, provider calls = %d", result, len(generator.Requests()))
+	}
+	if err := executionService.Settle(ctx, secondClaim, result); err != nil {
+		t.Fatalf("settle terminal replay: %v", err)
+	}
+	stored, err := store.GetInvocation(ctx, ack.InvocationID)
+	if err != nil || stored.Status != domain.InvocationCompleted ||
+		stored.CurrentCheckpointSequence != recorded.Checkpoint.Sequence ||
+		stored.CurrentIteration != 1 {
+		t.Fatalf("settled Invocation = %#v, error = %v", stored, err)
+	}
+	messages, err := store.ListSessionMessages(ctx, ack.SessionID)
+	if err != nil || len(messages) != 2 || messages[1].ID != recorded.Message.ID {
+		t.Fatalf("settled transcript = %#v, error = %v", messages, err)
+	}
+}
+
+func TestExpiredLeaseContinuesAfterCommittedToolResultWithoutRerun(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ctx := context.Background()
+	input := runtimeInput()
+	maxIterations := 3
+	input.Spec.Budgets = &services.InvocationBudgetInput{
+		MaxIterations: &maxIterations,
+	}
+	ack, err := runtime.Admit(ctx, auth, input)
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := newMutableClock(time.Now().UTC())
+	ids := identity.NewUUIDv7Generator(clock)
+	txm := NewTransactionManager(pool)
+	executionService := services.NewInvocationExecutionService(store, txm, clock, ids)
+	firstClaim, disposition, err := executionService.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"lost-after-result-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("first claim = %#v, disposition = %q, error = %v", firstClaim, disposition, err)
+	}
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	recorded, err := coordinator.RecordModelCheckpoint(
+		ctx,
+		firstClaim,
+		modelToolCheckpoint("result-window-provider-call", 2, 1),
+	)
+	if err != nil {
+		t.Fatalf("record checkpoint: %v", err)
+	}
+	firstExecution, err := coordinator.StartBuiltinToolCall(
+		ctx,
+		firstClaim,
+		1,
+		"result-window-provider-call",
+	)
+	if err != nil {
+		t.Fatalf("start builtin: %v", err)
+	}
+	accepted, err := coordinator.AcceptBuiltinToolResult(
+		ctx,
+		firstClaim,
+		firstExecution,
+		json.RawMessage(`"accepted-before-crash"`),
+		false,
+	)
+	if err != nil {
+		t.Fatalf("accept builtin: %v", err)
+	}
+	clock.Advance(time.Minute + time.Nanosecond)
+	if recovered, err := executionService.ReapExpired(ctx, 10); err != nil ||
+		len(recovered) != 1 || recovered[0].Status != domain.InvocationQueued {
+		t.Fatalf("recovered = %#v, error = %v", recovered, err)
+	}
+	secondClaim, disposition, err := executionService.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"replacement-after-result-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed || secondClaim.Attempt != 2 {
+		t.Fatalf("replacement claim = %#v, disposition = %q, error = %v", secondClaim, disposition, err)
+	}
+	generator := durableResumeContinuationGenerator{
+		coordinator: coordinator,
+	}
+	result, err := services.NewGenerationExecutor(store, generator, nil).Execute(ctx, secondClaim)
+	if err != nil {
+		t.Fatalf("continue after result: %v", err)
+	}
+	if err := executionService.Settle(ctx, secondClaim, result); err != nil {
+		t.Fatalf("settle continuation: %v", err)
+	}
+	stored, err := store.GetToolCall(ctx, recorded.ToolCalls[0].ID)
+	if err != nil || stored.ID != accepted.ID || stored.CurrentAttempt != 1 ||
+		stored.Status != domain.ToolCallCompleted {
+		t.Fatalf("accepted ToolCall = %#v, error = %v", stored, err)
+	}
+	var attemptCount int
+	if err := pool.QueryRow(
+		ctx,
+		"SELECT count(*) FROM tool_call_attempts WHERE tool_call_id = $1",
+		stored.ID,
+	).Scan(&attemptCount); err != nil || attemptCount != 1 {
+		t.Fatalf("tool attempt count = %d, error = %v", attemptCount, err)
 	}
 }
 

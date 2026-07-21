@@ -31,9 +31,9 @@ durably, and streams output and tool calls back.
 
 An agent turn may take seconds or tens of minutes, progressing through many
 rounds of tool calls. Durable admission means an API disconnect, API process
-loss, or deploy cannot erase accepted work. Before checkpoint recovery ships,
-engine loss may settle the Invocation as a visible typed failure; checkpointed
-continuation from the interrupted point is a later durability level.
+loss, or deploy cannot erase accepted work. If an execution owner is lost, the
+same Invocation is requeued and a replacement continues from its last committed
+model or builtin checkpoint. Uncommitted provider work may run again.
 
 ## Boundaries
 

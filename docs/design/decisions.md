@@ -204,3 +204,22 @@ New admissions use fingerprint v3 so adding, removing, or changing the output
 contract changes idempotency identity; retained v1/v2 schema-free rows remain
 comparable by their recorded algorithm. Crash recovery remains deferred: a
 lost engine still settles `execution_lost` and publishes no output.
+
+27. Checkpoint-based recovery supersedes lease-loss failure (2026-07-21): an
+expired execution owner no longer terminalizes otherwise viable work. The
+reaper accrues its active segment only through the earlier recorded lease or
+execution deadline, clears ownership, publishes a queued lifecycle revision,
+and leaves the same Invocation, transcript, receipts, checkpoints, ToolCalls,
+and dispatch evidence intact. A replacement increments the Invocation fence,
+validates the append-only prefix, initializes cumulative usage and iteration,
+and continues from the next incomplete boundary. Every production model
+response, including a tool-free final response, is checkpointed before tool
+execution or settlement; therefore a committed final checkpoint settles
+without a second provider call. Pending builtins reuse their ToolCall, and an
+abandoned running builtin closes only its old attempt before starting a new one
+under the same ToolCall ID. Accepted results are never rerun. Corrupt evidence
+fails once with public `internal` and internal class `recovery_invalid`.
+`execution_lost` remains readable for retained historical rows but is no longer
+written for recoverable lease expiry. This decision does not add a public retry
+endpoint, arbitrary provider snapshots, exactly-once billing or external
+effects, or cooperative checkpoint-and-chain at the intentional segment limit.

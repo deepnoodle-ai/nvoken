@@ -182,6 +182,7 @@ type GenerationRequest struct {
 	MaxIterations    int
 	Claim            *InvocationClaim
 	StructuredOutput *StructuredOutputRequest
+	Resume           *GenerationResume
 }
 
 type GenerationResponse struct {
@@ -197,6 +198,22 @@ type GenerationResponse struct {
 type StructuredOutputRequest struct {
 	Schema       json.RawMessage
 	SchemaDigest []byte
+}
+
+// GenerationResume is a validated durable prefix. The model adapter may
+// continue only after the service has checked these rows against the owning
+// Invocation and latest checkpoint.
+type GenerationResume struct {
+	Iteration               int
+	Usage                   ModelUsage
+	StructuredOutput        *StructuredOutput
+	StructuredOutputFailure string
+	OpenToolCalls           []ResumableToolCall
+}
+
+type ResumableToolCall struct {
+	Call  ToolCall
+	Input json.RawMessage
 }
 
 type StructuredOutput struct {

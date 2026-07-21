@@ -738,16 +738,17 @@ func (s *Store) SettleInvocation(
 	return invocationFromRow(row), nil
 }
 
-func (s *Store) ReapInvocationLease(
+func (s *Store) RecoverInvocationLease(
 	ctx context.Context,
 	id string,
 	attempt, stateRevision int64,
-	errorPayload []byte,
 	observedAt time.Time,
 ) (domain.Invocation, error) {
-	row, err := s.q(ctx).ReapInvocationLease(ctx, postgresdb.ReapInvocationLeaseParams{
-		ID: id, LeaseAttempt: attempt, StateRevision: stateRevision,
-		ErrorPayload: errorPayload, ObservedAt: &observedAt,
+	row, err := s.q(ctx).RecoverInvocationLease(ctx, postgresdb.RecoverInvocationLeaseParams{
+		ID:            id,
+		LeaseAttempt:  attempt,
+		StateRevision: stateRevision,
+		ObservedAt:    observedAt,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Invocation{}, ports.ErrLeaseLost

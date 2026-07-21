@@ -405,21 +405,30 @@ func TestInvocationExecutionExpiredLeaseIsReapedAndSessionFreed(t *testing.T) {
 		t.Fatalf("reaped = %#v, error = %v", reaped, err)
 	}
 	stored, err := store.GetInvocation(context.Background(), ack.InvocationID)
-	if err != nil || stored.Status != domain.InvocationFailed || stored.CompletedAt == nil ||
+	if err != nil || stored.Status != domain.InvocationQueued || stored.CompletedAt != nil ||
 		stored.LeaseOwner != nil || stored.LeaseExpiresAt != nil {
-		t.Fatalf("reaped Invocation = %#v, error = %v", stored, err)
+		t.Fatalf("recovered Invocation = %#v, error = %v", stored, err)
 	}
-	var failure struct {
-		Code string `json:"code"`
-	}
-	if err := json.Unmarshal(stored.Error, &failure); err != nil || failure.Code != "execution_lost" {
-		t.Fatalf("reaped error = %s, decode error = %v", stored.Error, err)
+	if len(stored.Error) != 0 || stored.ActiveExecutionMS != time.Minute.Milliseconds() {
+		t.Fatalf("recovered evidence = %#v", stored)
 	}
 	if _, err := execution.Renew(context.Background(), claim, time.Minute); !errors.Is(err, ports.ErrLeaseLost) {
 		t.Fatalf("stale renewal = %v, want lease lost", err)
 	}
 	if err := execution.Settle(context.Background(), claim, completedResult()); !errors.Is(err, ports.ErrLeaseLost) {
 		t.Fatalf("stale settlement = %v, want lease lost", err)
+	}
+	replacement, disposition, err := execution.ClaimExact(
+		context.Background(),
+		ack.InvocationID,
+		"replacement-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed || replacement.Attempt != 2 {
+		t.Fatalf("replacement claim = %#v, disposition = %q, error = %v", replacement, disposition, err)
+	}
+	if err := execution.Settle(context.Background(), replacement, completedResult()); err != nil {
+		t.Fatalf("replacement settlement: %v", err)
 	}
 
 	next := runtimeInput()
@@ -429,6 +438,118 @@ func TestInvocationExecutionExpiredLeaseIsReapedAndSessionFreed(t *testing.T) {
 	next.Input.Content[0].Text = "try again"
 	if nextAck, err := runtime.Admit(context.Background(), auth, next); err != nil || nextAck.SessionID != ack.SessionID {
 		t.Fatalf("admit after reap = %#v, error = %v", nextAck, err)
+	}
+}
+
+func TestInvocationExecutionConcurrentRecoveryAndReplacementClaimConverge(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ack, err := runtime.Admit(context.Background(), auth, runtimeInput())
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := newMutableClock(time.Now().UTC())
+	execution := services.NewInvocationExecutionService(
+		store,
+		NewTransactionManager(pool),
+		clock,
+		identity.NewUUIDv7Generator(clock),
+	)
+	if _, disposition, err := execution.ClaimExact(
+		context.Background(),
+		ack.InvocationID,
+		"lost-concurrent-owner",
+		time.Minute,
+	); err != nil || disposition != services.Claimed {
+		t.Fatalf("first claim disposition = %q, error = %v", disposition, err)
+	}
+	clock.Advance(time.Minute + time.Nanosecond)
+
+	var recovered atomic.Int64
+	var recoveryErrors atomic.Int64
+	var reapers sync.WaitGroup
+	for range 20 {
+		reapers.Add(1)
+		go func() {
+			defer reapers.Done()
+			items, err := execution.ReapExpired(context.Background(), 10)
+			if err != nil {
+				recoveryErrors.Add(1)
+				return
+			}
+			recovered.Add(int64(len(items)))
+		}()
+	}
+	reapers.Wait()
+	if recoveryErrors.Load() != 0 || recovered.Load() != 1 {
+		t.Fatalf("recovery errors = %d, transitions = %d", recoveryErrors.Load(), recovered.Load())
+	}
+
+	var claimed atomic.Int64
+	var claimErrors atomic.Int64
+	var claimers sync.WaitGroup
+	for index := range 20 {
+		claimers.Add(1)
+		go func() {
+			defer claimers.Done()
+			_, disposition, err := execution.ClaimExact(
+				context.Background(),
+				ack.InvocationID,
+				fmt.Sprintf("replacement-%d", index),
+				time.Minute,
+			)
+			if err != nil {
+				claimErrors.Add(1)
+				return
+			}
+			if disposition == services.Claimed {
+				claimed.Add(1)
+			}
+		}()
+	}
+	claimers.Wait()
+	if claimErrors.Load() != 0 || claimed.Load() != 1 {
+		t.Fatalf("claim errors = %d, owners = %d", claimErrors.Load(), claimed.Load())
+	}
+	stored, err := store.GetInvocation(context.Background(), ack.InvocationID)
+	if err != nil || stored.Status != domain.InvocationRunning || stored.LeaseAttempt != 2 {
+		t.Fatalf("replacement Invocation = %#v, error = %v", stored, err)
+	}
+}
+
+func TestExpiredLeaseRecoversPastElapsedExecutionSegment(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ack, err := runtime.Admit(context.Background(), auth, runtimeInput())
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := newMutableClock(time.Now().UTC())
+	execution := services.NewInvocationExecutionService(
+		store,
+		NewTransactionManager(pool),
+		clock,
+		identity.NewUUIDv7Generator(clock),
+		services.WithExecutionSegmentCeiling(time.Second),
+	)
+	claim, disposition, err := execution.ClaimExact(
+		context.Background(),
+		ack.InvocationID,
+		"segment-owner",
+		2*time.Second,
+	)
+	if err != nil || disposition != services.Claimed ||
+		claim.Invocation.ExecutionDeadlineScope == nil ||
+		*claim.Invocation.ExecutionDeadlineScope != "execution_segment" {
+		t.Fatalf("segment claim = %#v, disposition = %q, error = %v", claim, disposition, err)
+	}
+	clock.Advance(2*time.Second + time.Nanosecond)
+	recovered, err := execution.ReapExpired(context.Background(), 10)
+	if err != nil || len(recovered) != 1 || recovered[0].Status != domain.InvocationQueued {
+		t.Fatalf("recovered = %#v, error = %v", recovered, err)
+	}
+	stored, err := store.GetInvocation(context.Background(), ack.InvocationID)
+	if err != nil || stored.Status != domain.InvocationQueued ||
+		stored.ActiveExecutionMS != time.Second.Milliseconds() || len(stored.Error) != 0 {
+		t.Fatalf("recovered segment = %#v, error = %v", stored, err)
 	}
 }
 
@@ -493,7 +614,9 @@ func TestInvocationExecutionReaperContinuesAfterCandidateFailure(t *testing.T) {
 		t.Fatalf("expired candidates = %#v, error = %v", candidates, err)
 	}
 	faults := &faultingExecutionStore{
-		Store: store, failStatus: domain.InvocationFailed, failInvocationID: candidates[0].ID,
+		Store:            store,
+		failStatus:       domain.InvocationQueued,
+		failInvocationID: candidates[0].ID,
 	}
 	faulty := services.NewInvocationExecutionService(
 		faults, NewTransactionManager(pool), clock, identity.NewUUIDv7Generator(clock),
