@@ -358,7 +358,7 @@ variable "synthetic_dispatch_delay_seconds" {
 }
 
 variable "monitoring_notification_channels" {
-  description = "Existing Monitoring notification channel resource names to attach to dispatch alert policies."
+  description = "Existing Monitoring notification channel resource names attached to every nvoken alert policy. Production requires at least one tested channel."
   type        = list(string)
   default     = []
 
@@ -368,6 +368,103 @@ variable "monitoring_notification_channels" {
       can(regex("^projects/[^/]+/notificationChannels/[^/]+$", channel))
     ])
     error_message = "monitoring_notification_channels entries must be full projects/.../notificationChannels/... resource names."
+  }
+}
+
+variable "enable_monitoring_dashboard" {
+  description = "Create the single Terraform-managed nvoken operations dashboard."
+  type        = bool
+  default     = true
+}
+
+variable "monitoring_alert_thresholds" {
+  description = "Conservative alert thresholds. Count conditions alert when the aligned value is greater than the configured value."
+  type = object({
+    public_5xx_count               = number
+    aged_dispatch_count            = number
+    dispatch_publish_failure_count = number
+    executor_retry_count           = number
+    executor_auth_count            = number
+    task_delivery_rejection_count  = number
+    provider_failure_count         = number
+    callback_exhaustion_count      = number
+    callback_worker_failure_count  = number
+    database_connections           = number
+    database_storage_utilization   = number
+    database_unhealthy_state       = number
+  })
+  default = {
+    public_5xx_count               = 5
+    aged_dispatch_count            = 0
+    dispatch_publish_failure_count = 0
+    executor_retry_count           = 0
+    executor_auth_count            = 0
+    task_delivery_rejection_count  = 5
+    provider_failure_count         = 5
+    callback_exhaustion_count      = 0
+    callback_worker_failure_count  = 2
+    database_connections           = 80
+    database_storage_utilization   = 0.85
+    database_unhealthy_state       = 0
+  }
+
+  validation {
+    condition = (
+      var.monitoring_alert_thresholds.public_5xx_count >= 0 &&
+      var.monitoring_alert_thresholds.aged_dispatch_count >= 0 &&
+      var.monitoring_alert_thresholds.dispatch_publish_failure_count >= 0 &&
+      var.monitoring_alert_thresholds.executor_retry_count >= 0 &&
+      var.monitoring_alert_thresholds.executor_auth_count >= 0 &&
+      var.monitoring_alert_thresholds.task_delivery_rejection_count >= 0 &&
+      var.monitoring_alert_thresholds.provider_failure_count >= 1 &&
+      var.monitoring_alert_thresholds.callback_exhaustion_count >= 0 &&
+      var.monitoring_alert_thresholds.callback_worker_failure_count >= 1 &&
+      var.monitoring_alert_thresholds.database_connections >= 1 &&
+      var.monitoring_alert_thresholds.database_storage_utilization > 0 &&
+      var.monitoring_alert_thresholds.database_storage_utilization < 1 &&
+      var.monitoring_alert_thresholds.database_unhealthy_state >= 0
+    )
+    error_message = "Monitoring count thresholds must be nonnegative, sustained-failure and connection thresholds must be positive, and database_storage_utilization must be between 0 and 1."
+  }
+}
+
+variable "monitoring_alert_windows_seconds" {
+  description = "Alert condition windows in whole minutes; zero is allowed for discrete failure conditions."
+  type = object({
+    public_5xx               = number
+    uptime                   = number
+    aged_dispatch            = number
+    dispatch_publish_failure = number
+    executor_retry           = number
+    executor_auth            = number
+    task_delivery_rejection  = number
+    provider_failure         = number
+    callback_exhaustion      = number
+    callback_worker_failure  = number
+    database_capacity        = number
+    database_health          = number
+  })
+  default = {
+    public_5xx               = 300
+    uptime                   = 180
+    aged_dispatch            = 300
+    dispatch_publish_failure = 0
+    executor_retry           = 300
+    executor_auth            = 0
+    task_delivery_rejection  = 300
+    provider_failure         = 300
+    callback_exhaustion      = 0
+    callback_worker_failure  = 300
+    database_capacity        = 300
+    database_health          = 300
+  }
+
+  validation {
+    condition = alltrue([
+      for seconds in values(var.monitoring_alert_windows_seconds) :
+      seconds >= 0 && seconds <= 3600 && seconds == floor(seconds) && seconds % 60 == 0
+    ])
+    error_message = "Monitoring alert windows must be whole-minute values from 0 through 3600 seconds."
   }
 }
 

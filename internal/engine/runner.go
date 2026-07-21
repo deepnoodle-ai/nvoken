@@ -345,6 +345,7 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 
 	if state.settled.Load() {
 		fields := []any{
+			"event", "invocation_settled",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
 			"status", result.Status, "execution_latency_ms", time.Since(started).Milliseconds(),
 		}
