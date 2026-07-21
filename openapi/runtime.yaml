@@ -7,8 +7,7 @@ info:
     name: Apache-2.0
     identifier: Apache-2.0
   description: |
-    This focused contract freezes the background JSON surface required before
-    nvoken's runtime schema and admission implementation are built. It defines
+    This focused contract defines nvoken's implemented background JSON surface:
     durable Invocation admission and authoritative Invocation and Session reads.
 
     Model execution, streaming, tools, structured output, budgets, spec
@@ -51,6 +50,9 @@ paths:
         spec, and input after documented defaults are applied. JSON object member
         order is ignored, array order is significant, and strings are not
         rewritten. A changed material field returns `idempotency_conflict`.
+
+        The encoded JSON request body is limited to 1 MiB. Requests over that
+        limit are rejected before admission.
       requestBody:
         required: true
         content:
@@ -210,6 +212,8 @@ paths:
                     created_at: "2026-07-20T14:01:02Z"
                     updated_at: "2026-07-20T14:01:09Z"
                     completed_at: "2026-07-20T14:01:09Z"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
@@ -252,6 +256,8 @@ paths:
                     active_invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     created_at: "2026-07-20T14:01:02Z"
                     updated_at: "2026-07-20T14:01:05Z"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
@@ -305,6 +311,7 @@ components:
         agent_ref:
           type: string
           minLength: 1
+          maxLength: 255
           description: |
             Stable caller-controlled Agent reference, unique within the
             authenticated Account. The resulting Agent anchor stores identity
@@ -312,6 +319,7 @@ components:
         tenant_ref:
           type: string
           minLength: 1
+          maxLength: 255
           description: |
             Optional tenant partition. For Session-key resolution or a new
             Session, precedence is credential constraint, this explicit value,
@@ -323,12 +331,14 @@ components:
         session_key:
           type: string
           minLength: 1
+          maxLength: 255
           description: |
             Caller key resolved within (Account, effective tenant partition,
             Agent, session_key). Mutually exclusive with session_id.
         idempotency_key:
           type: string
           minLength: 1
+          maxLength: 255
           description: |
             Stable admission identity scoped to (Account, effective tenant
             partition, agent_ref). Reuse an unchanged request after any 5xx,
@@ -346,6 +356,7 @@ components:
         content:
           type: array
           minItems: 1
+          maxItems: 64
           items:
             $ref: "#/components/schemas/TextInputBlock"
           description: Ordered caller-input blocks. The launch contract supports text only.
@@ -381,9 +392,11 @@ components:
         provider:
           type: string
           minLength: 1
+          maxLength: 255
         name:
           type: string
           minLength: 1
+          maxLength: 255
     InvocationStatus:
       type: string
       enum: [queued, running, waiting, completed, failed, cancelled]

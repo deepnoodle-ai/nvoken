@@ -2,8 +2,11 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	postgresdb "github.com/deepnoodle-ai/nvoken/internal/adapters/postgres/sqlc"
@@ -47,9 +50,29 @@ func (s *Store) CreateAccount(ctx context.Context, account domain.Account) error
 func (s *Store) GetAccount(ctx context.Context, id string) (domain.Account, error) {
 	row, err := s.q(ctx).GetAccount(ctx, id)
 	if err != nil {
-		return domain.Account{}, err
+		return domain.Account{}, normalizeNotFound(err)
 	}
 	return domain.Account{ID: row.ID, CreatedAt: row.CreatedAt}, nil
+}
+
+func (s *Store) ListAccounts(ctx context.Context) ([]domain.Account, error) {
+	rows, err := s.q(ctx).ListAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	accounts := make([]domain.Account, len(rows))
+	for i, row := range rows {
+		accounts[i] = domain.Account{ID: row.ID, CreatedAt: row.CreatedAt}
+	}
+	return accounts, nil
+}
+
+func (s *Store) LockInstallationBootstrap(ctx context.Context) error {
+	if _, ok := transactionFromContext(ctx); !ok {
+		return fmt.Errorf("installation bootstrap lock requires a transaction")
+	}
+	_, err := s.q(ctx).LockInstallationBootstrap(ctx)
+	return err
 }
 
 func (s *Store) CreateTenantPartition(ctx context.Context, partition domain.TenantPartition) error {
@@ -59,10 +82,36 @@ func (s *Store) CreateTenantPartition(ctx context.Context, partition domain.Tena
 	})
 }
 
+func (s *Store) ResolveTenantPartition(ctx context.Context, partition domain.TenantPartition) (domain.TenantPartition, error) {
+	if partition.TenantRef == nil {
+		if err := s.q(ctx).CreateDefaultTenantPartitionIfAbsent(ctx, postgresdb.CreateDefaultTenantPartitionIfAbsentParams{
+			ID: partition.ID, AccountID: partition.AccountID, CreatedAt: partition.CreatedAt,
+		}); err != nil {
+			return domain.TenantPartition{}, err
+		}
+		return s.GetDefaultTenantPartition(ctx, partition.AccountID)
+	}
+	if err := s.q(ctx).CreateTenantPartitionByRefIfAbsent(ctx, postgresdb.CreateTenantPartitionByRefIfAbsentParams{
+		ID: partition.ID, AccountID: partition.AccountID,
+		TenantRef: partition.TenantRef, CreatedAt: partition.CreatedAt,
+	}); err != nil {
+		return domain.TenantPartition{}, err
+	}
+	return s.GetTenantPartitionByRef(ctx, partition.AccountID, *partition.TenantRef)
+}
+
+func (s *Store) GetTenantPartition(ctx context.Context, id string) (domain.TenantPartition, error) {
+	row, err := s.q(ctx).GetTenantPartition(ctx, id)
+	if err != nil {
+		return domain.TenantPartition{}, normalizeNotFound(err)
+	}
+	return tenantPartitionFromRow(row), nil
+}
+
 func (s *Store) GetDefaultTenantPartition(ctx context.Context, accountID string) (domain.TenantPartition, error) {
 	row, err := s.q(ctx).GetDefaultTenantPartition(ctx, accountID)
 	if err != nil {
-		return domain.TenantPartition{}, err
+		return domain.TenantPartition{}, normalizeNotFound(err)
 	}
 	return tenantPartitionFromRow(row), nil
 }
@@ -72,7 +121,7 @@ func (s *Store) GetTenantPartitionByRef(ctx context.Context, accountID, tenantRe
 		AccountID: accountID, TenantRef: tenantRef,
 	})
 	if err != nil {
-		return domain.TenantPartition{}, err
+		return domain.TenantPartition{}, normalizeNotFound(err)
 	}
 	return tenantPartitionFromRow(row), nil
 }
@@ -89,12 +138,21 @@ func (s *Store) CreateAgent(ctx context.Context, agent domain.Agent) error {
 	})
 }
 
+func (s *Store) ResolveAgent(ctx context.Context, agent domain.Agent) (domain.Agent, error) {
+	if err := s.q(ctx).CreateAgentIfAbsent(ctx, postgresdb.CreateAgentIfAbsentParams{
+		ID: agent.ID, AccountID: agent.AccountID, AgentRef: agent.AgentRef, CreatedAt: agent.CreatedAt,
+	}); err != nil {
+		return domain.Agent{}, err
+	}
+	return s.GetAgentByRef(ctx, agent.AccountID, agent.AgentRef)
+}
+
 func (s *Store) GetAgentByRef(ctx context.Context, accountID, agentRef string) (domain.Agent, error) {
 	row, err := s.q(ctx).GetAgentByRef(ctx, postgresdb.GetAgentByRefParams{
 		AccountID: accountID, AgentRef: agentRef,
 	})
 	if err != nil {
-		return domain.Agent{}, err
+		return domain.Agent{}, normalizeNotFound(err)
 	}
 	return domain.Agent{
 		ID: row.ID, AccountID: row.AccountID, AgentRef: row.AgentRef, CreatedAt: row.CreatedAt,
@@ -111,10 +169,37 @@ func (s *Store) CreateSession(ctx context.Context, session domain.Session) error
 	})
 }
 
+func (s *Store) ResolveSessionByKey(ctx context.Context, session domain.Session) (domain.Session, error) {
+	if session.SessionKey == nil {
+		return domain.Session{}, fmt.Errorf("resolve session by key requires a session key")
+	}
+	if err := s.q(ctx).CreateSessionIfAbsent(ctx, postgresdb.CreateSessionIfAbsentParams{
+		ID: session.ID, AccountID: session.AccountID,
+		TenantPartitionID: session.TenantPartitionID, AgentID: session.AgentID,
+		SessionKey: session.SessionKey, NextMessageSequence: session.NextMessageSequence,
+		NextLifecycleRevision: session.NextLifecycleRevision,
+		CreatedAt:             session.CreatedAt, UpdatedAt: session.UpdatedAt,
+	}); err != nil {
+		return domain.Session{}, err
+	}
+	return s.GetSessionByKey(ctx, session.AccountID, session.TenantPartitionID, session.AgentID, *session.SessionKey)
+}
+
 func (s *Store) GetSession(ctx context.Context, id string) (domain.Session, error) {
 	row, err := s.q(ctx).GetSession(ctx, id)
 	if err != nil {
-		return domain.Session{}, err
+		return domain.Session{}, normalizeNotFound(err)
+	}
+	return sessionFromRow(row), nil
+}
+
+func (s *Store) GetSessionForUpdate(ctx context.Context, id string) (domain.Session, error) {
+	if _, ok := transactionFromContext(ctx); !ok {
+		return domain.Session{}, fmt.Errorf("session row lock requires a transaction")
+	}
+	row, err := s.q(ctx).GetSessionForUpdate(ctx, id)
+	if err != nil {
+		return domain.Session{}, normalizeNotFound(err)
 	}
 	return sessionFromRow(row), nil
 }
@@ -124,7 +209,7 @@ func (s *Store) GetSessionByKey(ctx context.Context, accountID, partitionID, age
 		AccountID: accountID, TenantPartitionID: partitionID, AgentID: agentID, SessionKey: sessionKey,
 	})
 	if err != nil {
-		return domain.Session{}, err
+		return domain.Session{}, normalizeNotFound(err)
 	}
 	return sessionFromRow(row), nil
 }
@@ -156,7 +241,7 @@ func (s *Store) CreateExecutionSpecSnapshot(ctx context.Context, snapshot domain
 func (s *Store) GetExecutionSpecSnapshot(ctx context.Context, id string) (domain.ExecutionSpecSnapshot, error) {
 	row, err := s.q(ctx).GetExecutionSpecSnapshot(ctx, id)
 	if err != nil {
-		return domain.ExecutionSpecSnapshot{}, err
+		return domain.ExecutionSpecSnapshot{}, normalizeNotFound(err)
 	}
 	return domain.ExecutionSpecSnapshot{
 		ID: row.ID, AccountID: row.AccountID, Spec: row.Spec, CreatedAt: row.CreatedAt,
@@ -178,7 +263,7 @@ func (s *Store) CreateInvocation(ctx context.Context, invocation domain.Invocati
 func (s *Store) GetInvocation(ctx context.Context, id string) (domain.Invocation, error) {
 	row, err := s.q(ctx).GetInvocation(ctx, id)
 	if err != nil {
-		return domain.Invocation{}, err
+		return domain.Invocation{}, normalizeNotFound(err)
 	}
 	return invocationFromRow(row), nil
 }
@@ -188,9 +273,25 @@ func (s *Store) GetInvocationByIdempotencyKey(ctx context.Context, accountID, pa
 		AccountID: accountID, TenantPartitionID: partitionID, AgentID: agentID, IdempotencyKey: key,
 	})
 	if err != nil {
-		return domain.Invocation{}, err
+		return domain.Invocation{}, normalizeNotFound(err)
 	}
 	return invocationFromRow(row), nil
+}
+
+func (s *Store) GetNonterminalInvocationBySession(ctx context.Context, sessionID string) (domain.Invocation, error) {
+	row, err := s.q(ctx).GetNonterminalInvocationBySession(ctx, sessionID)
+	if err != nil {
+		return domain.Invocation{}, normalizeNotFound(err)
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) LockInvocationAdmissionKey(ctx context.Context, key string) error {
+	if _, ok := transactionFromContext(ctx); !ok {
+		return fmt.Errorf("invocation admission lock requires a transaction")
+	}
+	_, err := s.q(ctx).LockInvocationAdmissionKey(ctx, key)
+	return err
 }
 
 func invocationFromRow(row postgresdb.Invocation) domain.Invocation {
@@ -269,4 +370,11 @@ func (s *Store) ListInvocationStates(ctx context.Context, sessionID string) ([]d
 		}
 	}
 	return states, nil
+}
+
+func normalizeNotFound(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ports.ErrNotFound
+	}
+	return err
 }

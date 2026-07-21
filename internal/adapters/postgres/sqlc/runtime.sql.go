@@ -139,6 +139,58 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error 
 	return err
 }
 
+const createAgentIfAbsent = `-- name: CreateAgentIfAbsent :exec
+INSERT INTO agents (id, account_id, agent_ref, created_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (account_id, agent_ref) DO NOTHING
+`
+
+type CreateAgentIfAbsentParams struct {
+	ID        string
+	AccountID string
+	AgentRef  string
+	CreatedAt time.Time
+}
+
+// CreateAgentIfAbsent
+//
+//	INSERT INTO agents (id, account_id, agent_ref, created_at)
+//	VALUES ($1, $2, $3, $4)
+//	ON CONFLICT (account_id, agent_ref) DO NOTHING
+func (q *Queries) CreateAgentIfAbsent(ctx context.Context, arg CreateAgentIfAbsentParams) error {
+	_, err := q.db.Exec(ctx, createAgentIfAbsent,
+		arg.ID,
+		arg.AccountID,
+		arg.AgentRef,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const createDefaultTenantPartitionIfAbsent = `-- name: CreateDefaultTenantPartitionIfAbsent :exec
+INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+VALUES ($1, $2, NULL, $3)
+ON CONFLICT (account_id) WHERE tenant_ref IS NULL
+DO NOTHING
+`
+
+type CreateDefaultTenantPartitionIfAbsentParams struct {
+	ID        string
+	AccountID string
+	CreatedAt time.Time
+}
+
+// CreateDefaultTenantPartitionIfAbsent
+//
+//	INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+//	VALUES ($1, $2, NULL, $3)
+//	ON CONFLICT (account_id) WHERE tenant_ref IS NULL
+//	DO NOTHING
+func (q *Queries) CreateDefaultTenantPartitionIfAbsent(ctx context.Context, arg CreateDefaultTenantPartitionIfAbsentParams) error {
+	_, err := q.db.Exec(ctx, createDefaultTenantPartitionIfAbsent, arg.ID, arg.AccountID, arg.CreatedAt)
+	return err
+}
+
 const createExecutionSpecSnapshot = `-- name: CreateExecutionSpecSnapshot :exec
 INSERT INTO execution_spec_snapshots (id, account_id, spec, created_at)
 VALUES ($1, $2, $3, $4)
@@ -271,6 +323,52 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 	return err
 }
 
+const createSessionIfAbsent = `-- name: CreateSessionIfAbsent :exec
+INSERT INTO sessions (
+    id, account_id, tenant_partition_id, agent_id, session_key,
+    next_message_sequence, next_lifecycle_revision, created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (account_id, tenant_partition_id, agent_id, session_key)
+    WHERE session_key IS NOT NULL
+DO NOTHING
+`
+
+type CreateSessionIfAbsentParams struct {
+	ID                    string
+	AccountID             string
+	TenantPartitionID     string
+	AgentID               string
+	SessionKey            *string
+	NextMessageSequence   int64
+	NextLifecycleRevision int64
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+// CreateSessionIfAbsent
+//
+//	INSERT INTO sessions (
+//	    id, account_id, tenant_partition_id, agent_id, session_key,
+//	    next_message_sequence, next_lifecycle_revision, created_at, updated_at
+//	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+//	ON CONFLICT (account_id, tenant_partition_id, agent_id, session_key)
+//	    WHERE session_key IS NOT NULL
+//	DO NOTHING
+func (q *Queries) CreateSessionIfAbsent(ctx context.Context, arg CreateSessionIfAbsentParams) error {
+	_, err := q.db.Exec(ctx, createSessionIfAbsent,
+		arg.ID,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.AgentID,
+		arg.SessionKey,
+		arg.NextMessageSequence,
+		arg.NextLifecycleRevision,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const createTenantPartition = `-- name: CreateTenantPartition :exec
 INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
 VALUES ($1, $2, $3, $4)
@@ -289,6 +387,36 @@ type CreateTenantPartitionParams struct {
 //	VALUES ($1, $2, $3, $4)
 func (q *Queries) CreateTenantPartition(ctx context.Context, arg CreateTenantPartitionParams) error {
 	_, err := q.db.Exec(ctx, createTenantPartition,
+		arg.ID,
+		arg.AccountID,
+		arg.TenantRef,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const createTenantPartitionByRefIfAbsent = `-- name: CreateTenantPartitionByRefIfAbsent :exec
+INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (account_id, tenant_ref) WHERE tenant_ref IS NOT NULL
+DO NOTHING
+`
+
+type CreateTenantPartitionByRefIfAbsentParams struct {
+	ID        string
+	AccountID string
+	TenantRef *string
+	CreatedAt time.Time
+}
+
+// CreateTenantPartitionByRefIfAbsent
+//
+//	INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+//	VALUES ($1, $2, $3, $4)
+//	ON CONFLICT (account_id, tenant_ref) WHERE tenant_ref IS NOT NULL
+//	DO NOTHING
+func (q *Queries) CreateTenantPartitionByRefIfAbsent(ctx context.Context, arg CreateTenantPartitionByRefIfAbsentParams) error {
+	_, err := q.db.Exec(ctx, createTenantPartitionByRefIfAbsent,
 		arg.ID,
 		arg.AccountID,
 		arg.TenantRef,
@@ -481,6 +609,47 @@ func (q *Queries) GetInvocationByIdempotencyKey(ctx context.Context, arg GetInvo
 	return i, err
 }
 
+const getNonterminalInvocationBySession = `-- name: GetNonterminalInvocationBySession :one
+SELECT id, session_id, account_id, tenant_partition_id, agent_id,
+       spec_snapshot_id, idempotency_key, request_fingerprint, status,
+       current_state_revision, error, created_at, updated_at, completed_at
+FROM invocations
+WHERE session_id = $1
+  AND status IN ('queued', 'running', 'waiting')
+LIMIT 1
+`
+
+// GetNonterminalInvocationBySession
+//
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id,
+//	       spec_snapshot_id, idempotency_key, request_fingerprint, status,
+//	       current_state_revision, error, created_at, updated_at, completed_at
+//	FROM invocations
+//	WHERE session_id = $1
+//	  AND status IN ('queued', 'running', 'waiting')
+//	LIMIT 1
+func (q *Queries) GetNonterminalInvocationBySession(ctx context.Context, sessionID string) (Invocation, error) {
+	row := q.db.QueryRow(ctx, getNonterminalInvocationBySession, sessionID)
+	var i Invocation
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.SpecSnapshotID,
+		&i.IdempotencyKey,
+		&i.RequestFingerprint,
+		&i.Status,
+		&i.CurrentStateRevision,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
 const getSession = `-- name: GetSession :one
 SELECT id, account_id, tenant_partition_id, agent_id, session_key,
        next_message_sequence, next_lifecycle_revision, created_at, updated_at
@@ -559,6 +728,61 @@ func (q *Queries) GetSessionByKey(ctx context.Context, arg GetSessionByKeyParams
 	return i, err
 }
 
+const getSessionForUpdate = `-- name: GetSessionForUpdate :one
+SELECT id, account_id, tenant_partition_id, agent_id, session_key,
+       next_message_sequence, next_lifecycle_revision, created_at, updated_at
+FROM sessions
+WHERE id = $1
+FOR UPDATE
+`
+
+// GetSessionForUpdate
+//
+//	SELECT id, account_id, tenant_partition_id, agent_id, session_key,
+//	       next_message_sequence, next_lifecycle_revision, created_at, updated_at
+//	FROM sessions
+//	WHERE id = $1
+//	FOR UPDATE
+func (q *Queries) GetSessionForUpdate(ctx context.Context, id string) (Session, error) {
+	row := q.db.QueryRow(ctx, getSessionForUpdate, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.SessionKey,
+		&i.NextMessageSequence,
+		&i.NextLifecycleRevision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTenantPartition = `-- name: GetTenantPartition :one
+SELECT id, account_id, tenant_ref, created_at
+FROM tenant_partitions
+WHERE id = $1
+`
+
+// GetTenantPartition
+//
+//	SELECT id, account_id, tenant_ref, created_at
+//	FROM tenant_partitions
+//	WHERE id = $1
+func (q *Queries) GetTenantPartition(ctx context.Context, id string) (TenantPartition, error) {
+	row := q.db.QueryRow(ctx, getTenantPartition, id)
+	var i TenantPartition
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.TenantRef,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTenantPartitionByRef = `-- name: GetTenantPartitionByRef :one
 SELECT id, account_id, tenant_ref, created_at
 FROM tenant_partitions
@@ -587,6 +811,39 @@ func (q *Queries) GetTenantPartitionByRef(ctx context.Context, arg GetTenantPart
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listAccounts = `-- name: ListAccounts :many
+SELECT id, created_at
+FROM accounts
+ORDER BY created_at, id
+LIMIT 2
+`
+
+// ListAccounts
+//
+//	SELECT id, created_at
+//	FROM accounts
+//	ORDER BY created_at, id
+//	LIMIT 2
+func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
+	rows, err := q.db.Query(ctx, listAccounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Account{}
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listInvocationStates = `-- name: ListInvocationStates :many
@@ -679,6 +936,34 @@ func (q *Queries) ListSessionMessages(ctx context.Context, sessionID string) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockInstallationBootstrap = `-- name: LockInstallationBootstrap :one
+SELECT pg_advisory_xact_lock(hashtextextended('nvoken:installation-bootstrap', 0))
+`
+
+// LockInstallationBootstrap
+//
+//	SELECT pg_advisory_xact_lock(hashtextextended('nvoken:installation-bootstrap', 0))
+func (q *Queries) LockInstallationBootstrap(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRow(ctx, lockInstallationBootstrap)
+	var pg_advisory_xact_lock interface{}
+	err := row.Scan(&pg_advisory_xact_lock)
+	return pg_advisory_xact_lock, err
+}
+
+const lockInvocationAdmissionKey = `-- name: LockInvocationAdmissionKey :one
+SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
+`
+
+// LockInvocationAdmissionKey
+//
+//	SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
+func (q *Queries) LockInvocationAdmissionKey(ctx context.Context, lockKey string) (interface{}, error) {
+	row := q.db.QueryRow(ctx, lockInvocationAdmissionKey, lockKey)
+	var pg_advisory_xact_lock interface{}
+	err := row.Scan(&pg_advisory_xact_lock)
+	return pg_advisory_xact_lock, err
 }
 
 const reserveLifecycleRevision = `-- name: ReserveLifecycleRevision :one

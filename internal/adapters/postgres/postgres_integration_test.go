@@ -23,6 +23,7 @@ import (
 
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
 var testSchemaCounter atomic.Uint64
@@ -331,7 +332,7 @@ func TestRuntimeRepositoriesCommitRollbackAndReadback(t *testing.T) {
 	if !errors.Is(err, wantRollback) {
 		t.Fatalf("rollback error = %v", err)
 	}
-	if _, err := store.GetExecutionSpecSnapshot(ctx, rolledBackID); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := store.GetExecutionSpecSnapshot(ctx, rolledBackID); !errors.Is(err, ports.ErrNotFound) {
 		t.Fatalf("rolled-back snapshot read error = %v", err)
 	}
 
@@ -351,7 +352,7 @@ func TestRuntimeRepositoriesCommitRollbackAndReadback(t *testing.T) {
 			panic("test panic")
 		})
 	}()
-	if _, err := store.GetAgentByRef(ctx, fixture.account.ID, panicAgent.AgentRef); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := store.GetAgentByRef(ctx, fixture.account.ID, panicAgent.AgentRef); !errors.Is(err, ports.ErrNotFound) {
 		t.Fatalf("panic write read error = %v", err)
 	}
 }
@@ -754,7 +755,7 @@ func TestInvocationUniquenessAndRetention(t *testing.T) {
 		t.Fatalf("same idempotency key in other tenant: %v", err)
 	}
 
-	assertPostgresCode(t, execError(ctx, pool, "DELETE FROM sessions WHERE id = $1", fixture.session.ID), "23001")
+	assertPostgresCode(t, execError(ctx, pool, "DELETE FROM sessions WHERE id = $1", fixture.session.ID), "23503")
 	assertPostgresCode(t, execError(ctx, pool, "UPDATE invocations SET status = 'running', completed_at = NULL WHERE id = $1", winner.ID), "23514")
 	assertPostgresCode(t, execError(ctx, pool, "UPDATE invocations SET error = '{}'::jsonb WHERE id = $1", winner.ID), "23514")
 }

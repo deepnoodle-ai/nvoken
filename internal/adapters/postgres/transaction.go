@@ -2,9 +2,12 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -39,12 +42,29 @@ func (m *TransactionManager) WithTransaction(ctx context.Context, fn func(contex
 		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
 			return fmt.Errorf("rollback transaction after %w: %v", err, rollbackErr)
 		}
-		return err
+		return normalizeTransactionError(err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
+		return fmt.Errorf("commit transaction: %w", normalizeTransactionError(err))
 	}
 	return nil
+}
+
+func normalizeTransactionError(err error) error {
+	var postgresError *pgconn.PgError
+	if !errors.As(err, &postgresError) {
+		return err
+	}
+	switch postgresError.Code {
+	case "40001", "40P01", "55P03", "57014":
+		return fmt.Errorf("%w: %w", ports.ErrRetryable, err)
+	case "23505":
+		if postgresError.ConstraintName == "invocations_one_nonterminal_per_session" ||
+			postgresError.ConstraintName == "invocations_idempotency_scope" {
+			return fmt.Errorf("%w: %w", ports.ErrConcurrentAdmission, err)
+		}
+	}
+	return err
 }
 
 func transactionFromContext(ctx context.Context) (pgx.Tx, bool) {

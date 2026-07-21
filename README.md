@@ -36,10 +36,10 @@ they are **stateless**. nvoken aims to retain that approach as much as possible.
 
 ## The contract
 
-> **Taking shape.** The API is being designed in the open and this is the current
-> sketch, not a shipped endpoint. If it looks wrong for your app, that's exactly
-> the feedback worth [opening an issue](https://github.com/deepnoodle-ai/nvoken/issues)
-> over. Now is when it's cheap to change.
+> **Early implementation.** Durable JSON admission and authoritative
+> Invocation/Session reads now work; the queued turn engine is the next slice.
+> If the contract looks wrong for your app, please
+> [open an issue](https://github.com/deepnoodle-ai/nvoken/issues).
 
 ```jsonc
 POST /v1/invocations

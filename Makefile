@@ -23,7 +23,7 @@ test:
 
 test-postgres:
 	@if [ -z "$$NVOKEN_TEST_DATABASE_URL" ]; then echo "NVOKEN_TEST_DATABASE_URL is required"; exit 1; fi
-	go test ./internal/adapters/postgres -count=1
+	go test ./... -count=1
 
 vet:
 	go vet ./...

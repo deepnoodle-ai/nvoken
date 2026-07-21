@@ -3,14 +3,41 @@ package httpapi
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/ports"
+	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
+const (
+	serverReadHeaderTimeout = 10 * time.Second
+	serverReadTimeout       = 30 * time.Second
+	// Leave response headroom after the bounded body read and the Postgres
+	// adapter's 120-second statement timeout while still bounding handlers.
+	serverWriteTimeout = 180 * time.Second
+	serverIdleTimeout  = 60 * time.Second
+)
+
+type RuntimeService interface {
+	Admit(context.Context, domain.RuntimeAuthContext, services.CreateInvocationInput) (services.InvocationAcknowledgement, error)
+	GetInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error)
+	GetSession(context.Context, domain.RuntimeAuthContext, string) (services.SessionRead, error)
+}
+
 type Config struct {
-	Addr string
+	Addr          string
+	Authenticator ports.RuntimeAuthenticator
+	Runtime       RuntimeService
+	Logger        *slog.Logger
 }
 
 type Server struct {
@@ -18,32 +45,344 @@ type Server struct {
 }
 
 func NewServer(cfg Config) *Server {
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	handler := newHandler(handlerConfig{
+		authenticator: cfg.Authenticator,
+		runtime:       cfg.Runtime,
+		logger:        logger,
+	})
 	return &Server{
 		http: &http.Server{
 			Addr:              cfg.Addr,
-			Handler:           newHandler(),
-			ReadHeaderTimeout: 10 * time.Second,
+			Handler:           handler,
+			ReadHeaderTimeout: serverReadHeaderTimeout,
+			ReadTimeout:       serverReadTimeout,
+			WriteTimeout:      serverWriteTimeout,
+			IdleTimeout:       serverIdleTimeout,
+			MaxHeaderBytes:    1 << 20,
 		},
 	}
 }
 
-func newHandler() http.Handler {
+type handlerConfig struct {
+	authenticator ports.RuntimeAuthenticator
+	runtime       RuntimeService
+	logger        *slog.Logger
+}
+
+type handler struct {
+	authenticator ports.RuntimeAuthenticator
+	runtime       RuntimeService
+	logger        *slog.Logger
+}
+
+func newHandler(cfg handlerConfig) http.Handler {
+	h := &handler{authenticator: cfg.authenticator, runtime: cfg.runtime, logger: cfg.logger}
+	if h.logger == nil {
+		h.logger = slog.Default()
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+	mux.HandleFunc("/healthz", h.requireMethod(http.MethodGet, h.health))
+	mux.HandleFunc("/v1/invocations", h.requireMethod(http.MethodPost, h.createInvocation))
+	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
+	mux.HandleFunc("/v1/sessions/{session_id}", h.requireMethod(http.MethodGet, h.getSession))
+	mux.HandleFunc("/", h.notFound)
+	return h.logRequests(mux)
+}
+
+func (h *handler) requireMethod(method string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method {
+			w.Header().Set("Allow", method)
+			writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
+				Code: "invalid_request", Message: "The request method is not allowed.",
+				RequestID: requestIDFromContext(r.Context()),
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (h *handler) notFound(w http.ResponseWriter, r *http.Request) {
+	h.writeError(w, requestIDFromContext(r.Context()), &services.PublicError{
+		Code: services.CodeNotFound, Message: "The requested resource was not found.",
 	})
-	return mux
+}
+
+func (h *handler) health(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
+func (h *handler) createInvocation(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	var input services.CreateInvocationInput
+	if err := decodeInvocationRequest(w, r, &input); err != nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeInvalidRequest, Message: err.Error()})
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	acknowledgement, err := h.runtime.Admit(r.Context(), auth, input)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, invocationAcknowledgementResponse{
+		AgentID: acknowledgement.AgentID, SessionID: acknowledgement.SessionID,
+		InvocationID: acknowledgement.InvocationID, Status: acknowledgement.Status,
+		Deduplicated: acknowledgement.Deduplicated,
+	})
+}
+
+func (h *handler) getInvocation(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	invocation, err := h.runtime.GetInvocation(r.Context(), auth, r.PathValue("invocation_id"))
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, invocationResponse{
+		ID: invocation.ID, AgentID: invocation.AgentID, SessionID: invocation.SessionID,
+		Status: invocation.Status, Error: rawJSONOrNil(invocation.Error),
+		CreatedAt: invocation.CreatedAt, UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
+	})
+}
+
+func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	session, err := h.runtime.GetSession(r.Context(), auth, r.PathValue("session_id"))
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sessionResponse{
+		ID: session.ID, AgentID: session.AgentID, TenantRef: session.TenantRef,
+		SessionKey: session.SessionKey, ActiveInvocationID: session.ActiveInvocationID,
+		CreatedAt: session.CreatedAt, UpdatedAt: session.UpdatedAt,
+	})
+}
+
+func (h *handler) authenticate(r *http.Request) (domain.RuntimeAuthContext, error) {
+	if h.authenticator == nil {
+		return domain.RuntimeAuthContext{}, &authenticationError{}
+	}
+	values := r.Header.Values("Authorization")
+	if len(values) != 1 {
+		return domain.RuntimeAuthContext{}, &authenticationError{}
+	}
+	scheme, token, found := strings.Cut(values[0], " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") || token == "" || strings.ContainsAny(token, " \t\r\n") {
+		return domain.RuntimeAuthContext{}, &authenticationError{}
+	}
+	auth, err := h.authenticator.Authenticate(r.Context(), token)
+	if err != nil {
+		return domain.RuntimeAuthContext{}, &authenticationError{cause: err}
+	}
+	return auth, nil
+}
+
+type authenticationError struct{ cause error }
+
+func (e *authenticationError) Error() string { return "A valid Runtime credential is required." }
+func (e *authenticationError) Unwrap() error { return e.cause }
+
+type errorResponse struct {
+	Code      string         `json:"code"`
+	Message   string         `json:"message"`
+	RequestID string         `json:"request_id"`
+	Details   map[string]any `json:"details,omitempty"`
+}
+
+func (h *handler) writeError(w http.ResponseWriter, requestID string, err error) {
+	status := http.StatusInternalServerError
+	response := errorResponse{Code: "internal", Message: "The request could not be completed.", RequestID: requestID}
+	var authentication *authenticationError
+	if errors.As(err, &authentication) {
+		status = http.StatusUnauthorized
+		response.Code = "unauthenticated"
+		response.Message = authentication.Error()
+		writeJSON(w, status, response)
+		return
+	}
+	var public *services.PublicError
+	if errors.As(err, &public) {
+		response.Code = string(public.Code)
+		response.Message = public.Message
+		response.Details = public.Details
+		switch public.Code {
+		case services.CodeInvalidRequest:
+			status = http.StatusBadRequest
+		case services.CodeForbidden:
+			status = http.StatusForbidden
+		case services.CodeNotFound:
+			status = http.StatusNotFound
+		case services.CodeIdempotencyConflict, services.CodeSessionInvocationActive:
+			status = http.StatusConflict
+		case services.CodeUnavailable:
+			status = http.StatusServiceUnavailable
+		default:
+			status = http.StatusInternalServerError
+		}
+		if status == http.StatusInternalServerError {
+			h.logger.Error("runtime request failed", "request_id", requestID, "error", err)
+		}
+	} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		status = http.StatusServiceUnavailable
+		response.Code = "unavailable"
+		response.Message = "The service is temporarily unavailable."
+	} else {
+		h.logger.Error("runtime request failed", "request_id", requestID, "error", err)
+	}
+	writeJSON(w, status, response)
+}
+
+type invocationAcknowledgementResponse struct {
+	AgentID      string                  `json:"agent_id"`
+	SessionID    string                  `json:"session_id"`
+	InvocationID string                  `json:"invocation_id"`
+	Status       domain.InvocationStatus `json:"status"`
+	Deduplicated bool                    `json:"deduplicated"`
+}
+
+type invocationResponse struct {
+	ID          string                  `json:"id"`
+	AgentID     string                  `json:"agent_id"`
+	SessionID   string                  `json:"session_id"`
+	Status      domain.InvocationStatus `json:"status"`
+	Error       any                     `json:"error"`
+	CreatedAt   time.Time               `json:"created_at"`
+	UpdatedAt   time.Time               `json:"updated_at"`
+	CompletedAt *time.Time              `json:"completed_at"`
+}
+
+type sessionResponse struct {
+	ID                 string    `json:"id"`
+	AgentID            string    `json:"agent_id"`
+	TenantRef          *string   `json:"tenant_ref"`
+	SessionKey         *string   `json:"session_key"`
+	ActiveInvocationID *string   `json:"active_invocation_id"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+func rawJSONOrNil(value json.RawMessage) any {
+	if len(value) == 0 {
+		return nil
+	}
+	var decoded any
+	if json.Unmarshal(value, &decoded) != nil {
+		return nil
+	}
+	return decoded
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
+
+type requestIDContextKey struct{}
+
+func (h *handler) logRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		requestID, err := newRequestID()
+		if err != nil {
+			requestID = "req_unavailable"
+		}
+		w.Header().Set("X-Request-ID", requestID)
+		ctx := context.WithValue(r.Context(), requestIDContextKey{}, requestID)
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		request := r.WithContext(ctx)
+		next.ServeHTTP(recorder, request)
+		h.logger.Info("http request",
+			"request_id", requestID,
+			"method", r.Method,
+			"route", request.Pattern,
+			"status", recorder.status,
+			"latency_ms", time.Since(started).Milliseconds(),
+		)
+	})
+}
+
+func requestIDFromContext(ctx context.Context) string {
+	requestID, _ := ctx.Value(requestIDContextKey{}).(string)
+	if requestID == "" {
+		return "req_unavailable"
+	}
+	return requestID
+}
+
+func newRequestID() (string, error) {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", fmt.Errorf("generate request ID: %w", err)
+	}
+	return "req_" + hex.EncodeToString(random[:]), nil
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status      int
+	wroteHeader bool
+}
+
+func (w *statusRecorder) WriteHeader(status int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusRecorder) Write(payload []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(payload)
 }
 
 // Run serves until ctx is cancelled, then shuts down gracefully.
 func (s *Server) Run(ctx context.Context) error {
 	slog.Info("nvokend listening", "addr", s.http.Addr)
-	errc := make(chan error, 1)
-	go func() { errc <- s.http.ListenAndServe() }()
+	errChan := make(chan error, 1)
+	go func() { errChan <- s.http.ListenAndServe() }()
 
 	select {
-	case err := <-errc:
+	case err := <-errChan:
 		return err
 	case <-ctx.Done():
 	}
@@ -53,7 +392,7 @@ func (s *Server) Run(ctx context.Context) error {
 	if err := s.http.Shutdown(shutdownCtx); err != nil {
 		return err
 	}
-	if err := <-errc; !errors.Is(err, http.ErrServerClosed) {
+	if err := <-errChan; !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil

@@ -1,0 +1,45 @@
+[
+  {
+    "name": "no-session-selector",
+    "selector": { "kind": "none", "value": "" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "anthropic", "name": "test-model" }
+    },
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":1,\"session_selector\":{\"kind\":\"none\",\"value\":\"\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"name\":\"test-model\"}},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "bdc4689a10a62ff00ee0fa335d504de05dde83bafad33f3fc8961829330321f6"
+  },
+  {
+    "name": "session-key-and-ordered-blocks",
+    "selector": { "kind": "key", "value": "ticket-1" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "openai", "name": "gpt-test" }
+    },
+    "input": {
+      "content": [
+        { "type": "text", "text": "first" },
+        { "type": "text", "text": "second" }
+      ]
+    },
+    "canonical": "{\"version\":1,\"session_selector\":{\"kind\":\"key\",\"value\":\"ticket-1\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"openai\",\"name\":\"gpt-test\"}},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"first\"},{\"type\":\"text\",\"text\":\"second\"}]}}",
+    "sha256": "7b63993576a6c7a8f3fee251b148b558c51df493338a49ce3c44d9aa69ea6b67"
+  },
+  {
+    "name": "session-id-and-json-escaping",
+    "selector": {
+      "kind": "id",
+      "value": "sesn_019b0a12-0000-7000-8000-000000000003"
+    },
+    "spec": {
+      "instructions": "<help & guide>",
+      "model": { "provider": "anthropic", "name": "claude-test" }
+    },
+    "input": {
+      "content": [{ "type": "text", "text": "line 1\nline 2" }]
+    },
+    "canonical": "{\"version\":1,\"session_selector\":{\"kind\":\"id\",\"value\":\"sesn_019b0a12-0000-7000-8000-000000000003\"},\"spec\":{\"instructions\":\"<help & guide>\",\"model\":{\"provider\":\"anthropic\",\"name\":\"claude-test\"}},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"line 1\\nline 2\"}]}}",
+    "sha256": "54e4b33ae99c64ce9380993aa25bd59a61863a4bcc18fe3b231331011fd41459"
+  }
+]
