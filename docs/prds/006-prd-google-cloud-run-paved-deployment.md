@@ -98,15 +98,17 @@ topology. PRDs 009 and 010 add the split execution path.
   that HTTP or CPU autoscaling is not a promise to scale with Postgres backlog.
 
 - **R5 — Honest health and startup.** The container must listen on Cloud Run's
-  `PORT`. `GET /healthz` must remain unauthenticated, cheap, and contain no
-  sensitive or dynamic content.
+  `PORT`. `GET /health` and the local-compatible `GET /healthz` alias must
+  remain unauthenticated, cheap, and contain no sensitive or dynamic content.
   The public Cloud Run endpoint must disable its edge Invoker IAM check and
   leave application requests authenticated by nvoken's Runtime bearer
   credential; it must not depend on an `allUsers` IAM binding.
   The process must not begin listening until configuration, database
   connectivity, exact schema validation, installation bootstrap, and engine
-  construction have succeeded. Cloud Run must use `/healthz` as an HTTP startup
-  probe, so a bad configuration or schema never receives application traffic.
+  construction have succeeded. Because Google Front End reserves the exact
+  external `/healthz` path, Cloud Run must use `/health` as its HTTP startup and
+  liveness probe, so a bad configuration or schema never receives application
+  traffic and the external smoke follows a routable path.
   The fuller dynamic `/readyz` surface in the governing API design remains
   deferred; at this stage the process never listens in a not-ready state.
 
@@ -152,11 +154,11 @@ topology. PRDs 009 and 010 add the split execution path.
   enforced, source access is bucket-scoped, and every accepted long resource
   name produces valid service-account IDs.
   The plan proves instance-based CPU, minimum instances `>= 1`, bounded maximum
-  instances, explicit request/engine/database concurrency, and the `/healthz`
-  startup probe. Validation rejects zero provider secrets and accepts Anthropic,
-  OpenAI, or both, and proves the public endpoint disables the Cloud Run IAM
-  check while retaining Runtime authentication. Automated release tests prove
-  the GCS backend bootstrap is
+  instances, explicit request/engine/database concurrency, and the `/health`
+  startup and liveness probes. Validation rejects zero provider secrets and
+  accepts Anthropic, OpenAI, or both, and proves the public endpoint disables
+  the Cloud Run IAM check while retaining Runtime authentication. Automated
+  release tests prove the GCS backend bootstrap is
   ordered before `terraform init` and enforces versioning, uniform access, and
   public access prevention without attempting to manage its own bucket in that
   state.
@@ -169,8 +171,8 @@ topology. PRDs 009 and 010 add the split execution path.
 
 - [x] **A4 (R3, R5):** A service started with an empty, dirty, behind, or
   ahead-of-binary schema exits before listening. With the exact schema and valid
-  configuration, `/healthz` returns `200` without authentication or database,
-  account, prompt, or secret content.
+  configuration, `/health` and `/healthz` return `200` without authentication
+  or database, account, prompt, or secret content.
 
 - [x] **A5 (R4):** The default paved plan keeps exactly one background-capable
   instance warm, caps horizontal instances and per-instance engine claims, and

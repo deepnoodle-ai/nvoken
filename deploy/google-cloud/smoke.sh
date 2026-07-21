@@ -41,7 +41,7 @@ if [[ ! "${NVOKEN_SMOKE_TIMEOUT_SECONDS:-300}" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 
-curl --silent --show-error --fail-with-body "${nvoken_service_url}/healthz" >/dev/null
+curl --silent --show-error --fail-with-body "${nvoken_service_url}/health" >/dev/null
 
 nvoken_smoke_id="$(date -u +%Y%m%dT%H%M%SZ)-${RANDOM}"
 nvoken_request_body="$(jq -n \

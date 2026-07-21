@@ -482,7 +482,7 @@ resource "google_cloud_run_v2_service" "runtime" {
         failure_threshold     = 20
 
         http_get {
-          path = "/healthz"
+          path = "/health"
           port = 8080
         }
       }
@@ -493,7 +493,7 @@ resource "google_cloud_run_v2_service" "runtime" {
         failure_threshold = 3
 
         http_get {
-          path = "/healthz"
+          path = "/health"
           port = 8080
         }
       }

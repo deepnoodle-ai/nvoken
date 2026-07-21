@@ -66,14 +66,18 @@ func (f *fakeRuntime) GetSession(context.Context, domain.RuntimeAuthContext, str
 	return f.session, f.err
 }
 
-func TestHealthzIsPublic(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+func TestHealthEndpointsArePublic(t *testing.T) {
+	for _, path := range []string{"/health", "/healthz"} {
+		t.Run(path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, path, nil)
 
-	testHandler(nil, nil, io.Discard).ServeHTTP(recorder, request)
+			testHandler(nil, nil, io.Discard).ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusOK || recorder.Body.String() != "ok" {
-		t.Fatalf("GET /healthz = %d %q", recorder.Code, recorder.Body.String())
+			if recorder.Code != http.StatusOK || recorder.Body.String() != "ok" {
+				t.Fatalf("GET %s = %d %q", path, recorder.Code, recorder.Body.String())
+			}
+		})
 	}
 }
 
@@ -102,6 +106,7 @@ func TestRoutingErrorsUseContractEnvelope(t *testing.T) {
 		name, method, target, code, allow string
 		status                            int
 	}{
+		{name: "wrong health method", method: http.MethodPost, target: "/health", code: "invalid_request", allow: http.MethodGet, status: http.StatusMethodNotAllowed},
 		{name: "wrong method", method: http.MethodPost, target: "/healthz", code: "invalid_request", allow: http.MethodGet, status: http.StatusMethodNotAllowed},
 		{name: "unknown route", method: http.MethodGet, target: "/v1/unknown", code: "not_found", status: http.StatusNotFound},
 	}

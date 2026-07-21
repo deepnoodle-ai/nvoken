@@ -92,14 +92,15 @@ Streaming and recovery:
 
 | Method | Endpoint                 | Purpose                                                                                            |
 | ------ | ------------------------ | -------------------------------------------------------------------------------------------------- |
-| `GET`  | `/healthz`               | Process liveness probe.                                                                            |
+| `GET`  | `/health`                | Process liveness probe; safe through Cloud Run's public edge.                                       |
+| `GET`  | `/healthz`               | Local-compatible process liveness alias; reserved by Cloud Run's public edge.                       |
 | `GET`  | `/readyz`                | Verify this instance can serve authoritative requests.                                             |
 | `GET`  | `/metrics`               | Private deployment metrics scrape.                                                                 |
 | `GET`  | `/v1/capabilities`       | Supported protocol versions, model providers, tool modes, streaming modes, and installed adapters. |
 | `GET`  | `/.well-known/jwks.json` | Active verification keys for runtime-signed envelopes.                                             |
 
 Capabilities describe what this installation can execute — no plan, agent,
-or integration catalog. `/healthz`, `/readyz`, and `/metrics` belong to
+or integration catalog. `/health`, `/healthz`, `/readyz`, and `/metrics` belong to
 deployment operation and are listed only because every installation exposes
 them.
 

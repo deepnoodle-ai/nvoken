@@ -138,12 +138,18 @@ deploy/google-cloud/smoke.sh
 ```
 
 The smoke test reads the generated Runtime bearer key directly from Secret
-Manager without printing it, checks `/healthz`, expects a `202` durable
+Manager without printing it, checks the Cloud Run-safe `/health` endpoint,
+expects a `202` durable
 acknowledgement, polls `GET /v1/invocations/{id}` to `completed`, performs a
 second authoritative read, and confirms a structured Cloud Logging entry is
 correlatable by Invocation ID. To prove restart readback during a release test,
 deploy the next unique image revision and repeat the final `GET` with the same
 ID; the state remains in Cloud SQL.
+
+Cloud Run reserves the exact external `/healthz` path at Google Front End and
+can return a Google-generated `404` before the request reaches nvoken. The
+runtime retains `/healthz` for local compatibility, but this paved deployment
+uses `/health` for startup, liveness, and external smoke checks.
 
 ## Capacity and shutdown
 
