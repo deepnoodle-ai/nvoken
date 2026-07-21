@@ -32,6 +32,37 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 		cfg.Budgets.DefaultActiveExecutionTimeout != 30*time.Minute || cfg.Budgets.DefaultMaxIterations != 1 {
 		t.Fatalf("budget defaults: %#v", cfg.Budgets)
 	}
+	if cfg.ProcessRole != "combined" || cfg.Dispatch.Queue != "execution" ||
+		cfg.Dispatch.PublicationLease != 30*time.Second || cfg.Dispatch.StaleAfter != 5*time.Minute ||
+		cfg.ExecutorAttemptTimeout != 29*time.Minute+55*time.Second {
+		t.Fatalf("dispatch defaults: %#v", cfg)
+	}
+}
+
+func TestLoadDaemonConfigExecutorDoesNotRequirePublicRuntimeSecrets(t *testing.T) {
+	t.Setenv("NVOKEN_PROCESS_ROLE", "executor")
+	t.Setenv("DATABASE_URL", "postgres://nvoken:secret@localhost/nvoken")
+	t.Setenv("DATABASE_MAX_CONNS", "1")
+	t.Setenv("RUNTIME_API_KEY", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
+
+	cfg, err := loadDaemonConfig()
+	if err != nil {
+		t.Fatalf("load executor config: %v", err)
+	}
+	if cfg.ProcessRole != "executor" || cfg.DatabaseMaxConns != 1 || cfg.RuntimeAPIKey != "" {
+		t.Fatalf("executor config = %#v", cfg)
+	}
+}
+
+func TestLoadDaemonConfigRequiresCompleteCloudTasksIdentity(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("CLOUD_TASKS_QUEUE", "projects/test/locations/us-central1/queues/execution")
+	_, err := loadDaemonConfig()
+	if err == nil || !strings.Contains(err.Error(), "must be configured together") {
+		t.Fatalf("partial Cloud Tasks error = %v", err)
+	}
 }
 
 func TestLoadMigrationConfig(t *testing.T) {

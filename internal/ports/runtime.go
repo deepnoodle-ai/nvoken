@@ -20,6 +20,8 @@ var (
 	ErrGenerationInputInvalid = errors.New("durable model generation input invalid")
 	ErrModelResponseInvalid   = errors.New("model response invalid")
 	ErrExecutionResultInvalid = errors.New("invocation execution result invalid")
+	ErrDispatchLeaseLost      = errors.New("execution dispatch publication lease lost")
+	ErrTaskAlreadyExists      = errors.New("task already exists")
 )
 
 // Clock makes persisted timestamps deterministic in services and tests.
@@ -143,6 +145,38 @@ type InvocationStateRepository interface {
 	AppendInvocationState(context.Context, domain.InvocationState) error
 	GetCurrentInvocationState(context.Context, string) (domain.InvocationState, error)
 	ListInvocationStates(context.Context, string) ([]domain.InvocationState, error)
+}
+
+type ExecutionDispatchRepository interface {
+	CreateSyntheticDispatchWork(context.Context, domain.SyntheticDispatchWork) error
+	GetSyntheticDispatchWork(context.Context, string) (domain.SyntheticDispatchWork, error)
+	GetSyntheticDispatchWorkForUpdate(context.Context, string) (domain.SyntheticDispatchWork, error)
+	SettleSyntheticDispatchWork(context.Context, string, time.Time) (domain.SyntheticDispatchWork, error)
+	CreateExecutionDispatch(context.Context, domain.ExecutionDispatch) error
+	GetExecutionDispatch(context.Context, string) (domain.ExecutionDispatch, error)
+	GetExecutionDispatchForUpdate(context.Context, string) (domain.ExecutionDispatch, error)
+	ClaimNextExecutionDispatch(context.Context, string, string, time.Time, time.Time) (domain.ExecutionDispatch, error)
+	RenewExecutionDispatchPublication(context.Context, string, string, int64, time.Time, time.Time) (domain.ExecutionDispatch, error)
+	MarkExecutionDispatchPublished(context.Context, string, string, int64, string, time.Time) (domain.ExecutionDispatch, error)
+	ReturnExecutionDispatchPending(context.Context, string, string, int64, time.Time, string, time.Time) (domain.ExecutionDispatch, error)
+	SettleExecutionDispatch(context.Context, string, time.Time) (domain.ExecutionDispatch, error)
+	AbandonExecutionDispatch(context.Context, string, string, time.Time) (domain.ExecutionDispatch, error)
+	ListAgedExecutionDispatches(context.Context, time.Time, int) ([]domain.ExecutionDispatch, error)
+	ListStalePublishedExecutionDispatches(context.Context, time.Time, int) ([]domain.ExecutionDispatch, error)
+	PruneTerminalExecutionDispatches(context.Context, time.Time, int) (int64, error)
+}
+
+type ExecutionTask struct {
+	DispatchID  string
+	AvailableAt time.Time
+}
+
+// ExecutionTaskQueue is transport only. Postgres dispatch and domain rows
+// remain authoritative when tasks are delayed, duplicated, or absent.
+type ExecutionTaskQueue interface {
+	CreateTask(context.Context, ExecutionTask) (string, error)
+	TaskExists(context.Context, string) (bool, error)
+	Close() error
 }
 
 const InvocationExecutionQueue = "invocation_execution"

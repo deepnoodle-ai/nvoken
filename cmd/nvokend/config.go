@@ -8,20 +8,42 @@ import (
 
 	"github.com/deepnoodle-ai/wonton/env"
 
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/cloudtasks"
 	"github.com/deepnoodle-ai/nvoken/internal/daemon"
+	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
 type config struct {
-	Port             string        `env:"PORT" envDefault:"8080"`
-	DatabaseURL      string        `env:"DATABASE_URL"`
-	DatabaseMaxConns int32         `env:"DATABASE_MAX_CONNS" envDefault:"10"`
-	RuntimeAPIKey    string        `env:"RUNTIME_API_KEY"`
-	RuntimeTenantRef string        `env:"RUNTIME_TENANT_REF"`
-	AnthropicAPIKey  string        `env:"ANTHROPIC_API_KEY"`
-	OpenAIAPIKey     string        `env:"OPENAI_API_KEY"`
-	ShutdownTimeout  time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
+	ProcessRole            string        `env:"NVOKEN_PROCESS_ROLE" envDefault:"combined"`
+	Port                   string        `env:"PORT" envDefault:"8080"`
+	DatabaseURL            string        `env:"DATABASE_URL"`
+	DatabaseMaxConns       int32         `env:"DATABASE_MAX_CONNS" envDefault:"10"`
+	RuntimeAPIKey          string        `env:"RUNTIME_API_KEY"`
+	RuntimeTenantRef       string        `env:"RUNTIME_TENANT_REF"`
+	AnthropicAPIKey        string        `env:"ANTHROPIC_API_KEY"`
+	OpenAIAPIKey           string        `env:"OPENAI_API_KEY"`
+	ShutdownTimeout        time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
+	ExecutorAttemptTimeout time.Duration `env:"EXECUTOR_ATTEMPT_TIMEOUT" envDefault:"29m55s"`
+
+	DispatchQueue                 string        `env:"DISPATCH_QUEUE" envDefault:"execution"`
+	DispatchPublicationLease      time.Duration `env:"DISPATCH_PUBLICATION_LEASE" envDefault:"30s"`
+	DispatchPublishRetryBase      time.Duration `env:"DISPATCH_PUBLISH_RETRY_BASE" envDefault:"1s"`
+	DispatchPublishRetryMax       time.Duration `env:"DISPATCH_PUBLISH_RETRY_MAX" envDefault:"1m"`
+	DispatchStaleAfter            time.Duration `env:"DISPATCH_STALE_AFTER" envDefault:"5m"`
+	DispatchRetention             time.Duration `env:"DISPATCH_RETENTION" envDefault:"168h"`
+	DispatchBatchLimit            int           `env:"DISPATCH_BATCH_LIMIT" envDefault:"100"`
+	DispatchPublishInterval       time.Duration `env:"DISPATCH_PUBLISH_INTERVAL" envDefault:"1s"`
+	DispatchReconcileInterval     time.Duration `env:"DISPATCH_RECONCILE_INTERVAL" envDefault:"1m"`
+	DispatchRetentionInterval     time.Duration `env:"DISPATCH_RETENTION_INTERVAL" envDefault:"1h"`
+	DispatchSyntheticAttemptDelay time.Duration `env:"DISPATCH_SYNTHETIC_ATTEMPT_DELAY" envDefault:"0s"`
+
+	CloudTasksQueue              string        `env:"CLOUD_TASKS_QUEUE"`
+	CloudTasksExecutorURL        string        `env:"CLOUD_TASKS_EXECUTOR_URL"`
+	CloudTasksOIDCServiceAccount string        `env:"CLOUD_TASKS_OIDC_SERVICE_ACCOUNT"`
+	CloudTasksOIDCAudience       string        `env:"CLOUD_TASKS_OIDC_AUDIENCE"`
+	CloudTasksDispatchDeadline   time.Duration `env:"CLOUD_TASKS_DISPATCH_DEADLINE" envDefault:"30m"`
 
 	EngineConcurrency             int           `env:"ENGINE_CONCURRENCY" envDefault:"8"`
 	EnginePollInterval            time.Duration `env:"ENGINE_POLL_INTERVAL" envDefault:"1s"`
@@ -48,6 +70,12 @@ type migrationConfig struct {
 	Timeout     time.Duration `env:"MIGRATION_TIMEOUT" envDefault:"5m"`
 }
 
+type dispatchSmokeConfig struct {
+	DatabaseURL      string `env:"DATABASE_URL"`
+	DatabaseMaxConns int32  `env:"DATABASE_MAX_CONNS" envDefault:"2"`
+	Queue            string `env:"DISPATCH_QUEUE" envDefault:"execution"`
+}
+
 func loadDaemonConfig() (daemon.Config, error) {
 	// Publish .env into os.Environ for local dev. No-overwrite, so shell
 	// exports still win. Missing .env is fine.
@@ -60,11 +88,19 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if cfg.DatabaseURL == "" {
 		return daemon.Config{}, fmt.Errorf("serve: DATABASE_URL is required")
 	}
-	if cfg.DatabaseMaxConns < 2 {
-		return daemon.Config{}, fmt.Errorf("serve: DATABASE_MAX_CONNS must be at least 2 (one connection is reserved for cancellation notifications)")
+	role := daemon.ProcessRole(cfg.ProcessRole)
+	if role != daemon.ProcessRoleCombined && role != daemon.ProcessRoleExecutor {
+		return daemon.Config{}, fmt.Errorf("serve: NVOKEN_PROCESS_ROLE must be combined or executor")
 	}
-	if cfg.RuntimeAPIKey == "" {
-		return daemon.Config{}, fmt.Errorf("serve: RUNTIME_API_KEY is required")
+	minimumConns := int32(1)
+	if role == daemon.ProcessRoleCombined {
+		minimumConns = 2
+	}
+	if cfg.DatabaseMaxConns < minimumConns {
+		return daemon.Config{}, fmt.Errorf("serve: DATABASE_MAX_CONNS must be at least %d for the %s role", minimumConns, role)
+	}
+	if role == daemon.ProcessRoleCombined && cfg.RuntimeAPIKey == "" {
+		return daemon.Config{}, fmt.Errorf("serve: RUNTIME_API_KEY is required for the combined role")
 	}
 	engineConfig := engine.Config{
 		Concurrency: cfg.EngineConcurrency, PollInterval: cfg.EnginePollInterval,
@@ -93,11 +129,56 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if cfg.ShutdownTimeout <= 0 {
 		return daemon.Config{}, fmt.Errorf("serve: SHUTDOWN_TIMEOUT must be positive")
 	}
-	if cfg.EngineDrainGrace > cfg.ShutdownTimeout-time.Second {
+	if cfg.ShutdownTimeout <= time.Second {
+		return daemon.Config{}, fmt.Errorf("serve: SHUTDOWN_TIMEOUT must exceed 1s")
+	}
+	if role == daemon.ProcessRoleCombined && cfg.EngineDrainGrace > cfg.ShutdownTimeout-time.Second {
 		return daemon.Config{}, fmt.Errorf("serve: ENGINE_DRAIN_GRACE must leave at least 1s inside SHUTDOWN_TIMEOUT")
 	}
-	if len(cfg.RuntimeAPIKey) < 32 {
+	if role == daemon.ProcessRoleCombined && len(cfg.RuntimeAPIKey) < 32 {
 		return daemon.Config{}, fmt.Errorf("serve: RUNTIME_API_KEY must be at least 32 bytes")
+	}
+	dispatchConfig := services.DispatchConfig{
+		Queue: cfg.DispatchQueue, PublicationLease: cfg.DispatchPublicationLease,
+		PublishRetryBase: cfg.DispatchPublishRetryBase, PublishRetryMax: cfg.DispatchPublishRetryMax,
+		StaleAfter: cfg.DispatchStaleAfter, Retention: cfg.DispatchRetention, BatchLimit: cfg.DispatchBatchLimit,
+		SyntheticAttemptDelay: cfg.DispatchSyntheticAttemptDelay,
+	}
+	if err := services.ValidateDispatchConfig(dispatchConfig); err != nil {
+		return daemon.Config{}, fmt.Errorf("invalid execution dispatch configuration: %w", err)
+	}
+	controllerConfig := dispatchruntime.ControllerConfig{
+		PublishInterval: cfg.DispatchPublishInterval, ReconcileInterval: cfg.DispatchReconcileInterval,
+		RetentionInterval: cfg.DispatchRetentionInterval, BatchLimit: cfg.DispatchBatchLimit,
+	}
+	if err := dispatchruntime.ValidateControllerConfig(controllerConfig); err != nil {
+		return daemon.Config{}, fmt.Errorf("invalid execution dispatch controller configuration: %w", err)
+	}
+	cloudTasksConfig := cloudtasks.Config{
+		Queue: cfg.CloudTasksQueue, ExecutorURL: cfg.CloudTasksExecutorURL,
+		OIDCServiceAccount: cfg.CloudTasksOIDCServiceAccount, OIDCAudience: cfg.CloudTasksOIDCAudience,
+		DispatchDeadline: cfg.CloudTasksDispatchDeadline,
+	}
+	cloudTasksFields := []string{cfg.CloudTasksQueue, cfg.CloudTasksExecutorURL, cfg.CloudTasksOIDCServiceAccount, cfg.CloudTasksOIDCAudience}
+	configuredCloudTasksFields := 0
+	for _, value := range cloudTasksFields {
+		if value != "" {
+			configuredCloudTasksFields++
+		}
+	}
+	if configuredCloudTasksFields != 0 && configuredCloudTasksFields != len(cloudTasksFields) {
+		return daemon.Config{}, fmt.Errorf("serve: Cloud Tasks queue, executor URL, OIDC service account, and audience must be configured together")
+	}
+	if configuredCloudTasksFields > 0 {
+		if role != daemon.ProcessRoleCombined {
+			return daemon.Config{}, fmt.Errorf("serve: Cloud Tasks publication is available only in the combined role")
+		}
+		if err := cloudtasks.ValidateConfig(cloudTasksConfig); err != nil {
+			return daemon.Config{}, fmt.Errorf("invalid Cloud Tasks configuration: %w", err)
+		}
+	}
+	if cfg.ExecutorAttemptTimeout <= 0 || cfg.ExecutorAttemptTimeout >= cfg.CloudTasksDispatchDeadline {
+		return daemon.Config{}, fmt.Errorf("serve: EXECUTOR_ATTEMPT_TIMEOUT must be positive and less than CLOUD_TASKS_DISPATCH_DEADLINE")
 	}
 	var tenantConstraint *string
 	if cfg.RuntimeTenantRef != "" {
@@ -111,9 +192,12 @@ func loadDaemonConfig() (daemon.Config, error) {
 	}
 	return daemon.Config{
 		Port: cfg.Port, DatabaseURL: cfg.DatabaseURL, DatabaseMaxConns: cfg.DatabaseMaxConns,
+		ProcessRole:   role,
 		RuntimeAPIKey: cfg.RuntimeAPIKey, RuntimeTenantConstraint: tenantConstraint,
 		AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
 		ShutdownTimeout: cfg.ShutdownTimeout, Engine: engineConfig, Budgets: budgetPolicy,
+		Dispatch: dispatchConfig, DispatchController: controllerConfig, CloudTasks: cloudTasksConfig,
+		ExecutorAttemptTimeout: cfg.ExecutorAttemptTimeout,
 	}, nil
 }
 
@@ -130,5 +214,27 @@ func loadMigrationConfig() (daemon.MigrationConfig, error) {
 	return daemon.MigrationConfig{
 		DatabaseURL: cfg.DatabaseURL,
 		Timeout:     cfg.Timeout,
+	}, nil
+}
+
+func loadDispatchSmokeConfig() (daemon.DispatchSmokeConfig, error) {
+	_ = env.LoadEnvFile(".env")
+	cfg, err := env.Parse[dispatchSmokeConfig]()
+	if err != nil {
+		return daemon.DispatchSmokeConfig{}, fmt.Errorf("failed to load configuration: %w", err)
+	}
+	if cfg.DatabaseURL == "" {
+		return daemon.DispatchSmokeConfig{}, fmt.Errorf("dispatch-smoke: DATABASE_URL is required")
+	}
+	if cfg.DatabaseMaxConns < 1 {
+		return daemon.DispatchSmokeConfig{}, fmt.Errorf("dispatch-smoke: DATABASE_MAX_CONNS must be positive")
+	}
+	dispatchCfg := services.DefaultDispatchConfig()
+	dispatchCfg.Queue = cfg.Queue
+	if err := services.ValidateDispatchConfig(dispatchCfg); err != nil {
+		return daemon.DispatchSmokeConfig{}, fmt.Errorf("dispatch-smoke: %w", err)
+	}
+	return daemon.DispatchSmokeConfig{
+		DatabaseURL: cfg.DatabaseURL, DatabaseMaxConns: cfg.DatabaseMaxConns, Queue: cfg.Queue,
 	}, nil
 }
