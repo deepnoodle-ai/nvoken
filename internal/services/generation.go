@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -30,14 +31,32 @@ type generationStore interface {
 type GenerationExecutor struct {
 	store     generationStore
 	generator ports.ModelGenerator
+	events    ports.LiveEventPublisher
 	logger    *slog.Logger
 }
 
-func NewGenerationExecutor(store generationStore, generator ports.ModelGenerator, logger *slog.Logger) *GenerationExecutor {
+type GenerationExecutorOption func(*GenerationExecutor)
+
+func WithGenerationLiveEvents(events ports.LiveEventPublisher) GenerationExecutorOption {
+	return func(executor *GenerationExecutor) { executor.events = events }
+}
+
+func NewGenerationExecutor(
+	store generationStore,
+	generator ports.ModelGenerator,
+	logger *slog.Logger,
+	options ...GenerationExecutorOption,
+) *GenerationExecutor {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &GenerationExecutor{store: store, generator: generator, logger: logger}
+	executor := &GenerationExecutor{store: store, generator: generator, logger: logger}
+	for _, option := range options {
+		if option != nil {
+			option(executor)
+		}
+	}
+	return executor
 }
 
 func (e *GenerationExecutor) Execute(
@@ -83,7 +102,7 @@ func (e *GenerationExecutor) Execute(
 		return domain.InvocationExecutionResult{}, err
 	}
 	started := time.Now()
-	response, err := e.generator.Generate(ctx, request)
+	response, err := e.generate(ctx, claim, request)
 	if err != nil {
 		if ctx.Err() != nil {
 			return domain.InvocationExecutionResult{}, ctx.Err()
@@ -133,6 +152,37 @@ func (e *GenerationExecutor) Execute(
 		"reasoning_tokens", response.Usage.ReasoningTokens,
 		"generation_latency_ms", time.Since(started).Milliseconds())
 	return result, nil
+}
+
+func (e *GenerationExecutor) generate(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	request domain.GenerationRequest,
+) (domain.GenerationResponse, error) {
+	streaming, ok := e.generator.(ports.StreamingModelGenerator)
+	if !ok {
+		return e.generator.Generate(ctx, request)
+	}
+	var sequence atomic.Int64
+	emit := func(delta domain.GenerationDelta) {
+		if e.events == nil {
+			return
+		}
+		payload, err := json.Marshal(domain.GenerationDeltaEvent{
+			EventType: domain.LiveEventGenerationDelta, SessionID: claim.Invocation.SessionID,
+			InvocationID: claim.Invocation.ID, LeaseAttempt: claim.Attempt, DeltaSequence: sequence.Add(1),
+			Delta: delta, EmittedAt: time.Now().UTC(),
+		})
+		if err != nil {
+			e.logger.Warn("generation delta encode failed", "invocation_id", claim.Invocation.ID)
+			return
+		}
+		e.events.Publish(ctx, ports.LiveEvent{
+			Type: domain.LiveEventGenerationDelta, AccountID: claim.Invocation.AccountID,
+			SessionID: claim.Invocation.SessionID, Payload: payload,
+		})
+	}
+	return streaming.GenerateStream(ctx, request, emit)
 }
 
 func (e *GenerationExecutor) logFailure(claim domain.InvocationClaim, class, provider, model string) {

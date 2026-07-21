@@ -92,6 +92,10 @@ func (f *fakeRuntime) GetSessionTranscript(context.Context, domain.RuntimeAuthCo
 	return f.transcript, f.err
 }
 
+func (f *fakeRuntime) GetSessionTranscriptStreamState(context.Context, domain.RuntimeAuthContext, string) (services.TranscriptStreamState, error) {
+	return services.TranscriptStreamState{Active: f.session.ActiveInvocationID != nil}, f.err
+}
+
 func TestHealthIsPublic(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -130,14 +134,16 @@ func TestCancelInvocationRequiresEmptyBodyAndReturnsAuthoritativeRow(t *testing.
 
 func TestServerTimeoutsAreBounded(t *testing.T) {
 	server := NewServer(Config{})
-	if server.http.ReadHeaderTimeout <= 0 || server.http.ReadTimeout <= 0 ||
-		server.http.WriteTimeout <= 0 || server.http.IdleTimeout <= 0 {
+	if server.http.ReadHeaderTimeout <= 0 || server.http.ReadTimeout <= 0 || server.http.IdleTimeout <= 0 {
 		t.Fatalf("server timeouts = header %s, read %s, write %s, idle %s",
 			server.http.ReadHeaderTimeout, server.http.ReadTimeout,
 			server.http.WriteTimeout, server.http.IdleTimeout)
 	}
-	if server.http.WriteTimeout <= server.http.ReadTimeout {
-		t.Fatalf("write timeout %s must leave time after read timeout %s", server.http.WriteTimeout, server.http.ReadTimeout)
+	if server.http.WriteTimeout != 0 {
+		t.Fatalf("global write timeout = %s, want per-response deadlines", server.http.WriteTimeout)
+	}
+	if server.http.BaseContext != nil || server.cancelStreams == nil {
+		t.Fatal("shutdown must cancel only stream handlers, not every request context")
 	}
 	if server.shutdownTimeout != defaultShutdownTimeout {
 		t.Fatalf("shutdown timeout = %s, want %s", server.shutdownTimeout, defaultShutdownTimeout)

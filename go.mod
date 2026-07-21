@@ -4,12 +4,14 @@ go 1.26.2
 
 require (
 	cloud.google.com/go/cloudtasks v1.18.0
+	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/deepnoodle-ai/dive v1.16.0
 	github.com/deepnoodle-ai/dive/providers/openai v1.16.0
 	github.com/deepnoodle-ai/wonton v0.0.37
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/googleapis/gax-go/v2 v2.21.0
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/redis/go-redis/v9 v9.17.2
 	google.golang.org/api v0.274.0
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
@@ -21,6 +23,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.7.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -36,6 +39,7 @@ require (
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect

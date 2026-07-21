@@ -53,6 +53,34 @@ type cancellingModelGenerator struct {
 	response domain.GenerationResponse
 }
 
+type streamingModelGenerator struct {
+	fakeModelGenerator
+	deltas []domain.GenerationDelta
+}
+
+func (g *streamingModelGenerator) GenerateStream(
+	ctx context.Context,
+	request domain.GenerationRequest,
+	emit ports.GenerationDeltaEmitter,
+) (domain.GenerationResponse, error) {
+	g.requests = append(g.requests, request)
+	for _, delta := range g.deltas {
+		emit(delta)
+	}
+	if g.err != nil {
+		return domain.GenerationResponse{}, g.err
+	}
+	return g.response, ctx.Err()
+}
+
+type recordingLivePublisher struct {
+	events []ports.LiveEvent
+}
+
+func (p *recordingLivePublisher) Publish(_ context.Context, event ports.LiveEvent) {
+	p.events = append(p.events, event)
+}
+
 func (g cancellingModelGenerator) Generate(context.Context, domain.GenerationRequest) (domain.GenerationResponse, error) {
 	g.cancel()
 	return g.response, nil
@@ -109,6 +137,61 @@ func TestGenerationExecutorReconstructsExactDurableTurn(t *testing.T) {
 		if !strings.Contains(logText, required) {
 			t.Fatalf("logs do not contain %q: %s", required, logText)
 		}
+	}
+}
+
+func TestGenerationExecutorPublishesNormalizedLiveDeltasWithoutChangingResult(t *testing.T) {
+	claim := generationClaim()
+	generator := &streamingModelGenerator{
+		fakeModelGenerator: fakeModelGenerator{response: successfulGenerationResponse()},
+		deltas: []domain.GenerationDelta{
+			{ContentIndex: 0, Type: "text", Text: "hel"},
+			{ContentIndex: 0, Type: "text", Text: "lo"},
+		},
+	}
+	publisher := &recordingLivePublisher{}
+	result, err := NewGenerationExecutor(
+		generationStoreFixture(claim), generator, nil, WithGenerationLiveEvents(publisher),
+	).Execute(context.Background(), claim)
+	if err != nil || result.Status != domain.InvocationCompleted || len(result.AssistantMessages) != 1 {
+		t.Fatalf("streaming result = %#v, error = %v", result, err)
+	}
+	if len(publisher.events) != 2 {
+		t.Fatalf("published events = %d, want 2", len(publisher.events))
+	}
+	for index, event := range publisher.events {
+		if event.Type != domain.LiveEventGenerationDelta || event.AccountID != claim.Invocation.AccountID ||
+			event.SessionID != claim.Invocation.SessionID {
+			t.Fatalf("event %d routing = %#v", index, event)
+		}
+		var payload domain.GenerationDeltaEvent
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			t.Fatalf("decode event %d: %v", index, err)
+		}
+		if payload.LeaseAttempt != claim.Attempt || payload.DeltaSequence != int64(index+1) ||
+			payload.InvocationID != claim.Invocation.ID || payload.Delta.Text == "" {
+			t.Fatalf("event %d payload = %#v", index, payload)
+		}
+	}
+}
+
+func TestGenerationExecutorStreamingFailureUsesExistingProviderFailure(t *testing.T) {
+	claim := generationClaim()
+	generator := &streamingModelGenerator{
+		fakeModelGenerator: fakeModelGenerator{err: errors.New("provider stream failed with secret")},
+		deltas:             []domain.GenerationDelta{{ContentIndex: 0, Type: "text", Text: "partial secret"}},
+	}
+	var logs bytes.Buffer
+	result, err := NewGenerationExecutor(
+		generationStoreFixture(claim), generator, slog.New(slog.NewJSONHandler(&logs, nil)),
+		WithGenerationLiveEvents(&recordingLivePublisher{}),
+	).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	assertFailureCode(t, result, "provider_error")
+	if strings.Contains(logs.String(), "provider stream failed") || strings.Contains(logs.String(), "partial secret") {
+		t.Fatalf("logs contain live/provider content: %s", logs.String())
 	}
 }
 

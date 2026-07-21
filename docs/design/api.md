@@ -87,14 +87,14 @@ The compatibility vectors are in
 
 Streaming and recovery:
 
-- Background JSON admission and authoritative JSON recovery are the frozen
-  launch contract. SSE is added only after this durable read model.
+- Background JSON admission, authoritative JSON recovery, and resumable SSE
+  over that recovery model are the frozen launch contract.
 - Ordered `SessionMessage` rows are the sole durable representation of caller,
   agent, and future ToolCall content. Append-only Invocation state revisions
   record lifecycle without copying message payloads.
 - The incremental Session transcript composes message sequence and Invocation
   revision with one fixed upper cut, draining messages before lifecycle changes.
-  A later stream projects that view plus optional ephemeral deltas. Neither
+  The Session stream projects that view plus optional ephemeral deltas. Neither
   transport is authoritative or persists a second content representation.
 
 ## 1. Service discovery
@@ -164,6 +164,7 @@ background acknowledgement contract.
 | `GET`  | `/v1/sessions/{session_id}`                  | Read immutable Session identity, partition and host key, plus the current nonterminal Invocation.  |
 | `GET`  | `/v1/sessions/{session_id}/messages`         | Page forward through canonical `SessionMessage` rows.                                              |
 | `GET`  | `/v1/sessions/{session_id}/transcript`       | Drain fixed-cut message and Invocation-lifecycle changes for a reducer or reconnect.                |
+| `GET`  | `/v1/sessions/{session_id}/transcript/stream` | Replay and tail transcript state with ephemeral generation deltas over SSE.                        |
 
 There is no public create: Invocation creates Sessions. A Session key is unique
 within Account, effective tenant partition, Agent, and key, so the same key in
@@ -178,10 +179,20 @@ retains the fixed upper cut. Pages drain messages first, then lifecycle changes,
 so terminal settlement cannot precede its referenced transcript watermark.
 Tokens grant no authority and every request re-authorizes the durable Session.
 
-Streaming, metadata, retention, and destructive operations remain later
-contracts. There is no generic public Session-event append endpoint. Client
-ToolCall results and future steering use narrow commands defined with those
-features.
+The SSE stream accepts the transcript `cursor`, with explicit query input
+taking precedence over `Last-Event-ID`. Nonempty `transcript.snapshot` frames
+project one JSON snapshot page and alone carry `id: <resume_cursor>`.
+`generation.delta`, `stream.resync`, and `stream.end` frames are live/control
+signals with no ID and no replay promise. Redis may carry those lossy signals
+between processes, but Postgres polling and the fixed-cut drain determine
+committed content and terminal state. An already-idle Session drains and ends;
+an active stream ends after terminal reconciliation or rotates deliberately so
+the client can reconnect with its last durable ID. Disconnect never cancels an
+Invocation.
+
+Metadata, retention, and destructive operations remain later contracts. There
+is no generic public Session-event append endpoint. Client ToolCall results and
+future steering use narrow commands defined with those features.
 
 ## 4. ToolCalls
 

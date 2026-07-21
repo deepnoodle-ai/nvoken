@@ -2,18 +2,17 @@ openapi: 3.1.0
 info:
   title: nvoken Runtime API
   version: 0.1.0
-  summary: Durable Invocation admission, execution, and recovery contract
+  summary: Durable Invocation admission, execution, recovery, and live-output contract
   license:
     name: Apache-2.0
     identifier: Apache-2.0
   description: |
-    This focused contract defines nvoken's implemented background JSON surface:
+    This focused contract defines nvoken's implemented background Runtime surface:
     durable Invocation admission, authoritative Invocation and Session reads,
-    and cursor-based transcript recovery.
+    cursor-based transcript recovery, and resumable Session output streaming.
 
-    Streaming, tools, structured output, spec references, external dispatch,
-    and administrative APIs are outside this
-    version of the contract.
+    Tools, structured output, spec references, and administrative APIs are
+    outside this version of the contract.
 servers:
   - url: /
     description: Current nvoken installation
@@ -470,6 +469,68 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TranscriptSnapshot"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/sessions/{session_id}/transcript/stream:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    get:
+      tags: [Sessions]
+      operationId: streamSessionTranscript
+      summary: Replay and tail one Session transcript over SSE
+      description: |
+        Opens a resumable Server-Sent Events projection over the same fixed-cut
+        transcript read model as the JSON endpoint. The server subscribes to
+        live fan-out before its first Postgres drain, re-drains Postgres on a
+        bounded poll, and closes after authoritative terminal reconciliation or
+        deliberate rotation. Disconnecting never cancels the Invocation.
+
+        `transcript.snapshot` data has the `TranscriptSnapshot` shape. Every
+        nonempty snapshot frame carries `id: <resume_cursor>`; that opaque ID is
+        the only replay position clients persist. `generation.delta`,
+        `stream.resync`, and `stream.end` are live/control frames and never carry
+        an `id`. Token and thinking deltas are ephemeral and may be lost; after
+        `stream.resync`, discard provisional output and wait for canonical
+        messages. `stream.end` reason `terminal` means the final Postgres drain
+        observed no nonterminal Invocation. Reason `rotate` means reconnect with
+        the last durable ID. An abnormal close has no terminal meaning.
+
+        The explicit `cursor` query parameter takes precedence over
+        `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
+        client that can set the `Authorization` header; the browser EventSource
+        constructor alone cannot do so. The server emits `retry: 1000` as its
+        default reconnect delay.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - name: Last-Event-ID
+          in: header
+          description: Opaque `resume_cursor` from the last cursor-bearing snapshot frame; ignored when `cursor` is supplied.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: |
+            SSE frames named `transcript.snapshot`, `generation.delta`,
+            `stream.resync`, and `stream.end`. Payload schemas are
+            `TranscriptSnapshot`, `GenerationDeltaEvent`, `StreamResyncEvent`,
+            and `StreamEndEvent` respectively.
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/TranscriptStreamEvent"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1018,6 +1079,101 @@ components:
           oneOf:
             - type: string
             - type: "null"
+    GenerationTextDelta:
+      type: object
+      additionalProperties: false
+      required: [content_index, type, text]
+      properties:
+        content_index:
+          type: integer
+          minimum: 0
+        type:
+          type: string
+          const: text
+        text:
+          type: string
+          minLength: 1
+    GenerationThinkingDelta:
+      type: object
+      additionalProperties: false
+      required: [content_index, type, thinking]
+      properties:
+        content_index:
+          type: integer
+          minimum: 0
+        type:
+          type: string
+          const: thinking
+        thinking:
+          type: string
+          minLength: 1
+    GenerationDeltaEvent:
+      type: object
+      additionalProperties: false
+      required: [event_type, session_id, invocation_id, lease_attempt, delta_sequence, delta, emitted_at]
+      properties:
+        event_type:
+          type: string
+          const: generation.delta
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        lease_attempt:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Fenced execution attempt that emitted this live preview.
+        delta_sequence:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Attempt-local live ordering hint; never a replay cursor.
+        delta:
+          oneOf:
+            - $ref: "#/components/schemas/GenerationTextDelta"
+            - $ref: "#/components/schemas/GenerationThinkingDelta"
+        emitted_at:
+          type: string
+          format: date-time
+    StreamResyncEvent:
+      type: object
+      additionalProperties: false
+      required: [event_type, session_id, reason]
+      properties:
+        event_type:
+          type: string
+          const: stream.resync
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        reason:
+          type: string
+          const: live_delivery_gap
+    StreamEndEvent:
+      type: object
+      additionalProperties: false
+      required: [event_type, session_id, reason, resume_cursor]
+      properties:
+        event_type:
+          type: string
+          const: stream.end
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        reason:
+          type: string
+          enum: [terminal, rotate]
+        resume_cursor:
+          type: string
+          minLength: 1
+    TranscriptStreamEvent:
+      description: |
+        The JSON value carried by one SSE `data:` field. SSE framing supplies
+        the event name and, for `TranscriptSnapshot` only, the durable ID.
+      oneOf:
+        - $ref: "#/components/schemas/TranscriptSnapshot"
+        - $ref: "#/components/schemas/GenerationDeltaEvent"
+        - $ref: "#/components/schemas/StreamResyncEvent"
+        - $ref: "#/components/schemas/StreamEndEvent"
     ErrorCode:
       type: string
       enum:

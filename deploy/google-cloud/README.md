@@ -17,6 +17,8 @@ visible `execution_lost` failure after lease expiry.
   short-lived source-staging bucket, and the APIs required by this root;
 - a dedicated VPC, subnet, and private services connection;
 - a private-IP-only Cloud SQL for PostgreSQL 17 instance with backups and PITR;
+- a private basic-tier Memorystore for Redis instance used only for lossy live
+  output Pub/Sub between executor and Runtime replicas;
 - generated database and Runtime credentials in Secret Manager;
 - Secret Manager access for existing Anthropic and/or OpenAI key secrets,
   granted only to the configured generating role;
@@ -48,8 +50,8 @@ Registry, Cloud Storage, Cloud Build, and Cloud Run resources. The release
 caller must also be allowed to act as the generated Cloud Build service account.
 The automatically managed, same-project Cloud Build service agent already has
 the token permissions required by Cloud Build; an extra cross-project service
-agent grant is neither required nor created. Cloud SQL and the continuously
-allocated Cloud Run minimum instance incur ongoing cost.
+agent grant is neither required nor created. Cloud SQL, Memorystore, and the
+continuously allocated Cloud Run minimum instance incur ongoing cost.
 
 Terraform state contains the generated database password, database URL, and
 Runtime bearer key. Keep it in a restricted, versioned GCS bucket; never commit
@@ -153,6 +155,29 @@ correlatable by Invocation ID. To prove restart readback during a release test,
 deploy the next unique image revision and repeat the final `GET` with the same
 ID; the state remains in Cloud SQL.
 
+To inspect the resumable stream during the same Invocation, use the `session_id`
+from its `202` acknowledgement with a bearer-capable HTTP client:
+
+```bash
+curl --no-buffer \
+  -H "Authorization: Bearer ${NVOKEN_RUNTIME_API_KEY}" \
+  -H 'Accept: text/event-stream' \
+  "${NVOKEN_RUNTIME_URL}/v1/sessions/${NVOKEN_SESSION_ID}/transcript/stream"
+```
+
+Only `transcript.snapshot` frames carry an `id`; reconnect with that value as
+`Last-Event-ID` or `?cursor=...`. `generation.delta` is an ephemeral preview.
+On `stream.resync`, discard provisional text and wait for the next canonical
+snapshot. `stream.end` reason `rotate` is a normal reconnect boundary and
+reason `terminal` follows the final Postgres reconciliation. A Redis outage may
+remove previews but the one-second Postgres poll still delivers committed
+messages and terminal state.
+
+The paved Memorystore instance is private, requires Redis AUTH, and accepts
+only TLS connections. Terraform stores its generated AUTH string in Secret
+Manager and supplies every active Memorystore CA to both service roles; nvoken
+verifies the server certificate and supports overlapping CAs during rotation.
+
 Cloud Run reserves some external paths ending in `z` at Google Front End and
 can return a Google-generated `404` before the request reaches nvoken. nvoken
 therefore uses `/health` consistently for local checks, Cloud Run startup and
@@ -247,6 +272,15 @@ segment deadline is 900 seconds and model work stops five seconds before that
 deadline for settlement. Terraform rejects a segment ceiling beyond the
 application attempt timeout and an application timeout that does not leave the
 same reserve before the platform deadline.
+
+The public Cloud Run request ceiling is 3,600 seconds and nvoken deliberately
+rotates an active SSE stream after 3,300 seconds. Every stream write is bounded
+to ten seconds, keepalive comments are sent every fifteen seconds, and a
+one-second Postgres poll remains the correctness fallback. These values are
+separate from Invocation and executor deadlines. The Runtime and executor both
+receive the private TLS Memorystore endpoint and generated AUTH secret; Redis
+carries no provider/runtime credentials, transcript authority, task ownership,
+or execution fence.
 
 Cloud Run currently provides a ten-second termination window. The paved service
 sets `SHUTDOWN_TIMEOUT=8s` and `ENGINE_DRAIN_GRACE=7s`. On `SIGTERM`, HTTP stops

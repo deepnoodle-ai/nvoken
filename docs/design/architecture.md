@@ -205,6 +205,18 @@ published protocol). The public admission handler owns no model execution:
 Both modes share identical semantics; moving between them is configuration
 only.
 
+Live output is a projection, not an execution or storage boundary. A Session
+SSE handler subscribes to bounded fan-out before draining the fixed-cut
+Postgres transcript, then polls that read model as its correctness fallback.
+Only transcript snapshots carry the opaque durable cursor. Provider-normalized
+generation deltas are best-effort, id-less previews; buffer overflow or Redis
+loss asks clients to discard provisional output and reconcile to canonical
+`SessionMessage` plus Invocation lifecycle state. Self-contained mode may use
+an in-process adapter. Split execution uses private Redis Pub/Sub between the
+executor and API replicas; the paved path authenticates it and verifies its TLS
+server certificate. Redis never grants a claim, advances a cursor, or
+determines terminal state.
+
 An executing turn is an I/O-bound state machine: one goroutine per active
 Invocation, thousands per process; a parked Invocation — waiting on a tool
 result — is durable rows and no goroutine. Memory, not CPU, is the scaling
@@ -352,21 +364,19 @@ carry over; the mapping below records how its concepts land in nvoken.
 
 1. Which spec reference schemes ship at launch: signed HTTPS, object
    storage, OCI artifact, or a subset?
-2. What is the replay guarantee for token deltas versus the durable transcript
-   and lifecycle change view?
-3. Which safety limits are installation configuration versus credential
+2. Which safety limits are installation configuration versus credential
    claims?
-4. What credential form should deferred direct end-user access take, and
+3. What credential form should deferred direct end-user access take, and
    when would host-issued JWT federation justify its complexity?
-5. How many metadata items are indexed per request, and what query surface
+4. How many metadata items are indexed per request, and what query surface
    do they get?
-6. What are the agent-memory data model and scoping (per agent, per
+5. What are the agent-memory data model and scoping (per agent, per
    `tenant_ref`, per Session)?
-7. How long are idempotency records retained?
-8. Do portable operators need multi-Account selection, or is single-Account
+6. How long are idempotency records retained?
+7. Do portable operators need multi-Account selection, or is single-Account
    operation sufficient outside nvoken Cloud?
-9. Which minimal builtins belong in the portable runtime?
-10. Which operator views does the console need first: session viewer,
+8. Which minimal builtins belong in the portable runtime?
+9. Which operator views does the console need first: session viewer,
     invocation trace, usage, health?
-11. How far does observability extend beyond the trace: an Account-wide
+10. How far does observability extend beyond the trace: an Account-wide
     activity feed, OpenTelemetry projection?

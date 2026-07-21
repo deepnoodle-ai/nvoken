@@ -29,6 +29,10 @@ const (
 	serverWriteTimeout     = 180 * time.Second
 	serverIdleTimeout      = 60 * time.Second
 	defaultShutdownTimeout = 10 * time.Second
+	defaultStreamPoll      = time.Second
+	defaultStreamKeepalive = 15 * time.Second
+	defaultStreamLifetime  = 55 * time.Minute
+	defaultStreamWrite     = 10 * time.Second
 )
 
 type RuntimeService interface {
@@ -39,6 +43,7 @@ type RuntimeService interface {
 	ListSessions(context.Context, domain.RuntimeAuthContext, services.SessionListInput) (services.SessionList, error)
 	ListSessionMessages(context.Context, domain.RuntimeAuthContext, string, services.MessageListInput) (services.SessionMessageList, error)
 	GetSessionTranscript(context.Context, domain.RuntimeAuthContext, string, services.TranscriptInput) (services.TranscriptSnapshot, error)
+	GetSessionTranscriptStreamState(context.Context, domain.RuntimeAuthContext, string) (services.TranscriptStreamState, error)
 }
 
 type cancellationRuntimeService interface {
@@ -51,11 +56,21 @@ type Config struct {
 	Runtime         RuntimeService
 	Logger          *slog.Logger
 	ShutdownTimeout time.Duration
+	LiveEvents      ports.LiveEventBus
+	Stream          StreamConfig
+}
+
+type StreamConfig struct {
+	PollInterval      time.Duration
+	KeepaliveInterval time.Duration
+	MaxLifetime       time.Duration
+	WriteTimeout      time.Duration
 }
 
 type Server struct {
 	http            *http.Server
 	shutdownTimeout time.Duration
+	cancelStreams   context.CancelFunc
 }
 
 func NewServer(cfg Config) *Server {
@@ -63,10 +78,15 @@ func NewServer(cfg Config) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	stream := normalizedStreamConfig(cfg.Stream)
+	streamShutdown, cancelStreams := context.WithCancel(context.Background())
 	handler := newHandler(handlerConfig{
-		authenticator: cfg.Authenticator,
-		runtime:       cfg.Runtime,
-		logger:        logger,
+		authenticator:  cfg.Authenticator,
+		runtime:        cfg.Runtime,
+		logger:         logger,
+		liveEvents:     cfg.LiveEvents,
+		stream:         stream,
+		streamShutdown: streamShutdown,
 	})
 	shutdownTimeout := cfg.ShutdownTimeout
 	if shutdownTimeout <= 0 {
@@ -78,30 +98,45 @@ func NewServer(cfg Config) *Server {
 			Handler:           handler,
 			ReadHeaderTimeout: serverReadHeaderTimeout,
 			ReadTimeout:       serverReadTimeout,
-			WriteTimeout:      serverWriteTimeout,
-			IdleTimeout:       serverIdleTimeout,
-			MaxHeaderBytes:    1 << 20,
+			// Streaming handlers set a bounded deadline on every write. A global
+			// WriteTimeout would terminate every SSE connection at the same age.
+			WriteTimeout:   0,
+			IdleTimeout:    serverIdleTimeout,
+			MaxHeaderBytes: 1 << 20,
 		},
 		shutdownTimeout: shutdownTimeout,
+		cancelStreams:   cancelStreams,
 	}
 }
 
 type handlerConfig struct {
-	authenticator ports.RuntimeAuthenticator
-	runtime       RuntimeService
-	logger        *slog.Logger
+	authenticator  ports.RuntimeAuthenticator
+	runtime        RuntimeService
+	logger         *slog.Logger
+	liveEvents     ports.LiveEventBus
+	stream         StreamConfig
+	streamShutdown context.Context
 }
 
 type handler struct {
-	authenticator ports.RuntimeAuthenticator
-	runtime       RuntimeService
-	logger        *slog.Logger
+	authenticator  ports.RuntimeAuthenticator
+	runtime        RuntimeService
+	logger         *slog.Logger
+	liveEvents     ports.LiveEventBus
+	stream         StreamConfig
+	streamShutdown context.Context
 }
 
 func newHandler(cfg handlerConfig) http.Handler {
-	h := &handler{authenticator: cfg.authenticator, runtime: cfg.runtime, logger: cfg.logger}
+	h := &handler{
+		authenticator: cfg.authenticator, runtime: cfg.runtime, logger: cfg.logger,
+		liveEvents: cfg.liveEvents, stream: normalizedStreamConfig(cfg.stream), streamShutdown: cfg.streamShutdown,
+	}
 	if h.logger == nil {
 		h.logger = slog.Default()
+	}
+	if h.streamShutdown == nil {
+		h.streamShutdown = context.Background()
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", h.requireMethod(http.MethodGet, h.health))
@@ -111,6 +146,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 	mux.HandleFunc("/v1/sessions", h.requireMethod(http.MethodGet, h.listSessions))
 	mux.HandleFunc("/v1/sessions/{session_id}/messages", h.requireMethod(http.MethodGet, h.listSessionMessages))
 	mux.HandleFunc("/v1/sessions/{session_id}/transcript", h.requireMethod(http.MethodGet, h.getSessionTranscript))
+	mux.HandleFunc("/v1/sessions/{session_id}/transcript/stream", h.requireMethod(http.MethodGet, h.streamSessionTranscript))
 	mux.HandleFunc("/v1/sessions/{session_id}", h.requireMethod(http.MethodGet, h.getSession))
 	mux.HandleFunc("/", h.notFound)
 	return h.logRequests(mux)
@@ -720,6 +756,9 @@ func (h *handler) logRequests(next http.Handler) http.Handler {
 			requestID = "req_unavailable"
 		}
 		w.Header().Set("X-Request-ID", requestID)
+		if !strings.HasSuffix(r.URL.Path, "/transcript/stream") {
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(serverWriteTimeout))
+		}
 		ctx := context.WithValue(r.Context(), requestIDContextKey{}, requestID)
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		request := r.WithContext(ctx)
@@ -732,6 +771,22 @@ func (h *handler) logRequests(next http.Handler) http.Handler {
 			"latency_ms", time.Since(started).Milliseconds(),
 		)
 	})
+}
+
+func normalizedStreamConfig(config StreamConfig) StreamConfig {
+	if config.PollInterval <= 0 {
+		config.PollInterval = defaultStreamPoll
+	}
+	if config.KeepaliveInterval <= 0 {
+		config.KeepaliveInterval = defaultStreamKeepalive
+	}
+	if config.MaxLifetime <= 0 {
+		config.MaxLifetime = defaultStreamLifetime
+	}
+	if config.WriteTimeout <= 0 {
+		config.WriteTimeout = defaultStreamWrite
+	}
+	return config
 }
 
 func requestIDFromContext(ctx context.Context) string {
@@ -755,6 +810,8 @@ type statusRecorder struct {
 	status      int
 	wroteHeader bool
 }
+
+func (w *statusRecorder) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (w *statusRecorder) WriteHeader(status int) {
 	if w.wroteHeader {
@@ -782,6 +839,9 @@ func (s *Server) Run(ctx context.Context) error {
 	case err := <-errChan:
 		return err
 	case <-ctx.Done():
+	}
+	if s.cancelStreams != nil {
+		s.cancelStreams()
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.shutdownTimeout)
