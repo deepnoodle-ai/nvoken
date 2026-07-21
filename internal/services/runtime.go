@@ -92,14 +92,33 @@ type admissionStore interface {
 }
 
 type RuntimeService struct {
-	store admissionStore
-	txm   ports.TransactionManager
-	clock ports.Clock
-	ids   ports.IDGenerator
+	store     admissionStore
+	txm       ports.TransactionManager
+	clock     ports.Clock
+	ids       ports.IDGenerator
+	signaller ports.WorkSignaller
 }
 
-func NewRuntimeService(store admissionStore, txm ports.TransactionManager, clock ports.Clock, ids ports.IDGenerator) *RuntimeService {
-	return &RuntimeService{store: store, txm: txm, clock: clock, ids: ids}
+type RuntimeOption func(*RuntimeService)
+
+func WithWorkSignaller(signaller ports.WorkSignaller) RuntimeOption {
+	return func(service *RuntimeService) { service.signaller = signaller }
+}
+
+func NewRuntimeService(
+	store admissionStore,
+	txm ports.TransactionManager,
+	clock ports.Clock,
+	ids ports.IDGenerator,
+	options ...RuntimeOption,
+) *RuntimeService {
+	service := &RuntimeService{store: store, txm: txm, clock: clock, ids: ids}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	return service
 }
 
 func ValidateCreateInvocation(input CreateInvocationInput) error {
@@ -287,6 +306,9 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			return nil
 		})
 		if err == nil {
+			if !acknowledgement.Deduplicated && s.signaller != nil {
+				s.signaller.Notify(ctx, ports.InvocationExecutionQueue)
+			}
 			return acknowledgement, nil
 		}
 		if errors.Is(err, ports.ErrConcurrentAdmission) && attempt == 0 && ctx.Err() == nil {

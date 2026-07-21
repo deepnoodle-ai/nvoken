@@ -74,6 +74,9 @@ type Invocation struct {
 	RequestFingerprint   []byte
 	Status               InvocationStatus
 	CurrentStateRevision int64
+	LeaseOwner           *string
+	LeaseExpiresAt       *time.Time
+	LeaseAttempt         int64
 	Error                json.RawMessage
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
@@ -110,6 +113,19 @@ type InvocationState struct {
 	AgentID                string
 	Revision               int64
 	Status                 InvocationStatus
+	LeaseAttempt           int64
 	ThroughMessageSequence *int64
 	CreatedAt              time.Time
+}
+
+type InvocationClaim struct {
+	Invocation     Invocation
+	Owner          string
+	Attempt        int64
+	LeaseExpiresAt time.Time
+}
+
+type InvocationExecutionResult struct {
+	Status InvocationStatus
+	Error  json.RawMessage
 }

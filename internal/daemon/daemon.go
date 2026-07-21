@@ -9,6 +9,7 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpapi"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/postgres"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/worksignal"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
@@ -47,7 +48,8 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("configure runtime authentication: %w", err)
 	}
-	runtime := services.NewRuntimeService(store, txm, clock, ids)
+	signaller := worksignal.NewInProcess()
+	runtime := services.NewRuntimeService(store, txm, clock, ids, services.WithWorkSignaller(signaller))
 	srv := httpapi.NewServer(httpapi.Config{
 		Addr: ":" + cfg.Port, Authenticator: authenticator, Runtime: runtime,
 	})
