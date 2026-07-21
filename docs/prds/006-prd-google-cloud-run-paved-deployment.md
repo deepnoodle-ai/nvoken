@@ -1,6 +1,6 @@
 # Deploy the Self-Contained Runtime on Google Cloud Run
 
-**Status:** Implemented; disposable Google Cloud proof pending
+**Status:** Implemented and verified in Google Cloud
 
 **Sequence:** 006
 
@@ -163,7 +163,7 @@ topology. PRDs 009 and 010 add the split execution path.
   public access prevention without attempting to manage its own bucket in that
   state.
 
-- [ ] **A3 (R3):** Against an empty Postgres database, the release operation
+- [x] **A3 (R3):** Against an empty Postgres database, the release operation
   runs the migration job to the expected schema version before deploying the
   service. Two concurrent migration executions serialize; a failed migration
   stops the release before service update, and ordinary service startup performs
@@ -192,12 +192,18 @@ topology. PRDs 009 and 010 add the split execution path.
   `severity` and `message`, and operational entries can be correlated by request
   or Invocation ID without logging model input/output.
 
-- [ ] **A8 (R3, R5, R8):** In a disposable Google Cloud environment, the
+- [x] **A8 (R3, R5, R8):** In a disposable Google Cloud environment, the
   documented paved workflow builds and deploys a unique image, completes the
   migration job, passes the startup probe, returns a `202` acknowledgement for
   a real Anthropic or OpenAI Invocation, and later returns `completed` for that
   same durable Invocation ID. Re-reading after a service revision restart
   returns the same terminal state.
+
+  Verified on 2026-07-21 in the `nvoken` project: the migration-gated release
+  deployed immutable image `1fd0f3f0d6309537eda94c34ff375fde06953fc5`,
+  OpenAI Invocation `invk_019f82b7-8d59-75e4-be8d-6f0671157dfb` completed, the
+  same terminal row was read after a new Cloud Run revision took traffic, and
+  the final Terraform plan reported no changes.
 
 ## Risks and open decisions
 
