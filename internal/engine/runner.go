@@ -66,7 +66,7 @@ func NewRunner(
 	if ownership == nil || executor == nil {
 		return nil, fmt.Errorf("engine ownership and executor are required")
 	}
-	if err := validateConfig(config); err != nil {
+	if err := ValidateConfig(config); err != nil {
 		return nil, err
 	}
 	if logger == nil {
@@ -78,7 +78,7 @@ func NewRunner(
 	}, nil
 }
 
-func validateConfig(config Config) error {
+func ValidateConfig(config Config) error {
 	if config.Concurrency <= 0 {
 		return fmt.Errorf("engine concurrency must be positive")
 	}
@@ -308,6 +308,7 @@ func (r *Runner) settleLoop(
 	result domain.InvocationExecutionResult,
 	state *claimState,
 ) {
+	validationFallbackUsed := false
 	for ctx.Err() == nil && !state.leaseLost.Load() {
 		err := r.ownership.Settle(ctx, claim, result)
 		if err == nil {
@@ -319,6 +320,18 @@ func (r *Runner) settleLoop(
 		if errors.Is(err, ports.ErrLeaseLost) {
 			r.loseLease(cancelLease, cancelExecutor, claim, state, "fence rejected settlement")
 			return
+		}
+		if errors.Is(err, ports.ErrExecutionResultInvalid) {
+			if validationFallbackUsed {
+				r.logger.Error("Internal failure result rejected; awaiting lease reaper",
+					"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt)
+				return
+			}
+			validationFallbackUsed = true
+			result = internalFailureResult()
+			r.logger.Warn("Invocation execution result rejected; settling internal failure",
+				"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt)
+			continue
 		}
 		r.logger.Warn("Invocation settlement failed; retrying",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
@@ -355,9 +368,11 @@ func internalFailureResult() domain.InvocationExecutionResult {
 
 func validResult(result domain.InvocationExecutionResult) bool {
 	if result.Status == domain.InvocationCompleted {
-		return len(result.Error) == 0
+		return len(result.Error) == 0 && len(result.AssistantMessages) > 0 &&
+			result.Usage != nil && result.Provenance != nil
 	}
-	return result.Status == domain.InvocationFailed && len(result.Error) > 0 && json.Valid(result.Error)
+	return result.Status == domain.InvocationFailed && len(result.Error) > 0 && json.Valid(result.Error) &&
+		len(result.AssistantMessages) == 0 && result.Usage == nil && result.Provenance == nil
 }
 
 func waitFor(ctx context.Context, duration time.Duration) bool {

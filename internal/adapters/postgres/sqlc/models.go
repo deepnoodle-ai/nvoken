@@ -45,6 +45,8 @@ type Invocation struct {
 	LeaseOwner           *string
 	LeaseExpiresAt       *time.Time
 	LeaseAttempt         int64
+	Usage                []byte
+	Provenance           []byte
 }
 
 type InvocationState struct {

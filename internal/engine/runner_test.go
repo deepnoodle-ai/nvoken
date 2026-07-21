@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -231,6 +232,34 @@ func TestRunnerDrainsBeforeCancellingAndJoinsAfterGrace(t *testing.T) {
 			t.Fatalf("settlement calls = %d, want retry after drain cancellation", got)
 		}
 	})
+}
+
+func TestRunnerSettlesInternalFailureAfterResultValidationRejection(t *testing.T) {
+	ownership := newFakeOwnership(1, time.Second)
+	ownership.settleErrors = []error{ports.ErrExecutionResultInvalid}
+	runner := newTestRunner(t, ownership, immediateExecutor{}, nil, testConfig())
+	ctx, cancel := context.WithCancel(context.Background())
+	done := runRunner(runner, ctx)
+	waitUntil(t, time.Second, func() bool { return ownership.settlementCount() == 1 })
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := ownership.settlementCallCount(); got != 2 {
+		t.Fatalf("settlement calls = %d, want rejected result plus internal failure", got)
+	}
+	ownership.mu.Lock()
+	result := ownership.settlements[0]
+	ownership.mu.Unlock()
+	if result.Status != domain.InvocationFailed || result.Usage != nil || result.Provenance != nil {
+		t.Fatalf("fallback result = %#v", result)
+	}
+	var failure struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(result.Error, &failure); err != nil || failure.Code != "internal" {
+		t.Fatalf("fallback error = %s, decoded = %#v, error = %v", result.Error, failure, err)
+	}
 }
 
 func TestRunnerLogsOperationalFieldsWithoutInvocationPayloads(t *testing.T) {
@@ -464,7 +493,18 @@ func (immediateExecutor) Execute(context.Context, domain.InvocationClaim) (domai
 }
 
 func completed() domain.InvocationExecutionResult {
-	return domain.InvocationExecutionResult{Status: domain.InvocationCompleted}
+	return domain.InvocationExecutionResult{
+		Status: domain.InvocationCompleted,
+		AssistantMessages: []domain.GenerationMessage{{
+			Role:    domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[{"type":"text","text":"done"}]`),
+		}},
+		Usage: &domain.ModelUsage{InputTokens: 1, OutputTokens: 1},
+		Provenance: &domain.ModelProvenance{
+			Provider: "test", RequestedModel: "test", ServedModel: "test",
+			CredentialSource: "installation_byok",
+		},
+	}
 }
 
 func testConfig() Config {
