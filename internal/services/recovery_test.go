@@ -158,6 +158,47 @@ func TestTranscriptRejectsAheadAndCrossSessionCursors(t *testing.T) {
 	}
 }
 
+func TestSessionConstraintHidesOtherSessionsAndNarrowsCollections(t *testing.T) {
+	store := &recoveryTestStore{
+		session: domain.Session{
+			ID: recoverySessionID, AccountID: recoveryAccountID,
+			TenantPartitionID: recoveryPartitionID, AgentID: recoveryAgentID,
+			NextMessageSequence: 1, NextLifecycleRevision: 1,
+		},
+		partition: domain.TenantPartition{ID: recoveryPartitionID, AccountID: recoveryAccountID},
+	}
+	service := newRecoveryTestService(store)
+	matching := recoveryAuth(domain.OperationGetSession, domain.OperationListSessions, domain.OperationGetTranscript, domain.OperationListInvocations)
+	matching.SessionConstraint = stringTestPointer(recoverySessionID)
+
+	if session, err := service.GetSession(context.Background(), matching, recoverySessionID); err != nil || session.ID != recoverySessionID {
+		t.Fatalf("matching constrained Session = %#v, %v", session, err)
+	}
+	listed, err := service.ListSessions(context.Background(), matching, SessionListInput{})
+	if err != nil || len(listed.Items) != 1 || listed.Items[0].ID != recoverySessionID {
+		t.Fatalf("matching constrained Session list = %#v, %v", listed, err)
+	}
+	otherAgent := "agnt_019b0a12-0000-7000-8000-000000000099"
+	listed, err = service.ListSessions(context.Background(), matching, SessionListInput{AgentID: &otherAgent})
+	if err != nil || len(listed.Items) != 0 {
+		t.Fatalf("mismatched constrained Session list = %#v, %v", listed, err)
+	}
+	otherSession := "sesn_019b0a12-0000-7000-8000-000000000099"
+	other := recoveryAuth(domain.OperationGetSession, domain.OperationGetTranscript, domain.OperationListInvocations)
+	other.SessionConstraint = &otherSession
+	if _, err := service.GetSession(context.Background(), other, recoverySessionID); !publicErrorCodeIs(err, CodeNotFound) {
+		t.Fatalf("cross-Session read error = %v", err)
+	}
+	if _, err := service.GetSessionTranscript(context.Background(), other, recoverySessionID, TranscriptInput{}); !publicErrorCodeIs(err, CodeNotFound) {
+		t.Fatalf("cross-Session transcript error = %v", err)
+	}
+	requestedSession := recoverySessionID
+	invocations, err := service.ListInvocations(context.Background(), other, InvocationListInput{SessionID: &requestedSession})
+	if err != nil || len(invocations.Items) != 0 {
+		t.Fatalf("cross-Session invocation list = %#v, %v", invocations, err)
+	}
+}
+
 type recoveryTestStore struct {
 	admissionStore
 	session   domain.Session
@@ -178,6 +219,10 @@ func (s *recoveryTestStore) GetTenantPartition(context.Context, string) (domain.
 		return domain.TenantPartition{}, ports.ErrNotFound
 	}
 	return s.partition, nil
+}
+
+func (s *recoveryTestStore) GetNonterminalInvocationBySession(context.Context, string) (domain.Invocation, error) {
+	return domain.Invocation{}, ports.ErrNotFound
 }
 
 func (s *recoveryTestStore) ListSessionMessagesRange(_ context.Context, _ string, after, through int64, limit int) ([]domain.SessionMessage, error) {

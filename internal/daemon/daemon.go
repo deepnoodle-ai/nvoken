@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/deepnoodle-ai/nvoken/internal/adapters/auth"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/callbackhttp"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/cloudtasks"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/divegen"
@@ -43,6 +42,10 @@ type Config struct {
 	DatabaseMaxConns        int32
 	RuntimeAPIKey           string
 	RuntimeTenantConstraint *string
+	BootstrapOwnerSecret    string
+	CredentialDeliveryKey   []byte
+	PublicBaseURL           string
+	TrustForwardedClientIP  bool
 	AnthropicAPIKey         string
 	OpenAIAPIKey            string
 	ShutdownTimeout         time.Duration
@@ -221,11 +224,20 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("bootstrap installation: %w", err)
 	}
-	authenticator, err := auth.NewStaticAuthenticator(auth.StaticConfig{
-		Token: cfg.RuntimeAPIKey, AccountID: account.ID, TenantConstraint: cfg.RuntimeTenantConstraint,
+	authenticator, err := services.NewIdentityService(store, store, txm, clock, ids, services.IdentityConfig{
+		AccountID:             account.ID,
+		VerificationBaseURL:   cfg.PublicBaseURL,
+		DeliveryEncryptionKey: cfg.CredentialDeliveryKey,
+		BootstrapOwnerSecret:  cfg.BootstrapOwnerSecret,
 	})
 	if err != nil {
 		return fmt.Errorf("configure runtime authentication: %w", err)
+	}
+	if _, err := authenticator.BootstrapOwner(ctx); err != nil {
+		return fmt.Errorf("bootstrap installation Owner: %w", err)
+	}
+	if _, err := authenticator.ImportStaticRuntimeCredential(ctx, cfg.RuntimeAPIKey, cfg.RuntimeTenantConstraint); err != nil {
+		return fmt.Errorf("import configured Runtime credential: %w", err)
 	}
 	signaller := worksignal.NewInProcess()
 	cancellations := worksignal.NewPostgresCancellation(pool)
@@ -237,8 +249,13 @@ func Run(ctx context.Context, cfg Config) error {
 	ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
 		services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
 	srv := httpapi.NewServer(httpapi.Config{
-		Addr: ":" + cfg.Port, Authenticator: authenticator, Runtime: runtime,
-		LiveEvents: liveBus, Stream: cfg.Stream,
+		Addr:                   ":" + cfg.Port,
+		Authenticator:          authenticator,
+		Runtime:                runtime,
+		Identity:               authenticator,
+		LiveEvents:             liveBus,
+		Stream:                 cfg.Stream,
+		TrustForwardedClientIP: cfg.TrustForwardedClientIP,
 		// Leave the supervisor one second to observe component completion and
 		// close the database pool inside the total process budget.
 		ShutdownTimeout: cfg.ShutdownTimeout - time.Second,

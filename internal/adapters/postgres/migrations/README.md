@@ -44,3 +44,9 @@ Migration `000011` adds one durable callback delivery per callback ToolCall,
 including blocked-before-park activation, delivery leases and attempts,
 terminal retention, and callback result provenance. Request and result content
 remain canonical only in `session_messages`.
+
+Migration `000012` replaces configuration-only Runtime authentication with
+durable machine and user credentials. It adds installation operator subjects
+and memberships, bounded encrypted issuance delivery, RFC 8628 device grants,
+bootstrap browser sessions, rotation lineage, and the one-time legacy Runtime
+key import marker.

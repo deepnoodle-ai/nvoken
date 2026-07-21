@@ -22,6 +22,11 @@ const (
 	PrefixSyntheticDispatchWork StableIDPrefix = "synw"
 	PrefixExecutionDispatch     StableIDPrefix = "dsp"
 	PrefixCallbackDelivery      StableIDPrefix = "cbdy"
+	PrefixOperatorSubject       StableIDPrefix = "osub"
+	PrefixMembership            StableIDPrefix = "mbrs"
+	PrefixCredential            StableIDPrefix = "cred"
+	PrefixDeviceAuthorization   StableIDPrefix = "dvaa"
+	PrefixBrowserSession        StableIDPrefix = "brws"
 )
 
 func (p StableIDPrefix) Valid() bool {
@@ -31,7 +36,8 @@ func (p StableIDPrefix) Valid() bool {
 		PrefixInvocationState, PrefixToolCall, PrefixToolCallAttempt,
 		PrefixModelUsageReceipt, PrefixInvocationCheckpoint,
 		PrefixSyntheticDispatchWork, PrefixExecutionDispatch,
-		PrefixCallbackDelivery:
+		PrefixCallbackDelivery, PrefixOperatorSubject, PrefixMembership,
+		PrefixCredential, PrefixDeviceAuthorization, PrefixBrowserSession:
 		return true
 	default:
 		return false

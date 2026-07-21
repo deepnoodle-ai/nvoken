@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -25,6 +26,10 @@ type config struct {
 	DatabaseMaxConns          int32         `env:"DATABASE_MAX_CONNS" envDefault:"10"`
 	RuntimeAPIKey             string        `env:"RUNTIME_API_KEY"`
 	RuntimeTenantRef          string        `env:"RUNTIME_TENANT_REF"`
+	BootstrapOwnerSecret      string        `env:"BOOTSTRAP_OWNER_SECRET"`
+	CredentialDeliveryKey     string        `env:"CREDENTIAL_DELIVERY_KEY"`
+	PublicBaseURL             string        `env:"NVOKEN_PUBLIC_BASE_URL"`
+	TrustForwardedClientIP    bool          `env:"NVOKEN_TRUST_FORWARDED_CLIENT_IP" envDefault:"false"`
 	AnthropicAPIKey           string        `env:"ANTHROPIC_API_KEY"`
 	OpenAIAPIKey              string        `env:"OPENAI_API_KEY"`
 	ShutdownTimeout           time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
@@ -132,9 +137,6 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if cfg.DatabaseMaxConns < minimumConns {
 		return daemon.Config{}, fmt.Errorf("serve: DATABASE_MAX_CONNS must be at least %d for the %s role", minimumConns, role)
 	}
-	if role == daemon.ProcessRoleCombined && cfg.RuntimeAPIKey == "" {
-		return daemon.Config{}, fmt.Errorf("serve: RUNTIME_API_KEY is required for the combined role")
-	}
 	engineConfig := engine.Config{
 		Concurrency: cfg.EngineConcurrency, PollInterval: cfg.EnginePollInterval,
 		LeaseDuration: cfg.EngineLeaseDuration, HeartbeatInterval: cfg.EngineHeartbeatInterval,
@@ -172,8 +174,19 @@ func loadDaemonConfig() (daemon.Config, error) {
 		cfg.CallbackDrainGrace > cfg.ShutdownTimeout-time.Second {
 		return daemon.Config{}, fmt.Errorf("serve: CALLBACK_DRAIN_GRACE must leave at least 1s inside SHUTDOWN_TIMEOUT")
 	}
-	if role == daemon.ProcessRoleCombined && len(cfg.RuntimeAPIKey) < 32 {
+	if role == daemon.ProcessRoleCombined && cfg.RuntimeAPIKey != "" && len(cfg.RuntimeAPIKey) < 32 {
 		return daemon.Config{}, fmt.Errorf("serve: RUNTIME_API_KEY must be at least 32 bytes")
+	}
+	var credentialDeliveryKey []byte
+	if role == daemon.ProcessRoleCombined {
+		if len(cfg.BootstrapOwnerSecret) < 32 {
+			return daemon.Config{}, fmt.Errorf("serve: BOOTSTRAP_OWNER_SECRET must be at least 32 bytes")
+		}
+		var err error
+		credentialDeliveryKey, err = base64.RawURLEncoding.DecodeString(cfg.CredentialDeliveryKey)
+		if err != nil || len(credentialDeliveryKey) != 32 {
+			return daemon.Config{}, fmt.Errorf("serve: CREDENTIAL_DELIVERY_KEY must be 32 bytes encoded as unpadded base64url")
+		}
 	}
 	callbackConfigured := cfg.CallbackSigningKey != ""
 	if role == daemon.ProcessRoleExecutor && callbackConfigured {
@@ -303,8 +316,12 @@ func loadDaemonConfig() (daemon.Config, error) {
 		ProcessRole:             role,
 		InvocationExecutionMode: executionMode,
 		RuntimeAPIKey:           cfg.RuntimeAPIKey, RuntimeTenantConstraint: tenantConstraint,
-		AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
-		ShutdownTimeout: cfg.ShutdownTimeout, Engine: engineConfig, Budgets: budgetPolicy,
+		BootstrapOwnerSecret: cfg.BootstrapOwnerSecret, CredentialDeliveryKey: credentialDeliveryKey,
+		PublicBaseURL:          cfg.PublicBaseURL,
+		TrustForwardedClientIP: cfg.TrustForwardedClientIP,
+		AnthropicAPIKey:        cfg.AnthropicAPIKey,
+		OpenAIAPIKey:           cfg.OpenAIAPIKey,
+		ShutdownTimeout:        cfg.ShutdownTimeout, Engine: engineConfig, Budgets: budgetPolicy,
 		Dispatch: dispatchConfig, DispatchController: controllerConfig, CloudTasks: cloudTasksConfig,
 		ExecutorAttemptTimeout: cfg.ExecutorAttemptTimeout,
 		RedisURL:               cfg.RedisURL, RedisPassword: cfg.RedisPassword,

@@ -19,7 +19,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/deepnoodle-ai/nvoken/internal/adapters/auth"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/liveevents"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/postgres"
@@ -247,13 +246,20 @@ func endToEndGenerationResponse() domain.GenerationResponse {
 
 func runtimeTestAuthenticator(t *testing.T, accountID string) ports.RuntimeAuthenticator {
 	t.Helper()
-	authenticator, err := auth.NewStaticAuthenticator(auth.StaticConfig{
-		Token: "0123456789abcdef0123456789abcdef", AccountID: accountID,
-	})
-	if err != nil {
-		t.Fatalf("authenticator: %v", err)
-	}
-	return authenticator
+	return fakeAuthenticator{auth: domain.RuntimeAuthContext{
+		AccountID: accountID,
+		Operations: map[domain.RuntimeOperation]struct{}{
+			domain.OperationCreateInvocation:  {},
+			domain.OperationGetInvocation:     {},
+			domain.OperationSubmitToolResults: {},
+			domain.OperationCancelInvocation:  {},
+			domain.OperationListInvocations:   {},
+			domain.OperationGetSession:        {},
+			domain.OperationListSessions:      {},
+			domain.OperationListMessages:      {},
+			domain.OperationGetTranscript:     {},
+		},
+	}}
 }
 
 func lastSSEID(stream string) string {
@@ -290,13 +296,7 @@ func openRuntimeHTTP(t *testing.T, databaseURL string) (*pgxpool.Pool, http.Hand
 		pool.Close()
 		t.Fatalf("bootstrap: %v", err)
 	}
-	authenticator, err := auth.NewStaticAuthenticator(auth.StaticConfig{
-		Token: "0123456789abcdef0123456789abcdef", AccountID: account.ID,
-	})
-	if err != nil {
-		pool.Close()
-		t.Fatalf("authenticator: %v", err)
-	}
+	authenticator := runtimeTestAuthenticator(t, account.ID)
 	runtime := services.NewRuntimeService(store, txm, clock, ids)
 	handler := newHandler(handlerConfig{
 		authenticator: authenticator, runtime: runtime,

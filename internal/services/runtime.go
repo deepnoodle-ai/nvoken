@@ -305,6 +305,9 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 	if auth.TenantConstraint != nil && input.TenantRef != nil && *auth.TenantConstraint != *input.TenantRef {
 		return InvocationAcknowledgement{}, forbidden("The requested tenant_ref conflicts with the credential constraint.")
 	}
+	if auth.SessionConstraint != nil && (input.SessionID == nil || *input.SessionID != *auth.SessionConstraint) {
+		return InvocationAcknowledgement{}, forbidden("The requested Session conflicts with the credential constraint.")
+	}
 	resolvedBudgets, err := s.budgetPolicy.ResolveForFeatures(
 		input.Spec.Budgets,
 		input.Spec.Output != nil,
@@ -603,7 +606,7 @@ func (s *RuntimeService) GetInvocation(ctx context.Context, auth domain.RuntimeA
 	if err != nil {
 		return InvocationRead{}, err
 	}
-	if invocation.AccountID != auth.AccountID {
+	if invocation.AccountID != auth.AccountID || !auth.AllowsSession(invocation.SessionID) {
 		return InvocationRead{}, notFound()
 	}
 	partition, err := s.store.GetTenantPartition(ctx, invocation.TenantPartitionID)
@@ -638,7 +641,7 @@ func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuth
 	if err != nil {
 		return SessionRead{}, err
 	}
-	if session.AccountID != auth.AccountID {
+	if session.AccountID != auth.AccountID || !auth.AllowsSession(session.ID) {
 		return SessionRead{}, notFound()
 	}
 	partition, err := s.store.GetTenantPartition(ctx, session.TenantPartitionID)

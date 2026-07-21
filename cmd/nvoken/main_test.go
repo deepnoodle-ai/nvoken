@@ -126,7 +126,7 @@ func TestConfigurationPrecedenceAndMissingCredential(t *testing.T) {
 	t.Setenv("NVOKEN_API_KEY", "")
 	app := newApp()
 	err = app.ExecuteContext(context.Background(), []string{"invocation", "get", testInvocationID})
-	if err == nil || !strings.Contains(err.Error(), "NVOKEN_API_KEY is required") {
+	if err == nil || !strings.Contains(err.Error(), "not authenticated") {
 		t.Fatalf("missing credential error: %v", err)
 	}
 }

@@ -21,6 +21,9 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 	if cfg.ShutdownTimeout != 40*time.Second {
 		t.Errorf("ShutdownTimeout: got %s, want 40s", cfg.ShutdownTimeout)
 	}
+	if cfg.TrustForwardedClientIP {
+		t.Error("TrustForwardedClientIP: got true, want false")
+	}
 	if cfg.Engine.Concurrency != 8 || cfg.Engine.PollInterval != time.Second ||
 		cfg.Engine.LeaseDuration != 30*time.Second || cfg.Engine.HeartbeatInterval != 10*time.Second ||
 		cfg.Engine.ReaperInterval != 10*time.Second || cfg.Engine.ReaperBatchLimit != 100 ||
@@ -51,6 +54,18 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 		cfg.CallbackController.DrainGrace != 15*time.Second || cfg.CallbackRequestTimeout != 10*time.Second ||
 		cfg.CallbackDNSTimeout != 5*time.Second {
 		t.Fatalf("callback defaults: %#v", cfg)
+	}
+}
+
+func TestLoadDaemonConfigTrustsForwardedClientIPWhenEnabled(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("NVOKEN_TRUST_FORWARDED_CLIENT_IP", "true")
+	cfg, err := loadDaemonConfig()
+	if err != nil {
+		t.Fatalf("loadDaemonConfig: %v", err)
+	}
+	if !cfg.TrustForwardedClientIP {
+		t.Error("TrustForwardedClientIP: got false, want true")
 	}
 }
 
@@ -344,8 +359,11 @@ func TestLoadDaemonConfigRequiresRuntimeDependencies(t *testing.T) {
 	}
 
 	t.Setenv("DATABASE_URL", "postgres://localhost/nvoken")
-	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "RUNTIME_API_KEY") {
-		t.Fatalf("missing runtime key error = %v", err)
+	t.Setenv("BOOTSTRAP_OWNER_SECRET", "bootstrap-owner-secret-0123456789")
+	t.Setenv("CREDENTIAL_DELIVERY_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret")
+	if _, err := loadDaemonConfig(); err != nil {
+		t.Fatalf("post-cutover config without RUNTIME_API_KEY: %v", err)
 	}
 
 	t.Setenv("RUNTIME_API_KEY", "short")
@@ -354,7 +372,6 @@ func TestLoadDaemonConfigRequiresRuntimeDependencies(t *testing.T) {
 	}
 
 	t.Setenv("RUNTIME_API_KEY", "0123456789abcdef0123456789abcdef")
-	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret")
 	t.Setenv("RUNTIME_TENANT_REF", strings.Repeat("界", 256))
 	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "255 Unicode characters") {
 		t.Fatalf("long tenant constraint error = %v", err)
@@ -373,5 +390,7 @@ func setServeConfig(t *testing.T) {
 	t.Helper()
 	t.Setenv("DATABASE_URL", "postgres://nvoken:secret@localhost/nvoken")
 	t.Setenv("RUNTIME_API_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("BOOTSTRAP_OWNER_SECRET", "bootstrap-owner-secret-0123456789")
+	t.Setenv("CREDENTIAL_DELIVERY_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret")
 }
