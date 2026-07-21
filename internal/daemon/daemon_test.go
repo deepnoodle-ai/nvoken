@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 type componentFunc func(context.Context) error
@@ -14,25 +15,28 @@ func (f componentFunc) Run(ctx context.Context) error { return f(ctx) }
 
 func TestRunComponentsCancelsAndJoinsSibling(t *testing.T) {
 	wantErr := errors.New("server failed")
-	joined := make(chan struct{})
+	siblingJoined := make(chan struct{})
 	var cancelled atomic.Bool
-	err := runComponents(context.Background(),
+	allJoined, err := runComponents(context.Background(), time.Second,
 		componentFunc(func(context.Context) error { return wantErr }),
 		componentFunc(func(ctx context.Context) error {
 			<-ctx.Done()
 			cancelled.Store(true)
-			close(joined)
+			close(siblingJoined)
 			return nil
 		}),
 	)
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("runComponents error = %v", err)
 	}
+	if !allJoined {
+		t.Fatal("components were not joined")
+	}
 	if !cancelled.Load() {
 		t.Fatal("sibling was not cancelled and joined")
 	}
 	select {
-	case <-joined:
+	case <-siblingJoined:
 	default:
 		t.Fatal("sibling did not finish before return")
 	}
@@ -45,9 +49,39 @@ func TestRunComponentsTreatsParentCancellationAsCleanShutdown(t *testing.T) {
 		<-ctx.Done()
 		return ctx.Err()
 	})
-	if err := runComponents(ctx, component, component); err != nil {
+	joined, err := runComponents(ctx, time.Second, component, component)
+	if err != nil {
 		t.Fatalf("runComponents cancellation error = %v", err)
 	}
+	if !joined {
+		t.Fatal("cancelled components were not joined")
+	}
+}
+
+func TestRunComponentsBoundsUncooperativeShutdown(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	release := make(chan struct{})
+	done := make(chan struct{})
+	component := componentFunc(func(context.Context) error {
+		defer close(done)
+		<-release
+		return nil
+	})
+	cancel()
+
+	started := time.Now()
+	joined, err := runComponents(ctx, 20*time.Millisecond, component)
+	if err != nil {
+		t.Fatalf("cancelled timeout error = %v", err)
+	}
+	if joined {
+		t.Fatal("uncooperative component reported joined")
+	}
+	if elapsed := time.Since(started); elapsed < 20*time.Millisecond || elapsed > time.Second {
+		t.Fatalf("shutdown elapsed = %s", elapsed)
+	}
+	close(release)
+	<-done
 }
 
 func TestExecutionOwnerIsUniqueAndBounded(t *testing.T) {

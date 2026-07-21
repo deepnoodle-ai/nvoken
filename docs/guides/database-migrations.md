@@ -23,6 +23,12 @@ The serve path checks that the schema is present, clean, and at the exact
 version expected by the binary; it exits rather than modifying an empty, dirty,
 older, or newer database.
 
+The [Google Cloud paved deployment](../../deploy/google-cloud/README.md) runs the
+same immutable image as a single-task migration Job. Its release script updates
+and executes that Job to success before the full Terraform apply can move the
+service to the new image. A failed migration leaves serving traffic on the
+prior revision.
+
 For adapter integration tests, point `NVOKEN_TEST_DATABASE_URL` at a disposable
 Postgres database and run:
 

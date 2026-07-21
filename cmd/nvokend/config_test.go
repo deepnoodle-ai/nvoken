@@ -18,6 +18,9 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 	if cfg.DatabaseMaxConns != 10 {
 		t.Errorf("DatabaseMaxConns: got %d, want 10", cfg.DatabaseMaxConns)
 	}
+	if cfg.ShutdownTimeout != 40*time.Second {
+		t.Errorf("ShutdownTimeout: got %s, want 40s", cfg.ShutdownTimeout)
+	}
 	if cfg.Engine.Concurrency != 8 || cfg.Engine.PollInterval != time.Second ||
 		cfg.Engine.LeaseDuration != 30*time.Second || cfg.Engine.HeartbeatInterval != 10*time.Second ||
 		cfg.Engine.ReaperInterval != 10*time.Second || cfg.Engine.ReaperBatchLimit != 100 ||
@@ -60,6 +63,8 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "openai-secret")
 	t.Setenv("ENGINE_CONCURRENCY", "3")
 	t.Setenv("ENGINE_POLL_INTERVAL", "250ms")
+	t.Setenv("SHUTDOWN_TIMEOUT", "8s")
+	t.Setenv("ENGINE_DRAIN_GRACE", "7s")
 
 	cfg, err := loadDaemonConfig()
 	if err != nil {
@@ -72,8 +77,20 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 		t.Fatalf("daemon config = %#v", cfg)
 	}
 	if cfg.AnthropicAPIKey != "anthropic-secret" || cfg.OpenAIAPIKey != "openai-secret" ||
-		cfg.Engine.Concurrency != 3 || cfg.Engine.PollInterval != 250*time.Millisecond {
+		cfg.Engine.Concurrency != 3 || cfg.Engine.PollInterval != 250*time.Millisecond ||
+		cfg.ShutdownTimeout != 8*time.Second || cfg.Engine.DrainGrace != 7*time.Second {
 		t.Fatalf("generation config = %#v", cfg)
+	}
+}
+
+func TestLoadDaemonConfigRejectsDrainOutsideShutdownBudget(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("SHUTDOWN_TIMEOUT", "8s")
+	t.Setenv("ENGINE_DRAIN_GRACE", "8s")
+
+	_, err := loadDaemonConfig()
+	if err == nil || !strings.Contains(err.Error(), "leave at least 1s") {
+		t.Fatalf("shutdown budget error = %v", err)
 	}
 }
 

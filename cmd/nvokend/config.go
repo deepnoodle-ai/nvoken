@@ -13,13 +13,14 @@ import (
 )
 
 type config struct {
-	Port             string `env:"PORT" envDefault:"8080"`
-	DatabaseURL      string `env:"DATABASE_URL"`
-	DatabaseMaxConns int32  `env:"DATABASE_MAX_CONNS" envDefault:"10"`
-	RuntimeAPIKey    string `env:"RUNTIME_API_KEY"`
-	RuntimeTenantRef string `env:"RUNTIME_TENANT_REF"`
-	AnthropicAPIKey  string `env:"ANTHROPIC_API_KEY"`
-	OpenAIAPIKey     string `env:"OPENAI_API_KEY"`
+	Port             string        `env:"PORT" envDefault:"8080"`
+	DatabaseURL      string        `env:"DATABASE_URL"`
+	DatabaseMaxConns int32         `env:"DATABASE_MAX_CONNS" envDefault:"10"`
+	RuntimeAPIKey    string        `env:"RUNTIME_API_KEY"`
+	RuntimeTenantRef string        `env:"RUNTIME_TENANT_REF"`
+	AnthropicAPIKey  string        `env:"ANTHROPIC_API_KEY"`
+	OpenAIAPIKey     string        `env:"OPENAI_API_KEY"`
+	ShutdownTimeout  time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
 
 	EngineConcurrency       int           `env:"ENGINE_CONCURRENCY" envDefault:"8"`
 	EnginePollInterval      time.Duration `env:"ENGINE_POLL_INTERVAL" envDefault:"1s"`
@@ -62,6 +63,12 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if err := engine.ValidateConfig(engineConfig); err != nil {
 		return daemon.Config{}, fmt.Errorf("invalid engine configuration: %w", err)
 	}
+	if cfg.ShutdownTimeout <= 0 {
+		return daemon.Config{}, fmt.Errorf("SHUTDOWN_TIMEOUT must be positive")
+	}
+	if cfg.EngineDrainGrace > cfg.ShutdownTimeout-time.Second {
+		return daemon.Config{}, fmt.Errorf("ENGINE_DRAIN_GRACE must leave at least 1s inside SHUTDOWN_TIMEOUT")
+	}
 	if len(cfg.RuntimeAPIKey) < 32 {
 		return daemon.Config{}, fmt.Errorf("RUNTIME_API_KEY must be at least 32 bytes")
 	}
@@ -79,7 +86,7 @@ func loadDaemonConfig() (daemon.Config, error) {
 		Port: cfg.Port, DatabaseURL: cfg.DatabaseURL, DatabaseMaxConns: cfg.DatabaseMaxConns,
 		RuntimeAPIKey: cfg.RuntimeAPIKey, RuntimeTenantConstraint: tenantConstraint,
 		AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
-		Engine: engineConfig,
+		ShutdownTimeout: cfg.ShutdownTimeout, Engine: engineConfig,
 	}, nil
 }
 

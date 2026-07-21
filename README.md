@@ -40,6 +40,9 @@ they are **stateless**. nvoken aims to retain that approach as much as possible.
 > Invocation/Session reads now work, and the self-contained service executes
 > generation-only Anthropic and OpenAI turns. Tools, transcript reads, and
 > checkpointed crash continuation remain future slices.
+> A reproducible [Google Cloud Run paved deployment](deploy/google-cloud/README.md)
+> packages this slice with private Cloud SQL, Secret Manager, and an explicit
+> migration job.
 > If the contract looks wrong for your app, please
 > [open an issue](https://github.com/deepnoodle-ai/nvoken/issues).
 

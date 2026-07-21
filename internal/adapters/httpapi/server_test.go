@@ -88,6 +88,13 @@ func TestServerTimeoutsAreBounded(t *testing.T) {
 	if server.http.WriteTimeout <= server.http.ReadTimeout {
 		t.Fatalf("write timeout %s must leave time after read timeout %s", server.http.WriteTimeout, server.http.ReadTimeout)
 	}
+	if server.shutdownTimeout != defaultShutdownTimeout {
+		t.Fatalf("shutdown timeout = %s, want %s", server.shutdownTimeout, defaultShutdownTimeout)
+	}
+	configured := NewServer(Config{ShutdownTimeout: 8 * time.Second})
+	if configured.shutdownTimeout != 8*time.Second {
+		t.Fatalf("configured shutdown timeout = %s", configured.shutdownTimeout)
+	}
 }
 
 func TestRoutingErrorsUseContractEnvelope(t *testing.T) {

@@ -94,3 +94,14 @@ required strings are invalid. Idempotency comparison uses the documented v1
 SHA-256 canonical representation under `docs/design/`, so JSON object order is
 irrelevant, array and string changes remain material, and retained work stays
 comparable across service releases.
+
+20. Self-contained Cloud Run drain limitation (2026-07-20): instance-based CPU
+and a nonzero minimum let the combined API and engine continue work after an
+admission response, but they do not make a background turn request-bound.
+Cloud Run revision shutdown and scale-in provide only the platform termination
+window, so a longer running turn may lose its engine and settle through the
+pre-checkpoint `execution_lost` policy. The process stops claims and cooperatively
+drains within one configured shutdown budget, and operators deploy combined mode
+during quiet periods. The stronger drain-without-interruption behavior applies
+to request-bound split execution; checkpoint recovery later makes process loss
+resumable in either topology.
