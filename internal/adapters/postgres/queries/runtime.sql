@@ -269,3 +269,68 @@ SELECT *
 FROM invocation_states
 WHERE session_id = $1
 ORDER BY revision;
+
+-- name: ListInvocationsForRecovery :many
+SELECT i.*
+FROM invocations AS i
+WHERE i.account_id = sqlc.arg(account_id)
+  AND (sqlc.narg(tenant_partition_id)::text IS NULL OR i.tenant_partition_id = sqlc.narg(tenant_partition_id)::text)
+  AND (sqlc.narg(session_id)::text IS NULL OR i.session_id = sqlc.narg(session_id)::text)
+  AND (sqlc.narg(agent_id)::text IS NULL OR i.agent_id = sqlc.narg(agent_id)::text)
+  AND (sqlc.narg(status)::text IS NULL OR i.status = sqlc.narg(status)::text)
+  AND (
+      sqlc.narg(before_created_at)::timestamptz IS NULL
+      OR (i.created_at, i.id) < (sqlc.narg(before_created_at)::timestamptz, sqlc.narg(before_id)::text)
+  )
+ORDER BY i.created_at DESC, i.id DESC
+LIMIT sqlc.arg(batch_limit);
+
+-- name: ListSessionsForRecovery :many
+SELECT s.id, s.account_id, s.tenant_partition_id, s.agent_id, s.session_key,
+       s.next_message_sequence, s.next_lifecycle_revision, s.created_at, s.updated_at,
+       tp.tenant_ref,
+       COALESCE(active.id, '') AS active_invocation_id,
+       COALESCE(active.status, '') AS active_invocation_status
+FROM sessions AS s
+JOIN tenant_partitions AS tp ON tp.id = s.tenant_partition_id
+LEFT JOIN LATERAL (
+    SELECT i.id, i.status
+    FROM invocations AS i
+    WHERE i.session_id = s.id
+      AND i.status IN ('queued', 'running', 'waiting')
+    ORDER BY i.created_at, i.id
+    LIMIT 1
+) AS active ON true
+WHERE s.account_id = sqlc.arg(account_id)
+  AND (sqlc.narg(tenant_partition_id)::text IS NULL OR s.tenant_partition_id = sqlc.narg(tenant_partition_id)::text)
+  AND (sqlc.narg(agent_id)::text IS NULL OR s.agent_id = sqlc.narg(agent_id)::text)
+  AND (sqlc.narg(session_key)::text IS NULL OR s.session_key = sqlc.narg(session_key)::text)
+  AND (
+      sqlc.narg(before_created_at)::timestamptz IS NULL
+      OR (s.created_at, s.id) < (sqlc.narg(before_created_at)::timestamptz, sqlc.narg(before_id)::text)
+  )
+ORDER BY s.created_at DESC, s.id DESC
+LIMIT sqlc.arg(batch_limit);
+
+-- name: ListSessionMessagesRange :many
+SELECT id, session_id, account_id, tenant_partition_id, agent_id,
+       invocation_id, sequence, role, content, created_at
+FROM session_messages
+WHERE session_id = sqlc.arg(session_id)
+  AND sequence > sqlc.arg(after_sequence)
+  AND sequence <= sqlc.arg(through_sequence)
+ORDER BY sequence
+LIMIT sqlc.arg(batch_limit);
+
+-- name: ListInvocationLifecycleChanges :many
+SELECT st.id, st.invocation_id, st.session_id, st.account_id,
+       st.tenant_partition_id, st.agent_id, st.revision, st.status,
+       st.lease_attempt, st.through_message_sequence, st.created_at,
+       i.error, i.usage, i.provenance
+FROM invocation_states AS st
+JOIN invocations AS i ON i.id = st.invocation_id
+WHERE st.session_id = sqlc.arg(session_id)
+  AND st.revision > sqlc.arg(after_revision)
+  AND st.revision <= sqlc.arg(through_revision)
+ORDER BY st.revision
+LIMIT sqlc.arg(batch_limit);

@@ -105,3 +105,17 @@ drains within one configured shutdown budget, and operators deploy combined mode
 during quiet periods. The stronger drain-without-interruption behavior applies
 to request-bound split execution; checkpoint recovery later makes process loss
 resumable in either topology.
+
+21. Fixed-cut JSON recovery model (2026-07-21): public Session recovery composes
+the existing `SessionMessage.sequence` and `InvocationState.revision`
+watermarks rather than creating a durable event log. A drain captures both
+committed high-water marks from the Session row in one read, retains that cut in
+page tokens, and finishes message pages before lifecycle-change pages. The
+final composite cursor becomes the next incremental starting point. Collection,
+message, and transcript cursors are opaque and scope-bound but not signed;
+authorization is re-evaluated on every read and forged positions can only alter
+the caller's own traversal. Session reads retain the frozen nullable
+`active_invocation_id` and add nullable `active_invocation_status` as a sibling
+field, present and null together. This carries forward Mobius Cloud's useful
+fixed-cut ordering while omitting its separate turn model, interactions, live
+preview state, and project namespace.

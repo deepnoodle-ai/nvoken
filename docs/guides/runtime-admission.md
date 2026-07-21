@@ -75,6 +75,41 @@ curl --fail-with-body \
   http://localhost:8080/v1/sessions/sesn_…
 ```
 
+The Invocation read includes terminal `error`, normalized aggregate `usage`,
+and model `provenance`. Collection reads are bounded, newest-first, and use the
+returned opaque cursor with the exact same filters:
+
+```bash
+curl --fail-with-body \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  'http://localhost:8080/v1/invocations?session_id=sesn_…&limit=100'
+
+curl --fail-with-body \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  'http://localhost:8080/v1/sessions?tenant_ref=customer-482'
+```
+
+Read the sole durable transcript directly, or use the incremental snapshot that
+the future stream will project:
+
+```bash
+curl --fail-with-body \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  'http://localhost:8080/v1/sessions/sesn_…/messages?limit=100'
+
+curl --fail-with-body \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  'http://localhost:8080/v1/sessions/sesn_…/transcript?limit=100'
+```
+
+For `/transcript`, continue with `next_page_token` until `has_more` is false,
+then retain `resume_cursor` for the next incremental drain. A page token fixes
+the original upper cut, so new writes cannot keep an old traversal open.
+Message pages always precede lifecycle-change pages; applying the arrays in
+response order cannot expose terminal completion before its committed assistant
+messages. Cursors and page tokens are scoped to their Account, Session, and
+filters and grant no authority of their own.
+
 The request body is limited to 1 MiB and 64 text blocks. Unknown fields,
 unsupported features such as tools, malformed IDs, duplicate JSON member names,
 and trailing JSON values are rejected before admission.

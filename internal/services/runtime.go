@@ -65,19 +65,22 @@ type InvocationRead struct {
 	SessionID   string
 	Status      domain.InvocationStatus
 	Error       json.RawMessage
+	Usage       json.RawMessage
+	Provenance  json.RawMessage
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	CompletedAt *time.Time
 }
 
 type SessionRead struct {
-	ID                 string
-	AgentID            string
-	TenantRef          *string
-	SessionKey         *string
-	ActiveInvocationID *string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                     string
+	AgentID                string
+	TenantRef              *string
+	SessionKey             *string
+	ActiveInvocationID     *string
+	ActiveInvocationStatus *domain.InvocationStatus
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
 type admissionStore interface {
@@ -89,6 +92,7 @@ type admissionStore interface {
 	ports.SessionMessageRepository
 	ports.InvocationRepository
 	ports.InvocationStateRepository
+	ports.RecoveryRepository
 }
 
 type RuntimeService struct {
@@ -433,11 +437,7 @@ func (s *RuntimeService) GetInvocation(ctx context.Context, auth domain.RuntimeA
 		}
 		return InvocationRead{}, err
 	}
-	return InvocationRead{
-		ID: invocation.ID, AgentID: invocation.AgentID, SessionID: invocation.SessionID,
-		Status: invocation.Status, Error: invocation.Error, CreatedAt: invocation.CreatedAt,
-		UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
-	}, nil
+	return invocationReadFromDomain(invocation), nil
 }
 
 func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuthContext, sessionID string) (SessionRead, error) {
@@ -468,17 +468,29 @@ func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuth
 		return SessionRead{}, err
 	}
 	var activeID *string
+	var activeStatus *domain.InvocationStatus
 	active, err := s.store.GetNonterminalInvocationBySession(ctx, session.ID)
 	if err == nil {
 		activeID = &active.ID
+		activeStatus = &active.Status
 	} else if !errors.Is(err, ports.ErrNotFound) {
 		return SessionRead{}, err
 	}
 	return SessionRead{
 		ID: session.ID, AgentID: session.AgentID, TenantRef: cloneString(partition.TenantRef),
 		SessionKey: cloneString(session.SessionKey), ActiveInvocationID: activeID,
-		CreatedAt: session.CreatedAt, UpdatedAt: session.UpdatedAt,
+		ActiveInvocationStatus: activeStatus,
+		CreatedAt:              session.CreatedAt, UpdatedAt: session.UpdatedAt,
 	}, nil
+}
+
+func invocationReadFromDomain(invocation domain.Invocation) InvocationRead {
+	return InvocationRead{
+		ID: invocation.ID, AgentID: invocation.AgentID, SessionID: invocation.SessionID,
+		Status: invocation.Status, Error: invocation.Error, Usage: invocation.Usage,
+		Provenance: invocation.Provenance, CreatedAt: invocation.CreatedAt,
+		UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
+	}
 }
 
 func (s *RuntimeService) ready() error {
