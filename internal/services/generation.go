@@ -36,6 +36,7 @@ type GenerationExecutor struct {
 	store     generationStore
 	generator ports.ModelGenerator
 	events    ports.LiveEventPublisher
+	clock     ports.Clock
 	logger    *slog.Logger
 }
 
@@ -44,6 +45,18 @@ type GenerationExecutorOption func(*GenerationExecutor)
 func WithGenerationLiveEvents(events ports.LiveEventPublisher) GenerationExecutorOption {
 	return func(executor *GenerationExecutor) { executor.events = events }
 }
+
+func WithGenerationClock(clock ports.Clock) GenerationExecutorOption {
+	return func(executor *GenerationExecutor) {
+		if clock != nil {
+			executor.clock = clock
+		}
+	}
+}
+
+type generationClock struct{}
+
+func (generationClock) Now() time.Time { return time.Now() }
 
 func NewGenerationExecutor(
 	store generationStore,
@@ -54,7 +67,12 @@ func NewGenerationExecutor(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	executor := &GenerationExecutor{store: store, generator: generator, logger: logger}
+	executor := &GenerationExecutor{
+		store:     store,
+		generator: generator,
+		clock:     generationClock{},
+		logger:    logger,
+	}
 	for _, option := range options {
 		if option != nil {
 			option(executor)
@@ -276,7 +294,7 @@ func (e *GenerationExecutor) claimLost(ctx context.Context, claim domain.Invocat
 	if err != nil {
 		return false
 	}
-	return !claimOwns(current, claim, time.Now().UTC())
+	return !claimOwns(current, claim, e.clock.Now().UTC())
 }
 
 func (e *GenerationExecutor) generate(

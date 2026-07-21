@@ -40,6 +40,7 @@ type Generator struct {
 	toolCoordinator ports.ToolCallCoordinator
 	testBuiltin     bool
 	clock           ports.Clock
+	logger          *slog.Logger
 }
 
 type Option func(*Generator)
@@ -72,6 +73,14 @@ func WithClock(clock ports.Clock) Option {
 	}
 }
 
+func WithLogger(logger *slog.Logger) Option {
+	return func(generator *Generator) {
+		if logger != nil {
+			generator.logger = logger
+		}
+	}
+}
+
 type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now() }
@@ -81,6 +90,7 @@ func New(config Config, options ...Option) *Generator {
 		config:  config,
 		factory: newModel,
 		clock:   systemClock{},
+		logger:  slog.Default(),
 	}
 	for _, option := range options {
 		if option != nil {
@@ -206,6 +216,7 @@ func (g *Generator) generate(
 			*request.Claim,
 			request.Resume.OpenToolCalls,
 			tools,
+			g.logger,
 		)
 		if err != nil {
 			if errors.Is(err, ports.ErrLeaseLost) {
@@ -746,6 +757,7 @@ func replayOpenToolCalls(
 	claim domain.InvocationClaim,
 	calls []domain.ResumableToolCall,
 	tools []dive.Tool,
+	logger *slog.Logger,
 ) ([]*llm.Message, error) {
 	byName := make(map[string]dive.Tool, len(tools))
 	for _, tool := range tools {
@@ -764,7 +776,7 @@ func replayOpenToolCalls(
 		if err != nil {
 			return nil, err
 		}
-		slog.Info(
+		logger.Info(
 			"Builtin ToolCall attempt resumed",
 			"invocation_id",
 			resumable.Call.InvocationID,

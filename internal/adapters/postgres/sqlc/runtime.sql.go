@@ -4522,7 +4522,9 @@ type StartToolCallAttemptParams struct {
 	ID         string
 }
 
-// StartToolCallAttempt
+// The service first verifies a live Invocation owner and execution deadline.
+// ToolCall.deadline_at is the logical wall deadline, not the abandoned
+// owner's segment cutoff, so recovery can start the same pending call.
 //
 //	UPDATE tool_calls
 //	SET status = 'running', current_attempt = current_attempt + 1,

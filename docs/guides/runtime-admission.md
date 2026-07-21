@@ -135,6 +135,14 @@ settle. Wall-clock and active-execution budgets remain hard limits across that
 continuation; operators should keep the reaper cadence well below the lease
 duration for prompt outcomes.
 
+In `cloud_tasks` mode, lease recovery deliberately keeps the active published
+dispatch so the original task retry is the fastest continuation path. If Cloud
+Tasks has exhausted or lost that delivery, the dispatch reconciler settles the
+stale publication and creates one successor for the queued Invocation. Keep the
+reconcile interval and aged-dispatch alerts tighter than the recovery latency
+your product promises; removing the active dispatch during reaping would lose
+this original-task retry path.
+
 Read the durable state after any API restart:
 
 ```bash

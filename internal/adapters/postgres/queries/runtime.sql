@@ -679,6 +679,9 @@ WHERE invocation_id = $1 AND iteration = $2
 ORDER BY batch_ordinal, id;
 
 -- name: StartToolCallAttempt :one
+-- The service first verifies a live Invocation owner and execution deadline.
+-- ToolCall.deadline_at is the logical wall deadline, not the abandoned
+-- owner's segment cutoff, so recovery can start the same pending call.
 UPDATE tool_calls
 SET status = 'running', current_attempt = current_attempt + 1,
     updated_at = sqlc.arg(observed_at)

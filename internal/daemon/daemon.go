@@ -164,9 +164,16 @@ func Run(ctx context.Context, cfg Config) error {
 		generator := divegen.New(divegen.Config{
 			AnthropicAPIKey: cfg.AnthropicAPIKey,
 			OpenAIAPIKey:    cfg.OpenAIAPIKey,
-		}, divegen.WithToolCoordinator(toolCoordinator))
+		},
+			divegen.WithToolCoordinator(toolCoordinator),
+			divegen.WithLogger(slog.Default()),
+		)
 		invocationExecutor := services.NewGenerationExecutor(
-			store, generator, slog.Default(), services.WithGenerationLiveEvents(liveBus),
+			store,
+			generator,
+			slog.Default(),
+			services.WithGenerationLiveEvents(liveBus),
+			services.WithGenerationClock(clock),
 		)
 		ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
 			services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
@@ -228,9 +235,16 @@ func Run(ctx context.Context, cfg Config) error {
 		generator := divegen.New(divegen.Config{
 			AnthropicAPIKey: cfg.AnthropicAPIKey,
 			OpenAIAPIKey:    cfg.OpenAIAPIKey,
-		}, divegen.WithToolCoordinator(toolCoordinator))
+		},
+			divegen.WithToolCoordinator(toolCoordinator),
+			divegen.WithLogger(slog.Default()),
+		)
 		executor := services.NewGenerationExecutor(
-			store, generator, slog.Default(), services.WithGenerationLiveEvents(liveBus),
+			store,
+			generator,
+			slog.Default(),
+			services.WithGenerationLiveEvents(liveBus),
+			services.WithGenerationClock(clock),
 		)
 		owner, err := executionOwner()
 		if err != nil {

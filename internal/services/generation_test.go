@@ -24,6 +24,21 @@ type fakeGenerationStore struct {
 	err         error
 }
 
+type claimAwareGenerationStore struct {
+	*fakeGenerationStore
+	invocation domain.Invocation
+}
+
+func (s *claimAwareGenerationStore) GetInvocation(context.Context, string) (domain.Invocation, error) {
+	return s.invocation, nil
+}
+
+type fixedGenerationClock struct {
+	now time.Time
+}
+
+func (c fixedGenerationClock) Now() time.Time { return c.now }
+
 func (s *fakeGenerationStore) GetExecutionSpecSnapshot(context.Context, string) (domain.ExecutionSpecSnapshot, error) {
 	if s.err != nil {
 		return domain.ExecutionSpecSnapshot{}, s.err
@@ -329,6 +344,43 @@ func TestGenerationExecutorSettlesCommittedFinalCheckpointWithoutProviderCall(t 
 	assertFailureCode(t, result, "internal")
 	if result.MessagesCheckpointed || len(generator.requests) != 0 {
 		t.Fatalf("corrupt recovery result = %#v, calls = %d", result, len(generator.requests))
+	}
+}
+
+func TestGenerationExecutorUsesInjectedClockWhenCheckingLostClaim(t *testing.T) {
+	claim := generationClaim()
+	now := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+	owner := claim.Owner
+	leaseExpiresAt := now.Add(time.Hour)
+	executionDeadlineAt := now.Add(time.Hour)
+	current := claim.Invocation
+	current.Status = domain.InvocationRunning
+	current.LeaseOwner = &owner
+	current.LeaseExpiresAt = &leaseExpiresAt
+	current.LeaseAttempt = claim.Attempt
+	current.ExecutionDeadlineAt = &executionDeadlineAt
+	store := &claimAwareGenerationStore{
+		fakeGenerationStore: generationStoreFixture(claim),
+		invocation:          current,
+	}
+	store.messages[len(store.messages)-1].Role = domain.MessageRoleAssistant
+	generator := &fakeModelGenerator{
+		response: successfulGenerationResponse(),
+	}
+	result, err := NewGenerationExecutor(
+		store,
+		generator,
+		nil,
+		WithGenerationClock(fixedGenerationClock{
+			now: now,
+		}),
+	).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	assertFailureCode(t, result, "internal")
+	if len(generator.requests) != 0 {
+		t.Fatalf("model calls = %d, want 0", len(generator.requests))
 	}
 }
 
