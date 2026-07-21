@@ -236,6 +236,65 @@ func TestGenerationExecutorRejectsInvalidDurableInputsWithoutModelCall(t *testin
 	}
 }
 
+func TestGenerationExecutorReplaysCanonicalToolHistory(t *testing.T) {
+	claim := generationClaim()
+	store := generationStoreFixture(claim)
+	toolCallID := "tcal_019f84a5-7838-7b57-a180-5f74a0b65be0"
+	store.messages = []domain.SessionMessage{
+		{
+			SessionID:         claim.Invocation.SessionID,
+			AccountID:         claim.Invocation.AccountID,
+			TenantPartitionID: claim.Invocation.TenantPartitionID,
+			AgentID:           claim.Invocation.AgentID,
+			InvocationID:      "inv_first",
+			Sequence:          1,
+			Role:              domain.MessageRoleUser,
+			Content:           json.RawMessage(`[{"type":"text","text":"first"}]`),
+		},
+		{
+			SessionID:         claim.Invocation.SessionID,
+			AccountID:         claim.Invocation.AccountID,
+			TenantPartitionID: claim.Invocation.TenantPartitionID,
+			AgentID:           claim.Invocation.AgentID,
+			InvocationID:      "inv_first",
+			Sequence:          2,
+			Role:              domain.MessageRoleAssistant,
+			Content:           json.RawMessage(`[{"type":"tool_use","id":"` + toolCallID + `","name":"lookup","input":{"key":"value"}}]`),
+		},
+		{
+			SessionID:         claim.Invocation.SessionID,
+			AccountID:         claim.Invocation.AccountID,
+			TenantPartitionID: claim.Invocation.TenantPartitionID,
+			AgentID:           claim.Invocation.AgentID,
+			InvocationID:      "inv_first",
+			Sequence:          3,
+			Role:              domain.MessageRoleTool,
+			Content:           json.RawMessage(`[{"type":"tool_result","tool_use_id":"` + toolCallID + `","content":{"ok":true}}]`),
+		},
+		{
+			SessionID:         claim.Invocation.SessionID,
+			AccountID:         claim.Invocation.AccountID,
+			TenantPartitionID: claim.Invocation.TenantPartitionID,
+			AgentID:           claim.Invocation.AgentID,
+			InvocationID:      claim.Invocation.ID,
+			Sequence:          4,
+			Role:              domain.MessageRoleUser,
+			Content:           json.RawMessage(`[{"type":"text","text":"current"}]`),
+		},
+	}
+	generator := &fakeModelGenerator{
+		response: successfulGenerationResponse(),
+	}
+	result, err := NewGenerationExecutor(store, generator, nil).Execute(context.Background(), claim)
+	if err != nil || result.Status != domain.InvocationCompleted {
+		t.Fatalf("Execute result = %#v, error = %v", result, err)
+	}
+	if len(generator.requests) != 1 || len(generator.requests[0].Messages) != 4 ||
+		generator.requests[0].Messages[2].Role != domain.MessageRoleTool {
+		t.Fatalf("replayed request = %#v", generator.requests)
+	}
+}
+
 func TestGenerationExecutorMapsProviderFailuresAndInvalidResponses(t *testing.T) {
 	for _, test := range []struct {
 		name      string

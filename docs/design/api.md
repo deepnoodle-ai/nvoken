@@ -202,7 +202,16 @@ definitions travel in the execution specification or reference named custom
 tool definitions (section 5); there is no integration connection or OAuth
 resource.
 
-ToolCalls have no endpoints in this contract. When the client-tool slice ships,
+ToolCalls have no endpoints in this contract, and public execution specs still
+reject `tools`. Internally, the runtime may exercise a deterministic test-only
+builtin to prove the durable boundary: its assistant request message,
+nvoken-owned ToolCall identity, attempt, tool-result message, per-model usage
+receipt, and checkpoint all commit under the current Invocation fence. The
+ToolCall row stores transcript references and a request digest, never request or
+result content. Cancellation or reaping closes an open call with a canonical
+synthetic error result; it does not make an expired claim resumable.
+
+When the client-tool slice ships,
 the canonical transcript carries each request and result and the Session and
 Invocation reads report pending calls. A client ToolCall parks the Invocation
 in `waiting` with no engine capacity; the host submits the result through a

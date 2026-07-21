@@ -246,19 +246,29 @@ continuation.
 
 ### Checkpoints and resume
 
-The durable transcript is the basis of the future checkpoint system. Once
-checkpoint recovery ships, nvoken may checkpoint progress with each iteration
-of the agent turn and when tool calls finish; a small cursor (pending ToolCall,
-budget consumed, turn position) completes it. Resume rebuilds the turn from
-transcript and cursor — never restores process state.
+The checkpoint evidence spine is durable now. Every accepted model iteration
+appends its normalized assistant message and usage/provenance receipt together;
+prepared ToolCalls and their stable IDs commit in that same cut. A ToolCall
+outcome appends the canonical tool-role result and its next checkpoint in one
+fenced transaction. The Invocation stores only monotonic iteration and
+checkpoint counters, while append-only checkpoints reference the transcript
+watermark and corresponding receipt or ToolCall. They never contain transcript
+content, a provider envelope, or restorable process state.
 
-Before that checkpoint and replay-safety work is complete, engine loss may
-settle the Invocation as a durable typed failure so work cannot remain wedged;
-the runtime does not promise continuation from the interrupted point. After it
-ships, a completed tool call whose result was not yet persisted may be retried
-on resumption; accepted results are not re-applied, and checkpoint data must
-suffice to resume without double-charging usage. Resume also enables parking
-and turns longer than one dispatch window (checkpoint-and-chain).
+Tool request and result payloads remain exclusively in `SessionMessage`.
+ToolCall rows retain immutable scope, provider correlation, mode, request hash,
+deadline, attempt count, status, and message references. Model usage receipts
+are immutable per Invocation iteration. If cancellation, deadline expiry,
+settlement, or lease reaping wins while calls are open, that terminal
+transaction appends a bounded synthetic error result, closes the calls and
+running attempts, advances checkpoints, and publishes a lifecycle watermark
+covering the result.
+
+This evidence is not yet a resume promise. Engine loss still settles as
+`execution_lost`, and callback/client modes remain inert. The recovery slice
+may later make a recorded prefix claimable, reconstructing from transcript and
+cursor rather than process memory; it must not re-apply accepted ToolCall
+results or usage receipts. Parking and checkpoint-and-chain remain later work.
 
 ## Identity and access
 
@@ -305,11 +315,14 @@ The pillars:
 
 Authoritative data: agent anchors; Sessions and `SessionMessage` transcript
 items; indexed request metadata; Invocations, append-only lifecycle state
-revisions, and spec snapshots/digests; ToolCalls, attempts, and results; change
-view cursors; leases and checkpoints; usage and provenance; opt-in agent memory
+revisions, and spec snapshots/digests; ToolCalls, attempts, immutable normalized
+model-usage receipts, and append-only checkpoints; change view cursors; leases;
+usage and provenance; opt-in agent memory
 records; named custom tool definitions. Lifecycle revisions and change views
 may reference transcript sequence numbers but never store another copy of
-message or ToolCall-result content. No host tables, business records, OAuth
+message or ToolCall-result content. Tool lifecycle records have no independent
+pruning path and remain with the owning Invocation/Session trace. No host
+tables, business records, OAuth
 connections, business credentials, release catalogs, or durable user files.
 Spec snapshots live no longer than the Invocation/Session trace.
 

@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -24,6 +25,8 @@ var (
 	ErrTaskAlreadyExists      = errors.New("task already exists")
 	ErrDispatchAttemptActive  = errors.New("execution dispatch attempt already active")
 	ErrDispatchAttemptPending = errors.New("execution dispatch attempt decision pending")
+	ErrToolCallConflict       = errors.New("tool call identity or outcome conflict")
+	ErrToolCallNotRunnable    = errors.New("tool call is not runnable")
 )
 
 // Clock makes persisted timestamps deterministic in services and tests.
@@ -148,6 +151,38 @@ type InvocationStateRepository interface {
 	AppendInvocationState(context.Context, domain.InvocationState) error
 	GetCurrentInvocationState(context.Context, string) (domain.InvocationState, error)
 	ListInvocationStates(context.Context, string) ([]domain.InvocationState, error)
+}
+
+// ToolCallRepository persists only lifecycle and transcript references. Tool
+// request/result payloads remain canonical in SessionMessage.
+type ToolCallRepository interface {
+	CreateToolCall(context.Context, domain.ToolCall) error
+	GetToolCall(context.Context, string) (domain.ToolCall, error)
+	GetToolCallForUpdate(context.Context, string) (domain.ToolCall, error)
+	GetToolCallByProviderIdentityForUpdate(context.Context, string, int, string) (domain.ToolCall, error)
+	ListOpenToolCallsForUpdate(context.Context, string) ([]domain.ToolCall, error)
+	ListToolCallsByIteration(context.Context, string, int) ([]domain.ToolCall, error)
+	StartToolCallAttempt(context.Context, string, time.Time) (domain.ToolCall, error)
+	CreateToolCallAttempt(context.Context, domain.ToolCallAttempt) error
+	SettleToolCall(context.Context, string, domain.ToolCallStatus, string, int64, time.Time) (domain.ToolCall, error)
+	SettleToolCallAttempt(context.Context, string, domain.ToolCallStatus, time.Time) (domain.ToolCallAttempt, error)
+	SettleRunningToolCallAttempts(context.Context, string, domain.ToolCallStatus, time.Time) (int64, error)
+	CreateModelUsageReceipt(context.Context, domain.ModelUsageReceipt) error
+	GetModelUsageReceiptByIteration(context.Context, string, int) (domain.ModelUsageReceipt, error)
+	ListModelUsageReceipts(context.Context, string) ([]domain.ModelUsageReceipt, error)
+	CreateInvocationCheckpoint(context.Context, domain.InvocationCheckpoint) error
+	GetLatestInvocationCheckpoint(context.Context, string) (domain.InvocationCheckpoint, error)
+	ListInvocationCheckpoints(context.Context, string) ([]domain.InvocationCheckpoint, error)
+	AdvanceInvocationCheckpoint(context.Context, string, string, int64, time.Time, int64, int) (domain.Invocation, error)
+	AdvanceInvocationCheckpointForTerminal(context.Context, string, int64, int) (domain.Invocation, error)
+}
+
+// ToolCallCoordinator is the durable boundary used by model adapters and
+// trusted builtins. Every method verifies Invocation ownership in Postgres.
+type ToolCallCoordinator interface {
+	RecordModelCheckpoint(context.Context, domain.InvocationClaim, domain.ModelCheckpointInput) (domain.ModelCheckpointResult, error)
+	StartBuiltinToolCall(context.Context, domain.InvocationClaim, int, string) (domain.ToolCallExecution, error)
+	AcceptBuiltinToolResult(context.Context, domain.InvocationClaim, domain.ToolCallExecution, json.RawMessage, bool) (domain.ToolCall, error)
 }
 
 type ExecutionDispatchRepository interface {

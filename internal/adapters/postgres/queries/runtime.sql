@@ -611,3 +611,146 @@ WHERE st.session_id = sqlc.arg(session_id)
   AND st.revision <= sqlc.arg(through_revision)
 ORDER BY st.revision
 LIMIT sqlc.arg(batch_limit);
+
+-- name: CreateToolCall :exec
+INSERT INTO tool_calls (
+    id, invocation_id, session_id, account_id, tenant_partition_id, agent_id,
+    iteration, batch_ordinal, provider_call_id, name, mode,
+    request_message_id, request_message_sequence, request_digest, status,
+    deadline_at, current_attempt, result_message_id, result_message_sequence,
+    created_at, updated_at, completed_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(invocation_id), sqlc.arg(session_id),
+    sqlc.arg(account_id), sqlc.arg(tenant_partition_id), sqlc.arg(agent_id),
+    sqlc.arg(iteration), sqlc.arg(batch_ordinal), sqlc.arg(provider_call_id),
+    sqlc.arg(name), sqlc.arg(mode), sqlc.arg(request_message_id),
+    sqlc.arg(request_message_sequence), sqlc.arg(request_digest), sqlc.arg(status),
+    sqlc.arg(deadline_at), sqlc.arg(current_attempt), sqlc.narg(result_message_id),
+    sqlc.narg(result_message_sequence), sqlc.arg(created_at), sqlc.arg(updated_at),
+    sqlc.narg(completed_at)
+);
+
+-- name: GetToolCall :one
+SELECT * FROM tool_calls WHERE id = $1;
+
+-- name: GetToolCallForUpdate :one
+SELECT * FROM tool_calls WHERE id = $1 FOR UPDATE;
+
+-- name: GetToolCallByProviderIdentityForUpdate :one
+SELECT * FROM tool_calls
+WHERE invocation_id = $1 AND iteration = $2 AND provider_call_id = $3
+FOR UPDATE;
+
+-- name: ListOpenToolCallsForUpdate :many
+SELECT * FROM tool_calls
+WHERE invocation_id = $1 AND status IN ('pending', 'running')
+ORDER BY iteration, batch_ordinal, id
+FOR UPDATE;
+
+-- name: ListToolCallsByIteration :many
+SELECT * FROM tool_calls
+WHERE invocation_id = $1 AND iteration = $2
+ORDER BY batch_ordinal, id;
+
+-- name: StartToolCallAttempt :one
+UPDATE tool_calls
+SET status = 'running', current_attempt = current_attempt + 1,
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status = 'pending'
+  AND deadline_at > sqlc.arg(observed_at)
+RETURNING *;
+
+-- name: CreateToolCallAttempt :exec
+INSERT INTO tool_call_attempts (
+    id, tool_call_id, invocation_id, session_id, account_id,
+    tenant_partition_id, agent_id, attempt, invocation_lease_attempt,
+    status, started_at, completed_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(tool_call_id), sqlc.arg(invocation_id),
+    sqlc.arg(session_id), sqlc.arg(account_id), sqlc.arg(tenant_partition_id),
+    sqlc.arg(agent_id), sqlc.arg(attempt), sqlc.arg(invocation_lease_attempt),
+    sqlc.arg(status), sqlc.arg(started_at), sqlc.narg(completed_at)
+);
+
+-- name: SettleToolCall :one
+UPDATE tool_calls
+SET status = sqlc.arg(status), result_message_id = sqlc.arg(result_message_id),
+    result_message_sequence = sqlc.arg(result_message_sequence),
+    completed_at = sqlc.arg(observed_at), updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status IN ('pending', 'running')
+RETURNING *;
+
+-- name: SettleToolCallAttempt :one
+UPDATE tool_call_attempts
+SET status = sqlc.arg(status), completed_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status = 'running'
+RETURNING *;
+
+-- name: SettleRunningToolCallAttempts :execrows
+UPDATE tool_call_attempts
+SET status = sqlc.arg(status), completed_at = sqlc.arg(observed_at)
+WHERE tool_call_id = sqlc.arg(tool_call_id) AND status = 'running';
+
+-- name: CreateModelUsageReceipt :exec
+INSERT INTO model_usage_receipts (
+    id, invocation_id, session_id, account_id, tenant_partition_id, agent_id,
+    iteration, message_id, message_sequence, usage, provenance,
+    evidence_digest, created_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(invocation_id), sqlc.arg(session_id),
+    sqlc.arg(account_id), sqlc.arg(tenant_partition_id), sqlc.arg(agent_id),
+    sqlc.arg(iteration), sqlc.arg(message_id), sqlc.arg(message_sequence),
+    sqlc.arg(usage), sqlc.arg(provenance), sqlc.arg(evidence_digest),
+    sqlc.arg(created_at)
+);
+
+-- name: GetModelUsageReceiptByIteration :one
+SELECT * FROM model_usage_receipts
+WHERE invocation_id = $1 AND iteration = $2;
+
+-- name: ListModelUsageReceipts :many
+SELECT * FROM model_usage_receipts
+WHERE invocation_id = $1 ORDER BY iteration;
+
+-- name: CreateInvocationCheckpoint :exec
+INSERT INTO invocation_checkpoints (
+    id, invocation_id, session_id, account_id, tenant_partition_id, agent_id,
+    sequence, iteration, kind, lease_attempt, through_message_sequence,
+    usage_receipt_id, tool_call_id, created_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(invocation_id), sqlc.arg(session_id),
+    sqlc.arg(account_id), sqlc.arg(tenant_partition_id), sqlc.arg(agent_id),
+    sqlc.arg(sequence), sqlc.arg(iteration), sqlc.arg(kind),
+    sqlc.arg(lease_attempt), sqlc.arg(through_message_sequence),
+    sqlc.narg(usage_receipt_id), sqlc.narg(tool_call_id), sqlc.arg(created_at)
+);
+
+-- name: GetLatestInvocationCheckpoint :one
+SELECT * FROM invocation_checkpoints
+WHERE invocation_id = $1 ORDER BY sequence DESC LIMIT 1;
+
+-- name: ListInvocationCheckpoints :many
+SELECT * FROM invocation_checkpoints
+WHERE invocation_id = $1 ORDER BY sequence;
+
+-- name: AdvanceInvocationCheckpoint :one
+UPDATE invocations
+SET current_checkpoint_sequence = sqlc.arg(checkpoint_sequence),
+    current_iteration = sqlc.arg(iteration), updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status = 'running'
+  AND lease_owner = sqlc.arg(lease_owner)
+  AND lease_attempt = sqlc.arg(lease_attempt)
+  AND lease_expires_at > sqlc.arg(observed_at)
+  AND execution_deadline_at > sqlc.arg(observed_at)
+  AND current_checkpoint_sequence < sqlc.arg(checkpoint_sequence)
+  AND current_iteration <= sqlc.arg(iteration)
+RETURNING *;
+
+-- name: AdvanceInvocationCheckpointForTerminal :one
+UPDATE invocations
+SET current_checkpoint_sequence = sqlc.arg(checkpoint_sequence),
+    current_iteration = sqlc.arg(iteration)
+WHERE id = sqlc.arg(id) AND status IN ('queued', 'running', 'waiting')
+  AND current_checkpoint_sequence < sqlc.arg(checkpoint_sequence)
+  AND current_iteration <= sqlc.arg(iteration)
+RETURNING *;

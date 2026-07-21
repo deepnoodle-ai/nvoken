@@ -19,3 +19,9 @@ operation rather than cascades.
 Migration `000007` extends the outbox to scoped Invocation work. The generic
 `work_id` remains intentionally free of a foreign key because the table carries
 multiple kinds; kind-specific checks and service transactions enforce shape.
+
+Migration `000008` adds the durable ToolCall/checkpoint spine. Tool request and
+result content remains canonical only in append-only `session_messages`; the
+new rows retain immutable identity, transcript references, attempts, normalized
+usage receipts, and replay watermarks. These records are business evidence and
+have no independent pruning path.
