@@ -73,9 +73,10 @@ func (s *InvocationExecutionService) ClaimNext(
 	}
 	var claim domain.InvocationClaim
 	found := false
+	observedAt := s.clock.Now().UTC()
 	err := s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
 		for {
-			candidate, err := s.store.FindNextQueuedInvocationForUpdate(txCtx)
+			candidate, err := s.store.FindNextQueuedInvocationForUpdate(txCtx, observedAt)
 			if errors.Is(err, ports.ErrNotFound) {
 				return nil
 			}
@@ -173,6 +174,12 @@ func (s *InvocationExecutionService) claimWithSessionLocked(
 	}
 	now := s.clock.Now().UTC()
 	if !invocation.WallClockDeadlineAt.After(now) {
+		if _, _, err := s.reapDeadlineWithSessionLocked(ctx, invocation, now); err != nil {
+			return domain.InvocationClaim{}, err
+		}
+		return domain.InvocationClaim{}, errQueuedInvocationExpired
+	}
+	if invocation.ActiveExecutionMS >= invocation.ActiveTimeoutMS {
 		if _, _, err := s.reapDeadlineWithSessionLocked(ctx, invocation, now); err != nil {
 			return domain.InvocationClaim{}, err
 		}
@@ -392,6 +399,8 @@ func (s *InvocationExecutionService) reapDeadlineWithSessionLocked(ctx context.C
 	scope := ""
 	if !invocation.WallClockDeadlineAt.After(now) {
 		scope = "wall_clock"
+	} else if invocation.ActiveExecutionMS >= invocation.ActiveTimeoutMS {
+		scope = "active_execution"
 	} else if invocation.Status == domain.InvocationRunning && invocation.ExecutionDeadlineAt != nil && !invocation.ExecutionDeadlineAt.After(now) {
 		if invocation.ExecutionDeadlineScope != nil {
 			scope = *invocation.ExecutionDeadlineScope
@@ -609,7 +618,7 @@ func executionDeadline(invocation domain.Invocation, startedAt time.Time, segmen
 	}
 	remainingActive := time.Duration(invocation.ActiveTimeoutMS-invocation.ActiveExecutionMS) * time.Millisecond
 	if remainingActive <= 0 {
-		return startedAt, "active_execution", nil
+		return time.Time{}, "", fmt.Errorf("invocation active execution budget is exhausted")
 	}
 	deadline := startedAt.Add(segmentCeiling)
 	scope := "execution_segment"

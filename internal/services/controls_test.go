@@ -105,6 +105,10 @@ func TestExecutionDeadlineUsesRemainingActiveAndWallBudgets(t *testing.T) {
 	if err != nil || scope != "wall_clock" || !deadline.Equal(invocation.WallClockDeadlineAt) {
 		t.Fatalf("wall deadline = %s %q, error = %v", deadline, scope, err)
 	}
+	invocation.ActiveExecutionMS = invocation.ActiveTimeoutMS
+	if _, _, err := executionDeadline(invocation, started, 5*time.Second); err == nil {
+		t.Fatal("exhausted active budget produced a claim deadline")
+	}
 }
 
 type legacyFingerprintStore struct {

@@ -646,6 +646,8 @@ SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.sp
 FROM invocations AS i
 JOIN sessions AS s ON s.id = i.session_id
 WHERE i.status = 'queued'
+  AND i.wall_clock_deadline_at > $1
+  AND i.active_execution_ms < i.active_execution_timeout_ms
 ORDER BY i.created_at, i.id
 FOR UPDATE OF s SKIP LOCKED
 LIMIT 1
@@ -657,11 +659,13 @@ LIMIT 1
 //	FROM invocations AS i
 //	JOIN sessions AS s ON s.id = i.session_id
 //	WHERE i.status = 'queued'
+//	  AND i.wall_clock_deadline_at > $1
+//	  AND i.active_execution_ms < i.active_execution_timeout_ms
 //	ORDER BY i.created_at, i.id
 //	FOR UPDATE OF s SKIP LOCKED
 //	LIMIT 1
-func (q *Queries) FindNextQueuedInvocationForUpdate(ctx context.Context) (Invocation, error) {
-	row := q.db.QueryRow(ctx, findNextQueuedInvocationForUpdate)
+func (q *Queries) FindNextQueuedInvocationForUpdate(ctx context.Context, observedAt time.Time) (Invocation, error) {
+	row := q.db.QueryRow(ctx, findNextQueuedInvocationForUpdate, observedAt)
 	var i Invocation
 	err := row.Scan(
 		&i.ID,
@@ -1246,6 +1250,7 @@ FROM invocations
 WHERE status IN ('queued', 'running', 'waiting')
   AND (
       wall_clock_deadline_at <= $1
+      OR active_execution_ms >= active_execution_timeout_ms
       OR (status = 'running' AND execution_deadline_at <= $1)
   )
 ORDER BY LEAST(wall_clock_deadline_at, COALESCE(execution_deadline_at, wall_clock_deadline_at)), id
@@ -1264,6 +1269,7 @@ type ListExpiredInvocationDeadlinesParams struct {
 //	WHERE status IN ('queued', 'running', 'waiting')
 //	  AND (
 //	      wall_clock_deadline_at <= $1
+//	      OR active_execution_ms >= active_execution_timeout_ms
 //	      OR (status = 'running' AND execution_deadline_at <= $1)
 //	  )
 //	ORDER BY LEAST(wall_clock_deadline_at, COALESCE(execution_deadline_at, wall_clock_deadline_at)), id
@@ -1914,6 +1920,7 @@ WHERE id = $4
   AND status IN ('queued', 'running', 'waiting')
   AND (
       wall_clock_deadline_at <= $2
+      OR active_execution_ms >= active_execution_timeout_ms
       OR (status = 'running' AND execution_deadline_at <= $2)
   )
 RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope
@@ -1952,6 +1959,7 @@ type ReapInvocationDeadlineParams struct {
 //	  AND status IN ('queued', 'running', 'waiting')
 //	  AND (
 //	      wall_clock_deadline_at <= $2
+//	      OR active_execution_ms >= active_execution_timeout_ms
 //	      OR (status = 'running' AND execution_deadline_at <= $2)
 //	  )
 //	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope

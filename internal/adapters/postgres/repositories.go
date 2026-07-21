@@ -292,11 +292,11 @@ func (s *Store) GetInvocationForUpdate(ctx context.Context, id string) (domain.I
 	return invocationFromRow(row), nil
 }
 
-func (s *Store) FindNextQueuedInvocationForUpdate(ctx context.Context) (domain.Invocation, error) {
+func (s *Store) FindNextQueuedInvocationForUpdate(ctx context.Context, observedAt time.Time) (domain.Invocation, error) {
 	if _, ok := transactionFromContext(ctx); !ok {
 		return domain.Invocation{}, fmt.Errorf("queued Invocation Session lock requires a transaction")
 	}
-	row, err := s.q(ctx).FindNextQueuedInvocationForUpdate(ctx)
+	row, err := s.q(ctx).FindNextQueuedInvocationForUpdate(ctx, observedAt)
 	if err != nil {
 		return domain.Invocation{}, normalizeNotFound(err)
 	}

@@ -159,6 +159,8 @@ SELECT i.*
 FROM invocations AS i
 JOIN sessions AS s ON s.id = i.session_id
 WHERE i.status = 'queued'
+  AND i.wall_clock_deadline_at > sqlc.arg(observed_at)
+  AND i.active_execution_ms < i.active_execution_timeout_ms
 ORDER BY i.created_at, i.id
 FOR UPDATE OF s SKIP LOCKED
 LIMIT 1;
@@ -177,6 +179,7 @@ FROM invocations
 WHERE status IN ('queued', 'running', 'waiting')
   AND (
       wall_clock_deadline_at <= sqlc.arg(observed_at)
+      OR active_execution_ms >= active_execution_timeout_ms
       OR (status = 'running' AND execution_deadline_at <= sqlc.arg(observed_at))
   )
 ORDER BY LEAST(wall_clock_deadline_at, COALESCE(execution_deadline_at, wall_clock_deadline_at)), id
@@ -328,6 +331,7 @@ WHERE id = sqlc.arg(id)
   AND status IN ('queued', 'running', 'waiting')
   AND (
       wall_clock_deadline_at <= sqlc.arg(observed_at)
+      OR active_execution_ms >= active_execution_timeout_ms
       OR (status = 'running' AND execution_deadline_at <= sqlc.arg(observed_at))
   )
 RETURNING *;

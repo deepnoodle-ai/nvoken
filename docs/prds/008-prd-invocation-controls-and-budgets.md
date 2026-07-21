@@ -155,6 +155,9 @@ synchronous guarantee that the provider has stopped when cancellation returns.
 
 - Provider-estimated cost is useful guardrail evidence, not authoritative
   billing or a reservation. A later metering slice may add a stricter ledger.
+- If fenced settlement exhausts its reserve, the reaper records an
+  evidence-free deadline failure because uncommitted provider evidence is not
+  durable. Operators should watch this signal before tuning the reserve.
 - PRD 009 builds dispatch intent on these durable controls. PRD 010 configures
   the segment ceiling below Cloud Tasks/Cloud Run request limits. PRD 014 can
   replace terminal segment exhaustion with checkpoint-and-chain continuation.

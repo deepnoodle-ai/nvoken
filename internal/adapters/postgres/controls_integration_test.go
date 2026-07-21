@@ -271,6 +271,71 @@ func TestInvocationDeadlineReaperDistinguishesLogicalAndSegmentExpiry(t *testing
 	}
 }
 
+func TestClaimNextSkipsExpiredQueuedPrefixForDeadlineReaper(t *testing.T) {
+	pool, _ := testDatabase(t, true)
+	store := NewStore(pool)
+	txm := NewTransactionManager(pool)
+	clock := newMutableClock(time.Date(2026, 7, 21, 14, 0, 0, 0, time.UTC))
+	ids := identity.NewUUIDv7Generator(clock)
+	account, err := services.BootstrapInstallation(context.Background(), store, txm, clock, ids)
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	runtime := services.NewRuntimeService(store, txm, clock, ids)
+	auth := runtimeAuth(account.ID)
+
+	wallInput := runtimeInput()
+	wallInput.SessionKey = pointerString("expired-wall-session")
+	wallInput.IdempotencyKey = "expired-wall-request"
+	shortWall := int64(1)
+	wallInput.Spec.Budgets = &services.InvocationBudgetInput{WallClockTimeoutSeconds: &shortWall}
+	wallExpired, err := runtime.Admit(context.Background(), auth, wallInput)
+	if err != nil {
+		t.Fatalf("admit wall-expired prefix: %v", err)
+	}
+
+	activeInput := runtimeInput()
+	activeInput.SessionKey = pointerString("expired-active-session")
+	activeInput.IdempotencyKey = "expired-active-request"
+	activeExpired, err := runtime.Admit(context.Background(), auth, activeInput)
+	if err != nil {
+		t.Fatalf("admit active-expired prefix: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `
+		UPDATE invocations
+		SET active_execution_ms = active_execution_timeout_ms
+		WHERE id = $1
+	`, activeExpired.InvocationID); err != nil {
+		t.Fatalf("exhaust active budget: %v", err)
+	}
+
+	clock.Advance(2 * time.Second)
+	liveInput := runtimeInput()
+	liveInput.SessionKey = pointerString("live-session")
+	liveInput.IdempotencyKey = "live-request"
+	live, err := runtime.Admit(context.Background(), auth, liveInput)
+	if err != nil {
+		t.Fatalf("admit live work: %v", err)
+	}
+
+	execution := services.NewInvocationExecutionService(store, txm, clock, ids)
+	claim, found, err := execution.ClaimNext(context.Background(), "live-owner", time.Minute)
+	if err != nil || !found || claim.Invocation.ID != live.InvocationID {
+		t.Fatalf("claim after expired prefix = %#v, found %t, error %v", claim, found, err)
+	}
+	for _, invocationID := range []string{wallExpired.InvocationID, activeExpired.InvocationID} {
+		invocation, readErr := store.GetInvocation(context.Background(), invocationID)
+		if readErr != nil || invocation.Status != domain.InvocationQueued {
+			t.Fatalf("expired prefix before reaper = %#v, error %v", invocation, readErr)
+		}
+	}
+	if _, err := execution.ReapExpired(context.Background(), 10); err != nil {
+		t.Fatalf("reap skipped prefix: %v", err)
+	}
+	assertInvocationFailureScope(t, store, wallExpired.InvocationID, "deadline_exceeded", "wall_clock")
+	assertInvocationFailureScope(t, store, activeExpired.InvocationID, "deadline_exceeded", "active_execution")
+}
+
 func TestBudgetFailureSettlementRollbackPreservesRunningClaim(t *testing.T) {
 	pool, runtime, store, auth := newRuntimeFixture(t)
 	ack, err := runtime.Admit(context.Background(), auth, runtimeInput())
