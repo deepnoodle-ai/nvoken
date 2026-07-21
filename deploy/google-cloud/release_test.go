@@ -112,6 +112,24 @@ func TestPavedTerraformRequiresDatabaseTLSAndDedicatedMigrationIdentity(t *testi
 	}
 }
 
+func TestCloudBuildPinsLinuxAMD64WithoutBuildKitOnlyDockerfileArgs(t *testing.T) {
+	buildConfig, err := os.ReadFile(filepath.Join(repoRoot(t), "deploy/google-cloud/cloudbuild.yaml"))
+	if err != nil {
+		t.Fatalf("read Cloud Build config: %v", err)
+	}
+	if !strings.Contains(string(buildConfig), `"--platform", "linux/amd64"`) {
+		t.Fatal("Cloud Build must explicitly produce the paved linux/amd64 image")
+	}
+
+	dockerfile, err := os.ReadFile(filepath.Join(repoRoot(t), "Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+	if strings.Contains(string(dockerfile), "$BUILDPLATFORM") {
+		t.Fatal("Dockerfile must parse without BuildKit-only automatic platform arguments")
+	}
+}
+
 func TestReleaseStopsBeforeServiceApplyWhenMigrationFails(t *testing.T) {
 	_, log := runRelease(t, true)
 	if strings.Contains(log, "terraform -chdir="+repoRoot(t)+"/deploy/google-cloud plan -out=") {

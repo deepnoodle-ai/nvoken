@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.2-bookworm AS build
+FROM golang:1.26.2-bookworm AS build
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
