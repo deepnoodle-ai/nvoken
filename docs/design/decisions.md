@@ -262,3 +262,32 @@ configuration and never durable data; its nonsecret ID/version are headers.
 The v1 body reserves optional delegated actor context, omitted until admission
 owns that claim. Per-tool credentials, private egress, JWKS/public-key signing,
 and automated key rotation remain separate future decisions.
+
+30. Model credentials bind per Invocation and provider (2026-07-21): the API
+supports four explicit sources for the model provider referenced by an
+Invocation: `caller_ephemeral`, `account_byok`, `tenant_byok`, and `platform`.
+Existing self-hosted `installation_byok` remains a deployment source. A
+self-hosted installation may enable caller, Account, and tenant BYOK when it
+configures application-layer credential encryption, but cannot select
+`platform`; nvoken Cloud may enable the four API sources but cannot select
+`installation_byok`. Reusable Account and tenant BYOK live as encrypted,
+versioned model-provider credential resources; tenant scope is the effective
+internal partition resolved from the host-controlled `tenant_ref`, not an
+end-user identity or new Tenant resource. An `InvocationProviderCredential`
+binding records exactly one source per Invocation and canonical provider. The
+current spec names one provider, so the current binding set has one row; the
+key remains provider-scoped for future specs without introducing multi-model
+behavior here. Caller-ephemeral ciphertext lives only on that binding and is
+cleared at terminal settlement or bounded expiry; reusable sources bind an
+immutable credential version, while platform and installation sources bind
+nonsecret deployment selectors. The binding commits with durable admission,
+is excluded from the execution-spec snapshot, and records no secret bytes in
+the idempotency fingerprint. Fingerprint v6 records the request's literal
+nonsecret source selection, including omission, rather than any materialized
+installation default. Equal admission replay therefore returns the original
+binding and never replaces its credential or changes source after a default
+change. Explicit source failure, revocation, expiry, or decryption failure
+settles visibly as credential
+unavailable; nvoken never silently changes source or charges platform credits.
+This is a narrow model-gateway exception to the no-secret-store boundary, not a
+general integration, OAuth, per-tool, or business-credential vault.
