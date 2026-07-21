@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nvoken"
+version = "0.1.0"
+description = "Python SDK for the nvoken durable agent runtime"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+  "httpx>=0.27,<1",
+  "pydantic>=2,<3",
+  "python-dateutil>=2.8,<3",
+  "typing-extensions>=4.7",
+]
+
+[project.optional-dependencies]
+test = ["pytest==8.4.1", "pytest-asyncio==1.1.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nvoken", "src/nvoken_generated"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
