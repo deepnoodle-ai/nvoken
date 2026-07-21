@@ -15,6 +15,10 @@ func TestReleaseOrdersMigrationBeforeServiceApply(t *testing.T) {
 		t.Fatalf("release output = %s", output)
 	}
 	assertOrdered(t, log,
+		"gcloud services enable storage.googleapis.com",
+		"gcloud storage buckets describe gs://nvoken-test-state",
+		"gcloud storage buckets update gs://nvoken-test-state",
+		"terraform -chdir=", "init -input=false -reconfigure",
 		"terraform -chdir=", "apply -auto-approve -target=terraform_data.build_ready",
 		"gcloud builds submit",
 		"apply -auto-approve -target=google_cloud_run_v2_job.migrate",
@@ -22,6 +26,72 @@ func TestReleaseOrdersMigrationBeforeServiceApply(t *testing.T) {
 		"plan -out=",
 		"apply ",
 	)
+}
+
+func TestBootstrapStateCreatesAndHardensMissingBucket(t *testing.T) {
+	fakeBin := t.TempDir()
+	logPath := filepath.Join(t.TempDir(), "commands.log")
+	writeExecutable(t, fakeBin, "gcloud", `#!/usr/bin/env bash
+printf 'gcloud %s\n' "$*" >>"${NVOKEN_TEST_COMMAND_LOG}"
+if [[ "$*" == storage\ buckets\ describe* ]]; then exit 1; fi
+exit 0
+`)
+
+	command := exec.Command("bash", filepath.Join(repoRoot(t), "deploy/google-cloud/bootstrap-state.sh"))
+	command.Env = append(os.Environ(),
+		"PATH="+fakeBin+":/usr/bin:/bin",
+		"NVOKEN_TEST_COMMAND_LOG="+logPath,
+		"TF_VAR_project_id=example-project",
+		"TF_VAR_region=us-east1",
+		"NVOKEN_TF_STATE_BUCKET=nvoken-test-state",
+	)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bootstrap failed: %v\n%s", err, output)
+	}
+	log, readErr := os.ReadFile(logPath)
+	if readErr != nil {
+		t.Fatalf("read command log: %v", readErr)
+	}
+	commands := string(log)
+	assertOrdered(t, commands,
+		"gcloud services enable storage.googleapis.com --project=example-project",
+		"gcloud storage buckets describe gs://nvoken-test-state --project=example-project",
+		"gcloud storage buckets create gs://nvoken-test-state --project=example-project --location=us-east1 --uniform-bucket-level-access --public-access-prevention",
+		"gcloud storage buckets update gs://nvoken-test-state --project=example-project --uniform-bucket-level-access --public-access-prevention --versioning --update-labels=application=nvoken,usage=terraform-state",
+	)
+}
+
+func TestBootstrapStateDoesNotRecreateExistingBucket(t *testing.T) {
+	fakeBin := t.TempDir()
+	logPath := filepath.Join(t.TempDir(), "commands.log")
+	writeExecutable(t, fakeBin, "gcloud", `#!/usr/bin/env bash
+printf 'gcloud %s\n' "$*" >>"${NVOKEN_TEST_COMMAND_LOG}"
+exit 0
+`)
+
+	command := exec.Command("bash", filepath.Join(repoRoot(t), "deploy/google-cloud/bootstrap-state.sh"))
+	command.Env = append(os.Environ(),
+		"PATH="+fakeBin+":/usr/bin:/bin",
+		"NVOKEN_TEST_COMMAND_LOG="+logPath,
+		"TF_VAR_project_id=example-project",
+		"NVOKEN_TF_STATE_BUCKET=nvoken-test-state",
+	)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bootstrap failed: %v\n%s", err, output)
+	}
+	log, readErr := os.ReadFile(logPath)
+	if readErr != nil {
+		t.Fatalf("read command log: %v", readErr)
+	}
+	commands := string(log)
+	if strings.Contains(commands, "storage buckets create") {
+		t.Fatalf("existing bucket was recreated:\n%s", commands)
+	}
+	if !strings.Contains(commands, "storage buckets update gs://nvoken-test-state") {
+		t.Fatalf("existing bucket was not hardened:\n%s", commands)
+	}
 }
 
 func TestReleaseStopsBeforeServiceApplyWhenMigrationFails(t *testing.T) {

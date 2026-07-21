@@ -41,10 +41,11 @@ prove a generation-only Invocation reaches a durable terminal read.
 ## Scope
 
 **In:** a production container image; reproducible Google Cloud infrastructure;
-Artifact Registry; one public Cloud Run service; one migration Cloud Run Job;
-private-IP Cloud SQL for Postgres; VPC connectivity; Secret Manager; a dedicated
-service identity; explicit CPU, request, engine, database, instance, probe, and
-shutdown settings; release and smoke-test commands; structured operational logs.
+a protected GCS Terraform backend bootstrap; Artifact Registry; one public
+Cloud Run service; one migration Cloud Run Job; private-IP Cloud SQL for
+Postgres; VPC connectivity; Secret Manager; a dedicated service identity;
+explicit CPU, request, engine, database, instance, probe, and shutdown settings;
+release and smoke-test commands; structured operational logs.
 
 **Out:** Cloud Tasks or a separate executor service; Redis; custom domains and
 load balancers; multi-region or zero-downtime database migration guarantees;
@@ -67,6 +68,9 @@ topology. PRDs 009 and 010 add the split execution path.
   service account, the migration job, and the public Cloud Run service. The
   runtime identity must receive only the secret access required by these two
   process roles; database credentials must not be exposed through a public IP.
+  An idempotent pre-Terraform bootstrap must create or harden the GCS backend
+  bucket with object versioning, uniform bucket-level access, and public access
+  prevention; the root must use a distinct prefix per environment.
 
 - **R3 — Migrate before service release.** The release workflow must first make
   the new immutable image available to the migration job, execute that job to
@@ -98,8 +102,9 @@ topology. PRDs 009 and 010 add the split execution path.
   not image layers, command arguments, source-controlled variable files, or
   logs. The paved deployment must require at least one supported provider key
   and allow both. Generated database and Runtime credentials may exist in
-  protected Terraform state, and that state-sensitivity constraint must be
-  explicit.
+  protected, versioned GCS Terraform state, and that state-sensitivity
+  constraint and required bucket IAM restriction must be explicit. Local state
+  is not the paved release path.
 
 - **R7 — Shutdown fits the platform boundary.** One operator-tunable total
   shutdown budget must cover HTTP request drain, engine drain grace, component
@@ -133,7 +138,10 @@ topology. PRDs 009 and 010 add the split execution path.
   The plan proves instance-based CPU, minimum instances `>= 1`, bounded maximum
   instances, explicit request/engine/database concurrency, and the `/healthz`
   startup probe. Validation rejects zero provider secrets and accepts Anthropic,
-  OpenAI, or both.
+  OpenAI, or both. Automated release tests prove the GCS backend bootstrap is
+  ordered before `terraform init` and enforces versioning, uniform access, and
+  public access prevention without attempting to manage its own bucket in that
+  state.
 
 - [ ] **A3 (R3):** Against an empty Postgres database, the release operation
   runs the migration job to the expected schema version before deploying the
@@ -158,10 +166,11 @@ topology. PRDs 009 and 010 add the split execution path.
   An interrupted attempt remains fenced and is resolved by the existing
   lease/reaper policy.
 
-- [x] **A7 (R6, R8):** Repository, image, Terraform plan output, and structured
-  application logs contain no supplied Runtime or provider secret values.
-  Cloud Logging parses `severity` and `message`, and operational entries can be
-  correlated by request or Invocation ID without logging model input/output.
+- [x] **A7 (R6, R8):** Repository, image, local filesystem, Terraform plan
+  output, and structured application logs contain no supplied Runtime or
+  provider secret values or persisted Terraform state. Cloud Logging parses
+  `severity` and `message`, and operational entries can be correlated by request
+  or Invocation ID without logging model input/output.
 
 - [ ] **A8 (R3, R5, R8):** In a disposable Google Cloud environment, the
   documented paved workflow builds and deploys a unique image, completes the

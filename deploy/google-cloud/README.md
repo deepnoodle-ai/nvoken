@@ -40,19 +40,22 @@ allocated Cloud Run minimum instance incur ongoing cost.
 
 Terraform state contains the generated database password, database URL, and
 Runtime bearer key. Keep it in a restricted, versioned GCS bucket; never commit
-state or a secret-bearing `.tfvars` file. Creating the state bucket is a
-one-time bootstrap because a Terraform root cannot safely own its own backend:
+state or a secret-bearing `.tfvars` file. The bucket must be bootstrapped outside
+the Terraform root because a root cannot safely own its own backend:
 
 ```bash
 export TF_VAR_project_id='your-google-cloud-project'
 export NVOKEN_TF_STATE_BUCKET='your-protected-terraform-state-bucket'
 
-gcloud storage buckets create "gs://${NVOKEN_TF_STATE_BUCKET}" \
-  --project="${TF_VAR_project_id}" \
-  --location=us-central1 \
-  --uniform-bucket-level-access
-gcloud storage buckets update "gs://${NVOKEN_TF_STATE_BUCKET}" --versioning
+deploy/google-cloud/bootstrap-state.sh
 ```
+
+The idempotent bootstrap enables the Cloud Storage API, creates the bucket when
+absent, and enforces object versioning, uniform bucket-level access, and public
+access prevention. `release.sh` calls it again before every `terraform init`,
+so the explicit bootstrap command is useful for proving access ahead of the
+first release but is not otherwise required. Restrict bucket IAM to the release
+identity and the small set of administrators who may recover infrastructure.
 
 Create at least one provider key as a Secret Manager version. The key value
 travels over stdin and never enters Terraform state:
@@ -104,8 +107,10 @@ and service deletion protection. Provider secret versions use `latest`, so
 rotating a key requires a service revision to refresh its environment.
 
 The Terraform root uses a GCS backend prefix of
-`nvoken/${TF_VAR_environment}`. Keep each environment isolated, and serialize
-release jobs against its state lock.
+`nvoken/${TF_VAR_environment}`. Set `NVOKEN_TF_STATE_LOCATION` before the first
+bootstrap to place the bucket somewhere other than `TF_VAR_region` (which
+defaults to `us-central1`). Bucket location cannot be changed later. Keep each
+environment isolated, and serialize release jobs against its state lock.
 
 ## End-to-end smoke
 

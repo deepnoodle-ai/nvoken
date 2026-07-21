@@ -57,6 +57,7 @@ if [[ "${NVOKEN_DEPLOY_AUTO_APPROVE:-0}" == "1" ]]; then
   nvoken_apply_args=(-auto-approve)
 fi
 
+"${nvoken_deploy_dir}/bootstrap-state.sh"
 terraform -chdir="${nvoken_deploy_dir}" init -input=false -reconfigure "${nvoken_init_args[@]}"
 terraform -chdir="${nvoken_deploy_dir}" validate
 
