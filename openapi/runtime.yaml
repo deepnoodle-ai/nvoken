@@ -272,15 +272,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Invocation"
               examples:
-                failedAfterEngineLoss:
+                queuedAfterEngineLoss:
                   value:
                     id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                     session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
-                    status: failed
-                    error:
-                      code: execution_lost
-                      message: The execution process ended before this Invocation could settle.
+                    status: queued
+                    error: null
                     usage: null
                     provenance: null
                     output: null
@@ -784,7 +782,9 @@ components:
       description: |
         `completed`, `failed`, and `cancelled` are terminal and immutable.
         Deadline or budget exhaustion settles as `failed`. `waiting` is
-        reserved for later durable ToolCalls.
+        reserved for later durable ToolCalls. Checkpoint recovery may move a
+        nonterminal Invocation from `running` back to `queued`; lifecycle
+        revision orders that transition.
     InvocationAcknowledgement:
       type: object
       additionalProperties: false
@@ -975,6 +975,9 @@ components:
         Failed Invocations may carry paired usage and provenance when a model
         response produced safe normalized evidence before deadline or budget
         settlement. Cancellation and pre-response failures carry neither.
+        `execution_lost` is retained for historical rows written before
+        checkpoint recovery; recoverable lease expiry now requeues the same
+        Invocation and does not write that failure.
     InvocationBudgets:
       type: object
       additionalProperties: false

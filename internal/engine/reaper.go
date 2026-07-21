@@ -47,12 +47,7 @@ func (r *Reaper) Run(ctx context.Context) error {
 func (r *Reaper) reap(ctx context.Context) {
 	items, err := r.ownership.ReapExpired(ctx, r.limit)
 	for _, invocation := range items {
-		fields := []any{
-			"invocation_id", invocation.ID, "lease_attempt", invocation.LeaseAttempt,
-			"status", invocation.Status,
-		}
-		fields = append(fields, failureLogFields(invocation.Error)...)
-		r.logger.Warn("Invocation ownership or deadline reaped", fields...)
+		logReapedInvocation(r.logger, invocation)
 	}
 	if err != nil && ctx.Err() == nil {
 		r.logger.Warn("Invocation lease scan failed; retrying", "error", err.Error())

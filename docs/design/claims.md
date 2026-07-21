@@ -33,10 +33,9 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
   between model providers is trivial.
 - Each agent turn may take seconds or up to tens of minutes,
   progressing through multiple rounds of tool calls.
-- nvoken durably admits each turn so API disconnects, API process loss, and
-  deploys cannot erase accepted work. Before checkpoint recovery is confirmed,
-  engine loss may settle the Invocation as a visible typed failure; continuation
-  from the interrupted point is not yet promised.
+- nvoken durably admits each turn so API disconnects, API process loss, engine
+  loss, and deploys cannot erase accepted work. A replacement engine resumes
+  from the last committed model or builtin checkpoint under a new fence.
 - nvoken maintains the conversation state in a Session. A session primarily
   consists of a sequence of messages and the content blocks within those.
 - nvoken is primarily used embedded within a host application.
@@ -98,8 +97,9 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 
 ## Durability
 
-- Accepted Invocations remain durably readable across API deploys, API process
-  crashes, and connection loss; engine loss produces a durable visible outcome.
+- Accepted Invocations remain durable across API deploys, API process crashes,
+  connection loss, and execution-owner loss; recovery remains visible through
+  lifecycle revisions and authoritative reads.
 - A client disconnect never erases authoritative state. Transports are never the
   source of truth.
 - A disconnected host recovers transcript, invocation state, and pending tool
@@ -107,10 +107,11 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 - Session messages are the sole durable transcript content record. Lifecycle
   revisions and streams may project or reference messages but do not persist a
   second copy of their content.
-- Checkpoint-based crash continuation is a later durability level. When it
-  ships, progress may be checkpointed at each turn iteration or after tool
-  calls; a completed external call whose result was not persisted may run again
-  on resumption.
+- Checkpoint-based crash continuation reclaims the same Invocation after an
+  execution lease expires. Progress is reusable only after its transcript,
+  receipt, and checkpoint transaction commits; uncommitted model work may run
+  again. Future external effects must use stable ToolCall idempotency because a
+  completed effect whose result was not persisted may also run again.
 
 ## Trust and security
 
@@ -184,9 +185,10 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 
 - A stale engine instance cannot commit after losing its lease.
 - A turn segment executes entirely on one harness version. Request-bound split
-  executors drain on deploy; the early self-contained Cloud Run mode may instead
-  produce a visible `execution_lost` failure when a background turn outlives the
-  platform termination window.
+  executors drain on deploy; if either execution topology loses an owner, the
+  lease reaper makes the same Invocation queued and a replacement continues
+  from its last validated checkpoint. Retained `execution_lost` failures are
+  historical records, not the current recoverable-lease policy.
 - nvoken supports the same public admission and read semantics in two execution
   topologies: a self-contained engine in `nvokend`, or a separate Cloud Tasks to
   Cloud Run executor. Delivery is only a wake-up mechanism; Postgres claims,

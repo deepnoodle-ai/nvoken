@@ -79,6 +79,18 @@ func (s *Store) ListOpenToolCallsForUpdate(ctx context.Context, invocationID str
 	return items, nil
 }
 
+func (s *Store) ListToolCallsByInvocation(ctx context.Context, invocationID string) ([]domain.ToolCall, error) {
+	rows, err := s.q(ctx).ListToolCallsByInvocation(ctx, invocationID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]domain.ToolCall, len(rows))
+	for index, row := range rows {
+		items[index] = toolCallFromRow(row)
+	}
+	return items, nil
+}
+
 func (s *Store) ListToolCallsByIteration(ctx context.Context, invocationID string, iteration int) ([]domain.ToolCall, error) {
 	rows, err := s.q(ctx).ListToolCallsByIteration(ctx, postgresdb.ListToolCallsByIterationParams{
 		InvocationID: invocationID,
@@ -103,6 +115,35 @@ func (s *Store) StartToolCallAttempt(ctx context.Context, id string, observedAt 
 		return domain.ToolCall{}, normalizeNotFound(err)
 	}
 	return toolCallFromRow(row), nil
+}
+
+func (s *Store) RestartToolCallAttempt(ctx context.Context, id string, observedAt time.Time) (domain.ToolCall, error) {
+	row, err := s.q(ctx).RestartToolCallAttempt(ctx, postgresdb.RestartToolCallAttemptParams{
+		ID:         id,
+		ObservedAt: observedAt,
+	})
+	if err != nil {
+		return domain.ToolCall{}, normalizeNotFound(err)
+	}
+	return toolCallFromRow(row), nil
+}
+
+func (s *Store) GetCurrentToolCallAttemptForUpdate(
+	ctx context.Context,
+	toolCallID string,
+	attempt int,
+) (domain.ToolCallAttempt, error) {
+	row, err := s.q(ctx).GetCurrentToolCallAttemptForUpdate(
+		ctx,
+		postgresdb.GetCurrentToolCallAttemptForUpdateParams{
+			ToolCallID: toolCallID,
+			Attempt:    int32(attempt),
+		},
+	)
+	if err != nil {
+		return domain.ToolCallAttempt{}, normalizeNotFound(err)
+	}
+	return toolCallAttemptFromRow(row), nil
 }
 
 func (s *Store) CreateToolCallAttempt(ctx context.Context, attempt domain.ToolCallAttempt) error {

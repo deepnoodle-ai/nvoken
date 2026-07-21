@@ -50,6 +50,7 @@ type recordingToolCoordinator struct {
 	resultContents []json.RawMessage
 	resultErrors   []bool
 	starts         int
+	existingCallID string
 }
 
 func (c *recordingToolCoordinator) RecordModelCheckpoint(_ context.Context, claim domain.InvocationClaim, input domain.ModelCheckpointInput) (domain.ModelCheckpointResult, error) {
@@ -68,9 +69,13 @@ func (c *recordingToolCoordinator) StartBuiltinToolCall(_ context.Context, claim
 	}
 	c.events = append(c.events, "start")
 	c.starts++
+	callID := c.existingCallID
+	if callID == "" {
+		callID = fmt.Sprintf("tcal_019f84a5-7838-7b57-a180-%012x", c.starts)
+	}
 	return domain.ToolCallExecution{
 		Call: domain.ToolCall{
-			ID:             fmt.Sprintf("tcal_019f84a5-7838-7b57-a180-%012x", c.starts),
+			ID:             callID,
 			ProviderCallID: providerCallID,
 			Iteration:      iteration,
 		},
@@ -79,6 +84,114 @@ func (c *recordingToolCoordinator) StartBuiltinToolCall(_ context.Context, claim
 			Attempt: 1,
 		},
 	}, nil
+}
+
+func TestDurableToolFreeGenerationCheckpointsFinalResponse(t *testing.T) {
+	coordinator := &recordingToolCoordinator{}
+	model := &fakeLLM{
+		result: successfulDiveResponse(),
+	}
+	generator := New(
+		Config{
+			AnthropicAPIKey: "secret",
+		},
+		WithToolCoordinator(coordinator),
+	)
+	generator.factory = func(string, string, string) (llm.LLM, error) {
+		return model, nil
+	}
+	request := generationRequest("anthropic")
+	request.Claim = generationClaim()
+
+	response, err := generator.Generate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	events, checkpoints, starts := coordinator.snapshot()
+	if !reflect.DeepEqual(events, []string{"checkpoint"}) || len(checkpoints) != 1 || starts != 0 {
+		t.Fatalf("durable final events = %#v, checkpoints = %d, starts = %d", events, len(checkpoints), starts)
+	}
+	if len(checkpoints[0].ToolCalls) != 0 || !response.MessagesCheckpointed || len(response.Messages) != 0 {
+		t.Fatalf("durable final response = %#v, checkpoint = %#v", response, checkpoints[0])
+	}
+}
+
+func TestDurableGenerationReplaysOpenBuiltinWithStableCallID(t *testing.T) {
+	const stableCallID = "tcal_019f84a5-7838-7b57-a180-111111111111"
+	coordinator := &recordingToolCoordinator{
+		checkpoints: []domain.ModelCheckpointInput{
+			{
+				Iteration: 1,
+			},
+		},
+		existingCallID: stableCallID,
+	}
+	model := &fakeLLM{
+		result: textResponse("continued"),
+	}
+	generator := New(
+		Config{
+			AnthropicAPIKey: "secret",
+		},
+		WithDeterministicTestBuiltin(coordinator),
+	)
+	generator.factory = func(string, string, string) (llm.LLM, error) {
+		return model, nil
+	}
+	request := generationRequest("anthropic")
+	request.Messages = []domain.GenerationMessage{
+		{
+			Role:    domain.MessageRoleUser,
+			Content: json.RawMessage(`[{"type":"text","text":"question"}]`),
+		},
+		{
+			Role: domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[{"type":"tool_use","id":"` + stableCallID +
+				`","name":"nvoken_test_echo","input":{"value":"hello"}}]`),
+		},
+	}
+	request.Claim = generationClaim()
+	request.Claim.Attempt = 2
+	request.Claim.Invocation.LeaseAttempt = 2
+	request.MaxIterations = 3
+	request.Resume = &domain.GenerationResume{
+		Iteration: 1,
+		Usage: domain.ModelUsage{
+			InputTokens:  3,
+			OutputTokens: 1,
+			Iterations:   1,
+		},
+		OpenToolCalls: []domain.ResumableToolCall{
+			{
+				Call: domain.ToolCall{
+					ID:             stableCallID,
+					ProviderCallID: "provider-call-1",
+					Name:           deterministicEchoToolName,
+					Mode:           domain.ToolCallModeBuiltin,
+				},
+				Input: json.RawMessage(`{"value":"hello"}`),
+			},
+		},
+	}
+
+	response, err := generator.Generate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	events, checkpoints, starts := coordinator.snapshot()
+	if !reflect.DeepEqual(events, []string{"start", "result", "checkpoint"}) || starts != 1 || len(checkpoints) != 2 {
+		t.Fatalf("resume events = %#v, starts = %d, checkpoints = %#v", events, starts, checkpoints)
+	}
+	if len(model.config.Messages) != 3 {
+		t.Fatalf("resume messages = %#v", model.config.Messages)
+	}
+	result, ok := model.config.Messages[2].Content[0].(*llm.ToolResultContent)
+	if !ok || result.ToolUseID != stableCallID || result.Content != `{"value":"hello"}` {
+		t.Fatalf("replayed result = %#v", model.config.Messages[2].Content)
+	}
+	if response.Usage.Iterations != 2 || response.Usage.InputTokens != 6 || response.Usage.OutputTokens != 2 {
+		t.Fatalf("cumulative response = %#v", response)
+	}
 }
 
 func (c *recordingToolCoordinator) AcceptBuiltinToolResult(_ context.Context, _ domain.InvocationClaim, execution domain.ToolCallExecution, content json.RawMessage, isError bool) (domain.ToolCall, error) {

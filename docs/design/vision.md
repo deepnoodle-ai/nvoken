@@ -27,10 +27,10 @@ is trivial.
 
 An agent turn may take seconds or tens of minutes, progressing through
 multiple rounds of tool calls. nvoken durably admits that work so an API
-disconnect or process restart cannot erase it. Checkpoint-based continuation
-after engine loss is a stronger capability that ships later; until then an
-interrupted execution may settle as a visible typed failure rather than resume
-from the interrupted point. Conversation state lives in the Session: a
+disconnect or process restart cannot erase it. If an execution owner is lost,
+another owner resumes the same Invocation from its last committed model or
+builtin checkpoint. Work completed outside Postgres but not checkpointed may
+run again. Conversation state lives in the Session: a
 sequence of messages and the content blocks within them. nvoken runs agent
 turns, manages their execution, and maintains sessions; application state
 remains entirely the host's responsibility.
@@ -168,10 +168,9 @@ The differentiator is execution quality, not configuration CRUD.
 
 **Durability.** Accepted work survives API processes and deploys; engines claim
 work with leases and fencing tokens; stale engines cannot commit; a client
-disconnect never erases authoritative state. Before checkpoint recovery ships,
-engine loss settles visibly rather than promising continuation. Once
-checkpoint recovery is available, the turn may checkpoint at each iteration
-and when tool calls finish. If the system fails between a tool call completing
+disconnect never erases authoritative state. Engine loss requeues the same
+Invocation, and a replacement validates and continues from the last committed
+model or builtin checkpoint. If the system fails between a tool call completing
 and its result persisting, the call may run again on resumption — hosts make
 business effects idempotent by ToolCall ID.
 

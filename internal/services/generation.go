@@ -25,6 +25,10 @@ type generationStore interface {
 	ports.SessionMessageRepository
 }
 
+type generationInvocationReader interface {
+	GetInvocation(context.Context, string) (domain.Invocation, error)
+}
+
 // GenerationExecutor reconstructs one tool-free turn from durable state. It
 // returns a desired terminal result; InvocationExecutionService alone owns the
 // fenced transaction that publishes that result.
@@ -84,17 +88,10 @@ func (e *GenerationExecutor) Execute(
 	if err != nil {
 		return domain.InvocationExecutionResult{}, fmt.Errorf("load Session transcript: %w", err)
 	}
-	messages, err := transcriptForClaim(claim, stored)
-	if err != nil {
-		e.logFailure(claim, "invalid_transcript", spec.Model.Provider, spec.Model.Name)
-		return internalGenerationFailure(), nil
-	}
-
 	request := domain.GenerationRequest{
 		Instructions:    spec.Instructions,
 		Provider:        strings.ToLower(spec.Model.Provider),
 		Model:           spec.Model.Name,
-		Messages:        messages,
 		MaxOutputTokens: claim.Invocation.MaxOutputTokens,
 		MaxIterations:   claim.Invocation.MaxIterations,
 		Claim:           &claim,
@@ -113,11 +110,84 @@ func (e *GenerationExecutor) Execute(
 		e.logFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.Name)
 		return internalGenerationFailure(), nil
 	}
+	var recovery generationRecovery
+	if claim.Invocation.CurrentCheckpointSequence > 0 {
+		durable, ok := e.store.(generationRecoveryStore)
+		if !ok {
+			if e.claimLost(ctx, claim) {
+				return domain.InvocationExecutionResult{}, ports.ErrLeaseLost
+			}
+			e.logFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.Name)
+			return internalGenerationFailure(), nil
+		}
+		recovery, err = loadGenerationRecovery(
+			ctx,
+			durable,
+			claim.Invocation,
+			stored,
+			request.StructuredOutput,
+		)
+		if err != nil {
+			if errors.Is(err, errRecoveryInvalid) {
+				if e.claimLost(ctx, claim) {
+					return domain.InvocationExecutionResult{}, ports.ErrLeaseLost
+				}
+				e.logFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.Name)
+				return internalGenerationFailure(), nil
+			}
+			return domain.InvocationExecutionResult{}, fmt.Errorf("load generation recovery: %w", err)
+		}
+		request.Resume = recovery.Resume
+		e.logger.Info(
+			"Invocation recovery prefix loaded",
+			"invocation_id",
+			claim.Invocation.ID,
+			"lease_attempt",
+			claim.Attempt,
+			"checkpoint_sequence",
+			claim.Invocation.CurrentCheckpointSequence,
+			"iteration",
+			claim.Invocation.CurrentIteration,
+			"terminal_replay",
+			recovery.Final,
+		)
+	}
+	messages, err := transcriptForClaim(claim, stored, recovery.Latest)
+	if err != nil {
+		if e.claimLost(ctx, claim) {
+			return domain.InvocationExecutionResult{}, ports.ErrLeaseLost
+		}
+		class := "invalid_transcript"
+		if claim.Invocation.CurrentCheckpointSequence > 0 {
+			class = "recovery_invalid"
+		}
+		e.logFailure(claim, class, spec.Model.Provider, spec.Model.Name)
+		return internalGenerationFailure(), nil
+	}
+	request.Messages = messages
 	if err := ctx.Err(); err != nil {
 		return domain.InvocationExecutionResult{}, err
 	}
 	started := time.Now()
-	response, err := e.generate(ctx, claim, request)
+	var response domain.GenerationResponse
+	if recovery.Final {
+		response = domain.GenerationResponse{
+			Usage:                   recovery.Resume.Usage,
+			ServedModel:             recovery.Provenance.ServedModel,
+			MessagesCheckpointed:    true,
+			StructuredOutput:        recovery.Resume.StructuredOutput,
+			StructuredOutputFailure: recovery.Resume.StructuredOutputFailure,
+		}
+	} else {
+		if request.Resume != nil {
+			if kind := resumeBudgetExceeded(claim.Invocation, *request.Resume); kind != "" {
+				failed := budgetGenerationFailure(kind, request.Resume.Usage, recovery.Provenance)
+				failed.MessagesCheckpointed = true
+				return failed, nil
+			}
+		}
+		response, err = e.generate(ctx, claim, request)
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return domain.InvocationExecutionResult{}, ctx.Err()
@@ -127,7 +197,8 @@ func (e *GenerationExecutor) Execute(
 		}
 		class := generationErrorClass(err)
 		e.logFailure(claim, class, request.Provider, request.Model)
-		if errors.Is(err, ports.ErrGenerationInputInvalid) {
+		if errors.Is(err, ports.ErrGenerationInputInvalid) ||
+			errors.Is(err, ports.ErrGenerationRecoveryInvalid) {
 			return internalGenerationFailure(), nil
 		}
 		return providerGenerationFailure(), nil
@@ -173,12 +244,16 @@ func (e *GenerationExecutor) Execute(
 		return providerGenerationFailure(), nil
 	}
 	if ctx.Err() != nil {
-		return deadlineGenerationFailure(claim, &response.Usage, result.Provenance), nil
+		failed := deadlineGenerationFailure(claim, &response.Usage, result.Provenance)
+		failed.MessagesCheckpointed = response.MessagesCheckpointed
+		return failed, nil
 	}
 	if kind := exceededGenerationBudget(claim.Invocation, response.Usage); kind != "" {
 		e.logger.Warn("Model generation budget exceeded",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt, "budget_kind", kind)
-		return budgetGenerationFailure(kind, response.Usage, *result.Provenance), nil
+		failed := budgetGenerationFailure(kind, response.Usage, *result.Provenance)
+		failed.MessagesCheckpointed = response.MessagesCheckpointed
+		return failed, nil
 	}
 	e.logger.Info("Model generation completed",
 		"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
@@ -190,6 +265,18 @@ func (e *GenerationExecutor) Execute(
 		"reasoning_tokens", response.Usage.ReasoningTokens,
 		"generation_latency_ms", time.Since(started).Milliseconds())
 	return result, nil
+}
+
+func (e *GenerationExecutor) claimLost(ctx context.Context, claim domain.InvocationClaim) bool {
+	reader, ok := e.store.(generationInvocationReader)
+	if !ok {
+		return false
+	}
+	current, err := reader.GetInvocation(ctx, claim.Invocation.ID)
+	if err != nil {
+		return false
+	}
+	return !claimOwns(current, claim, time.Now().UTC())
 }
 
 func (e *GenerationExecutor) generate(
@@ -207,17 +294,23 @@ func (e *GenerationExecutor) generate(
 			return
 		}
 		payload, err := json.Marshal(domain.GenerationDeltaEvent{
-			EventType: domain.LiveEventGenerationDelta, SessionID: claim.Invocation.SessionID,
-			InvocationID: claim.Invocation.ID, LeaseAttempt: claim.Attempt, DeltaSequence: sequence.Add(1),
-			Delta: delta, EmittedAt: time.Now().UTC(),
+			EventType:     domain.LiveEventGenerationDelta,
+			SessionID:     claim.Invocation.SessionID,
+			InvocationID:  claim.Invocation.ID,
+			LeaseAttempt:  claim.Attempt,
+			DeltaSequence: sequence.Add(1),
+			Delta:         delta,
+			EmittedAt:     time.Now().UTC(),
 		})
 		if err != nil {
 			e.logger.Warn("generation delta encode failed", "invocation_id", claim.Invocation.ID)
 			return
 		}
 		e.events.Publish(ctx, ports.LiveEvent{
-			Type: domain.LiveEventGenerationDelta, AccountID: claim.Invocation.AccountID,
-			SessionID: claim.Invocation.SessionID, Payload: payload,
+			Type:      domain.LiveEventGenerationDelta,
+			AccountID: claim.Invocation.AccountID,
+			SessionID: claim.Invocation.SessionID,
+			Payload:   payload,
 		})
 	}
 	return streaming.GenerateStream(ctx, request, emit)
@@ -263,7 +356,11 @@ func requireJSONEOF(decoder *json.Decoder) error {
 	return nil
 }
 
-func transcriptForClaim(claim domain.InvocationClaim, stored []domain.SessionMessage) ([]domain.GenerationMessage, error) {
+func transcriptForClaim(
+	claim domain.InvocationClaim,
+	stored []domain.SessionMessage,
+	latest *domain.InvocationCheckpoint,
+) ([]domain.GenerationMessage, error) {
 	if len(stored) == 0 {
 		return nil, fmt.Errorf("session transcript is empty")
 	}
@@ -286,11 +383,38 @@ func transcriptForClaim(claim domain.InvocationClaim, stored []domain.SessionMes
 		}
 		messages = append(messages, generationMessage)
 	}
+	firstCurrent := -1
+	for index, message := range stored {
+		if message.InvocationID == claim.Invocation.ID {
+			firstCurrent = index
+			break
+		}
+	}
+	if firstCurrent < 0 || stored[firstCurrent].Role != domain.MessageRoleUser {
+		return nil, fmt.Errorf("current Invocation input is missing")
+	}
+	for _, message := range stored[firstCurrent:] {
+		if message.InvocationID != claim.Invocation.ID {
+			return nil, fmt.Errorf("current Invocation transcript is not contiguous")
+		}
+	}
 	last := stored[len(stored)-1]
-	if last.InvocationID != claim.Invocation.ID || last.Role != domain.MessageRoleUser {
-		return nil, fmt.Errorf("current Invocation input is not the final user message")
+	if latest == nil {
+		if firstCurrent != len(stored)-1 || last.Role != domain.MessageRoleUser {
+			return nil, fmt.Errorf("uncheckpointed Invocation has durable output")
+		}
+	} else if latest.Sequence != claim.Invocation.CurrentCheckpointSequence ||
+		latest.ThroughMessageSequence != last.Sequence || last.Role == domain.MessageRoleUser {
+		return nil, fmt.Errorf("checkpoint does not cover the current transcript")
 	}
 	return messages, nil
+}
+
+func resumeBudgetExceeded(invocation domain.Invocation, resume domain.GenerationResume) string {
+	if resume.Usage.Iterations >= invocation.MaxIterations {
+		return "iterations"
+	}
+	return exceededGenerationBudget(invocation, resume.Usage)
 }
 
 func validateGenerationMessage(message domain.GenerationMessage, output bool) error {
@@ -467,6 +591,8 @@ func generationErrorClass(err error) string {
 		return "invalid_provider_response"
 	case errors.Is(err, ports.ErrGenerationInputInvalid):
 		return "invalid_generation_input"
+	case errors.Is(err, ports.ErrGenerationRecoveryInvalid):
+		return "recovery_invalid"
 	default:
 		return "provider_call_failed"
 	}

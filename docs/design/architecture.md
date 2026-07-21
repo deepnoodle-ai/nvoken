@@ -40,9 +40,9 @@ request metadata. Everything explicitly cut from the runtime is listed in
 ## Goals
 
 1. First agent response with one Runtime API operation and no provisioning.
-2. An admitted Invocation survives API deploys, API crashes, and connection
-   loss. Before checkpoint recovery ships, engine loss may settle as a visible
-   typed failure rather than continue from the interrupted point.
+2. An admitted Invocation survives API deploys, API crashes, connection loss,
+   and execution-owner loss. A replacement resumes the same Invocation from
+   its last committed checkpoint under a new fence.
 3. A Session preserves transcript across Invocations.
 4. Client tools return like generation tool calls; a durable result
    submission resumes the parked turn.
@@ -185,10 +185,10 @@ Every tool declares one mode:
 The engine deploys by drain when its hosting platform keeps the execution
 segment alive: stop claiming, finish in-flight turns, and exit while the new
 version claims fresh work. A turn segment executes entirely on one harness
-version. Self-contained Cloud Run is an explicit early limitation: background
-turns are not request-bound, so revision shutdown or scale-in can interrupt work
-that exceeds the platform termination window. The lease/reaper then records the
-visible typed failure used before checkpoint recovery.
+version. Self-contained Cloud Run remains operationally less predictable:
+background turns are not request-bound, so revision shutdown or scale-in can
+interrupt work that exceeds the platform termination window. The lease/reaper
+then requeues the Invocation for checkpoint-based continuation.
 
 Two runtime modes implement the internal dispatch seam (claim, lease,
 heartbeat, checkpoint, settle — a version-locked Go interface, never a
@@ -230,10 +230,10 @@ nvoken executes no untrusted code.
 
 Bounded lease plus fencing token per claim; heartbeats extend only the current
 lease; checkpoint, ToolCall, usage, and terminal commits verify the fence; a
-stale instance may finish local computation but cannot commit. Before
-checkpoint recovery ships, the reaper may settle expired execution as a typed
-failure. After replay safety ships, a recoverable checkpoint may instead become
-claimable again.
+stale instance may finish local computation but cannot commit. The reaper
+accrues the abandoned segment only through its recorded lease/deadline boundary,
+clears ownership, and makes the same Invocation queued. Wall-clock,
+active-execution, cancellation, and already-terminal outcomes still win.
 
 Cancellation uses the same first-terminal transaction and Session-before-
 Invocation lock order as settlement. A committed cancellation may notify other
@@ -242,10 +242,10 @@ authority; a missed wake is recovered when renewal or settlement loses its
 fence. Each claim also persists one active-execution segment and a deadline
 chosen from wall-clock remainder, active-execution remainder, and the
 installation segment ceiling. Model work stops before that deadline to reserve
-settlement time. Segment accrual and terminal state commit atomically and never
-move backward. Queue time consumes wall clock only. Before checkpoint resume,
-segment exhaustion is a typed terminal deadline failure rather than a hidden
-continuation.
+settlement time. Segment accrual and terminal state commit atomically. Queue
+time consumes wall clock only. A healthy owner that reaches its segment cutoff
+settles a typed deadline failure; if ownership itself expires before settlement,
+the replacement resumes from the durable prefix instead.
 
 ### Checkpoints and resume
 
@@ -261,17 +261,19 @@ content, a provider envelope, or restorable process state.
 Tool request and result payloads remain exclusively in `SessionMessage`.
 ToolCall rows retain immutable scope, provider correlation, mode, request hash,
 deadline, attempt count, status, and message references. Model usage receipts
-are immutable per Invocation iteration. If cancellation, deadline expiry,
-settlement, or lease reaping wins while calls are open, that terminal
-transaction appends a bounded synthetic error result, closes the calls and
-running attempts, advances checkpoints, and publishes a lifecycle watermark
-covering the result.
+are immutable per Invocation iteration. If cancellation, deadline expiry, or
+terminal settlement wins while calls are open, that transaction appends a
+bounded synthetic error result, closes the calls and running attempts, advances
+checkpoints, and publishes a lifecycle watermark covering the result. Lease
+recovery deliberately leaves open calls intact.
 
-This evidence is not yet a resume promise. Engine loss still settles as
-`execution_lost`, and callback/client modes remain inert. The recovery slice
-may later make a recorded prefix claimable, reconstructing from transcript and
-cursor rather than process memory; it must not re-apply accepted ToolCall
-results or usage receipts. Parking and checkpoint-and-chain remain later work.
+After owner loss, a replacement validates the append-only transcript,
+checkpoints, receipts, and ToolCalls before new work. A committed final model
+checkpoint settles without another provider call; a pending or abandoned
+builtin continues under the same ToolCall ID and a new attempt. Inconsistent
+evidence fails with the bounded public `internal` error. This is crash recovery,
+not a public retry API, arbitrary process snapshots, external-effect safety, or
+intentional checkpoint-and-chain at the segment ceiling.
 
 ## Identity and access
 

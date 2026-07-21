@@ -158,7 +158,9 @@ same request and key.
 Public states are exactly `queued`, `running`, `waiting`, `completed`, `failed`,
 and `cancelled`. The last three are terminal and immutable; deadline or budget
 exhaustion is a typed `failed` outcome. `waiting` is reserved for later durable
-ToolCalls.
+ToolCalls. Recovery may visibly move a nonterminal Invocation from `running`
+back to `queued`; clients order observations by lifecycle revision rather than
+assuming nonterminal status monotonicity.
 
 There is no public retry or resume endpoint. Terminal Invocations stay
 terminal; the host creates a new Invocation for another turn.
@@ -221,8 +223,9 @@ builtin to prove the durable boundary: its assistant request message,
 nvoken-owned ToolCall identity, attempt, tool-result message, per-model usage
 receipt, and checkpoint all commit under the current Invocation fence. The
 ToolCall row stores transcript references and a request digest, never request or
-result content. Cancellation or reaping closes an open call with a canonical
-synthetic error result; it does not make an expired claim resumable.
+result content. Cancellation or logical deadline reaping closes an open call
+with a canonical synthetic error result. Expired ownership instead requeues the
+same Invocation and preserves the open call for fenced recovery.
 
 When the client-tool slice ships,
 the canonical transcript carries each request and result and the Session and
@@ -481,8 +484,9 @@ The admission transaction covers these crash windows:
 
 The executing process is separate from admission in both topologies; delivery
 identities, claim owners, leases, and fences never appear in the public
-acknowledgement or reads. Until checkpoint recovery ships, engine loss may
-produce a durable `execution_lost` failure rather than continuation. The same
+acknowledgement or reads. Engine loss requeues the same Invocation and a new
+owner resumes from the last validated checkpoint; retained `execution_lost`
+rows remain readable as historical terminal outcomes. The same
 OpenAPI request, acknowledgement, read, replay, and conflict fixtures apply
 unchanged to the self-contained and split Cloud Run modes.
 

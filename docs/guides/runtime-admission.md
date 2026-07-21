@@ -110,12 +110,30 @@ fenced checkpoint. ToolCall rows contain lifecycle and message references, not
 a second copy of content. These records are intentionally not exposed as a
 public tool surface yet.
 
-Checkpoint evidence does not currently turn process loss into continuation.
-An expired engine claim still becomes the durable `execution_lost` failure;
-cancellation, deadlines, and reaping close any prepared calls with a synthetic
-tool-result message so transcript replay remains structurally complete. Do not
-retry a terminal Invocation in place. Create a new Invocation when the host
-wants another attempt.
+When an execution lease expires, nvoken accrues the abandoned segment only
+through its recorded lease/deadline boundary, moves the same Invocation back to
+`queued`, and preserves its checkpoint evidence and open builtin ToolCalls. A
+replacement owner validates that evidence before continuing. A committed final
+model response is not requested again; model work that completed but did not
+commit its checkpoint may run and be billed again. Cancellation and logical
+deadlines remain terminal and close prepared calls with a synthetic result.
+There is still no public retry-in-place operation for terminal Invocations.
+
+Public reads and streams may observe `running → queued → running` during this
+recovery. Use lifecycle revision/cursors to order observations. Retained
+`execution_lost` rows are historical outcomes from the earlier policy; current
+recoverable lease expiry does not write that code. An internal recovery failure
+means the stored transcript/checkpoint evidence was inconsistent and is exposed
+only as the bounded public `internal` failure.
+
+The execution-segment ceiling reserves time for a live owner to settle, not a
+hard terminal boundary after ownership is gone. A live owner or deadline reaper
+observing the cutoff before lease expiry writes the segment-scoped deadline
+failure. If no settlement lands and the lease itself later expires, recovery
+wins because a replacement cannot distinguish a crashed owner from a delayed
+settle. Wall-clock and active-execution budgets remain hard limits across that
+continuation; operators should keep the reaper cadence well below the lease
+duration for prompt outcomes.
 
 Read the durable state after any API restart:
 

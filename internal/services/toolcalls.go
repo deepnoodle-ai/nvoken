@@ -198,10 +198,44 @@ func (s *ToolCheckpointService) StartBuiltinToolCall(ctx context.Context, claim 
 		if err != nil {
 			return err
 		}
-		if call.Mode != domain.ToolCallModeBuiltin || call.Status != domain.ToolCallPending || !call.DeadlineAt.After(now) {
+		if call.Mode != domain.ToolCallModeBuiltin {
 			return ports.ErrToolCallNotRunnable
 		}
-		call, err = s.store.StartToolCallAttempt(txCtx, call.ID, now)
+		switch call.Status {
+		case domain.ToolCallPending:
+			call, err = s.store.StartToolCallAttempt(txCtx, call.ID, now)
+		case domain.ToolCallRunning:
+			currentAttempt, attemptErr := s.store.GetCurrentToolCallAttemptForUpdate(
+				txCtx,
+				call.ID,
+				call.CurrentAttempt,
+			)
+			if attemptErr != nil {
+				return attemptErr
+			}
+			if currentAttempt.ToolCallID != call.ID ||
+				currentAttempt.InvocationID != invocation.ID ||
+				currentAttempt.SessionID != invocation.SessionID ||
+				currentAttempt.AccountID != invocation.AccountID ||
+				currentAttempt.TenantPartitionID != invocation.TenantPartitionID ||
+				currentAttempt.AgentID != invocation.AgentID ||
+				currentAttempt.Attempt != call.CurrentAttempt ||
+				currentAttempt.Status != domain.ToolCallRunning ||
+				currentAttempt.InvocationLeaseAttempt >= claim.Attempt {
+				return ports.ErrToolCallNotRunnable
+			}
+			if _, attemptErr := s.store.SettleToolCallAttempt(
+				txCtx,
+				currentAttempt.ID,
+				domain.ToolCallFailed,
+				now,
+			); attemptErr != nil {
+				return attemptErr
+			}
+			call, err = s.store.RestartToolCallAttempt(txCtx, call.ID, now)
+		default:
+			return ports.ErrToolCallNotRunnable
+		}
 		if err != nil {
 			return err
 		}
@@ -356,9 +390,6 @@ func (s *ToolCheckpointService) prepareToolCalls(invocation domain.Invocation, i
 		byProvider[requested.ProviderCallID] = requested
 	}
 	deadline := invocation.WallClockDeadlineAt
-	if invocation.ExecutionDeadlineAt != nil && invocation.ExecutionDeadlineAt.Before(deadline) {
-		deadline = *invocation.ExecutionDeadlineAt
-	}
 	calls := make([]domain.ToolCall, 0, len(input.ToolCalls))
 	ordinal := 0
 	for _, block := range blocks {

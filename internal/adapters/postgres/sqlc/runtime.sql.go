@@ -1555,6 +1555,44 @@ func (q *Queries) GetCurrentInvocationState(ctx context.Context, invocationID st
 	return i, err
 }
 
+const getCurrentToolCallAttemptForUpdate = `-- name: GetCurrentToolCallAttemptForUpdate :one
+SELECT id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, attempt, invocation_lease_attempt, status, started_at, completed_at FROM tool_call_attempts
+WHERE tool_call_id = $1
+  AND attempt = $2
+FOR UPDATE
+`
+
+type GetCurrentToolCallAttemptForUpdateParams struct {
+	ToolCallID string
+	Attempt    int32
+}
+
+// GetCurrentToolCallAttemptForUpdate
+//
+//	SELECT id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, attempt, invocation_lease_attempt, status, started_at, completed_at FROM tool_call_attempts
+//	WHERE tool_call_id = $1
+//	  AND attempt = $2
+//	FOR UPDATE
+func (q *Queries) GetCurrentToolCallAttemptForUpdate(ctx context.Context, arg GetCurrentToolCallAttemptForUpdateParams) (ToolCallAttempt, error) {
+	row := q.db.QueryRow(ctx, getCurrentToolCallAttemptForUpdate, arg.ToolCallID, arg.Attempt)
+	var i ToolCallAttempt
+	err := row.Scan(
+		&i.ID,
+		&i.ToolCallID,
+		&i.InvocationID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.Attempt,
+		&i.InvocationLeaseAttempt,
+		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
 const getDefaultTenantPartition = `-- name: GetDefaultTenantPartition :one
 SELECT id, account_id, tenant_ref, created_at
 FROM tenant_partitions
@@ -2478,7 +2516,23 @@ WHERE status IN ('queued', 'running', 'waiting')
   AND (
       wall_clock_deadline_at <= $1
       OR active_execution_ms >= active_execution_timeout_ms
-      OR (status = 'running' AND execution_deadline_at <= $1)
+      OR (
+          status = 'running'
+          AND active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+              (LEAST(
+                  lease_expires_at,
+                  execution_deadline_at,
+                  $1::timestamptz
+              ) - active_segment_started_at)) * 1000)::bigint) >= active_execution_timeout_ms
+      )
+      OR (
+          status = 'running'
+          AND execution_deadline_at <= $1
+          AND (
+              execution_deadline_scope <> 'execution_segment'
+              OR lease_expires_at > $1
+          )
+      )
   )
 ORDER BY LEAST(wall_clock_deadline_at, COALESCE(execution_deadline_at, wall_clock_deadline_at)), id
 LIMIT $2
@@ -2497,7 +2551,23 @@ type ListExpiredInvocationDeadlinesParams struct {
 //	  AND (
 //	      wall_clock_deadline_at <= $1
 //	      OR active_execution_ms >= active_execution_timeout_ms
-//	      OR (status = 'running' AND execution_deadline_at <= $1)
+//	      OR (
+//	          status = 'running'
+//	          AND active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+//	              (LEAST(
+//	                  lease_expires_at,
+//	                  execution_deadline_at,
+//	                  $1::timestamptz
+//	              ) - active_segment_started_at)) * 1000)::bigint) >= active_execution_timeout_ms
+//	      )
+//	      OR (
+//	          status = 'running'
+//	          AND execution_deadline_at <= $1
+//	          AND (
+//	              execution_deadline_scope <> 'execution_segment'
+//	              OR lease_expires_at > $1
+//	          )
+//	      )
 //	  )
 //	ORDER BY LEAST(wall_clock_deadline_at, COALESCE(execution_deadline_at, wall_clock_deadline_at)), id
 //	LIMIT $2
@@ -3313,6 +3383,60 @@ func (q *Queries) ListStalePublishedExecutionDispatches(ctx context.Context, arg
 	return items, nil
 }
 
+const listToolCallsByInvocation = `-- name: ListToolCallsByInvocation :many
+SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+WHERE invocation_id = $1
+ORDER BY iteration, batch_ordinal, id
+`
+
+// ListToolCallsByInvocation
+//
+//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+//	WHERE invocation_id = $1
+//	ORDER BY iteration, batch_ordinal, id
+func (q *Queries) ListToolCallsByInvocation(ctx context.Context, invocationID string) ([]ToolCall, error) {
+	rows, err := q.db.Query(ctx, listToolCallsByInvocation, invocationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ToolCall{}
+	for rows.Next() {
+		var i ToolCall
+		if err := rows.Scan(
+			&i.ID,
+			&i.InvocationID,
+			&i.SessionID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.AgentID,
+			&i.Iteration,
+			&i.BatchOrdinal,
+			&i.ProviderCallID,
+			&i.Name,
+			&i.Mode,
+			&i.RequestMessageID,
+			&i.RequestMessageSequence,
+			&i.RequestDigest,
+			&i.Status,
+			&i.DeadlineAt,
+			&i.CurrentAttempt,
+			&i.ResultMessageID,
+			&i.ResultMessageSequence,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listToolCallsByIteration = `-- name: ListToolCallsByIteration :many
 SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
 WHERE invocation_id = $1 AND iteration = $2
@@ -3613,66 +3737,68 @@ func (q *Queries) ReapInvocationDeadline(ctx context.Context, arg ReapInvocation
 	return i, err
 }
 
-const reapInvocationLease = `-- name: ReapInvocationLease :one
+const recoverInvocationLease = `-- name: RecoverInvocationLease :one
 UPDATE invocations
-SET status = 'failed',
+SET status = 'queued',
     current_state_revision = $1,
     lease_owner = NULL,
     lease_expires_at = NULL,
     active_execution_ms = LEAST(
         active_execution_timeout_ms,
         active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
-            ($2::timestamptz - active_segment_started_at)) * 1000)::bigint)
+            (LEAST(
+                lease_expires_at,
+                execution_deadline_at,
+                $2::timestamptz
+            ) - active_segment_started_at)) * 1000)::bigint)
     ),
     active_segment_started_at = NULL,
     execution_deadline_at = NULL,
     execution_deadline_scope = NULL,
-    error = $3,
-    completed_at = $2,
     updated_at = $2
-WHERE id = $4
+WHERE id = $3
   AND status = 'running'
-  AND lease_attempt = $5
+  AND lease_attempt = $4
   AND lease_expires_at <= $2
 RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 `
 
-type ReapInvocationLeaseParams struct {
+type RecoverInvocationLeaseParams struct {
 	StateRevision int64
-	ObservedAt    *time.Time
-	ErrorPayload  []byte
+	ObservedAt    time.Time
 	ID            string
 	LeaseAttempt  int64
 }
 
-// ReapInvocationLease
+// RecoverInvocationLease
 //
 //	UPDATE invocations
-//	SET status = 'failed',
+//	SET status = 'queued',
 //	    current_state_revision = $1,
 //	    lease_owner = NULL,
 //	    lease_expires_at = NULL,
 //	    active_execution_ms = LEAST(
 //	        active_execution_timeout_ms,
 //	        active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
-//	            ($2::timestamptz - active_segment_started_at)) * 1000)::bigint)
+//	            (LEAST(
+//	                lease_expires_at,
+//	                execution_deadline_at,
+//	                $2::timestamptz
+//	            ) - active_segment_started_at)) * 1000)::bigint)
 //	    ),
 //	    active_segment_started_at = NULL,
 //	    execution_deadline_at = NULL,
 //	    execution_deadline_scope = NULL,
-//	    error = $3,
-//	    completed_at = $2,
 //	    updated_at = $2
-//	WHERE id = $4
+//	WHERE id = $3
 //	  AND status = 'running'
-//	  AND lease_attempt = $5
+//	  AND lease_attempt = $4
 //	  AND lease_expires_at <= $2
 //	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
-func (q *Queries) ReapInvocationLease(ctx context.Context, arg ReapInvocationLeaseParams) (Invocation, error) {
-	row := q.db.QueryRow(ctx, reapInvocationLease,
+func (q *Queries) RecoverInvocationLease(ctx context.Context, arg RecoverInvocationLeaseParams) (Invocation, error) {
+	row := q.db.QueryRow(ctx, recoverInvocationLease,
 		arg.StateRevision,
 		arg.ObservedAt,
-		arg.ErrorPayload,
 		arg.ID,
 		arg.LeaseAttempt,
 	)
@@ -3902,6 +4028,56 @@ func (q *Queries) ReserveMessageSequence(ctx context.Context, id string) (int64,
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const restartToolCallAttempt = `-- name: RestartToolCallAttempt :one
+UPDATE tool_calls
+SET current_attempt = current_attempt + 1,
+    updated_at = $1
+WHERE id = $2 AND status = 'running'
+RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
+`
+
+type RestartToolCallAttemptParams struct {
+	ObservedAt time.Time
+	ID         string
+}
+
+// RestartToolCallAttempt
+//
+//	UPDATE tool_calls
+//	SET current_attempt = current_attempt + 1,
+//	    updated_at = $1
+//	WHERE id = $2 AND status = 'running'
+//	RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
+func (q *Queries) RestartToolCallAttempt(ctx context.Context, arg RestartToolCallAttemptParams) (ToolCall, error) {
+	row := q.db.QueryRow(ctx, restartToolCallAttempt, arg.ObservedAt, arg.ID)
+	var i ToolCall
+	err := row.Scan(
+		&i.ID,
+		&i.InvocationID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.Iteration,
+		&i.BatchOrdinal,
+		&i.ProviderCallID,
+		&i.Name,
+		&i.Mode,
+		&i.RequestMessageID,
+		&i.RequestMessageSequence,
+		&i.RequestDigest,
+		&i.Status,
+		&i.DeadlineAt,
+		&i.CurrentAttempt,
+		&i.ResultMessageID,
+		&i.ResultMessageSequence,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+	)
+	return i, err
 }
 
 const returnExecutionDispatchPending = `-- name: ReturnExecutionDispatchPending :one
@@ -4338,7 +4514,6 @@ UPDATE tool_calls
 SET status = 'running', current_attempt = current_attempt + 1,
     updated_at = $1
 WHERE id = $2 AND status = 'pending'
-  AND deadline_at > $1
 RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
 `
 
@@ -4353,7 +4528,6 @@ type StartToolCallAttemptParams struct {
 //	SET status = 'running', current_attempt = current_attempt + 1,
 //	    updated_at = $1
 //	WHERE id = $2 AND status = 'pending'
-//	  AND deadline_at > $1
 //	RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
 func (q *Queries) StartToolCallAttempt(ctx context.Context, arg StartToolCallAttemptParams) (ToolCall, error) {
 	row := q.db.QueryRow(ctx, startToolCallAttempt, arg.ObservedAt, arg.ID)

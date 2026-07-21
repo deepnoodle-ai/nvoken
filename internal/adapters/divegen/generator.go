@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 	"sync"
@@ -148,6 +149,9 @@ func (g *Generator) generate(
 	}
 	evidence := &modelEvidence{}
 	checkpointState := &generationCheckpointState{}
+	if request.Resume != nil {
+		checkpointState.seed(request.Resume.Iteration, request.Resume.Usage)
+	}
 	var agentModel llm.LLM = &evidenceModel{
 		LLM:      model,
 		evidence: evidence,
@@ -172,7 +176,7 @@ func (g *Generator) generate(
 		if err := json.Unmarshal(request.StructuredOutput.Schema, &toolSchema); err != nil {
 			return domain.GenerationResponse{}, fmt.Errorf("%w: project structured-output schema", ports.ErrGenerationInputInvalid)
 		}
-		outputCapture = newStructuredOutputCapture()
+		outputCapture = newStructuredOutputCapture(request.Resume)
 		tools = append(tools, newStructuredOutputTool(
 			g.toolCoordinator,
 			*request.Claim,
@@ -189,6 +193,31 @@ func (g *Generator) generate(
 		}
 		tools = append(tools, newDeterministicEchoTool(g.toolCoordinator, *request.Claim, checkpointState))
 	}
+	durableExecution := request.Claim != nil
+	if durableExecution && g.toolCoordinator == nil {
+		return domain.GenerationResponse{}, fmt.Errorf("durable generation requires a ToolCall coordinator")
+	}
+	if request.Resume != nil && request.Claim == nil {
+		return domain.GenerationResponse{}, fmt.Errorf("durable generation resume requires an Invocation claim")
+	}
+	if request.Resume != nil && len(request.Resume.OpenToolCalls) != 0 {
+		replayed, err := replayOpenToolCalls(
+			ctx,
+			*request.Claim,
+			request.Resume.OpenToolCalls,
+			tools,
+		)
+		if err != nil {
+			if errors.Is(err, ports.ErrLeaseLost) {
+				return domain.GenerationResponse{}, err
+			}
+			return domain.GenerationResponse{}, fmt.Errorf(
+				"%w: replay durable builtin result",
+				ports.ErrGenerationRecoveryInvalid,
+			)
+		}
+		messages = append(messages, replayed...)
+	}
 	systemPrompt := request.Instructions
 	if request.StructuredOutput != nil {
 		systemPrompt += "\n\n# Output Contract\nWhen your work is finished, call nvoken_submit_output exactly once with the final object. Its input schema is the required shape. After the tool confirms acceptance, end with a brief status note. Prose and fenced JSON do not satisfy the output contract."
@@ -204,15 +233,14 @@ func (g *Generator) generate(
 		return domain.GenerationResponse{}, fmt.Errorf("configure Dive agent: %w", err)
 	}
 	options := []dive.CreateResponseOption{dive.WithMessages(messages...)}
-	durableTools := g.testBuiltin || request.StructuredOutput != nil
-	if emit != nil || durableTools {
+	if emit != nil || durableExecution {
 		options = append(options, dive.WithEventCallback(func(_ context.Context, item *dive.ResponseItem) error {
 			if delta, ok := normalizedDelta(item); ok {
 				if emit != nil {
 					emit(delta)
 				}
 			}
-			if durableTools && item != nil && item.Type == dive.ResponseItemTypeMessage && item.Message != nil && item.Usage != nil {
+			if durableExecution && item != nil && item.Type == dive.ResponseItemTypeMessage && item.Message != nil && item.Usage != nil {
 				iteration := int(checkpointState.iteration.Add(1))
 				message, err := fromDiveMessage(item.Message)
 				if err != nil {
@@ -283,7 +311,7 @@ func (g *Generator) generate(
 		return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
 	}
 	output := make([]domain.GenerationMessage, 0, len(response.OutputMessages))
-	if durableTools {
+	if durableExecution {
 		if strings.TrimSpace(response.OutputText()) == "" {
 			if outputCapture == nil {
 				return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
@@ -367,6 +395,17 @@ func (s *generationCheckpointState) addUsage(usage domain.ModelUsage) {
 			s.usage.EstimatedCost.CacheWrite += usage.EstimatedCost.CacheWrite
 			s.usage.EstimatedCost.Total += usage.EstimatedCost.Total
 		}
+	}
+	s.mu.Unlock()
+}
+
+func (s *generationCheckpointState) seed(iteration int, usage domain.ModelUsage) {
+	s.iteration.Store(int64(iteration))
+	s.mu.Lock()
+	s.usage = usage
+	if usage.EstimatedCost != nil {
+		cost := *usage.EstimatedCost
+		s.usage.EstimatedCost = &cost
 	}
 	s.mu.Unlock()
 }
@@ -460,8 +499,23 @@ type structuredOutputCapture struct {
 	last     string
 }
 
-func newStructuredOutputCapture() *structuredOutputCapture {
-	return &structuredOutputCapture{last: "missing"}
+func newStructuredOutputCapture(resume *domain.GenerationResume) *structuredOutputCapture {
+	capture := &structuredOutputCapture{
+		last: "missing",
+	}
+	if resume == nil {
+		return capture
+	}
+	capture.last = resume.StructuredOutputFailure
+	if capture.last == "" && resume.StructuredOutput == nil {
+		capture.last = "missing"
+	}
+	if resume.StructuredOutput != nil {
+		output := *resume.StructuredOutput
+		output.Value = append(json.RawMessage(nil), resume.StructuredOutput.Value...)
+		capture.accepted = &output
+	}
+	return capture
 }
 
 func (c *structuredOutputCapture) output() *domain.StructuredOutput {
@@ -685,6 +739,64 @@ func rawToolInput(input any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("tool input is not valid JSON")
 	}
 	return raw, nil
+}
+
+func replayOpenToolCalls(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	calls []domain.ResumableToolCall,
+	tools []dive.Tool,
+) ([]*llm.Message, error) {
+	byName := make(map[string]dive.Tool, len(tools))
+	for _, tool := range tools {
+		byName[tool.Name()] = tool
+	}
+	messages := make([]*llm.Message, 0, len(calls))
+	for _, resumable := range calls {
+		tool, ok := byName[resumable.Call.Name]
+		if !ok || resumable.Call.ProviderCallID == "" || resumable.Call.ID == "" {
+			return nil, errors.New("durable builtin is unavailable")
+		}
+		result, err := tool.Call(
+			dive.WithToolCallID(ctx, resumable.Call.ProviderCallID),
+			append(json.RawMessage(nil), resumable.Input...),
+		)
+		if err != nil {
+			return nil, err
+		}
+		slog.Info(
+			"Builtin ToolCall attempt resumed",
+			"invocation_id",
+			resumable.Call.InvocationID,
+			"tool_call_id",
+			resumable.Call.ID,
+			"lease_attempt",
+			claim.Attempt,
+			"prior_tool_attempt",
+			resumable.Call.CurrentAttempt,
+		)
+		text, err := replayedToolResultText(result)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, llm.NewToolResultMessage(&llm.ToolResultContent{
+			ToolUseID: resumable.Call.ID,
+			Content:   text,
+			IsError:   result.IsError,
+		}))
+	}
+	return messages, nil
+}
+
+func replayedToolResultText(result *dive.ToolResult) (string, error) {
+	if result == nil || result.Suspend != nil || result.Background != nil || len(result.Content) != 1 {
+		return "", errors.New("durable builtin returned an unsupported result")
+	}
+	content := result.Content[0]
+	if content == nil || content.Type != dive.ToolResultContentTypeText || content.Text == "" {
+		return "", errors.New("durable builtin did not return text")
+	}
+	return content.Text, nil
 }
 
 // evidenceModel captures blocking-provider evidence without exposing the raw

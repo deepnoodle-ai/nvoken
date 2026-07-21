@@ -181,7 +181,23 @@ WHERE status IN ('queued', 'running', 'waiting')
   AND (
       wall_clock_deadline_at <= sqlc.arg(observed_at)
       OR active_execution_ms >= active_execution_timeout_ms
-      OR (status = 'running' AND execution_deadline_at <= sqlc.arg(observed_at))
+      OR (
+          status = 'running'
+          AND active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+              (LEAST(
+                  lease_expires_at,
+                  execution_deadline_at,
+                  sqlc.arg(observed_at)::timestamptz
+              ) - active_segment_started_at)) * 1000)::bigint) >= active_execution_timeout_ms
+      )
+      OR (
+          status = 'running'
+          AND execution_deadline_at <= sqlc.arg(observed_at)
+          AND (
+              execution_deadline_scope <> 'execution_segment'
+              OR lease_expires_at > sqlc.arg(observed_at)
+          )
+      )
   )
 ORDER BY LEAST(wall_clock_deadline_at, COALESCE(execution_deadline_at, wall_clock_deadline_at)), id
 LIMIT sqlc.arg(batch_limit);
@@ -261,22 +277,24 @@ WHERE id = sqlc.arg(id)
   AND execution_deadline_at > sqlc.arg(observed_at)
 RETURNING *;
 
--- name: ReapInvocationLease :one
+-- name: RecoverInvocationLease :one
 UPDATE invocations
-SET status = 'failed',
+SET status = 'queued',
     current_state_revision = sqlc.arg(state_revision),
     lease_owner = NULL,
     lease_expires_at = NULL,
     active_execution_ms = LEAST(
         active_execution_timeout_ms,
         active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
-            (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
+            (LEAST(
+                lease_expires_at,
+                execution_deadline_at,
+                sqlc.arg(observed_at)::timestamptz
+            ) - active_segment_started_at)) * 1000)::bigint)
     ),
     active_segment_started_at = NULL,
     execution_deadline_at = NULL,
     execution_deadline_scope = NULL,
-    error = sqlc.arg(error_payload),
-    completed_at = sqlc.arg(observed_at),
     updated_at = sqlc.arg(observed_at)
 WHERE id = sqlc.arg(id)
   AND status = 'running'
@@ -650,6 +668,11 @@ WHERE invocation_id = $1 AND status IN ('pending', 'running')
 ORDER BY iteration, batch_ordinal, id
 FOR UPDATE;
 
+-- name: ListToolCallsByInvocation :many
+SELECT * FROM tool_calls
+WHERE invocation_id = $1
+ORDER BY iteration, batch_ordinal, id;
+
 -- name: ListToolCallsByIteration :many
 SELECT * FROM tool_calls
 WHERE invocation_id = $1 AND iteration = $2
@@ -660,8 +683,20 @@ UPDATE tool_calls
 SET status = 'running', current_attempt = current_attempt + 1,
     updated_at = sqlc.arg(observed_at)
 WHERE id = sqlc.arg(id) AND status = 'pending'
-  AND deadline_at > sqlc.arg(observed_at)
 RETURNING *;
+
+-- name: RestartToolCallAttempt :one
+UPDATE tool_calls
+SET current_attempt = current_attempt + 1,
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status = 'running'
+RETURNING *;
+
+-- name: GetCurrentToolCallAttemptForUpdate :one
+SELECT * FROM tool_call_attempts
+WHERE tool_call_id = sqlc.arg(tool_call_id)
+  AND attempt = sqlc.arg(attempt)
+FOR UPDATE;
 
 -- name: CreateToolCallAttempt :exec
 INSERT INTO tool_call_attempts (
