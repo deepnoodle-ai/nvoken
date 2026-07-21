@@ -515,8 +515,12 @@ WHERE id IN (
 );
 
 -- name: FindQueuedInvocationWithoutActiveDispatchForUpdate :one
+-- Lock the Session serialization root, not the Invocation row. Lifecycle
+-- transitions lock Session then Invocation; repair only needs queued state to
+-- remain stable while it inserts the missing dispatch.
 SELECT i.*
 FROM invocations AS i
+JOIN sessions AS s ON s.id = i.session_id
 WHERE i.status = 'queued'
   AND i.wall_clock_deadline_at > sqlc.arg(observed_at)
   AND NOT EXISTS (
@@ -527,7 +531,7 @@ WHERE i.status = 'queued'
         AND d.status IN ('pending', 'publishing', 'published')
   )
 ORDER BY i.created_at, i.id
-FOR UPDATE OF i SKIP LOCKED
+FOR UPDATE OF s SKIP LOCKED
 LIMIT 1;
 
 -- name: GetCurrentInvocationState :one

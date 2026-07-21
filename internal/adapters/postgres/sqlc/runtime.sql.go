@@ -951,6 +951,7 @@ func (q *Queries) FindNextQueuedInvocationForUpdate(ctx context.Context, observe
 const findQueuedInvocationWithoutActiveDispatchForUpdate = `-- name: FindQueuedInvocationWithoutActiveDispatchForUpdate :one
 SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope
 FROM invocations AS i
+JOIN sessions AS s ON s.id = i.session_id
 WHERE i.status = 'queued'
   AND i.wall_clock_deadline_at > $1
   AND NOT EXISTS (
@@ -961,14 +962,17 @@ WHERE i.status = 'queued'
         AND d.status IN ('pending', 'publishing', 'published')
   )
 ORDER BY i.created_at, i.id
-FOR UPDATE OF i SKIP LOCKED
+FOR UPDATE OF s SKIP LOCKED
 LIMIT 1
 `
 
-// FindQueuedInvocationWithoutActiveDispatchForUpdate
+// Lock the Session serialization root, not the Invocation row. Lifecycle
+// transitions lock Session then Invocation; repair only needs queued state to
+// remain stable while it inserts the missing dispatch.
 //
 //	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope
 //	FROM invocations AS i
+//	JOIN sessions AS s ON s.id = i.session_id
 //	WHERE i.status = 'queued'
 //	  AND i.wall_clock_deadline_at > $1
 //	  AND NOT EXISTS (
@@ -979,7 +983,7 @@ LIMIT 1
 //	        AND d.status IN ('pending', 'publishing', 'published')
 //	  )
 //	ORDER BY i.created_at, i.id
-//	FOR UPDATE OF i SKIP LOCKED
+//	FOR UPDATE OF s SKIP LOCKED
 //	LIMIT 1
 func (q *Queries) FindQueuedInvocationWithoutActiveDispatchForUpdate(ctx context.Context, observedAt time.Time) (Invocation, error) {
 	row := q.db.QueryRow(ctx, findQueuedInvocationWithoutActiveDispatchForUpdate, observedAt)

@@ -186,7 +186,7 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if role == daemon.ProcessRoleCombined && executionMode == services.InvocationExecutionCloudTasks && configuredCloudTasksFields != len(cloudTasksFields) {
 		return daemon.Config{}, fmt.Errorf("serve: cloud_tasks Invocation execution requires complete Cloud Tasks queue and OIDC configuration")
 	}
-	if cfg.ExecutorAttemptTimeout <= 0 || cfg.ExecutorAttemptTimeout >= cfg.CloudTasksDispatchDeadline {
+	if role == daemon.ProcessRoleExecutor && (cfg.ExecutorAttemptTimeout <= 0 || cfg.ExecutorAttemptTimeout >= cfg.CloudTasksDispatchDeadline) {
 		return daemon.Config{}, fmt.Errorf("serve: EXECUTOR_ATTEMPT_TIMEOUT must be positive and less than CLOUD_TASKS_DISPATCH_DEADLINE")
 	}
 	if role == daemon.ProcessRoleExecutor && executionMode == services.InvocationExecutionCloudTasks && cfg.EngineExecutionSegmentCeiling > cfg.ExecutorAttemptTimeout {

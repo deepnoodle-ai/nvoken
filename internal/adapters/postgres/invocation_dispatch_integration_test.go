@@ -189,6 +189,64 @@ func TestInvocationDispatchSettlementFailureStaysRetryable(t *testing.T) {
 	}
 }
 
+func TestInvocationSettlementToleratesMatchingTerminalDispatch(t *testing.T) {
+	for _, terminal := range []domain.ExecutionDispatchStatus{
+		domain.ExecutionDispatchSettled,
+		domain.ExecutionDispatchAbandoned,
+	} {
+		t.Run(string(terminal), func(t *testing.T) {
+			fixture := newInvocationDispatchFixture(t, &postgresModelGenerator{})
+			ownership := services.NewInvocationExecutionService(fixture.store, fixture.txm, fixture.clock, fixture.ids,
+				services.WithExecutionSegmentCeiling(time.Second))
+			claim, disposition, err := ownership.ClaimExact(context.Background(), fixture.ack.InvocationID, "terminal-dispatch-owner", time.Minute)
+			if err != nil || disposition != services.Claimed {
+				t.Fatalf("claim disposition/error = %q/%v", disposition, err)
+			}
+			switch terminal {
+			case domain.ExecutionDispatchSettled:
+				_, err = fixture.store.SettleExecutionDispatch(context.Background(), fixture.dispatch.ID, fixture.clock.Now())
+			case domain.ExecutionDispatchAbandoned:
+				_, err = fixture.store.AbandonExecutionDispatch(context.Background(), fixture.dispatch.ID, "test terminal dispatch", fixture.clock.Now())
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := ownership.SettleDispatch(context.Background(), claim, completedResult(), fixture.dispatch.ID); err != nil {
+				t.Fatalf("settle with %s dispatch: %v", terminal, err)
+			}
+			invocation, _ := fixture.store.GetInvocation(context.Background(), fixture.ack.InvocationID)
+			dispatch, _ := fixture.store.GetExecutionDispatch(context.Background(), fixture.dispatch.ID)
+			messages, _ := fixture.store.ListSessionMessages(context.Background(), fixture.ack.SessionID)
+			if invocation.Status != domain.InvocationCompleted || dispatch.Status != terminal || len(messages) != 2 {
+				t.Fatalf("terminal settlement state = %#v / %#v / %d messages", invocation, dispatch, len(messages))
+			}
+		})
+	}
+}
+
+func TestInvocationSettlementRejectsMismatchedDispatch(t *testing.T) {
+	fixture := newInvocationDispatchFixture(t, &postgresModelGenerator{})
+	ownership := services.NewInvocationExecutionService(fixture.store, fixture.txm, fixture.clock, fixture.ids,
+		services.WithExecutionSegmentCeiling(time.Second))
+	claim, disposition, err := ownership.ClaimExact(context.Background(), fixture.ack.InvocationID, "mismatched-dispatch-owner", time.Minute)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("claim disposition/error = %q/%v", disposition, err)
+	}
+	_, mismatched, err := fixture.dispatches.CreateSynthetic(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ownership.SettleDispatch(context.Background(), claim, completedResult(), mismatched.ID); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("mismatched dispatch settlement error = %v", err)
+	}
+	invocation, _ := fixture.store.GetInvocation(context.Background(), fixture.ack.InvocationID)
+	messages, _ := fixture.store.ListSessionMessages(context.Background(), fixture.ack.SessionID)
+	if invocation.Status != domain.InvocationRunning || len(messages) != 1 {
+		t.Fatalf("mismatched settlement changed Invocation: %#v / %d messages", invocation, len(messages))
+	}
+}
+
 func TestInvocationDispatchModeRaceExecutesOnceAndConverges(t *testing.T) {
 	generator := newBlockingDispatchGenerator()
 	fixture := newInvocationDispatchFixture(t, generator)

@@ -56,6 +56,15 @@ func TestLoadDaemonConfigExecutorDoesNotRequirePublicRuntimeSecrets(t *testing.T
 	}
 }
 
+func TestLoadDaemonConfigEmbeddedCombinedIgnoresExecutorRequestTimeouts(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("EXECUTOR_ATTEMPT_TIMEOUT", "45m")
+	t.Setenv("CLOUD_TASKS_DISPATCH_DEADLINE", "30m")
+	if _, err := loadDaemonConfig(); err != nil {
+		t.Fatalf("embedded combined config: %v", err)
+	}
+}
+
 func TestLoadDaemonConfigRequiresCompleteCloudTasksIdentity(t *testing.T) {
 	setServeConfig(t)
 	t.Setenv("CLOUD_TASKS_QUEUE", "projects/test/locations/us-central1/queues/execution")

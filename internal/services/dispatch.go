@@ -145,6 +145,10 @@ func (s *DispatchService) RepairQueuedInvocations(ctx context.Context, limit int
 		created := false
 		err = s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
 			now := s.clock.Now().UTC()
+			// The repository query locks the candidate's Session with SKIP
+			// LOCKED. Every Invocation lifecycle transition takes that same
+			// Session lock first, so repair can verify queued state and insert
+			// the dispatch without inverting Session-before-Invocation order.
 			invocation, err := s.repository.FindQueuedInvocationWithoutActiveDispatchForUpdate(txCtx, now)
 			if errors.Is(err, ports.ErrNotFound) {
 				return nil
