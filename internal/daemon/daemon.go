@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/auth"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/divegen"
@@ -29,6 +30,7 @@ type Config struct {
 	RuntimeTenantConstraint *string
 	AnthropicAPIKey         string
 	OpenAIAPIKey            string
+	ShutdownTimeout         time.Duration
 	Engine                  engine.Config
 }
 
@@ -43,7 +45,12 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("open runtime database: %w", err)
 	}
-	defer pool.Close()
+	closePool := true
+	defer func() {
+		if closePool {
+			pool.Close()
+		}
+	}()
 	if err := postgres.CheckSchema(ctx, pool); err != nil {
 		return fmt.Errorf("check runtime database schema: %w", err)
 	}
@@ -79,8 +86,20 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	srv := httpapi.NewServer(httpapi.Config{
 		Addr: ":" + cfg.Port, Authenticator: authenticator, Runtime: runtime,
+		// Leave the supervisor one second to observe component completion and
+		// close the database pool inside the total process budget.
+		ShutdownTimeout: cfg.ShutdownTimeout - time.Second,
 	})
-	return runComponents(ctx, srv, runner)
+	joined, err := runComponents(ctx, cfg.ShutdownTimeout, srv, runner)
+	if !joined {
+		// An uncooperative component can still hold a pool connection. Do not
+		// block past the process shutdown budget waiting for pgxpool.Close;
+		// Cloud Run will reclaim process resources at termination.
+		closePool = false
+		slog.Warn("process shutdown budget expired before components joined",
+			"shutdown_timeout_ms", cfg.ShutdownTimeout.Milliseconds())
+	}
+	return err
 }
 
 func executionOwner() (string, error) {
@@ -99,7 +118,13 @@ func executionOwner() (string, error) {
 	return hostname + tail, nil
 }
 
-func runComponents(parent context.Context, components ...component) error {
+func runComponents(parent context.Context, shutdownTimeout time.Duration, components ...component) (bool, error) {
+	if shutdownTimeout <= 0 {
+		return true, fmt.Errorf("shutdown timeout must be positive")
+	}
+	if len(components) == 0 {
+		return true, nil
+	}
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	type outcome struct{ err error }
@@ -107,14 +132,43 @@ func runComponents(parent context.Context, components ...component) error {
 	for _, current := range components {
 		go func() { results <- outcome{err: current.Run(ctx)} }()
 	}
-	first := <-results
-	cancel()
-	allErrors := []error{first.err}
-	for range len(components) - 1 {
-		allErrors = append(allErrors, (<-results).err)
+	remaining := len(components)
+	allErrors := make([]error, 0, remaining)
+	parentDone := parent.Done()
+	var shutdownTimer *time.Timer
+	var shutdownDeadline <-chan time.Time
+	beginShutdown := func() {
+		if shutdownTimer != nil {
+			return
+		}
+		cancel()
+		shutdownTimer = time.NewTimer(shutdownTimeout)
+		shutdownDeadline = shutdownTimer.C
+	}
+	defer func() {
+		if shutdownTimer != nil {
+			shutdownTimer.Stop()
+		}
+	}()
+
+	for remaining > 0 {
+		select {
+		case result := <-results:
+			remaining--
+			allErrors = append(allErrors, result.err)
+			beginShutdown()
+		case <-parentDone:
+			parentDone = nil
+			beginShutdown()
+		case <-shutdownDeadline:
+			if parent.Err() != nil {
+				return false, nil
+			}
+			return false, fmt.Errorf("component shutdown exceeded %s", shutdownTimeout)
+		}
 	}
 	if parent.Err() != nil {
-		return nil
+		return true, nil
 	}
-	return errors.Join(allErrors...)
+	return true, errors.Join(allErrors...)
 }

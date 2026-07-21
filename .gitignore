@@ -33,3 +33,9 @@ go.work.sum
 
 # Build output
 /bin/
+
+# Terraform working data and saved plans (state contains generated secrets)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan

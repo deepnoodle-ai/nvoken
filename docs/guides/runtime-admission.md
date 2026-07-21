@@ -23,7 +23,10 @@ back to another provider or ambient credentials. Engine capacity and timing are
 bounded by `ENGINE_CONCURRENCY`, `ENGINE_POLL_INTERVAL`,
 `ENGINE_LEASE_DURATION`, `ENGINE_HEARTBEAT_INTERVAL`,
 `ENGINE_REAPER_INTERVAL`, `ENGINE_REAPER_BATCH_LIMIT`, and
-`ENGINE_DRAIN_GRACE`. Defaults are suitable for local self-contained operation.
+`ENGINE_DRAIN_GRACE`. `SHUTDOWN_TIMEOUT` bounds HTTP shutdown and the overall
+component join; engine drain grace must be shorter than that total. Defaults are
+suitable for local self-contained operation. The Cloud Run paved path overrides
+both shutdown values to fit the platform termination window.
 
 On its first start, the static self-hosted authenticator serializes creation of
 one installation Account and its default tenant partition. Later starts resolve

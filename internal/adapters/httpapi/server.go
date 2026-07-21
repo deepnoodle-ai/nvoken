@@ -23,8 +23,9 @@ const (
 	serverReadTimeout       = 30 * time.Second
 	// Leave response headroom after the bounded body read and the Postgres
 	// adapter's 120-second statement timeout while still bounding handlers.
-	serverWriteTimeout = 180 * time.Second
-	serverIdleTimeout  = 60 * time.Second
+	serverWriteTimeout     = 180 * time.Second
+	serverIdleTimeout      = 60 * time.Second
+	defaultShutdownTimeout = 10 * time.Second
 )
 
 type RuntimeService interface {
@@ -34,14 +35,16 @@ type RuntimeService interface {
 }
 
 type Config struct {
-	Addr          string
-	Authenticator ports.RuntimeAuthenticator
-	Runtime       RuntimeService
-	Logger        *slog.Logger
+	Addr            string
+	Authenticator   ports.RuntimeAuthenticator
+	Runtime         RuntimeService
+	Logger          *slog.Logger
+	ShutdownTimeout time.Duration
 }
 
 type Server struct {
-	http *http.Server
+	http            *http.Server
+	shutdownTimeout time.Duration
 }
 
 func NewServer(cfg Config) *Server {
@@ -54,6 +57,10 @@ func NewServer(cfg Config) *Server {
 		runtime:       cfg.Runtime,
 		logger:        logger,
 	})
+	shutdownTimeout := cfg.ShutdownTimeout
+	if shutdownTimeout <= 0 {
+		shutdownTimeout = defaultShutdownTimeout
+	}
 	return &Server{
 		http: &http.Server{
 			Addr:              cfg.Addr,
@@ -64,6 +71,7 @@ func NewServer(cfg Config) *Server {
 			IdleTimeout:       serverIdleTimeout,
 			MaxHeaderBytes:    1 << 20,
 		},
+		shutdownTimeout: shutdownTimeout,
 	}
 }
 
@@ -85,7 +93,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 		h.logger = slog.Default()
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", h.requireMethod(http.MethodGet, h.health))
+	mux.HandleFunc("/health", h.requireMethod(http.MethodGet, h.health))
 	mux.HandleFunc("/v1/invocations", h.requireMethod(http.MethodPost, h.createInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
 	mux.HandleFunc("/v1/sessions/{session_id}", h.requireMethod(http.MethodGet, h.getSession))
@@ -387,10 +395,19 @@ func (s *Server) Run(ctx context.Context) error {
 	case <-ctx.Done():
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.shutdownTimeout)
 	defer cancel()
-	if err := s.http.Shutdown(shutdownCtx); err != nil {
-		return err
+	shutdownErr := s.http.Shutdown(shutdownCtx)
+	if shutdownErr != nil {
+		// Shutdown stops listeners immediately but can time out waiting for an
+		// active handler. Force-close remaining connections so Server.Run itself
+		// still joins within the process supervisor's larger total budget.
+		closeErr := s.http.Close()
+		listenErr := <-errChan
+		if errors.Is(listenErr, http.ErrServerClosed) {
+			listenErr = nil
+		}
+		return errors.Join(shutdownErr, closeErr, listenErr)
 	}
 	if err := <-errChan; !errors.Is(err, http.ErrServerClosed) {
 		return err

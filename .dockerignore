@@ -1,0 +1,16 @@
+.git
+.github
+.agents
+.env
+.DS_Store
+bin
+coverage.*
+*.out
+*.tfstate
+*.tfstate.*
+**/.terraform
+**/.terraform.lock.hcl
+assets
+deploy
+docs
+openapi
