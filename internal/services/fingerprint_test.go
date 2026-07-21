@@ -42,6 +42,10 @@ func TestInvocationFingerprintV4DesignVectors(t *testing.T) {
 	testFingerprintDesignVectors(t, "admission-fingerprint-v4.json", 4)
 }
 
+func TestInvocationFingerprintV5DesignVectors(t *testing.T) {
+	testFingerprintDesignVectors(t, "admission-fingerprint-v5.json", 5)
+}
+
 func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
 	t.Helper()
 	_, callerFile, _, _ := runtime.Caller(0)
@@ -78,9 +82,12 @@ func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
 			} else if version == 3 {
 				canonical, err = invocationFingerprintBytesV3(input)
 				fingerprint, _ = InvocationFingerprintV3(input)
-			} else {
+			} else if version == 4 {
 				canonical, err = invocationFingerprintBytesV4(input)
 				fingerprint, _ = InvocationFingerprintV4(input)
+			} else {
+				canonical, err = invocationFingerprintBytesV5(input)
+				fingerprint, _ = InvocationFingerprintV5(input)
 			}
 			if err != nil {
 				t.Fatalf("canonicalize: %v", err)
@@ -268,6 +275,77 @@ func TestValidateCreateInvocationClientToolBoundaries(t *testing.T) {
 				t.Fatal("invalid client tools were accepted")
 			}
 		})
+	}
+}
+
+func TestValidateCreateInvocationCallbackToolBoundaries(t *testing.T) {
+	callbackURLPrefix := "https://callbacks.example.test/"
+	callback := ClientToolSpec{
+		Name:        "lookup_callback",
+		Description: "Look up a value through a callback",
+		Mode:        "callback",
+		InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+		Callback: &CallbackTarget{
+			URL: "https://callbacks.example.test/tools/lookup?version=1",
+		},
+	}
+	input := validServiceInput()
+	input.Spec.Tools = []ClientToolSpec{callback}
+	if err := ValidateCreateInvocation(input); err != nil {
+		t.Fatalf("valid callback tool rejected: %v", err)
+	}
+	maximum := input
+	maximum.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
+	maximumTarget := *callback.Callback
+	maximumTarget.URL = callbackURLPrefix + strings.Repeat("x", MaxCallbackURLBytes-len(callbackURLPrefix))
+	maximum.Spec.Tools[0].Callback = &maximumTarget
+	if err := ValidateCreateInvocation(maximum); err != nil {
+		t.Fatalf("maximum callback URL rejected: %v", err)
+	}
+	for name, url := range map[string]string{
+		"http":         "http://callbacks.example.test/tool",
+		"userinfo":     "https://secret@callbacks.example.test/tool",
+		"fragment":     "https://callbacks.example.test/tool#secret",
+		"missing host": "https:///tool",
+		"too long":     maximumTarget.URL + "x",
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := input
+			candidate.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
+			target := *callback.Callback
+			target.URL = url
+			candidate.Spec.Tools[0].Callback = &target
+			if err := ValidateCreateInvocation(candidate); err == nil {
+				t.Fatal("invalid callback URL accepted")
+			}
+		})
+	}
+	missing := input
+	missing.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
+	missing.Spec.Tools[0].Callback = nil
+	if err := ValidateCreateInvocation(missing); err == nil {
+		t.Fatal("callback mode without callback target accepted")
+	}
+	clientWithCallback := input
+	clientWithCallback.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
+	clientWithCallback.Spec.Tools[0].Mode = "client"
+	if err := ValidateCreateInvocation(clientWithCallback); err == nil {
+		t.Fatal("client mode with callback target accepted")
+	}
+	var clientWithNull ClientToolSpec
+	if err := json.Unmarshal([]byte(`{
+		"name":"lookup_client",
+		"description":"Look up a value through the client",
+		"mode":"client",
+		"input_schema":{"type":"object"},
+		"callback":null
+	}`), &clientWithNull); err != nil {
+		t.Fatalf("decode client callback null: %v", err)
+	}
+	nullInput := validServiceInput()
+	nullInput.Spec.Tools = []ClientToolSpec{clientWithNull}
+	if err := ValidateCreateInvocation(nullInput); err == nil {
+		t.Fatal("client mode with explicit null callback accepted")
 	}
 }
 

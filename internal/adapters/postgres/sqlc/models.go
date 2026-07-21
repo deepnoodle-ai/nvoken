@@ -20,6 +20,27 @@ type Agent struct {
 	CreatedAt time.Time
 }
 
+type CallbackDelivery struct {
+	ID                string
+	ToolCallID        string
+	InvocationID      string
+	SessionID         string
+	AccountID         string
+	TenantPartitionID string
+	AgentID           string
+	EndpointUrl       string
+	Status            string
+	AvailableAt       *time.Time
+	Owner             *string
+	LeaseExpiresAt    *time.Time
+	Attempt           int64
+	LastErrorCode     *string
+	ResponseStatus    *int32
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	TerminalAt        *time.Time
+}
+
 type ExecutionDispatch struct {
 	ID                      string
 	Kind                    string

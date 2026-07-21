@@ -28,6 +28,7 @@ var (
 	ErrDispatchAttemptPending    = errors.New("execution dispatch attempt decision pending")
 	ErrToolCallConflict          = errors.New("tool call identity or outcome conflict")
 	ErrToolCallNotRunnable       = errors.New("tool call is not runnable")
+	ErrCallbackDeliveryLeaseLost = errors.New("callback delivery lease lost")
 )
 
 // Clock makes persisted timestamps deterministic in services and tests.
@@ -182,6 +183,38 @@ type ToolCallRepository interface {
 	AdvanceInvocationCheckpoint(context.Context, string, string, int64, time.Time, int64, int) (domain.Invocation, error)
 	AdvanceWaitingInvocationCheckpoint(context.Context, string, int64, int64, int, time.Time) (domain.Invocation, error)
 	AdvanceInvocationCheckpointForTerminal(context.Context, string, int64, int) (domain.Invocation, error)
+}
+
+type CallbackDeliveryRepository interface {
+	CreateCallbackDelivery(context.Context, domain.CallbackDelivery) error
+	GetCallbackDelivery(context.Context, string) (domain.CallbackDelivery, error)
+	GetCallbackDeliveryForUpdate(context.Context, string) (domain.CallbackDelivery, error)
+	ActivateCallbackDeliveries(context.Context, string, time.Time) (int64, error)
+	ClaimNextCallbackDelivery(context.Context, string, time.Time, time.Time) (domain.CallbackDelivery, error)
+	ReturnCallbackDeliveryPending(context.Context, string, string, int64, time.Time, string, time.Time) (domain.CallbackDelivery, error)
+	SettleCallbackDelivery(context.Context, string, string, int64, domain.CallbackDeliveryStatus, string, *int, time.Time) (domain.CallbackDelivery, error)
+	AbandonActiveCallbackDeliveries(context.Context, string, string, time.Time) (int64, error)
+	RecoverExpiredCallbackDeliveries(context.Context, time.Time, int) (int64, error)
+	PruneTerminalCallbackDeliveries(context.Context, time.Time, int) (int64, error)
+}
+
+type CallbackTransportRequest struct {
+	EndpointURL string
+	DeliveryID  string
+	ToolCallID  string
+	Body        json.RawMessage
+}
+
+type CallbackTransportResult struct {
+	StatusCode  int
+	ContentType string
+	Body        []byte
+	ErrorCode   string
+	Retryable   bool
+}
+
+type CallbackTransport interface {
+	Send(context.Context, CallbackTransportRequest) CallbackTransportResult
 }
 
 // ToolCallCoordinator is the durable boundary used by model adapters and

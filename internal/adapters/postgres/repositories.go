@@ -32,6 +32,7 @@ var (
 	_ ports.InvocationRepository            = (*Store)(nil)
 	_ ports.InvocationStateRepository       = (*Store)(nil)
 	_ ports.ToolCallRepository              = (*Store)(nil)
+	_ ports.CallbackDeliveryRepository      = (*Store)(nil)
 	_ ports.RecoveryRepository              = (*Store)(nil)
 	_ ports.ExecutionDispatchRepository     = (*Store)(nil)
 	_ ports.TransactionManager              = (*TransactionManager)(nil)
@@ -370,6 +371,19 @@ func (s *Store) GetAgentByRef(ctx context.Context, accountID, agentRef string) (
 	}
 	return domain.Agent{
 		ID: row.ID, AccountID: row.AccountID, AgentRef: row.AgentRef, CreatedAt: row.CreatedAt,
+	}, nil
+}
+
+func (s *Store) GetAgentByID(ctx context.Context, id string) (domain.Agent, error) {
+	row, err := s.q(ctx).GetAgentByID(ctx, id)
+	if err != nil {
+		return domain.Agent{}, normalizeNotFound(err)
+	}
+	return domain.Agent{
+		ID:        row.ID,
+		AccountID: row.AccountID,
+		AgentRef:  row.AgentRef,
+		CreatedAt: row.CreatedAt,
 	}, nil
 }
 

@@ -8,8 +8,9 @@ request then exact-claims and runs one bounded generation segment.
 
 Set `invocation_execution_mode = "embedded"` to roll back to the combined
 service's Postgres polling runner. Public API semantics do not change. Neither
-mode provides checkpoint replay yet: an abruptly lost model segment becomes the
-visible `execution_lost` failure after lease expiry.
+mode treats delivery as ownership: an abruptly lost model segment is requeued
+from its last validated checkpoint after lease expiry, while Postgres fences
+stale writers.
 
 ## What it creates
 
@@ -22,6 +23,8 @@ visible `execution_lost` failure after lease expiry.
 - generated database and Runtime credentials in Secret Manager;
 - Secret Manager access for existing Anthropic and/or OpenAI key secrets,
   granted only to the configured generating role;
+- optional access to an existing callback HMAC secret, granted only to the
+  combined service that owns callback delivery;
 - separate runtime and database-migration service accounts with no project-wide
   application role;
 - a one-task Cloud Run migration Job and a synthetic dispatch smoke Job;
@@ -91,6 +94,15 @@ export TF_VAR_anthropic_api_key_secret_id='nvoken-anthropic-api-key'
 Use `TF_VAR_openai_api_key_secret_id` the same way for OpenAI. Either provider
 is sufficient and both may be configured together. Do not put the provider key
 itself in a Terraform variable.
+
+To enable callback tools, create a separate random secret of at least 32 bytes
+and set `TF_VAR_callback_signing_key_secret_id`. Set the nonsecret
+`TF_VAR_callback_signing_key_id` and positive
+`TF_VAR_callback_signing_key_version` to values receivers recognize. The
+combined service alone can access the secret; the private executor and
+migration job cannot. A Secret Manager version rotation must update the
+receiver and key-version variable and deploy a new service revision together.
+This HMAC rollout does not yet provide overlapping-key or JWKS rotation.
 
 ## Release
 
@@ -283,11 +295,12 @@ carries no provider/runtime credentials, transcript authority, task ownership,
 or execution fence.
 
 Cloud Run currently provides a ten-second termination window. The paved service
-sets `SHUTDOWN_TIMEOUT=8s` and `ENGINE_DRAIN_GRACE=7s`. On `SIGTERM`, HTTP stops
-accepting work and the engine stops claiming; cooperative work can finish inside
-the shared budget before remaining calls are cancelled. Work that outlives the
-platform process is still protected by the existing lease fence and reaper, but
-is not resumable until the checkpoint PRD ships.
+sets `SHUTDOWN_TIMEOUT=8s`, `ENGINE_DRAIN_GRACE=7s`, and
+`CALLBACK_DRAIN_GRACE=7s`. On `SIGTERM`, HTTP stops accepting work and both
+workers stop claiming; cooperative model work and callback requests can finish
+inside the shared budget before remaining calls are cancelled. Work that
+outlives the platform process is protected by its lease fence and recovered
+from durable checkpoints or delivery rows.
 
 ## Local validation
 

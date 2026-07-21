@@ -321,7 +321,7 @@ func (s *InvocationExecutionService) settle(
 			return err
 		}
 		if result.Status == domain.InvocationWaiting {
-			return s.parkForClientTools(
+			return s.parkForExternalTools(
 				txCtx,
 				claim,
 				invocation,
@@ -411,7 +411,7 @@ func (s *InvocationExecutionService) settle(
 	})
 }
 
-func (s *InvocationExecutionService) parkForClientTools(
+func (s *InvocationExecutionService) parkForExternalTools(
 	ctx context.Context,
 	claim domain.InvocationClaim,
 	invocation domain.Invocation,
@@ -427,7 +427,7 @@ func (s *InvocationExecutionService) parkForClientTools(
 	if len(calls) == 0 || len(calls) > MaxClientTools {
 		return ports.ErrExecutionResultInvalid
 	}
-	invocation, err = s.settlePendingBuiltinSiblingsForClientWait(
+	invocation, err = s.settlePendingBuiltinSiblingsForExternalWait(
 		ctx,
 		claim,
 		invocation,
@@ -442,7 +442,7 @@ func (s *InvocationExecutionService) parkForClientTools(
 		return ports.ErrExecutionResultInvalid
 	}
 	for _, call := range calls {
-		if call.Mode != domain.ToolCallModeClient ||
+		if (call.Mode != domain.ToolCallModeClient && call.Mode != domain.ToolCallModeCallback) ||
 			call.Iteration != invocation.CurrentIteration ||
 			call.Status != domain.ToolCallPending {
 			return ports.ErrExecutionResultInvalid
@@ -486,6 +486,17 @@ func (s *InvocationExecutionService) parkForClientTools(
 	)); err != nil {
 		return err
 	}
+	if callbackStore, ok := any(s.store).(ports.CallbackDeliveryRepository); ok {
+		if _, err := callbackStore.ActivateCallbackDeliveries(ctx, invocation.ID, now); err != nil {
+			return err
+		}
+	} else {
+		for _, call := range calls {
+			if call.Mode == domain.ToolCallModeCallback {
+				return fmt.Errorf("callback delivery repository is not configured")
+			}
+		}
+	}
 	if settleDispatch {
 		if _, err := s.store.SettleExecutionDispatch(ctx, *dispatchID, now); err != nil {
 			return fmt.Errorf("settle execution dispatch with parked Invocation: %w", err)
@@ -494,7 +505,7 @@ func (s *InvocationExecutionService) parkForClientTools(
 	return nil
 }
 
-func (s *InvocationExecutionService) settlePendingBuiltinSiblingsForClientWait(
+func (s *InvocationExecutionService) settlePendingBuiltinSiblingsForExternalWait(
 	ctx context.Context,
 	claim domain.InvocationClaim,
 	invocation domain.Invocation,
@@ -502,17 +513,17 @@ func (s *InvocationExecutionService) settlePendingBuiltinSiblingsForClientWait(
 	now time.Time,
 ) (domain.Invocation, error) {
 	builtins := make([]domain.ToolCall, 0, len(calls))
-	clientCount := 0
+	externalCount := 0
 	for _, call := range calls {
 		if call.Iteration != invocation.CurrentIteration {
 			return domain.Invocation{}, ports.ErrExecutionResultInvalid
 		}
 		switch call.Mode {
-		case domain.ToolCallModeClient:
+		case domain.ToolCallModeClient, domain.ToolCallModeCallback:
 			if call.Status != domain.ToolCallPending {
 				return domain.Invocation{}, ports.ErrExecutionResultInvalid
 			}
-			clientCount++
+			externalCount++
 		case domain.ToolCallModeBuiltin:
 			if call.Status != domain.ToolCallPending && call.Status != domain.ToolCallRunning {
 				return domain.Invocation{}, ports.ErrExecutionResultInvalid
@@ -522,7 +533,7 @@ func (s *InvocationExecutionService) settlePendingBuiltinSiblingsForClientWait(
 			return domain.Invocation{}, ports.ErrExecutionResultInvalid
 		}
 	}
-	if clientCount == 0 {
+	if externalCount == 0 {
 		return domain.Invocation{}, ports.ErrExecutionResultInvalid
 	}
 	if len(builtins) == 0 {

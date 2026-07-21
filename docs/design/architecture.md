@@ -166,10 +166,11 @@ Every tool declares one mode:
 - **`builtin`** — a deliberately small trusted runtime capability executed
   by the turn engine in process. Broad integrations do not become builtins.
 - **`callback`** — a signed request to a host endpoint with durable result
-  consumption. Delivery carries stable Invocation, ToolCall, tenant,
-  delegated actor, and idempotency identities; URLs must satisfy deployment
-  egress policy; hosts verify with the runtime JWKS or a shared signing
-  secret.
+  consumption. Delivery carries stable Invocation, ToolCall, tenant, Agent,
+  and idempotency identities; its versioned context reserves delegated actor
+  identity until admission owns such a claim. URLs satisfy public-only
+  dial-time egress policy. The first implementation uses one installation HMAC
+  secret with explicit key ID/version; JWKS signing remains a later scheme.
 - **`client`** — the ToolCall is persisted in the canonical transcript before
   projection through Invocation and Session reads. The Invocation parks in
   `waiting` until the host submits a bounded batch through

@@ -244,3 +244,21 @@ transcript keeps submission order; provider projection coalesces and restores
 original model batch order. This deliberately avoids Mobius Cloud's mutable
 suspension blob and does not add generic Session append, callback delivery, or
 host credentials to nvoken.
+
+29. Callback tools use a blocked outbox and installation HMAC v1 (2026-07-21):
+an inline callback declaration adds one public HTTPS URL to the immutable tool
+spec and fingerprint v5. Each selected callback ToolCall commits exactly one
+blocked `CallbackDelivery` in its model-checkpoint transaction; only the
+fenced transition that parks the Invocation activates those rows. A
+combined-role Postgres worker claims with an expiring attempt fence, signs the
+exact compact body as `v1.<delivery_id>.<timestamp>.<body>`, refuses redirects
+and nonpublic dial targets, and retries bounded transport/408/425/429/5xx
+outcomes. Delivery ID stays stable across retries, while `Idempotency-Key` is
+the ToolCall ID because the receiver must make uncertain external effects
+idempotent at that boundary. A valid or bounded failure response settles the
+delivery, ToolCall, transcript result, checkpoint, and possible waiting-to-
+queued transition atomically. The one installation HMAC key is deployment
+configuration and never durable data; its nonsecret ID/version are headers.
+The v1 body reserves optional delegated actor context, omitted until admission
+owns that claim. Per-tool credentials, private egress, JWKS/public-key signing,
+and automated key rotation remain separate future decisions.
