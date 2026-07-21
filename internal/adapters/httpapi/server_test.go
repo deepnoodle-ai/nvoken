@@ -77,6 +77,19 @@ func TestHealthzIsPublic(t *testing.T) {
 	}
 }
 
+func TestServerTimeoutsAreBounded(t *testing.T) {
+	server := NewServer(Config{})
+	if server.http.ReadHeaderTimeout <= 0 || server.http.ReadTimeout <= 0 ||
+		server.http.WriteTimeout <= 0 || server.http.IdleTimeout <= 0 {
+		t.Fatalf("server timeouts = header %s, read %s, write %s, idle %s",
+			server.http.ReadHeaderTimeout, server.http.ReadTimeout,
+			server.http.WriteTimeout, server.http.IdleTimeout)
+	}
+	if server.http.WriteTimeout <= server.http.ReadTimeout {
+		t.Fatalf("write timeout %s must leave time after read timeout %s", server.http.WriteTimeout, server.http.ReadTimeout)
+	}
+}
+
 func TestRoutingErrorsUseContractEnvelope(t *testing.T) {
 	tests := []struct {
 		name, method, target, code, allow string

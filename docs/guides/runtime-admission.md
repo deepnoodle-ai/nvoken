@@ -44,6 +44,8 @@ IDs. If the acknowledgement is lost, retry the exact request and
 `idempotency_key`; nvoken returns the original IDs with `deduplicated: true`.
 A changed request using the same scoped key returns
 `409 idempotency_conflict`.
+Treat `503 unavailable` the same way as any ambiguous acknowledgement: retry
+the exact body and key rather than inventing a new key for the same turn.
 
 Read the durable state after any API restart:
 

@@ -20,10 +20,17 @@ SELECT pg_advisory_xact_lock(hashtextextended('nvoken:installation-bootstrap', 0
 INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
 VALUES ($1, $2, $3, $4);
 
--- name: CreateTenantPartitionIfAbsent :exec
+-- name: CreateDefaultTenantPartitionIfAbsent :exec
+INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+VALUES ($1, $2, NULL, $3)
+ON CONFLICT (account_id) WHERE tenant_ref IS NULL
+DO NOTHING;
+
+-- name: CreateTenantPartitionByRefIfAbsent :exec
 INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (account_id, tenant_ref) WHERE tenant_ref IS NOT NULL
+DO NOTHING;
 
 -- name: GetTenantPartition :one
 SELECT id, account_id, tenant_ref, created_at

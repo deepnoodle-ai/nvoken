@@ -61,7 +61,7 @@ func normalizeTransactionError(err error) error {
 	case "23505":
 		if postgresError.ConstraintName == "invocations_one_nonterminal_per_session" ||
 			postgresError.ConstraintName == "invocations_idempotency_scope" {
-			return fmt.Errorf("%w: %w", ports.ErrRetryable, err)
+			return fmt.Errorf("%w: %w", ports.ErrConcurrentAdmission, err)
 		}
 	}
 	return err

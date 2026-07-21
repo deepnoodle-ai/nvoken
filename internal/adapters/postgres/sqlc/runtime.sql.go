@@ -167,6 +167,30 @@ func (q *Queries) CreateAgentIfAbsent(ctx context.Context, arg CreateAgentIfAbse
 	return err
 }
 
+const createDefaultTenantPartitionIfAbsent = `-- name: CreateDefaultTenantPartitionIfAbsent :exec
+INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+VALUES ($1, $2, NULL, $3)
+ON CONFLICT (account_id) WHERE tenant_ref IS NULL
+DO NOTHING
+`
+
+type CreateDefaultTenantPartitionIfAbsentParams struct {
+	ID        string
+	AccountID string
+	CreatedAt time.Time
+}
+
+// CreateDefaultTenantPartitionIfAbsent
+//
+//	INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+//	VALUES ($1, $2, NULL, $3)
+//	ON CONFLICT (account_id) WHERE tenant_ref IS NULL
+//	DO NOTHING
+func (q *Queries) CreateDefaultTenantPartitionIfAbsent(ctx context.Context, arg CreateDefaultTenantPartitionIfAbsentParams) error {
+	_, err := q.db.Exec(ctx, createDefaultTenantPartitionIfAbsent, arg.ID, arg.AccountID, arg.CreatedAt)
+	return err
+}
+
 const createExecutionSpecSnapshot = `-- name: CreateExecutionSpecSnapshot :exec
 INSERT INTO execution_spec_snapshots (id, account_id, spec, created_at)
 VALUES ($1, $2, $3, $4)
@@ -371,26 +395,28 @@ func (q *Queries) CreateTenantPartition(ctx context.Context, arg CreateTenantPar
 	return err
 }
 
-const createTenantPartitionIfAbsent = `-- name: CreateTenantPartitionIfAbsent :exec
+const createTenantPartitionByRefIfAbsent = `-- name: CreateTenantPartitionByRefIfAbsent :exec
 INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT DO NOTHING
+ON CONFLICT (account_id, tenant_ref) WHERE tenant_ref IS NOT NULL
+DO NOTHING
 `
 
-type CreateTenantPartitionIfAbsentParams struct {
+type CreateTenantPartitionByRefIfAbsentParams struct {
 	ID        string
 	AccountID string
 	TenantRef *string
 	CreatedAt time.Time
 }
 
-// CreateTenantPartitionIfAbsent
+// CreateTenantPartitionByRefIfAbsent
 //
 //	INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
 //	VALUES ($1, $2, $3, $4)
-//	ON CONFLICT DO NOTHING
-func (q *Queries) CreateTenantPartitionIfAbsent(ctx context.Context, arg CreateTenantPartitionIfAbsentParams) error {
-	_, err := q.db.Exec(ctx, createTenantPartitionIfAbsent,
+//	ON CONFLICT (account_id, tenant_ref) WHERE tenant_ref IS NOT NULL
+//	DO NOTHING
+func (q *Queries) CreateTenantPartitionByRefIfAbsent(ctx context.Context, arg CreateTenantPartitionByRefIfAbsentParams) error {
+	_, err := q.db.Exec(ctx, createTenantPartitionByRefIfAbsent,
 		arg.ID,
 		arg.AccountID,
 		arg.TenantRef,

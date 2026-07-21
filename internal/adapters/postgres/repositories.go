@@ -83,14 +83,19 @@ func (s *Store) CreateTenantPartition(ctx context.Context, partition domain.Tena
 }
 
 func (s *Store) ResolveTenantPartition(ctx context.Context, partition domain.TenantPartition) (domain.TenantPartition, error) {
-	if err := s.q(ctx).CreateTenantPartitionIfAbsent(ctx, postgresdb.CreateTenantPartitionIfAbsentParams{
+	if partition.TenantRef == nil {
+		if err := s.q(ctx).CreateDefaultTenantPartitionIfAbsent(ctx, postgresdb.CreateDefaultTenantPartitionIfAbsentParams{
+			ID: partition.ID, AccountID: partition.AccountID, CreatedAt: partition.CreatedAt,
+		}); err != nil {
+			return domain.TenantPartition{}, err
+		}
+		return s.GetDefaultTenantPartition(ctx, partition.AccountID)
+	}
+	if err := s.q(ctx).CreateTenantPartitionByRefIfAbsent(ctx, postgresdb.CreateTenantPartitionByRefIfAbsentParams{
 		ID: partition.ID, AccountID: partition.AccountID,
 		TenantRef: partition.TenantRef, CreatedAt: partition.CreatedAt,
 	}); err != nil {
 		return domain.TenantPartition{}, err
-	}
-	if partition.TenantRef == nil {
-		return s.GetDefaultTenantPartition(ctx, partition.AccountID)
 	}
 	return s.GetTenantPartitionByRef(ctx, partition.AccountID, *partition.TenantRef)
 }

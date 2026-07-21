@@ -90,6 +90,38 @@ func TestInstallationBootstrapConvergesAcrossReplicas(t *testing.T) {
 	}
 }
 
+func TestResolveTenantPartitionConvergesWithinExplicitConflictScope(t *testing.T) {
+	pool, _, store, auth := newRuntimeFixture(t)
+	now := time.Now().UTC()
+	defaultCandidate := domain.TenantPartition{
+		ID: testID(t, domain.PrefixTenantPartition), AccountID: auth.AccountID, CreatedAt: now,
+	}
+	resolvedDefault, err := store.ResolveTenantPartition(context.Background(), defaultCandidate)
+	if err != nil {
+		t.Fatalf("resolve default partition: %v", err)
+	}
+	if resolvedDefault.ID == defaultCandidate.ID || resolvedDefault.TenantRef != nil {
+		t.Fatalf("resolved default partition = %#v", resolvedDefault)
+	}
+
+	tenantRef := "tenant-a"
+	first, err := store.ResolveTenantPartition(context.Background(), domain.TenantPartition{
+		ID: testID(t, domain.PrefixTenantPartition), AccountID: auth.AccountID,
+		TenantRef: &tenantRef, CreatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("resolve tenant partition: %v", err)
+	}
+	second, err := store.ResolveTenantPartition(context.Background(), domain.TenantPartition{
+		ID: testID(t, domain.PrefixTenantPartition), AccountID: auth.AccountID,
+		TenantRef: &tenantRef, CreatedAt: now,
+	})
+	if err != nil || second.ID != first.ID {
+		t.Fatalf("second tenant resolution = %#v, error = %v; first = %#v", second, err, first)
+	}
+	assertTableCount(t, pool, "tenant_partitions", 2)
+}
+
 func TestRuntimeAdmissionRetryReadsAndTenantIsolation(t *testing.T) {
 	pool, service, store, auth := newRuntimeFixture(t)
 	ctx := context.Background()
@@ -411,6 +443,76 @@ func TestRuntimeAdmissionMapsRetryableDatabaseConflictToUnavailable(t *testing.T
 	assertAdmissionCounts(t, pool, 0)
 }
 
+func TestRuntimeAdmissionReevaluatesConcurrentBackstopConflict(t *testing.T) {
+	tests := []struct {
+		name      string
+		mutate    func(*services.CreateInvocationInput, services.InvocationAcknowledgement)
+		wantCode  services.ErrorCode
+		wantDedup bool
+	}{
+		{name: "equal replay", wantDedup: true},
+		{
+			name: "changed replay", wantCode: services.CodeIdempotencyConflict,
+			mutate: func(input *services.CreateInvocationInput, _ services.InvocationAcknowledgement) {
+				input.Input.Content[0].Text = "changed"
+			},
+		},
+		{
+			name: "active Session", wantCode: services.CodeSessionInvocationActive,
+			mutate: func(input *services.CreateInvocationInput, first services.InvocationAcknowledgement) {
+				input.SessionKey = nil
+				input.SessionID = &first.SessionID
+				input.IdempotencyKey = "request-2"
+				input.Input.Content[0].Text = "next input"
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pool, initialService, store, auth := newRuntimeFixture(t)
+			first, err := initialService.Admit(context.Background(), auth, runtimeInput())
+			if err != nil {
+				t.Fatalf("initial admission: %v", err)
+			}
+			input := runtimeInput()
+			if test.mutate != nil {
+				test.mutate(&input, first)
+			}
+			clock := identity.SystemClock{}
+			txm := &concurrentAdmissionOnceTransactionManager{base: NewTransactionManager(pool)}
+			service := services.NewRuntimeService(store, txm, clock, identity.NewUUIDv7Generator(clock))
+
+			acknowledgement, err := service.Admit(context.Background(), auth, input)
+			if txm.calls != 2 {
+				t.Fatalf("transaction attempts = %d, want 2", txm.calls)
+			}
+			if test.wantCode != "" {
+				assertPublicCode(t, err, test.wantCode)
+				return
+			}
+			if err != nil || acknowledgement.InvocationID != first.InvocationID || acknowledgement.Deduplicated != test.wantDedup {
+				t.Fatalf("acknowledgement = %#v, error = %v", acknowledgement, err)
+			}
+		})
+	}
+}
+
+func TestRuntimeAdmissionBoundsRepeatedBackstopConflict(t *testing.T) {
+	pool, _, store, auth := newRuntimeFixture(t)
+	clock := identity.SystemClock{}
+	txm := &concurrentAdmissionAlwaysTransactionManager{}
+	service := services.NewRuntimeService(store, txm, clock, identity.NewUUIDv7Generator(clock))
+
+	_, err := service.Admit(context.Background(), auth, runtimeInput())
+	assertPublicCode(t, err, services.CodeUnavailable)
+	if txm.calls != 2 {
+		t.Fatalf("transaction attempts = %d, want 2", txm.calls)
+	}
+	assertTableCount(t, pool, "agents", 0)
+	assertTableCount(t, pool, "sessions", 0)
+	assertAdmissionCounts(t, pool, 0)
+}
+
 func TestRuntimeAdmissionCancellationWhileWaitingForSessionLockRollsBack(t *testing.T) {
 	pool, service, store, auth := newRuntimeFixture(t)
 	first, err := service.Admit(context.Background(), auth, runtimeInput())
@@ -503,6 +605,26 @@ type retryableTransactionManager struct{}
 
 func (retryableTransactionManager) WithTransaction(context.Context, func(context.Context) error) error {
 	return ports.ErrRetryable
+}
+
+type concurrentAdmissionOnceTransactionManager struct {
+	base  *TransactionManager
+	calls int
+}
+
+type concurrentAdmissionAlwaysTransactionManager struct{ calls int }
+
+func (m *concurrentAdmissionAlwaysTransactionManager) WithTransaction(context.Context, func(context.Context) error) error {
+	m.calls++
+	return ports.ErrConcurrentAdmission
+}
+
+func (m *concurrentAdmissionOnceTransactionManager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
+	m.calls++
+	if m.calls == 1 {
+		return ports.ErrConcurrentAdmission
+	}
+	return m.base.WithTransaction(ctx, fn)
 }
 
 func (m *commitFailureTransactionManager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {

@@ -21,7 +21,7 @@ func TestNormalizeTransactionErrorClassifiesRetryableConflicts(t *testing.T) {
 	for _, constraint := range []string{"invocations_one_nonterminal_per_session", "invocations_idempotency_scope"} {
 		t.Run(constraint, func(t *testing.T) {
 			postgresError := &pgconn.PgError{Code: "23505", ConstraintName: constraint, Message: "unique violation"}
-			if err := normalizeTransactionError(postgresError); !errors.Is(err, ports.ErrRetryable) {
+			if err := normalizeTransactionError(postgresError); !errors.Is(err, ports.ErrConcurrentAdmission) {
 				t.Fatalf("normalized error = %v", err)
 			}
 		})

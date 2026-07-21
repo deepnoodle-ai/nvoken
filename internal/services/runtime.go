@@ -173,127 +173,135 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 		return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 	}
 
-	var acknowledgement InvocationAcknowledgement
-	err = s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
-		account, err := s.store.GetAccount(txCtx, auth.AccountID)
-		if err != nil {
-			return fmt.Errorf("resolve authenticated Account: %w", err)
-		}
-		now := s.clock.Now().UTC()
-		agentID, err := s.ids.NewID(domain.PrefixAgent)
-		if err != nil {
-			return err
-		}
-		agent, err := s.store.ResolveAgent(txCtx, domain.Agent{
-			ID: agentID, AccountID: account.ID, AgentRef: input.AgentRef, CreatedAt: now,
-		})
-		if err != nil {
-			return err
-		}
-
-		partition, selectedSession, err := s.resolvePartitionAndSelectedSession(txCtx, account, agent, auth, input, now)
-		if err != nil {
-			return err
-		}
-		if err := s.store.LockInvocationAdmissionKey(txCtx, invocationAdmissionLockKey(account.ID, partition.ID, agent.ID, input.IdempotencyKey)); err != nil {
-			return err
-		}
-		if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, fingerprint); err != nil {
-			return err
-		} else if found {
-			acknowledgement = acknowledgementFor(existing, true)
-			return nil
-		}
-
-		session, err := s.resolveSession(txCtx, account, partition, agent, selectedSession, input, now)
-		if err != nil {
-			return err
-		}
-		session, err = s.store.GetSessionForUpdate(txCtx, session.ID)
-		if err != nil {
-			return err
-		}
-		if session.AccountID != account.ID || session.TenantPartitionID != partition.ID || session.AgentID != agent.ID {
-			return notFound()
-		}
-		if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, fingerprint); err != nil {
-			return err
-		} else if found {
-			acknowledgement = acknowledgementFor(existing, true)
-			return nil
-		}
-		active, err := s.store.GetNonterminalInvocationBySession(txCtx, session.ID)
-		if err == nil {
-			return &PublicError{
-				Code: CodeSessionInvocationActive, Message: "This Session already has a nonterminal Invocation.",
-				Details: map[string]any{"invocation_id": active.ID, "status": active.Status},
+	for attempt := 0; attempt < 2; attempt++ {
+		var acknowledgement InvocationAcknowledgement
+		err = s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
+			account, err := s.store.GetAccount(txCtx, auth.AccountID)
+			if err != nil {
+				return fmt.Errorf("resolve authenticated Account: %w", err)
 			}
-		}
-		if !errors.Is(err, ports.ErrNotFound) {
-			return err
-		}
+			now := s.clock.Now().UTC()
+			agentID, err := s.ids.NewID(domain.PrefixAgent)
+			if err != nil {
+				return err
+			}
+			agent, err := s.store.ResolveAgent(txCtx, domain.Agent{
+				ID: agentID, AccountID: account.ID, AgentRef: input.AgentRef, CreatedAt: now,
+			})
+			if err != nil {
+				return err
+			}
 
-		sequence, err := s.store.ReserveMessageSequence(txCtx, session.ID)
-		if err != nil {
-			return err
+			partition, selectedSession, err := s.resolvePartitionAndSelectedSession(txCtx, account, agent, auth, input, now)
+			if err != nil {
+				return err
+			}
+			if err := s.store.LockInvocationAdmissionKey(txCtx, invocationAdmissionLockKey(account.ID, partition.ID, agent.ID, input.IdempotencyKey)); err != nil {
+				return err
+			}
+			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, fingerprint); err != nil {
+				return err
+			} else if found {
+				acknowledgement = acknowledgementFor(existing, true)
+				return nil
+			}
+
+			session, err := s.resolveSession(txCtx, account, partition, agent, selectedSession, input, now)
+			if err != nil {
+				return err
+			}
+			session, err = s.store.GetSessionForUpdate(txCtx, session.ID)
+			if err != nil {
+				return err
+			}
+			if session.AccountID != account.ID || session.TenantPartitionID != partition.ID || session.AgentID != agent.ID {
+				return notFound()
+			}
+			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, fingerprint); err != nil {
+				return err
+			} else if found {
+				acknowledgement = acknowledgementFor(existing, true)
+				return nil
+			}
+			active, err := s.store.GetNonterminalInvocationBySession(txCtx, session.ID)
+			if err == nil {
+				return &PublicError{
+					Code: CodeSessionInvocationActive, Message: "This Session already has a nonterminal Invocation.",
+					Details: map[string]any{"invocation_id": active.ID, "status": active.Status},
+				}
+			}
+			if !errors.Is(err, ports.ErrNotFound) {
+				return err
+			}
+
+			sequence, err := s.store.ReserveMessageSequence(txCtx, session.ID)
+			if err != nil {
+				return err
+			}
+			revision, err := s.store.ReserveLifecycleRevision(txCtx, session.ID)
+			if err != nil {
+				return err
+			}
+			ids, err := s.newAdmissionIDs()
+			if err != nil {
+				return err
+			}
+			specJSON, err := json.Marshal(input.Spec)
+			if err != nil {
+				return err
+			}
+			contentJSON, err := json.Marshal(input.Input.Content)
+			if err != nil {
+				return err
+			}
+			snapshot := domain.ExecutionSpecSnapshot{ID: ids.snapshot, AccountID: account.ID, Spec: specJSON, CreatedAt: now}
+			invocation := domain.Invocation{
+				ID: ids.invocation, SessionID: session.ID, AccountID: account.ID,
+				TenantPartitionID: partition.ID, AgentID: agent.ID, SpecSnapshotID: snapshot.ID,
+				IdempotencyKey: input.IdempotencyKey, RequestFingerprint: fingerprint[:],
+				Status: domain.InvocationQueued, CurrentStateRevision: revision, CreatedAt: now, UpdatedAt: now,
+			}
+			message := domain.SessionMessage{
+				ID: ids.message, SessionID: session.ID, AccountID: account.ID,
+				TenantPartitionID: partition.ID, AgentID: agent.ID, InvocationID: invocation.ID,
+				Sequence: sequence, Role: domain.MessageRoleUser, Content: contentJSON, CreatedAt: now,
+			}
+			state := domain.InvocationState{
+				ID: ids.state, InvocationID: invocation.ID, SessionID: session.ID, AccountID: account.ID,
+				TenantPartitionID: partition.ID, AgentID: agent.ID, Revision: revision,
+				Status: domain.InvocationQueued, ThroughMessageSequence: &sequence, CreatedAt: now,
+			}
+			if err := s.store.CreateExecutionSpecSnapshot(txCtx, snapshot); err != nil {
+				return err
+			}
+			if err := s.store.CreateInvocation(txCtx, invocation); err != nil {
+				return err
+			}
+			if err := s.store.AppendSessionMessage(txCtx, message); err != nil {
+				return err
+			}
+			if err := s.store.AppendInvocationState(txCtx, state); err != nil {
+				return err
+			}
+			acknowledgement = acknowledgementFor(invocation, false)
+			return nil
+		})
+		if err == nil {
+			return acknowledgement, nil
 		}
-		revision, err := s.store.ReserveLifecycleRevision(txCtx, session.ID)
-		if err != nil {
-			return err
+		if errors.Is(err, ports.ErrConcurrentAdmission) && attempt == 0 && ctx.Err() == nil {
+			continue
 		}
-		ids, err := s.newAdmissionIDs()
-		if err != nil {
-			return err
-		}
-		specJSON, err := json.Marshal(input.Spec)
-		if err != nil {
-			return err
-		}
-		contentJSON, err := json.Marshal(input.Input.Content)
-		if err != nil {
-			return err
-		}
-		snapshot := domain.ExecutionSpecSnapshot{ID: ids.snapshot, AccountID: account.ID, Spec: specJSON, CreatedAt: now}
-		invocation := domain.Invocation{
-			ID: ids.invocation, SessionID: session.ID, AccountID: account.ID,
-			TenantPartitionID: partition.ID, AgentID: agent.ID, SpecSnapshotID: snapshot.ID,
-			IdempotencyKey: input.IdempotencyKey, RequestFingerprint: fingerprint[:],
-			Status: domain.InvocationQueued, CurrentStateRevision: revision, CreatedAt: now, UpdatedAt: now,
-		}
-		message := domain.SessionMessage{
-			ID: ids.message, SessionID: session.ID, AccountID: account.ID,
-			TenantPartitionID: partition.ID, AgentID: agent.ID, InvocationID: invocation.ID,
-			Sequence: sequence, Role: domain.MessageRoleUser, Content: contentJSON, CreatedAt: now,
-		}
-		state := domain.InvocationState{
-			ID: ids.state, InvocationID: invocation.ID, SessionID: session.ID, AccountID: account.ID,
-			TenantPartitionID: partition.ID, AgentID: agent.ID, Revision: revision,
-			Status: domain.InvocationQueued, ThroughMessageSequence: &sequence, CreatedAt: now,
-		}
-		if err := s.store.CreateExecutionSpecSnapshot(txCtx, snapshot); err != nil {
-			return err
-		}
-		if err := s.store.CreateInvocation(txCtx, invocation); err != nil {
-			return err
-		}
-		if err := s.store.AppendSessionMessage(txCtx, message); err != nil {
-			return err
-		}
-		if err := s.store.AppendInvocationState(txCtx, state); err != nil {
-			return err
-		}
-		acknowledgement = acknowledgementFor(invocation, false)
-		return nil
-	})
-	if err != nil {
-		if errors.Is(err, ports.ErrRetryable) {
+		if errors.Is(err, ports.ErrRetryable) || errors.Is(err, ports.ErrConcurrentAdmission) {
 			return InvocationAcknowledgement{}, &PublicError{
 				Code: CodeUnavailable, Message: "The service is temporarily unavailable.", Cause: err,
 			}
 		}
 		return InvocationAcknowledgement{}, err
 	}
-	return acknowledgement, nil
+	return InvocationAcknowledgement{}, &PublicError{
+		Code: CodeUnavailable, Message: "The service is temporarily unavailable.",
+	}
 }
 
 func (s *RuntimeService) resolvePartitionAndSelectedSession(

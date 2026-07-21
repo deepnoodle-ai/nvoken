@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	ErrNotFound        = errors.New("not found")
-	ErrUnauthenticated = errors.New("unauthenticated")
-	ErrRetryable       = errors.New("retryable database conflict")
+	ErrNotFound            = errors.New("not found")
+	ErrUnauthenticated     = errors.New("unauthenticated")
+	ErrRetryable           = errors.New("retryable database conflict")
+	ErrConcurrentAdmission = errors.New("concurrent admission conflict")
 )
 
 // Clock makes persisted timestamps deterministic in services and tests.

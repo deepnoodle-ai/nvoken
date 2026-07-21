@@ -18,6 +18,15 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
+const (
+	serverReadHeaderTimeout = 10 * time.Second
+	serverReadTimeout       = 30 * time.Second
+	// Leave response headroom after the bounded body read and the Postgres
+	// adapter's 120-second statement timeout while still bounding handlers.
+	serverWriteTimeout = 180 * time.Second
+	serverIdleTimeout  = 60 * time.Second
+)
+
 type RuntimeService interface {
 	Admit(context.Context, domain.RuntimeAuthContext, services.CreateInvocationInput) (services.InvocationAcknowledgement, error)
 	GetInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error)
@@ -49,7 +58,10 @@ func NewServer(cfg Config) *Server {
 		http: &http.Server{
 			Addr:              cfg.Addr,
 			Handler:           handler,
-			ReadHeaderTimeout: 10 * time.Second,
+			ReadHeaderTimeout: serverReadHeaderTimeout,
+			ReadTimeout:       serverReadTimeout,
+			WriteTimeout:      serverWriteTimeout,
+			IdleTimeout:       serverIdleTimeout,
 			MaxHeaderBytes:    1 << 20,
 		},
 	}
