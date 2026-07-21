@@ -205,6 +205,85 @@ func TestCreateInvocationReturnsDurableAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestCreateInvocationDecodesStructuredOutputContract(t *testing.T) {
+	runtime := &fakeRuntime{
+		ack: services.InvocationAcknowledgement{
+			AgentID:      testAgentID,
+			SessionID:    testSessionID,
+			InvocationID: testInvocationID,
+			Status:       domain.InvocationQueued,
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodPost, "/v1/invocations", structuredInvocationJSON())
+
+	testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusAccepted || runtime.admitCalls != 1 {
+		t.Fatalf("structured admission = %d, calls = %d, body = %s", recorder.Code, runtime.admitCalls, recorder.Body.String())
+	}
+	if runtime.admitInput.Spec.Output == nil ||
+		string(runtime.admitInput.Spec.Output.Schema) != `{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}` {
+		t.Fatalf("decoded output = %#v", runtime.admitInput.Spec.Output)
+	}
+}
+
+func TestInvocationReadAndTranscriptProjectStructuredOutput(t *testing.T) {
+	output := json.RawMessage(`{"answer":"yes"}`)
+	provenance := json.RawMessage(`{"source":"tool_call","tool_call_id":"tcal_019f84a5-7838-7b57-a180-000000000001","schema_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`)
+	now := time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC)
+	runtime := &fakeRuntime{
+		invocation: services.InvocationRead{
+			ID:               testInvocationID,
+			AgentID:          testAgentID,
+			SessionID:        testSessionID,
+			Status:           domain.InvocationCompleted,
+			Output:           output,
+			OutputProvenance: provenance,
+			Budgets: services.InvocationBudgetRead{
+				WallClockTimeoutSeconds:       1800,
+				ActiveExecutionTimeoutSeconds: 1800,
+				MaxIterations:                 3,
+			},
+			WallClockDeadlineAt: now.Add(time.Hour),
+			CreatedAt:           now,
+			UpdatedAt:           now,
+			CompletedAt:         &now,
+		},
+		transcript: services.TranscriptSnapshot{
+			InvocationChanges: []domain.InvocationLifecycleChange{
+				{
+					InvocationState: domain.InvocationState{
+						InvocationID: testInvocationID,
+						Revision:     2,
+						Status:       domain.InvocationCompleted,
+						CreatedAt:    now,
+					},
+					Output:           output,
+					OutputProvenance: provenance,
+				},
+			},
+			ResumeCursor: "cursor",
+		},
+	}
+	handler := testHandler(runtime, nil, io.Discard)
+
+	for _, target := range []string{
+		"/v1/invocations/" + testInvocationID,
+		"/v1/sessions/" + testSessionID + "/transcript",
+	} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, authenticatedRequest(http.MethodGet, target, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d: %s", target, recorder.Code, recorder.Body.String())
+		}
+		if !strings.Contains(recorder.Body.String(), `"output":{"answer":"yes"}`) ||
+			!strings.Contains(recorder.Body.String(), `"source":"tool_call"`) {
+			t.Fatalf("GET %s omitted structured output: %s", target, recorder.Body.String())
+		}
+	}
+}
+
 func TestInvocationRequestRejectsInvalidJSONBeforeService(t *testing.T) {
 	valid := validInvocationJSON()
 	oversized := `{"agent_ref":"` + strings.Repeat("a", services.MaxInvocationBodyBytes) + `"}`
@@ -212,6 +291,12 @@ func TestInvocationRequestRejectsInvalidJSONBeforeService(t *testing.T) {
 		"unknown field":  bytes.Replace(valid, []byte(`"spec":{`), []byte(`"unknown":true,"spec":{`), 1),
 		"deferred tools": bytes.Replace(valid, []byte(`"instructions":"help",`), []byte(`"instructions":"help","tools":[],`), 1),
 		"duplicate key":  bytes.Replace(valid, []byte(`"provider":"anthropic"`), []byte(`"provider":"anthropic","provider":"openai"`), 1),
+		"duplicate schema key": bytes.Replace(
+			structuredInvocationJSON(),
+			[]byte(`"type":"object","properties"`),
+			[]byte(`"type":"object","type":"array","properties"`),
+			1,
+		),
 		"trailing value": append(append([]byte{}, valid...), []byte(` {}`)...),
 		"null optional":  bytes.Replace(valid, []byte(`"agent_ref":"support",`), []byte(`"agent_ref":"support","tenant_ref":null,`), 1),
 		"two selectors":  bytes.Replace(valid, []byte(`"idempotency_key":`), []byte(`"session_id":"`+testSessionID+`","session_key":"ticket","idempotency_key":`), 1),
@@ -473,6 +558,10 @@ func authenticatedRequest(method, target string, body []byte) *http.Request {
 
 func validInvocationJSON() []byte {
 	return []byte(`{"agent_ref":"support","idempotency_key":"request-1","input":{"content":[{"type":"text","text":"private caller text"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","name":"test-model"}}}`)
+}
+
+func structuredInvocationJSON() []byte {
+	return []byte(`{"agent_ref":"support","idempotency_key":"request-1","input":{"content":[{"type":"text","text":"private caller text"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","name":"test-model"},"output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}}}}`)
 }
 
 func assertErrorEnvelope(t *testing.T, body []byte, code string) {

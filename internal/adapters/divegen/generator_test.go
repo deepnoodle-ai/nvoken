@@ -2,8 +2,10 @@ package divegen
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
+	"github.com/deepnoodle-ai/nvoken/internal/structuredoutput"
 )
 
 type sequenceLLM struct {
@@ -41,10 +44,12 @@ func (m *sequenceLLM) Generate(_ context.Context, options ...llm.Option) (*llm.R
 }
 
 type recordingToolCoordinator struct {
-	mu          sync.Mutex
-	events      []string
-	checkpoints []domain.ModelCheckpointInput
-	starts      int
+	mu             sync.Mutex
+	events         []string
+	checkpoints    []domain.ModelCheckpointInput
+	resultContents []json.RawMessage
+	resultErrors   []bool
+	starts         int
 }
 
 func (c *recordingToolCoordinator) RecordModelCheckpoint(_ context.Context, claim domain.InvocationClaim, input domain.ModelCheckpointInput) (domain.ModelCheckpointResult, error) {
@@ -65,7 +70,7 @@ func (c *recordingToolCoordinator) StartBuiltinToolCall(_ context.Context, claim
 	c.starts++
 	return domain.ToolCallExecution{
 		Call: domain.ToolCall{
-			ID:             "tcal_019f84a5-7838-7b57-a180-5f74a0b65be0",
+			ID:             fmt.Sprintf("tcal_019f84a5-7838-7b57-a180-%012x", c.starts),
 			ProviderCallID: providerCallID,
 			Iteration:      iteration,
 		},
@@ -79,10 +84,12 @@ func (c *recordingToolCoordinator) StartBuiltinToolCall(_ context.Context, claim
 func (c *recordingToolCoordinator) AcceptBuiltinToolResult(_ context.Context, _ domain.InvocationClaim, execution domain.ToolCallExecution, content json.RawMessage, isError bool) (domain.ToolCall, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if execution.Call.ID == "" || len(content) == 0 || isError {
+	if execution.Call.ID == "" || len(content) == 0 {
 		return domain.ToolCall{}, errors.New("invalid deterministic result")
 	}
 	c.events = append(c.events, "result")
+	c.resultContents = append(c.resultContents, append(json.RawMessage(nil), content...))
+	c.resultErrors = append(c.resultErrors, isError)
 	return execution.Call, nil
 }
 
@@ -90,6 +97,22 @@ func (c *recordingToolCoordinator) snapshot() ([]string, []domain.ModelCheckpoin
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]string(nil), c.events...), append([]domain.ModelCheckpointInput(nil), c.checkpoints...), c.starts
+}
+
+func (c *recordingToolCoordinator) errorSnapshot() []bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]bool(nil), c.resultErrors...)
+}
+
+func (c *recordingToolCoordinator) resultSnapshot() []json.RawMessage {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	result := make([]json.RawMessage, len(c.resultContents))
+	for index, content := range c.resultContents {
+		result[index] = append(json.RawMessage(nil), content...)
+	}
+	return result
 }
 
 type fakeLLM struct {
@@ -294,6 +317,232 @@ func TestDeterministicBuiltinStopsAtCheckpointBudgetBeforeToolRuns(t *testing.T)
 	}
 }
 
+func TestStructuredOutputCheckpointsAcceptedValueBeforeFinalResponse(t *testing.T) {
+	coordinator := &recordingToolCoordinator{}
+	model := &sequenceLLM{
+		responses: []*llm.Response{
+			toolUseResponse("provider-output-1", `{"answer":"yes"}`),
+			textResponse("done"),
+		},
+	}
+	generator := New(
+		Config{
+			AnthropicAPIKey: "secret",
+		},
+		WithToolCoordinator(coordinator),
+	)
+	generator.factory = func(string, string, string) (llm.LLM, error) {
+		return model, nil
+	}
+	request := structuredGenerationRequest("anthropic")
+
+	response, err := generator.Generate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	events, checkpoints, starts := coordinator.snapshot()
+	if !reflect.DeepEqual(events, []string{"checkpoint", "start", "result", "checkpoint"}) || starts != 1 {
+		t.Fatalf("structured output events = %#v, starts = %d", events, starts)
+	}
+	if len(checkpoints) != 2 || len(checkpoints[0].ToolCalls) != 1 || len(checkpoints[1].ToolCalls) != 0 {
+		t.Fatalf("model checkpoints = %#v", checkpoints)
+	}
+	if response.StructuredOutput == nil || string(response.StructuredOutput.Value) != `{"answer":"yes"}` {
+		t.Fatalf("structured output = %#v", response.StructuredOutput)
+	}
+	if response.StructuredOutput.Provenance.Source != "tool_call" ||
+		response.StructuredOutput.Provenance.ToolCallID != "tcal_019f84a5-7838-7b57-a180-000000000001" ||
+		response.StructuredOutput.Provenance.SchemaSHA256 != fmt.Sprintf("%x", request.StructuredOutput.SchemaDigest) {
+		t.Fatalf("structured output provenance = %#v", response.StructuredOutput.Provenance)
+	}
+	if !response.MessagesCheckpointed || response.StructuredOutputFailure != "" || response.Usage.Iterations != 2 {
+		t.Fatalf("structured generation response = %#v", response)
+	}
+}
+
+func TestStructuredOutputRejectsThenCorrectsDurably(t *testing.T) {
+	coordinator := &recordingToolCoordinator{}
+	model := &sequenceLLM{
+		responses: []*llm.Response{
+			toolUseResponse("provider-output-1", `{}`),
+			toolUseResponse("provider-output-2", `{"answer":"corrected"}`),
+			textResponse("done"),
+		},
+	}
+	generator := New(
+		Config{
+			AnthropicAPIKey: "secret",
+		},
+		WithToolCoordinator(coordinator),
+	)
+	generator.factory = func(string, string, string) (llm.LLM, error) {
+		return model, nil
+	}
+
+	response, err := generator.Generate(context.Background(), structuredGenerationRequest("anthropic"))
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	wantEvents := []string{
+		"checkpoint",
+		"start",
+		"result",
+		"checkpoint",
+		"start",
+		"result",
+		"checkpoint",
+	}
+	events, checkpoints, starts := coordinator.snapshot()
+	if !reflect.DeepEqual(events, wantEvents) || starts != 2 || len(checkpoints) != 3 {
+		t.Fatalf("correction events = %#v, starts = %d, checkpoints = %d", events, starts, len(checkpoints))
+	}
+	if !reflect.DeepEqual(coordinator.errorSnapshot(), []bool{true, false}) {
+		t.Fatalf("result errors = %#v", coordinator.errorSnapshot())
+	}
+	results := coordinator.resultSnapshot()
+	if len(results) != 2 || !strings.Contains(string(results[0]), "answer") || len(results[0]) > 700 {
+		t.Fatalf("bounded correction result = %s", results[0])
+	}
+	if response.StructuredOutput == nil || string(response.StructuredOutput.Value) != `{"answer":"corrected"}` ||
+		response.StructuredOutput.Provenance.ToolCallID != "tcal_019f84a5-7838-7b57-a180-000000000002" {
+		t.Fatalf("corrected output = %#v", response.StructuredOutput)
+	}
+}
+
+func TestStructuredOutputDoesNotAcceptFinalText(t *testing.T) {
+	for _, text := range []string{
+		`{"answer":"text only"}`,
+		"```json\n{\"answer\":\"fenced\"}\n```",
+	} {
+		t.Run(text, func(t *testing.T) {
+			coordinator := &recordingToolCoordinator{}
+			model := &sequenceLLM{
+				responses: []*llm.Response{
+					textResponse(text),
+				},
+			}
+			generator := New(
+				Config{
+					AnthropicAPIKey: "secret",
+				},
+				WithToolCoordinator(coordinator),
+			)
+			generator.factory = func(string, string, string) (llm.LLM, error) {
+				return model, nil
+			}
+
+			response, err := generator.Generate(context.Background(), structuredGenerationRequest("anthropic"))
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			if response.StructuredOutput != nil || response.StructuredOutputFailure != "missing" || !response.MessagesCheckpointed {
+				t.Fatalf("final-text response = %#v", response)
+			}
+		})
+	}
+}
+
+func TestStructuredOutputClassifiesOversizedSubmission(t *testing.T) {
+	coordinator := &recordingToolCoordinator{}
+	oversized := `{"answer":"` + strings.Repeat("x", structuredoutput.MaxValueBytes) + `"}`
+	model := &sequenceLLM{
+		responses: []*llm.Response{
+			toolUseResponse("provider-output-1", oversized),
+			textResponse("unable to correct"),
+		},
+	}
+	generator := New(
+		Config{
+			AnthropicAPIKey: "secret",
+		},
+		WithToolCoordinator(coordinator),
+	)
+	generator.factory = func(string, string, string) (llm.LLM, error) {
+		return model, nil
+	}
+
+	response, err := generator.Generate(context.Background(), structuredGenerationRequest("anthropic"))
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if response.StructuredOutput != nil || response.StructuredOutputFailure != "oversized" {
+		t.Fatalf("oversized response = %#v", response)
+	}
+	if !reflect.DeepEqual(coordinator.errorSnapshot(), []bool{true}) {
+		t.Fatalf("result errors = %#v", coordinator.errorSnapshot())
+	}
+}
+
+func TestStructuredOutputFirstAcceptedValueWins(t *testing.T) {
+	coordinator := &recordingToolCoordinator{}
+	model := &sequenceLLM{
+		responses: []*llm.Response{
+			toolUseResponse("provider-output-1", `{"answer":"first"}`),
+			toolUseResponse("provider-output-2", `{"answer":"second"}`),
+			textResponse("done"),
+		},
+	}
+	generator := New(
+		Config{
+			AnthropicAPIKey: "secret",
+		},
+		WithToolCoordinator(coordinator),
+	)
+	generator.factory = func(string, string, string) (llm.LLM, error) {
+		return model, nil
+	}
+
+	response, err := generator.Generate(context.Background(), structuredGenerationRequest("anthropic"))
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if response.StructuredOutput == nil || string(response.StructuredOutput.Value) != `{"answer":"first"}` ||
+		response.StructuredOutput.Provenance.ToolCallID != "tcal_019f84a5-7838-7b57-a180-000000000001" {
+		t.Fatalf("first accepted output = %#v", response.StructuredOutput)
+	}
+	if !reflect.DeepEqual(coordinator.errorSnapshot(), []bool{false, false}) {
+		t.Fatalf("result errors = %#v", coordinator.errorSnapshot())
+	}
+}
+
+func TestStructuredOutputSchemaProjectsForSupportedProviders(t *testing.T) {
+	for _, provider := range []string{"anthropic", "openai"} {
+		t.Run(provider, func(t *testing.T) {
+			model := &fakeLLM{
+				result: textResponse("done"),
+			}
+			generator := New(
+				Config{
+					AnthropicAPIKey: "anthropic-secret",
+					OpenAIAPIKey:    "openai-secret",
+				},
+				WithToolCoordinator(&recordingToolCoordinator{}),
+			)
+			generator.factory = func(string, string, string) (llm.LLM, error) {
+				return model, nil
+			}
+
+			response, err := generator.Generate(context.Background(), structuredGenerationRequest(provider))
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			if response.StructuredOutputFailure != "missing" {
+				t.Fatalf("response = %#v", response)
+			}
+			if len(model.config.Tools) != 1 || model.config.Tools[0].Name() != "nvoken_submit_output" {
+				t.Fatalf("tools = %#v", model.config.Tools)
+			}
+			schemaPayload, err := json.Marshal(model.config.Tools[0].Schema())
+			if err != nil {
+				t.Fatalf("marshal projected schema: %v", err)
+			}
+			if !jsonEqualForTest(schemaPayload, structuredOutputSchema()) {
+				t.Fatalf("projected schema = %s", schemaPayload)
+			}
+		})
+	}
+}
+
 func TestCheckpointBudgetUsesInjectedObservationTime(t *testing.T) {
 	deadline := time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC)
 	request := generationRequest("anthropic")
@@ -437,6 +686,66 @@ func generationRequest(provider string) domain.GenerationRequest {
 			{Role: domain.MessageRoleAssistant, Content: []byte(`[{"type":"text","text":"prior answer"}]`)},
 		},
 	}
+}
+
+func structuredGenerationRequest(provider string) domain.GenerationRequest {
+	request := generationRequest(provider)
+	request.Messages = request.Messages[:1]
+	request.Claim = generationClaim()
+	request.MaxIterations = 3
+	schema := structuredOutputSchema()
+	digest := sha256.Sum256(schema)
+	request.StructuredOutput = &domain.StructuredOutputRequest{
+		Schema:       schema,
+		SchemaDigest: digest[:],
+	}
+	return request
+}
+
+func structuredOutputSchema() json.RawMessage {
+	return json.RawMessage(`{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}`)
+}
+
+func toolUseResponse(providerCallID, input string) *llm.Response {
+	return &llm.Response{
+		Model: "served-model",
+		Role:  llm.Assistant,
+		Content: []llm.Content{
+			&llm.ToolUseContent{
+				ID:    providerCallID,
+				Name:  "nvoken_submit_output",
+				Input: json.RawMessage(input),
+			},
+		},
+		Usage: llm.Usage{
+			InputTokens:  3,
+			OutputTokens: 1,
+		},
+	}
+}
+
+func textResponse(text string) *llm.Response {
+	return &llm.Response{
+		Model: "served-model",
+		Role:  llm.Assistant,
+		Content: []llm.Content{
+			&llm.TextContent{
+				Text: text,
+			},
+		},
+		Usage: llm.Usage{
+			InputTokens:  3,
+			OutputTokens: 1,
+		},
+	}
+}
+
+func jsonEqualForTest(left, right []byte) bool {
+	var leftValue any
+	var rightValue any
+	return json.Unmarshal(left, &leftValue) == nil &&
+		json.Unmarshal(right, &rightValue) == nil &&
+		reflect.DeepEqual(leftValue, rightValue)
 }
 
 func successfulDiveResponse() *llm.Response {

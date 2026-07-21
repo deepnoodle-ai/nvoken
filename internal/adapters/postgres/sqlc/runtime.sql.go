@@ -70,7 +70,7 @@ WHERE id = $4 AND status = 'running'
   AND execution_deadline_at > $3
   AND current_checkpoint_sequence < $1
   AND current_iteration <= $2
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 `
 
 type AdvanceInvocationCheckpointParams struct {
@@ -94,7 +94,7 @@ type AdvanceInvocationCheckpointParams struct {
 //	  AND execution_deadline_at > $3
 //	  AND current_checkpoint_sequence < $1
 //	  AND current_iteration <= $2
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 func (q *Queries) AdvanceInvocationCheckpoint(ctx context.Context, arg AdvanceInvocationCheckpointParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, advanceInvocationCheckpoint,
 		arg.CheckpointSequence,
@@ -138,6 +138,9 @@ func (q *Queries) AdvanceInvocationCheckpoint(ctx context.Context, arg AdvanceIn
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -149,7 +152,7 @@ SET current_checkpoint_sequence = $1,
 WHERE id = $3 AND status IN ('queued', 'running', 'waiting')
   AND current_checkpoint_sequence < $1
   AND current_iteration <= $2
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 `
 
 type AdvanceInvocationCheckpointForTerminalParams struct {
@@ -166,7 +169,7 @@ type AdvanceInvocationCheckpointForTerminalParams struct {
 //	WHERE id = $3 AND status IN ('queued', 'running', 'waiting')
 //	  AND current_checkpoint_sequence < $1
 //	  AND current_iteration <= $2
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 func (q *Queries) AdvanceInvocationCheckpointForTerminal(ctx context.Context, arg AdvanceInvocationCheckpointForTerminalParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, advanceInvocationCheckpointForTerminal, arg.CheckpointSequence, arg.Iteration, arg.ID)
 	var i Invocation
@@ -203,6 +206,9 @@ func (q *Queries) AdvanceInvocationCheckpointForTerminal(ctx context.Context, ar
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -316,7 +322,7 @@ SET status = 'cancelled',
     updated_at = $2
 WHERE id = $3
   AND status IN ('queued', 'running', 'waiting')
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 `
 
 type CancelInvocationParams struct {
@@ -349,7 +355,7 @@ type CancelInvocationParams struct {
 //	    updated_at = $2
 //	WHERE id = $3
 //	  AND status IN ('queued', 'running', 'waiting')
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 func (q *Queries) CancelInvocation(ctx context.Context, arg CancelInvocationParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, cancelInvocation, arg.StateRevision, arg.ObservedAt, arg.ID)
 	var i Invocation
@@ -386,6 +392,9 @@ func (q *Queries) CancelInvocation(ctx context.Context, arg CancelInvocationPara
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -404,7 +413,7 @@ SET status = 'running',
 WHERE id = $7
   AND status = 'queued'
   AND wall_clock_deadline_at > $4
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 `
 
 type ClaimInvocationParams struct {
@@ -432,7 +441,7 @@ type ClaimInvocationParams struct {
 //	WHERE id = $7
 //	  AND status = 'queued'
 //	  AND wall_clock_deadline_at > $4
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 func (q *Queries) ClaimInvocation(ctx context.Context, arg ClaimInvocationParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, claimInvocation,
 		arg.StateRevision,
@@ -477,6 +486,9 @@ func (q *Queries) ClaimInvocation(ctx context.Context, arg ClaimInvocationParams
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -776,7 +788,8 @@ INSERT INTO invocations (
     request_fingerprint_version, current_state_revision, error,
     wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens,
     max_estimated_cost_microusd, max_iterations, active_execution_ms,
-    wall_clock_deadline_at, created_at, updated_at, completed_at
+    wall_clock_deadline_at, output_schema_digest,
+    created_at, updated_at, completed_at
 ) VALUES (
     $1, $2, $3,
     $4, $5,
@@ -786,8 +799,8 @@ INSERT INTO invocations (
     $13, $14,
     $15, $16,
     $17, $18,
-    $19,
-    $20, $21, $22
+    $19, $20,
+    $21, $22, $23
 )
 `
 
@@ -811,6 +824,7 @@ type CreateInvocationParams struct {
 	MaxIterations             int32
 	ActiveExecutionMs         int64
 	WallClockDeadlineAt       time.Time
+	OutputSchemaDigest        []byte
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
 	CompletedAt               *time.Time
@@ -824,7 +838,8 @@ type CreateInvocationParams struct {
 //	    request_fingerprint_version, current_state_revision, error,
 //	    wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens,
 //	    max_estimated_cost_microusd, max_iterations, active_execution_ms,
-//	    wall_clock_deadline_at, created_at, updated_at, completed_at
+//	    wall_clock_deadline_at, output_schema_digest,
+//	    created_at, updated_at, completed_at
 //	) VALUES (
 //	    $1, $2, $3,
 //	    $4, $5,
@@ -834,8 +849,8 @@ type CreateInvocationParams struct {
 //	    $13, $14,
 //	    $15, $16,
 //	    $17, $18,
-//	    $19,
-//	    $20, $21, $22
+//	    $19, $20,
+//	    $21, $22, $23
 //	)
 func (q *Queries) CreateInvocation(ctx context.Context, arg CreateInvocationParams) error {
 	_, err := q.db.Exec(ctx, createInvocation,
@@ -858,6 +873,7 @@ func (q *Queries) CreateInvocation(ctx context.Context, arg CreateInvocationPara
 		arg.MaxIterations,
 		arg.ActiveExecutionMs,
 		arg.WallClockDeadlineAt,
+		arg.OutputSchemaDigest,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.CompletedAt,
@@ -1314,7 +1330,7 @@ func (q *Queries) CreateToolCallAttempt(ctx context.Context, arg CreateToolCallA
 }
 
 const findNextQueuedInvocationForUpdate = `-- name: FindNextQueuedInvocationForUpdate :one
-SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration
+SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration, i.output_schema_digest, i.output, i.output_provenance
 FROM invocations AS i
 JOIN sessions AS s ON s.id = i.session_id
 WHERE i.status = 'queued'
@@ -1327,7 +1343,7 @@ LIMIT 1
 
 // FindNextQueuedInvocationForUpdate
 //
-//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration
+//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration, i.output_schema_digest, i.output, i.output_provenance
 //	FROM invocations AS i
 //	JOIN sessions AS s ON s.id = i.session_id
 //	WHERE i.status = 'queued'
@@ -1372,12 +1388,15 @@ func (q *Queries) FindNextQueuedInvocationForUpdate(ctx context.Context, observe
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
 
 const findQueuedInvocationWithoutActiveDispatchForUpdate = `-- name: FindQueuedInvocationWithoutActiveDispatchForUpdate :one
-SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration
+SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration, i.output_schema_digest, i.output, i.output_provenance
 FROM invocations AS i
 JOIN sessions AS s ON s.id = i.session_id
 WHERE i.status = 'queued'
@@ -1398,7 +1417,7 @@ LIMIT 1
 // transitions lock Session then Invocation; repair only needs queued state to
 // remain stable while it inserts the missing dispatch.
 //
-//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration
+//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration, i.output_schema_digest, i.output, i.output_provenance
 //	FROM invocations AS i
 //	JOIN sessions AS s ON s.id = i.session_id
 //	WHERE i.status = 'queued'
@@ -1449,6 +1468,9 @@ func (q *Queries) FindQueuedInvocationWithoutActiveDispatchForUpdate(ctx context
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -1646,14 +1668,14 @@ func (q *Queries) GetExecutionSpecSnapshot(ctx context.Context, id string) (Exec
 }
 
 const getInvocation = `-- name: GetInvocation :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 FROM invocations
 WHERE id = $1
 `
 
 // GetInvocation
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 //	FROM invocations
 //	WHERE id = $1
 func (q *Queries) GetInvocation(ctx context.Context, id string) (Invocation, error) {
@@ -1692,12 +1714,15 @@ func (q *Queries) GetInvocation(ctx context.Context, id string) (Invocation, err
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
 
 const getInvocationByIdempotencyKey = `-- name: GetInvocationByIdempotencyKey :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 FROM invocations
 WHERE account_id = $1
   AND tenant_partition_id = $2
@@ -1714,7 +1739,7 @@ type GetInvocationByIdempotencyKeyParams struct {
 
 // GetInvocationByIdempotencyKey
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 //	FROM invocations
 //	WHERE account_id = $1
 //	  AND tenant_partition_id = $2
@@ -1761,12 +1786,15 @@ func (q *Queries) GetInvocationByIdempotencyKey(ctx context.Context, arg GetInvo
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
 
 const getInvocationForUpdate = `-- name: GetInvocationForUpdate :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 FROM invocations
 WHERE id = $1
 FOR UPDATE
@@ -1774,7 +1802,7 @@ FOR UPDATE
 
 // GetInvocationForUpdate
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 //	FROM invocations
 //	WHERE id = $1
 //	FOR UPDATE
@@ -1814,6 +1842,9 @@ func (q *Queries) GetInvocationForUpdate(ctx context.Context, id string) (Invoca
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -1885,7 +1916,7 @@ func (q *Queries) GetModelUsageReceiptByIteration(ctx context.Context, arg GetMo
 }
 
 const getNonterminalInvocationBySession = `-- name: GetNonterminalInvocationBySession :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 FROM invocations
 WHERE session_id = $1
   AND status IN ('queued', 'running', 'waiting')
@@ -1894,7 +1925,7 @@ LIMIT 1
 
 // GetNonterminalInvocationBySession
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 //	FROM invocations
 //	WHERE session_id = $1
 //	  AND status IN ('queued', 'running', 'waiting')
@@ -1935,6 +1966,9 @@ func (q *Queries) GetNonterminalInvocationBySession(ctx context.Context, session
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -2438,7 +2472,7 @@ func (q *Queries) ListAlertableAgedExecutionDispatches(ctx context.Context, arg 
 }
 
 const listExpiredInvocationDeadlines = `-- name: ListExpiredInvocationDeadlines :many
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 FROM invocations
 WHERE status IN ('queued', 'running', 'waiting')
   AND (
@@ -2457,7 +2491,7 @@ type ListExpiredInvocationDeadlinesParams struct {
 
 // ListExpiredInvocationDeadlines
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 //	FROM invocations
 //	WHERE status IN ('queued', 'running', 'waiting')
 //	  AND (
@@ -2509,6 +2543,9 @@ func (q *Queries) ListExpiredInvocationDeadlines(ctx context.Context, arg ListEx
 			&i.ExecutionDeadlineScope,
 			&i.CurrentCheckpointSequence,
 			&i.CurrentIteration,
+			&i.OutputSchemaDigest,
+			&i.Output,
+			&i.OutputProvenance,
 		); err != nil {
 			return nil, err
 		}
@@ -2521,7 +2558,7 @@ func (q *Queries) ListExpiredInvocationDeadlines(ctx context.Context, arg ListEx
 }
 
 const listExpiredInvocationLeases = `-- name: ListExpiredInvocationLeases :many
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 FROM invocations
 WHERE status = 'running'
   AND lease_expires_at <= $1
@@ -2536,7 +2573,7 @@ type ListExpiredInvocationLeasesParams struct {
 
 // ListExpiredInvocationLeases
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 //	FROM invocations
 //	WHERE status = 'running'
 //	  AND lease_expires_at <= $1
@@ -2584,6 +2621,9 @@ func (q *Queries) ListExpiredInvocationLeases(ctx context.Context, arg ListExpir
 			&i.ExecutionDeadlineScope,
 			&i.CurrentCheckpointSequence,
 			&i.CurrentIteration,
+			&i.OutputSchemaDigest,
+			&i.Output,
+			&i.OutputProvenance,
 		); err != nil {
 			return nil, err
 		}
@@ -2643,7 +2683,7 @@ const listInvocationLifecycleChanges = `-- name: ListInvocationLifecycleChanges 
 SELECT st.id, st.invocation_id, st.session_id, st.account_id,
        st.tenant_partition_id, st.agent_id, st.revision, st.status,
        st.lease_attempt, st.through_message_sequence, st.created_at,
-       i.error, i.usage, i.provenance
+       i.error, i.usage, i.provenance, i.output, i.output_provenance
 FROM invocation_states AS st
 JOIN invocations AS i ON i.id = st.invocation_id
 WHERE st.session_id = $1
@@ -2675,6 +2715,8 @@ type ListInvocationLifecycleChangesRow struct {
 	Error                  []byte
 	Usage                  []byte
 	Provenance             []byte
+	Output                 []byte
+	OutputProvenance       []byte
 }
 
 // ListInvocationLifecycleChanges
@@ -2682,7 +2724,7 @@ type ListInvocationLifecycleChangesRow struct {
 //	SELECT st.id, st.invocation_id, st.session_id, st.account_id,
 //	       st.tenant_partition_id, st.agent_id, st.revision, st.status,
 //	       st.lease_attempt, st.through_message_sequence, st.created_at,
-//	       i.error, i.usage, i.provenance
+//	       i.error, i.usage, i.provenance, i.output, i.output_provenance
 //	FROM invocation_states AS st
 //	JOIN invocations AS i ON i.id = st.invocation_id
 //	WHERE st.session_id = $1
@@ -2719,6 +2761,8 @@ func (q *Queries) ListInvocationLifecycleChanges(ctx context.Context, arg ListIn
 			&i.Error,
 			&i.Usage,
 			&i.Provenance,
+			&i.Output,
+			&i.OutputProvenance,
 		); err != nil {
 			return nil, err
 		}
@@ -2776,7 +2820,7 @@ func (q *Queries) ListInvocationStates(ctx context.Context, sessionID string) ([
 }
 
 const listInvocationsForRecovery = `-- name: ListInvocationsForRecovery :many
-SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration
+SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration, i.output_schema_digest, i.output, i.output_provenance
 FROM invocations AS i
 WHERE i.account_id = $1
   AND ($2::text IS NULL OR i.tenant_partition_id = $2::text)
@@ -2804,7 +2848,7 @@ type ListInvocationsForRecoveryParams struct {
 
 // ListInvocationsForRecovery
 //
-//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration
+//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration, i.output_schema_digest, i.output, i.output_provenance
 //	FROM invocations AS i
 //	WHERE i.account_id = $1
 //	  AND ($2::text IS NULL OR i.tenant_partition_id = $2::text)
@@ -2868,6 +2912,9 @@ func (q *Queries) ListInvocationsForRecovery(ctx context.Context, arg ListInvoca
 			&i.ExecutionDeadlineScope,
 			&i.CurrentCheckpointSequence,
 			&i.CurrentIteration,
+			&i.OutputSchemaDigest,
+			&i.Output,
+			&i.OutputProvenance,
 		); err != nil {
 			return nil, err
 		}
@@ -3478,7 +3525,7 @@ WHERE id = $4
       OR active_execution_ms >= active_execution_timeout_ms
       OR (status = 'running' AND execution_deadline_at <= $2)
   )
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 `
 
 type ReapInvocationDeadlineParams struct {
@@ -3517,7 +3564,7 @@ type ReapInvocationDeadlineParams struct {
 //	      OR active_execution_ms >= active_execution_timeout_ms
 //	      OR (status = 'running' AND execution_deadline_at <= $2)
 //	  )
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 func (q *Queries) ReapInvocationDeadline(ctx context.Context, arg ReapInvocationDeadlineParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, reapInvocationDeadline,
 		arg.StateRevision,
@@ -3559,6 +3606,9 @@ func (q *Queries) ReapInvocationDeadline(ctx context.Context, arg ReapInvocation
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -3584,7 +3634,7 @@ WHERE id = $4
   AND status = 'running'
   AND lease_attempt = $5
   AND lease_expires_at <= $2
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 `
 
 type ReapInvocationLeaseParams struct {
@@ -3617,7 +3667,7 @@ type ReapInvocationLeaseParams struct {
 //	  AND status = 'running'
 //	  AND lease_attempt = $5
 //	  AND lease_expires_at <= $2
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 func (q *Queries) ReapInvocationLease(ctx context.Context, arg ReapInvocationLeaseParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, reapInvocationLease,
 		arg.StateRevision,
@@ -3660,6 +3710,9 @@ func (q *Queries) ReapInvocationLease(ctx context.Context, arg ReapInvocationLea
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -3735,7 +3788,7 @@ WHERE id = $3
   AND lease_attempt = $5
   AND lease_expires_at > $2
   AND execution_deadline_at > $2
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 `
 
 type RenewInvocationLeaseParams struct {
@@ -3757,7 +3810,7 @@ type RenewInvocationLeaseParams struct {
 //	  AND lease_attempt = $5
 //	  AND lease_expires_at > $2
 //	  AND execution_deadline_at > $2
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 func (q *Queries) RenewInvocationLease(ctx context.Context, arg RenewInvocationLeaseParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, renewInvocationLease,
 		arg.LeaseExpiresAt,
@@ -3800,6 +3853,9 @@ func (q *Queries) RenewInvocationLease(ctx context.Context, arg RenewInvocationL
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }
@@ -4007,27 +4063,31 @@ SET status = $1,
     error = $4,
     usage = $5,
     provenance = $6,
+    output = $7,
+    output_provenance = $8,
     completed_at = $3,
     updated_at = $3
-WHERE id = $7
+WHERE id = $9
   AND status = 'running'
-  AND lease_owner = $8
-  AND lease_attempt = $9
+  AND lease_owner = $10
+  AND lease_attempt = $11
   AND lease_expires_at > $3
   AND execution_deadline_at > $3
-RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 `
 
 type SettleInvocationParams struct {
-	Status            string
-	StateRevision     int64
-	ObservedAt        *time.Time
-	ErrorPayload      []byte
-	UsagePayload      []byte
-	ProvenancePayload []byte
-	ID                string
-	LeaseOwner        *string
-	LeaseAttempt      int64
+	Status                  string
+	StateRevision           int64
+	ObservedAt              *time.Time
+	ErrorPayload            []byte
+	UsagePayload            []byte
+	ProvenancePayload       []byte
+	OutputPayload           []byte
+	OutputProvenancePayload []byte
+	ID                      string
+	LeaseOwner              *string
+	LeaseAttempt            int64
 }
 
 // SettleInvocation
@@ -4048,15 +4108,17 @@ type SettleInvocationParams struct {
 //	    error = $4,
 //	    usage = $5,
 //	    provenance = $6,
+//	    output = $7,
+//	    output_provenance = $8,
 //	    completed_at = $3,
 //	    updated_at = $3
-//	WHERE id = $7
+//	WHERE id = $9
 //	  AND status = 'running'
-//	  AND lease_owner = $8
-//	  AND lease_attempt = $9
+//	  AND lease_owner = $10
+//	  AND lease_attempt = $11
 //	  AND lease_expires_at > $3
 //	  AND execution_deadline_at > $3
-//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
 func (q *Queries) SettleInvocation(ctx context.Context, arg SettleInvocationParams) (Invocation, error) {
 	row := q.db.QueryRow(ctx, settleInvocation,
 		arg.Status,
@@ -4065,6 +4127,8 @@ func (q *Queries) SettleInvocation(ctx context.Context, arg SettleInvocationPara
 		arg.ErrorPayload,
 		arg.UsagePayload,
 		arg.ProvenancePayload,
+		arg.OutputPayload,
+		arg.OutputProvenancePayload,
 		arg.ID,
 		arg.LeaseOwner,
 		arg.LeaseAttempt,
@@ -4103,6 +4167,9 @@ func (q *Queries) SettleInvocation(ctx context.Context, arg SettleInvocationPara
 		&i.ExecutionDeadlineScope,
 		&i.CurrentCheckpointSequence,
 		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
 	)
 	return i, err
 }

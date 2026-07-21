@@ -154,6 +154,30 @@ paths:
                     model:
                       provider: openai
                       name: gpt-5.4
+              structuredOutput:
+                summary: Require one validated machine-readable object
+                value:
+                  agent_ref: support-triage
+                  session_key: ticket-483
+                  idempotency_key: ticket-483:classification
+                  input:
+                    content:
+                      - type: text
+                        text: Classify the billing problem.
+                  spec:
+                    instructions: Classify the request, then submit the result.
+                    model:
+                      provider: anthropic
+                      name: claude-sonnet-5
+                    output:
+                      schema:
+                        type: object
+                        properties:
+                          category:
+                            type: string
+                            enum: [duplicate_charge, refund, other]
+                        required: [category]
+                        additionalProperties: false
       responses:
         "202":
           description: |
@@ -259,6 +283,8 @@ paths:
                       message: The execution process ended before this Invocation could settle.
                     usage: null
                     provenance: null
+                    output: null
+                    output_provenance: null
                     budgets:
                       wall_clock_timeout_seconds: 1800
                       active_execution_timeout_seconds: 1800
@@ -688,10 +714,32 @@ components:
           $ref: "#/components/schemas/ModelSelection"
         budgets:
           $ref: "#/components/schemas/InvocationBudgetRequest"
+        output:
+          $ref: "#/components/schemas/StructuredOutputSpec"
       description: |
         Minimal immutable launch snapshot. Unknown or deferred fields,
-        including references, tools, and structured output, are
-        rejected rather than ignored.
+        including references and host-defined tools, are rejected rather than
+        ignored.
+    StructuredOutputSpec:
+      type: object
+      additionalProperties: false
+      required: [schema]
+      properties:
+        schema:
+          type: object
+          additionalProperties: true
+          description: |
+            Self-contained JSON Schema for an object result. Compact canonical
+            JSON is limited to 32 KiB and 16 schema positions. Supported
+            keywords are type, title, description, properties, required,
+            additionalProperties, items, enum, pattern, minLength, maxLength,
+            minItems, maxItems, minimum, and maximum. Every schema position has
+            one string type; pattern values are limited to 1,024 UTF-8 bytes;
+            references and other keywords are rejected.
+      description: |
+        Optional per-Invocation structured-output contract. nvoken exposes a
+        reserved durable submit tool and publishes only a server-validated
+        terminal object. This does not enable host-defined tools.
     InvocationBudgetRequest:
       type: object
       additionalProperties: false
@@ -755,7 +803,7 @@ components:
     Invocation:
       type: object
       additionalProperties: false
-      required: [id, agent_id, session_id, status, error, usage, provenance, budgets, active_execution_ms, wall_clock_deadline_at, created_at, updated_at, completed_at]
+      required: [id, agent_id, session_id, status, error, usage, provenance, output, output_provenance, budgets, active_execution_ms, wall_clock_deadline_at, created_at, updated_at, completed_at]
       properties:
         id:
           $ref: "#/components/schemas/InvocationID"
@@ -777,6 +825,19 @@ components:
         provenance:
           oneOf:
             - $ref: "#/components/schemas/ModelProvenance"
+            - type: "null"
+        output:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+          description: |
+            Server-validated terminal object for a schema-bearing Invocation.
+            Null until successful terminal settlement and always null when no
+            output contract was admitted.
+        output_provenance:
+          oneOf:
+            - $ref: "#/components/schemas/StructuredOutputProvenance"
             - type: "null"
         budgets:
           $ref: "#/components/schemas/InvocationBudgets"
@@ -875,6 +936,22 @@ components:
           type: string
         credential_source:
           const: installation_byok
+    StructuredOutputProvenance:
+      type: object
+      additionalProperties: false
+      required: [source, tool_call_id, schema_sha256]
+      properties:
+        source:
+          const: tool_call
+        tool_call_id:
+          type: string
+          pattern: "^tcal_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        schema_sha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+      description: |
+        Immutable proof that output equals the request of the accepted
+        reserved durable ToolCall under the admitted schema digest.
     InvocationFailure:
       type: object
       additionalProperties: false
@@ -887,6 +964,7 @@ components:
             - budget_exceeded
             - execution_lost
             - provider_error
+            - structured_output_unsatisfied
             - internal
         message:
           type: string
@@ -1025,7 +1103,7 @@ components:
     InvocationChange:
       type: object
       additionalProperties: false
-      required: [invocation_id, revision, status, through_message_sequence, error, usage, provenance, occurred_at]
+      required: [invocation_id, revision, status, through_message_sequence, error, usage, provenance, output, output_provenance, occurred_at]
       properties:
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
@@ -1052,6 +1130,15 @@ components:
         provenance:
           oneOf:
             - $ref: "#/components/schemas/ModelProvenance"
+            - type: "null"
+        output:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        output_provenance:
+          oneOf:
+            - $ref: "#/components/schemas/StructuredOutputProvenance"
             - type: "null"
         occurred_at:
           type: string

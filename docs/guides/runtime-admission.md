@@ -49,6 +49,17 @@ tokens and estimated cost have no default and remain unlimited unless the host
 requests them. `DATABASE_MAX_CONNS` must be at least two because the
 cross-process cancellation listener reserves one pool connection.
 
+A request may add `spec.output.schema` for one validated object result. nvoken
+admits a bounded JSON Schema subset, presents it as the reserved
+`nvoken_submit_output` builtin, and persists its request/result through the
+normal durable ToolCall path. An omitted iteration budget resolves to three (or
+the lower installation maximum); an explicit value below two is rejected. The
+model must submit a valid object and then finish with a normal assistant
+response. Prose or fenced JSON never substitutes for the tool submission.
+Patterns are limited to 1,024 UTF-8 bytes. The accepted ToolCall is internal
+checkpoint evidence; public `output` remains null until fenced terminal
+settlement commits the final object and provenance together.
+
 On its first start, the static self-hosted authenticator serializes creation of
 one installation Account and its default tenant partition. Later starts resolve
 that same Account and fail closed if the database contains more than one.
@@ -120,7 +131,13 @@ curl --fail-with-body \
 
 The Invocation read includes terminal `error`, normalized aggregate `usage`,
 model `provenance`, resolved `budgets`, accrued `active_execution_ms`, and its
-wall-clock deadline. Cancel accepted work idempotently with an empty body:
+wall-clock deadline. It also always includes nullable `output` and
+`output_provenance`. A successful schema-bearing Invocation returns the
+validated object and its reserved ToolCall ID/schema digest; failed, cancelled,
+or schema-free Invocations return null for both. If no valid submission was
+accepted, the failure code is `structured_output_unsatisfied` with a bounded
+missing, invalid, or oversized reason. Cancel accepted work idempotently with
+an empty body:
 
 ```bash
 curl --fail-with-body -X POST \
@@ -180,6 +197,6 @@ final Postgres reconciliation. Closing or losing the stream never cancels the
 Invocation. Use a streaming HTTP client that can set the bearer header; the
 browser's bare `EventSource` constructor cannot.
 
-The request body is limited to 1 MiB and 64 text blocks. Unknown fields,
+The request body is limited to 1 MiB, 64 JSON nesting levels, and 64 text blocks. Unknown fields,
 unsupported features such as tools, malformed IDs, duplicate JSON member names,
 and trailing JSON values are rejected before admission.

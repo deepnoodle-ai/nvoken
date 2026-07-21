@@ -334,6 +334,72 @@ func TestGenerationExecutorMapsDurableConversionFailureToInternal(t *testing.T) 
 	assertFailureCode(t, result, "internal")
 }
 
+func TestGenerationExecutorMapsStructuredOutputFailureReasons(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		generator  string
+		wantReason string
+	}{
+		{
+			name:       "missing",
+			generator:  "missing",
+			wantReason: "missing",
+		},
+		{
+			name:       "invalid",
+			generator:  "invalid",
+			wantReason: "invalid",
+		},
+		{
+			name:       "oversized",
+			generator:  "oversized",
+			wantReason: "oversized",
+		},
+		{
+			name:       "unknown is bounded",
+			generator:  "provider-specific-secret",
+			wantReason: "invalid",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			claim := generationClaim()
+			store := generationStoreFixture(claim)
+			schema := json.RawMessage(`{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"]}`)
+			digest, err := structuredOutputSchemaDigest(schema)
+			if err != nil {
+				t.Fatalf("schema digest: %v", err)
+			}
+			claim.Invocation.OutputSchemaDigest = digest
+			store.snapshot.Spec = json.RawMessage(
+				`{"instructions":"durable instructions","model":{"provider":"ANTHROPIC","name":"claude-test"},"output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"]}}}`,
+			)
+			generator := &fakeModelGenerator{
+				response: domain.GenerationResponse{
+					Usage: domain.ModelUsage{
+						InputTokens:  2,
+						OutputTokens: 1,
+						Iterations:   1,
+					},
+					ServedModel:             "claude-served",
+					MessagesCheckpointed:    true,
+					StructuredOutputFailure: test.generator,
+				},
+			}
+			result, err := NewGenerationExecutor(store, generator, nil).Execute(context.Background(), claim)
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			assertFailureCode(t, result, "structured_output_unsatisfied")
+			var failure struct {
+				Details map[string]string `json:"details"`
+			}
+			if err := json.Unmarshal(result.Error, &failure); err != nil || failure.Details["reason"] != test.wantReason {
+				t.Fatalf("failure = %s, error = %v", result.Error, err)
+			}
+		})
+	}
+}
+
 func TestGenerationExecutorEnforcesResolvedBudgetsAndRetainsEvidence(t *testing.T) {
 	for _, test := range []struct {
 		name      string

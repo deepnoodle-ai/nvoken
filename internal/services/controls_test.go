@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"testing"
 	"time"
@@ -37,6 +38,36 @@ func TestBudgetPolicyResolvesDefaultsAndExplicitLimits(t *testing.T) {
 	}
 }
 
+func TestBudgetPolicyResolvesStructuredOutputIterationFloor(t *testing.T) {
+	policy := DefaultBudgetPolicy()
+	resolved, err := policy.ResolveForOutput(nil, true)
+	if err != nil {
+		t.Fatalf("resolve output defaults: %v", err)
+	}
+	if resolved.MaxIterations != 3 {
+		t.Fatalf("output default iterations = %d, want 3", resolved.MaxIterations)
+	}
+
+	explicit := 2
+	resolved, err = policy.ResolveForOutput(&InvocationBudgetInput{
+		MaxIterations: &explicit,
+	}, true)
+	if err != nil || resolved.MaxIterations != explicit {
+		t.Fatalf("explicit output iterations = %d, error = %v", resolved.MaxIterations, err)
+	}
+
+	explicit = 1
+	if _, err := policy.ResolveForOutput(&InvocationBudgetInput{
+		MaxIterations: &explicit,
+	}, true); err == nil {
+		t.Fatal("one output iteration was accepted")
+	}
+	policy.MaxIterations = 1
+	if _, err := policy.ResolveForOutput(nil, true); err == nil {
+		t.Fatal("installation maximum below output floor was accepted")
+	}
+}
+
 func TestBudgetValidationRejectsUnsafeNumbers(t *testing.T) {
 	for name, cost := range map[string]float64{
 		"zero": 0, "negative": -1, "nan": math.NaN(), "infinite": math.Inf(1), "over precision": 0.1234567,
@@ -68,6 +99,32 @@ func TestFingerprintV2MakesRequestedBudgetsMaterial(t *testing.T) {
 	}
 }
 
+func TestFingerprintV3CanonicalizesStructuredOutput(t *testing.T) {
+	input := validServiceInput()
+	omitted, err := InvocationFingerprintV3(input)
+	if err != nil {
+		t.Fatalf("omitted output fingerprint: %v", err)
+	}
+	input.Spec.Output = &StructuredOutputSpec{
+		Schema: json.RawMessage(`{"type":"object","properties":{"score":{"type":"number","minimum":1}}}`),
+	}
+	first, err := InvocationFingerprintV3(input)
+	if err != nil {
+		t.Fatalf("first output fingerprint: %v", err)
+	}
+	input.Spec.Output.Schema = json.RawMessage(`{"properties":{"score":{"minimum":1.0,"type":"number"}},"type":"object"}`)
+	second, err := InvocationFingerprintV3(input)
+	if err != nil {
+		t.Fatalf("equivalent output fingerprint: %v", err)
+	}
+	if first != second {
+		t.Fatal("semantically equal output schemas produced different fingerprints")
+	}
+	if omitted == first {
+		t.Fatal("adding output did not change fingerprint")
+	}
+}
+
 func TestLegacyBudgetlessFingerprintReplayCompatibility(t *testing.T) {
 	input := validServiceInput()
 	legacy, err := InvocationFingerprintV1(input)
@@ -87,6 +144,41 @@ func TestLegacyBudgetlessFingerprintReplayCompatibility(t *testing.T) {
 	v2, _ = InvocationFingerprintV2(input)
 	if _, _, err := service.findIdempotent(context.Background(), "account", "partition", "agent", "key", input, v2); err == nil {
 		t.Fatal("budget-bearing request matched legacy budgetless fingerprint")
+	}
+}
+
+func TestV2FingerprintReplayRejectsAddedStructuredOutput(t *testing.T) {
+	input := validServiceInput()
+	v2, err := InvocationFingerprintV2(input)
+	if err != nil {
+		t.Fatalf("v2 fingerprint: %v", err)
+	}
+	store := &legacyFingerprintStore{
+		invocation: domain.Invocation{
+			FingerprintVersion: 2,
+			RequestFingerprint: v2[:],
+		},
+	}
+	service := &RuntimeService{
+		store: store,
+	}
+	input.Spec.Output = &StructuredOutputSpec{
+		Schema: json.RawMessage(`{"type":"object"}`),
+	}
+	v3, err := InvocationFingerprintV3(input)
+	if err != nil {
+		t.Fatalf("v3 fingerprint: %v", err)
+	}
+	if _, _, err := service.findIdempotent(
+		context.Background(),
+		"account",
+		"partition",
+		"agent",
+		"key",
+		input,
+		v3,
+	); err == nil {
+		t.Fatal("output-bearing request matched a v2 row")
 	}
 }
 

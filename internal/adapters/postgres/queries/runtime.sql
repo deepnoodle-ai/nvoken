@@ -129,7 +129,8 @@ INSERT INTO invocations (
     request_fingerprint_version, current_state_revision, error,
     wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens,
     max_estimated_cost_microusd, max_iterations, active_execution_ms,
-    wall_clock_deadline_at, created_at, updated_at, completed_at
+    wall_clock_deadline_at, output_schema_digest,
+    created_at, updated_at, completed_at
 ) VALUES (
     sqlc.arg(id), sqlc.arg(session_id), sqlc.arg(account_id),
     sqlc.arg(tenant_partition_id), sqlc.arg(agent_id),
@@ -139,7 +140,7 @@ INSERT INTO invocations (
     sqlc.arg(wall_clock_timeout_ms), sqlc.arg(active_execution_timeout_ms),
     sqlc.narg(max_output_tokens), sqlc.narg(max_estimated_cost_microusd),
     sqlc.arg(max_iterations), sqlc.arg(active_execution_ms),
-    sqlc.arg(wall_clock_deadline_at),
+    sqlc.arg(wall_clock_deadline_at), sqlc.narg(output_schema_digest),
     sqlc.arg(created_at), sqlc.arg(updated_at), sqlc.narg(completed_at)
 );
 
@@ -248,6 +249,8 @@ SET status = sqlc.arg(status),
     error = sqlc.narg(error_payload),
     usage = sqlc.narg(usage_payload),
     provenance = sqlc.narg(provenance_payload),
+    output = sqlc.narg(output_payload),
+    output_provenance = sqlc.narg(output_provenance_payload),
     completed_at = sqlc.arg(observed_at),
     updated_at = sqlc.arg(observed_at)
 WHERE id = sqlc.arg(id)
@@ -603,7 +606,7 @@ LIMIT sqlc.arg(batch_limit);
 SELECT st.id, st.invocation_id, st.session_id, st.account_id,
        st.tenant_partition_id, st.agent_id, st.revision, st.status,
        st.lease_attempt, st.through_message_sequence, st.created_at,
-       i.error, i.usage, i.provenance
+       i.error, i.usage, i.provenance, i.output, i.output_provenance
 FROM invocation_states AS st
 JOIN invocations AS i ON i.id = st.invocation_id
 WHERE st.session_id = sqlc.arg(session_id)

@@ -90,6 +90,9 @@ type Invocation struct {
 	ExecutionDeadlineScope    *string
 	CurrentCheckpointSequence int64
 	CurrentIteration          int
+	OutputSchemaDigest        []byte
+	Output                    json.RawMessage
+	OutputProvenance          json.RawMessage
 	Error                     json.RawMessage
 	Usage                     json.RawMessage
 	Provenance                json.RawMessage
@@ -138,9 +141,11 @@ type InvocationState struct {
 // message content remains exclusively in SessionMessage.
 type InvocationLifecycleChange struct {
 	InvocationState
-	Error      json.RawMessage
-	Usage      json.RawMessage
-	Provenance json.RawMessage
+	Error            json.RawMessage
+	Usage            json.RawMessage
+	Provenance       json.RawMessage
+	Output           json.RawMessage
+	OutputProvenance json.RawMessage
 }
 
 type InvocationClaim struct {
@@ -157,6 +162,7 @@ type InvocationExecutionResult struct {
 	MessagesCheckpointed bool
 	Usage                *ModelUsage
 	Provenance           *ModelProvenance
+	StructuredOutput     *StructuredOutput
 }
 
 // GenerationMessage is the provider-neutral message shape exchanged with the
@@ -168,21 +174,40 @@ type GenerationMessage struct {
 }
 
 type GenerationRequest struct {
-	Instructions    string
-	Provider        string
-	Model           string
-	Messages        []GenerationMessage
-	MaxOutputTokens *int
-	MaxIterations   int
-	Claim           *InvocationClaim
+	Instructions     string
+	Provider         string
+	Model            string
+	Messages         []GenerationMessage
+	MaxOutputTokens  *int
+	MaxIterations    int
+	Claim            *InvocationClaim
+	StructuredOutput *StructuredOutputRequest
 }
 
 type GenerationResponse struct {
-	Messages             []GenerationMessage
-	Usage                ModelUsage
-	ServedModel          string
-	MessagesCheckpointed bool
-	BudgetExceeded       string
+	Messages                []GenerationMessage
+	Usage                   ModelUsage
+	ServedModel             string
+	MessagesCheckpointed    bool
+	BudgetExceeded          string
+	StructuredOutput        *StructuredOutput
+	StructuredOutputFailure string
+}
+
+type StructuredOutputRequest struct {
+	Schema       json.RawMessage
+	SchemaDigest []byte
+}
+
+type StructuredOutput struct {
+	Value      json.RawMessage
+	Provenance StructuredOutputProvenance
+}
+
+type StructuredOutputProvenance struct {
+	Source       string `json:"source"`
+	ToolCallID   string `json:"tool_call_id"`
+	SchemaSHA256 string `json:"schema_sha256"`
 }
 
 type ModelUsage struct {

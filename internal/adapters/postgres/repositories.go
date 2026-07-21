@@ -469,20 +469,29 @@ func (s *Store) CreateInvocation(ctx context.Context, invocation domain.Invocati
 		maxOutputTokens = &value
 	}
 	return s.q(ctx).CreateInvocation(ctx, postgresdb.CreateInvocationParams{
-		ID: invocation.ID, SessionID: invocation.SessionID, AccountID: invocation.AccountID,
-		TenantPartitionID: invocation.TenantPartitionID, AgentID: invocation.AgentID,
-		SpecSnapshotID: invocation.SpecSnapshotID, IdempotencyKey: invocation.IdempotencyKey,
-		RequestFingerprint: invocation.RequestFingerprint, Status: string(invocation.Status),
+		ID:                        invocation.ID,
+		SessionID:                 invocation.SessionID,
+		AccountID:                 invocation.AccountID,
+		TenantPartitionID:         invocation.TenantPartitionID,
+		AgentID:                   invocation.AgentID,
+		SpecSnapshotID:            invocation.SpecSnapshotID,
+		IdempotencyKey:            invocation.IdempotencyKey,
+		RequestFingerprint:        invocation.RequestFingerprint,
+		Status:                    string(invocation.Status),
 		RequestFingerprintVersion: int16(invocation.FingerprintVersion),
-		CurrentStateRevision:      invocation.CurrentStateRevision, ErrorPayload: invocation.Error,
-		WallClockTimeoutMs:       invocation.WallClockTimeoutMS,
-		ActiveExecutionTimeoutMs: invocation.ActiveTimeoutMS,
-		MaxOutputTokens:          maxOutputTokens,
-		MaxEstimatedCostMicrousd: invocation.MaxEstimatedCostMicros,
-		MaxIterations:            int32(invocation.MaxIterations), ActiveExecutionMs: invocation.ActiveExecutionMS,
-		WallClockDeadlineAt: invocation.WallClockDeadlineAt,
-		CreatedAt:           invocation.CreatedAt, UpdatedAt: invocation.UpdatedAt,
-		CompletedAt: invocation.CompletedAt,
+		CurrentStateRevision:      invocation.CurrentStateRevision,
+		ErrorPayload:              invocation.Error,
+		WallClockTimeoutMs:        invocation.WallClockTimeoutMS,
+		ActiveExecutionTimeoutMs:  invocation.ActiveTimeoutMS,
+		MaxOutputTokens:           maxOutputTokens,
+		MaxEstimatedCostMicrousd:  invocation.MaxEstimatedCostMicros,
+		MaxIterations:             int32(invocation.MaxIterations),
+		ActiveExecutionMs:         invocation.ActiveExecutionMS,
+		WallClockDeadlineAt:       invocation.WallClockDeadlineAt,
+		OutputSchemaDigest:        invocation.OutputSchemaDigest,
+		CreatedAt:                 invocation.CreatedAt,
+		UpdatedAt:                 invocation.UpdatedAt,
+		CompletedAt:               invocation.CompletedAt,
 	})
 }
 
@@ -623,6 +632,9 @@ func invocationFromRow(row postgresdb.Invocation) domain.Invocation {
 		ExecutionDeadlineScope:    row.ExecutionDeadlineScope,
 		CurrentCheckpointSequence: row.CurrentCheckpointSequence,
 		CurrentIteration:          int(row.CurrentIteration),
+		OutputSchemaDigest:        row.OutputSchemaDigest,
+		Output:                    row.Output,
+		OutputProvenance:          row.OutputProvenance,
 		Error:                     row.Error,
 		Usage:                     row.Usage,
 		Provenance:                row.Provenance,
@@ -701,13 +713,21 @@ func (s *Store) SettleInvocation(
 	status domain.InvocationStatus,
 	stateRevision int64,
 	errorPayload, usagePayload, provenancePayload []byte,
+	outputPayload, outputProvenancePayload []byte,
 	observedAt time.Time,
 ) (domain.Invocation, error) {
 	row, err := s.q(ctx).SettleInvocation(ctx, postgresdb.SettleInvocationParams{
-		ID: id, LeaseOwner: &owner, LeaseAttempt: attempt,
-		Status: string(status), StateRevision: stateRevision,
-		ErrorPayload: errorPayload, UsagePayload: usagePayload,
-		ProvenancePayload: provenancePayload, ObservedAt: &observedAt,
+		ID:                      id,
+		LeaseOwner:              &owner,
+		LeaseAttempt:            attempt,
+		Status:                  string(status),
+		StateRevision:           stateRevision,
+		ErrorPayload:            errorPayload,
+		UsagePayload:            usagePayload,
+		ProvenancePayload:       provenancePayload,
+		OutputPayload:           outputPayload,
+		OutputProvenancePayload: outputProvenancePayload,
+		ObservedAt:              &observedAt,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Invocation{}, ports.ErrLeaseLost
@@ -904,6 +924,8 @@ func (s *Store) ListInvocationLifecycleChanges(ctx context.Context, sessionID st
 			items[i].Error = row.Error
 			items[i].Usage = row.Usage
 			items[i].Provenance = row.Provenance
+			items[i].Output = row.Output
+			items[i].OutputProvenance = row.OutputProvenance
 		}
 	}
 	return items, nil

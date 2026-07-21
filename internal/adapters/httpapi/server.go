@@ -526,6 +526,8 @@ type invocationResponse struct {
 	Error               any                           `json:"error"`
 	Usage               any                           `json:"usage"`
 	Provenance          any                           `json:"provenance"`
+	Output              any                           `json:"output"`
+	OutputProvenance    any                           `json:"output_provenance"`
 	Budgets             services.InvocationBudgetRead `json:"budgets"`
 	ActiveExecutionMS   int64                         `json:"active_execution_ms"`
 	WallClockDeadlineAt time.Time                     `json:"wall_clock_deadline_at"`
@@ -582,6 +584,8 @@ type invocationChangeResponse struct {
 	Error                  any                     `json:"error"`
 	Usage                  any                     `json:"usage"`
 	Provenance             any                     `json:"provenance"`
+	Output                 any                     `json:"output"`
+	OutputProvenance       any                     `json:"output_provenance"`
 	OccurredAt             time.Time               `json:"occurred_at"`
 }
 
@@ -595,12 +599,21 @@ type transcriptSnapshotResponse struct {
 
 func invocationResponseFromService(invocation services.InvocationRead) invocationResponse {
 	return invocationResponse{
-		ID: invocation.ID, AgentID: invocation.AgentID, SessionID: invocation.SessionID,
-		Status: invocation.Status, Error: rawJSONOrNil(invocation.Error),
-		Usage: rawJSONOrNil(invocation.Usage), Provenance: rawJSONOrNil(invocation.Provenance),
-		Budgets: invocation.Budgets, ActiveExecutionMS: invocation.ActiveExecutionMS,
+		ID:                  invocation.ID,
+		AgentID:             invocation.AgentID,
+		SessionID:           invocation.SessionID,
+		Status:              invocation.Status,
+		Error:               rawJSONOrNil(invocation.Error),
+		Usage:               rawJSONOrNil(invocation.Usage),
+		Provenance:          rawJSONOrNil(invocation.Provenance),
+		Output:              rawJSONOrNil(invocation.Output),
+		OutputProvenance:    rawJSONOrNil(invocation.OutputProvenance),
+		Budgets:             invocation.Budgets,
+		ActiveExecutionMS:   invocation.ActiveExecutionMS,
 		WallClockDeadlineAt: invocation.WallClockDeadlineAt,
-		CreatedAt:           invocation.CreatedAt, UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
+		CreatedAt:           invocation.CreatedAt,
+		UpdatedAt:           invocation.UpdatedAt,
+		CompletedAt:         invocation.CompletedAt,
 	}
 }
 
@@ -623,10 +636,16 @@ func sessionMessageResponseFromDomain(message domain.SessionMessage) sessionMess
 
 func invocationChangeResponseFromDomain(change domain.InvocationLifecycleChange) invocationChangeResponse {
 	return invocationChangeResponse{
-		InvocationID: change.InvocationID, Revision: change.Revision, Status: change.Status,
+		InvocationID:           change.InvocationID,
+		Revision:               change.Revision,
+		Status:                 change.Status,
 		ThroughMessageSequence: change.ThroughMessageSequence,
-		Error:                  rawJSONOrNil(change.Error), Usage: rawJSONOrNil(change.Usage),
-		Provenance: rawJSONOrNil(change.Provenance), OccurredAt: change.CreatedAt,
+		Error:                  rawJSONOrNil(change.Error),
+		Usage:                  rawJSONOrNil(change.Usage),
+		Provenance:             rawJSONOrNil(change.Provenance),
+		Output:                 rawJSONOrNil(change.Output),
+		OutputProvenance:       rawJSONOrNil(change.OutputProvenance),
+		OccurredAt:             change.CreatedAt,
 	}
 }
 

@@ -25,3 +25,8 @@ result content remains canonical only in append-only `session_messages`; the
 new rows retain immutable identity, transcript references, attempts, normalized
 usage receipts, and replay watermarks. These records are business evidence and
 have no independent pruning path.
+
+Migration `000009` adds immutable output-schema identity plus the terminal
+structured-output value/provenance projection. The projection may be written
+only with successful settlement and remains bound to the accepted transcript
+ToolCall by service equality checks and database shape constraints.

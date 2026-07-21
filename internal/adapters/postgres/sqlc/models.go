@@ -81,6 +81,9 @@ type Invocation struct {
 	ExecutionDeadlineScope    *string
 	CurrentCheckpointSequence int64
 	CurrentIteration          int32
+	OutputSchemaDigest        []byte
+	Output                    []byte
+	OutputProvenance          []byte
 }
 
 type InvocationCheckpoint struct {
