@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -11,9 +12,11 @@ import (
 
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/cloudtasks"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpapi"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/secretcrypto"
 	callbackruntime "github.com/deepnoodle-ai/nvoken/internal/callback"
 	"github.com/deepnoodle-ai/nvoken/internal/daemon"
 	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
+	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
@@ -32,6 +35,14 @@ type config struct {
 	TrustForwardedClientIP    bool          `env:"NVOKEN_TRUST_FORWARDED_CLIENT_IP" envDefault:"false"`
 	AnthropicAPIKey           string        `env:"ANTHROPIC_API_KEY"`
 	OpenAIAPIKey              string        `env:"OPENAI_API_KEY"`
+	CredentialDeploymentMode  string        `env:"MODEL_CREDENTIAL_DEPLOYMENT_MODE" envDefault:"self_hosted"`
+	DefaultCredentialSource   string        `env:"INVOCATION_DEFAULT_CREDENTIAL_SOURCE" envDefault:"installation_byok"`
+	CredentialEncryptionKeys  string        `env:"PROVIDER_CREDENTIAL_ENCRYPTION_KEYS"`
+	CredentialActiveKeyID     string        `env:"PROVIDER_CREDENTIAL_ACTIVE_KEY_ID"`
+	CredentialCleanupGrace    time.Duration `env:"PROVIDER_CREDENTIAL_CLEANUP_GRACE" envDefault:"5m"`
+	PlatformAnthropicAPIKey   string        `env:"PLATFORM_ANTHROPIC_API_KEY"`
+	PlatformOpenAIAPIKey      string        `env:"PLATFORM_OPENAI_API_KEY"`
+	PlatformFundingEnabled    bool          `env:"PLATFORM_FUNDING_ENABLED" envDefault:"false"`
 	ShutdownTimeout           time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
 	ExecutorAttemptTimeout    time.Duration `env:"EXECUTOR_ATTEMPT_TIMEOUT" envDefault:"29m55s"`
 	RedisURL                  string        `env:"REDIS_URL"`
@@ -296,10 +307,35 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if cfg.StreamWriteTimeout >= cfg.StreamMaxLifetime {
 		return daemon.Config{}, fmt.Errorf("serve: STREAM_WRITE_TIMEOUT must be less than STREAM_MAX_LIFETIME")
 	}
+	credentialPolicy := services.ProviderCredentialPolicy{
+		DeploymentMode: services.CredentialDeploymentMode(cfg.CredentialDeploymentMode),
+		DefaultSource:  domain.ProviderCredentialSource(cfg.DefaultCredentialSource),
+	}
+	if err := validateCredentialPolicy(credentialPolicy); err != nil {
+		return daemon.Config{}, fmt.Errorf("serve: %w", err)
+	}
+	if cfg.CredentialCleanupGrace <= 0 || cfg.CredentialCleanupGrace > time.Hour {
+		return daemon.Config{}, fmt.Errorf("serve: PROVIDER_CREDENTIAL_CLEANUP_GRACE must be positive and at most 1h")
+	}
+	credentialCipher, err := parseCredentialCipher(cfg.CredentialActiveKeyID, cfg.CredentialEncryptionKeys)
+	if err != nil {
+		return daemon.Config{}, fmt.Errorf("serve: %w", err)
+	}
+	requiresCredentialCipher := credentialPolicy.DeploymentMode == services.CredentialDeploymentCloud ||
+		credentialPolicy.DefaultSource == domain.ProviderCredentialSourceAccountBYOK ||
+		credentialPolicy.DefaultSource == domain.ProviderCredentialSourceTenantBYOK
+	if requiresCredentialCipher && credentialCipher == nil {
+		return daemon.Config{}, fmt.Errorf("serve: the credential deployment mode or default source requires provider credential encryption keys")
+	}
 	generatesInvocations := (role == daemon.ProcessRoleCombined && executionMode == services.InvocationExecutionEmbedded) ||
 		(role == daemon.ProcessRoleExecutor && executionMode == services.InvocationExecutionCloudTasks)
-	if generatesInvocations && cfg.AnthropicAPIKey == "" && cfg.OpenAIAPIKey == "" {
-		return daemon.Config{}, fmt.Errorf("serve: the Invocation-generating role requires ANTHROPIC_API_KEY, OPENAI_API_KEY, or both")
+	if generatesInvocations && credentialPolicy.DefaultSource == domain.ProviderCredentialSourceInstallationBYOK &&
+		cfg.AnthropicAPIKey == "" && cfg.OpenAIAPIKey == "" {
+		return daemon.Config{}, fmt.Errorf("serve: the Invocation-generating role requires ANTHROPIC_API_KEY, OPENAI_API_KEY, or both for installation_byok")
+	}
+	if generatesInvocations && credentialPolicy.DefaultSource == domain.ProviderCredentialSourcePlatform &&
+		cfg.PlatformAnthropicAPIKey == "" && cfg.PlatformOpenAIAPIKey == "" {
+		return daemon.Config{}, fmt.Errorf("serve: the Invocation-generating role requires a platform provider key for the platform default")
 	}
 	var tenantConstraint *string
 	if cfg.RuntimeTenantRef != "" {
@@ -312,23 +348,41 @@ func loadDaemonConfig() (daemon.Config, error) {
 		tenantConstraint = &cfg.RuntimeTenantRef
 	}
 	return daemon.Config{
-		Port: cfg.Port, DatabaseURL: cfg.DatabaseURL, DatabaseMaxConns: cfg.DatabaseMaxConns,
+		Port:                    cfg.Port,
+		DatabaseURL:             cfg.DatabaseURL,
+		DatabaseMaxConns:        cfg.DatabaseMaxConns,
 		ProcessRole:             role,
 		InvocationExecutionMode: executionMode,
-		RuntimeAPIKey:           cfg.RuntimeAPIKey, RuntimeTenantConstraint: tenantConstraint,
-		BootstrapOwnerSecret: cfg.BootstrapOwnerSecret, CredentialDeliveryKey: credentialDeliveryKey,
-		PublicBaseURL:          cfg.PublicBaseURL,
-		TrustForwardedClientIP: cfg.TrustForwardedClientIP,
-		AnthropicAPIKey:        cfg.AnthropicAPIKey,
-		OpenAIAPIKey:           cfg.OpenAIAPIKey,
-		ShutdownTimeout:        cfg.ShutdownTimeout, Engine: engineConfig, Budgets: budgetPolicy,
-		Dispatch: dispatchConfig, DispatchController: controllerConfig, CloudTasks: cloudTasksConfig,
-		ExecutorAttemptTimeout: cfg.ExecutorAttemptTimeout,
-		RedisURL:               cfg.RedisURL, RedisPassword: cfg.RedisPassword,
-		RedisCACertificate: cfg.RedisCACertificate, LiveEventBuffer: cfg.LiveEventBuffer,
+		RuntimeAPIKey:           cfg.RuntimeAPIKey,
+		RuntimeTenantConstraint: tenantConstraint,
+		BootstrapOwnerSecret:    cfg.BootstrapOwnerSecret,
+		CredentialDeliveryKey:   credentialDeliveryKey,
+		PublicBaseURL:           cfg.PublicBaseURL,
+		TrustForwardedClientIP:  cfg.TrustForwardedClientIP,
+		AnthropicAPIKey:         cfg.AnthropicAPIKey,
+		OpenAIAPIKey:            cfg.OpenAIAPIKey,
+		CredentialPolicy:        credentialPolicy,
+		CredentialCipher:        credentialCipher,
+		CredentialCleanupGrace:  cfg.CredentialCleanupGrace,
+		PlatformAnthropicAPIKey: cfg.PlatformAnthropicAPIKey,
+		PlatformOpenAIAPIKey:    cfg.PlatformOpenAIAPIKey,
+		PlatformFundingEnabled:  cfg.PlatformFundingEnabled,
+		ShutdownTimeout:         cfg.ShutdownTimeout,
+		Engine:                  engineConfig,
+		Budgets:                 budgetPolicy,
+		Dispatch:                dispatchConfig,
+		DispatchController:      controllerConfig,
+		CloudTasks:              cloudTasksConfig,
+		ExecutorAttemptTimeout:  cfg.ExecutorAttemptTimeout,
+		RedisURL:                cfg.RedisURL,
+		RedisPassword:           cfg.RedisPassword,
+		RedisCACertificate:      cfg.RedisCACertificate,
+		LiveEventBuffer:         cfg.LiveEventBuffer,
 		Stream: httpapi.StreamConfig{
-			PollInterval: cfg.StreamPollInterval, KeepaliveInterval: cfg.StreamKeepaliveInterval,
-			MaxLifetime: cfg.StreamMaxLifetime, WriteTimeout: cfg.StreamWriteTimeout,
+			PollInterval:      cfg.StreamPollInterval,
+			KeepaliveInterval: cfg.StreamKeepaliveInterval,
+			MaxLifetime:       cfg.StreamMaxLifetime,
+			WriteTimeout:      cfg.StreamWriteTimeout,
 		},
 		CallbackSigningKey:     cfg.CallbackSigningKey,
 		CallbackSigningKeyID:   cfg.CallbackSigningKeyID,
@@ -378,4 +432,46 @@ func loadDispatchSmokeConfig() (daemon.DispatchSmokeConfig, error) {
 	return daemon.DispatchSmokeConfig{
 		DatabaseURL: cfg.DatabaseURL, DatabaseMaxConns: cfg.DatabaseMaxConns, Queue: cfg.Queue,
 	}, nil
+}
+
+func validateCredentialPolicy(policy services.ProviderCredentialPolicy) error {
+	if policy.DeploymentMode != services.CredentialDeploymentSelfHosted && policy.DeploymentMode != services.CredentialDeploymentCloud {
+		return fmt.Errorf("MODEL_CREDENTIAL_DEPLOYMENT_MODE must be self_hosted or cloud")
+	}
+	if !policy.DefaultSource.Valid() || policy.DefaultSource == domain.ProviderCredentialSourceCallerEphemeral {
+		return fmt.Errorf("INVOCATION_DEFAULT_CREDENTIAL_SOURCE is invalid")
+	}
+	if policy.DeploymentMode == services.CredentialDeploymentSelfHosted && policy.DefaultSource == domain.ProviderCredentialSourcePlatform {
+		return fmt.Errorf("platform cannot be the default credential source in self_hosted mode")
+	}
+	if policy.DeploymentMode == services.CredentialDeploymentCloud && policy.DefaultSource == domain.ProviderCredentialSourceInstallationBYOK {
+		return fmt.Errorf("installation_byok cannot be the default credential source in cloud mode")
+	}
+	return nil
+}
+
+func parseCredentialCipher(activeKeyID, encodedKeys string) (*secretcrypto.Keyring, error) {
+	if activeKeyID == "" && encodedKeys == "" {
+		return nil, nil
+	}
+	if activeKeyID == "" || encodedKeys == "" {
+		return nil, fmt.Errorf("PROVIDER_CREDENTIAL_ACTIVE_KEY_ID and PROVIDER_CREDENTIAL_ENCRYPTION_KEYS must be configured together")
+	}
+	var encoded map[string]string
+	if err := json.Unmarshal([]byte(encodedKeys), &encoded); err != nil {
+		return nil, fmt.Errorf("PROVIDER_CREDENTIAL_ENCRYPTION_KEYS must be a JSON object of base64 keys")
+	}
+	keys := make(map[string][]byte, len(encoded))
+	for id, value := range encoded {
+		key, err := base64.StdEncoding.DecodeString(value)
+		if err != nil {
+			return nil, fmt.Errorf("provider credential encryption key %q is not valid base64", id)
+		}
+		keys[id] = key
+	}
+	keyring, err := secretcrypto.NewKeyring(activeKeyID, keys)
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider credential encryption keyring: %w", err)
+	}
+	return keyring, nil
 }

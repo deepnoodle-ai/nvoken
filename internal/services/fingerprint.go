@@ -15,6 +15,7 @@ const fingerprintVersionV2 = 2
 const fingerprintVersionV3 = 3
 const fingerprintVersionV4 = 4
 const fingerprintVersionV5 = 5
+const fingerprintVersionV6 = 6
 
 // InvocationFingerprintV1 hashes a fixed JSON representation whose object-key
 // order is part of the versioned contract. Values are already typed, so source
@@ -324,6 +325,65 @@ func invocationFingerprintBytesV5(input CreateInvocationInput) ([]byte, error) {
 	}
 	tools.WriteByte(']')
 	return []byte(canonical[:index] + tools.String() + canonical[index:]), nil
+}
+
+// InvocationFingerprintV6 adds the literal nonsecret provider credential
+// selection outside the execution spec. Caller secret bytes and materialized
+// defaults never enter the canonical representation.
+func InvocationFingerprintV6(input CreateInvocationInput) ([sha256.Size]byte, error) {
+	canonical, err := invocationFingerprintBytesV6(input)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(canonical), nil
+}
+
+func invocationFingerprintBytesV6(input CreateInvocationInput) ([]byte, error) {
+	v5, err := invocationFingerprintBytesV5(input)
+	if err != nil {
+		return nil, err
+	}
+	canonical := string(v5)
+	canonical = strings.Replace(
+		canonical,
+		`{"version":`+strconv.Itoa(fingerprintVersionV5),
+		`{"version":`+strconv.Itoa(fingerprintVersionV6),
+		1,
+	)
+	var inputSuffix bytes.Buffer
+	inputSuffix.WriteString(`},"input":`)
+	if err := writeFingerprintInput(&inputSuffix, input.Input); err != nil {
+		return nil, err
+	}
+	inputSuffix.WriteByte('}')
+	suffix := inputSuffix.Bytes()
+	if !bytes.HasSuffix(v5, suffix) {
+		return nil, fmt.Errorf("v5 fingerprint shape is invalid")
+	}
+	index := len(v5) - len(suffix)
+	var selections bytes.Buffer
+	selections.WriteString(`,"provider_credentials":`)
+	if input.ProviderCredentials == nil {
+		selections.WriteString("null")
+	} else {
+		selections.WriteByte('[')
+		for selectionIndex, selection := range input.ProviderCredentials {
+			if selectionIndex > 0 {
+				selections.WriteByte(',')
+			}
+			selections.WriteString(`{"provider":`)
+			if err := writeJSONString(&selections, selection.Provider); err != nil {
+				return nil, err
+			}
+			selections.WriteString(`,"source":`)
+			if err := writeJSONString(&selections, string(selection.Source)); err != nil {
+				return nil, err
+			}
+			selections.WriteByte('}')
+		}
+		selections.WriteByte(']')
+	}
+	return []byte(canonical[:index] + selections.String() + canonical[index:]), nil
 }
 
 func writeOptionalInt(buffer *bytes.Buffer, value *int) {

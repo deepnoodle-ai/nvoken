@@ -94,6 +94,13 @@ to a public host HTTPS endpoint with a stable ToolCall idempotency key and a
 versioned HMAC signature. The exact surface is in
 [openapi/runtime.yaml](openapi/runtime.yaml).
 
+Each Invocation also binds its model provider to one explicit payment and
+credential source: caller-ephemeral, reusable Account BYOK, tenant BYOK, or a
+platform-funded key; self-hosted installations retain installation BYOK as the
+default. The binding is durable for recovery, encrypted when it contains secret
+material, rechecked before every provider call, and never falls through to a
+different payer when unavailable.
+
 ## Your app owns the state
 
 A multi-tenant app cannot treat agents as fixed config. Instructions, tools,
@@ -104,8 +111,9 @@ For an app with thousands of users, this turns into a big pain.
 
 nvoken avoids this by design. Your app composes the spec from its own database
 on every invocation, so tenant customization is just a query. nvoken stores
-sessions and running turns, nothing else. There is nothing to register, sync,
-or migrate when you update your app with new agent customizations.
+sessions, running turns, and optional encrypted provider credentials—not agent
+definitions. There is nothing to register, sync, or migrate when you update
+your app with new agent customizations.
 
 That is the "your app owns the state" test in the comparison below. Only
 nvoken passes it. This boundary is the design; see

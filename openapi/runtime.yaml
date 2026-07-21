@@ -16,8 +16,9 @@ info:
     complete inventory and any future ordered-deletion contract are governed by
     the design packet's Data and retention section.
 
-    Inline client tools, callback tools, and structured output are included.
-    Spec references and administrative APIs remain outside this version.
+    Inline and callback client tools, structured output, and reusable model
+    provider credential lifecycle are included. Spec references and general
+    administrative APIs remain outside this version.
 servers:
   - url: /
     description: Current nvoken installation
@@ -28,6 +29,8 @@ tags:
     description: Durable agent-turn admission and state.
   - name: Sessions
     description: Durable conversation identity and state.
+  - name: Provider credentials
+    description: Encrypted Account and tenant model-provider BYOK lifecycle.
 paths:
   /v1/invocations:
     get:
@@ -419,6 +422,152 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
+  /v1/provider-credentials:
+    get:
+      tags: [Provider credentials]
+      operationId: listProviderCredentials
+      summary: List reusable provider credential metadata
+      description: Returns metadata only; secret material is never readable.
+      parameters:
+        - name: provider
+          in: query
+          schema:
+            $ref: "#/components/schemas/ModelProvider"
+        - name: scope
+          in: query
+          schema:
+            $ref: "#/components/schemas/ProviderCredentialScope"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, revoked]
+        - name: tenant_ref
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+      responses:
+        "200":
+          description: Bounded credential metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderCredentialList"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    post:
+      tags: [Provider credentials]
+      operationId: createProviderCredential
+      summary: Create one reusable provider credential
+      description: |
+        Creates encrypted Account or tenant BYOK. Account scope requires an
+        Operator credential. A tenant-constrained Runtime credential may manage
+        only its exact tenant partition. The response contains metadata only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProviderCredentialRequest"
+      responses:
+        "201":
+          description: Provider credential metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderCredential"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: The idempotency key changed nonsecret request metadata or an active credential already exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/provider-credentials/{provider_credential_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProviderCredentialID"
+    get:
+      tags: [Provider credentials]
+      operationId: getProviderCredential
+      summary: Read provider credential metadata
+      responses:
+        "200":
+          description: Provider credential metadata without secret material.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderCredential"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    delete:
+      tags: [Provider credentials]
+      operationId: revokeProviderCredential
+      summary: Revoke a provider credential and destroy live encrypted versions
+      responses:
+        "200":
+          description: Revoked credential metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderCredential"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/provider-credentials/{provider_credential_id}/rotate:
+    parameters:
+      - $ref: "#/components/parameters/ProviderCredentialID"
+    post:
+      tags: [Provider credentials]
+      operationId: rotateProviderCredential
+      summary: Rotate a provider credential
+      description: Replaces the active version, optionally preserving a bounded overlap.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RotateProviderCredentialRequest"
+      responses:
+        "200":
+          description: Current provider credential metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderCredential"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The rotation idempotency key names another credential or changed expiry or overlap metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /v1/sessions:
     get:
       tags: [Sessions]
@@ -668,6 +817,12 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/SessionID"
+    ProviderCredentialID:
+      name: provider_credential_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/ProviderCredentialID"
     Cursor:
       name: cursor
       in: query
@@ -712,6 +867,20 @@ components:
       type: string
       pattern: "^invk_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
       description: UUIDv7 with the public `invk_` prefix.
+    ProviderCredentialID:
+      type: string
+      pattern: "^pcrd_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      description: UUIDv7 with the public `pcrd_` prefix.
+    ProviderCredentialVersionID:
+      type: string
+      pattern: "^pcvr_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      description: UUIDv7 with the public `pcvr_` prefix.
+    ModelProvider:
+      type: string
+      enum: [anthropic, openai]
+    ProviderCredentialScope:
+      type: string
+      enum: [account, tenant]
     CreateInvocationRequest:
       type: object
       additionalProperties: false
@@ -759,6 +928,156 @@ components:
           $ref: "#/components/schemas/InvocationInput"
         spec:
           $ref: "#/components/schemas/InlineExecutionSpec"
+        provider_credentials:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: "#/components/schemas/InvocationProviderCredentialSelection"
+          description: |
+            Explicit nonsecret source selection for the spec model provider.
+            Omission selects the deployment's configured default. The
+            selection is stored outside the execution spec; only
+            caller_ephemeral accepts secret material. Equal idempotent replay
+            never replaces the original encrypted credential.
+    InvocationProviderCredentialSelection:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [provider, source, credential]
+          properties:
+            provider:
+              $ref: "#/components/schemas/ModelProvider"
+            source:
+              const: caller_ephemeral
+            credential:
+              $ref: "#/components/schemas/ProviderStaticCredential"
+        - type: object
+          additionalProperties: false
+          required: [provider, source]
+          properties:
+            provider:
+              $ref: "#/components/schemas/ModelProvider"
+            source:
+              type: string
+              enum: [account_byok, tenant_byok, platform]
+      description: Exactly one selection matching the canonical spec provider.
+    ProviderStaticCredential:
+      type: object
+      additionalProperties: false
+      required: [api_key]
+      properties:
+        api_key:
+          type: string
+          minLength: 1
+          maxLength: 65536
+          writeOnly: true
+          description: Encrypted before persistence and never returned.
+    CreateProviderCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, scope, credential, idempotency_key]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ModelProvider"
+        scope:
+          $ref: "#/components/schemas/ProviderCredentialScope"
+        tenant_ref:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Required for tenant scope and forbidden for Account scope.
+        credential:
+          $ref: "#/components/schemas/ProviderStaticCredential"
+        expires_at:
+          type: string
+          format: date-time
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+    RotateProviderCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [credential, idempotency_key]
+      properties:
+        credential:
+          $ref: "#/components/schemas/ProviderStaticCredential"
+        expires_at:
+          type: string
+          format: date-time
+        overlap_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+          default: 0
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+    ProviderCredential:
+      type: object
+      additionalProperties: false
+      required: [id, provider, scope, tenant_ref, status, version, version_id, previous_version_id, version_status, expires_at, overlap_expires_at, created_by, created_at, updated_at, revoked_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/ProviderCredentialID"
+        provider:
+          $ref: "#/components/schemas/ModelProvider"
+        scope:
+          $ref: "#/components/schemas/ProviderCredentialScope"
+        tenant_ref:
+          oneOf:
+            - type: string
+            - type: "null"
+        status:
+          type: string
+          enum: [active, revoked]
+        version:
+          type: integer
+          minimum: 1
+        version_id:
+          $ref: "#/components/schemas/ProviderCredentialVersionID"
+        previous_version_id:
+          oneOf:
+            - $ref: "#/components/schemas/ProviderCredentialVersionID"
+            - type: "null"
+        version_status:
+          type: string
+          enum: [active, overlap, expired, revoked]
+        expires_at:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        overlap_expires_at:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        revoked_at:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+      description: Safe metadata only; secret material is never represented.
+    ProviderCredentialList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderCredential"
     InvocationInput:
       type: object
       additionalProperties: false
@@ -924,9 +1243,7 @@ components:
       required: [provider, name]
       properties:
         provider:
-          type: string
-          minLength: 1
-          maxLength: 255
+          $ref: "#/components/schemas/ModelProvider"
         name:
           type: string
           minLength: 1
@@ -1096,7 +1413,16 @@ components:
         served_model:
           type: string
         credential_source:
-          const: installation_byok
+          type: string
+          enum: [caller_ephemeral, account_byok, tenant_byok, platform, installation_byok]
+        provider_credential_id:
+          $ref: "#/components/schemas/ProviderCredentialID"
+        credential_version_id:
+          $ref: "#/components/schemas/ProviderCredentialVersionID"
+      description: |
+        Reusable BYOK sources include safe credential and version IDs. Caller,
+        platform, and installation sources omit them. No secret material is
+        included.
     StructuredOutputProvenance:
       type: object
       additionalProperties: false
@@ -1192,6 +1518,7 @@ components:
             - deadline_exceeded
             - budget_exceeded
             - execution_lost
+            - credential_unavailable
             - provider_error
             - structured_output_unsatisfied
             - internal
@@ -1506,6 +1833,7 @@ components:
         - forbidden
         - not_found
         - idempotency_conflict
+        - provider_credential_conflict
         - session_invocation_active
         - invocation_not_waiting
         - tool_result_conflict

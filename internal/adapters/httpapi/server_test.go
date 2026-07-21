@@ -49,6 +49,38 @@ type fakeRuntime struct {
 	err              error
 }
 
+type fakeProviderCredentials struct {
+	createInput services.CreateProviderCredentialInput
+	created     services.ProviderCredentialRead
+	createCalls int
+}
+
+func (f *fakeProviderCredentials) Create(
+	_ context.Context,
+	_ domain.RuntimeAuthContext,
+	input services.CreateProviderCredentialInput,
+) (services.ProviderCredentialRead, error) {
+	f.createCalls++
+	f.createInput = input
+	return f.created, nil
+}
+
+func (f *fakeProviderCredentials) List(context.Context, domain.RuntimeAuthContext, services.ProviderCredentialListInput) (services.ProviderCredentialList, error) {
+	return services.ProviderCredentialList{Items: []services.ProviderCredentialRead{}}, nil
+}
+
+func (f *fakeProviderCredentials) Get(context.Context, domain.RuntimeAuthContext, string) (services.ProviderCredentialRead, error) {
+	return f.created, nil
+}
+
+func (f *fakeProviderCredentials) Rotate(context.Context, domain.RuntimeAuthContext, string, services.RotateProviderCredentialInput) (services.ProviderCredentialRead, error) {
+	return f.created, nil
+}
+
+func (f *fakeProviderCredentials) Revoke(context.Context, domain.RuntimeAuthContext, string) (services.ProviderCredentialRead, error) {
+	return f.created, nil
+}
+
 type operationCheckingRuntime struct{ fakeRuntime }
 
 func (r *operationCheckingRuntime) Admit(_ context.Context, auth domain.RuntimeAuthContext, _ services.CreateInvocationInput) (services.InvocationAcknowledgement, error) {
@@ -216,6 +248,79 @@ func TestCreateInvocationReturnsDurableAcknowledgement(t *testing.T) {
 	}
 	if recorder.Header().Get("X-Request-ID") == "" {
 		t.Fatal("missing X-Request-ID")
+	}
+}
+
+func TestCreateInvocationDecodesCredentialSelectionAndRejectsNull(t *testing.T) {
+	runtime := &fakeRuntime{ack: services.InvocationAcknowledgement{
+		AgentID:      testAgentID,
+		SessionID:    testSessionID,
+		InvocationID: testInvocationID,
+		Status:       domain.InvocationQueued,
+	}}
+	body := []byte(`{"agent_ref":"support","idempotency_key":"request-1","input":{"content":[{"type":"text","text":"hello"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","name":"test-model"}},"provider_credentials":[{"provider":"anthropic","source":"caller_ephemeral","credential":{"api_key":"caller-secret"}}]}`)
+	recorder := httptest.NewRecorder()
+	testHandler(runtime, nil, io.Discard).ServeHTTP(
+		recorder,
+		authenticatedRequest(http.MethodPost, "/v1/invocations", body),
+	)
+	if recorder.Code != http.StatusAccepted || len(runtime.admitInput.ProviderCredentials) != 1 ||
+		runtime.admitInput.ProviderCredentials[0].Credential == nil ||
+		runtime.admitInput.ProviderCredentials[0].Credential.APIKey != "caller-secret" {
+		t.Fatalf("credential admission = %d %s, input = %#v", recorder.Code, recorder.Body.String(), runtime.admitInput.ProviderCredentials)
+	}
+
+	nullBody := bytes.Replace(validInvocationJSON(), []byte(`"spec"`), []byte(`"provider_credentials":null,"spec"`), 1)
+	recorder = httptest.NewRecorder()
+	testHandler(runtime, nil, io.Discard).ServeHTTP(
+		recorder,
+		authenticatedRequest(http.MethodPost, "/v1/invocations", nullBody),
+	)
+	if recorder.Code != http.StatusBadRequest || runtime.admitCalls != 1 {
+		t.Fatalf("null provider_credentials = %d %s, calls = %d", recorder.Code, recorder.Body.String(), runtime.admitCalls)
+	}
+
+	unusedNull := []byte(`{"agent_ref":"support","idempotency_key":"request-2","input":{"content":[{"type":"text","text":"hello"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","name":"test-model"}},"provider_credentials":[{"provider":"anthropic","source":"account_byok","credential":null}]}`)
+	recorder = httptest.NewRecorder()
+	testHandler(runtime, nil, io.Discard).ServeHTTP(
+		recorder,
+		authenticatedRequest(http.MethodPost, "/v1/invocations", unusedNull),
+	)
+	if recorder.Code != http.StatusBadRequest || runtime.admitCalls != 1 {
+		t.Fatalf("unused null credential = %d %s, calls = %d", recorder.Code, recorder.Body.String(), runtime.admitCalls)
+	}
+}
+
+func TestProviderCredentialCreateNeverReturnsOrLogsSecret(t *testing.T) {
+	credentialID := "pcrd_019b0a12-0000-7000-8000-000000000005"
+	versionID := "pcvr_019b0a12-0000-7000-8000-000000000006"
+	now := time.Date(2026, time.July, 21, 18, 0, 0, 0, time.UTC)
+	credentials := &fakeProviderCredentials{created: services.ProviderCredentialRead{
+		ID:            credentialID,
+		Provider:      "openai",
+		Scope:         domain.ProviderCredentialScopeAccount,
+		Status:        domain.ProviderCredentialActive,
+		Version:       1,
+		VersionID:     versionID,
+		VersionStatus: domain.ProviderCredentialVersionActive,
+		CreatedBy:     "operator:test",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}}
+	var logs bytes.Buffer
+	body := []byte(`{"provider":"openai","scope":"account","credential":{"api_key":"lifecycle-secret"},"idempotency_key":"credential-1"}`)
+	recorder := httptest.NewRecorder()
+	testHandlerWithCredentials(nil, credentials, nil, &logs).ServeHTTP(
+		recorder,
+		authenticatedRequest(http.MethodPost, "/v1/provider-credentials", body),
+	)
+	if recorder.Code != http.StatusCreated || credentials.createCalls != 1 || credentials.createInput.Credential.APIKey != "lifecycle-secret" {
+		t.Fatalf("credential create = %d %s, calls = %d", recorder.Code, recorder.Body.String(), credentials.createCalls)
+	}
+	for _, output := range []string{recorder.Body.String(), logs.String()} {
+		if strings.Contains(output, "lifecycle-secret") || strings.Contains(output, "api_key") {
+			t.Fatalf("secret-bearing output = %s", output)
+		}
 	}
 }
 
@@ -694,6 +799,15 @@ func TestLogsDoNotContainCredentialsOrRequestContent(t *testing.T) {
 }
 
 func testHandler(runtime RuntimeService, authenticator *fakeAuthenticator, logWriter io.Writer) http.Handler {
+	return testHandlerWithCredentials(runtime, nil, authenticator, logWriter)
+}
+
+func testHandlerWithCredentials(
+	runtime RuntimeService,
+	credentials ProviderCredentialService,
+	authenticator *fakeAuthenticator,
+	logWriter io.Writer,
+) http.Handler {
 	if authenticator == nil {
 		authenticator = &fakeAuthenticator{auth: domain.RuntimeAuthContext{
 			AccountID: testAccountID,
@@ -701,11 +815,19 @@ func testHandler(runtime RuntimeService, authenticator *fakeAuthenticator, logWr
 				domain.OperationCreateInvocation: {}, domain.OperationGetInvocation: {}, domain.OperationCancelInvocation: {}, domain.OperationSubmitToolResults: {}, domain.OperationGetSession: {},
 				domain.OperationListInvocations: {}, domain.OperationListSessions: {},
 				domain.OperationListMessages: {}, domain.OperationGetTranscript: {},
+				domain.OperationListProviderCredentials: {}, domain.OperationCreateProviderCredential: {},
+				domain.OperationGetProviderCredential: {}, domain.OperationRotateProviderCredential: {},
+				domain.OperationRevokeProviderCredential: {},
 			},
 		}}
 	}
 	logger := slog.New(slog.NewTextHandler(logWriter, nil))
-	return newHandler(handlerConfig{authenticator: authenticator, runtime: runtime, logger: logger})
+	return newHandler(handlerConfig{
+		authenticator:       authenticator,
+		runtime:             runtime,
+		providerCredentials: credentials,
+		logger:              logger,
+	})
 }
 
 func authenticatedRequest(method, target string, body []byte) *http.Request {

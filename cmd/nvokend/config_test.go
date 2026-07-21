@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +69,63 @@ func TestLoadDaemonConfigTrustsForwardedClientIPWhenEnabled(t *testing.T) {
 	if !cfg.TrustForwardedClientIP {
 		t.Error("TrustForwardedClientIP: got false, want true")
 	}
+}
+
+func TestLoadDaemonConfigCredentialModesAndKeyring(t *testing.T) {
+	encodedKey := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
+	encodedKeyring := fmt.Sprintf(`{"v1":%q}`, encodedKey)
+
+	t.Run("self hosted optional encryption", func(t *testing.T) {
+		setServeConfig(t)
+		t.Setenv("PROVIDER_CREDENTIAL_ACTIVE_KEY_ID", "v1")
+		t.Setenv("PROVIDER_CREDENTIAL_ENCRYPTION_KEYS", encodedKeyring)
+		cfg, err := loadDaemonConfig()
+		if err != nil {
+			t.Fatalf("load encrypted self-hosted config: %v", err)
+		}
+		if cfg.CredentialCipher == nil || cfg.CredentialPolicy.DeploymentMode != "self_hosted" ||
+			cfg.CredentialPolicy.DefaultSource != "installation_byok" {
+			t.Fatalf("credential config = %#v", cfg)
+		}
+	})
+
+	t.Run("cloud requires encryption", func(t *testing.T) {
+		setServeConfig(t)
+		t.Setenv("MODEL_CREDENTIAL_DEPLOYMENT_MODE", "cloud")
+		t.Setenv("INVOCATION_DEFAULT_CREDENTIAL_SOURCE", "platform")
+		t.Setenv("PLATFORM_OPENAI_API_KEY", "platform-secret")
+		if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "requires provider credential encryption") {
+			t.Fatalf("missing Cloud encryption error = %v", err)
+		}
+		t.Setenv("PROVIDER_CREDENTIAL_ACTIVE_KEY_ID", "v1")
+		t.Setenv("PROVIDER_CREDENTIAL_ENCRYPTION_KEYS", encodedKeyring)
+		t.Setenv("PLATFORM_FUNDING_ENABLED", "true")
+		cfg, err := loadDaemonConfig()
+		if err != nil {
+			t.Fatalf("load Cloud credential config: %v", err)
+		}
+		if cfg.CredentialPolicy.DeploymentMode != "cloud" || cfg.CredentialPolicy.DefaultSource != "platform" ||
+			cfg.PlatformOpenAIAPIKey != "platform-secret" || !cfg.PlatformFundingEnabled {
+			t.Fatalf("Cloud credential config = %#v", cfg)
+		}
+	})
+
+	t.Run("reusable self-hosted default requires encryption", func(t *testing.T) {
+		setServeConfig(t)
+		t.Setenv("INVOCATION_DEFAULT_CREDENTIAL_SOURCE", "account_byok")
+		if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "requires provider credential encryption") {
+			t.Fatalf("missing reusable-default encryption error = %v", err)
+		}
+		t.Setenv("PROVIDER_CREDENTIAL_ACTIVE_KEY_ID", "v1")
+		t.Setenv("PROVIDER_CREDENTIAL_ENCRYPTION_KEYS", encodedKeyring)
+		cfg, err := loadDaemonConfig()
+		if err != nil {
+			t.Fatalf("load reusable-default config: %v", err)
+		}
+		if cfg.CredentialPolicy.DefaultSource != "account_byok" || cfg.CredentialCipher == nil {
+			t.Fatalf("reusable-default config = %#v", cfg)
+		}
+	})
 }
 
 func TestLoadDaemonConfigCallbackSigningIsCombinedOnlyAndBounded(t *testing.T) {

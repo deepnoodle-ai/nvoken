@@ -50,3 +50,9 @@ durable machine and user credentials. It adds installation operator subjects
 and memberships, bounded encrypted issuance delivery, RFC 8628 device grants,
 bootstrap browser sessions, rotation lineage, and the one-time legacy Runtime
 key import marker.
+
+Migration `000013` adds encrypted, versioned Account and tenant model-provider
+credentials plus one provider-scoped binding per Invocation. Existing retained
+Invocations receive deterministic `installation_byok` bindings. A terminal-state
+trigger clears caller-ephemeral ciphertext in the same settlement transaction;
+retained bindings keep only safe provenance metadata.

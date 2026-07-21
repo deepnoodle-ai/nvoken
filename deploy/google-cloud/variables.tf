@@ -86,6 +86,41 @@ variable "openai_api_key_secret_id" {
   }
 }
 
+variable "provider_credential_encryption_keys_secret_id" {
+  description = "Existing Secret Manager secret ID whose latest version contains the JSON object of base64 provider credential encryption keys. Null disables reusable and caller-ephemeral BYOK."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.provider_credential_encryption_keys_secret_id == null || trimspace(var.provider_credential_encryption_keys_secret_id) != ""
+    error_message = "provider_credential_encryption_keys_secret_id must be null or nonblank."
+  }
+}
+
+variable "provider_credential_active_key_id" {
+  description = "Active nonsecret key ID within provider_credential_encryption_keys_secret_id."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.provider_credential_active_key_id == null || trimspace(var.provider_credential_active_key_id) != ""
+    error_message = "provider_credential_active_key_id must be null or nonblank."
+  }
+}
+
+variable "runtime_api_profile" {
+  description = "Authorization profile assigned to the generated Runtime bearer key. Operator enables Account BYOK lifecycle; runtime is Invocation-oriented."
+  type        = string
+  default     = "operator"
+
+  validation {
+    condition     = contains(["runtime", "viewer", "operator"], var.runtime_api_profile)
+    error_message = "runtime_api_profile must be runtime, viewer, or operator."
+  }
+}
+
 variable "callback_signing_key_secret_id" {
   description = "Existing Secret Manager secret ID whose latest version contains the installation callback HMAC key. Null disables callback admission."
   type        = string

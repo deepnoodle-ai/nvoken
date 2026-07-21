@@ -25,6 +25,9 @@ locals {
     var.anthropic_api_key_secret_id == null ? {} : { ANTHROPIC_API_KEY = var.anthropic_api_key_secret_id },
     var.openai_api_key_secret_id == null ? {} : { OPENAI_API_KEY = var.openai_api_key_secret_id },
   )
+  credential_encryption_secrets = var.provider_credential_encryption_keys_secret_id == null ? {} : {
+    PROVIDER_CREDENTIAL_ENCRYPTION_KEYS = var.provider_credential_encryption_keys_secret_id
+  }
   database_url = format(
     "postgres://%s:%s@%s:5432/%s?sslmode=require",
     urlencode(var.database_user),
@@ -403,6 +406,24 @@ resource "google_secret_manager_secret_iam_member" "provider_executor" {
   member    = "serviceAccount:${google_service_account.executor.email}"
 }
 
+resource "google_secret_manager_secret_iam_member" "credential_encryption_runtime" {
+  for_each = local.credential_encryption_secrets
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "credential_encryption_executor" {
+  for_each = var.invocation_execution_mode == "cloud_tasks" ? local.credential_encryption_secrets : {}
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.executor.email}"
+}
+
 resource "google_secret_manager_secret_iam_member" "callback_runtime" {
   count = var.callback_signing_key_secret_id == null ? 0 : 1
 
@@ -614,6 +635,29 @@ resource "google_cloud_run_v2_service" "executor" {
         }
       }
 
+      dynamic "env" {
+        for_each = local.credential_encryption_secrets
+
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.provider_credential_active_key_id == null ? [] : [var.provider_credential_active_key_id]
+
+        content {
+          name  = "PROVIDER_CREDENTIAL_ACTIVE_KEY_ID"
+          value = env.value
+        }
+      }
+
       env {
         name = "DATABASE_URL"
         value_source {
@@ -743,6 +787,7 @@ resource "google_cloud_run_v2_service" "executor" {
     google_secret_manager_secret_iam_member.executor_database,
     google_secret_manager_secret_iam_member.executor_redis_auth,
     google_secret_manager_secret_iam_member.provider_executor,
+    google_secret_manager_secret_iam_member.credential_encryption_executor,
     google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.redis_auth,
   ]
@@ -769,6 +814,10 @@ resource "google_cloud_run_v2_service" "runtime" {
     precondition {
       condition     = var.anthropic_api_key_secret_id != null || var.openai_api_key_secret_id != null
       error_message = "Set anthropic_api_key_secret_id, openai_api_key_secret_id, or both."
+    }
+    precondition {
+      condition     = (var.provider_credential_encryption_keys_secret_id == null) == (var.provider_credential_active_key_id == null)
+      error_message = "Set provider_credential_encryption_keys_secret_id and provider_credential_active_key_id together."
     }
     precondition {
       condition     = var.max_instances >= var.min_instances
@@ -903,6 +952,11 @@ resource "google_cloud_run_v2_service" "runtime" {
         }
       }
 
+      env {
+        name  = "RUNTIME_API_PROFILE"
+        value = var.runtime_api_profile
+      }
+
       dynamic "env" {
         for_each = var.invocation_execution_mode == "embedded" ? local.provider_secrets : {}
 
@@ -914,6 +968,29 @@ resource "google_cloud_run_v2_service" "runtime" {
               version = "latest"
             }
           }
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.credential_encryption_secrets
+
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.provider_credential_active_key_id == null ? [] : [var.provider_credential_active_key_id]
+
+        content {
+          name  = "PROVIDER_CREDENTIAL_ACTIVE_KEY_ID"
+          value = env.value
         }
       }
 
@@ -1158,6 +1235,7 @@ resource "google_cloud_run_v2_service" "runtime" {
     google_project_service.required,
     google_secret_manager_secret_iam_member.generated,
     google_secret_manager_secret_iam_member.callback_runtime,
+    google_secret_manager_secret_iam_member.credential_encryption_runtime,
     google_secret_manager_secret_iam_member.provider_runtime,
     google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.bootstrap_owner_secret,

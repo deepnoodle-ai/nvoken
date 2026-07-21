@@ -1,6 +1,6 @@
 # Resolve model credentials per Invocation and provider
 
-**Status:** Draft
+**Status:** Implemented
 **Sequence:** 028
 **Depends on:** `003-prd-durable-invocation-admission.md`,
 `008-prd-invocation-controls-and-budgets.md`,
@@ -183,49 +183,49 @@ and `installation_byok` is unavailable in Cloud.
 
 ## Acceptance
 
-- [ ] **A1 (R1, R2, R9):** An authorized host creates OpenAI Account BYOK and
+- [x] **A1 (R1, R2, R9):** An authorized host creates OpenAI Account BYOK and
   Anthropic tenant BYOK records. Metadata is readable and filterable by provider
   and scope, but database/API/log searches expose no plaintext.
   Cross-Account, mismatched-tenant, duplicate-active, and unauthorized Runtime
   operations fail without disclosing whether another credential exists.
 
-- [ ] **A2 (R3–R5):** Separate Invocations bind OpenAI to Account BYOK,
+- [x] **A2 (R3–R5):** Separate Invocations bind OpenAI to Account BYOK,
   Anthropic to caller-ephemeral, OpenAI to platform, and Anthropic to tenant
   BYOK. Each deterministic adapter receives only its selected credential.
   Missing, corrupt, revoked, expired, or funding-denied sources produce
   `credential_unavailable` and zero calls to all alternate sources.
 
-- [ ] **A3 (R3, R4):** Fault injection at every admission write leaves either
+- [x] **A3 (R3, R4):** Fault injection at every admission write leaves either
   no claimable Invocation or the Invocation plus its complete provider-binding
   set and dispatch. Equal replay with the same or a different supplied secret
   returns the original bindings without replacement; changing a source with the
   same idempotency key conflicts. A literally omitted source replayed after the
   installation default changes returns its original materialized binding.
 
-- [ ] **A4 (R5, R6):** After a model checkpoint and executor loss, another
+- [x] **A4 (R5, R6):** After a model checkpoint and executor loss, another
   process decrypts the same bound version and continues under a new fence.
   Rotation overlap preserves a bound old version only until its deadline;
   revocation blocks the next call, and neither case changes credential source.
 
-- [ ] **A5 (R6, R7):** Completion, provider failure, cancellation, deadline,
+- [x] **A5 (R6, R7):** Completion, provider failure, cancellation, deadline,
   and delayed-settlement expiry tests make caller-ephemeral ciphertext
   unavailable while retaining safe source metadata. Restoring a backup follows
   the documented encrypted-retention boundary rather than claiming immediate
   physical erasure.
 
-- [ ] **A6 (R1, R5, R8):** Across separate Invocations, two tenants using the
+- [x] **A6 (R1, R5, R8):** Across separate Invocations, two tenants using the
   same provider resolve different tenant BYOK versions; an Account BYOK binding
   is usable across those tenants;
   caller-ephemeral remains usable only by its Invocation. Usage receipts report
   the exact source, and only platform fixtures invoke the funding/metering seam.
 
-- [ ] **A7 (R2, R8, R9):** Provider, HTTP, Postgres, recovery, and rotation tests
+- [x] **A7 (R2, R8, R9):** Provider, HTTP, Postgres, recovery, and rotation tests
   capture requests, persistence, structured logs, metrics, and errors. They find
   credential source and safe IDs but no raw secret, authorization header,
   decrypted payload, or persisted copy of the intentionally secret-bearing
   admission input.
 
-- [ ] **A8 (R1–R9):** `make check` passes with migration drift, OpenAPI lint,
+- [x] **A8 (R1–R9):** `make check` passes with migration drift, OpenAPI lint,
   authorization matrix, idempotency, race, encryption-key failure, redaction,
   recovery, cleanup, and provenance coverage for every supported credential
   source. Fingerprint v6 compatibility tests consume

@@ -526,6 +526,27 @@ func TestGenerationExecutorStreamingFailureUsesExistingProviderFailure(t *testin
 	}
 }
 
+func TestGenerationExecutorSettlesCredentialUnavailableDistinctly(t *testing.T) {
+	claim := generationClaim()
+	generator := &fakeModelGenerator{err: ports.ErrCredentialUnavailable}
+	var logs bytes.Buffer
+	result, err := NewGenerationExecutor(
+		generationStoreFixture(claim),
+		generator,
+		slog.New(slog.NewJSONHandler(&logs, nil)),
+	).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	assertFailureCode(t, result, "credential_unavailable")
+	if result.Provenance != nil || result.Usage != nil {
+		t.Fatalf("pre-provider credential failure leaked evidence = %#v", result)
+	}
+	if !strings.Contains(logs.String(), `"class":"credential_unavailable"`) {
+		t.Fatalf("credential failure class missing from logs: %s", logs.String())
+	}
+}
+
 func TestGenerationExecutorRejectsInvalidDurableInputsWithoutModelCall(t *testing.T) {
 	tests := []struct {
 		name   string

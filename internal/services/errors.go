@@ -5,16 +5,17 @@ import "fmt"
 type ErrorCode string
 
 const (
-	CodeInvalidRequest          ErrorCode = "invalid_request"
-	CodeForbidden               ErrorCode = "forbidden"
-	CodeNotFound                ErrorCode = "not_found"
-	CodeIdempotencyConflict     ErrorCode = "idempotency_conflict"
-	CodeSessionInvocationActive ErrorCode = "session_invocation_active"
-	CodeInvocationNotWaiting    ErrorCode = "invocation_not_waiting"
-	CodeToolResultConflict      ErrorCode = "tool_result_conflict"
-	CodeToolResultExpired       ErrorCode = "tool_result_expired"
-	CodeInternal                ErrorCode = "internal"
-	CodeUnavailable             ErrorCode = "unavailable"
+	CodeInvalidRequest             ErrorCode = "invalid_request"
+	CodeForbidden                  ErrorCode = "forbidden"
+	CodeNotFound                   ErrorCode = "not_found"
+	CodeIdempotencyConflict        ErrorCode = "idempotency_conflict"
+	CodeSessionInvocationActive    ErrorCode = "session_invocation_active"
+	CodeInvocationNotWaiting       ErrorCode = "invocation_not_waiting"
+	CodeToolResultConflict         ErrorCode = "tool_result_conflict"
+	CodeToolResultExpired          ErrorCode = "tool_result_expired"
+	CodeProviderCredentialConflict ErrorCode = "provider_credential_conflict"
+	CodeInternal                   ErrorCode = "internal"
+	CodeUnavailable                ErrorCode = "unavailable"
 )
 
 type PublicError struct {
