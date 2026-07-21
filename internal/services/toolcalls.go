@@ -95,7 +95,7 @@ func (s *ToolCheckpointService) RecordModelCheckpoint(ctx context.Context, claim
 		if err != nil {
 			return err
 		}
-		calls, normalizedContent, err := s.prepareToolCalls(invocation, input, messageID, sequence, now)
+		calls, deliveries, normalizedContent, err := s.prepareToolCalls(invocation, input, messageID, sequence, now)
 		if err != nil {
 			return err
 		}
@@ -117,6 +117,17 @@ func (s *ToolCheckpointService) RecordModelCheckpoint(ctx context.Context, claim
 		for _, call := range calls {
 			if err := s.store.CreateToolCall(txCtx, call); err != nil {
 				return err
+			}
+		}
+		if len(deliveries) != 0 {
+			callbackStore, ok := s.store.(ports.CallbackDeliveryRepository)
+			if !ok {
+				return fmt.Errorf("callback delivery repository is not configured")
+			}
+			for _, delivery := range deliveries {
+				if err := callbackStore.CreateCallbackDelivery(txCtx, delivery); err != nil {
+					return err
+				}
 			}
 		}
 		receiptID, err := s.ids.NewID(domain.PrefixModelUsageReceipt)
@@ -382,26 +393,39 @@ func (s *ToolCheckpointService) AcceptBuiltinToolResult(ctx context.Context, cla
 	return settled, err
 }
 
-func (s *ToolCheckpointService) prepareToolCalls(invocation domain.Invocation, input domain.ModelCheckpointInput, messageID string, sequence int64, now time.Time) ([]domain.ToolCall, json.RawMessage, error) {
+func (s *ToolCheckpointService) prepareToolCalls(
+	invocation domain.Invocation,
+	input domain.ModelCheckpointInput,
+	messageID string,
+	sequence int64,
+	now time.Time,
+) ([]domain.ToolCall, []domain.CallbackDelivery, json.RawMessage, error) {
 	if len(input.ToolCalls) > MaxClientTools {
-		return nil, nil, fmt.Errorf("model checkpoint exceeds the maximum ToolCall batch size")
+		return nil, nil, nil, fmt.Errorf("model checkpoint exceeds the maximum ToolCall batch size")
 	}
 	var blocks []map[string]json.RawMessage
 	if err := json.Unmarshal(input.Message.Content, &blocks); err != nil || len(blocks) == 0 {
-		return nil, nil, fmt.Errorf("model checkpoint content is invalid")
+		return nil, nil, nil, fmt.Errorf("model checkpoint content is invalid")
 	}
 	byProvider := make(map[string]domain.ToolCallRequest, len(input.ToolCalls))
 	for _, requested := range input.ToolCalls {
 		if requested.ProviderCallID == "" || requested.Name == "" || requested.Mode == "" || !json.Valid(requested.Input) {
-			return nil, nil, fmt.Errorf("tool call request is invalid")
+			return nil, nil, nil, fmt.Errorf("tool call request is invalid")
+		}
+		if requested.Mode == domain.ToolCallModeCallback && !validCallbackURL(requested.CallbackURL) {
+			return nil, nil, nil, fmt.Errorf("callback tool call URL is invalid")
+		}
+		if requested.Mode != domain.ToolCallModeCallback && requested.CallbackURL != "" {
+			return nil, nil, nil, fmt.Errorf("non-callback tool call has a callback URL")
 		}
 		if _, exists := byProvider[requested.ProviderCallID]; exists {
-			return nil, nil, ports.ErrToolCallConflict
+			return nil, nil, nil, ports.ErrToolCallConflict
 		}
 		byProvider[requested.ProviderCallID] = requested
 	}
 	deadline := invocation.WallClockDeadlineAt
 	calls := make([]domain.ToolCall, 0, len(input.ToolCalls))
+	deliveries := make([]domain.CallbackDelivery, 0, len(input.ToolCalls))
 	ordinal := 0
 	for _, block := range blocks {
 		var kind string
@@ -413,19 +437,19 @@ func (s *ToolCheckpointService) prepareToolCalls(invocation domain.Invocation, i
 		var rawInput json.RawMessage
 		if json.Unmarshal(block["id"], &providerID) != nil || json.Unmarshal(block["name"], &name) != nil ||
 			json.Unmarshal(block["input"], &rawInput) != nil {
-			return nil, nil, fmt.Errorf("model tool_use block is invalid")
+			return nil, nil, nil, fmt.Errorf("model tool_use block is invalid")
 		}
 		requested, ok := byProvider[providerID]
 		if !ok || requested.Name != name || !jsonEqual(requested.Input, rawInput) {
-			return nil, nil, ports.ErrToolCallConflict
+			return nil, nil, nil, ports.ErrToolCallConflict
 		}
 		callID, err := s.ids.NewID(domain.PrefixToolCall)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		digest, err := toolRequestDigest(name, requested.Mode, rawInput)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		call := domain.ToolCall{
 			ID:                     callID,
@@ -448,16 +472,35 @@ func (s *ToolCheckpointService) prepareToolCalls(invocation domain.Invocation, i
 			UpdatedAt:              now,
 		}
 		calls = append(calls, call)
+		if requested.Mode == domain.ToolCallModeCallback {
+			deliveryID, err := s.ids.NewID(domain.PrefixCallbackDelivery)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			deliveries = append(deliveries, domain.CallbackDelivery{
+				ID:                deliveryID,
+				ToolCallID:        call.ID,
+				InvocationID:      call.InvocationID,
+				SessionID:         call.SessionID,
+				AccountID:         call.AccountID,
+				TenantPartitionID: call.TenantPartitionID,
+				AgentID:           call.AgentID,
+				EndpointURL:       requested.CallbackURL,
+				Status:            domain.CallbackDeliveryBlocked,
+				CreatedAt:         now,
+				UpdatedAt:         now,
+			})
+		}
 		encodedID, _ := json.Marshal(callID)
 		block["id"] = encodedID
 		delete(byProvider, providerID)
 		ordinal++
 	}
 	if len(byProvider) != 0 || len(calls) != len(input.ToolCalls) {
-		return nil, nil, ports.ErrToolCallConflict
+		return nil, nil, nil, ports.ErrToolCallConflict
 	}
 	normalized, err := json.Marshal(blocks)
-	return calls, normalized, err
+	return calls, deliveries, normalized, err
 }
 
 func (s *ToolCheckpointService) replayModelCheckpoint(ctx context.Context, invocation domain.Invocation, input domain.ModelCheckpointInput, digest []byte, result *domain.ModelCheckpointResult) error {
@@ -867,6 +910,22 @@ func closeOpenToolCallsForTerminal(
 			ToolCallID:             &callID,
 			CreatedAt:              now,
 		}); err != nil {
+			return nil, err
+		}
+	}
+	if callbacks, ok := store.(ports.CallbackDeliveryRepository); ok {
+		errorCode := "invocation_terminal"
+		if terminalStatus == domain.InvocationCancelled {
+			errorCode = "invocation_cancelled"
+		} else if !invocation.WallClockDeadlineAt.After(now) {
+			errorCode = "deadline_exceeded"
+		}
+		if _, err := callbacks.AbandonActiveCallbackDeliveries(
+			ctx,
+			invocation.ID,
+			errorCode,
+			now,
+		); err != nil {
 			return nil, err
 		}
 	}

@@ -42,6 +42,46 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 		cfg.Stream.WriteTimeout != 10*time.Second {
 		t.Fatalf("stream defaults: %#v", cfg)
 	}
+	if cfg.CallbackSigningKey != "" || cfg.CallbackDelivery.LeaseDuration != 30*time.Second ||
+		cfg.CallbackDelivery.MaxAttempts != 5 || cfg.CallbackController.Concurrency != 4 ||
+		cfg.CallbackController.DrainGrace != 15*time.Second || cfg.CallbackRequestTimeout != 10*time.Second ||
+		cfg.CallbackDNSTimeout != 5*time.Second {
+		t.Fatalf("callback defaults: %#v", cfg)
+	}
+}
+
+func TestLoadDaemonConfigCallbackSigningIsCombinedOnlyAndBounded(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("CALLBACK_SIGNING_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("CALLBACK_SIGNING_KEY_ID", "installation/callback")
+	t.Setenv("CALLBACK_SIGNING_KEY_VERSION", "7")
+	cfg, err := loadDaemonConfig()
+	if err != nil {
+		t.Fatalf("load callback config: %v", err)
+	}
+	if cfg.CallbackSigningKeyID != "installation/callback" || cfg.CallbackSigningVersion != 7 {
+		t.Fatalf("callback identity = %#v", cfg)
+	}
+
+	t.Setenv("CALLBACK_DRAIN_GRACE", "40s")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "CALLBACK_DRAIN_GRACE") {
+		t.Fatalf("callback drain error = %v", err)
+	}
+	t.Setenv("CALLBACK_DRAIN_GRACE", "15s")
+
+	t.Setenv("CALLBACK_REQUEST_TIMEOUT", "30s")
+	t.Setenv("CALLBACK_LEASE_DURATION", "30s")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "less than CALLBACK_LEASE_DURATION") {
+		t.Fatalf("callback timeout error = %v", err)
+	}
+
+	t.Setenv("CALLBACK_REQUEST_TIMEOUT", "10s")
+	t.Setenv("NVOKEN_PROCESS_ROLE", "executor")
+	t.Setenv("DATABASE_MAX_CONNS", "1")
+	t.Setenv("RUNTIME_API_KEY", "")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "available only to the combined role") {
+		t.Fatalf("executor callback secret error = %v", err)
+	}
 }
 
 func TestLoadDaemonConfigExecutorDoesNotRequirePublicRuntimeSecrets(t *testing.T) {
@@ -174,6 +214,7 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	t.Setenv("ENGINE_POLL_INTERVAL", "250ms")
 	t.Setenv("SHUTDOWN_TIMEOUT", "8s")
 	t.Setenv("ENGINE_DRAIN_GRACE", "7s")
+	t.Setenv("CALLBACK_DRAIN_GRACE", "7s")
 	t.Setenv("REDIS_URL", "rediss://10.0.0.2:6378/0")
 	t.Setenv("REDIS_PASSWORD", "redis-secret")
 	t.Setenv("REDIS_CA_CERT", "test-ca")
@@ -196,6 +237,7 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	if cfg.AnthropicAPIKey != "anthropic-secret" || cfg.OpenAIAPIKey != "openai-secret" ||
 		cfg.Engine.Concurrency != 3 || cfg.Engine.PollInterval != 250*time.Millisecond ||
 		cfg.ShutdownTimeout != 8*time.Second || cfg.Engine.DrainGrace != 7*time.Second ||
+		cfg.CallbackController.DrainGrace != 7*time.Second ||
 		cfg.RedisURL != "rediss://10.0.0.2:6378/0" || cfg.RedisPassword != "redis-secret" ||
 		cfg.RedisCACertificate != "test-ca" ||
 		cfg.LiveEventBuffer != 12 || cfg.Stream.PollInterval != 200*time.Millisecond ||

@@ -736,7 +736,7 @@ func assertStructuredOutputTrace(
 	if err != nil {
 		t.Fatalf("read Invocation: %v", err)
 	}
-	if invocation.Status != domain.InvocationCompleted || invocation.FingerprintVersion != 4 ||
+	if invocation.Status != domain.InvocationCompleted || invocation.FingerprintVersion != 5 ||
 		len(invocation.OutputSchemaDigest) != 32 || invocation.MaxIterations != 3 ||
 		!jsonObjectEqual(invocation.Output, json.RawMessage(`{"answer":"yes"}`)) {
 		t.Fatalf("completed structured Invocation = %#v", invocation)

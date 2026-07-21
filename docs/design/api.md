@@ -152,12 +152,14 @@ a bounded, self-contained object schema. nvoken exposes it to the model as the
 reserved `nvoken_submit_output` builtin and validates every submission itself.
 Schema-bearing requests require at least two model iterations; when the host
 omits that budget nvoken resolves it to three or the lower installation maximum.
-The spec may declare up to 32 ordered client tools with a unique name,
-description, `mode: client`, and the same bounded schema subset for input.
+The spec may declare up to 32 ordered client or callback tools with a unique
+name, description, mode, and the same bounded schema subset for input. A
+callback additionally supplies exactly one public HTTPS URL and is admitted
+only when installation callback signing is configured.
 Tools-bearing requests require at least two model iterations; omission resolves
 to three or the lower installation maximum, as with structured output.
-Unknown and deferred fields — including spec references, callback tools,
-retention, indexed metadata, delegated actor,
+Unknown and deferred fields — including spec references, retention, indexed
+metadata, delegated actor,
 and delivery mode — are rejected rather than ignored. The admitted spec is an
 immutable Invocation snapshot, never mutable Agent configuration.
 
@@ -231,8 +233,9 @@ tool definitions (section 5); there is no integration connection or OAuth
 resource.
 
 ToolCalls are not independent public resources. Inline execution specs may
-declare client tools; the only public write is the Invocation-scoped result
-command. Internally, the runtime may also exercise trusted builtins: their
+declare client and callback tools; the only public result write is the
+Invocation-scoped client command. Internally, the runtime may also exercise
+trusted builtins: their
 assistant request message,
 nvoken-owned ToolCall identity, attempt, tool-result message, per-model usage
 receipt, and checkpoint all commit under the current Invocation fence. The
@@ -254,12 +257,14 @@ after cancellation returns `invocation_not_waiting`, and acceptance at or after
 the durable deadline returns `tool_result_expired`. No connection stays open
 for correctness and there is still no generic Session append endpoint.
 
-Callback wire rules: definitions supplied per Invocation or by custom-tool
-reference; URLs must satisfy the credential's deployment-configured egress
-policy; requests are runtime-signed with stable Invocation, ToolCall,
-tenant, delegated actor, and idempotency identities; hosts verify with the
-runtime JWKS or a signing secret shared between nvoken and the host. No
-per-tool signing-key CRUD.
+Callback wire rules: inline definitions supply one public HTTPS URL. The model
+checkpoint commits one blocked delivery per callback ToolCall, and the fenced
+park transaction activates it. The combined-role worker retries at most five
+times with stable delivery and ToolCall IDs; Postgres, not the HTTP request,
+owns result settlement. Requests use the v1 HMAC protocol described in
+`docs/guides/callback-receivers.md`; `Idempotency-Key` is the ToolCall ID. The
+optional actor context is reserved but omitted until admission owns a delegated
+actor claim. JWKS and per-tool signing-key CRUD remain deferred.
 
 The runtime stores no host integrations or business credentials; hosts use
 client tools, callback tools, or a credential broker.

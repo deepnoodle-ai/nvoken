@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1096,6 +1098,7 @@ func TestCallbackAndClientToolCallsRemainInert(t *testing.T) {
 				Name:           "host_callback",
 				Mode:           domain.ToolCallModeCallback,
 				Input:          json.RawMessage(`{"value":1}`),
+				CallbackURL:    "https://callbacks.example.test/tools/host_callback",
 			},
 			{
 				ProviderCallID: "client-provider-call",
@@ -1119,6 +1122,532 @@ func TestCallbackAndClientToolCallsRemainInert(t *testing.T) {
 	}
 	if _, err := runtime.CancelInvocation(ctx, auth, ack.InvocationID); err != nil {
 		t.Fatalf("cancel inert ToolCalls: %v", err)
+	}
+	var abandoned int
+	if err := pool.QueryRow(
+		ctx,
+		"SELECT count(*) FROM callback_deliveries WHERE invocation_id = $1 AND status = 'abandoned'",
+		ack.InvocationID,
+	).Scan(&abandoned); err != nil || abandoned != 1 {
+		t.Fatalf("abandoned callback deliveries = %d, error = %v", abandoned, err)
+	}
+}
+
+type callbackIntegrationTransport struct {
+	requests []ports.CallbackTransportRequest
+	result   *ports.CallbackTransportResult
+}
+
+func (t *callbackIntegrationTransport) Send(
+	_ context.Context,
+	request ports.CallbackTransportRequest,
+) ports.CallbackTransportResult {
+	t.requests = append(t.requests, request)
+	if t.result != nil {
+		return *t.result
+	}
+	return ports.CallbackTransportResult{
+		StatusCode:  http.StatusOK,
+		ContentType: "application/json",
+		Body:        []byte(`{"content":{"answer":42}}`),
+	}
+}
+
+func callbackDeliveryIDForToolCall(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	toolCallID string,
+) string {
+	t.Helper()
+	var deliveryID string
+	if err := pool.QueryRow(
+		context.Background(),
+		"SELECT id FROM callback_deliveries WHERE tool_call_id = $1",
+		toolCallID,
+	).Scan(&deliveryID); err != nil {
+		t.Fatalf("read callback delivery ID: %v", err)
+	}
+	return deliveryID
+}
+
+func TestCallbackDeliveryParksClaimsAndResumes(t *testing.T) {
+	pool, disabledRuntime, store, auth := newRuntimeFixture(t)
+	ctx := context.Background()
+	clock := newMutableClock(time.Now().UTC())
+	ids := identity.NewUUIDv7Generator(clock)
+	txm := NewTransactionManager(pool)
+	runtime := services.NewRuntimeService(
+		store,
+		txm,
+		clock,
+		ids,
+		services.WithCallbackTools(true),
+	)
+	input := runtimeInput()
+	input.IdempotencyKey = "callback-delivery"
+	input.SessionKey = pointerString("callback-delivery")
+	maxIterations := 3
+	input.Spec.Budgets = &services.InvocationBudgetInput{
+		MaxIterations: &maxIterations,
+	}
+	input.Spec.Tools = []services.ClientToolSpec{
+		{
+			Name:        "lookup_callback",
+			Description: "Look up a value through the host callback",
+			Mode:        string(domain.ToolCallModeCallback),
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+			Callback: &services.CallbackTarget{
+				URL: "https://callbacks.example.test/tools/lookup",
+			},
+		},
+		{
+			Name:        "confirm_client",
+			Description: "Confirm the callback result in the host client",
+			Mode:        string(domain.ToolCallModeClient),
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+		},
+	}
+	if _, err := disabledRuntime.Admit(ctx, auth, input); err == nil ||
+		!strings.Contains(err.Error(), "callback mode is not configured") {
+		t.Fatalf("disabled callback admission error = %v", err)
+	}
+	ack, err := runtime.Admit(ctx, auth, input)
+	if err != nil {
+		t.Fatalf("admit callback Invocation: %v", err)
+	}
+	ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+	claim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "callback-engine", time.Minute)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("claim callback Invocation = %q, %v", disposition, err)
+	}
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	usage := domain.ModelUsage{
+		InputTokens:  2,
+		OutputTokens: 1,
+		Iterations:   1,
+	}
+	provenance := testModelProvenance()
+	recorded, err := coordinator.RecordModelCheckpoint(ctx, claim, domain.ModelCheckpointInput{
+		Iteration: 1,
+		Message: domain.GenerationMessage{
+			Role: domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[
+				{"type":"tool_use","id":"provider-callback","name":"lookup_callback","input":{"key":"value"}},
+				{"type":"tool_use","id":"provider-client","name":"confirm_client","input":{"accepted":true}}
+			]`),
+		},
+		Usage:      usage,
+		Provenance: provenance,
+		ToolCalls: []domain.ToolCallRequest{
+			{
+				ProviderCallID: "provider-callback",
+				Name:           "lookup_callback",
+				Mode:           domain.ToolCallModeCallback,
+				Input:          json.RawMessage(`{"key":"value"}`),
+				CallbackURL:    "https://callbacks.example.test/tools/lookup",
+			},
+			{
+				ProviderCallID: "provider-client",
+				Name:           "confirm_client",
+				Mode:           domain.ToolCallModeClient,
+				Input:          json.RawMessage(`{"accepted":true}`),
+			},
+		},
+	})
+	if err != nil || len(recorded.ToolCalls) != 2 {
+		t.Fatalf("record callback checkpoint = %#v, %v", recorded, err)
+	}
+	var deliveryID string
+	var deliveryStatus string
+	var availableAt *time.Time
+	if err := pool.QueryRow(
+		ctx,
+		"SELECT id, status, available_at FROM callback_deliveries WHERE tool_call_id = $1",
+		recorded.ToolCalls[0].ID,
+	).Scan(&deliveryID, &deliveryStatus, &availableAt); err != nil {
+		t.Fatalf("read blocked callback delivery: %v", err)
+	}
+	if deliveryStatus != string(domain.CallbackDeliveryBlocked) || availableAt != nil {
+		t.Fatalf("blocked callback delivery = %q, %#v", deliveryStatus, availableAt)
+	}
+	if _, err := store.ClaimNextCallbackDelivery(
+		ctx,
+		"premature-callback-worker",
+		clock.Now(),
+		clock.Now().Add(time.Minute),
+	); !errors.Is(err, ports.ErrNotFound) {
+		t.Fatalf("blocked callback delivery claim error = %v", err)
+	}
+	if err := ownership.Settle(ctx, claim, domain.InvocationExecutionResult{
+		Status:               domain.InvocationWaiting,
+		MessagesCheckpointed: true,
+		Usage:                &usage,
+		Provenance:           &provenance,
+	}); err != nil {
+		t.Fatalf("park callback Invocation: %v", err)
+	}
+	deliveryConfig := services.DefaultCallbackDeliveryConfig()
+	var callbackLogs bytes.Buffer
+	deliveryService, err := services.NewCallbackDeliveryService(
+		store,
+		txm,
+		clock,
+		ids,
+		nil,
+		deliveryConfig,
+		slog.New(slog.NewJSONHandler(&callbackLogs, nil)),
+	)
+	if err != nil {
+		t.Fatalf("configure callback delivery service: %v", err)
+	}
+	claims := make(chan domain.CallbackDeliveryClaim, 20)
+	var group sync.WaitGroup
+	for index := 0; index < 20; index++ {
+		group.Add(1)
+		go func(worker int) {
+			defer group.Done()
+			candidate, found, claimErr := deliveryService.ClaimNext(
+				ctx,
+				fmt.Sprintf("callback-worker-%d", worker),
+			)
+			if claimErr != nil {
+				t.Errorf("claim callback delivery: %v", claimErr)
+				return
+			}
+			if found {
+				claims <- candidate
+			}
+		}(index)
+	}
+	group.Wait()
+	close(claims)
+	var winners []domain.CallbackDeliveryClaim
+	for winner := range claims {
+		winners = append(winners, winner)
+	}
+	if len(winners) != 1 || winners[0].Delivery.ID != deliveryID {
+		t.Fatalf("callback claim winners = %#v", winners)
+	}
+	retryTransport := &callbackIntegrationTransport{
+		result: &ports.CallbackTransportResult{
+			StatusCode: http.StatusServiceUnavailable,
+			ErrorCode:  "http_503",
+			Retryable:  true,
+		},
+	}
+	if err := deliveryService.ProcessClaim(ctx, retryTransport, winners[0]); err != nil {
+		t.Fatalf("schedule callback retry: %v", err)
+	}
+	retrying, err := store.GetCallbackDelivery(ctx, deliveryID)
+	if err != nil || retrying.Status != domain.CallbackDeliveryPending ||
+		retrying.Attempt != 1 || retrying.AvailableAt == nil ||
+		!retrying.AvailableAt.Equal(clock.Now().Add(time.Second)) {
+		t.Fatalf("persisted callback retry = %#v, %v", retrying, err)
+	}
+	if _, found, err := deliveryService.ClaimNext(ctx, "early-callback-worker"); err != nil || found {
+		t.Fatalf("early callback retry claim found = %t, error = %v", found, err)
+	}
+	clock.Advance(time.Second)
+	secondClaim, found, err := deliveryService.ClaimNext(ctx, "replacement-callback-worker")
+	if err != nil || !found || secondClaim.Attempt != 2 {
+		t.Fatalf("replacement callback claim = %#v, found = %t, error = %v", secondClaim, found, err)
+	}
+	clock.Advance(deliveryConfig.LeaseDuration)
+	staleTransport := &callbackIntegrationTransport{}
+	if err := deliveryService.ProcessClaim(ctx, staleTransport, secondClaim); !errors.Is(err, ports.ErrCallbackDeliveryLeaseLost) {
+		t.Fatalf("expired callback claim error = %v", err)
+	}
+	if len(staleTransport.requests) != 0 {
+		t.Fatalf("expired callback claim sent requests = %#v", staleTransport.requests)
+	}
+	recovered, err := deliveryService.RecoverExpired(ctx)
+	if err != nil || recovered != 1 {
+		t.Fatalf("recover expired callback claim = %d, %v", recovered, err)
+	}
+	thirdClaim, found, err := deliveryService.ClaimNext(ctx, "final-callback-worker")
+	if err != nil || !found || thirdClaim.Attempt != 3 {
+		t.Fatalf("final callback claim = %#v, found = %t, error = %v", thirdClaim, found, err)
+	}
+	transport := &callbackIntegrationTransport{}
+	if err := deliveryService.ProcessClaim(ctx, transport, thirdClaim); err != nil {
+		t.Fatalf("process callback delivery: %v", err)
+	}
+	if len(transport.requests) != 1 || transport.requests[0].ToolCallID != recorded.ToolCalls[0].ID {
+		t.Fatalf("callback requests = %#v", transport.requests)
+	}
+	callbackBody := string(transport.requests[0].Body)
+	for _, expected := range []string{
+		`"schema_version":1`,
+		`"delivery_id":"` + deliveryID + `"`,
+		`"tool_call_id":"` + recorded.ToolCalls[0].ID + `"`,
+		`"agent_ref":"support"`,
+		`"input":{"key":"value"}`,
+	} {
+		if !strings.Contains(callbackBody, expected) {
+			t.Fatalf("callback body omitted %q: %s", expected, callbackBody)
+		}
+	}
+	if strings.Contains(callbackBody, `"actor"`) || strings.Contains(callbackBody, `"tenant_ref"`) {
+		t.Fatalf("callback body included unowned optional identity: %s", callbackBody)
+	}
+	if len(retryTransport.requests) != 1 ||
+		retryTransport.requests[0].DeliveryID != transport.requests[0].DeliveryID ||
+		retryTransport.requests[0].ToolCallID != transport.requests[0].ToolCallID ||
+		!bytes.Equal(retryTransport.requests[0].Body, transport.requests[0].Body) {
+		t.Fatalf("callback retry identity changed: first = %#v, final = %#v", retryTransport.requests, transport.requests)
+	}
+	invocation, err := store.GetInvocation(ctx, ack.InvocationID)
+	if err != nil || invocation.Status != domain.InvocationWaiting {
+		t.Fatalf("partially resumed callback Invocation = %#v, %v", invocation, err)
+	}
+	pending, err := runtime.GetInvocation(ctx, auth, ack.InvocationID)
+	if err != nil || len(pending.PendingToolCalls) != 1 ||
+		pending.PendingToolCalls[0].ID != recorded.ToolCalls[1].ID {
+		t.Fatalf("callback-hidden client projection = %#v, %v", pending.PendingToolCalls, err)
+	}
+	clientResult, err := runtime.SubmitClientToolResults(
+		ctx,
+		auth,
+		ack.InvocationID,
+		services.SubmitClientToolResultsInput{
+			Results: []services.ClientToolResultInput{
+				{
+					ToolCallID: recorded.ToolCalls[1].ID,
+					Content:    json.RawMessage(`{"confirmed":true}`),
+				},
+			},
+		},
+	)
+	if err != nil || clientResult.Status != domain.InvocationQueued {
+		t.Fatalf("final mixed client result = %#v, %v", clientResult, err)
+	}
+	call, err := store.GetToolCall(ctx, recorded.ToolCalls[0].ID)
+	if err != nil || call.Status != domain.ToolCallCompleted ||
+		call.ResultOrigin == nil || *call.ResultOrigin != domain.ToolCallResultCallback {
+		t.Fatalf("settled callback ToolCall = %#v, %v", call, err)
+	}
+	delivery, err := store.GetCallbackDelivery(ctx, deliveryID)
+	if err != nil || delivery.Status != domain.CallbackDeliverySucceeded {
+		t.Fatalf("settled callback delivery = %#v, %v", delivery, err)
+	}
+	for _, secret := range []string{
+		"https://callbacks.example.test/tools/lookup",
+		`\"key\":\"value\"`,
+		`\"answer\":42`,
+		"0123456789abcdef0123456789abcdef",
+	} {
+		if strings.Contains(callbackLogs.String(), secret) {
+			t.Fatalf("callback log exposed sensitive material %q: %s", secret, callbackLogs.String())
+		}
+	}
+
+	exhaustionClaim, disposition, err := ownership.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"callback-exhaustion-engine",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("claim callback exhaustion Invocation = %q, %v", disposition, err)
+	}
+	exhaustedCheckpoint, err := coordinator.RecordModelCheckpoint(ctx, exhaustionClaim, domain.ModelCheckpointInput{
+		Iteration: 2,
+		Message: domain.GenerationMessage{
+			Role: domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[
+				{"type":"tool_use","id":"provider-callback-exhausted","name":"lookup_callback","input":{"key":"retry"}}
+			]`),
+		},
+		Usage:      usage,
+		Provenance: provenance,
+		ToolCalls: []domain.ToolCallRequest{
+			{
+				ProviderCallID: "provider-callback-exhausted",
+				Name:           "lookup_callback",
+				Mode:           domain.ToolCallModeCallback,
+				Input:          json.RawMessage(`{"key":"retry"}`),
+				CallbackURL:    "https://callbacks.example.test/tools/lookup",
+			},
+		},
+	})
+	if err != nil || len(exhaustedCheckpoint.ToolCalls) != 1 {
+		t.Fatalf("record exhausted callback checkpoint = %#v, %v", exhaustedCheckpoint, err)
+	}
+	cumulativeUsage := domain.ModelUsage{
+		InputTokens:  4,
+		OutputTokens: 2,
+		Iterations:   2,
+	}
+	if err := ownership.Settle(ctx, exhaustionClaim, domain.InvocationExecutionResult{
+		Status:               domain.InvocationWaiting,
+		MessagesCheckpointed: true,
+		Usage:                &cumulativeUsage,
+		Provenance:           &provenance,
+	}); err != nil {
+		t.Fatalf("park exhausted callback Invocation: %v", err)
+	}
+	exhaustionConfig := deliveryConfig
+	exhaustionConfig.MaxAttempts = 5
+	exhaustionService, err := services.NewCallbackDeliveryService(
+		store,
+		txm,
+		clock,
+		ids,
+		nil,
+		exhaustionConfig,
+		slog.New(slog.NewJSONHandler(&callbackLogs, nil)),
+	)
+	if err != nil {
+		t.Fatalf("configure callback exhaustion service: %v", err)
+	}
+	exhaustionTransport := &callbackIntegrationTransport{
+		result: &ports.CallbackTransportResult{
+			StatusCode: http.StatusServiceUnavailable,
+			ErrorCode:  "http_503",
+			Retryable:  true,
+		},
+	}
+	var exhaustedClaim domain.CallbackDeliveryClaim
+	for expectedAttempt := int64(1); expectedAttempt <= int64(exhaustionConfig.MaxAttempts); expectedAttempt++ {
+		var found bool
+		exhaustedClaim, found, err = exhaustionService.ClaimNext(
+			ctx,
+			fmt.Sprintf("callback-exhaustion-worker-%d", expectedAttempt),
+		)
+		if err != nil || !found || exhaustedClaim.Attempt != expectedAttempt {
+			t.Fatalf(
+				"claim exhausted callback attempt %d = %#v, found = %t, error = %v",
+				expectedAttempt,
+				exhaustedClaim,
+				found,
+				err,
+			)
+		}
+		if err := exhaustionService.ProcessClaim(ctx, exhaustionTransport, exhaustedClaim); err != nil {
+			t.Fatalf("exhaust callback delivery attempt %d: %v", expectedAttempt, err)
+		}
+		if expectedAttempt < int64(exhaustionConfig.MaxAttempts) {
+			retrying, err := store.GetCallbackDelivery(ctx, exhaustedClaim.Delivery.ID)
+			if err != nil || retrying.Status != domain.CallbackDeliveryPending ||
+				retrying.Attempt != expectedAttempt {
+				t.Fatalf("exhaustion retry %d = %#v, %v", expectedAttempt, retrying, err)
+			}
+			clock.Advance(time.Second << (expectedAttempt - 1))
+		}
+	}
+	if len(exhaustionTransport.requests) != exhaustionConfig.MaxAttempts {
+		t.Fatalf("exhaustion callback requests = %d", len(exhaustionTransport.requests))
+	}
+	exhaustedDelivery, err := store.GetCallbackDelivery(ctx, exhaustedClaim.Delivery.ID)
+	if err != nil || exhaustedDelivery.Status != domain.CallbackDeliveryFailed ||
+		exhaustedDelivery.LastErrorCode == nil || *exhaustedDelivery.LastErrorCode != "http_503" {
+		t.Fatalf("exhausted callback delivery = %#v, %v", exhaustedDelivery, err)
+	}
+	exhaustedCall, err := store.GetToolCall(ctx, exhaustedCheckpoint.ToolCalls[0].ID)
+	if err != nil || exhaustedCall.Status != domain.ToolCallFailed ||
+		exhaustedCall.ResultOrigin == nil || *exhaustedCall.ResultOrigin != domain.ToolCallResultCallback {
+		t.Fatalf("exhausted callback ToolCall = %#v, %v", exhaustedCall, err)
+	}
+	exhaustedInvocation, err := store.GetInvocation(ctx, ack.InvocationID)
+	if err != nil || exhaustedInvocation.Status != domain.InvocationQueued {
+		t.Fatalf("queued exhausted callback Invocation = %#v, %v", exhaustedInvocation, err)
+	}
+	messages, err := store.ListSessionMessages(ctx, ack.SessionID)
+	if err != nil || len(messages) == 0 ||
+		!bytes.Contains(messages[len(messages)-1].Content, []byte("callback_delivery_failed")) ||
+		bytes.Contains(messages[len(messages)-1].Content, []byte("http_503")) {
+		t.Fatalf("bounded callback failure evidence = %#v, %v", messages, err)
+	}
+
+	deadlineClaim, disposition, err := ownership.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"callback-deadline-engine",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("claim callback deadline Invocation = %q, %v", disposition, err)
+	}
+	deadlineCheckpoint, err := coordinator.RecordModelCheckpoint(ctx, deadlineClaim, domain.ModelCheckpointInput{
+		Iteration: 3,
+		Message: domain.GenerationMessage{
+			Role: domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[
+				{"type":"tool_use","id":"provider-callback-deadline","name":"lookup_callback","input":{"key":"deadline"}}
+			]`),
+		},
+		Usage:      usage,
+		Provenance: provenance,
+		ToolCalls: []domain.ToolCallRequest{
+			{
+				ProviderCallID: "provider-callback-deadline",
+				Name:           "lookup_callback",
+				Mode:           domain.ToolCallModeCallback,
+				Input:          json.RawMessage(`{"key":"deadline"}`),
+				CallbackURL:    "https://callbacks.example.test/tools/lookup",
+			},
+		},
+	})
+	if err != nil || len(deadlineCheckpoint.ToolCalls) != 1 {
+		t.Fatalf("record deadline callback checkpoint = %#v, %v", deadlineCheckpoint, err)
+	}
+	deadlineUsage := domain.ModelUsage{
+		InputTokens:  6,
+		OutputTokens: 3,
+		Iterations:   3,
+	}
+	if err := ownership.Settle(ctx, deadlineClaim, domain.InvocationExecutionResult{
+		Status:               domain.InvocationWaiting,
+		MessagesCheckpointed: true,
+		Usage:                &deadlineUsage,
+		Provenance:           &provenance,
+	}); err != nil {
+		t.Fatalf("park deadline callback Invocation: %v", err)
+	}
+	deadlineInvocation, err := store.GetInvocation(ctx, ack.InvocationID)
+	if err != nil {
+		t.Fatalf("read deadline callback Invocation: %v", err)
+	}
+	clock.Advance(deadlineInvocation.WallClockDeadlineAt.Sub(clock.Now()) + time.Millisecond)
+	if _, found, err := deliveryService.ClaimNext(ctx, "late-callback-worker"); err != nil || found {
+		t.Fatalf("deadline callback claim found = %t, error = %v", found, err)
+	}
+	reaped, err := ownership.ReapExpired(ctx, 10)
+	if err != nil || len(reaped) != 1 || reaped[0].Status != domain.InvocationFailed {
+		t.Fatalf("reap deadline callback Invocation = %#v, %v", reaped, err)
+	}
+	deadlineDelivery, err := store.GetCallbackDelivery(ctx, callbackDeliveryIDForToolCall(
+		t,
+		pool,
+		deadlineCheckpoint.ToolCalls[0].ID,
+	))
+	if err != nil || deadlineDelivery.Status != domain.CallbackDeliveryAbandoned {
+		t.Fatalf("deadline callback delivery = %#v, %v", deadlineDelivery, err)
+	}
+
+	clock.Advance(deliveryConfig.Retention + time.Millisecond)
+	pruneBefore := clock.Now().Add(-deliveryConfig.Retention)
+	var pruneCandidates int
+	if err := pool.QueryRow(
+		ctx,
+		"SELECT count(*) FROM callback_deliveries WHERE terminal_at < $1",
+		pruneBefore,
+	).Scan(&pruneCandidates); err != nil || pruneCandidates != 3 {
+		t.Fatalf(
+			"terminal callback prune candidates = %d before %s, success terminal = %v, failure terminal = %v, %v",
+			pruneCandidates,
+			pruneBefore,
+			delivery.TerminalAt,
+			exhaustedDelivery.TerminalAt,
+			err,
+		)
+	}
+	pruned, err := deliveryService.Prune(ctx)
+	if err != nil || pruned != 3 {
+		t.Fatalf("prune terminal callback deliveries = %d, %v", pruned, err)
+	}
+	if _, err := store.GetCallbackDelivery(ctx, deliveryID); !errors.Is(err, ports.ErrNotFound) {
+		t.Fatalf("pruned callback delivery error = %v", err)
 	}
 }
 

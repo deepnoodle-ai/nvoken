@@ -353,6 +353,15 @@ resource "google_secret_manager_secret_iam_member" "provider_executor" {
   member    = "serviceAccount:${google_service_account.executor.email}"
 }
 
+resource "google_secret_manager_secret_iam_member" "callback_runtime" {
+  count = var.callback_signing_key_secret_id == null ? 0 : 1
+
+  project   = var.project_id
+  secret_id = var.callback_signing_key_secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
+}
+
 resource "google_secret_manager_secret_iam_member" "migration_database" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.database_url.secret_id
@@ -825,6 +834,35 @@ resource "google_cloud_run_v2_service" "runtime" {
       }
 
       dynamic "env" {
+        for_each = var.callback_signing_key_secret_id == null ? [] : [var.callback_signing_key_secret_id]
+
+        content {
+          name = "CALLBACK_SIGNING_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      env {
+        name  = "CALLBACK_SIGNING_KEY_ID"
+        value = var.callback_signing_key_id
+      }
+
+      env {
+        name  = "CALLBACK_SIGNING_KEY_VERSION"
+        value = tostring(var.callback_signing_key_version)
+      }
+
+      env {
+        name  = "CALLBACK_DRAIN_GRACE"
+        value = "${var.engine_drain_grace_seconds}s"
+      }
+
+      dynamic "env" {
         for_each = var.runtime_tenant_ref == null ? [] : [var.runtime_tenant_ref]
 
         content {
@@ -1035,6 +1073,7 @@ resource "google_cloud_run_v2_service" "runtime" {
     google_service_account_iam_member.runtime_acts_as_task_caller,
     google_project_service.required,
     google_secret_manager_secret_iam_member.generated,
+    google_secret_manager_secret_iam_member.callback_runtime,
     google_secret_manager_secret_iam_member.provider_runtime,
     google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.redis_auth,

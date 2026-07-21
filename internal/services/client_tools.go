@@ -12,7 +12,6 @@ import (
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
-	"github.com/deepnoodle-ai/nvoken/internal/structuredoutput"
 )
 
 type PendingClientToolCall struct {
@@ -59,11 +58,8 @@ func ValidateSubmitClientToolResults(input SubmitClientToolResultsInput) error {
 			return invalidRequest("results must not contain duplicate tool_call_id values.")
 		}
 		seen[result.ToolCallID] = struct{}{}
-		if len(result.Content) == 0 || len(result.Content) > structuredoutput.MaxValueBytes || !json.Valid(result.Content) {
+		if err := validateToolResultContent(result.Content); err != nil {
 			return invalidRequest(fmt.Sprintf("results[%d].content must be bounded valid JSON.", index))
-		}
-		if depth, err := clientToolJSONDepth(result.Content); err != nil || depth > structuredoutput.MaxValueDepth {
-			return invalidRequest(fmt.Sprintf("results[%d].content exceeds the maximum nesting depth.", index))
 		}
 	}
 	return nil
@@ -274,7 +270,8 @@ func (s *RuntimeService) SubmitClientToolResults(
 			return err
 		}
 		for _, call := range open {
-			if call.Mode != domain.ToolCallModeClient || call.Iteration != invocation.CurrentIteration {
+			if (call.Mode != domain.ToolCallModeClient && call.Mode != domain.ToolCallModeCallback) ||
+				call.Iteration != invocation.CurrentIteration {
 				return fmt.Errorf("waiting Invocation has an unsupported open ToolCall")
 			}
 		}

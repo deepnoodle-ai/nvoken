@@ -30,10 +30,53 @@ func (s ToolCallStatus) Terminal() bool {
 type ToolCallResultOrigin string
 
 const (
-	ToolCallResultBuiltin ToolCallResultOrigin = "builtin"
-	ToolCallResultClient  ToolCallResultOrigin = "client"
-	ToolCallResultSystem  ToolCallResultOrigin = "system"
+	ToolCallResultBuiltin  ToolCallResultOrigin = "builtin"
+	ToolCallResultCallback ToolCallResultOrigin = "callback"
+	ToolCallResultClient   ToolCallResultOrigin = "client"
+	ToolCallResultSystem   ToolCallResultOrigin = "system"
 )
+
+type CallbackDeliveryStatus string
+
+const (
+	CallbackDeliveryBlocked    CallbackDeliveryStatus = "blocked"
+	CallbackDeliveryPending    CallbackDeliveryStatus = "pending"
+	CallbackDeliveryDelivering CallbackDeliveryStatus = "delivering"
+	CallbackDeliverySucceeded  CallbackDeliveryStatus = "succeeded"
+	CallbackDeliveryFailed     CallbackDeliveryStatus = "failed"
+	CallbackDeliveryAbandoned  CallbackDeliveryStatus = "abandoned"
+)
+
+func (s CallbackDeliveryStatus) Terminal() bool {
+	return s == CallbackDeliverySucceeded || s == CallbackDeliveryFailed || s == CallbackDeliveryAbandoned
+}
+
+type CallbackDelivery struct {
+	ID                string
+	ToolCallID        string
+	InvocationID      string
+	SessionID         string
+	AccountID         string
+	TenantPartitionID string
+	AgentID           string
+	EndpointURL       string
+	Status            CallbackDeliveryStatus
+	AvailableAt       *time.Time
+	Owner             *string
+	LeaseExpiresAt    *time.Time
+	Attempt           int64
+	LastErrorCode     *string
+	ResponseStatus    *int
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	TerminalAt        *time.Time
+}
+
+type CallbackDeliveryClaim struct {
+	Delivery CallbackDelivery
+	Owner    string
+	Attempt  int64
+}
 
 type ToolCall struct {
 	ID                     string
@@ -121,6 +164,7 @@ type ToolCallRequest struct {
 	Name           string
 	Mode           ToolCallMode
 	Input          json.RawMessage
+	CallbackURL    string
 }
 
 type ModelCheckpointInput struct {

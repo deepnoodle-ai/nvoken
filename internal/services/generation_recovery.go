@@ -22,11 +22,11 @@ type generationRecoveryStore interface {
 }
 
 type generationRecovery struct {
-	Resume             *domain.GenerationResume
-	Latest             *domain.InvocationCheckpoint
-	Final              bool
-	ClientToolsPending bool
-	Provenance         domain.ModelProvenance
+	Resume               *domain.GenerationResume
+	Latest               *domain.InvocationCheckpoint
+	Final                bool
+	ExternalToolsPending bool
+	Provenance           domain.ModelProvenance
 }
 
 func loadGenerationRecovery(
@@ -165,7 +165,7 @@ func loadGenerationRecovery(
 		}
 	}
 
-	clientToolsPending := false
+	externalToolsPending := false
 	for _, call := range calls {
 		if call.Status.Terminal() {
 			if err := validateStoredToolResult(messageByID, call); err != nil {
@@ -176,11 +176,11 @@ func loadGenerationRecovery(
 		if call.Iteration != invocation.CurrentIteration {
 			return generationRecovery{}, errRecoveryInvalid
 		}
-		if call.Mode == domain.ToolCallModeClient {
+		if call.Mode == domain.ToolCallModeClient || call.Mode == domain.ToolCallModeCallback {
 			if call.Status != domain.ToolCallPending {
 				return generationRecovery{}, errRecoveryInvalid
 			}
-			clientToolsPending = true
+			externalToolsPending = true
 			continue
 		}
 		if call.Mode != domain.ToolCallModeBuiltin {
@@ -209,11 +209,11 @@ func loadGenerationRecovery(
 		}
 	}
 	return generationRecovery{
-		Resume:             resume,
-		Latest:             &latest,
-		Final:              final,
-		ClientToolsPending: clientToolsPending,
-		Provenance:         provenance,
+		Resume:               resume,
+		Latest:               &latest,
+		Final:                final,
+		ExternalToolsPending: externalToolsPending,
+		Provenance:           provenance,
 	}, nil
 }
 

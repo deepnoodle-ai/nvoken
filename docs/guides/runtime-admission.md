@@ -138,6 +138,16 @@ Cloud Tasks mode creates the successor dispatch in that transaction. Use
 `is_error: true` to return a model-visible tool failure. Cancellation and the
 wall deadline remain first-writer-wins.
 
+Declare a callback tool with the same name, description, and input schema plus
+`mode: "callback"` and `callback: {"url": "https://..."}`. Callback admission
+is enabled only when the installation has `CALLBACK_SIGNING_KEY`,
+`CALLBACK_SIGNING_KEY_ID`, and `CALLBACK_SIGNING_KEY_VERSION`. nvoken commits
+the request and a blocked delivery before parking, then a background worker
+sends and retries it. Callback calls do not appear in `pending_tool_calls`, and
+the public client-result command cannot settle them. See
+[Callback receivers](callback-receivers.md) for the signed wire contract and
+idempotency requirement.
+
 When an execution lease expires, nvoken accrues the abandoned segment only
 through its recorded lease/deadline boundary, moves the same Invocation back to
 `queued`, and preserves its checkpoint evidence and open builtin ToolCalls. A

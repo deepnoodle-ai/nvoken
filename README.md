@@ -85,7 +85,9 @@ Postgres decides the terminal winner. If an execution owner is lost, the same
 Invocation is requeued and continues from its last validated checkpoint. A
 client tool parks that Invocation without holding compute; the host can recover
 the pending call by ID, submit its result idempotently, and let any engine
-continue it. The exact surface is in
+continue it. A callback tool instead lets nvoken deliver the same durable call
+to a public host HTTPS endpoint with a stable ToolCall idempotency key and a
+versioned HMAC signature. The exact surface is in
 [openapi/runtime.yaml](openapi/runtime.yaml).
 
 ## Your app owns the state

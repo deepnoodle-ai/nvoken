@@ -10,6 +10,7 @@ import (
 
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/cloudtasks"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpapi"
+	callbackruntime "github.com/deepnoodle-ai/nvoken/internal/callback"
 	"github.com/deepnoodle-ai/nvoken/internal/daemon"
 	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
@@ -17,25 +18,43 @@ import (
 )
 
 type config struct {
-	ProcessRole             string        `env:"NVOKEN_PROCESS_ROLE" envDefault:"combined"`
-	InvocationExecutionMode string        `env:"INVOCATION_EXECUTION_MODE" envDefault:"embedded"`
-	Port                    string        `env:"PORT" envDefault:"8080"`
-	DatabaseURL             string        `env:"DATABASE_URL"`
-	DatabaseMaxConns        int32         `env:"DATABASE_MAX_CONNS" envDefault:"10"`
-	RuntimeAPIKey           string        `env:"RUNTIME_API_KEY"`
-	RuntimeTenantRef        string        `env:"RUNTIME_TENANT_REF"`
-	AnthropicAPIKey         string        `env:"ANTHROPIC_API_KEY"`
-	OpenAIAPIKey            string        `env:"OPENAI_API_KEY"`
-	ShutdownTimeout         time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
-	ExecutorAttemptTimeout  time.Duration `env:"EXECUTOR_ATTEMPT_TIMEOUT" envDefault:"29m55s"`
-	RedisURL                string        `env:"REDIS_URL"`
-	RedisPassword           string        `env:"REDIS_PASSWORD"`
-	RedisCACertificate      string        `env:"REDIS_CA_CERT"`
-	LiveEventBuffer         int           `env:"LIVE_EVENT_BUFFER" envDefault:"64"`
-	StreamPollInterval      time.Duration `env:"STREAM_POLL_INTERVAL" envDefault:"1s"`
-	StreamKeepaliveInterval time.Duration `env:"STREAM_KEEPALIVE_INTERVAL" envDefault:"15s"`
-	StreamMaxLifetime       time.Duration `env:"STREAM_MAX_LIFETIME" envDefault:"55m"`
-	StreamWriteTimeout      time.Duration `env:"STREAM_WRITE_TIMEOUT" envDefault:"10s"`
+	ProcessRole               string        `env:"NVOKEN_PROCESS_ROLE" envDefault:"combined"`
+	InvocationExecutionMode   string        `env:"INVOCATION_EXECUTION_MODE" envDefault:"embedded"`
+	Port                      string        `env:"PORT" envDefault:"8080"`
+	DatabaseURL               string        `env:"DATABASE_URL"`
+	DatabaseMaxConns          int32         `env:"DATABASE_MAX_CONNS" envDefault:"10"`
+	RuntimeAPIKey             string        `env:"RUNTIME_API_KEY"`
+	RuntimeTenantRef          string        `env:"RUNTIME_TENANT_REF"`
+	AnthropicAPIKey           string        `env:"ANTHROPIC_API_KEY"`
+	OpenAIAPIKey              string        `env:"OPENAI_API_KEY"`
+	ShutdownTimeout           time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
+	ExecutorAttemptTimeout    time.Duration `env:"EXECUTOR_ATTEMPT_TIMEOUT" envDefault:"29m55s"`
+	RedisURL                  string        `env:"REDIS_URL"`
+	RedisPassword             string        `env:"REDIS_PASSWORD"`
+	RedisCACertificate        string        `env:"REDIS_CA_CERT"`
+	LiveEventBuffer           int           `env:"LIVE_EVENT_BUFFER" envDefault:"64"`
+	StreamPollInterval        time.Duration `env:"STREAM_POLL_INTERVAL" envDefault:"1s"`
+	StreamKeepaliveInterval   time.Duration `env:"STREAM_KEEPALIVE_INTERVAL" envDefault:"15s"`
+	StreamMaxLifetime         time.Duration `env:"STREAM_MAX_LIFETIME" envDefault:"55m"`
+	StreamWriteTimeout        time.Duration `env:"STREAM_WRITE_TIMEOUT" envDefault:"10s"`
+	CallbackSigningKey        string        `env:"CALLBACK_SIGNING_KEY"`
+	CallbackSigningKeyID      string        `env:"CALLBACK_SIGNING_KEY_ID" envDefault:"nvoken/installation/callback"`
+	CallbackSigningVersion    int64         `env:"CALLBACK_SIGNING_KEY_VERSION" envDefault:"1"`
+	CallbackRequestTimeout    time.Duration `env:"CALLBACK_REQUEST_TIMEOUT" envDefault:"10s"`
+	CallbackDNSTimeout        time.Duration `env:"CALLBACK_DNS_TIMEOUT" envDefault:"5s"`
+	CallbackConnectTimeout    time.Duration `env:"CALLBACK_CONNECT_TIMEOUT" envDefault:"5s"`
+	CallbackTLSTimeout        time.Duration `env:"CALLBACK_TLS_TIMEOUT" envDefault:"5s"`
+	CallbackLeaseDuration     time.Duration `env:"CALLBACK_LEASE_DURATION" envDefault:"30s"`
+	CallbackRetryBase         time.Duration `env:"CALLBACK_RETRY_BASE" envDefault:"1s"`
+	CallbackRetryMaximum      time.Duration `env:"CALLBACK_RETRY_MAX" envDefault:"1m"`
+	CallbackMaxAttempts       int           `env:"CALLBACK_MAX_ATTEMPTS" envDefault:"5"`
+	CallbackRetention         time.Duration `env:"CALLBACK_RETENTION" envDefault:"168h"`
+	CallbackBatchLimit        int           `env:"CALLBACK_BATCH_LIMIT" envDefault:"100"`
+	CallbackConcurrency       int           `env:"CALLBACK_CONCURRENCY" envDefault:"4"`
+	CallbackPollInterval      time.Duration `env:"CALLBACK_POLL_INTERVAL" envDefault:"1s"`
+	CallbackRecoveryInterval  time.Duration `env:"CALLBACK_RECOVERY_INTERVAL" envDefault:"10s"`
+	CallbackRetentionInterval time.Duration `env:"CALLBACK_RETENTION_INTERVAL" envDefault:"1h"`
+	CallbackDrainGrace        time.Duration `env:"CALLBACK_DRAIN_GRACE" envDefault:"15s"`
 
 	DispatchQueue                 string        `env:"DISPATCH_QUEUE" envDefault:"execution"`
 	DispatchPublicationLease      time.Duration `env:"DISPATCH_PUBLICATION_LEASE" envDefault:"30s"`
@@ -149,8 +168,34 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if role == daemon.ProcessRoleCombined && cfg.EngineDrainGrace > cfg.ShutdownTimeout-time.Second {
 		return daemon.Config{}, fmt.Errorf("serve: ENGINE_DRAIN_GRACE must leave at least 1s inside SHUTDOWN_TIMEOUT")
 	}
+	if role == daemon.ProcessRoleCombined && cfg.CallbackSigningKey != "" &&
+		cfg.CallbackDrainGrace > cfg.ShutdownTimeout-time.Second {
+		return daemon.Config{}, fmt.Errorf("serve: CALLBACK_DRAIN_GRACE must leave at least 1s inside SHUTDOWN_TIMEOUT")
+	}
 	if role == daemon.ProcessRoleCombined && len(cfg.RuntimeAPIKey) < 32 {
 		return daemon.Config{}, fmt.Errorf("serve: RUNTIME_API_KEY must be at least 32 bytes")
+	}
+	callbackConfigured := cfg.CallbackSigningKey != ""
+	if role == daemon.ProcessRoleExecutor && callbackConfigured {
+		return daemon.Config{}, fmt.Errorf("serve: CALLBACK_SIGNING_KEY is available only to the combined role")
+	}
+	if callbackConfigured {
+		if len(cfg.CallbackSigningKey) < 32 {
+			return daemon.Config{}, fmt.Errorf("serve: CALLBACK_SIGNING_KEY must be at least 32 bytes")
+		}
+		if strings.TrimSpace(cfg.CallbackSigningKeyID) == "" || len(cfg.CallbackSigningKeyID) > 255 {
+			return daemon.Config{}, fmt.Errorf("serve: CALLBACK_SIGNING_KEY_ID must be nonblank and at most 255 bytes")
+		}
+		if cfg.CallbackSigningVersion <= 0 {
+			return daemon.Config{}, fmt.Errorf("serve: CALLBACK_SIGNING_KEY_VERSION must be positive")
+		}
+		if cfg.CallbackRequestTimeout <= 0 || cfg.CallbackDNSTimeout <= 0 ||
+			cfg.CallbackConnectTimeout <= 0 || cfg.CallbackTLSTimeout <= 0 {
+			return daemon.Config{}, fmt.Errorf("serve: callback HTTP timeouts must be positive")
+		}
+		if cfg.CallbackRequestTimeout >= cfg.CallbackLeaseDuration {
+			return daemon.Config{}, fmt.Errorf("serve: CALLBACK_REQUEST_TIMEOUT must be less than CALLBACK_LEASE_DURATION")
+		}
 	}
 	dispatchConfig := services.DispatchConfig{
 		Queue: cfg.DispatchQueue, PublicationLease: cfg.DispatchPublicationLease,
@@ -165,6 +210,29 @@ func loadDaemonConfig() (daemon.Config, error) {
 		PublishInterval: cfg.DispatchPublishInterval, ReconcileInterval: cfg.DispatchReconcileInterval,
 		RetentionInterval: cfg.DispatchRetentionInterval, BatchLimit: cfg.DispatchBatchLimit,
 		RepairInvocations: executionMode == services.InvocationExecutionCloudTasks,
+	}
+	callbackDeliveryConfig := services.CallbackDeliveryConfig{
+		LeaseDuration: cfg.CallbackLeaseDuration,
+		RetryBase:     cfg.CallbackRetryBase,
+		RetryMaximum:  cfg.CallbackRetryMaximum,
+		MaxAttempts:   cfg.CallbackMaxAttempts,
+		Retention:     cfg.CallbackRetention,
+		BatchLimit:    cfg.CallbackBatchLimit,
+		ExecutionMode: executionMode,
+		DispatchQueue: cfg.DispatchQueue,
+	}
+	if err := services.ValidateCallbackDeliveryConfig(callbackDeliveryConfig); err != nil {
+		return daemon.Config{}, fmt.Errorf("invalid callback delivery configuration: %w", err)
+	}
+	callbackControllerConfig := callbackruntime.Config{
+		Concurrency:       cfg.CallbackConcurrency,
+		PollInterval:      cfg.CallbackPollInterval,
+		RecoveryInterval:  cfg.CallbackRecoveryInterval,
+		RetentionInterval: cfg.CallbackRetentionInterval,
+		DrainGrace:        cfg.CallbackDrainGrace,
+	}
+	if err := callbackruntime.ValidateConfig(callbackControllerConfig); err != nil {
+		return daemon.Config{}, fmt.Errorf("invalid callback controller configuration: %w", err)
 	}
 	if err := dispatchruntime.ValidateControllerConfig(controllerConfig); err != nil {
 		return daemon.Config{}, fmt.Errorf("invalid execution dispatch controller configuration: %w", err)
@@ -243,6 +311,15 @@ func loadDaemonConfig() (daemon.Config, error) {
 			PollInterval: cfg.StreamPollInterval, KeepaliveInterval: cfg.StreamKeepaliveInterval,
 			MaxLifetime: cfg.StreamMaxLifetime, WriteTimeout: cfg.StreamWriteTimeout,
 		},
+		CallbackSigningKey:     cfg.CallbackSigningKey,
+		CallbackSigningKeyID:   cfg.CallbackSigningKeyID,
+		CallbackSigningVersion: cfg.CallbackSigningVersion,
+		CallbackRequestTimeout: cfg.CallbackRequestTimeout,
+		CallbackDNSTimeout:     cfg.CallbackDNSTimeout,
+		CallbackConnectTimeout: cfg.CallbackConnectTimeout,
+		CallbackTLSTimeout:     cfg.CallbackTLSTimeout,
+		CallbackDelivery:       callbackDeliveryConfig,
+		CallbackController:     callbackControllerConfig,
 	}, nil
 }
 
