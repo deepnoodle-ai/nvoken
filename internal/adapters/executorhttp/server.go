@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
@@ -79,8 +80,16 @@ func newHandler(attempts AttemptService, logger *slog.Logger, attemptTimeout tim
 		defer cancel()
 		outcome, err := attempts.Attempt(ctx, r.PathValue("dispatch_id"))
 		if err != nil {
+			retryReason := "infrastructure"
+			if errors.Is(err, ports.ErrDispatchAttemptActive) {
+				retryReason = "active_owner"
+			} else if errors.Is(err, ports.ErrDispatchAttemptPending) {
+				retryReason = "durable_decision_pending"
+			}
 			logger.Error("execution dispatch attempt undecided",
-				"dispatch_id", r.PathValue("dispatch_id"), "handler_outcome", "retry", "error", err)
+				"event", "dispatch_attempt_retry", "dispatch_id", r.PathValue("dispatch_id"),
+				"handler_outcome", "retry", "retry_reason", retryReason, "error", err)
+			w.Header().Set("Retry-After", "1")
 			http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
 			return
 		}

@@ -81,6 +81,17 @@ variable "runtime_tenant_ref" {
   nullable    = true
 }
 
+variable "invocation_execution_mode" {
+  description = "Invocation execution topology. The Google paved path defaults to request-bound Cloud Tasks."
+  type        = string
+  default     = "cloud_tasks"
+
+  validation {
+    condition     = contains(["embedded", "cloud_tasks"], var.invocation_execution_mode)
+    error_message = "invocation_execution_mode must be embedded or cloud_tasks."
+  }
+}
+
 variable "min_instances" {
   description = "Service-level minimum instances. Combined mode requires at least one poller."
   type        = number
@@ -148,13 +159,13 @@ variable "executor_request_concurrency" {
 }
 
 variable "executor_database_max_connections" {
-  description = "Maximum Postgres pool connections per private executor instance."
+  description = "Maximum Postgres pool connections per private executor instance; one is reserved for cancellation notifications."
   type        = number
   default     = 4
 
   validation {
-    condition     = var.executor_database_max_connections >= 1 && var.executor_database_max_connections == floor(var.executor_database_max_connections)
-    error_message = "executor_database_max_connections must be a positive whole number."
+    condition     = var.executor_database_max_connections >= 2 && var.executor_database_max_connections == floor(var.executor_database_max_connections)
+    error_message = "executor_database_max_connections must be a whole number of at least 2."
   }
 }
 

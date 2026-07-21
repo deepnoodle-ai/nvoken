@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
 type componentFunc func(context.Context) error
@@ -98,5 +100,50 @@ func TestExecutionOwnerIsUniqueAndBounded(t *testing.T) {
 	}
 	if len(first) > 255 {
 		t.Fatalf("owner is %d bytes, want at most 255", len(first))
+	}
+}
+
+func TestRuntimeTopologySeparatesSchedulersAndSurfaces(t *testing.T) {
+	tests := []struct {
+		name       string
+		role       ProcessRole
+		mode       services.InvocationExecutionMode
+		cloudTasks bool
+		want       runtimeTopology
+	}{
+		{
+			name: "embedded combined", role: ProcessRoleCombined, mode: services.InvocationExecutionEmbedded,
+			want: runtimeTopology{publicAPI: true, embeddedRunner: true},
+		},
+		{
+			name: "embedded with synthetic dispatch control", role: ProcessRoleCombined, mode: services.InvocationExecutionEmbedded, cloudTasks: true,
+			want: runtimeTopology{publicAPI: true, embeddedRunner: true, dispatchControl: true},
+		},
+		{
+			name: "cloud tasks combined", role: ProcessRoleCombined, mode: services.InvocationExecutionCloudTasks, cloudTasks: true,
+			want: runtimeTopology{publicAPI: true, reaper: true, dispatchControl: true},
+		},
+		{
+			name: "private executor", role: ProcessRoleExecutor, mode: services.InvocationExecutionCloudTasks,
+			want: runtimeTopology{privateExecutor: true},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := resolveRuntimeTopology(test.role, test.mode, test.cloudTasks)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != test.want {
+				t.Fatalf("topology = %#v, want %#v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestRuntimeTopologyRejectsCloudModeWithoutDispatchControl(t *testing.T) {
+	_, err := resolveRuntimeTopology(ProcessRoleCombined, services.InvocationExecutionCloudTasks, false)
+	if err == nil || !strings.Contains(err.Error(), "requires Cloud Tasks") {
+		t.Fatalf("topology error = %v", err)
 	}
 }

@@ -31,6 +31,7 @@ type executionStore interface {
 	ports.SessionMessageRepository
 	ports.InvocationRepository
 	ports.InvocationStateRepository
+	ports.ExecutionDispatchRepository
 }
 
 type InvocationExecutionService struct {
@@ -244,6 +245,27 @@ func (s *InvocationExecutionService) Settle(
 	claim domain.InvocationClaim,
 	result domain.InvocationExecutionResult,
 ) error {
+	return s.settle(ctx, claim, result, nil)
+}
+
+func (s *InvocationExecutionService) SettleDispatch(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	result domain.InvocationExecutionResult,
+	dispatchID string,
+) error {
+	if !domain.ValidStableID(dispatchID, domain.PrefixExecutionDispatch) {
+		return fmt.Errorf("execution dispatch ID is invalid")
+	}
+	return s.settle(ctx, claim, result, &dispatchID)
+}
+
+func (s *InvocationExecutionService) settle(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	result domain.InvocationExecutionResult,
+	dispatchID *string,
+) error {
 	if err := validateExecutionResult(result); err != nil {
 		return ports.ErrExecutionResultInvalid
 	}
@@ -273,6 +295,17 @@ func (s *InvocationExecutionService) Settle(
 		now := s.clock.Now().UTC()
 		if !claimOwns(invocation, claim, now) {
 			return ports.ErrLeaseLost
+		}
+		settleDispatch := false
+		if dispatchID != nil {
+			dispatch, err := s.store.GetExecutionDispatchForUpdate(txCtx, *dispatchID)
+			if err != nil {
+				return fmt.Errorf("lock execution dispatch for Invocation settlement: %w", err)
+			}
+			if !dispatchMatchesInvocation(dispatch, invocation) {
+				return fmt.Errorf("execution dispatch does not match the claimed Invocation")
+			}
+			settleDispatch = !dispatch.Status.Terminal()
 		}
 		currentState, err := s.store.GetCurrentInvocationState(txCtx, invocation.ID)
 		if err != nil {
@@ -315,10 +348,25 @@ func (s *InvocationExecutionService) Settle(
 		if err != nil {
 			return err
 		}
-		return s.store.AppendInvocationState(txCtx, lifecycleState(
+		if err := s.store.AppendInvocationState(txCtx, lifecycleState(
 			settled, stateID, revision, result.Status, throughMessageSequence, now,
-		))
+		)); err != nil {
+			return err
+		}
+		if settleDispatch {
+			if _, err := s.store.SettleExecutionDispatch(txCtx, *dispatchID, now); err != nil {
+				return fmt.Errorf("settle execution dispatch with Invocation: %w", err)
+			}
+		}
+		return nil
 	})
+}
+
+func dispatchMatchesInvocation(dispatch domain.ExecutionDispatch, invocation domain.Invocation) bool {
+	return dispatch.Kind == domain.ExecutionDispatchInvocation &&
+		dispatch.WorkID == invocation.ID &&
+		dispatch.AccountID != nil && *dispatch.AccountID == invocation.AccountID &&
+		dispatch.TenantPartitionID != nil && *dispatch.TenantPartitionID == invocation.TenantPartitionID
 }
 
 func (s *InvocationExecutionService) ReapExpired(ctx context.Context, limit int) ([]domain.Invocation, error) {
@@ -434,6 +482,9 @@ func (s *InvocationExecutionService) reapDeadlineWithSessionLocked(ctx context.C
 	)); err != nil {
 		return domain.Invocation{}, false, err
 	}
+	if _, err := s.store.SettleActiveExecutionDispatchForWork(ctx, domain.ExecutionDispatchInvocation, invocation.ID, now); err != nil {
+		return domain.Invocation{}, false, err
+	}
 	return reaped, true, nil
 }
 
@@ -485,6 +536,9 @@ func (s *InvocationExecutionService) reapCandidate(
 		if err := s.store.AppendInvocationState(txCtx, lifecycleState(
 			reaped, stateID, revision, domain.InvocationFailed, currentState.ThroughMessageSequence, now,
 		)); err != nil {
+			return err
+		}
+		if _, err := s.store.SettleActiveExecutionDispatchForWork(txCtx, domain.ExecutionDispatchInvocation, invocation.ID, now); err != nil {
 			return err
 		}
 		changed = true

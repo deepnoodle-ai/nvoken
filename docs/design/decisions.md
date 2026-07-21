@@ -134,3 +134,16 @@ neither. New requests use fingerprint v2 with requested budgets as material
 input; retained v1 budgetless work remains replay-compatible. This adopts
 Mobius Cloud's cancellation and active-segment invariants without importing its
 turn/run ownership or wait/job tables.
+
+23. Request-bound Google Cloud execution default (2026-07-21): installations
+choose Invocation execution explicitly as `embedded` or `cloud_tasks`; the
+public Runtime contract is unchanged. Local and generic self-hosted operation
+defaults to embedded polling. The paved Google Cloud deployment defaults to a
+private Cloud Tasks-to-Cloud Run executor because its in-flight HTTP request
+allows normal revision draining. Admission in that mode commits an Invocation
+dispatch intent atomically, while Postgres exact claims, leases, fences,
+cancellation, budgets, and terminal writes remain authoritative. The combined
+service continues non-request-bound publication, reconciliation, repair, and
+reaping with instance CPU and nonzero minimum capacity. Until checkpoint replay
+ships, an abruptly lost model segment fails visibly as `execution_lost` rather
+than being regenerated.

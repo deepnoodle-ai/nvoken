@@ -67,7 +67,7 @@ const (
 )
 
 type DispatchService struct {
-	repository ports.ExecutionDispatchRepository
+	repository dispatchRepository
 	txm        ports.TransactionManager
 	clock      ports.Clock
 	ids        ports.IDGenerator
@@ -75,7 +75,13 @@ type DispatchService struct {
 	logger     *slog.Logger
 }
 
-func NewDispatchService(repository ports.ExecutionDispatchRepository, txm ports.TransactionManager, clock ports.Clock, ids ports.IDGenerator, cfg DispatchConfig, logger *slog.Logger) (*DispatchService, error) {
+type dispatchRepository interface {
+	ports.ExecutionDispatchRepository
+	ports.InvocationRepository
+	ports.SessionRepository
+}
+
+func NewDispatchService(repository dispatchRepository, txm ports.TransactionManager, clock ports.Clock, ids ports.IDGenerator, cfg DispatchConfig, logger *slog.Logger) (*DispatchService, error) {
 	if repository == nil || txm == nil || clock == nil || ids == nil {
 		return nil, fmt.Errorf("dispatch service dependencies are required")
 	}
@@ -124,6 +130,54 @@ func (s *DispatchService) GetSynthetic(ctx context.Context, id string) (domain.S
 
 func (s *DispatchService) GetDispatch(ctx context.Context, id string) (domain.ExecutionDispatch, error) {
 	return s.repository.GetExecutionDispatch(ctx, id)
+}
+
+func (s *DispatchService) RepairQueuedInvocations(ctx context.Context, limit int) (int, error) {
+	if limit <= 0 {
+		return 0, fmt.Errorf("repair batch limit must be positive")
+	}
+	repaired := 0
+	for range limit {
+		dispatchID, err := s.ids.NewID(domain.PrefixExecutionDispatch)
+		if err != nil {
+			return repaired, err
+		}
+		created := false
+		err = s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
+			now := s.clock.Now().UTC()
+			// The repository query locks the candidate's Session with SKIP
+			// LOCKED. Every Invocation lifecycle transition takes that same
+			// Session lock first, so repair can verify queued state and insert
+			// the dispatch without inverting Session-before-Invocation order.
+			invocation, err := s.repository.FindQueuedInvocationWithoutActiveDispatchForUpdate(txCtx, now)
+			if errors.Is(err, ports.ErrNotFound) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			accountID := invocation.AccountID
+			partitionID := invocation.TenantPartitionID
+			if err := s.repository.CreateExecutionDispatch(txCtx, domain.ExecutionDispatch{
+				ID: dispatchID, Kind: domain.ExecutionDispatchInvocation, WorkID: invocation.ID,
+				AccountID: &accountID, TenantPartitionID: &partitionID,
+				Queue: s.config.Queue, Status: domain.ExecutionDispatchPending,
+				AvailableAt: now, CreatedAt: now, UpdatedAt: now,
+			}); err != nil {
+				return err
+			}
+			created = true
+			return nil
+		})
+		if err != nil {
+			return repaired, fmt.Errorf("repair queued Invocation dispatch: %w", err)
+		}
+		if !created {
+			break
+		}
+		repaired++
+	}
+	return repaired, nil
 }
 
 func (s *DispatchService) Attempt(ctx context.Context, dispatchID string) (DispatchAttemptOutcome, error) {
@@ -298,6 +352,7 @@ func boundedDispatchError(err error) string {
 
 type ReconcileResult struct {
 	Existing  int
+	Retained  int
 	Settled   int
 	Succeeded int
 }
@@ -323,11 +378,13 @@ func (s *DispatchService) Reconcile(ctx context.Context, tasks ports.ExecutionTa
 			result.Existing++
 			continue
 		}
-		created, err := s.reconcileMissing(ctx, dispatch.ID)
+		created, retained, err := s.reconcileMissing(ctx, dispatch.ID)
 		if err != nil {
 			return result, err
 		}
-		if created {
+		if retained {
+			result.Retained++
+		} else if created {
 			result.Succeeded++
 		} else {
 			result.Settled++
@@ -336,63 +393,153 @@ func (s *DispatchService) Reconcile(ctx context.Context, tasks ports.ExecutionTa
 	return result, nil
 }
 
-func (s *DispatchService) reconcileMissing(ctx context.Context, dispatchID string) (bool, error) {
+func (s *DispatchService) reconcileMissing(ctx context.Context, dispatchID string) (bool, bool, error) {
 	successorID, err := s.ids.NewID(domain.PrefixExecutionDispatch)
+	if err != nil {
+		return false, false, err
+	}
+	dispatch, err := s.repository.GetExecutionDispatch(ctx, dispatchID)
+	if errors.Is(err, ports.ErrNotFound) || (err == nil && dispatch.Status.Terminal()) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	if dispatch.Status != domain.ExecutionDispatchPublished {
+		return false, false, nil
+	}
+	switch dispatch.Kind {
+	case domain.ExecutionDispatchSynthetic:
+		created := false
+		err = s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
+			current, err := s.repository.GetExecutionDispatchForUpdate(txCtx, dispatch.ID)
+			if errors.Is(err, ports.ErrNotFound) || (err == nil && current.Status.Terminal()) {
+				return nil
+			}
+			if err != nil || current.Status != domain.ExecutionDispatchPublished {
+				return err
+			}
+			created, err = s.reconcileMissingSynthetic(txCtx, current, successorID)
+			return err
+		})
+		return created, false, err
+	case domain.ExecutionDispatchInvocation:
+		return s.reconcileMissingInvocation(ctx, dispatch, successorID)
+	default:
+		err = s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
+			current, err := s.repository.GetExecutionDispatchForUpdate(txCtx, dispatch.ID)
+			if errors.Is(err, ports.ErrNotFound) || (err == nil && current.Status.Terminal()) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			_, err = s.repository.AbandonExecutionDispatch(txCtx, current.ID, "unsupported reconciliation kind", s.clock.Now())
+			return err
+		})
+		return false, false, err
+	}
+}
+
+func (s *DispatchService) reconcileMissingSynthetic(ctx context.Context, dispatch domain.ExecutionDispatch, successorID string) (bool, error) {
+	work, err := s.repository.GetSyntheticDispatchWorkForUpdate(ctx, dispatch.WorkID)
+	if errors.Is(err, ports.ErrNotFound) {
+		_, err = s.repository.AbandonExecutionDispatch(ctx, dispatch.ID, "authoritative work missing during reconciliation", s.clock.Now())
+		return false, err
+	}
 	if err != nil {
 		return false, err
 	}
+	now := s.clock.Now()
+	if _, err := s.repository.SettleExecutionDispatch(ctx, dispatch.ID, now); err != nil {
+		return false, err
+	}
+	if work.Status != domain.SyntheticDispatchWorkPending {
+		return false, nil
+	}
+	successor := domain.ExecutionDispatch{
+		ID: successorID, Kind: dispatch.Kind, WorkID: dispatch.WorkID,
+		AccountID: dispatch.AccountID, TenantPartitionID: dispatch.TenantPartitionID,
+		Queue: dispatch.Queue, Status: domain.ExecutionDispatchPending,
+		AvailableAt: now, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := s.repository.CreateExecutionDispatch(ctx, successor); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *DispatchService) reconcileMissingInvocation(ctx context.Context, dispatch domain.ExecutionDispatch, successorID string) (bool, bool, error) {
+	observed, err := s.repository.GetInvocation(ctx, dispatch.WorkID)
+	if errors.Is(err, ports.ErrNotFound) {
+		err = s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
+			current, err := s.repository.GetExecutionDispatchForUpdate(txCtx, dispatch.ID)
+			if errors.Is(err, ports.ErrNotFound) || (err == nil && current.Status.Terminal()) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			_, err = s.repository.AbandonExecutionDispatch(txCtx, current.ID, "authoritative Invocation missing during reconciliation", s.clock.Now())
+			return err
+		})
+		return false, false, err
+	}
+	if err != nil {
+		return false, false, err
+	}
 	created := false
+	retained := false
 	err = s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
-		dispatch, err := s.repository.GetExecutionDispatchForUpdate(txCtx, dispatchID)
-		if errors.Is(err, ports.ErrNotFound) || (err == nil && dispatch.Status.Terminal()) {
-			return nil
+		if _, err := s.repository.GetSessionForUpdate(txCtx, observed.SessionID); err != nil {
+			return err
 		}
+		invocation, err := s.repository.GetInvocationForUpdate(txCtx, observed.ID)
 		if err != nil {
 			return err
 		}
-		if dispatch.Status != domain.ExecutionDispatchPublished {
+		current, err := s.repository.GetExecutionDispatchForUpdate(txCtx, dispatch.ID)
+		if errors.Is(err, ports.ErrNotFound) || (err == nil && current.Status.Terminal()) {
 			return nil
 		}
-		if dispatch.Kind != domain.ExecutionDispatchSynthetic {
-			_, err = s.repository.AbandonExecutionDispatch(txCtx, dispatch.ID, "unsupported reconciliation kind", s.clock.Now())
+		if err != nil || current.Status != domain.ExecutionDispatchPublished {
 			return err
 		}
-		work, err := s.repository.GetSyntheticDispatchWorkForUpdate(txCtx, dispatch.WorkID)
-		if errors.Is(err, ports.ErrNotFound) {
-			_, err = s.repository.AbandonExecutionDispatch(txCtx, dispatch.ID, "authoritative work missing during reconciliation", s.clock.Now())
+		if current.AccountID == nil || current.TenantPartitionID == nil ||
+			*current.AccountID != invocation.AccountID || *current.TenantPartitionID != invocation.TenantPartitionID {
+			_, err = s.repository.AbandonExecutionDispatch(txCtx, current.ID, "Invocation dispatch scope mismatch", s.clock.Now())
 			return err
 		}
-		if err != nil {
-			return err
-		}
-		now := s.clock.Now()
-		if _, err := s.repository.SettleExecutionDispatch(txCtx, dispatch.ID, now); err != nil {
-			return err
-		}
-		if work.Status != domain.SyntheticDispatchWorkPending {
+		if invocation.Status == domain.InvocationRunning {
+			retained = true
 			return nil
 		}
-		successor := domain.ExecutionDispatch{
-			ID: successorID, Kind: dispatch.Kind, WorkID: dispatch.WorkID,
-			AccountID: dispatch.AccountID, TenantPartitionID: dispatch.TenantPartitionID,
-			Queue: dispatch.Queue, Status: domain.ExecutionDispatchPending,
+		now := s.clock.Now().UTC()
+		if _, err := s.repository.SettleExecutionDispatch(txCtx, current.ID, now); err != nil {
+			return err
+		}
+		if invocation.Status != domain.InvocationQueued {
+			return nil
+		}
+		accountID := invocation.AccountID
+		partitionID := invocation.TenantPartitionID
+		if err := s.repository.CreateExecutionDispatch(txCtx, domain.ExecutionDispatch{
+			ID: successorID, Kind: domain.ExecutionDispatchInvocation, WorkID: invocation.ID,
+			AccountID: &accountID, TenantPartitionID: &partitionID,
+			Queue: current.Queue, Status: domain.ExecutionDispatchPending,
 			AvailableAt: now, CreatedAt: now, UpdatedAt: now,
-		}
-		if err := s.repository.CreateExecutionDispatch(txCtx, successor); err != nil {
+		}); err != nil {
 			return err
 		}
 		created = true
 		return nil
 	})
-	if err != nil {
-		return false, fmt.Errorf("reconcile missing dispatch task: %w", err)
-	}
-	return created, nil
+	return created, retained, err
 }
 
 func (s *DispatchService) LogAged(ctx context.Context) error {
 	now := s.clock.Now()
-	items, err := s.repository.ListAgedExecutionDispatches(ctx, now.Add(-s.config.StaleAfter), s.config.BatchLimit)
+	items, err := s.repository.ListAlertableAgedExecutionDispatches(ctx, now.Add(-s.config.StaleAfter), now, s.config.BatchLimit)
 	if err != nil {
 		return err
 	}

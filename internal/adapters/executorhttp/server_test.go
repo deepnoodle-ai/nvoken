@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
@@ -60,6 +61,20 @@ func TestExecutorRetriesOnlyUndecidedAttempt(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", response.Code)
+	}
+	if response.Header().Get("Retry-After") != "1" {
+		t.Fatalf("Retry-After = %q, want 1", response.Header().Get("Retry-After"))
+	}
+}
+
+func TestExecutorRetriesLiveDuplicateAttempt(t *testing.T) {
+	attempts := &fakeAttempts{err: ports.ErrDispatchAttemptActive}
+	handler := newHandler(attempts, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Second)
+	request := httptest.NewRequest(http.MethodPost, "/internal/execution-dispatches/dsp_test/attempts", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || response.Header().Get("Retry-After") != "1" {
+		t.Fatalf("status/Retry-After = %d/%q, want 503/1", response.Code, response.Header().Get("Retry-After"))
 	}
 }
 
