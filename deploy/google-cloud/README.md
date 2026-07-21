@@ -267,6 +267,37 @@ cannot strand accepted work. Active uniqueness makes the repair idempotent.
 Terminal dispatch diagnostics are pruned in bounded batches after seven days;
 authoritative Invocation and transcript rows are retained.
 
+## Retention and storage growth
+
+The paved profile follows the shared
+[retain-by-default policy](../../docs/guides/data-retention.md). Postgres in
+Cloud SQL is authoritative; Memorystore previews and Cloud Tasks deliveries do
+not replace its history. The combined service uses the documented seven-day,
+100-row defaults for terminal execution-dispatch and callback-delivery
+diagnostics unless their `DISPATCH_*` or `CALLBACK_*` environment settings are
+explicitly overridden.
+
+In Cloud Monitoring, select resource type **Cloud SQL Database**, filter to the
+instance identified by the Terraform `cloud_sql_instance` output, and graph the
+[Cloud SQL storage metric](https://cloud.google.com/sql/docs/postgres/admin-api/metrics)
+`cloudsql.googleapis.com/database/disk/bytes_used`. The related
+`cloudsql.googleapis.com/database/disk/utilization` signal shows the fraction of
+the current disk quota in use. The Cloud SQL instance Overview and System
+Insights pages expose the same storage-usage family. Terraform enables disk
+autoresize, but operators should still watch absolute usage and its growth rate
+so retention does not become an unplanned capacity or privacy boundary.
+
+Use the metadata-only Postgres queries in the shared guide to identify the
+largest nvoken tables. They complement the instance-level Cloud SQL signal and
+do not read transcript content. This slice adds neither a per-tenant breakdown
+nor an automatic scaling or alert policy.
+
+Cloud SQL backups and point-in-time recovery retain older database versions
+separately from live rows. A future Session or tenant deletion contract must
+include backup expiry; deleting live data will not immediately erase it from
+retained backups. Compaction, cursor behavior, and archive/export remain future
+contracts.
+
 ## Capacity and shutdown
 
 `request_concurrency`, `engine_concurrency`, `database_max_connections`, and

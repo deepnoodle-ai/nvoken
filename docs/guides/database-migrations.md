@@ -36,8 +36,12 @@ Postgres database and run:
 make test-postgres
 ```
 
-The tests create and remove isolated schemas. Runtime records use restrictive
-foreign keys and have no deletion or pruning surface in this implementation.
+The tests create and remove isolated schemas. Authoritative runtime records use
+restrictive foreign keys and have no deletion or pruning surface in this
+implementation. Only terminal execution-dispatch and callback-delivery
+diagnostics have bounded prune operations; see
+[Data retention and storage growth](data-retention.md) for their defaults and
+the governing inventory.
 
 ## Queries and generated code
 

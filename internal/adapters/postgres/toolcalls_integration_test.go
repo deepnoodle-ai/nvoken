@@ -1625,29 +1625,197 @@ func TestCallbackDeliveryParksClaimsAndResumes(t *testing.T) {
 		t.Fatalf("deadline callback delivery = %#v, %v", deadlineDelivery, err)
 	}
 
-	clock.Advance(deliveryConfig.Retention + time.Millisecond)
-	pruneBefore := clock.Now().Add(-deliveryConfig.Retention)
-	var pruneCandidates int
-	if err := pool.QueryRow(
-		ctx,
-		"SELECT count(*) FROM callback_deliveries WHERE terminal_at < $1",
-		pruneBefore,
-	).Scan(&pruneCandidates); err != nil || pruneCandidates != 3 {
-		t.Fatalf(
-			"terminal callback prune candidates = %d before %s, success terminal = %v, failure terminal = %v, %v",
-			pruneCandidates,
-			pruneBefore,
-			delivery.TerminalAt,
-			exhaustedDelivery.TerminalAt,
-			err,
-		)
+}
+
+func TestCallbackDeliveryRetentionPrunesOnlyTransportRows(t *testing.T) {
+	pool, _, store, auth := newRuntimeFixture(t)
+	ctx := context.Background()
+	clock := newMutableClock(time.Now().UTC())
+	ids := identity.NewUUIDv7Generator(clock)
+	txm := NewTransactionManager(pool)
+	runtime := services.NewRuntimeService(
+		store,
+		txm,
+		clock,
+		ids,
+		services.WithCallbackTools(true),
+	)
+	input := runtimeInput()
+	input.IdempotencyKey = "callback-retention"
+	input.SessionKey = pointerString("callback-retention")
+	maxIterations := 2
+	input.Spec.Budgets = &services.InvocationBudgetInput{
+		MaxIterations: &maxIterations,
 	}
+	for _, name := range []string{"retention_callback_a", "retention_callback_b", "retention_callback_c"} {
+		input.Spec.Tools = append(input.Spec.Tools, services.ClientToolSpec{
+			Name:        name,
+			Description: "Produce retained callback evidence",
+			Mode:        string(domain.ToolCallModeCallback),
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+			Callback: &services.CallbackTarget{
+				URL: "https://callbacks.example.test/tools/retention",
+			},
+		})
+	}
+	ack, err := runtime.Admit(ctx, auth, input)
+	if err != nil {
+		t.Fatalf("admit callback retention Invocation: %v", err)
+	}
+	ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+	claim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "callback-retention-engine", time.Minute)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("claim callback retention Invocation = %q, %v", disposition, err)
+	}
+	usage := domain.ModelUsage{
+		InputTokens:  2,
+		OutputTokens: 1,
+		Iterations:   1,
+	}
+	provenance := testModelProvenance()
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	recorded, err := coordinator.RecordModelCheckpoint(ctx, claim, domain.ModelCheckpointInput{
+		Iteration: 1,
+		Message: domain.GenerationMessage{
+			Role: domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[
+				{"type":"tool_use","id":"retention-a","name":"retention_callback_a","input":{"value":"a"}},
+				{"type":"tool_use","id":"retention-b","name":"retention_callback_b","input":{"value":"b"}},
+				{"type":"tool_use","id":"retention-c","name":"retention_callback_c","input":{"value":"c"}},
+				{"type":"tool_use","id":"retention-builtin","name":"nvoken_test_echo","input":{"value":"retained"}}
+			]`),
+		},
+		Usage:      usage,
+		Provenance: provenance,
+		ToolCalls: []domain.ToolCallRequest{
+			{
+				ProviderCallID: "retention-a",
+				Name:           "retention_callback_a",
+				Mode:           domain.ToolCallModeCallback,
+				Input:          json.RawMessage(`{"value":"a"}`),
+				CallbackURL:    "https://callbacks.example.test/tools/retention",
+			},
+			{
+				ProviderCallID: "retention-b",
+				Name:           "retention_callback_b",
+				Mode:           domain.ToolCallModeCallback,
+				Input:          json.RawMessage(`{"value":"b"}`),
+				CallbackURL:    "https://callbacks.example.test/tools/retention",
+			},
+			{
+				ProviderCallID: "retention-c",
+				Name:           "retention_callback_c",
+				Mode:           domain.ToolCallModeCallback,
+				Input:          json.RawMessage(`{"value":"c"}`),
+				CallbackURL:    "https://callbacks.example.test/tools/retention",
+			},
+			{
+				ProviderCallID: "retention-builtin",
+				Name:           "nvoken_test_echo",
+				Mode:           domain.ToolCallModeBuiltin,
+				Input:          json.RawMessage(`{"value":"retained"}`),
+			},
+		},
+	})
+	if err != nil || len(recorded.ToolCalls) != 4 {
+		t.Fatalf("record callback retention checkpoint = %#v, %v", recorded, err)
+	}
+	builtin, err := coordinator.StartBuiltinToolCall(ctx, claim, 1, "retention-builtin")
+	if err != nil {
+		t.Fatalf("start retention builtin ToolCall: %v", err)
+	}
+	if _, err := coordinator.AcceptBuiltinToolResult(
+		ctx,
+		claim,
+		builtin,
+		json.RawMessage(`{"echo":"retained"}`),
+		false,
+	); err != nil {
+		t.Fatalf("settle retention builtin ToolCall: %v", err)
+	}
+	if err := ownership.Settle(ctx, claim, domain.InvocationExecutionResult{
+		Status:               domain.InvocationWaiting,
+		MessagesCheckpointed: true,
+		Usage:                &usage,
+		Provenance:           &provenance,
+	}); err != nil {
+		t.Fatalf("park callback retention Invocation: %v", err)
+	}
+	deliveryConfig := services.DefaultCallbackDeliveryConfig()
+	deliveryConfig.BatchLimit = 2
+	deliveryService, err := services.NewCallbackDeliveryService(
+		store,
+		txm,
+		clock,
+		ids,
+		nil,
+		deliveryConfig,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	if err != nil {
+		t.Fatalf("configure callback retention service: %v", err)
+	}
+	var deliveryIDs []string
+	transport := &callbackIntegrationTransport{}
+	for index := range 3 {
+		deliveryClaim, found, err := deliveryService.ClaimNext(
+			ctx,
+			fmt.Sprintf("callback-retention-worker-%d", index),
+		)
+		if err != nil || !found {
+			t.Fatalf("claim callback retention delivery %d = %#v, %t, %v", index, deliveryClaim, found, err)
+		}
+		deliveryIDs = append(deliveryIDs, deliveryClaim.Delivery.ID)
+		if err := deliveryService.ProcessClaim(ctx, transport, deliveryClaim); err != nil {
+			t.Fatalf("settle callback retention delivery %d: %v", index, err)
+		}
+	}
+	clock.Advance(deliveryConfig.Retention + time.Millisecond)
 	pruned, err := deliveryService.Prune(ctx)
-	if err != nil || pruned != 3 {
+	if err != nil || pruned != 2 {
 		t.Fatalf("prune terminal callback deliveries = %d, %v", pruned, err)
 	}
-	if _, err := store.GetCallbackDelivery(ctx, deliveryID); !errors.Is(err, ports.ErrNotFound) {
-		t.Fatalf("pruned callback delivery error = %v", err)
+	pruned, err = deliveryService.Prune(ctx)
+	if err != nil || pruned != 1 {
+		t.Fatalf("second callback delivery prune = %d, %v", pruned, err)
+	}
+	for _, deliveryID := range deliveryIDs {
+		if _, err := store.GetCallbackDelivery(ctx, deliveryID); !errors.Is(err, ports.ErrNotFound) {
+			t.Fatalf("pruned callback delivery %s error = %v", deliveryID, err)
+		}
+	}
+	invocationRead, err := runtime.GetInvocation(ctx, auth, ack.InvocationID)
+	if err != nil || invocationRead.Status != domain.InvocationQueued {
+		t.Fatalf("retained callback Invocation = %#v, %v", invocationRead, err)
+	}
+	sessionRead, err := runtime.GetSession(ctx, auth, ack.SessionID)
+	if err != nil || sessionRead.ID != ack.SessionID {
+		t.Fatalf("retained callback Session = %#v, %v", sessionRead, err)
+	}
+	messages, err := store.ListSessionMessages(ctx, ack.SessionID)
+	if err != nil || len(messages) != 6 {
+		t.Fatalf("retained callback transcript = %#v, %v", messages, err)
+	}
+	for _, toolCall := range recorded.ToolCalls {
+		if _, err := store.GetToolCall(ctx, toolCall.ID); err != nil {
+			t.Fatalf("retained ToolCall %s: %v", toolCall.ID, err)
+		}
+	}
+	receipts, err := store.ListModelUsageReceipts(ctx, ack.InvocationID)
+	if err != nil || len(receipts) != 1 {
+		t.Fatalf("retained callback usage receipts = %#v, %v", receipts, err)
+	}
+	checkpoints, err := store.ListInvocationCheckpoints(ctx, ack.InvocationID)
+	if err != nil || len(checkpoints) != 5 {
+		t.Fatalf("retained callback checkpoints = %#v, %v", checkpoints, err)
+	}
+	var attempts int
+	if err := pool.QueryRow(
+		ctx,
+		"SELECT count(*) FROM tool_call_attempts WHERE invocation_id = $1",
+		ack.InvocationID,
+	).Scan(&attempts); err != nil || attempts != 1 {
+		t.Fatalf("retained ToolCall attempts = %d, %v", attempts, err)
 	}
 }
 

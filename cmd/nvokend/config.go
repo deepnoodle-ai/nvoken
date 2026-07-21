@@ -221,9 +221,6 @@ func loadDaemonConfig() (daemon.Config, error) {
 		ExecutionMode: executionMode,
 		DispatchQueue: cfg.DispatchQueue,
 	}
-	if err := services.ValidateCallbackDeliveryConfig(callbackDeliveryConfig); err != nil {
-		return daemon.Config{}, fmt.Errorf("invalid callback delivery configuration: %w", err)
-	}
 	callbackControllerConfig := callbackruntime.Config{
 		Concurrency:       cfg.CallbackConcurrency,
 		PollInterval:      cfg.CallbackPollInterval,
@@ -231,8 +228,13 @@ func loadDaemonConfig() (daemon.Config, error) {
 		RetentionInterval: cfg.CallbackRetentionInterval,
 		DrainGrace:        cfg.CallbackDrainGrace,
 	}
-	if err := callbackruntime.ValidateConfig(callbackControllerConfig); err != nil {
-		return daemon.Config{}, fmt.Errorf("invalid callback controller configuration: %w", err)
+	if callbackConfigured {
+		if err := services.ValidateCallbackDeliveryConfig(callbackDeliveryConfig); err != nil {
+			return daemon.Config{}, fmt.Errorf("invalid callback delivery configuration: %w", err)
+		}
+		if err := callbackruntime.ValidateConfig(callbackControllerConfig); err != nil {
+			return daemon.Config{}, fmt.Errorf("invalid callback controller configuration: %w", err)
+		}
 	}
 	if err := dispatchruntime.ValidateControllerConfig(controllerConfig); err != nil {
 		return daemon.Config{}, fmt.Errorf("invalid execution dispatch controller configuration: %w", err)

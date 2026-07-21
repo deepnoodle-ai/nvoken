@@ -1,6 +1,6 @@
 # Make the initial retention posture explicit
 
-**Status:** Draft
+**Status:** Implemented
 **Sequence:** 021
 **Depends on:** `017-prd-production-readiness-profiles.md` and
 `018-prd-operational-signals-and-diagnostics.md`
@@ -70,18 +70,18 @@ pruning; changing the public API.
 
 ## Acceptance
 
-- [ ] **A1 (R1, R2):** Schema, migration, API, and operator docs agree on which
+- [x] **A1 (R1, R2):** Schema, migration, API, and operator docs agree on which
   rows are authoritative and confirm that no production path destructively
   prunes them.
-- [ ] **A2 (R3):** Integration tests age terminal dispatch and callback rows,
+- [x] **A2 (R3):** Integration tests age terminal dispatch and callback rows,
   prune them in bounded batches, and prove their authoritative owners and
   evidence remain readable. Invalid dispatch settings and invalid enabled-
   callback settings fail startup with an attributable error; operator docs name
   the corresponding configuration and defaults.
-- [ ] **A3 (R4):** The portable guide's safe query and the paved Google
+- [x] **A3 (R4):** The portable guide's safe query and the paved Google
   deployment guide's Cloud SQL signal identify total database size and the
   largest runtime tables without reading transcript content.
-- [ ] **A4 (R5):** The readiness matrix records retain-by-default as an explicit
+- [x] **A4 (R5):** The readiness matrix records retain-by-default as an explicit
   limitation and links to the deferred deletion/compaction questions.
 
 ## Follow-up
