@@ -6,6 +6,11 @@ loops, plus a private request-bound executor reached through Cloud Tasks. Every
 new Invocation and its dispatch intent commit together in Postgres; the task
 request then exact-claims and runs one bounded generation segment.
 
+This guide defines the topology and procedures; it does not independently make
+a production-readiness claim. The `google_cloud` profile boundary, current
+status, and required evidence live in the
+[production-readiness profiles and evidence matrix](../../docs/testing/production-readiness-profiles.md).
+
 Set `invocation_execution_mode = "embedded"` to roll back to the combined
 service's Postgres polling runner. Public API semantics do not change. Neither
 mode treats delivery as ownership: an abruptly lost model segment is requeued

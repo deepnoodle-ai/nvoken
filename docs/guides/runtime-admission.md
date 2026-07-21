@@ -4,6 +4,10 @@ The self-contained Runtime durably admits, executes, and reads Invocations,
 including structured output and host-executed client tools. Admission still
 returns before model generation begins.
 
+This guide explains the runtime, not a production-readiness claim. The exact
+single-daemon operating boundary and its current proof status live in the
+[production-readiness profiles and evidence matrix](../testing/production-readiness-profiles.md).
+
 Apply migrations explicitly, then start the service with a Postgres URL and a
 random bearer secret of at least 32 bytes. Supply the installation key for each
 provider your admitted specs may select:

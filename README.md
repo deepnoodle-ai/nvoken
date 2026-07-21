@@ -42,11 +42,13 @@ they are **stateless**. nvoken aims to retain that approach as much as possible.
 > page the canonical transcript, and drain fixed-cut incremental recovery
 > snapshots or tail the same state over resumable SSE with ephemeral live
 > generation deltas. Durable builtin checkpoints and crash continuation now
-> resume a lost execution owner from its last committed boundary; host/client
-> tools remain future slices.
+> resume a lost execution owner from its last committed boundary; client and
+> signed callback tools use the same durable ToolCall path.
 > A reproducible [Google Cloud Run paved deployment](deploy/google-cloud/README.md)
 > packages this slice with private Cloud SQL, Secret Manager, and an explicit
 > migration job.
+> Current production-readiness claims and missing evidence are tracked only in
+> the [readiness profiles and evidence matrix](docs/testing/production-readiness-profiles.md).
 > If the contract looks wrong for your app, please
 > [open an issue](https://github.com/deepnoodle-ai/nvoken/issues).
 

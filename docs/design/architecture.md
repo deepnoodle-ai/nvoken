@@ -214,6 +214,12 @@ published protocol). The public admission handler owns no model execution:
 Both modes share identical semantics; moving between them is configuration
 only.
 
+The two initial operational shapes and the evidence required before either may
+be called production ready are defined in the
+[production-readiness profiles](../testing/production-readiness-profiles.md).
+That matrix adds readiness constraints without changing these runtime modes or
+treating a delivery service as execution authority.
+
 Live output is a projection, not an execution or storage boundary. A Session
 SSE handler subscribes to bounded fan-out before draining the fixed-cut
 Postgres transcript, then polls that read model as its correctness fallback.
