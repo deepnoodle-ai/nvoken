@@ -60,13 +60,15 @@ type cancellationRuntimeService interface {
 }
 
 type Config struct {
-	Addr            string
-	Authenticator   ports.RuntimeAuthenticator
-	Runtime         RuntimeService
-	Logger          *slog.Logger
-	ShutdownTimeout time.Duration
-	LiveEvents      ports.LiveEventBus
-	Stream          StreamConfig
+	Addr                   string
+	Authenticator          ports.RuntimeAuthenticator
+	Runtime                RuntimeService
+	Identity               IdentityService
+	Logger                 *slog.Logger
+	ShutdownTimeout        time.Duration
+	LiveEvents             ports.LiveEventBus
+	Stream                 StreamConfig
+	TrustForwardedClientIP bool
 }
 
 type StreamConfig struct {
@@ -90,12 +92,14 @@ func NewServer(cfg Config) *Server {
 	stream := normalizedStreamConfig(cfg.Stream)
 	streamShutdown, cancelStreams := context.WithCancel(context.Background())
 	handler := newHandler(handlerConfig{
-		authenticator:  cfg.Authenticator,
-		runtime:        cfg.Runtime,
-		logger:         logger,
-		liveEvents:     cfg.LiveEvents,
-		stream:         stream,
-		streamShutdown: streamShutdown,
+		authenticator:          cfg.Authenticator,
+		runtime:                cfg.Runtime,
+		identity:               cfg.Identity,
+		logger:                 logger,
+		liveEvents:             cfg.LiveEvents,
+		stream:                 stream,
+		streamShutdown:         streamShutdown,
+		trustForwardedClientIP: cfg.TrustForwardedClientIP,
 	})
 	shutdownTimeout := cfg.ShutdownTimeout
 	if shutdownTimeout <= 0 {
@@ -119,27 +123,43 @@ func NewServer(cfg Config) *Server {
 }
 
 type handlerConfig struct {
-	authenticator  ports.RuntimeAuthenticator
-	runtime        RuntimeService
-	logger         *slog.Logger
-	liveEvents     ports.LiveEventBus
-	stream         StreamConfig
-	streamShutdown context.Context
+	authenticator          ports.RuntimeAuthenticator
+	runtime                RuntimeService
+	identity               IdentityService
+	logger                 *slog.Logger
+	liveEvents             ports.LiveEventBus
+	stream                 StreamConfig
+	streamShutdown         context.Context
+	trustForwardedClientIP bool
 }
 
 type handler struct {
-	authenticator  ports.RuntimeAuthenticator
-	runtime        RuntimeService
-	logger         *slog.Logger
-	liveEvents     ports.LiveEventBus
-	stream         StreamConfig
-	streamShutdown context.Context
+	authenticator          ports.RuntimeAuthenticator
+	runtime                RuntimeService
+	identity               IdentityService
+	logger                 *slog.Logger
+	liveEvents             ports.LiveEventBus
+	stream                 StreamConfig
+	streamShutdown         context.Context
+	trustForwardedClientIP bool
+	deviceCodeLimiter      *attemptLimiter
+	bootstrapLimiter       *attemptLimiter
+	confirmationLimiter    *attemptLimiter
 }
 
 func newHandler(cfg handlerConfig) http.Handler {
 	h := &handler{
-		authenticator: cfg.authenticator, runtime: cfg.runtime, logger: cfg.logger,
-		liveEvents: cfg.liveEvents, stream: normalizedStreamConfig(cfg.stream), streamShutdown: cfg.streamShutdown,
+		authenticator:          cfg.authenticator,
+		runtime:                cfg.runtime,
+		identity:               cfg.identity,
+		logger:                 cfg.logger,
+		liveEvents:             cfg.liveEvents,
+		stream:                 normalizedStreamConfig(cfg.stream),
+		streamShutdown:         cfg.streamShutdown,
+		trustForwardedClientIP: cfg.trustForwardedClientIP,
+		deviceCodeLimiter:      newAttemptLimiter(10, time.Minute),
+		bootstrapLimiter:       newAttemptLimiter(5, time.Minute),
+		confirmationLimiter:    newAttemptLimiter(20, time.Minute),
 	}
 	if h.logger == nil {
 		h.logger = slog.Default()
@@ -149,6 +169,16 @@ func newHandler(cfg handlerConfig) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", h.requireMethod(http.MethodGet, h.health))
+	mux.HandleFunc("/v1/account", h.requireMethod(http.MethodGet, h.getCurrentAccount))
+	mux.HandleFunc("/v1/account/credentials", h.credentials)
+	mux.HandleFunc("/v1/account/credentials/{credential_id}", h.requireMethod(http.MethodGet, h.getCredential))
+	mux.HandleFunc("/v1/account/credentials/{credential_id}/rotate", h.requireMethod(http.MethodPost, h.rotateCredential))
+	mux.HandleFunc("/v1/account/credentials/{credential_id}/revoke", h.requireMethod(http.MethodPost, h.revokeCredential))
+	mux.HandleFunc("/v1/auth/device/code", h.requireMethod(http.MethodPost, h.startDeviceAuthorization))
+	mux.HandleFunc("/v1/auth/device/token", h.requireMethod(http.MethodPost, h.pollDeviceAuthorization))
+	mux.HandleFunc("/v1/auth/device/confirm", h.requireMethod(http.MethodPost, h.confirmDeviceAuthorization))
+	mux.HandleFunc("/v1/auth/bootstrap/session", h.requireMethod(http.MethodPost, h.createBootstrapSession))
+	mux.HandleFunc("/auth/device", h.requireMethod(http.MethodGet, h.deviceApprovalPage))
 	mux.HandleFunc("/v1/invocations", h.invocations)
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/cancel", h.requireMethod(http.MethodPost, h.cancelInvocation))
@@ -498,7 +528,7 @@ func (h *handler) authenticate(r *http.Request) (domain.RuntimeAuthContext, erro
 
 type authenticationError struct{ cause error }
 
-func (e *authenticationError) Error() string { return "A valid Runtime credential is required." }
+func (e *authenticationError) Error() string { return "A valid API credential is required." }
 func (e *authenticationError) Unwrap() error { return e.cause }
 
 type errorResponse struct {

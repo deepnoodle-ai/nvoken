@@ -1,3 +1,7 @@
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
 locals {
   resource_name         = "${var.name}-${var.environment}"
   runtime_account_id    = length(local.resource_name) <= 30 ? local.resource_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.resource_name), 0, 8)}"
@@ -11,6 +15,7 @@ locals {
   task_caller_id        = length(local.task_caller_name) <= 30 ? local.task_caller_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.task_caller_name), 0, 8)}"
   build_source_bucket   = "${var.project_id}-${substr(sha256("${var.project_id}/${local.resource_name}"), 0, 12)}-nvoken-build"
   image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}/nvokend:${var.image_tag}"
+  public_base_url       = var.public_base_url == null ? "https://${local.resource_name}-${data.google_project.current.number}.${var.region}.run.app" : trimsuffix(trimspace(var.public_base_url), "/")
   labels = merge(var.labels, {
     application = "nvoken"
     environment = var.environment
@@ -245,6 +250,15 @@ resource "random_password" "runtime_api_key" {
   special = false
 }
 
+resource "random_password" "bootstrap_owner_secret" {
+  length  = 48
+  special = false
+}
+
+resource "random_id" "credential_delivery_key" {
+  byte_length = 32
+}
+
 resource "google_secret_manager_secret" "database_url" {
   project   = var.project_id
   secret_id = "${local.resource_name}-database-url"
@@ -279,6 +293,40 @@ resource "google_secret_manager_secret" "runtime_api_key" {
 resource "google_secret_manager_secret_version" "runtime_api_key" {
   secret      = google_secret_manager_secret.runtime_api_key.id
   secret_data = random_password.runtime_api_key.result
+}
+
+resource "google_secret_manager_secret" "bootstrap_owner_secret" {
+  project   = var.project_id
+  secret_id = "${local.resource_name}-bootstrap-owner"
+  labels    = local.labels
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.required]
+}
+
+resource "google_secret_manager_secret_version" "bootstrap_owner_secret" {
+  secret      = google_secret_manager_secret.bootstrap_owner_secret.id
+  secret_data = random_password.bootstrap_owner_secret.result
+}
+
+resource "google_secret_manager_secret" "credential_delivery_key" {
+  project   = var.project_id
+  secret_id = "${local.resource_name}-credential-delivery-key"
+  labels    = local.labels
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.required]
+}
+
+resource "google_secret_manager_secret_version" "credential_delivery_key" {
+  secret      = google_secret_manager_secret.credential_delivery_key.id
+  secret_data = random_id.credential_delivery_key.b64_url
 }
 
 resource "google_secret_manager_secret" "redis_auth" {
@@ -324,9 +372,11 @@ resource "google_service_account" "task_caller" {
 
 resource "google_secret_manager_secret_iam_member" "generated" {
   for_each = {
-    database_url    = google_secret_manager_secret.database_url.secret_id
-    runtime_api_key = google_secret_manager_secret.runtime_api_key.secret_id
-    redis_auth      = google_secret_manager_secret.redis_auth.secret_id
+    bootstrap_owner         = google_secret_manager_secret.bootstrap_owner_secret.secret_id
+    credential_delivery_key = google_secret_manager_secret.credential_delivery_key.secret_id
+    database_url            = google_secret_manager_secret.database_url.secret_id
+    runtime_api_key         = google_secret_manager_secret.runtime_api_key.secret_id
+    redis_auth              = google_secret_manager_secret.redis_auth.secret_id
   }
 
   project   = var.project_id
@@ -800,6 +850,16 @@ resource "google_cloud_run_v2_service" "runtime" {
       }
 
       env {
+        name  = "NVOKEN_PUBLIC_BASE_URL"
+        value = local.public_base_url
+      }
+
+      env {
+        name  = "NVOKEN_TRUST_FORWARDED_CLIENT_IP"
+        value = "true"
+      }
+
+      env {
         name = "DATABASE_URL"
         value_source {
           secret_key_ref {
@@ -809,11 +869,35 @@ resource "google_cloud_run_v2_service" "runtime" {
         }
       }
 
+      dynamic "env" {
+        for_each = var.retain_legacy_runtime_key ? [1] : []
+
+        content {
+          name = "RUNTIME_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.runtime_api_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
       env {
-        name = "RUNTIME_API_KEY"
+        name = "BOOTSTRAP_OWNER_SECRET"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.runtime_api_key.secret_id
+            secret  = google_secret_manager_secret.bootstrap_owner_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "CREDENTIAL_DELIVERY_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.credential_delivery_key.secret_id
             version = "latest"
           }
         }
@@ -1076,6 +1160,8 @@ resource "google_cloud_run_v2_service" "runtime" {
     google_secret_manager_secret_iam_member.callback_runtime,
     google_secret_manager_secret_iam_member.provider_runtime,
     google_secret_manager_secret_version.database_url,
+    google_secret_manager_secret_version.bootstrap_owner_secret,
+    google_secret_manager_secret_version.credential_delivery_key,
     google_secret_manager_secret_version.redis_auth,
     google_secret_manager_secret_version.runtime_api_key,
   ]

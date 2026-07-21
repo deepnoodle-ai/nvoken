@@ -1,0 +1,526 @@
+openapi: 3.1.0
+info:
+  title: nvoken Identity API
+  version: 0.1.0
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  description: |
+    Durable Account credential and CLI device-authorization contract.
+
+    Authorization matrix:
+    - Runtime machine credentials may call every Runtime operation and GET /v1/account.
+    - Viewer credentials may call Runtime reads and GET /v1/account. A user credential may also read and revoke itself.
+    - Operator credentials may call every Runtime operation, GET /v1/account, and all credential lifecycle operations.
+    - Owner is a membership role, never a bearer profile. User credentials resolve membership on every request and are clamped to Operator or their Viewer cap.
+    Tenant, Session, operation, and expiry constraints only narrow these grants.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /v1/account:
+    get:
+      operationId: getCurrentAccount
+      summary: Explain the current Account and authentication context
+      responses:
+        "200":
+          description: Current Account and resolved caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentAccount"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /v1/account/credentials:
+    get:
+      operationId: listCredentials
+      summary: List safe credential metadata
+      responses:
+        "200":
+          description: Credential metadata only
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Credential"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createCredential
+      summary: Create a machine credential
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCredentialRequest"
+      responses:
+        "201":
+          description: One-time credential secret
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialIssuance"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /v1/account/credentials/{credential_id}:
+    parameters:
+      - $ref: "#/components/parameters/CredentialID"
+    get:
+      operationId: getCredential
+      summary: Read safe credential metadata
+      responses:
+        "200":
+          description: Credential metadata without secret material
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/account/credentials/{credential_id}/rotate:
+    parameters:
+      - $ref: "#/components/parameters/CredentialID"
+    post:
+      operationId: rotateCredential
+      summary: Rotate a machine credential with bounded overlap
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [overlap_seconds]
+              properties:
+                overlap_seconds:
+                  type: integer
+                  minimum: 0
+                  maximum: 86400
+      responses:
+        "201":
+          description: One-time replacement secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialIssuance"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /v1/account/credentials/{credential_id}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/CredentialID"
+    post:
+      operationId: revokeCredential
+      summary: Revoke a credential
+      responses:
+        "200":
+          description: Revoked credential metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/auth/device/code:
+    post:
+      operationId: createDeviceCode
+      summary: Begin RFC 8628 device authorization
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceCodeRequest"
+      responses:
+        "200":
+          description: Device and user codes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceCodeResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /v1/auth/device/token:
+    post:
+      operationId: exchangeDeviceCode
+      summary: Poll an RFC 8628 device grant
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, device_code]
+              properties:
+                grant_type:
+                  type: string
+                  const: urn:ietf:params:oauth:grant-type:device_code
+                device_code:
+                  type: string
+      responses:
+        "200":
+          description: Issued user credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceTokenResponse"
+        "400":
+          description: RFC 8628 polling result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceTokenError"
+  /v1/auth/device/confirm:
+    post:
+      operationId: confirmDeviceCode
+      summary: Approve or deny a device grant from a browser session
+      security:
+        - bootstrapSession: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [user_code, csrf_token, decision]
+              properties:
+                user_code:
+                  type: string
+                csrf_token:
+                  type: string
+                decision:
+                  type: string
+                  enum: [approve, deny]
+      responses:
+        "200":
+          description: Confirmation result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [approved, denied]
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    bootstrapSession:
+      type: apiKey
+      in: cookie
+      name: nvoken_bootstrap_session
+  parameters:
+    CredentialID:
+      name: credential_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^cred_[0-9a-f-]{36}$
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+  schemas:
+    Profile:
+      type: string
+      enum: [Runtime, Viewer, Operator]
+    Operation:
+      type: string
+      enum: [create_invocation, get_invocation, submit_tool_results, cancel_invocation, list_invocations, get_session, list_sessions, list_session_messages, get_session_transcript, get_account, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential]
+    Credential:
+      type: object
+      required: [id, kind, name, prefix, status, operations, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [machine, user]
+        name:
+          type: string
+        prefix:
+          type: string
+        status:
+          type: string
+          enum: [active, revoked]
+        profile:
+          oneOf:
+            - $ref: "#/components/schemas/Profile"
+            - type: "null"
+        role_cap:
+          oneOf:
+            - type: string
+              enum: [Viewer, Operator]
+            - type: "null"
+        owner_subject_id:
+          type: [string, "null"]
+        creator_subject_id:
+          type: [string, "null"]
+        creator_credential_id:
+          type: [string, "null"]
+        tenant_ref:
+          type: [string, "null"]
+        session_id:
+          type: [string, "null"]
+        operations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Operation"
+        expires_at:
+          type: [string, "null"]
+          format: date-time
+        rotated_from_id:
+          type: [string, "null"]
+        rotation_overlap_ends_at:
+          type: [string, "null"]
+          format: date-time
+        revoked_at:
+          type: [string, "null"]
+          format: date-time
+        last_used_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [name, profile]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        profile:
+          $ref: "#/components/schemas/Profile"
+        tenant_ref:
+          type: string
+          minLength: 1
+          maxLength: 255
+        session_id:
+          type: string
+        operations:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/Operation"
+        expires_at:
+          type: string
+          format: date-time
+    CredentialIssuance:
+      type: object
+      required: [credential, secret, delivery_expires_at, replayed]
+      properties:
+        credential:
+          $ref: "#/components/schemas/Credential"
+        secret:
+          type: string
+          writeOnly: true
+        delivery_expires_at:
+          type: string
+          format: date-time
+        replayed:
+          type: boolean
+    CurrentAccount:
+      type: object
+      required: [id, created_at, authentication]
+      properties:
+        id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        subject:
+          type: object
+          required: [id, issuer, subject]
+          properties:
+            id:
+              type: string
+            issuer:
+              type: string
+            subject:
+              type: string
+        authentication:
+          type: object
+          required: [credential_id, credential_kind, effective_profile, operations, method, assurance]
+          properties:
+            credential_id:
+              type: string
+            credential_kind:
+              type: string
+              enum: [machine, user]
+            effective_profile:
+              $ref: "#/components/schemas/Profile"
+            tenant_ref:
+              type: [string, "null"]
+            session_id:
+              type: [string, "null"]
+            operations:
+              type: array
+              items:
+                $ref: "#/components/schemas/Operation"
+            method:
+              type: string
+              enum: [api_key, device_authorization]
+            assurance:
+              type: string
+              const: bearer
+    DeviceCodeRequest:
+      type: object
+      additionalProperties: false
+      required: [device_label]
+      properties:
+        device_label:
+          type: string
+          minLength: 1
+          maxLength: 100
+        role_cap:
+          type: string
+          enum: [Viewer, Operator]
+          default: Operator
+        tenant_ref:
+          type: string
+          minLength: 1
+          maxLength: 255
+        session_id:
+          type: string
+    DeviceCodeResponse:
+      type: object
+      required: [device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval]
+      properties:
+        device_code:
+          type: string
+        user_code:
+          type: string
+        verification_uri:
+          type: string
+          format: uri
+        verification_uri_complete:
+          type: string
+          format: uri
+        expires_in:
+          type: integer
+        interval:
+          type: integer
+    DeviceTokenResponse:
+      type: object
+      required: [access_token, token_type, credential_id, account_id]
+      properties:
+        access_token:
+          type: string
+          writeOnly: true
+        token_type:
+          type: string
+          const: Bearer
+        credential_id:
+          type: string
+        account_id:
+          type: string
+    DeviceTokenError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [authorization_pending, slow_down, access_denied, expired_token, unsupported_grant_type]
+    Error:
+      type: object
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    InvalidRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthenticated:
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: The credential is not authorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found or undisclosable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Idempotency or lifecycle conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

@@ -1,6 +1,6 @@
 # Issue machine credentials and authenticate the CLI
 
-**Status:** Draft
+**Status:** Implemented
 **Sequence:** 027
 **Depends on:** `002-prd-postgres-runtime-spine.md`,
 `003-prd-durable-invocation-admission.md`,
@@ -170,58 +170,58 @@ business secrets; and automatic secret-manager publication.
 
 ## Acceptance
 
-- [ ] **A1 (R1–R3, R5):** An Operator creates independent Account-wide and
+- [x] **A1 (R1–R3, R5):** An Operator creates independent Account-wide and
   tenant-constrained Runtime machine credentials. Each secret is shown only on
   issuance; later list/get responses contain metadata only. Valid requests
   resolve the documented actor, profile, and constraints, while cross-Account,
   constraint, and disallowed-operation probes fail without disclosure.
 
-- [ ] **A2 (R3, R4):** Fault injection loses the response after credential
+- [x] **A2 (R3, R4):** Fault injection loses the response after credential
   creation and after rotation commits. Replaying the same idempotent operation
   returns the same issuance result within the delivery window, creates no
   duplicate, and leaves exactly the documented predecessor/replacement overlap;
   after the window, no raw secret is recoverable.
 
-- [ ] **A3 (R3, R5):** Expiring or revoking a credential causes its next
+- [x] **A3 (R3, R5):** Expiring or revoking a credential causes its next
   Runtime and identity/admin requests to fail. Rotation overlap ends at the
   promised time. Reads retain creator, owner, lineage, prefix, status, and safe
   last-use/audit evidence without any raw bearer value.
 
-- [ ] **A4 (R6, R7):** From a clean self-hosted installation, a human starts
+- [x] **A4 (R6, R7):** From a clean self-hosted installation, a human starts
   `nvoken auth login`, authenticates the browser with the bootstrap Owner,
   verifies the displayed Account/device/cap, approves, and receives exactly one
   user credential. Pending, too-fast, denied, expired, cancelled, duplicate
   confirmation, brute-force, process-restart, and lost-token-response cases all
   produce the specified durable result and RFC error.
 
-- [ ] **A5 (R2, R5, R6):** A user credential's effective permissions change on
+- [x] **A5 (R2, R5, R6):** A user credential's effective permissions change on
   the next request when its durable membership is changed through the
   installation-owned membership seam, and never exceed `Operator` or its lower
   cap. The bootstrap flow records the stable installation Owner as its owner;
   Owner authority is not present in the bearer credential. The owner can still
   inspect and revoke that credential wherever the governing policy permits.
 
-- [ ] **A6 (R8, R9):** CLI contract tests prove profile login and selection,
+- [x] **A6 (R8, R9):** CLI contract tests prove profile login and selection,
   independent endpoint override, `NVOKEN_API_KEY` and `--api-key` precedence,
   active verification, multiple-default rejection, local logout without remote
   revocation, remote revocation cleanup, permission warnings, and stable JSON
   output. CI runs Runtime commands with only `NVOKEN_BASE_URL` and
   `NVOKEN_API_KEY` and creates no credentials file.
 
-- [ ] **A7 (R8, R9):** The CLI's Runtime commands still consume the Go Runtime
+- [x] **A7 (R8, R9):** The CLI's Runtime commands still consume the Go Runtime
   SDK and identity/admin commands consume the generated transport from
   `openapi/identity.yaml`. A source check finds no independently maintained
   route or payload definitions; only browser launch, polling orchestration, and
   profile storage are handwritten.
 
-- [ ] **A8 (R10):** Upgrading a fixture containing the current configured key
+- [x] **A8 (R10):** Upgrading a fixture containing the current configured key
   preserves its Account, tenant constraint, and Runtime access as one imported
   credential. Repeated starts and configuration changes do not duplicate it.
   Before cutover, the previous release can start with the unchanged key; after
   explicit cutover, revocation survives every 027-or-later restart and the
   documented procedure rejects rollback to the configuration-only release.
 
-- [ ] **A9 (R1–R10):** `make check` passes with migration, authentication,
+- [x] **A9 (R1–R10):** `make check` passes with migration, authentication,
   authorization-matrix, device-flow, HTTP contract, CLI profile, race, and
   secret-redaction tests. Logs and generated fixtures contain no raw credential,
   bootstrap, device, or browser-session secrets.

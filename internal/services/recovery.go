@@ -123,6 +123,12 @@ func (s *RuntimeService) ListInvocations(ctx context.Context, auth domain.Runtim
 	if input.Status != nil && !validInvocationStatus(*input.Status) {
 		return InvocationList{}, invalidRequest("status is invalid.")
 	}
+	if auth.SessionConstraint != nil {
+		if input.SessionID != nil && *input.SessionID != *auth.SessionConstraint {
+			return InvocationList{Items: []InvocationRead{}}, nil
+		}
+		input.SessionID = cloneString(auth.SessionConstraint)
+	}
 	partitionID, tenantScope, err := s.resolveListTenantScope(ctx, auth, input.TenantRef, input.DefaultTenant)
 	if err != nil {
 		return InvocationList{}, err
@@ -194,6 +200,19 @@ func (s *RuntimeService) ListSessions(ctx context.Context, auth domain.RuntimeAu
 		if err := validateBoundedString("session_key", *input.SessionKey, MaxReferenceCharacters); err != nil {
 			return SessionList{}, err
 		}
+	}
+	if auth.SessionConstraint != nil {
+		if input.Cursor != "" {
+			return SessionList{Items: []SessionRead{}}, nil
+		}
+		session, partition, err := s.authorizedSession(ctx, auth, *auth.SessionConstraint)
+		if err != nil {
+			return SessionList{Items: []SessionRead{}}, nil
+		}
+		if input.AgentID != nil && *input.AgentID != session.AgentID || input.SessionKey != nil && (session.SessionKey == nil || *input.SessionKey != *session.SessionKey) || input.TenantRef != nil && (partition.TenantRef == nil || *input.TenantRef != *partition.TenantRef) || input.DefaultTenant && partition.TenantRef != nil {
+			return SessionList{Items: []SessionRead{}}, nil
+		}
+		return SessionList{Items: []SessionRead{{ID: session.ID, AgentID: session.AgentID, TenantRef: cloneString(partition.TenantRef), SessionKey: cloneString(session.SessionKey), CreatedAt: session.CreatedAt, UpdatedAt: session.UpdatedAt}}}, nil
 	}
 	partitionID, tenantScope, err := s.resolveListTenantScope(ctx, auth, input.TenantRef, input.DefaultTenant)
 	if err != nil {
@@ -405,7 +424,7 @@ func (s *RuntimeService) authorizedSession(ctx context.Context, auth domain.Runt
 	if err != nil {
 		return domain.Session{}, domain.TenantPartition{}, err
 	}
-	if session.AccountID != auth.AccountID {
+	if session.AccountID != auth.AccountID || !auth.AllowsSession(session.ID) {
 		return domain.Session{}, domain.TenantPartition{}, notFound()
 	}
 	partition, err := s.store.GetTenantPartition(ctx, session.TenantPartitionID)

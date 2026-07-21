@@ -25,7 +25,7 @@ stale writers.
 - a private-IP-only Cloud SQL for PostgreSQL 17 instance with backups and PITR;
 - a private basic-tier Memorystore for Redis instance used only for lossy live
   output Pub/Sub between executor and Runtime replicas;
-- generated database and Runtime credentials in Secret Manager;
+- generated database, initial Runtime, bootstrap Owner, and bounded credential-delivery secrets in Secret Manager;
 - Secret Manager access for existing Anthropic and/or OpenAI key secrets,
   granted only to the configured generating role;
 - optional access to an existing callback HMAC secret, granted only to the
@@ -34,8 +34,8 @@ stale writers.
   application role;
 - a one-task Cloud Run migration Job and a synthetic dispatch smoke Job;
 - a public Cloud Run service with the edge Invoker IAM check disabled, Runtime
-  bearer authentication, a startup probe, instance-based CPU, one minimum
-  instance, and explicit capacity caps;
+  bearer authentication, a canonical device-approval origin, a startup probe,
+  instance-based CPU, one minimum instance, and explicit capacity caps;
 - a regional Cloud Tasks queue, transactional Postgres dispatch publisher and
   reconciler, and a dedicated OIDC caller identity; and
 - an internal-ingress, IAM-protected executor Cloud Run service that receives
@@ -65,8 +65,9 @@ the token permissions required by Cloud Build; an extra cross-project service
 agent grant is neither required nor created. Cloud SQL, Memorystore, and the
 continuously allocated Cloud Run minimum instance incur ongoing cost.
 
-Terraform state contains the generated database password, database URL, and
-Runtime bearer key. Keep it in a restricted, versioned GCS bucket; never commit
+Terraform state contains the generated database password, database URL,
+initial Runtime bearer, bootstrap Owner secret, and credential-delivery key.
+Keep it in a restricted, versioned GCS bucket; never commit
 state or a secret-bearing `.tfvars` file. The bucket must be bootstrapped outside
 the Terraform root because a root cannot safely own its own backend:
 
@@ -103,6 +104,16 @@ export TF_VAR_anthropic_api_key_secret_id='nvoken-anthropic-api-key'
 Use `TF_VAR_openai_api_key_secret_id` the same way for OpenAI. Either provider
 is sufficient and both may be configured together. Do not put the provider key
 itself in a Terraform variable.
+
+The public service receives `NVOKEN_PUBLIC_BASE_URL` as its canonical device
+approval origin. By default Terraform computes Cloud Run's
+[documented deterministic `run.app` URL](https://cloud.google.com/run/docs/triggering/https-request)
+before the service exists. Set
+`TF_VAR_public_base_url='https://nvoken.example'` when a custom domain is the
+canonical user-facing origin. The paved service also trusts the Google Front
+End's `X-Forwarded-For` client address for its bounded in-process device-flow
+limits; self-managed deployments should enable that setting only behind a
+trusted proxy.
 
 To enable callback tools, create a separate random secret of at least 32 bytes
 and set `TF_VAR_callback_signing_key_secret_id`. Set the nonsecret
@@ -214,6 +225,15 @@ second authoritative read, and confirms a structured Cloud Logging entry is
 correlatable by Invocation ID. To prove restart readback during a release test,
 deploy the next unique image revision and repeat the final `GET` with the same
 ID; the state remains in Cloud SQL.
+
+That generated key is imported once into the durable credential store. Keep
+`retain_legacy_runtime_key = true` while the immediately previous release must
+remain startable. To end the rollback window, first issue and verify separate
+host and CI Runtime credentials, revoke the imported credential, then set
+`retain_legacy_runtime_key = false` and apply Terraform. Subsequent nvoken
+starts do not recreate the revoked credential. The legacy smoke script uses the
+generated key and is therefore a pre-cutover check; after cutover, run the
+equivalent CLI or HTTP smoke with a managed Runtime credential.
 
 To inspect the resumable stream during the same Invocation, use the `session_id`
 from its `202` acknowledgement with a bearer-capable HTTP client:

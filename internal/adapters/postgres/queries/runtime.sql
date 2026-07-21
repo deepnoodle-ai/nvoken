@@ -16,6 +16,170 @@ LIMIT 2;
 -- name: LockInstallationBootstrap :one
 SELECT pg_advisory_xact_lock(hashtextextended('nvoken:installation-bootstrap', 0));
 
+-- name: CreateOperatorSubject :exec
+INSERT INTO operator_subjects (id, account_id, issuer, subject, created_at)
+VALUES ($1, $2, $3, $4, $5);
+
+-- name: GetOperatorSubjectByIdentity :one
+SELECT * FROM operator_subjects
+WHERE account_id = $1 AND issuer = $2 AND subject = $3;
+
+-- name: GetOperatorSubject :one
+SELECT * FROM operator_subjects WHERE id = $1;
+
+-- name: CreateMembership :exec
+INSERT INTO account_memberships (id, account_id, subject_id, role, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6);
+
+-- name: UpsertMembership :one
+INSERT INTO account_memberships (id, account_id, subject_id, role, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (account_id, subject_id) DO UPDATE
+SET role = EXCLUDED.role, updated_at = EXCLUDED.updated_at
+RETURNING *;
+
+-- name: GetMembershipBySubject :one
+SELECT * FROM account_memberships
+WHERE account_id = $1 AND subject_id = $2;
+
+-- name: DeleteMembershipBySubject :execrows
+DELETE FROM account_memberships
+WHERE account_id = $1 AND subject_id = $2;
+
+-- name: CreateAPICredential :exec
+INSERT INTO api_credentials (
+    id, account_id, kind, name, prefix, verifier, status, profile, role_cap,
+    owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint,
+    operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at,
+    revoked_at, last_used_at, created_at, updated_at
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, sqlc.narg(profile), sqlc.narg(role_cap),
+    sqlc.narg(owner_subject_id), sqlc.narg(creator_subject_id), sqlc.narg(creator_credential_id), sqlc.narg(tenant_constraint),
+    sqlc.narg(session_constraint), $8, sqlc.narg(expires_at), sqlc.narg(rotated_from_id),
+    sqlc.narg(rotation_overlap_ends_at), sqlc.narg(revoked_at), sqlc.narg(last_used_at), $9, $10
+);
+
+-- name: GetAPICredential :one
+SELECT * FROM api_credentials WHERE id = $1;
+
+-- name: GetAPICredentialByPrefix :one
+SELECT * FROM api_credentials WHERE prefix = $1;
+
+-- name: GetAPICredentialForUpdate :one
+SELECT * FROM api_credentials WHERE id = $1 FOR UPDATE;
+
+-- name: ListAPICredentials :many
+SELECT * FROM api_credentials
+WHERE account_id = $1
+ORDER BY created_at DESC, id DESC;
+
+-- name: TouchAPICredential :exec
+UPDATE api_credentials
+SET last_used_at = GREATEST(COALESCE(last_used_at, sqlc.arg(used_at)::timestamptz), sqlc.arg(used_at)),
+    updated_at = GREATEST(updated_at, sqlc.arg(used_at))
+WHERE id = sqlc.arg(id) AND status = 'active'
+  AND (last_used_at IS NULL OR last_used_at <= sqlc.arg(used_at)::timestamptz - INTERVAL '5 minutes');
+
+-- name: RevokeAPICredential :one
+UPDATE api_credentials
+SET status = 'revoked', revoked_at = sqlc.arg(revoked_at), updated_at = sqlc.arg(revoked_at)
+WHERE id = sqlc.arg(id) AND account_id = sqlc.arg(account_id) AND status = 'active'
+RETURNING *;
+
+-- name: SetCredentialRotationOverlap :one
+UPDATE api_credentials
+SET rotation_overlap_ends_at = sqlc.arg(overlap_ends_at), updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND account_id = sqlc.arg(account_id) AND status = 'active'
+RETURNING *;
+
+-- name: CreateCredentialIssuance :exec
+INSERT INTO credential_issuances (
+    account_id, scope, idempotency_key, request_hash, credential_id,
+    ciphertext, nonce, expires_at, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+
+-- name: GetCredentialIssuance :one
+SELECT * FROM credential_issuances
+WHERE account_id = $1 AND scope = $2 AND idempotency_key = $3;
+
+-- name: ClearExpiredCredentialIssuance :exec
+UPDATE credential_issuances SET ciphertext = NULL, nonce = NULL
+WHERE account_id = $1 AND scope = $2 AND idempotency_key = $3
+  AND expires_at <= sqlc.arg(observed_at);
+
+-- name: GetStaticCredentialImport :one
+SELECT * FROM static_credential_imports
+WHERE account_id = $1 AND import_key = $2;
+
+-- name: CreateStaticCredentialImport :exec
+INSERT INTO static_credential_imports (account_id, import_key, credential_id, imported_at)
+VALUES ($1, $2, $3, $4);
+
+-- name: CreateDeviceAuthorization :exec
+INSERT INTO device_authorizations (
+    id, account_id, device_code_hash, user_code_hash, user_code_display,
+    device_label, role_cap, tenant_constraint, session_constraint, status,
+    poll_interval_seconds, next_poll_at, confirmation_attempts,
+    approved_by_subject_id, credential_id, expires_at, delivery_expires_at,
+    created_at, updated_at
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, sqlc.narg(tenant_constraint),
+    sqlc.narg(session_constraint), $8, $9, $10, $11,
+    sqlc.narg(approved_by_subject_id), sqlc.narg(credential_id), $12,
+    sqlc.narg(delivery_expires_at), $13, $14
+);
+
+-- name: GetDeviceAuthorizationByDeviceCodeForUpdate :one
+SELECT * FROM device_authorizations WHERE device_code_hash = $1 FOR UPDATE;
+
+-- name: GetDeviceAuthorizationByUserCodeForUpdate :one
+SELECT * FROM device_authorizations WHERE user_code_hash = $1 FOR UPDATE;
+
+-- name: RecordDevicePoll :one
+UPDATE device_authorizations
+SET poll_interval_seconds = sqlc.arg(poll_interval_seconds),
+    next_poll_at = sqlc.arg(next_poll_at),
+    updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: ApproveDeviceAuthorization :one
+UPDATE device_authorizations
+SET status = 'approved', approved_by_subject_id = sqlc.arg(approved_by_subject_id),
+    credential_id = sqlc.arg(credential_id), delivery_expires_at = sqlc.arg(delivery_expires_at),
+    updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND status = 'pending'
+RETURNING *;
+
+-- name: DenyDeviceAuthorization :one
+UPDATE device_authorizations
+SET status = 'denied', updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND status = 'pending'
+RETURNING *;
+
+-- name: ExchangeDeviceAuthorization :one
+UPDATE device_authorizations
+SET status = 'exchanged', updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND status IN ('approved', 'exchanged')
+RETURNING *;
+
+-- name: IncrementDeviceConfirmationAttempts :one
+UPDATE device_authorizations
+SET confirmation_attempts = confirmation_attempts + 1, updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND confirmation_attempts < 20
+RETURNING *;
+
+-- name: CreateBrowserSession :exec
+INSERT INTO browser_sessions (
+    id, account_id, subject_id, token_hash, csrf_hash, expires_at, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7);
+
+-- name: GetBrowserSessionByTokenHash :one
+SELECT * FROM browser_sessions WHERE token_hash = $1;
+
+-- name: DeleteBrowserSession :execrows
+DELETE FROM browser_sessions WHERE id = $1;
+
 -- name: CreateTenantPartition :exec
 INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
 VALUES ($1, $2, $3, $4);

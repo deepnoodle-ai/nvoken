@@ -1,4 +1,10 @@
 mock_provider "google" {
+  mock_data "google_project" {
+    defaults = {
+      number = "123456789012"
+    }
+  }
+
   mock_resource "google_sql_database_instance" {
     defaults = {
       private_ip_address = "10.42.0.3"
@@ -103,6 +109,14 @@ run "paved_defaults" {
   assert {
     condition     = google_cloud_run_v2_service.runtime.invoker_iam_disabled == true
     error_message = "The public service must disable Cloud Run's edge IAM check and defer authentication to the Runtime bearer credential."
+  }
+
+  assert {
+    condition = (
+      one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "NVOKEN_PUBLIC_BASE_URL"]) == "https://nvoken-test-123456789012.us-central1.run.app" &&
+      one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "NVOKEN_TRUST_FORWARDED_CLIENT_IP"]) == "true"
+    )
+    error_message = "The public service must use its deterministic Cloud Run origin and trust GFE client forwarding for bounded device-flow rate limits."
   }
 
   assert {
@@ -250,6 +264,17 @@ run "paved_defaults" {
   }
 
   assert {
+    condition = (
+      contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "RUNTIME_API_KEY") &&
+      contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "BOOTSTRAP_OWNER_SECRET") &&
+      contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "CREDENTIAL_DELIVERY_KEY") &&
+      !contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], "BOOTSTRAP_OWNER_SECRET") &&
+      !contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], "CREDENTIAL_DELIVERY_KEY")
+    )
+    error_message = "Identity bootstrap and delivery secrets belong only to the combined service, with the legacy Runtime key retained by default."
+  }
+
+  assert {
     condition     = google_cloud_run_v2_job.dispatch_smoke.template[0].template[0].containers[0].args == tolist(["dispatch-smoke"])
     error_message = "The staging proof must use the same image's synthetic dispatch command."
   }
@@ -319,6 +344,29 @@ run "paved_defaults" {
       alltrue([for policy in google_monitoring_alert_policy.dispatch_failures : strcontains(policy.documentation[0].content, "runbooks.md#")])
     )
     error_message = "High-signal alerts must retain conservative defaults, allow immediate discrete failures, and link their alert-specific runbooks."
+  }
+}
+
+run "credential_cutover_removes_legacy_env" {
+  command = plan
+
+  variables {
+    project_id                   = "example-project"
+    environment                  = "test"
+    image_tag                    = "0123456789abcdef"
+    retain_legacy_runtime_key    = false
+    anthropic_api_key_secret_id  = "nvoken-test-anthropic"
+    database_deletion_protection = false
+    service_deletion_protection  = false
+  }
+
+  assert {
+    condition = (
+      !contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "RUNTIME_API_KEY") &&
+      contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "BOOTSTRAP_OWNER_SECRET") &&
+      contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "CREDENTIAL_DELIVERY_KEY")
+    )
+    error_message = "Explicit credential cutover must remove only the legacy Runtime key from the active service."
   }
 }
 

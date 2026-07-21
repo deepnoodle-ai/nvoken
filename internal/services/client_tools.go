@@ -386,7 +386,7 @@ func (s *RuntimeService) authorizeInvocationScope(
 	auth domain.RuntimeAuthContext,
 	invocation domain.Invocation,
 ) error {
-	if invocation.AccountID != auth.AccountID {
+	if invocation.AccountID != auth.AccountID || !auth.AllowsSession(invocation.SessionID) {
 		return notFound()
 	}
 	partition, err := s.store.GetTenantPartition(ctx, invocation.TenantPartitionID)

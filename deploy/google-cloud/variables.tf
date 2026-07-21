@@ -50,6 +50,18 @@ variable "image_tag" {
   }
 }
 
+variable "public_base_url" {
+  description = "Canonical HTTPS origin used in browser device-approval URLs. Null uses Cloud Run's deterministic run.app URL."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.public_base_url == null || can(regex("^https://[^/?#]+/?$", trimspace(var.public_base_url)))
+    error_message = "public_base_url must be null or an HTTPS origin without a path, query, or fragment."
+  }
+}
+
 variable "anthropic_api_key_secret_id" {
   description = "Existing Secret Manager secret ID whose latest version contains ANTHROPIC_API_KEY."
   type        = string
@@ -113,6 +125,12 @@ variable "runtime_tenant_ref" {
   type        = string
   default     = null
   nullable    = true
+}
+
+variable "retain_legacy_runtime_key" {
+  description = "Keep RUNTIME_API_KEY attached for the pre-027 rollback window. Set false only after issuing replacement credentials and revoking the imported key."
+  type        = bool
+  default     = true
 }
 
 variable "invocation_execution_mode" {

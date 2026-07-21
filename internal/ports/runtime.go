@@ -151,6 +151,41 @@ type RuntimeAuthenticator interface {
 	Authenticate(context.Context, string) (domain.RuntimeAuthContext, error)
 }
 
+// IdentityRepository persists the installation-owned identity substrate. The
+// portable HTTP API exposes credentials, not membership mutation.
+type IdentityRepository interface {
+	CreateOperatorSubject(context.Context, domain.OperatorSubject) error
+	GetOperatorSubject(context.Context, string) (domain.OperatorSubject, error)
+	GetOperatorSubjectByIdentity(context.Context, string, string, string) (domain.OperatorSubject, error)
+	UpsertMembership(context.Context, domain.Membership) (domain.Membership, error)
+	GetMembershipBySubject(context.Context, string, string) (domain.Membership, error)
+	DeleteMembershipBySubject(context.Context, string, string) error
+	CreateCredential(context.Context, domain.Credential) error
+	GetCredential(context.Context, string) (domain.Credential, error)
+	GetCredentialForUpdate(context.Context, string) (domain.Credential, error)
+	GetCredentialByPrefix(context.Context, string) (domain.Credential, error)
+	ListCredentials(context.Context, string) ([]domain.Credential, error)
+	TouchCredential(context.Context, string, time.Time) error
+	RevokeCredential(context.Context, string, string, time.Time) (domain.Credential, error)
+	SetCredentialRotationOverlap(context.Context, string, string, time.Time, time.Time) (domain.Credential, error)
+	CreateCredentialIssuance(context.Context, domain.CredentialIssuance) error
+	GetCredentialIssuance(context.Context, string, string, string) (domain.CredentialIssuance, error)
+	ClearExpiredCredentialIssuance(context.Context, string, string, string, time.Time) error
+	GetStaticCredentialImport(context.Context, string, string) (string, error)
+	CreateStaticCredentialImport(context.Context, string, string, string, time.Time) error
+	CreateDeviceAuthorization(context.Context, domain.DeviceAuthorization) error
+	GetDeviceAuthorizationByDeviceCodeForUpdate(context.Context, []byte) (domain.DeviceAuthorization, error)
+	GetDeviceAuthorizationByUserCodeForUpdate(context.Context, []byte) (domain.DeviceAuthorization, error)
+	RecordDevicePoll(context.Context, domain.DeviceAuthorization) (domain.DeviceAuthorization, error)
+	ApproveDeviceAuthorization(context.Context, domain.DeviceAuthorization) (domain.DeviceAuthorization, error)
+	DenyDeviceAuthorization(context.Context, string, time.Time) (domain.DeviceAuthorization, error)
+	ExchangeDeviceAuthorization(context.Context, string, time.Time) (domain.DeviceAuthorization, error)
+	IncrementDeviceConfirmationAttempts(context.Context, string, time.Time) (domain.DeviceAuthorization, error)
+	CreateBrowserSession(context.Context, domain.BrowserSession) error
+	GetBrowserSessionByTokenHash(context.Context, []byte) (domain.BrowserSession, error)
+	DeleteBrowserSession(context.Context, string) error
+}
+
 type InvocationStateRepository interface {
 	AppendInvocationState(context.Context, domain.InvocationState) error
 	GetCurrentInvocationState(context.Context, string) (domain.InvocationState, error)

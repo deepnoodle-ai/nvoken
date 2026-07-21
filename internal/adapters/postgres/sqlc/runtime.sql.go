@@ -434,6 +434,64 @@ func (q *Queries) AppendSessionMessage(ctx context.Context, arg AppendSessionMes
 	return err
 }
 
+const approveDeviceAuthorization = `-- name: ApproveDeviceAuthorization :one
+UPDATE device_authorizations
+SET status = 'approved', approved_by_subject_id = $1,
+    credential_id = $2, delivery_expires_at = $3,
+    updated_at = $4
+WHERE id = $5 AND status = 'pending'
+RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+`
+
+type ApproveDeviceAuthorizationParams struct {
+	ApprovedBySubjectID *string
+	CredentialID        *string
+	DeliveryExpiresAt   *time.Time
+	UpdatedAt           time.Time
+	ID                  string
+}
+
+// ApproveDeviceAuthorization
+//
+//	UPDATE device_authorizations
+//	SET status = 'approved', approved_by_subject_id = $1,
+//	    credential_id = $2, delivery_expires_at = $3,
+//	    updated_at = $4
+//	WHERE id = $5 AND status = 'pending'
+//	RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+func (q *Queries) ApproveDeviceAuthorization(ctx context.Context, arg ApproveDeviceAuthorizationParams) (DeviceAuthorization, error) {
+	row := q.db.QueryRow(ctx, approveDeviceAuthorization,
+		arg.ApprovedBySubjectID,
+		arg.CredentialID,
+		arg.DeliveryExpiresAt,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	var i DeviceAuthorization
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.DeviceCodeHash,
+		&i.UserCodeHash,
+		&i.UserCodeDisplay,
+		&i.DeviceLabel,
+		&i.RoleCap,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.Status,
+		&i.PollIntervalSeconds,
+		&i.NextPollAt,
+		&i.ConfirmationAttempts,
+		&i.ApprovedBySubjectID,
+		&i.CredentialID,
+		&i.ExpiresAt,
+		&i.DeliveryExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const cancelInvocation = `-- name: CancelInvocation :one
 UPDATE invocations
 SET status = 'cancelled',
@@ -800,6 +858,114 @@ func (q *Queries) ClaimNextExecutionDispatch(ctx context.Context, arg ClaimNextE
 	return i, err
 }
 
+const clearExpiredCredentialIssuance = `-- name: ClearExpiredCredentialIssuance :exec
+UPDATE credential_issuances SET ciphertext = NULL, nonce = NULL
+WHERE account_id = $1 AND scope = $2 AND idempotency_key = $3
+  AND expires_at <= $4
+`
+
+type ClearExpiredCredentialIssuanceParams struct {
+	AccountID      string
+	Scope          string
+	IdempotencyKey string
+	ObservedAt     time.Time
+}
+
+// ClearExpiredCredentialIssuance
+//
+//	UPDATE credential_issuances SET ciphertext = NULL, nonce = NULL
+//	WHERE account_id = $1 AND scope = $2 AND idempotency_key = $3
+//	  AND expires_at <= $4
+func (q *Queries) ClearExpiredCredentialIssuance(ctx context.Context, arg ClearExpiredCredentialIssuanceParams) error {
+	_, err := q.db.Exec(ctx, clearExpiredCredentialIssuance,
+		arg.AccountID,
+		arg.Scope,
+		arg.IdempotencyKey,
+		arg.ObservedAt,
+	)
+	return err
+}
+
+const createAPICredential = `-- name: CreateAPICredential :exec
+INSERT INTO api_credentials (
+    id, account_id, kind, name, prefix, verifier, status, profile, role_cap,
+    owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint,
+    operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at,
+    revoked_at, last_used_at, created_at, updated_at
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $11, $12,
+    $13, $14, $15, $16,
+    $17, $8, $18, $19,
+    $20, $21, $22, $9, $10
+)
+`
+
+type CreateAPICredentialParams struct {
+	ID                    string
+	AccountID             string
+	Kind                  string
+	Name                  string
+	Prefix                string
+	Verifier              []byte
+	Status                string
+	OperationConstraints  []string
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	Profile               *string
+	RoleCap               *string
+	OwnerSubjectID        *string
+	CreatorSubjectID      *string
+	CreatorCredentialID   *string
+	TenantConstraint      *string
+	SessionConstraint     *string
+	ExpiresAt             *time.Time
+	RotatedFromID         *string
+	RotationOverlapEndsAt *time.Time
+	RevokedAt             *time.Time
+	LastUsedAt            *time.Time
+}
+
+// CreateAPICredential
+//
+//	INSERT INTO api_credentials (
+//	    id, account_id, kind, name, prefix, verifier, status, profile, role_cap,
+//	    owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint,
+//	    operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at,
+//	    revoked_at, last_used_at, created_at, updated_at
+//	) VALUES (
+//	    $1, $2, $3, $4, $5, $6, $7, $11, $12,
+//	    $13, $14, $15, $16,
+//	    $17, $8, $18, $19,
+//	    $20, $21, $22, $9, $10
+//	)
+func (q *Queries) CreateAPICredential(ctx context.Context, arg CreateAPICredentialParams) error {
+	_, err := q.db.Exec(ctx, createAPICredential,
+		arg.ID,
+		arg.AccountID,
+		arg.Kind,
+		arg.Name,
+		arg.Prefix,
+		arg.Verifier,
+		arg.Status,
+		arg.OperationConstraints,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.Profile,
+		arg.RoleCap,
+		arg.OwnerSubjectID,
+		arg.CreatorSubjectID,
+		arg.CreatorCredentialID,
+		arg.TenantConstraint,
+		arg.SessionConstraint,
+		arg.ExpiresAt,
+		arg.RotatedFromID,
+		arg.RotationOverlapEndsAt,
+		arg.RevokedAt,
+		arg.LastUsedAt,
+	)
+	return err
+}
+
 const createAccount = `-- name: CreateAccount :exec
 INSERT INTO accounts (id, created_at)
 VALUES ($1, $2)
@@ -868,6 +1034,40 @@ func (q *Queries) CreateAgentIfAbsent(ctx context.Context, arg CreateAgentIfAbse
 		arg.ID,
 		arg.AccountID,
 		arg.AgentRef,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const createBrowserSession = `-- name: CreateBrowserSession :exec
+INSERT INTO browser_sessions (
+    id, account_id, subject_id, token_hash, csrf_hash, expires_at, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+`
+
+type CreateBrowserSessionParams struct {
+	ID        string
+	AccountID string
+	SubjectID string
+	TokenHash []byte
+	CsrfHash  []byte
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
+// CreateBrowserSession
+//
+//	INSERT INTO browser_sessions (
+//	    id, account_id, subject_id, token_hash, csrf_hash, expires_at, created_at
+//	) VALUES ($1, $2, $3, $4, $5, $6, $7)
+func (q *Queries) CreateBrowserSession(ctx context.Context, arg CreateBrowserSessionParams) error {
+	_, err := q.db.Exec(ctx, createBrowserSession,
+		arg.ID,
+		arg.AccountID,
+		arg.SubjectID,
+		arg.TokenHash,
+		arg.CsrfHash,
+		arg.ExpiresAt,
 		arg.CreatedAt,
 	)
 	return err
@@ -949,6 +1149,46 @@ func (q *Queries) CreateCallbackDelivery(ctx context.Context, arg CreateCallback
 	return err
 }
 
+const createCredentialIssuance = `-- name: CreateCredentialIssuance :exec
+INSERT INTO credential_issuances (
+    account_id, scope, idempotency_key, request_hash, credential_id,
+    ciphertext, nonce, expires_at, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`
+
+type CreateCredentialIssuanceParams struct {
+	AccountID      string
+	Scope          string
+	IdempotencyKey string
+	RequestHash    []byte
+	CredentialID   string
+	Ciphertext     []byte
+	Nonce          []byte
+	ExpiresAt      time.Time
+	CreatedAt      time.Time
+}
+
+// CreateCredentialIssuance
+//
+//	INSERT INTO credential_issuances (
+//	    account_id, scope, idempotency_key, request_hash, credential_id,
+//	    ciphertext, nonce, expires_at, created_at
+//	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+func (q *Queries) CreateCredentialIssuance(ctx context.Context, arg CreateCredentialIssuanceParams) error {
+	_, err := q.db.Exec(ctx, createCredentialIssuance,
+		arg.AccountID,
+		arg.Scope,
+		arg.IdempotencyKey,
+		arg.RequestHash,
+		arg.CredentialID,
+		arg.Ciphertext,
+		arg.Nonce,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const createDefaultTenantPartitionIfAbsent = `-- name: CreateDefaultTenantPartitionIfAbsent :exec
 INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
 VALUES ($1, $2, NULL, $3)
@@ -970,6 +1210,82 @@ type CreateDefaultTenantPartitionIfAbsentParams struct {
 //	DO NOTHING
 func (q *Queries) CreateDefaultTenantPartitionIfAbsent(ctx context.Context, arg CreateDefaultTenantPartitionIfAbsentParams) error {
 	_, err := q.db.Exec(ctx, createDefaultTenantPartitionIfAbsent, arg.ID, arg.AccountID, arg.CreatedAt)
+	return err
+}
+
+const createDeviceAuthorization = `-- name: CreateDeviceAuthorization :exec
+INSERT INTO device_authorizations (
+    id, account_id, device_code_hash, user_code_hash, user_code_display,
+    device_label, role_cap, tenant_constraint, session_constraint, status,
+    poll_interval_seconds, next_poll_at, confirmation_attempts,
+    approved_by_subject_id, credential_id, expires_at, delivery_expires_at,
+    created_at, updated_at
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $15,
+    $16, $8, $9, $10, $11,
+    $17, $18, $12,
+    $19, $13, $14
+)
+`
+
+type CreateDeviceAuthorizationParams struct {
+	ID                   string
+	AccountID            string
+	DeviceCodeHash       []byte
+	UserCodeHash         []byte
+	UserCodeDisplay      string
+	DeviceLabel          string
+	RoleCap              string
+	Status               string
+	PollIntervalSeconds  int32
+	NextPollAt           time.Time
+	ConfirmationAttempts int32
+	ExpiresAt            time.Time
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TenantConstraint     *string
+	SessionConstraint    *string
+	ApprovedBySubjectID  *string
+	CredentialID         *string
+	DeliveryExpiresAt    *time.Time
+}
+
+// CreateDeviceAuthorization
+//
+//	INSERT INTO device_authorizations (
+//	    id, account_id, device_code_hash, user_code_hash, user_code_display,
+//	    device_label, role_cap, tenant_constraint, session_constraint, status,
+//	    poll_interval_seconds, next_poll_at, confirmation_attempts,
+//	    approved_by_subject_id, credential_id, expires_at, delivery_expires_at,
+//	    created_at, updated_at
+//	) VALUES (
+//	    $1, $2, $3, $4, $5, $6, $7, $15,
+//	    $16, $8, $9, $10, $11,
+//	    $17, $18, $12,
+//	    $19, $13, $14
+//	)
+func (q *Queries) CreateDeviceAuthorization(ctx context.Context, arg CreateDeviceAuthorizationParams) error {
+	_, err := q.db.Exec(ctx, createDeviceAuthorization,
+		arg.ID,
+		arg.AccountID,
+		arg.DeviceCodeHash,
+		arg.UserCodeHash,
+		arg.UserCodeDisplay,
+		arg.DeviceLabel,
+		arg.RoleCap,
+		arg.Status,
+		arg.PollIntervalSeconds,
+		arg.NextPollAt,
+		arg.ConfirmationAttempts,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.TenantConstraint,
+		arg.SessionConstraint,
+		arg.ApprovedBySubjectID,
+		arg.CredentialID,
+		arg.DeliveryExpiresAt,
+	)
 	return err
 }
 
@@ -1241,6 +1557,36 @@ func (q *Queries) CreateInvocationCheckpoint(ctx context.Context, arg CreateInvo
 	return err
 }
 
+const createMembership = `-- name: CreateMembership :exec
+INSERT INTO account_memberships (id, account_id, subject_id, role, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type CreateMembershipParams struct {
+	ID        string
+	AccountID string
+	SubjectID string
+	Role      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// CreateMembership
+//
+//	INSERT INTO account_memberships (id, account_id, subject_id, role, created_at, updated_at)
+//	VALUES ($1, $2, $3, $4, $5, $6)
+func (q *Queries) CreateMembership(ctx context.Context, arg CreateMembershipParams) error {
+	_, err := q.db.Exec(ctx, createMembership,
+		arg.ID,
+		arg.AccountID,
+		arg.SubjectID,
+		arg.Role,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const createModelUsageReceipt = `-- name: CreateModelUsageReceipt :exec
 INSERT INTO model_usage_receipts (
     id, invocation_id, session_id, account_id, tenant_partition_id, agent_id,
@@ -1298,6 +1644,34 @@ func (q *Queries) CreateModelUsageReceipt(ctx context.Context, arg CreateModelUs
 		arg.Usage,
 		arg.Provenance,
 		arg.EvidenceDigest,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const createOperatorSubject = `-- name: CreateOperatorSubject :exec
+INSERT INTO operator_subjects (id, account_id, issuer, subject, created_at)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type CreateOperatorSubjectParams struct {
+	ID        string
+	AccountID string
+	Issuer    string
+	Subject   string
+	CreatedAt time.Time
+}
+
+// CreateOperatorSubject
+//
+//	INSERT INTO operator_subjects (id, account_id, issuer, subject, created_at)
+//	VALUES ($1, $2, $3, $4, $5)
+func (q *Queries) CreateOperatorSubject(ctx context.Context, arg CreateOperatorSubjectParams) error {
+	_, err := q.db.Exec(ctx, createOperatorSubject,
+		arg.ID,
+		arg.AccountID,
+		arg.Issuer,
+		arg.Subject,
 		arg.CreatedAt,
 	)
 	return err
@@ -1385,6 +1759,32 @@ func (q *Queries) CreateSessionIfAbsent(ctx context.Context, arg CreateSessionIf
 		arg.NextLifecycleRevision,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+	)
+	return err
+}
+
+const createStaticCredentialImport = `-- name: CreateStaticCredentialImport :exec
+INSERT INTO static_credential_imports (account_id, import_key, credential_id, imported_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type CreateStaticCredentialImportParams struct {
+	AccountID    string
+	ImportKey    string
+	CredentialID string
+	ImportedAt   time.Time
+}
+
+// CreateStaticCredentialImport
+//
+//	INSERT INTO static_credential_imports (account_id, import_key, credential_id, imported_at)
+//	VALUES ($1, $2, $3, $4)
+func (q *Queries) CreateStaticCredentialImport(ctx context.Context, arg CreateStaticCredentialImportParams) error {
+	_, err := q.db.Exec(ctx, createStaticCredentialImport,
+		arg.AccountID,
+		arg.ImportKey,
+		arg.CredentialID,
+		arg.ImportedAt,
 	)
 	return err
 }
@@ -1625,6 +2025,133 @@ func (q *Queries) CreateToolCallAttempt(ctx context.Context, arg CreateToolCallA
 	return err
 }
 
+const deleteBrowserSession = `-- name: DeleteBrowserSession :execrows
+DELETE FROM browser_sessions WHERE id = $1
+`
+
+// DeleteBrowserSession
+//
+//	DELETE FROM browser_sessions WHERE id = $1
+func (q *Queries) DeleteBrowserSession(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteBrowserSession, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteMembershipBySubject = `-- name: DeleteMembershipBySubject :execrows
+DELETE FROM account_memberships
+WHERE account_id = $1 AND subject_id = $2
+`
+
+type DeleteMembershipBySubjectParams struct {
+	AccountID string
+	SubjectID string
+}
+
+// DeleteMembershipBySubject
+//
+//	DELETE FROM account_memberships
+//	WHERE account_id = $1 AND subject_id = $2
+func (q *Queries) DeleteMembershipBySubject(ctx context.Context, arg DeleteMembershipBySubjectParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMembershipBySubject, arg.AccountID, arg.SubjectID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const denyDeviceAuthorization = `-- name: DenyDeviceAuthorization :one
+UPDATE device_authorizations
+SET status = 'denied', updated_at = $1
+WHERE id = $2 AND status = 'pending'
+RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+`
+
+type DenyDeviceAuthorizationParams struct {
+	UpdatedAt time.Time
+	ID        string
+}
+
+// DenyDeviceAuthorization
+//
+//	UPDATE device_authorizations
+//	SET status = 'denied', updated_at = $1
+//	WHERE id = $2 AND status = 'pending'
+//	RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+func (q *Queries) DenyDeviceAuthorization(ctx context.Context, arg DenyDeviceAuthorizationParams) (DeviceAuthorization, error) {
+	row := q.db.QueryRow(ctx, denyDeviceAuthorization, arg.UpdatedAt, arg.ID)
+	var i DeviceAuthorization
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.DeviceCodeHash,
+		&i.UserCodeHash,
+		&i.UserCodeDisplay,
+		&i.DeviceLabel,
+		&i.RoleCap,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.Status,
+		&i.PollIntervalSeconds,
+		&i.NextPollAt,
+		&i.ConfirmationAttempts,
+		&i.ApprovedBySubjectID,
+		&i.CredentialID,
+		&i.ExpiresAt,
+		&i.DeliveryExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const exchangeDeviceAuthorization = `-- name: ExchangeDeviceAuthorization :one
+UPDATE device_authorizations
+SET status = 'exchanged', updated_at = $1
+WHERE id = $2 AND status IN ('approved', 'exchanged')
+RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+`
+
+type ExchangeDeviceAuthorizationParams struct {
+	UpdatedAt time.Time
+	ID        string
+}
+
+// ExchangeDeviceAuthorization
+//
+//	UPDATE device_authorizations
+//	SET status = 'exchanged', updated_at = $1
+//	WHERE id = $2 AND status IN ('approved', 'exchanged')
+//	RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+func (q *Queries) ExchangeDeviceAuthorization(ctx context.Context, arg ExchangeDeviceAuthorizationParams) (DeviceAuthorization, error) {
+	row := q.db.QueryRow(ctx, exchangeDeviceAuthorization, arg.UpdatedAt, arg.ID)
+	var i DeviceAuthorization
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.DeviceCodeHash,
+		&i.UserCodeHash,
+		&i.UserCodeDisplay,
+		&i.DeviceLabel,
+		&i.RoleCap,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.Status,
+		&i.PollIntervalSeconds,
+		&i.NextPollAt,
+		&i.ConfirmationAttempts,
+		&i.ApprovedBySubjectID,
+		&i.CredentialID,
+		&i.ExpiresAt,
+		&i.DeliveryExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const findNextQueuedInvocationForUpdate = `-- name: FindNextQueuedInvocationForUpdate :one
 SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration, i.output_schema_digest, i.output, i.output_provenance
 FROM invocations AS i
@@ -1771,6 +2298,117 @@ func (q *Queries) FindQueuedInvocationWithoutActiveDispatchForUpdate(ctx context
 	return i, err
 }
 
+const getAPICredential = `-- name: GetAPICredential :one
+SELECT id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at FROM api_credentials WHERE id = $1
+`
+
+// GetAPICredential
+//
+//	SELECT id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at FROM api_credentials WHERE id = $1
+func (q *Queries) GetAPICredential(ctx context.Context, id string) (ApiCredential, error) {
+	row := q.db.QueryRow(ctx, getAPICredential, id)
+	var i ApiCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Kind,
+		&i.Name,
+		&i.Prefix,
+		&i.Verifier,
+		&i.Status,
+		&i.Profile,
+		&i.RoleCap,
+		&i.OwnerSubjectID,
+		&i.CreatorSubjectID,
+		&i.CreatorCredentialID,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.OperationConstraints,
+		&i.ExpiresAt,
+		&i.RotatedFromID,
+		&i.RotationOverlapEndsAt,
+		&i.RevokedAt,
+		&i.LastUsedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAPICredentialByPrefix = `-- name: GetAPICredentialByPrefix :one
+SELECT id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at FROM api_credentials WHERE prefix = $1
+`
+
+// GetAPICredentialByPrefix
+//
+//	SELECT id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at FROM api_credentials WHERE prefix = $1
+func (q *Queries) GetAPICredentialByPrefix(ctx context.Context, prefix string) (ApiCredential, error) {
+	row := q.db.QueryRow(ctx, getAPICredentialByPrefix, prefix)
+	var i ApiCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Kind,
+		&i.Name,
+		&i.Prefix,
+		&i.Verifier,
+		&i.Status,
+		&i.Profile,
+		&i.RoleCap,
+		&i.OwnerSubjectID,
+		&i.CreatorSubjectID,
+		&i.CreatorCredentialID,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.OperationConstraints,
+		&i.ExpiresAt,
+		&i.RotatedFromID,
+		&i.RotationOverlapEndsAt,
+		&i.RevokedAt,
+		&i.LastUsedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAPICredentialForUpdate = `-- name: GetAPICredentialForUpdate :one
+SELECT id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at FROM api_credentials WHERE id = $1 FOR UPDATE
+`
+
+// GetAPICredentialForUpdate
+//
+//	SELECT id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at FROM api_credentials WHERE id = $1 FOR UPDATE
+func (q *Queries) GetAPICredentialForUpdate(ctx context.Context, id string) (ApiCredential, error) {
+	row := q.db.QueryRow(ctx, getAPICredentialForUpdate, id)
+	var i ApiCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Kind,
+		&i.Name,
+		&i.Prefix,
+		&i.Verifier,
+		&i.Status,
+		&i.Profile,
+		&i.RoleCap,
+		&i.OwnerSubjectID,
+		&i.CreatorSubjectID,
+		&i.CreatorCredentialID,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.OperationConstraints,
+		&i.ExpiresAt,
+		&i.RotatedFromID,
+		&i.RotationOverlapEndsAt,
+		&i.RevokedAt,
+		&i.LastUsedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getAccount = `-- name: GetAccount :one
 SELECT id, created_at
 FROM accounts
@@ -1840,6 +2478,28 @@ func (q *Queries) GetAgentByRef(ctx context.Context, arg GetAgentByRefParams) (A
 	return i, err
 }
 
+const getBrowserSessionByTokenHash = `-- name: GetBrowserSessionByTokenHash :one
+SELECT id, account_id, subject_id, token_hash, csrf_hash, expires_at, created_at FROM browser_sessions WHERE token_hash = $1
+`
+
+// GetBrowserSessionByTokenHash
+//
+//	SELECT id, account_id, subject_id, token_hash, csrf_hash, expires_at, created_at FROM browser_sessions WHERE token_hash = $1
+func (q *Queries) GetBrowserSessionByTokenHash(ctx context.Context, tokenHash []byte) (BrowserSession, error) {
+	row := q.db.QueryRow(ctx, getBrowserSessionByTokenHash, tokenHash)
+	var i BrowserSession
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.SubjectID,
+		&i.TokenHash,
+		&i.CsrfHash,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getCallbackDelivery = `-- name: GetCallbackDelivery :one
 SELECT id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, endpoint_url, status, available_at, owner, lease_expires_at, attempt, last_error_code, response_status, created_at, updated_at, terminal_at FROM callback_deliveries WHERE id = $1
 `
@@ -1902,6 +2562,38 @@ func (q *Queries) GetCallbackDeliveryForUpdate(ctx context.Context, id string) (
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TerminalAt,
+	)
+	return i, err
+}
+
+const getCredentialIssuance = `-- name: GetCredentialIssuance :one
+SELECT account_id, scope, idempotency_key, request_hash, credential_id, ciphertext, nonce, expires_at, created_at FROM credential_issuances
+WHERE account_id = $1 AND scope = $2 AND idempotency_key = $3
+`
+
+type GetCredentialIssuanceParams struct {
+	AccountID      string
+	Scope          string
+	IdempotencyKey string
+}
+
+// GetCredentialIssuance
+//
+//	SELECT account_id, scope, idempotency_key, request_hash, credential_id, ciphertext, nonce, expires_at, created_at FROM credential_issuances
+//	WHERE account_id = $1 AND scope = $2 AND idempotency_key = $3
+func (q *Queries) GetCredentialIssuance(ctx context.Context, arg GetCredentialIssuanceParams) (CredentialIssuance, error) {
+	row := q.db.QueryRow(ctx, getCredentialIssuance, arg.AccountID, arg.Scope, arg.IdempotencyKey)
+	var i CredentialIssuance
+	err := row.Scan(
+		&i.AccountID,
+		&i.Scope,
+		&i.IdempotencyKey,
+		&i.RequestHash,
+		&i.CredentialID,
+		&i.Ciphertext,
+		&i.Nonce,
+		&i.ExpiresAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -1997,6 +2689,74 @@ func (q *Queries) GetDefaultTenantPartition(ctx context.Context, accountID strin
 		&i.AccountID,
 		&i.TenantRef,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getDeviceAuthorizationByDeviceCodeForUpdate = `-- name: GetDeviceAuthorizationByDeviceCodeForUpdate :one
+SELECT id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at FROM device_authorizations WHERE device_code_hash = $1 FOR UPDATE
+`
+
+// GetDeviceAuthorizationByDeviceCodeForUpdate
+//
+//	SELECT id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at FROM device_authorizations WHERE device_code_hash = $1 FOR UPDATE
+func (q *Queries) GetDeviceAuthorizationByDeviceCodeForUpdate(ctx context.Context, deviceCodeHash []byte) (DeviceAuthorization, error) {
+	row := q.db.QueryRow(ctx, getDeviceAuthorizationByDeviceCodeForUpdate, deviceCodeHash)
+	var i DeviceAuthorization
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.DeviceCodeHash,
+		&i.UserCodeHash,
+		&i.UserCodeDisplay,
+		&i.DeviceLabel,
+		&i.RoleCap,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.Status,
+		&i.PollIntervalSeconds,
+		&i.NextPollAt,
+		&i.ConfirmationAttempts,
+		&i.ApprovedBySubjectID,
+		&i.CredentialID,
+		&i.ExpiresAt,
+		&i.DeliveryExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getDeviceAuthorizationByUserCodeForUpdate = `-- name: GetDeviceAuthorizationByUserCodeForUpdate :one
+SELECT id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at FROM device_authorizations WHERE user_code_hash = $1 FOR UPDATE
+`
+
+// GetDeviceAuthorizationByUserCodeForUpdate
+//
+//	SELECT id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at FROM device_authorizations WHERE user_code_hash = $1 FOR UPDATE
+func (q *Queries) GetDeviceAuthorizationByUserCodeForUpdate(ctx context.Context, userCodeHash []byte) (DeviceAuthorization, error) {
+	row := q.db.QueryRow(ctx, getDeviceAuthorizationByUserCodeForUpdate, userCodeHash)
+	var i DeviceAuthorization
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.DeviceCodeHash,
+		&i.UserCodeHash,
+		&i.UserCodeDisplay,
+		&i.DeviceLabel,
+		&i.RoleCap,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.Status,
+		&i.PollIntervalSeconds,
+		&i.NextPollAt,
+		&i.ConfirmationAttempts,
+		&i.ApprovedBySubjectID,
+		&i.CredentialID,
+		&i.ExpiresAt,
+		&i.DeliveryExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -2303,6 +3063,34 @@ func (q *Queries) GetLatestInvocationCheckpoint(ctx context.Context, invocationI
 	return i, err
 }
 
+const getMembershipBySubject = `-- name: GetMembershipBySubject :one
+SELECT id, account_id, subject_id, role, created_at, updated_at FROM account_memberships
+WHERE account_id = $1 AND subject_id = $2
+`
+
+type GetMembershipBySubjectParams struct {
+	AccountID string
+	SubjectID string
+}
+
+// GetMembershipBySubject
+//
+//	SELECT id, account_id, subject_id, role, created_at, updated_at FROM account_memberships
+//	WHERE account_id = $1 AND subject_id = $2
+func (q *Queries) GetMembershipBySubject(ctx context.Context, arg GetMembershipBySubjectParams) (AccountMembership, error) {
+	row := q.db.QueryRow(ctx, getMembershipBySubject, arg.AccountID, arg.SubjectID)
+	var i AccountMembership
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.SubjectID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getModelUsageReceiptByIteration = `-- name: GetModelUsageReceiptByIteration :one
 SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, message_id, message_sequence, usage, provenance, evidence_digest, created_at FROM model_usage_receipts
 WHERE invocation_id = $1 AND iteration = $2
@@ -2392,6 +3180,54 @@ func (q *Queries) GetNonterminalInvocationBySession(ctx context.Context, session
 		&i.OutputSchemaDigest,
 		&i.Output,
 		&i.OutputProvenance,
+	)
+	return i, err
+}
+
+const getOperatorSubject = `-- name: GetOperatorSubject :one
+SELECT id, account_id, issuer, subject, created_at FROM operator_subjects WHERE id = $1
+`
+
+// GetOperatorSubject
+//
+//	SELECT id, account_id, issuer, subject, created_at FROM operator_subjects WHERE id = $1
+func (q *Queries) GetOperatorSubject(ctx context.Context, id string) (OperatorSubject, error) {
+	row := q.db.QueryRow(ctx, getOperatorSubject, id)
+	var i OperatorSubject
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Issuer,
+		&i.Subject,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getOperatorSubjectByIdentity = `-- name: GetOperatorSubjectByIdentity :one
+SELECT id, account_id, issuer, subject, created_at FROM operator_subjects
+WHERE account_id = $1 AND issuer = $2 AND subject = $3
+`
+
+type GetOperatorSubjectByIdentityParams struct {
+	AccountID string
+	Issuer    string
+	Subject   string
+}
+
+// GetOperatorSubjectByIdentity
+//
+//	SELECT id, account_id, issuer, subject, created_at FROM operator_subjects
+//	WHERE account_id = $1 AND issuer = $2 AND subject = $3
+func (q *Queries) GetOperatorSubjectByIdentity(ctx context.Context, arg GetOperatorSubjectByIdentityParams) (OperatorSubject, error) {
+	row := q.db.QueryRow(ctx, getOperatorSubjectByIdentity, arg.AccountID, arg.Issuer, arg.Subject)
+	var i OperatorSubject
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Issuer,
+		&i.Subject,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -2502,6 +3338,32 @@ func (q *Queries) GetSessionForUpdate(ctx context.Context, id string) (Session, 
 		&i.NextLifecycleRevision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getStaticCredentialImport = `-- name: GetStaticCredentialImport :one
+SELECT account_id, import_key, credential_id, imported_at FROM static_credential_imports
+WHERE account_id = $1 AND import_key = $2
+`
+
+type GetStaticCredentialImportParams struct {
+	AccountID string
+	ImportKey string
+}
+
+// GetStaticCredentialImport
+//
+//	SELECT account_id, import_key, credential_id, imported_at FROM static_credential_imports
+//	WHERE account_id = $1 AND import_key = $2
+func (q *Queries) GetStaticCredentialImport(ctx context.Context, arg GetStaticCredentialImportParams) (StaticCredentialImport, error) {
+	row := q.db.QueryRow(ctx, getStaticCredentialImport, arg.AccountID, arg.ImportKey)
+	var i StaticCredentialImport
+	err := row.Scan(
+		&i.AccountID,
+		&i.ImportKey,
+		&i.CredentialID,
+		&i.ImportedAt,
 	)
 	return i, err
 }
@@ -2723,6 +3585,105 @@ func (q *Queries) GetToolCallForUpdate(ctx context.Context, id string) (ToolCall
 		&i.ResultOrigin,
 	)
 	return i, err
+}
+
+const incrementDeviceConfirmationAttempts = `-- name: IncrementDeviceConfirmationAttempts :one
+UPDATE device_authorizations
+SET confirmation_attempts = confirmation_attempts + 1, updated_at = $1
+WHERE id = $2 AND confirmation_attempts < 20
+RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+`
+
+type IncrementDeviceConfirmationAttemptsParams struct {
+	UpdatedAt time.Time
+	ID        string
+}
+
+// IncrementDeviceConfirmationAttempts
+//
+//	UPDATE device_authorizations
+//	SET confirmation_attempts = confirmation_attempts + 1, updated_at = $1
+//	WHERE id = $2 AND confirmation_attempts < 20
+//	RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+func (q *Queries) IncrementDeviceConfirmationAttempts(ctx context.Context, arg IncrementDeviceConfirmationAttemptsParams) (DeviceAuthorization, error) {
+	row := q.db.QueryRow(ctx, incrementDeviceConfirmationAttempts, arg.UpdatedAt, arg.ID)
+	var i DeviceAuthorization
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.DeviceCodeHash,
+		&i.UserCodeHash,
+		&i.UserCodeDisplay,
+		&i.DeviceLabel,
+		&i.RoleCap,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.Status,
+		&i.PollIntervalSeconds,
+		&i.NextPollAt,
+		&i.ConfirmationAttempts,
+		&i.ApprovedBySubjectID,
+		&i.CredentialID,
+		&i.ExpiresAt,
+		&i.DeliveryExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listAPICredentials = `-- name: ListAPICredentials :many
+SELECT id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at FROM api_credentials
+WHERE account_id = $1
+ORDER BY created_at DESC, id DESC
+`
+
+// ListAPICredentials
+//
+//	SELECT id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at FROM api_credentials
+//	WHERE account_id = $1
+//	ORDER BY created_at DESC, id DESC
+func (q *Queries) ListAPICredentials(ctx context.Context, accountID string) ([]ApiCredential, error) {
+	rows, err := q.db.Query(ctx, listAPICredentials, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ApiCredential{}
+	for rows.Next() {
+		var i ApiCredential
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.Kind,
+			&i.Name,
+			&i.Prefix,
+			&i.Verifier,
+			&i.Status,
+			&i.Profile,
+			&i.RoleCap,
+			&i.OwnerSubjectID,
+			&i.CreatorSubjectID,
+			&i.CreatorCredentialID,
+			&i.TenantConstraint,
+			&i.SessionConstraint,
+			&i.OperationConstraints,
+			&i.ExpiresAt,
+			&i.RotatedFromID,
+			&i.RotationOverlapEndsAt,
+			&i.RevokedAt,
+			&i.LastUsedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAccounts = `-- name: ListAccounts :many
@@ -4342,6 +5303,62 @@ func (q *Queries) ReapInvocationDeadline(ctx context.Context, arg ReapInvocation
 	return i, err
 }
 
+const recordDevicePoll = `-- name: RecordDevicePoll :one
+UPDATE device_authorizations
+SET poll_interval_seconds = $1,
+    next_poll_at = $2,
+    updated_at = $3
+WHERE id = $4
+RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+`
+
+type RecordDevicePollParams struct {
+	PollIntervalSeconds int32
+	NextPollAt          time.Time
+	UpdatedAt           time.Time
+	ID                  string
+}
+
+// RecordDevicePoll
+//
+//	UPDATE device_authorizations
+//	SET poll_interval_seconds = $1,
+//	    next_poll_at = $2,
+//	    updated_at = $3
+//	WHERE id = $4
+//	RETURNING id, account_id, device_code_hash, user_code_hash, user_code_display, device_label, role_cap, tenant_constraint, session_constraint, status, poll_interval_seconds, next_poll_at, confirmation_attempts, approved_by_subject_id, credential_id, expires_at, delivery_expires_at, created_at, updated_at
+func (q *Queries) RecordDevicePoll(ctx context.Context, arg RecordDevicePollParams) (DeviceAuthorization, error) {
+	row := q.db.QueryRow(ctx, recordDevicePoll,
+		arg.PollIntervalSeconds,
+		arg.NextPollAt,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	var i DeviceAuthorization
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.DeviceCodeHash,
+		&i.UserCodeHash,
+		&i.UserCodeDisplay,
+		&i.DeviceLabel,
+		&i.RoleCap,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.Status,
+		&i.PollIntervalSeconds,
+		&i.NextPollAt,
+		&i.ConfirmationAttempts,
+		&i.ApprovedBySubjectID,
+		&i.CredentialID,
+		&i.ExpiresAt,
+		&i.DeliveryExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const recoverExpiredCallbackDeliveries = `-- name: RecoverExpiredCallbackDeliveries :execrows
 WITH candidates AS (
     SELECT id
@@ -4860,6 +5877,110 @@ func (q *Queries) ReturnExecutionDispatchPending(ctx context.Context, arg Return
 	return i, err
 }
 
+const revokeAPICredential = `-- name: RevokeAPICredential :one
+UPDATE api_credentials
+SET status = 'revoked', revoked_at = $1, updated_at = $1
+WHERE id = $2 AND account_id = $3 AND status = 'active'
+RETURNING id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at
+`
+
+type RevokeAPICredentialParams struct {
+	RevokedAt *time.Time
+	ID        string
+	AccountID string
+}
+
+// RevokeAPICredential
+//
+//	UPDATE api_credentials
+//	SET status = 'revoked', revoked_at = $1, updated_at = $1
+//	WHERE id = $2 AND account_id = $3 AND status = 'active'
+//	RETURNING id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at
+func (q *Queries) RevokeAPICredential(ctx context.Context, arg RevokeAPICredentialParams) (ApiCredential, error) {
+	row := q.db.QueryRow(ctx, revokeAPICredential, arg.RevokedAt, arg.ID, arg.AccountID)
+	var i ApiCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Kind,
+		&i.Name,
+		&i.Prefix,
+		&i.Verifier,
+		&i.Status,
+		&i.Profile,
+		&i.RoleCap,
+		&i.OwnerSubjectID,
+		&i.CreatorSubjectID,
+		&i.CreatorCredentialID,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.OperationConstraints,
+		&i.ExpiresAt,
+		&i.RotatedFromID,
+		&i.RotationOverlapEndsAt,
+		&i.RevokedAt,
+		&i.LastUsedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setCredentialRotationOverlap = `-- name: SetCredentialRotationOverlap :one
+UPDATE api_credentials
+SET rotation_overlap_ends_at = $1, updated_at = $2
+WHERE id = $3 AND account_id = $4 AND status = 'active'
+RETURNING id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at
+`
+
+type SetCredentialRotationOverlapParams struct {
+	OverlapEndsAt *time.Time
+	UpdatedAt     time.Time
+	ID            string
+	AccountID     string
+}
+
+// SetCredentialRotationOverlap
+//
+//	UPDATE api_credentials
+//	SET rotation_overlap_ends_at = $1, updated_at = $2
+//	WHERE id = $3 AND account_id = $4 AND status = 'active'
+//	RETURNING id, account_id, kind, name, prefix, verifier, status, profile, role_cap, owner_subject_id, creator_subject_id, creator_credential_id, tenant_constraint, session_constraint, operation_constraints, expires_at, rotated_from_id, rotation_overlap_ends_at, revoked_at, last_used_at, created_at, updated_at
+func (q *Queries) SetCredentialRotationOverlap(ctx context.Context, arg SetCredentialRotationOverlapParams) (ApiCredential, error) {
+	row := q.db.QueryRow(ctx, setCredentialRotationOverlap,
+		arg.OverlapEndsAt,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.AccountID,
+	)
+	var i ApiCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Kind,
+		&i.Name,
+		&i.Prefix,
+		&i.Verifier,
+		&i.Status,
+		&i.Profile,
+		&i.RoleCap,
+		&i.OwnerSubjectID,
+		&i.CreatorSubjectID,
+		&i.CreatorCredentialID,
+		&i.TenantConstraint,
+		&i.SessionConstraint,
+		&i.OperationConstraints,
+		&i.ExpiresAt,
+		&i.RotatedFromID,
+		&i.RotationOverlapEndsAt,
+		&i.RevokedAt,
+		&i.LastUsedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const settleActiveExecutionDispatchForWork = `-- name: SettleActiveExecutionDispatchForWork :execrows
 UPDATE execution_dispatches
 SET status = 'settled', publisher_owner = NULL,
@@ -5347,6 +6468,76 @@ func (q *Queries) StartToolCallAttempt(ctx context.Context, arg StartToolCallAtt
 		&i.UpdatedAt,
 		&i.CompletedAt,
 		&i.ResultOrigin,
+	)
+	return i, err
+}
+
+const touchAPICredential = `-- name: TouchAPICredential :exec
+UPDATE api_credentials
+SET last_used_at = GREATEST(COALESCE(last_used_at, $1::timestamptz), $1),
+    updated_at = GREATEST(updated_at, $1)
+WHERE id = $2 AND status = 'active'
+  AND (last_used_at IS NULL OR last_used_at <= $1::timestamptz - INTERVAL '5 minutes')
+`
+
+type TouchAPICredentialParams struct {
+	UsedAt time.Time
+	ID     string
+}
+
+// TouchAPICredential
+//
+//	UPDATE api_credentials
+//	SET last_used_at = GREATEST(COALESCE(last_used_at, $1::timestamptz), $1),
+//	    updated_at = GREATEST(updated_at, $1)
+//	WHERE id = $2 AND status = 'active'
+//	  AND (last_used_at IS NULL OR last_used_at <= $1::timestamptz - INTERVAL '5 minutes')
+func (q *Queries) TouchAPICredential(ctx context.Context, arg TouchAPICredentialParams) error {
+	_, err := q.db.Exec(ctx, touchAPICredential, arg.UsedAt, arg.ID)
+	return err
+}
+
+const upsertMembership = `-- name: UpsertMembership :one
+INSERT INTO account_memberships (id, account_id, subject_id, role, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (account_id, subject_id) DO UPDATE
+SET role = EXCLUDED.role, updated_at = EXCLUDED.updated_at
+RETURNING id, account_id, subject_id, role, created_at, updated_at
+`
+
+type UpsertMembershipParams struct {
+	ID        string
+	AccountID string
+	SubjectID string
+	Role      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// UpsertMembership
+//
+//	INSERT INTO account_memberships (id, account_id, subject_id, role, created_at, updated_at)
+//	VALUES ($1, $2, $3, $4, $5, $6)
+//	ON CONFLICT (account_id, subject_id) DO UPDATE
+//	SET role = EXCLUDED.role, updated_at = EXCLUDED.updated_at
+//	RETURNING id, account_id, subject_id, role, created_at, updated_at
+func (q *Queries) UpsertMembership(ctx context.Context, arg UpsertMembershipParams) (AccountMembership, error) {
+	row := q.db.QueryRow(ctx, upsertMembership,
+		arg.ID,
+		arg.AccountID,
+		arg.SubjectID,
+		arg.Role,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i AccountMembership
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.SubjectID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
