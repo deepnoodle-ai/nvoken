@@ -68,8 +68,8 @@ func newHandler(attempts AttemptService, logger *slog.Logger, attemptTimeout tim
 		_, _ = w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("POST /internal/execution-dispatches/{dispatch_id}/attempts", func(w http.ResponseWriter, r *http.Request) {
-		var body [1]byte
-		if count, err := r.Body.Read(body[:]); count != 0 || (err != nil && !errors.Is(err, io.EOF)) {
+		r.Body = http.MaxBytesReader(w, r.Body, 0)
+		if _, err := io.ReadAll(r.Body); err != nil {
 			logger.Warn("ignored malformed execution dispatch delivery",
 				"dispatch_id", r.PathValue("dispatch_id"), "handler_outcome", "poison_body")
 			w.WriteHeader(http.StatusNoContent)

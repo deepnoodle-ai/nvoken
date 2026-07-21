@@ -148,6 +148,16 @@ run "paved_defaults" {
 
   assert {
     condition = (
+      google_cloud_tasks_queue_iam_member.runtime_cloud_tasks_enqueuer.name == google_cloud_tasks_queue.execution.name &&
+      google_cloud_tasks_queue_iam_member.runtime_cloud_tasks_enqueuer.role == "roles/cloudtasks.enqueuer" &&
+      google_cloud_tasks_queue_iam_member.runtime_cloud_tasks_viewer.name == google_cloud_tasks_queue.execution.name &&
+      google_cloud_tasks_queue_iam_member.runtime_cloud_tasks_viewer.role == "roles/cloudtasks.viewer"
+    )
+    error_message = "Publisher Cloud Tasks permissions must be scoped to the execution queue."
+  }
+
+  assert {
+    condition = (
       google_cloud_tasks_queue.execution.rate_limits[0].max_concurrent_dispatches <= var.executor_max_instances * var.executor_request_concurrency &&
       google_cloud_run_v2_service.executor.template[0].timeout == "1800s" &&
       one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "EXECUTOR_ATTEMPT_TIMEOUT"]) == "1795s"
@@ -181,6 +191,37 @@ run "paved_defaults" {
   assert {
     condition     = length(google_monitoring_alert_policy.dispatch_failures) == 4
     error_message = "Aged dispatch, publication failure, and executor authentication signals must be alertable."
+  }
+
+  assert {
+    condition = (
+      google_monitoring_alert_policy.dispatch_failures["aged_pending"].conditions[0].condition_threshold[0].duration == "300s" &&
+      google_monitoring_alert_policy.dispatch_failures["stale_published"].conditions[0].condition_threshold[0].duration == "300s" &&
+      google_monitoring_alert_policy.dispatch_failures["publish_failure"].conditions[0].condition_threshold[0].duration == "0s"
+    )
+    error_message = "Aged dispatch alerts must require sustained evidence without delaying discrete failure alerts."
+  }
+}
+
+run "notification_channels_are_wired" {
+  command = plan
+
+  variables {
+    project_id                       = "example-project"
+    environment                      = "test"
+    image_tag                        = "0123456789abcdef"
+    anthropic_api_key_secret_id      = "nvoken-test-anthropic"
+    database_deletion_protection     = false
+    service_deletion_protection      = false
+    monitoring_notification_channels = ["projects/example-project/notificationChannels/123456789"]
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in google_monitoring_alert_policy.dispatch_failures :
+      policy.notification_channels == tolist(["projects/example-project/notificationChannels/123456789"])
+    ])
+    error_message = "Every dispatch alert policy must attach the configured notification channels."
   }
 }
 

@@ -235,6 +235,20 @@ variable "synthetic_dispatch_delay_seconds" {
   }
 }
 
+variable "monitoring_notification_channels" {
+  description = "Existing Monitoring notification channel resource names to attach to dispatch alert policies."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for channel in var.monitoring_notification_channels :
+      can(regex("^projects/[^/]+/notificationChannels/[^/]+$", channel))
+    ])
+    error_message = "monitoring_notification_channels entries must be full projects/.../notificationChannels/... resource names."
+  }
+}
+
 variable "database_max_connections" {
   description = "Maximum Postgres pool connections per service instance."
   type        = number

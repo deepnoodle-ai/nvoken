@@ -322,16 +322,20 @@ resource "google_secret_manager_secret_iam_member" "executor_database" {
   member    = "serviceAccount:${google_service_account.executor.email}"
 }
 
-resource "google_project_iam_member" "runtime_cloud_tasks_enqueuer" {
-  project = var.project_id
-  role    = "roles/cloudtasks.enqueuer"
-  member  = "serviceAccount:${google_service_account.runtime.email}"
+resource "google_cloud_tasks_queue_iam_member" "runtime_cloud_tasks_enqueuer" {
+  project  = var.project_id
+  location = google_cloud_tasks_queue.execution.location
+  name     = google_cloud_tasks_queue.execution.name
+  role     = "roles/cloudtasks.enqueuer"
+  member   = "serviceAccount:${google_service_account.runtime.email}"
 }
 
-resource "google_project_iam_member" "runtime_cloud_tasks_viewer" {
-  project = var.project_id
-  role    = "roles/cloudtasks.viewer"
-  member  = "serviceAccount:${google_service_account.runtime.email}"
+resource "google_cloud_tasks_queue_iam_member" "runtime_cloud_tasks_viewer" {
+  project  = var.project_id
+  location = google_cloud_tasks_queue.execution.location
+  name     = google_cloud_tasks_queue.execution.name
+  role     = "roles/cloudtasks.viewer"
+  member   = "serviceAccount:${google_service_account.runtime.email}"
 }
 
 resource "google_service_account_iam_member" "runtime_acts_as_task_caller" {
@@ -855,8 +859,8 @@ resource "google_cloud_run_v2_service" "runtime" {
   depends_on = [
     google_cloud_run_v2_job.migrate,
     google_cloud_run_v2_service_iam_member.task_caller_invokes_executor,
-    google_project_iam_member.runtime_cloud_tasks_enqueuer,
-    google_project_iam_member.runtime_cloud_tasks_viewer,
+    google_cloud_tasks_queue_iam_member.runtime_cloud_tasks_enqueuer,
+    google_cloud_tasks_queue_iam_member.runtime_cloud_tasks_viewer,
     google_service_account_iam_member.runtime_acts_as_task_caller,
     google_project_service.required,
     google_secret_manager_secret_iam_member.generated,
@@ -959,11 +963,11 @@ resource "google_monitoring_alert_policy" "dispatch_failures" {
       filter          = "metric.type=\"logging.googleapis.com/user/${each.value.name}\" AND resource.type=\"cloud_run_revision\""
       comparison      = "COMPARISON_GT"
       threshold_value = 0
-      duration        = "0s"
+      duration        = contains(["aged_pending", "stale_published"], each.key) ? "300s" : "0s"
 
       aggregations {
         alignment_period   = "60s"
-        per_series_aligner = "ALIGN_DELTA"
+        per_series_aligner = "ALIGN_SUM"
       }
     }
   }
@@ -976,4 +980,6 @@ resource "google_monitoring_alert_policy" "dispatch_failures" {
     content   = "Investigate nvoken execution dispatch publication, reconciliation, or executor IAM. See deploy/google-cloud/README.md."
     mime_type = "text/markdown"
   }
+
+  notification_channels = var.monitoring_notification_channels
 }

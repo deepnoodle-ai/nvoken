@@ -191,8 +191,13 @@ conservative live-owner duplicate response in PRD 010.
 
 Terraform creates alert policies for aged pending dispatches, stale published
 dispatches, repeated publication failure, and executor `401`/`403` responses.
-Attach the installation's notification channels to those policies before a
-production rollout.
+Aged-state policies require five minutes of sustained observations, while
+publication and authentication failures alert immediately. Set
+`monitoring_notification_channels` to existing full Monitoring channel resource
+names (for example,
+`["projects/PROJECT/notificationChannels/CHANNEL"]`) before a production
+rollout. The default empty list creates observable incidents but does not notify
+an operator.
 
 Because PRD 009 does not route real Invocations, rollback is intentionally
 simple: pause the queue, stop creating synthetic dispatches, and roll the

@@ -391,21 +391,58 @@ func (s *DispatchService) reconcileMissing(ctx context.Context, dispatchID strin
 }
 
 func (s *DispatchService) LogAged(ctx context.Context) error {
-	items, err := s.repository.ListAgedExecutionDispatches(ctx, s.clock.Now().Add(-s.config.StaleAfter), s.config.BatchLimit)
+	now := s.clock.Now()
+	items, err := s.repository.ListAgedExecutionDispatches(ctx, now.Add(-s.config.StaleAfter), s.config.BatchLimit)
 	if err != nil {
 		return err
 	}
+	for _, summary := range summarizeAgedDispatches(items) {
+		s.logger.Warn("execution dispatches are stale",
+			"event", summary.Event, "dispatch_count", summary.Count,
+			"oldest_dispatch_id", summary.Oldest.ID, "oldest_dispatch_kind", summary.Oldest.Kind,
+			"oldest_dispatch_status", summary.Oldest.Status,
+			"oldest_age_ms", now.Sub(summary.Oldest.UpdatedAt).Milliseconds(),
+			"max_publish_attempts", summary.MaxPublishAttempts,
+			"batch_full", len(items) == s.config.BatchLimit)
+	}
+	return nil
+}
+
+type agedDispatchSummary struct {
+	Event              string
+	Count              int
+	Oldest             domain.ExecutionDispatch
+	MaxPublishAttempts int
+}
+
+func summarizeAgedDispatches(items []domain.ExecutionDispatch) []agedDispatchSummary {
+	byEvent := make(map[string]*agedDispatchSummary, 2)
 	for _, dispatch := range items {
 		event := "dispatch_aged_pending"
 		if dispatch.Status == domain.ExecutionDispatchPublished {
 			event = "dispatch_stale_published"
 		}
-		s.logger.Warn("execution dispatch is stale",
-			"event", event, "dispatch_id", dispatch.ID, "dispatch_kind", dispatch.Kind,
-			"dispatch_status", dispatch.Status, "publish_attempts", dispatch.PublishAttempts,
-			"age_ms", s.clock.Now().Sub(dispatch.UpdatedAt).Milliseconds())
+		summary := byEvent[event]
+		if summary == nil {
+			summary = &agedDispatchSummary{Event: event, Oldest: dispatch}
+			byEvent[event] = summary
+		}
+		summary.Count++
+		if dispatch.UpdatedAt.Before(summary.Oldest.UpdatedAt) {
+			summary.Oldest = dispatch
+		}
+		if dispatch.PublishAttempts > summary.MaxPublishAttempts {
+			summary.MaxPublishAttempts = dispatch.PublishAttempts
+		}
 	}
-	return nil
+
+	summaries := make([]agedDispatchSummary, 0, len(byEvent))
+	for _, event := range []string{"dispatch_aged_pending", "dispatch_stale_published"} {
+		if summary := byEvent[event]; summary != nil {
+			summaries = append(summaries, *summary)
+		}
+	}
+	return summaries
 }
 
 func (s *DispatchService) Prune(ctx context.Context) (int64, error) {
