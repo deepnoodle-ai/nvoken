@@ -194,7 +194,7 @@ func TestRuntimeAdmissionRetryReadsAndTenantIsolation(t *testing.T) {
 	assertPublicCode(t, err, services.CodeNotFound)
 
 	completedAt := time.Now().UTC()
-	if err := store.UpdateInvocationStatus(ctx, first.InvocationID, domain.InvocationCompleted, 2, nil, &completedAt); err != nil {
+	if err := updateInvocationStatusForTest(ctx, pool, first.InvocationID, domain.InvocationCompleted, 2, nil, &completedAt); err != nil {
 		t.Fatalf("complete Invocation: %v", err)
 	}
 	replay, err = service.Admit(ctx, auth, input)
@@ -343,13 +343,13 @@ func TestRuntimeAdmissionConcurrentEqualAndDistinctRequests(t *testing.T) {
 	})
 
 	t.Run("distinct requests for an existing idle Session", func(t *testing.T) {
-		pool, service, store, auth := newRuntimeFixture(t)
+		pool, service, _, auth := newRuntimeFixture(t)
 		first, err := service.Admit(context.Background(), auth, runtimeInput())
 		if err != nil {
 			t.Fatalf("initial admission: %v", err)
 		}
 		completedAt := time.Now().UTC()
-		if err := store.UpdateInvocationStatus(context.Background(), first.InvocationID, domain.InvocationCompleted, 2, nil, &completedAt); err != nil {
+		if err := updateInvocationStatusForTest(context.Background(), pool, first.InvocationID, domain.InvocationCompleted, 2, nil, &completedAt); err != nil {
 			t.Fatalf("complete initial Invocation: %v", err)
 		}
 
@@ -520,7 +520,7 @@ func TestRuntimeAdmissionCancellationWhileWaitingForSessionLockRollsBack(t *test
 		t.Fatalf("first admission: %v", err)
 	}
 	completedAt := time.Now().UTC()
-	if err := store.UpdateInvocationStatus(context.Background(), first.InvocationID, domain.InvocationCompleted, 2, nil, &completedAt); err != nil {
+	if err := updateInvocationStatusForTest(context.Background(), pool, first.InvocationID, domain.InvocationCompleted, 2, nil, &completedAt); err != nil {
 		t.Fatalf("complete first: %v", err)
 	}
 
