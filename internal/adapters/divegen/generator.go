@@ -47,6 +47,22 @@ func newModel(provider, model, apiKey string) (llm.LLM, error) {
 }
 
 func (g *Generator) Generate(ctx context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
+	return g.generate(ctx, request, nil)
+}
+
+func (g *Generator) GenerateStream(
+	ctx context.Context,
+	request domain.GenerationRequest,
+	emit ports.GenerationDeltaEmitter,
+) (domain.GenerationResponse, error) {
+	return g.generate(ctx, request, emit)
+}
+
+func (g *Generator) generate(
+	ctx context.Context,
+	request domain.GenerationRequest,
+	emit ports.GenerationDeltaEmitter,
+) (domain.GenerationResponse, error) {
 	if g == nil || g.factory == nil {
 		return domain.GenerationResponse{}, fmt.Errorf("dive generator is not configured")
 	}
@@ -76,10 +92,14 @@ func (g *Generator) Generate(ctx context.Context, request domain.GenerationReque
 		}
 		messages = append(messages, converted)
 	}
-	evidence := &evidenceModel{LLM: model}
+	evidence := &modelEvidence{}
+	var agentModel llm.LLM = &evidenceModel{LLM: model, evidence: evidence}
+	if streaming, ok := model.(llm.StreamingLLM); ok && emit != nil {
+		agentModel = &streamingEvidenceModel{StreamingLLM: streaming, evidence: evidence}
+	}
 	agent, err := dive.NewAgent(dive.AgentOptions{
 		SystemPrompt:       request.Instructions,
-		Model:              evidence,
+		Model:              agentModel,
 		Tools:              nil,
 		ModelSettings:      &dive.ModelSettings{MaxTokens: request.MaxOutputTokens},
 		ToolIterationLimit: request.MaxIterations,
@@ -87,7 +107,16 @@ func (g *Generator) Generate(ctx context.Context, request domain.GenerationReque
 	if err != nil {
 		return domain.GenerationResponse{}, fmt.Errorf("configure Dive agent: %w", err)
 	}
-	response, err := agent.CreateResponse(ctx, dive.WithMessages(messages...))
+	options := []dive.CreateResponseOption{dive.WithMessages(messages...)}
+	if emit != nil {
+		options = append(options, dive.WithEventCallback(func(_ context.Context, item *dive.ResponseItem) error {
+			if delta, ok := normalizedDelta(item); ok {
+				emit(delta)
+			}
+			return nil
+		}))
+	}
+	response, err := agent.CreateResponse(ctx, options...)
 	if err != nil {
 		if ctx.Err() != nil {
 			return domain.GenerationResponse{}, ctx.Err()
@@ -117,39 +146,125 @@ func (g *Generator) Generate(ctx context.Context, request domain.GenerationReque
 	return domain.GenerationResponse{Messages: output, Usage: usage, ServedModel: servedModel}, nil
 }
 
-// evidenceModel captures the provider's response model without exposing the
-// raw response outside this adapter. It intentionally implements only LLM so
-// this slice remains one non-streaming generation call.
+// evidenceModel captures blocking-provider evidence without exposing the raw
+// response outside this adapter.
 type evidenceModel struct {
 	llm.LLM
+	evidence *modelEvidence
+}
+
+type modelEvidence struct {
 	mu     sync.Mutex
 	served string
 	calls  int
 }
 
 func (m *evidenceModel) Generate(ctx context.Context, options ...llm.Option) (*llm.Response, error) {
-	m.mu.Lock()
-	m.calls++
-	m.mu.Unlock()
+	m.evidence.recordCall()
 	response, err := m.LLM.Generate(ctx, options...)
 	if response != nil && strings.TrimSpace(response.Model) != "" {
-		m.mu.Lock()
-		m.served = response.Model
-		m.mu.Unlock()
+		m.evidence.recordModel(response.Model)
 	}
 	return response, err
 }
 
-func (m *evidenceModel) iterations() int {
+type streamingEvidenceModel struct {
+	llm.StreamingLLM
+	evidence *modelEvidence
+}
+
+func (m *streamingEvidenceModel) Stream(ctx context.Context, options ...llm.Option) (llm.StreamIterator, error) {
+	m.evidence.recordCall()
+	iterator, err := m.StreamingLLM.Stream(ctx, options...)
+	if err != nil {
+		return nil, err
+	}
+	return &evidenceIterator{StreamIterator: iterator, evidence: m.evidence}, nil
+}
+
+type evidenceIterator struct {
+	llm.StreamIterator
+	evidence *modelEvidence
+}
+
+func (i *evidenceIterator) Next() bool {
+	if !i.StreamIterator.Next() {
+		return false
+	}
+	event := i.StreamIterator.Event()
+	if event != nil && event.Message != nil {
+		i.evidence.recordModel(event.Message.Model)
+	}
+	return true
+}
+
+func (m *modelEvidence) recordCall() {
+	m.mu.Lock()
+	m.calls++
+	m.mu.Unlock()
+}
+
+func (m *modelEvidence) recordModel(model string) {
+	if strings.TrimSpace(model) == "" {
+		return
+	}
+	m.mu.Lock()
+	m.served = model
+	m.mu.Unlock()
+}
+
+func (m *modelEvidence) iterations() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.calls
 }
 
-func (m *evidenceModel) servedModel() string {
+func (m *modelEvidence) servedModel() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.served
+}
+
+func normalizedDelta(item *dive.ResponseItem) (domain.GenerationDelta, bool) {
+	if item == nil || item.Type != dive.ResponseItemTypeModelEvent || item.Event == nil {
+		return domain.GenerationDelta{}, false
+	}
+	event := item.Event
+	index := 0
+	if event.Index != nil {
+		index = *event.Index
+	}
+	switch event.Type {
+	case llm.EventTypeContentBlockStart:
+		if event.ContentBlock == nil {
+			return domain.GenerationDelta{}, false
+		}
+		switch event.ContentBlock.Type {
+		case llm.ContentTypeText:
+			if event.ContentBlock.Text != "" {
+				return domain.GenerationDelta{ContentIndex: index, Type: "text", Text: event.ContentBlock.Text}, true
+			}
+		case llm.ContentTypeThinking:
+			if event.ContentBlock.Thinking != "" {
+				return domain.GenerationDelta{ContentIndex: index, Type: "thinking", Thinking: event.ContentBlock.Thinking}, true
+			}
+		}
+	case llm.EventTypeContentBlockDelta:
+		if event.Delta == nil {
+			return domain.GenerationDelta{}, false
+		}
+		switch event.Delta.Type {
+		case llm.EventDeltaTypeText:
+			if event.Delta.Text != "" {
+				return domain.GenerationDelta{ContentIndex: index, Type: "text", Text: event.Delta.Text}, true
+			}
+		case llm.EventDeltaTypeThinking:
+			if event.Delta.Thinking != "" {
+				return domain.GenerationDelta{ContentIndex: index, Type: "thinking", Thinking: event.Delta.Thinking}, true
+			}
+		}
+	}
+	return domain.GenerationDelta{}, false
 }
 
 func toDiveMessage(message domain.GenerationMessage) (*llm.Message, error) {

@@ -9,6 +9,7 @@ import (
 	"github.com/deepnoodle-ai/wonton/env"
 
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/cloudtasks"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpapi"
 	"github.com/deepnoodle-ai/nvoken/internal/daemon"
 	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
@@ -27,6 +28,14 @@ type config struct {
 	OpenAIAPIKey            string        `env:"OPENAI_API_KEY"`
 	ShutdownTimeout         time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
 	ExecutorAttemptTimeout  time.Duration `env:"EXECUTOR_ATTEMPT_TIMEOUT" envDefault:"29m55s"`
+	RedisURL                string        `env:"REDIS_URL"`
+	RedisPassword           string        `env:"REDIS_PASSWORD"`
+	RedisCACertificate      string        `env:"REDIS_CA_CERT"`
+	LiveEventBuffer         int           `env:"LIVE_EVENT_BUFFER" envDefault:"64"`
+	StreamPollInterval      time.Duration `env:"STREAM_POLL_INTERVAL" envDefault:"1s"`
+	StreamKeepaliveInterval time.Duration `env:"STREAM_KEEPALIVE_INTERVAL" envDefault:"15s"`
+	StreamMaxLifetime       time.Duration `env:"STREAM_MAX_LIFETIME" envDefault:"55m"`
+	StreamWriteTimeout      time.Duration `env:"STREAM_WRITE_TIMEOUT" envDefault:"10s"`
 
 	DispatchQueue                 string        `env:"DISPATCH_QUEUE" envDefault:"execution"`
 	DispatchPublicationLease      time.Duration `env:"DISPATCH_PUBLICATION_LEASE" envDefault:"30s"`
@@ -192,6 +201,18 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if role == daemon.ProcessRoleExecutor && executionMode == services.InvocationExecutionCloudTasks && cfg.EngineExecutionSegmentCeiling > cfg.ExecutorAttemptTimeout {
 		return daemon.Config{}, fmt.Errorf("serve: ENGINE_EXECUTION_SEGMENT_CEILING must not exceed EXECUTOR_ATTEMPT_TIMEOUT")
 	}
+	if executionMode == services.InvocationExecutionCloudTasks && cfg.RedisURL == "" {
+		return daemon.Config{}, fmt.Errorf("serve: cloud_tasks Invocation execution requires REDIS_URL for cross-process live output")
+	}
+	if cfg.LiveEventBuffer <= 0 {
+		return daemon.Config{}, fmt.Errorf("serve: LIVE_EVENT_BUFFER must be positive")
+	}
+	if cfg.StreamPollInterval <= 0 || cfg.StreamKeepaliveInterval <= 0 || cfg.StreamMaxLifetime <= 0 || cfg.StreamWriteTimeout <= 0 {
+		return daemon.Config{}, fmt.Errorf("serve: stream intervals, lifetime, and write timeout must be positive")
+	}
+	if cfg.StreamWriteTimeout >= cfg.StreamMaxLifetime {
+		return daemon.Config{}, fmt.Errorf("serve: STREAM_WRITE_TIMEOUT must be less than STREAM_MAX_LIFETIME")
+	}
 	generatesInvocations := (role == daemon.ProcessRoleCombined && executionMode == services.InvocationExecutionEmbedded) ||
 		(role == daemon.ProcessRoleExecutor && executionMode == services.InvocationExecutionCloudTasks)
 	if generatesInvocations && cfg.AnthropicAPIKey == "" && cfg.OpenAIAPIKey == "" {
@@ -216,6 +237,12 @@ func loadDaemonConfig() (daemon.Config, error) {
 		ShutdownTimeout: cfg.ShutdownTimeout, Engine: engineConfig, Budgets: budgetPolicy,
 		Dispatch: dispatchConfig, DispatchController: controllerConfig, CloudTasks: cloudTasksConfig,
 		ExecutorAttemptTimeout: cfg.ExecutorAttemptTimeout,
+		RedisURL:               cfg.RedisURL, RedisPassword: cfg.RedisPassword,
+		RedisCACertificate: cfg.RedisCACertificate, LiveEventBuffer: cfg.LiveEventBuffer,
+		Stream: httpapi.StreamConfig{
+			PollInterval: cfg.StreamPollInterval, KeepaliveInterval: cfg.StreamKeepaliveInterval,
+			MaxLifetime: cfg.StreamMaxLifetime, WriteTimeout: cfg.StreamWriteTimeout,
+		},
 	}, nil
 }
 

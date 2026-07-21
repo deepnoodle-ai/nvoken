@@ -40,8 +40,9 @@ they are **stateless**. nvoken aims to retain that approach as much as possible.
 > Invocation/Session reads now work, and the self-contained service executes
 > generation-only Anthropic and OpenAI turns. Hosts can list durable work,
 > page the canonical transcript, and drain fixed-cut incremental recovery
-> snapshots. Tools, streaming, and checkpointed crash continuation remain
-> future slices.
+> snapshots or tail the same state over resumable SSE with ephemeral live
+> generation deltas. Tools and checkpointed crash continuation remain future
+> slices.
 > A reproducible [Google Cloud Run paved deployment](deploy/google-cloud/README.md)
 > packages this slice with private Cloud SQL, Secret Manager, and an explicit
 > migration job.
@@ -74,12 +75,13 @@ POST /v1/invocations
 }
 ```
 
-The first contract is background JSON: acknowledgement follows durable
+The first contract is background execution: acknowledgement follows durable
 admission, execution does not belong to the request handler, and clients recover
-authoritative state by durable ID or a scope-bound cursor. Hosts can bound or
-idempotently cancel accepted work; Postgres decides the terminal winner.
-Streaming, tools, and checkpointed crash continuation build on that record in
-later slices. The exact frozen surface is in
+authoritative state by durable ID or a scope-bound cursor. A Session SSE stream
+replays that same cursor model and adds id-less token previews; disconnecting it
+never affects execution. Hosts can bound or idempotently cancel accepted work;
+Postgres decides the terminal winner. Tools and checkpointed crash continuation
+build on that record in later slices. The exact frozen surface is in
 [openapi/runtime.yaml](openapi/runtime.yaml).
 
 ## Your app owns the state

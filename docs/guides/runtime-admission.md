@@ -30,6 +30,17 @@ component join; engine drain grace must be shorter than that total. Defaults are
 suitable for local self-contained operation. The Cloud Run paved path overrides
 both shutdown values to fit the platform termination window.
 
+Live output uses an in-process bounded fan-out by default. Set `REDIS_URL` to a
+`redis://` or `rediss://` URL when publishers and stream handlers run in
+different processes; `cloud_tasks` execution requires it. `REDIS_PASSWORD`
+overrides a URL-embedded password, and `REDIS_CA_CERT` accepts one or more PEM
+CAs for server-authenticated TLS. The Google paved path supplies both from
+Memorystore and Secret Manager. `LIVE_EVENT_BUFFER`,
+`STREAM_POLL_INTERVAL`, `STREAM_KEEPALIVE_INTERVAL`,
+`STREAM_MAX_LIFETIME`, and `STREAM_WRITE_TIMEOUT` bound loss, reconciliation,
+rotation, and slow clients. Redis carries previews only. A Redis failure cannot
+change execution or committed recovery state.
+
 `INVOCATION_DEFAULT_WALL_CLOCK_TIMEOUT`,
 `INVOCATION_DEFAULT_ACTIVE_EXECUTION_TIMEOUT`, and
 `INVOCATION_DEFAULT_MAX_ITERATIONS` supply omitted limits. The corresponding
@@ -118,8 +129,8 @@ curl --fail-with-body \
   'http://localhost:8080/v1/sessions?tenant_ref=customer-482'
 ```
 
-Read the sole durable transcript directly, or use the incremental snapshot that
-the future stream will project:
+Read the sole durable transcript directly, use the incremental JSON snapshot,
+or tail that same snapshot model with ephemeral live deltas:
 
 ```bash
 curl --fail-with-body \
@@ -129,6 +140,11 @@ curl --fail-with-body \
 curl --fail-with-body \
   -H "Authorization: Bearer $RUNTIME_API_KEY" \
   'http://localhost:8080/v1/sessions/sesn_…/transcript?limit=100'
+
+curl --no-buffer \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  -H 'Accept: text/event-stream' \
+  'http://localhost:8080/v1/sessions/sesn_…/transcript/stream'
 ```
 
 For `/transcript`, continue with `next_page_token` until `has_more` is false,
@@ -138,6 +154,16 @@ Message pages always precede lifecycle-change pages; applying the arrays in
 response order cannot expose terminal completion before its committed assistant
 messages. Cursors and page tokens are scoped to their Account, Session, and
 filters and grant no authority of their own.
+
+The stream accepts that `resume_cursor` as `?cursor=...`, or as
+`Last-Event-ID` when the query parameter is absent. Only
+`transcript.snapshot` frames carry an SSE ID. `generation.delta` frames are
+live-only text or thinking previews, and `stream.resync` means discard the
+preview and wait for canonical state. `stream.end` reason `rotate` requests a
+normal reconnect with the last ID; reason `terminal` is emitted only after the
+final Postgres reconciliation. Closing or losing the stream never cancels the
+Invocation. Use a streaming HTTP client that can set the bearer header; the
+browser's bare `EventSource` constructor cannot.
 
 The request body is limited to 1 MiB and 64 text blocks. Unknown fields,
 unsupported features such as tools, malformed IDs, duplicate JSON member names,

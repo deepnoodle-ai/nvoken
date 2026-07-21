@@ -17,10 +17,12 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/executorhttp"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpapi"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/liveevents"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/postgres"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/worksignal"
 	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
+	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
@@ -49,6 +51,11 @@ type Config struct {
 	DispatchController      dispatchruntime.ControllerConfig
 	CloudTasks              cloudtasks.Config
 	ExecutorAttemptTimeout  time.Duration
+	RedisURL                string
+	RedisPassword           string
+	RedisCACertificate      string
+	LiveEventBuffer         int
+	Stream                  httpapi.StreamConfig
 }
 
 type component interface {
@@ -128,6 +135,26 @@ func Run(ctx context.Context, cfg Config) error {
 	ids := identity.NewUUIDv7Generator(clock)
 	store := postgres.NewStore(pool)
 	txm := postgres.NewTransactionManager(pool)
+	var liveBus interface {
+		ports.LiveEventBus
+		Close() error
+	}
+	if cfg.RedisURL != "" {
+		liveBus, err = liveevents.NewRedisURL(
+			cfg.RedisURL, cfg.RedisPassword, cfg.RedisCACertificate, cfg.LiveEventBuffer, slog.Default(),
+		)
+		if err != nil {
+			return fmt.Errorf("configure Redis live-event fan-out: %w", err)
+		}
+		defer func() {
+			if err := liveBus.Close(); err != nil {
+				slog.Warn("close live-event fan-out", "error", err)
+			}
+		}()
+	} else {
+		inProcess := liveevents.NewInProcess(cfg.LiveEventBuffer)
+		liveBus = &inProcessLiveBus{LiveEventBus: inProcess}
+	}
 	dispatchService, err := services.NewDispatchService(store, txm, clock, ids, cfg.Dispatch, slog.Default())
 	if err != nil {
 		return fmt.Errorf("configure execution dispatch service: %w", err)
@@ -136,7 +163,9 @@ func Run(ctx context.Context, cfg Config) error {
 		generator := divegen.New(divegen.Config{
 			AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
 		})
-		invocationExecutor := services.NewGenerationExecutor(store, generator, slog.Default())
+		invocationExecutor := services.NewGenerationExecutor(
+			store, generator, slog.Default(), services.WithGenerationLiveEvents(liveBus),
+		)
 		ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
 			services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
 		owner, err := executionOwner()
@@ -187,6 +216,7 @@ func Run(ctx context.Context, cfg Config) error {
 		services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
 	srv := httpapi.NewServer(httpapi.Config{
 		Addr: ":" + cfg.Port, Authenticator: authenticator, Runtime: runtime,
+		LiveEvents: liveBus, Stream: cfg.Stream,
 		// Leave the supervisor one second to observe component completion and
 		// close the database pool inside the total process budget.
 		ShutdownTimeout: cfg.ShutdownTimeout - time.Second,
@@ -196,7 +226,9 @@ func Run(ctx context.Context, cfg Config) error {
 		generator := divegen.New(divegen.Config{
 			AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
 		})
-		executor := services.NewGenerationExecutor(store, generator, slog.Default())
+		executor := services.NewGenerationExecutor(
+			store, generator, slog.Default(), services.WithGenerationLiveEvents(liveBus),
+		)
 		owner, err := executionOwner()
 		if err != nil {
 			return fmt.Errorf("create execution owner: %w", err)
@@ -245,6 +277,12 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	return err
 }
+
+type inProcessLiveBus struct {
+	ports.LiveEventBus
+}
+
+func (*inProcessLiveBus) Close() error { return nil }
 
 func executionOwner() (string, error) {
 	hostname, err := os.Hostname()

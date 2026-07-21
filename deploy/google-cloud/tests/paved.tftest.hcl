@@ -11,6 +11,17 @@ mock_provider "google" {
       uri = "https://nvoken-test.example.run.app"
     }
   }
+
+  mock_resource "google_redis_instance" {
+    defaults = {
+      host        = "10.42.0.4"
+      port        = 6378
+      auth_string = "test-only-redis-auth"
+      server_ca_certs = [{
+        cert = "-----BEGIN CERTIFICATE-----\ntest-only\n-----END CERTIFICATE-----"
+      }]
+    }
+  }
 }
 
 mock_provider "random" {
@@ -86,6 +97,32 @@ run "paved_defaults" {
   assert {
     condition     = google_cloud_run_v2_service.runtime.template[0].containers[0].resources[0].cpu_idle == false
     error_message = "Combined mode must use instance-based CPU."
+  }
+
+  assert {
+    condition = (
+      google_redis_instance.live_events.tier == "BASIC" &&
+      google_redis_instance.live_events.connect_mode == "DIRECT_PEERING" &&
+      google_redis_instance.live_events.auth_enabled == true &&
+      google_redis_instance.live_events.transit_encryption_mode == "SERVER_AUTHENTICATION"
+    )
+    error_message = "Live Pub/Sub must use a bounded private Memorystore instance on the runtime VPC."
+  }
+
+  assert {
+    condition = (
+      length([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item if item.name == "REDIS_URL"]) == 1 &&
+      length([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item if item.name == "REDIS_URL"]) == 1 &&
+      startswith(one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "REDIS_URL"]), "rediss://") &&
+      length([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item if item.name == "REDIS_PASSWORD" && item.value_source[0].secret_key_ref[0].secret == google_secret_manager_secret.redis_auth.secret_id]) == 1 &&
+      length([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item if item.name == "REDIS_PASSWORD" && item.value_source[0].secret_key_ref[0].secret == google_secret_manager_secret.redis_auth.secret_id]) == 1 &&
+      length([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item if item.name == "REDIS_CA_CERT"]) == 1 &&
+      length([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item if item.name == "REDIS_CA_CERT"]) == 1 &&
+      google_cloud_run_v2_service.runtime.template[0].timeout == "3600s" &&
+      one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "STREAM_MAX_LIFETIME"]) == "3300s" &&
+      var.stream_max_lifetime_seconds + var.stream_write_timeout_seconds < var.runtime_request_timeout_seconds
+    )
+    error_message = "Both process roles must share private live fan-out and application-led rotation must precede the Cloud Run deadline."
   }
 
   assert {

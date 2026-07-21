@@ -125,6 +125,83 @@ variable "request_concurrency" {
   }
 }
 
+variable "runtime_request_timeout_seconds" {
+  description = "Cloud Run request ceiling; must exceed the application-led SSE rotation lifetime."
+  type        = number
+  default     = 3600
+
+  validation {
+    condition     = var.runtime_request_timeout_seconds >= 60 && var.runtime_request_timeout_seconds <= 3600 && var.runtime_request_timeout_seconds == floor(var.runtime_request_timeout_seconds)
+    error_message = "runtime_request_timeout_seconds must be a whole number from 60 through 3600."
+  }
+}
+
+variable "stream_max_lifetime_seconds" {
+  description = "Application-led SSE rotation lifetime."
+  type        = number
+  default     = 3300
+
+  validation {
+    condition     = var.stream_max_lifetime_seconds >= 30 && var.stream_max_lifetime_seconds == floor(var.stream_max_lifetime_seconds)
+    error_message = "stream_max_lifetime_seconds must be a whole number of at least 30."
+  }
+}
+
+variable "stream_poll_interval_seconds" {
+  description = "Postgres correctness-poll interval for active Session streams."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.stream_poll_interval_seconds >= 1 && var.stream_poll_interval_seconds == floor(var.stream_poll_interval_seconds)
+    error_message = "stream_poll_interval_seconds must be a positive whole number."
+  }
+}
+
+variable "stream_keepalive_interval_seconds" {
+  description = "SSE comment keepalive interval."
+  type        = number
+  default     = 15
+
+  validation {
+    condition     = var.stream_keepalive_interval_seconds >= 1 && var.stream_keepalive_interval_seconds == floor(var.stream_keepalive_interval_seconds)
+    error_message = "stream_keepalive_interval_seconds must be a positive whole number."
+  }
+}
+
+variable "stream_write_timeout_seconds" {
+  description = "Maximum duration of one SSE write before the slow client is disconnected."
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.stream_write_timeout_seconds >= 1 && var.stream_write_timeout_seconds == floor(var.stream_write_timeout_seconds)
+    error_message = "stream_write_timeout_seconds must be a positive whole number."
+  }
+}
+
+variable "live_event_buffer" {
+  description = "Bounded per-process live-event buffer depth."
+  type        = number
+  default     = 64
+
+  validation {
+    condition     = var.live_event_buffer >= 1 && var.live_event_buffer <= 10000 && var.live_event_buffer == floor(var.live_event_buffer)
+    error_message = "live_event_buffer must be a whole number from 1 through 10000."
+  }
+}
+
+variable "redis_memory_size_gb" {
+  description = "Memory allocated to the private basic-tier Memorystore instance used only for live Pub/Sub."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.redis_memory_size_gb >= 1 && var.redis_memory_size_gb == floor(var.redis_memory_size_gb)
+    error_message = "redis_memory_size_gb must be a positive whole number."
+  }
+}
+
 variable "engine_concurrency" {
   description = "Maximum simultaneously claimed Invocations per service instance."
   type        = number
