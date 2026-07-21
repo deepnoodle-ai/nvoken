@@ -46,6 +46,15 @@ type RuntimeService interface {
 	GetSessionTranscriptStreamState(context.Context, domain.RuntimeAuthContext, string) (services.TranscriptStreamState, error)
 }
 
+type clientToolRuntimeService interface {
+	SubmitClientToolResults(
+		context.Context,
+		domain.RuntimeAuthContext,
+		string,
+		services.SubmitClientToolResultsInput,
+	) (services.SubmitClientToolResultsResult, error)
+}
+
 type cancellationRuntimeService interface {
 	CancelInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error)
 }
@@ -143,6 +152,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 	mux.HandleFunc("/v1/invocations", h.invocations)
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/cancel", h.requireMethod(http.MethodPost, h.cancelInvocation))
+	mux.HandleFunc("/v1/invocations/{invocation_id}/tool-results", h.requireMethod(http.MethodPost, h.submitClientToolResults))
 	mux.HandleFunc("/v1/sessions", h.requireMethod(http.MethodGet, h.listSessions))
 	mux.HandleFunc("/v1/sessions/{session_id}/messages", h.requireMethod(http.MethodGet, h.listSessionMessages))
 	mux.HandleFunc("/v1/sessions/{session_id}/transcript", h.requireMethod(http.MethodGet, h.getSessionTranscript))
@@ -269,6 +279,42 @@ func (h *handler) cancelInvocation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, invocationResponseFromService(invocation))
 }
 
+func (h *handler) submitClientToolResults(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	var input services.SubmitClientToolResultsInput
+	if err := decodeBoundedStrictJSON(w, r, &input, services.MaxInvocationBodyBytes); err != nil {
+		h.writeError(w, requestID, &services.PublicError{
+			Code:    services.CodeInvalidRequest,
+			Message: err.Error(),
+		})
+		return
+	}
+	runtime, ok := h.runtime.(clientToolRuntimeService)
+	if !ok {
+		h.writeError(w, requestID, &services.PublicError{
+			Code:    services.CodeUnavailable,
+			Message: "The service is temporarily unavailable.",
+		})
+		return
+	}
+	result, err := runtime.SubmitClientToolResults(
+		r.Context(),
+		auth,
+		r.PathValue("invocation_id"),
+		input,
+	)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, clientToolResultsResponseFromService(result))
+}
+
 func (h *handler) listInvocations(w http.ResponseWriter, r *http.Request) {
 	requestID := requestIDFromContext(r.Context())
 	auth, err := h.authenticate(r)
@@ -318,12 +364,7 @@ func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, requestID, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, sessionResponse{
-		ID: session.ID, AgentID: session.AgentID, TenantRef: session.TenantRef,
-		SessionKey: session.SessionKey, ActiveInvocationID: session.ActiveInvocationID,
-		ActiveInvocationStatus: session.ActiveInvocationStatus,
-		CreatedAt:              session.CreatedAt, UpdatedAt: session.UpdatedAt,
-	})
+	writeJSON(w, http.StatusOK, sessionResponseFromService(session))
 }
 
 func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
@@ -490,7 +531,11 @@ func (h *handler) writeError(w http.ResponseWriter, requestID string, err error)
 			status = http.StatusForbidden
 		case services.CodeNotFound:
 			status = http.StatusNotFound
-		case services.CodeIdempotencyConflict, services.CodeSessionInvocationActive:
+		case services.CodeIdempotencyConflict,
+			services.CodeSessionInvocationActive,
+			services.CodeInvocationNotWaiting,
+			services.CodeToolResultConflict,
+			services.CodeToolResultExpired:
 			status = http.StatusConflict
 		case services.CodeUnavailable:
 			status = http.StatusServiceUnavailable
@@ -519,21 +564,22 @@ type invocationAcknowledgementResponse struct {
 }
 
 type invocationResponse struct {
-	ID                  string                        `json:"id"`
-	AgentID             string                        `json:"agent_id"`
-	SessionID           string                        `json:"session_id"`
-	Status              domain.InvocationStatus       `json:"status"`
-	Error               any                           `json:"error"`
-	Usage               any                           `json:"usage"`
-	Provenance          any                           `json:"provenance"`
-	Output              any                           `json:"output"`
-	OutputProvenance    any                           `json:"output_provenance"`
-	Budgets             services.InvocationBudgetRead `json:"budgets"`
-	ActiveExecutionMS   int64                         `json:"active_execution_ms"`
-	WallClockDeadlineAt time.Time                     `json:"wall_clock_deadline_at"`
-	CreatedAt           time.Time                     `json:"created_at"`
-	UpdatedAt           time.Time                     `json:"updated_at"`
-	CompletedAt         *time.Time                    `json:"completed_at"`
+	ID                  string                          `json:"id"`
+	AgentID             string                          `json:"agent_id"`
+	SessionID           string                          `json:"session_id"`
+	Status              domain.InvocationStatus         `json:"status"`
+	Error               any                             `json:"error"`
+	Usage               any                             `json:"usage"`
+	Provenance          any                             `json:"provenance"`
+	Output              any                             `json:"output"`
+	OutputProvenance    any                             `json:"output_provenance"`
+	Budgets             services.InvocationBudgetRead   `json:"budgets"`
+	ActiveExecutionMS   int64                           `json:"active_execution_ms"`
+	WallClockDeadlineAt time.Time                       `json:"wall_clock_deadline_at"`
+	CreatedAt           time.Time                       `json:"created_at"`
+	UpdatedAt           time.Time                       `json:"updated_at"`
+	CompletedAt         *time.Time                      `json:"completed_at"`
+	PendingToolCalls    []pendingClientToolCallResponse `json:"pending_tool_calls,omitempty"`
 }
 
 type invocationListResponse struct {
@@ -543,14 +589,36 @@ type invocationListResponse struct {
 }
 
 type sessionResponse struct {
-	ID                     string                   `json:"id"`
-	AgentID                string                   `json:"agent_id"`
-	TenantRef              *string                  `json:"tenant_ref"`
-	SessionKey             *string                  `json:"session_key"`
-	ActiveInvocationID     *string                  `json:"active_invocation_id"`
-	ActiveInvocationStatus *domain.InvocationStatus `json:"active_invocation_status"`
-	CreatedAt              time.Time                `json:"created_at"`
-	UpdatedAt              time.Time                `json:"updated_at"`
+	ID                     string                          `json:"id"`
+	AgentID                string                          `json:"agent_id"`
+	TenantRef              *string                         `json:"tenant_ref"`
+	SessionKey             *string                         `json:"session_key"`
+	ActiveInvocationID     *string                         `json:"active_invocation_id"`
+	ActiveInvocationStatus *domain.InvocationStatus        `json:"active_invocation_status"`
+	CreatedAt              time.Time                       `json:"created_at"`
+	UpdatedAt              time.Time                       `json:"updated_at"`
+	PendingToolCalls       []pendingClientToolCallResponse `json:"pending_tool_calls,omitempty"`
+}
+
+type pendingClientToolCallResponse struct {
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Input      json.RawMessage `json:"input"`
+	DeadlineAt time.Time       `json:"deadline_at"`
+}
+
+type clientToolResultAcceptanceResponse struct {
+	ToolCallID   string                `json:"tool_call_id"`
+	Status       domain.ToolCallStatus `json:"status"`
+	Deduplicated bool                  `json:"deduplicated"`
+}
+
+type clientToolResultsResponse struct {
+	InvocationID     string                               `json:"invocation_id"`
+	SessionID        string                               `json:"session_id"`
+	Status           domain.InvocationStatus              `json:"status"`
+	Results          []clientToolResultAcceptanceResponse `json:"results"`
+	PendingToolCalls []pendingClientToolCallResponse      `json:"pending_tool_calls"`
 }
 
 type sessionListResponse struct {
@@ -614,15 +682,52 @@ func invocationResponseFromService(invocation services.InvocationRead) invocatio
 		CreatedAt:           invocation.CreatedAt,
 		UpdatedAt:           invocation.UpdatedAt,
 		CompletedAt:         invocation.CompletedAt,
+		PendingToolCalls:    pendingClientToolCallResponses(invocation.PendingToolCalls),
 	}
 }
 
 func sessionResponseFromService(session services.SessionRead) sessionResponse {
 	return sessionResponse{
-		ID: session.ID, AgentID: session.AgentID, TenantRef: session.TenantRef,
-		SessionKey: session.SessionKey, ActiveInvocationID: session.ActiveInvocationID,
+		ID:                     session.ID,
+		AgentID:                session.AgentID,
+		TenantRef:              session.TenantRef,
+		SessionKey:             session.SessionKey,
+		ActiveInvocationID:     session.ActiveInvocationID,
 		ActiveInvocationStatus: session.ActiveInvocationStatus,
-		CreatedAt:              session.CreatedAt, UpdatedAt: session.UpdatedAt,
+		PendingToolCalls:       pendingClientToolCallResponses(session.PendingToolCalls),
+		CreatedAt:              session.CreatedAt,
+		UpdatedAt:              session.UpdatedAt,
+	}
+}
+
+func pendingClientToolCallResponses(calls []services.PendingClientToolCall) []pendingClientToolCallResponse {
+	responses := make([]pendingClientToolCallResponse, len(calls))
+	for index, call := range calls {
+		responses[index] = pendingClientToolCallResponse{
+			ID:         call.ID,
+			Name:       call.Name,
+			Input:      call.Input,
+			DeadlineAt: call.DeadlineAt,
+		}
+	}
+	return responses
+}
+
+func clientToolResultsResponseFromService(result services.SubmitClientToolResultsResult) clientToolResultsResponse {
+	responses := make([]clientToolResultAcceptanceResponse, len(result.Results))
+	for index, accepted := range result.Results {
+		responses[index] = clientToolResultAcceptanceResponse{
+			ToolCallID:   accepted.ToolCallID,
+			Status:       accepted.Status,
+			Deduplicated: accepted.Deduplicated,
+		}
+	}
+	return clientToolResultsResponse{
+		InvocationID:     result.InvocationID,
+		SessionID:        result.SessionID,
+		Status:           result.Status,
+		Results:          responses,
+		PendingToolCalls: pendingClientToolCallResponses(result.PendingToolCalls),
 	}
 }
 

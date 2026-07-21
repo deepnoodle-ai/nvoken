@@ -383,6 +383,66 @@ func TestDeterministicBuiltinCheckpointsBeforeExecutionAndNextModelCall(t *testi
 	}
 }
 
+func TestClientToolSuspendsAfterDurableModelCheckpoint(t *testing.T) {
+	coordinator := &recordingToolCoordinator{}
+	model := &sequenceLLM{
+		responses: []*llm.Response{
+			{
+				Model: "served-model",
+				Role:  llm.Assistant,
+				Content: []llm.Content{
+					&llm.ToolUseContent{
+						ID:    "provider-client-call",
+						Name:  "lookup_order",
+						Input: json.RawMessage(`{"order_id":"order-1"}`),
+					},
+				},
+				Usage: llm.Usage{
+					InputTokens:  3,
+					OutputTokens: 1,
+				},
+			},
+		},
+	}
+	generator := New(
+		Config{
+			AnthropicAPIKey: "secret",
+		},
+		WithToolCoordinator(coordinator),
+	)
+	generator.factory = func(string, string, string) (llm.LLM, error) {
+		return model, nil
+	}
+	request := generationRequest("anthropic")
+	request.Messages = request.Messages[:1]
+	request.Claim = generationClaim()
+	request.MaxIterations = 2
+	request.ClientTools = []domain.ClientToolDefinition{
+		{
+			Name:        "lookup_order",
+			Description: "Look up an order",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"order_id":{"type":"string"}},"required":["order_id"],"additionalProperties":false}`),
+		},
+	}
+
+	response, err := generator.Generate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	events, checkpoints, starts := coordinator.snapshot()
+	if !reflect.DeepEqual(events, []string{"checkpoint"}) || starts != 0 || len(checkpoints) != 1 {
+		t.Fatalf("client tool events = %#v, starts = %d, checkpoints = %#v", events, starts, checkpoints)
+	}
+	if len(checkpoints[0].ToolCalls) != 1 ||
+		checkpoints[0].ToolCalls[0].Name != "lookup_order" ||
+		checkpoints[0].ToolCalls[0].Mode != domain.ToolCallModeClient {
+		t.Fatalf("client tool checkpoint = %#v", checkpoints[0])
+	}
+	if !response.ClientToolsPending || !response.MessagesCheckpointed || response.Usage.Iterations != 1 {
+		t.Fatalf("client tool response = %#v", response)
+	}
+}
+
 func TestDeterministicBuiltinStopsAtCheckpointBudgetBeforeToolRuns(t *testing.T) {
 	coordinator := &recordingToolCoordinator{}
 	model := &sequenceLLM{

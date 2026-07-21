@@ -18,9 +18,12 @@ import (
 )
 
 const (
-	MaxInvocationBodyBytes = 1 << 20
-	MaxInputBlocks         = 64
-	MaxReferenceCharacters = 255
+	MaxInvocationBodyBytes             = 1 << 20
+	MaxInputBlocks                     = 64
+	MaxReferenceCharacters             = 255
+	MaxClientTools                     = 32
+	MaxClientToolNameBytes             = 64
+	MaxClientToolDescriptionCharacters = 4096
 )
 
 type TextInputBlock struct {
@@ -42,6 +45,14 @@ type InlineExecutionSpec struct {
 	Model        ModelSelection         `json:"model"`
 	Budgets      *InvocationBudgetInput `json:"budgets,omitempty"`
 	Output       *StructuredOutputSpec  `json:"output,omitempty"`
+	Tools        []ClientToolSpec       `json:"tools,omitempty"`
+}
+
+type ClientToolSpec struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Mode        string          `json:"mode"`
+	InputSchema json.RawMessage `json:"input_schema"`
 }
 
 type StructuredOutputSpec struct {
@@ -82,6 +93,7 @@ type InvocationRead struct {
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 	CompletedAt         *time.Time
+	PendingToolCalls    []PendingClientToolCall
 }
 
 type SessionRead struct {
@@ -93,6 +105,7 @@ type SessionRead struct {
 	ActiveInvocationStatus *domain.InvocationStatus
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
+	PendingToolCalls       []PendingClientToolCall
 }
 
 type admissionStore interface {
@@ -106,6 +119,7 @@ type admissionStore interface {
 	ports.InvocationStateRepository
 	ports.RecoveryRepository
 	ports.ExecutionDispatchRepository
+	ports.ToolCallRepository
 }
 
 type InvocationExecutionMode string
@@ -228,6 +242,9 @@ func ValidateCreateInvocation(input CreateInvocationInput) error {
 			return invalidRequest("spec.output.schema is invalid: " + err.Error() + ".")
 		}
 	}
+	if err := validateClientTools(input.Spec.Tools); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -254,7 +271,11 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 	if auth.TenantConstraint != nil && input.TenantRef != nil && *auth.TenantConstraint != *input.TenantRef {
 		return InvocationAcknowledgement{}, forbidden("The requested tenant_ref conflicts with the credential constraint.")
 	}
-	resolvedBudgets, err := s.budgetPolicy.ResolveForOutput(input.Spec.Budgets, input.Spec.Output != nil)
+	resolvedBudgets, err := s.budgetPolicy.ResolveForFeatures(
+		input.Spec.Budgets,
+		input.Spec.Output != nil,
+		len(input.Spec.Tools) != 0,
+	)
 	if err != nil {
 		return InvocationAcknowledgement{}, err
 	}
@@ -265,7 +286,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 		}
 	}
-	fingerprint, err := InvocationFingerprintV3(input)
+	fingerprint, err := InvocationFingerprintV4(input)
 	if err != nil {
 		return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 	}
@@ -366,7 +387,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 				SpecSnapshotID:         snapshot.ID,
 				IdempotencyKey:         input.IdempotencyKey,
 				RequestFingerprint:     fingerprint[:],
-				FingerprintVersion:     3,
+				FingerprintVersion:     4,
 				Status:                 domain.InvocationQueued,
 				CurrentStateRevision:   revision,
 				WallClockTimeoutMS:     resolvedBudgets.WallClockTimeout.Milliseconds(),
@@ -558,7 +579,12 @@ func (s *RuntimeService) GetInvocation(ctx context.Context, auth domain.RuntimeA
 		}
 		return InvocationRead{}, err
 	}
-	return invocationReadFromDomain(invocation), nil
+	read := invocationReadFromDomain(invocation)
+	read.PendingToolCalls, err = s.pendingClientToolCalls(ctx, invocation)
+	if err != nil {
+		return InvocationRead{}, err
+	}
+	return read, nil
 }
 
 func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuthContext, sessionID string) (SessionRead, error) {
@@ -590,18 +616,28 @@ func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuth
 	}
 	var activeID *string
 	var activeStatus *domain.InvocationStatus
+	var pending []PendingClientToolCall
 	active, err := s.store.GetNonterminalInvocationBySession(ctx, session.ID)
 	if err == nil {
 		activeID = &active.ID
 		activeStatus = &active.Status
+		pending, err = s.pendingClientToolCalls(ctx, active)
+		if err != nil {
+			return SessionRead{}, err
+		}
 	} else if !errors.Is(err, ports.ErrNotFound) {
 		return SessionRead{}, err
 	}
 	return SessionRead{
-		ID: session.ID, AgentID: session.AgentID, TenantRef: cloneString(partition.TenantRef),
-		SessionKey: cloneString(session.SessionKey), ActiveInvocationID: activeID,
+		ID:                     session.ID,
+		AgentID:                session.AgentID,
+		TenantRef:              cloneString(partition.TenantRef),
+		SessionKey:             cloneString(session.SessionKey),
+		ActiveInvocationID:     activeID,
 		ActiveInvocationStatus: activeStatus,
-		CreatedAt:              session.CreatedAt, UpdatedAt: session.UpdatedAt,
+		PendingToolCalls:       pending,
+		CreatedAt:              session.CreatedAt,
+		UpdatedAt:              session.UpdatedAt,
 	}, nil
 }
 
@@ -673,7 +709,7 @@ func (s *RuntimeService) findIdempotent(
 	expected := fingerprint[:]
 	switch existing.FingerprintVersion {
 	case 1:
-		if input.Spec.Budgets != nil || input.Spec.Output != nil {
+		if input.Spec.Budgets != nil || input.Spec.Output != nil || len(input.Spec.Tools) != 0 {
 			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
 		}
 		legacy, legacyErr := InvocationFingerprintV1(input)
@@ -682,7 +718,7 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 2:
-		if input.Spec.Output != nil {
+		if input.Spec.Output != nil || len(input.Spec.Tools) != 0 {
 			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
 		}
 		legacy, legacyErr := InvocationFingerprintV2(input)
@@ -691,6 +727,18 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 3:
+		if len(input.Spec.Tools) != 0 {
+			return domain.Invocation{}, false, &PublicError{
+				Code:    CodeIdempotencyConflict,
+				Message: "The idempotency key was already used with a different request.",
+			}
+		}
+		legacy, legacyErr := InvocationFingerprintV3(input)
+		if legacyErr != nil {
+			return domain.Invocation{}, false, legacyErr
+		}
+		expected = legacy[:]
+	case 4:
 	default:
 		return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
 	}

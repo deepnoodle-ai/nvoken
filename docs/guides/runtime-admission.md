@@ -1,7 +1,8 @@
 # Runtime admission
 
-The self-contained Runtime durably admits, executes, and reads public
-tool-free Invocations. Admission still returns before model generation begins.
+The self-contained Runtime durably admits, executes, and reads Invocations,
+including structured output and host-executed client tools. Admission still
+returns before model generation begins.
 
 Apply migrations explicitly, then start the service with a Postgres URL and a
 random bearer secret of at least 32 bytes. Supply the installation key for each
@@ -102,13 +103,40 @@ A changed request using the same scoped key returns
 Treat `503 unavailable` the same way as any ambiguous acknowledgement: retry
 the exact body and key rather than inventing a new key for the same turn.
 
-The database now retains internal checkpoint evidence at each accepted model
+The database retains checkpoint evidence at each accepted model
 iteration: the canonical assistant message, normalized usage/provenance
 receipt, any prepared ToolCalls, and a transcript watermark commit together.
 Accepted builtin outcomes likewise commit one canonical tool-role result and a
 fenced checkpoint. ToolCall rows contain lifecycle and message references, not
-a second copy of content. These records are intentionally not exposed as a
-public tool surface yet.
+a second copy of content.
+
+Declare a client tool inside `spec.tools` with `name`, `description`,
+`mode: "client"`, and a bounded object `input_schema`. When the model selects
+it, Invocation and Session reads expose the stable pending call after the
+Invocation parks in `waiting`; no engine lease or request stays alive. Submit a
+result with the returned ID. Tools require at least two model iterations;
+omission resolves to three or the lower installation maximum.
+
+```bash
+curl --fail-with-body \
+  -X POST http://localhost:8080/v1/invocations/invk_…/tool-results \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "results": [{
+      "tool_call_id": "tcal_…",
+      "content": {"order_id": "order-123", "state": "ready"}
+    }]
+  }'
+```
+
+The command accepts 1-32 results atomically. Equal retries return `202` with
+`deduplicated: true`; changed retries return `tool_result_conflict`. Partial
+batches remain `waiting`. The transaction that accepts the final pending call
+moves the same Invocation to `queued`; embedded mode wakes after commit and
+Cloud Tasks mode creates the successor dispatch in that transaction. Use
+`is_error: true` to return a model-visible tool failure. Cancellation and the
+wall deadline remain first-writer-wins.
 
 When an execution lease expires, nvoken accrues the abandoned segment only
 through its recorded lease/deadline boundary, moves the same Invocation back to
@@ -223,6 +251,8 @@ final Postgres reconciliation. Closing or losing the stream never cancels the
 Invocation. Use a streaming HTTP client that can set the bearer header; the
 browser's bare `EventSource` constructor cannot.
 
-The request body is limited to 1 MiB, 64 JSON nesting levels, and 64 text blocks. Unknown fields,
-unsupported features such as tools, malformed IDs, duplicate JSON member names,
-and trailing JSON values are rejected before admission.
+Admission bodies are limited to 1 MiB, 64 JSON nesting levels, and 64 text
+blocks. Unknown fields, callback tools, malformed IDs, duplicate JSON member
+names, and trailing JSON values are rejected before admission. Client-result
+bodies are also limited to 1 MiB; each JSON result is limited to 256 KiB and 32
+nesting levels.

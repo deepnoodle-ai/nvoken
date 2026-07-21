@@ -260,6 +260,687 @@ func TestDurableToolCallCheckpointFlow(t *testing.T) {
 	assertToolEvidenceIsImmutable(t, pool, ack.InvocationID, stableCallID, running.Attempt.ID)
 }
 
+func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ctx := context.Background()
+	input := runtimeInputWithTwoIterations()
+	input.Spec.Tools = []services.ClientToolSpec{
+		{
+			Name:        "lookup_order",
+			Description: "Look up an order",
+			Mode:        "client",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"order_id":{"type":"string"}},"additionalProperties":false}`),
+		},
+		{
+			Name:        "notify_user",
+			Description: "Notify a user",
+			Mode:        "client",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"message":{"type":"string"}},"additionalProperties":false}`),
+		},
+	}
+	ack, err := runtime.Admit(ctx, auth, input)
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := identity.SystemClock{}
+	ids := identity.NewUUIDv7Generator(clock)
+	txm := NewTransactionManager(pool)
+	ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+	claim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "client-tool-owner-a", time.Minute)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("claim disposition = %q, error = %v", disposition, err)
+	}
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	recorded, err := coordinator.RecordModelCheckpoint(ctx, claim, domain.ModelCheckpointInput{
+		Iteration: 1,
+		Message: domain.GenerationMessage{
+			Role: domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[
+				{"type":"tool_use","id":"provider-lookup","name":"lookup_order","input":{"order_id":"order-1"}},
+				{"type":"tool_use","id":"provider-notify","name":"notify_user","input":{"message":"ready"}}
+			]`),
+		},
+		Usage: domain.ModelUsage{
+			InputTokens:  3,
+			OutputTokens: 1,
+			Iterations:   1,
+		},
+		Provenance: testModelProvenance(),
+		ToolCalls: []domain.ToolCallRequest{
+			{
+				ProviderCallID: "provider-lookup",
+				Name:           "lookup_order",
+				Mode:           domain.ToolCallModeClient,
+				Input:          json.RawMessage(`{"order_id":"order-1"}`),
+			},
+			{
+				ProviderCallID: "provider-notify",
+				Name:           "notify_user",
+				Mode:           domain.ToolCallModeClient,
+				Input:          json.RawMessage(`{"message":"ready"}`),
+			},
+		},
+	})
+	if err != nil || len(recorded.ToolCalls) != 2 {
+		t.Fatalf("record client checkpoint = %#v, error = %v", recorded, err)
+	}
+	usage := domain.ModelUsage{
+		InputTokens:  3,
+		OutputTokens: 1,
+		Iterations:   1,
+	}
+	if err := ownership.Settle(ctx, claim, domain.InvocationExecutionResult{
+		Status:               domain.InvocationWaiting,
+		MessagesCheckpointed: true,
+		Usage:                &usage,
+		Provenance:           pointerModelProvenance(testModelProvenance()),
+	}); err != nil {
+		t.Fatalf("park client tool Invocation: %v", err)
+	}
+
+	parked, err := store.GetInvocation(ctx, ack.InvocationID)
+	if err != nil || parked.Status != domain.InvocationWaiting || parked.LeaseOwner != nil ||
+		parked.LeaseExpiresAt != nil || parked.ExecutionDeadlineAt != nil ||
+		parked.ActiveSegmentStartedAt != nil {
+		t.Fatalf("parked Invocation = %#v, error = %v", parked, err)
+	}
+	parkedActiveExecutionMS := parked.ActiveExecutionMS
+	read, err := runtime.GetInvocation(ctx, auth, ack.InvocationID)
+	if err != nil || len(read.PendingToolCalls) != 2 ||
+		read.PendingToolCalls[0].ID != recorded.ToolCalls[0].ID ||
+		read.PendingToolCalls[1].ID != recorded.ToolCalls[1].ID {
+		t.Fatalf("pending client tools = %#v, error = %v", read.PendingToolCalls, err)
+	}
+	sessionRead, err := runtime.GetSession(ctx, auth, ack.SessionID)
+	if err != nil || len(sessionRead.PendingToolCalls) != 2 ||
+		sessionRead.ActiveInvocationStatus == nil ||
+		*sessionRead.ActiveInvocationStatus != domain.InvocationWaiting {
+		t.Fatalf("Session pending client tools = %#v, error = %v", sessionRead, err)
+	}
+
+	firstResult := services.ClientToolResultInput{
+		ToolCallID: recorded.ToolCalls[1].ID,
+		Content:    json.RawMessage(`{"notified":true}`),
+	}
+	type concurrentSubmission struct {
+		result services.SubmitClientToolResultsResult
+		err    error
+	}
+	const submitters = 12
+	start := make(chan struct{})
+	submissions := make(chan concurrentSubmission, submitters)
+	var group sync.WaitGroup
+	for range submitters {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			<-start
+			result, submitErr := runtime.SubmitClientToolResults(
+				ctx,
+				auth,
+				ack.InvocationID,
+				services.SubmitClientToolResultsInput{
+					Results: []services.ClientToolResultInput{firstResult},
+				},
+			)
+			submissions <- concurrentSubmission{
+				result: result,
+				err:    submitErr,
+			}
+		}()
+	}
+	close(start)
+	group.Wait()
+	close(submissions)
+	newResults := 0
+	for submission := range submissions {
+		if submission.err != nil || submission.result.Status != domain.InvocationWaiting ||
+			len(submission.result.PendingToolCalls) != 1 || len(submission.result.Results) != 1 {
+			t.Fatalf("concurrent partial client result = %#v, error = %v", submission.result, submission.err)
+		}
+		if !submission.result.Results[0].Deduplicated {
+			newResults++
+		}
+	}
+	if newResults != 1 {
+		t.Fatalf("new concurrent client results = %d, want 1", newResults)
+	}
+	stillParked, err := store.GetInvocation(ctx, ack.InvocationID)
+	if err != nil || stillParked.Status != domain.InvocationWaiting ||
+		stillParked.ActiveExecutionMS != parkedActiveExecutionMS {
+		t.Fatalf("partially settled Invocation = %#v, error = %v", stillParked, err)
+	}
+	deduplicated, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
+		Results: []services.ClientToolResultInput{firstResult},
+	})
+	if err != nil || len(deduplicated.Results) != 1 || !deduplicated.Results[0].Deduplicated {
+		t.Fatalf("equal partial replay = %#v, error = %v", deduplicated, err)
+	}
+	changed := firstResult
+	changed.Content = json.RawMessage(`{"notified":false}`)
+	if _, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
+		Results: []services.ClientToolResultInput{changed},
+	}); !publicErrorHasCode(err, services.CodeToolResultConflict) {
+		t.Fatalf("changed partial replay error = %v", err)
+	}
+	secondResult := services.ClientToolResultInput{
+		ToolCallID: recorded.ToolCalls[0].ID,
+		Content:    json.RawMessage(`{"state":"ready"}`),
+	}
+	resumed, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
+		Results: []services.ClientToolResultInput{
+			firstResult,
+			secondResult,
+		},
+	})
+	if err != nil || resumed.Status != domain.InvocationQueued || len(resumed.PendingToolCalls) != 0 ||
+		len(resumed.Results) != 2 || !resumed.Results[0].Deduplicated || resumed.Results[1].Deduplicated {
+		t.Fatalf("final client results = %#v, error = %v", resumed, err)
+	}
+	messages, err := store.ListSessionMessages(ctx, ack.SessionID)
+	if err != nil || len(messages) != 4 {
+		t.Fatalf("partial result transcript = %#v, error = %v", messages, err)
+	}
+
+	secondClaim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "client-tool-owner-b", time.Minute)
+	if err != nil || disposition != services.Claimed || secondClaim.Attempt != claim.Attempt+1 {
+		t.Fatalf("resume claim = %#v, disposition = %q, error = %v", secondClaim, disposition, err)
+	}
+	executor := services.NewGenerationExecutor(
+		store,
+		durableResumeContinuationGenerator{
+			coordinator: coordinator,
+		},
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	result, err := executor.Execute(ctx, secondClaim)
+	if err != nil || result.Status != domain.InvocationCompleted {
+		t.Fatalf("resume execution = %#v, error = %v", result, err)
+	}
+	if err := ownership.Settle(ctx, secondClaim, result); err != nil {
+		t.Fatalf("settle resumed Invocation: %v", err)
+	}
+	completed, err := store.GetInvocation(ctx, ack.InvocationID)
+	if err != nil || completed.Status != domain.InvocationCompleted ||
+		completed.CurrentIteration != 2 || completed.CurrentCheckpointSequence != 4 {
+		t.Fatalf("completed resumed Invocation = %#v, error = %v", completed, err)
+	}
+	replay, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
+		Results: []services.ClientToolResultInput{
+			secondResult,
+			firstResult,
+		},
+	})
+	if err != nil || replay.Status != domain.InvocationCompleted ||
+		len(replay.Results) != 2 || !replay.Results[0].Deduplicated || !replay.Results[1].Deduplicated {
+		t.Fatalf("terminal equal replay = %#v, error = %v", replay, err)
+	}
+}
+
+func TestExpiredLeaseParksCommittedClientToolWithoutProviderReplay(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ctx := context.Background()
+	input := runtimeInputWithTwoIterations()
+	input.Spec.Tools = []services.ClientToolSpec{
+		{
+			Name:        "lookup_order",
+			Description: "Look up an order",
+			Mode:        "client",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+	}
+	ack, err := runtime.Admit(ctx, auth, input)
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := newMutableClock(time.Now().UTC())
+	ids := identity.NewUUIDv7Generator(clock)
+	txm := NewTransactionManager(pool)
+	ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+	firstClaim, disposition, err := ownership.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"lost-client-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("first claim = %#v, disposition = %q, error = %v", firstClaim, disposition, err)
+	}
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	recorded, err := coordinator.RecordModelCheckpoint(ctx, firstClaim, domain.ModelCheckpointInput{
+		Iteration: 1,
+		Message: domain.GenerationMessage{
+			Role:    domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[{"type":"tool_use","id":"provider-lookup","name":"lookup_order","input":{"order_id":"order-1"}}]`),
+		},
+		Usage: domain.ModelUsage{
+			InputTokens:  3,
+			OutputTokens: 1,
+			Iterations:   1,
+		},
+		Provenance: testModelProvenance(),
+		ToolCalls: []domain.ToolCallRequest{
+			{
+				ProviderCallID: "provider-lookup",
+				Name:           "lookup_order",
+				Mode:           domain.ToolCallModeClient,
+				Input:          json.RawMessage(`{"order_id":"order-1"}`),
+			},
+		},
+	})
+	if err != nil || len(recorded.ToolCalls) != 1 {
+		t.Fatalf("record client checkpoint = %#v, error = %v", recorded, err)
+	}
+	clock.Advance(time.Minute + time.Nanosecond)
+	recovered, err := ownership.ReapExpired(ctx, 10)
+	if err != nil || len(recovered) != 1 || recovered[0].Status != domain.InvocationQueued {
+		t.Fatalf("recovered = %#v, error = %v", recovered, err)
+	}
+	secondClaim, disposition, err := ownership.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"replacement-client-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed || secondClaim.Attempt != 2 {
+		t.Fatalf("replacement claim = %#v, disposition = %q, error = %v", secondClaim, disposition, err)
+	}
+	generator := &postgresModelGenerator{}
+	result, err := services.NewGenerationExecutor(store, generator, nil).Execute(ctx, secondClaim)
+	if err != nil || result.Status != domain.InvocationWaiting || !result.MessagesCheckpointed {
+		t.Fatalf("recover client wait = %#v, error = %v", result, err)
+	}
+	if len(generator.Requests()) != 0 {
+		t.Fatalf("provider replayed %d times", len(generator.Requests()))
+	}
+	if err := ownership.Settle(ctx, secondClaim, result); err != nil {
+		t.Fatalf("park recovered client wait: %v", err)
+	}
+	parked, err := store.GetInvocation(ctx, ack.InvocationID)
+	if err != nil || parked.Status != domain.InvocationWaiting || parked.LeaseOwner != nil ||
+		parked.CurrentCheckpointSequence != recorded.Checkpoint.Sequence {
+		t.Fatalf("recovered parked Invocation = %#v, error = %v", parked, err)
+	}
+	pending, err := runtime.GetInvocation(ctx, auth, ack.InvocationID)
+	if err != nil || len(pending.PendingToolCalls) != 1 ||
+		pending.PendingToolCalls[0].ID != recorded.ToolCalls[0].ID {
+		t.Fatalf("recovered pending tools = %#v, error = %v", pending.PendingToolCalls, err)
+	}
+}
+
+func TestClientWaitClosesPendingBuiltinSiblings(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ctx := context.Background()
+	input := runtimeInputWithTwoIterations()
+	input.Spec.Tools = []services.ClientToolSpec{
+		{
+			Name:        "lookup_order",
+			Description: "Look up an order",
+			Mode:        "client",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+	}
+	ack, err := runtime.Admit(ctx, auth, input)
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := identity.SystemClock{}
+	ids := identity.NewUUIDv7Generator(clock)
+	txm := NewTransactionManager(pool)
+	ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+	claim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "mixed-tool-owner", time.Minute)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("claim = %#v, disposition = %q, error = %v", claim, disposition, err)
+	}
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	recorded, err := coordinator.RecordModelCheckpoint(ctx, claim, domain.ModelCheckpointInput{
+		Iteration: 1,
+		Message: domain.GenerationMessage{
+			Role: domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[
+				{"type":"tool_use","id":"provider-client","name":"lookup_order","input":{}},
+				{"type":"tool_use","id":"provider-builtin","name":"nvoken_test_echo","input":{"value":"ok"}}
+			]`),
+		},
+		Usage: domain.ModelUsage{
+			InputTokens:  3,
+			OutputTokens: 1,
+			Iterations:   1,
+		},
+		Provenance: testModelProvenance(),
+		ToolCalls: []domain.ToolCallRequest{
+			{
+				ProviderCallID: "provider-client",
+				Name:           "lookup_order",
+				Mode:           domain.ToolCallModeClient,
+				Input:          json.RawMessage(`{}`),
+			},
+			{
+				ProviderCallID: "provider-builtin",
+				Name:           "nvoken_test_echo",
+				Mode:           domain.ToolCallModeBuiltin,
+				Input:          json.RawMessage(`{"value":"ok"}`),
+			},
+		},
+	})
+	if err != nil || len(recorded.ToolCalls) != 2 {
+		t.Fatalf("record mixed checkpoint = %#v, error = %v", recorded, err)
+	}
+	runningBuiltin, err := coordinator.StartBuiltinToolCall(
+		ctx,
+		claim,
+		1,
+		"provider-builtin",
+	)
+	if err != nil || runningBuiltin.Call.Status != domain.ToolCallRunning {
+		t.Fatalf("start mixed builtin = %#v, error = %v", runningBuiltin, err)
+	}
+	usage := domain.ModelUsage{
+		InputTokens:  3,
+		OutputTokens: 1,
+		Iterations:   1,
+	}
+	if err := ownership.Settle(ctx, claim, domain.InvocationExecutionResult{
+		Status:               domain.InvocationWaiting,
+		MessagesCheckpointed: true,
+		Usage:                &usage,
+		Provenance:           pointerModelProvenance(testModelProvenance()),
+	}); err != nil {
+		t.Fatalf("park mixed client wait: %v", err)
+	}
+	builtin, err := store.GetToolCall(ctx, recorded.ToolCalls[1].ID)
+	if err != nil || builtin.Status != domain.ToolCallFailed || builtin.ResultOrigin == nil ||
+		*builtin.ResultOrigin != domain.ToolCallResultSystem {
+		t.Fatalf("settled builtin sibling = %#v, error = %v", builtin, err)
+	}
+	builtinAttempt, err := store.GetCurrentToolCallAttemptForUpdate(
+		ctx,
+		builtin.ID,
+		runningBuiltin.Attempt.Attempt,
+	)
+	if err != nil || builtinAttempt.Status != domain.ToolCallFailed {
+		t.Fatalf("settled builtin attempt = %#v, error = %v", builtinAttempt, err)
+	}
+	client, err := store.GetToolCall(ctx, recorded.ToolCalls[0].ID)
+	if err != nil || client.Status != domain.ToolCallPending || client.ResultOrigin != nil {
+		t.Fatalf("pending client call = %#v, error = %v", client, err)
+	}
+	checkpoints, err := store.ListInvocationCheckpoints(ctx, ack.InvocationID)
+	if err != nil || len(checkpoints) != 2 || checkpoints[1].ToolCallID == nil ||
+		*checkpoints[1].ToolCallID != builtin.ID {
+		t.Fatalf("mixed checkpoints = %#v, error = %v", checkpoints, err)
+	}
+}
+
+func TestClientToolResultsRejectSystemSettledCalls(t *testing.T) {
+	t.Run("cancellation", func(t *testing.T) {
+		pool, runtime, store, auth := newRuntimeFixture(t)
+		ctx := context.Background()
+		clock := identity.SystemClock{}
+		ids := identity.NewUUIDv7Generator(clock)
+		txm := NewTransactionManager(pool)
+		ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+		coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+		ack, call := admitAndParkSingleClientTool(
+			t,
+			ctx,
+			runtime,
+			ownership,
+			coordinator,
+			auth,
+			"cancelled-client-owner",
+		)
+		if _, err := runtime.CancelInvocation(ctx, auth, ack.InvocationID); err != nil {
+			t.Fatalf("cancel waiting Invocation: %v", err)
+		}
+		settled, err := store.GetToolCall(ctx, call.ID)
+		if err != nil || settled.Status != domain.ToolCallCancelled || settled.ResultOrigin == nil ||
+			*settled.ResultOrigin != domain.ToolCallResultSystem {
+			t.Fatalf("cancelled client call = %#v, error = %v", settled, err)
+		}
+		_, err = runtime.SubmitClientToolResults(
+			ctx,
+			auth,
+			ack.InvocationID,
+			services.SubmitClientToolResultsInput{
+				Results: []services.ClientToolResultInput{
+					{
+						ToolCallID: call.ID,
+						Content:    json.RawMessage(`{"late":true}`),
+					},
+				},
+			},
+		)
+		if !publicErrorHasCode(err, services.CodeInvocationNotWaiting) {
+			t.Fatalf("post-cancellation result error = %v", err)
+		}
+	})
+
+	t.Run("wall deadline", func(t *testing.T) {
+		pool, _ := testDatabase(t, true)
+		ctx := context.Background()
+		store := NewStore(pool)
+		txm := NewTransactionManager(pool)
+		clock := newMutableClock(time.Now().UTC())
+		ids := identity.NewUUIDv7Generator(clock)
+		account, err := services.BootstrapInstallation(ctx, store, txm, clock, ids)
+		if err != nil {
+			t.Fatalf("bootstrap installation: %v", err)
+		}
+		auth := runtimeAuth(account.ID)
+		runtime := services.NewRuntimeService(store, txm, clock, ids)
+		ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+		coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+		ack, call := admitAndParkSingleClientTool(
+			t,
+			ctx,
+			runtime,
+			ownership,
+			coordinator,
+			auth,
+			"expired-client-owner",
+		)
+		clock.Advance(31 * time.Minute)
+		reaped, err := ownership.ReapExpired(ctx, 10)
+		if err != nil || len(reaped) != 1 || reaped[0].Status != domain.InvocationFailed {
+			t.Fatalf("deadline reap = %#v, error = %v", reaped, err)
+		}
+		settled, err := store.GetToolCall(ctx, call.ID)
+		if err != nil || settled.Status != domain.ToolCallFailed || settled.ResultOrigin == nil ||
+			*settled.ResultOrigin != domain.ToolCallResultSystem {
+			t.Fatalf("deadline-settled client call = %#v, error = %v", settled, err)
+		}
+		_, err = runtime.SubmitClientToolResults(
+			ctx,
+			auth,
+			ack.InvocationID,
+			services.SubmitClientToolResultsInput{
+				Results: []services.ClientToolResultInput{
+					{
+						ToolCallID: call.ID,
+						Content:    json.RawMessage(`{"late":true}`),
+					},
+				},
+			},
+		)
+		if !publicErrorHasCode(err, services.CodeToolResultExpired) {
+			t.Fatalf("post-deadline result error = %v", err)
+		}
+	})
+}
+
+func admitAndParkSingleClientTool(
+	t *testing.T,
+	ctx context.Context,
+	runtime *services.RuntimeService,
+	ownership *services.InvocationExecutionService,
+	coordinator *services.ToolCheckpointService,
+	auth domain.RuntimeAuthContext,
+	owner string,
+) (services.InvocationAcknowledgement, domain.ToolCall) {
+	t.Helper()
+	input := runtimeInputWithTwoIterations()
+	input.Spec.Tools = []services.ClientToolSpec{
+		{
+			Name:        "lookup_order",
+			Description: "Look up an order",
+			Mode:        "client",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+	}
+	ack, err := runtime.Admit(ctx, auth, input)
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	claim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, owner, time.Minute)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("claim = %#v, disposition = %q, error = %v", claim, disposition, err)
+	}
+	recorded, err := coordinator.RecordModelCheckpoint(ctx, claim, domain.ModelCheckpointInput{
+		Iteration: 1,
+		Message: domain.GenerationMessage{
+			Role:    domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[{"type":"tool_use","id":"provider-lookup","name":"lookup_order","input":{}}]`),
+		},
+		Usage: domain.ModelUsage{
+			InputTokens:  2,
+			OutputTokens: 1,
+			Iterations:   1,
+		},
+		Provenance: testModelProvenance(),
+		ToolCalls: []domain.ToolCallRequest{
+			{
+				ProviderCallID: "provider-lookup",
+				Name:           "lookup_order",
+				Mode:           domain.ToolCallModeClient,
+				Input:          json.RawMessage(`{}`),
+			},
+		},
+	})
+	if err != nil || len(recorded.ToolCalls) != 1 {
+		t.Fatalf("record client checkpoint = %#v, error = %v", recorded, err)
+	}
+	usage := domain.ModelUsage{
+		InputTokens:  2,
+		OutputTokens: 1,
+		Iterations:   1,
+	}
+	if err := ownership.Settle(ctx, claim, domain.InvocationExecutionResult{
+		Status:               domain.InvocationWaiting,
+		MessagesCheckpointed: true,
+		Usage:                &usage,
+		Provenance:           pointerModelProvenance(testModelProvenance()),
+	}); err != nil {
+		t.Fatalf("park client Invocation: %v", err)
+	}
+	return ack, recorded.ToolCalls[0]
+}
+
+func publicErrorHasCode(err error, code services.ErrorCode) bool {
+	var public *services.PublicError
+	return errors.As(err, &public) && public.Code == code
+}
+
+func TestClientToolFinalResultCreatesSuccessorDispatch(t *testing.T) {
+	pool, _ := testDatabase(t, true)
+	ctx := context.Background()
+	store := NewStore(pool)
+	txm := NewTransactionManager(pool)
+	clock := identity.SystemClock{}
+	ids := identity.NewUUIDv7Generator(clock)
+	account, err := services.BootstrapInstallation(ctx, store, txm, clock, ids)
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	runtime := services.NewRuntimeService(
+		store,
+		txm,
+		clock,
+		ids,
+		services.WithInvocationExecutionMode(
+			services.InvocationExecutionCloudTasks,
+			services.DefaultExecutionDispatchQueue,
+		),
+	)
+	input := runtimeInputWithTwoIterations()
+	input.Spec.Tools = []services.ClientToolSpec{
+		{
+			Name:        "lookup_order",
+			Description: "Look up an order",
+			Mode:        "client",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+	}
+	auth := runtimeAuth(account.ID)
+	ack, err := runtime.Admit(ctx, auth, input)
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	initialDispatch := activeInvocationDispatch(t, store, ack.InvocationID)
+	ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+	claim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "client-dispatch-owner", time.Minute)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("claim disposition = %q, error = %v", disposition, err)
+	}
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	recorded, err := coordinator.RecordModelCheckpoint(ctx, claim, domain.ModelCheckpointInput{
+		Iteration: 1,
+		Message: domain.GenerationMessage{
+			Role:    domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[{"type":"tool_use","id":"provider-call","name":"lookup_order","input":{}}]`),
+		},
+		Usage: domain.ModelUsage{
+			InputTokens:  1,
+			OutputTokens: 1,
+			Iterations:   1,
+		},
+		Provenance: testModelProvenance(),
+		ToolCalls: []domain.ToolCallRequest{
+			{
+				ProviderCallID: "provider-call",
+				Name:           "lookup_order",
+				Mode:           domain.ToolCallModeClient,
+				Input:          json.RawMessage(`{}`),
+			},
+		},
+	})
+	if err != nil || len(recorded.ToolCalls) != 1 {
+		t.Fatalf("record client call = %#v, error = %v", recorded, err)
+	}
+	usage := domain.ModelUsage{
+		InputTokens:  1,
+		OutputTokens: 1,
+		Iterations:   1,
+	}
+	if err := ownership.SettleDispatch(ctx, claim, domain.InvocationExecutionResult{
+		Status:               domain.InvocationWaiting,
+		MessagesCheckpointed: true,
+		Usage:                &usage,
+		Provenance:           pointerModelProvenance(testModelProvenance()),
+	}, initialDispatch.ID); err != nil {
+		t.Fatalf("park attached dispatch: %v", err)
+	}
+	settledInitial, err := store.GetExecutionDispatch(ctx, initialDispatch.ID)
+	if err != nil || settledInitial.Status != domain.ExecutionDispatchSettled {
+		t.Fatalf("settled initial dispatch = %#v, error = %v", settledInitial, err)
+	}
+	result, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
+		Results: []services.ClientToolResultInput{
+			{
+				ToolCallID: recorded.ToolCalls[0].ID,
+				Content:    json.RawMessage(`{"state":"ready"}`),
+			},
+		},
+	})
+	if err != nil || result.Status != domain.InvocationQueued {
+		t.Fatalf("queue final client result = %#v, error = %v", result, err)
+	}
+	successor := activeInvocationDispatch(t, store, ack.InvocationID)
+	if successor.ID == initialDispatch.ID || successor.Status != domain.ExecutionDispatchPending {
+		t.Fatalf("successor dispatch = %#v, initial = %#v", successor, initialDispatch)
+	}
+}
+
 func TestToolCoordinatorRunsThroughEmbeddedAndExactDispatchExecution(t *testing.T) {
 	t.Run("embedded", func(t *testing.T) {
 		pool, runtime, store, auth := newRuntimeFixture(t)
@@ -1018,6 +1699,10 @@ func assertToolEvidenceIsImmutable(t *testing.T, pool *pgxpool.Pool, invocationI
 	for name, mutate := range map[string]func() error{
 		"ToolCall request identity": func() error {
 			_, err := pool.Exec(ctx, "UPDATE tool_calls SET name = 'changed' WHERE id = $1", toolCallID)
+			return err
+		},
+		"ToolCall result origin": func() error {
+			_, err := pool.Exec(ctx, "UPDATE tool_calls SET result_origin = 'system' WHERE id = $1", toolCallID)
 			return err
 		},
 		"terminal ToolCall attempt": func() error {

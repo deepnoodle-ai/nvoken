@@ -118,7 +118,8 @@ public state is exactly `queued`, `running`,
 `waiting`, `completed`, `failed`, or `cancelled`; the last three are terminal
 and immutable, and the first valid terminal settlement wins. Deadline and
 budget exhaustion are typed failures, not additional lifecycle states.
-`waiting` is reserved for durable ToolCalls. The Invocation owns caller
+`waiting` means durable client ToolCalls are pending while the Invocation owns
+no engine lease or active segment. The Invocation owns caller
 context; resolved spec bytes and digest; attempts, leases, and checkpoints;
 model requests and normalized usage; ToolCalls and results; output — including
 structured output, produced by an internal tool call against a host-provided
@@ -132,7 +133,7 @@ The transcript remains canonical for replay. A new turn is a new Invocation.
 | --- | :---: | --- |
 | `queued` | No | Durably admitted and available for a future execution claim. |
 | `running` | No | A fenced engine owns the current execution segment. |
-| `waiting` | No | Reserved for a durable ToolCall wait with no engine held. |
+| `waiting` | No | Durable client ToolCalls are pending; no execution owner or engine is held. |
 | `completed` | Yes | The turn settled successfully. |
 | `failed` | Yes | The turn settled unsuccessfully, including deadline, budget, or temporary pre-recovery engine-loss outcomes. |
 | `cancelled` | Yes | Cancellation won terminal settlement. |
@@ -169,11 +170,13 @@ Every tool declares one mode:
   delegated actor, and idempotency identities; URLs must satisfy deployment
   egress policy; hosts verify with the runtime JWKS or a shared signing
   secret.
-- **`client`** — the ToolCall is emitted as a generation output item, persisted
-  before delivery; the Invocation parks in a waiting state until the host
-  submits the terminal result through the narrow durable ToolCall command
-  chosen with that feature. The first result per ToolCall ID wins; duplicates
-  return the recorded outcome.
+- **`client`** — the ToolCall is persisted in the canonical transcript before
+  projection through Invocation and Session reads. The Invocation parks in
+  `waiting` until the host submits a bounded batch through
+  `POST /v1/invocations/{invocation_id}/tool-results`. The first result per
+  ToolCall ID wins; equal duplicates return the recorded outcome, and the
+  transaction that closes the last call queues the same Invocation and its
+  successor external dispatch when configured.
 
 ### Two roles, two runtime modes
 
@@ -267,9 +270,21 @@ bounded synthetic error result, closes the calls and running attempts, advances
 checkpoints, and publishes a lifecycle watermark covering the result. Lease
 recovery deliberately leaves open calls intact.
 
-After owner loss, a replacement validates the append-only transcript,
-checkpoints, receipts, and ToolCalls before new work. A committed final model
-checkpoint settles without another provider call; a pending or abandoned
+Client ToolCall result submission uses Session, Invocation, then ToolCall lock
+order. A partial batch appends one tool-role message and one checkpoint per new
+result while leaving the Invocation waiting. The final batch also appends a
+queued lifecycle revision through that message. Durable result messages retain
+host submission order; before the next provider call the engine coalesces the
+batch and projects blocks in the original model ToolCall order. Wall-clock time
+continues while parked, active-execution time does not. Each terminal ToolCall
+also records whether its result came from a client, builtin, or nvoken system
+settlement so late host submissions never compare against cancellation or
+deadline evidence.
+
+After owner loss or a client-tool resume, a replacement validates the
+append-only transcript, checkpoints, receipts, and ToolCalls before new work. A
+committed final model checkpoint settles without another provider call; a
+pending or abandoned
 builtin continues under the same ToolCall ID and a new attempt. Inconsistent
 evidence fails with the bounded public `internal` error. This is crash recovery,
 not a public retry API, arbitrary process snapshots, external-effect safety, or

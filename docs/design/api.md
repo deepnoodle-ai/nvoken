@@ -85,13 +85,21 @@ members encoded as `null`. Explicit defaults therefore differ from omission.
 The compatibility vectors are in
 [`admission-fingerprint-v2.json`](admission-fingerprint-v2.json).
 
-New admissions use fingerprint v3. It preserves the v2 order and inserts
+Fingerprint v3 preserves the v2 order and inserts
 `output` after `budgets`. Omitted output is `null`; otherwise it is an object
 containing `schema`, canonicalized recursively so object member order and
 equivalent JSON number spellings do not change the fingerprint. A request with
 output never replays a retained v1 or v2 row. A schema-free request may still
 replay those rows with their recorded algorithm. The compatibility vectors are
 in [`admission-fingerprint-v3.json`](admission-fingerprint-v3.json).
+
+New admissions use fingerprint v4. It preserves the v3 order and inserts the
+ordered `tools` array after `output`. Every client-tool item encodes `name`,
+`description`, `mode`, and recursively canonical `input_schema`; definition
+order remains material. A tools-bearing request cannot replay a retained v1-v3
+row, while a tools-free replay remains comparable by the row's recorded
+algorithm. Compatibility vectors are in
+[`admission-fingerprint-v4.json`](admission-fingerprint-v4.json).
 
 Streaming and recovery:
 
@@ -131,6 +139,7 @@ Runtime surface:
 | `GET`  | `/v1/invocations`                 | List authoritative Invocations with exact tenant, Session, Agent, and status filters.                              |
 | `GET`  | `/v1/invocations/{invocation_id}` | Read authoritative identity, lifecycle, terminal error, aggregate usage, model provenance, and validated output. |
 | `POST` | `/v1/invocations/{invocation_id}/cancel` | Idempotently make nonterminal work cancelled and return the authoritative terminal row.                    |
+| `POST` | `/v1/invocations/{invocation_id}/tool-results` | Atomically accept a bounded batch of pending client ToolCall results and queue the Invocation when complete. |
 
 The launch create request carries `agent_ref`, body `idempotency_key`, one or
 more text input blocks, an optional `tenant_ref`, at most one of `session_id`
@@ -143,8 +152,12 @@ a bounded, self-contained object schema. nvoken exposes it to the model as the
 reserved `nvoken_submit_output` builtin and validates every submission itself.
 Schema-bearing requests require at least two model iterations; when the host
 omits that budget nvoken resolves it to three or the lower installation maximum.
-Unknown and deferred fields — including spec references,
-host-defined tools, retention, indexed metadata, delegated actor,
+The spec may declare up to 32 ordered client tools with a unique name,
+description, `mode: client`, and the same bounded schema subset for input.
+Tools-bearing requests require at least two model iterations; omission resolves
+to three or the lower installation maximum, as with structured output.
+Unknown and deferred fields — including spec references, callback tools,
+retention, indexed metadata, delegated actor,
 and delivery mode — are rejected rather than ignored. The admitted spec is an
 immutable Invocation snapshot, never mutable Agent configuration.
 
@@ -157,19 +170,19 @@ same request and key.
 
 Public states are exactly `queued`, `running`, `waiting`, `completed`, `failed`,
 and `cancelled`. The last three are terminal and immutable; deadline or budget
-exhaustion is a typed `failed` outcome. `waiting` is reserved for later durable
-ToolCalls. Recovery may visibly move a nonterminal Invocation from `running`
-back to `queued`; clients order observations by lifecycle revision rather than
-assuming nonterminal status monotonicity.
+exhaustion is a typed `failed` outcome. `waiting` exposes durable pending client
+ToolCalls and owns no lease or engine capacity. Final result acceptance moves
+the same Invocation back to `queued`. Recovery may also visibly move a
+nonterminal Invocation from `running` back to `queued`; clients order
+observations by lifecycle revision rather than assuming nonterminal status
+monotonicity.
 
 There is no public retry or resume endpoint. Terminal Invocations stay
 terminal; the host creates a new Invocation for another turn.
 
-Cancellation is durable, first-terminal-wins, and idempotent; its response does
-not promise that an in-flight provider request stopped before incurring cost.
-Structured output, tool summaries, and streaming remain later extensions and
-must preserve this admission identity, lifecycle, idempotency, recovery, and
-background acknowledgement contract.
+Cancellation is durable, first-terminal-wins, and idempotent; it also closes
+pending ToolCalls. Its response does not promise that an in-flight provider
+request stopped before incurring cost.
 
 ## 3. Sessions
 
@@ -217,9 +230,10 @@ definitions travel in the execution specification or reference named custom
 tool definitions (section 5); there is no integration connection or OAuth
 resource.
 
-ToolCalls have no endpoints in this contract, and public execution specs still
-reject `tools`. Internally, the runtime may exercise a deterministic test-only
-builtin to prove the durable boundary: its assistant request message,
+ToolCalls are not independent public resources. Inline execution specs may
+declare client tools; the only public write is the Invocation-scoped result
+command. Internally, the runtime may also exercise trusted builtins: their
+assistant request message,
 nvoken-owned ToolCall identity, attempt, tool-result message, per-model usage
 receipt, and checkpoint all commit under the current Invocation fence. The
 ToolCall row stores transcript references and a request digest, never request or
@@ -227,12 +241,18 @@ result content. Cancellation or logical deadline reaping closes an open call
 with a canonical synthetic error result. Expired ownership instead requeues the
 same Invocation and preserves the open call for fenced recovery.
 
-When the client-tool slice ships,
-the canonical transcript carries each request and result and the Session and
-Invocation reads report pending calls. A client ToolCall parks the Invocation
-in `waiting` with no engine capacity; the host submits the result through a
-narrow, batchable, idempotent command chosen in that slice. The first result per
-ToolCall ID wins. No connection stays open for correctness.
+The canonical transcript carries each request and result. Invocation get and
+Session get project unresolved client calls as stable `id`, `name`, canonical
+`input`, and `deadline_at`. A client ToolCall parks the Invocation in `waiting`
+with no engine capacity. The host submits 1-32 results to
+`POST /v1/invocations/{invocation_id}/tool-results`; one transaction validates
+the complete batch, appends result evidence for new items, and leaves the
+Invocation waiting or queues it when the batch closes the last call. The first
+result per ToolCall ID wins. Equal replay returns `202` with `deduplicated:
+true`; changed replay returns `409 tool_result_conflict`. Result acceptance
+after cancellation returns `invocation_not_waiting`, and acceptance at or after
+the durable deadline returns `tool_result_expired`. No connection stays open
+for correctness and there is still no generic Session append endpoint.
 
 Callback wire rules: definitions supplied per Invocation or by custom-tool
 reference; URLs must satisfy the credential's deployment-configured egress

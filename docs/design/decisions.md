@@ -223,3 +223,24 @@ fails once with public `internal` and internal class `recovery_invalid`.
 written for recoverable lease expiry. This decision does not add a public retry
 endpoint, arbitrary provider snapshots, exactly-once billing or external
 effects, or cooperative checkpoint-and-chain at the intentional segment limit.
+
+28. Client tools park and resume through one Invocation command (2026-07-21):
+an inline immutable spec may declare up to 32 ordered `mode: client` tools with
+bounded object schemas. New admissions use fingerprint v4, which makes the
+ordered declarations material while recursively canonicalizing schema objects;
+retained tools-free v1-v3 rows remain comparable by their recorded algorithm.
+When Dive selects a client tool, nvoken commits the assistant request, stable
+ToolCall identities, receipt, and checkpoint before atomically parking the
+Invocation in `waiting` with no lease or active segment. Invocation and Session
+reads project unresolved calls from that evidence. The only public write is
+`POST /v1/invocations/{invocation_id}/tool-results`: under Session, Invocation,
+then ToolCall locks, the first accepted result wins, equal replay deduplicates,
+partial batches remain waiting, and the final batch queues the same Invocation
+and its Cloud Tasks dispatch in one transaction. Durable result origin prevents
+client replay comparison against nvoken-owned cancellation or deadline
+evidence. A replacement owner can also recognize a checkpointed-but-not-yet-
+parked client batch and park it without replaying the provider. The canonical
+transcript keeps submission order; provider projection coalesces and restores
+original model batch order. This deliberately avoids Mobius Cloud's mutable
+suspension blob and does not add generic Session append, callback delivery, or
+host credentials to nvoken.

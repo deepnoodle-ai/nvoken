@@ -338,7 +338,15 @@ func (s *ToolCheckpointService) AcceptBuiltinToolResult(ctx context.Context, cla
 		if isError {
 			status = domain.ToolCallFailed
 		}
-		settled, err = s.store.SettleToolCall(txCtx, call.ID, status, messageID, sequence, now)
+		settled, err = s.store.SettleToolCall(
+			txCtx,
+			call.ID,
+			status,
+			domain.ToolCallResultBuiltin,
+			messageID,
+			sequence,
+			now,
+		)
 		if err != nil {
 			return err
 		}
@@ -375,6 +383,9 @@ func (s *ToolCheckpointService) AcceptBuiltinToolResult(ctx context.Context, cla
 }
 
 func (s *ToolCheckpointService) prepareToolCalls(invocation domain.Invocation, input domain.ModelCheckpointInput, messageID string, sequence int64, now time.Time) ([]domain.ToolCall, json.RawMessage, error) {
+	if len(input.ToolCalls) > MaxClientTools {
+		return nil, nil, fmt.Errorf("model checkpoint exceeds the maximum ToolCall batch size")
+	}
 	var blocks []map[string]json.RawMessage
 	if err := json.Unmarshal(input.Message.Content, &blocks); err != nil || len(blocks) == 0 {
 		return nil, nil, fmt.Errorf("model checkpoint content is invalid")
@@ -818,7 +829,15 @@ func closeOpenToolCallsForTerminal(
 	checkpointSequence := invocation.CurrentCheckpointSequence
 	iteration := invocation.CurrentIteration
 	for _, call := range open {
-		if _, err := durable.SettleToolCall(ctx, call.ID, callStatus, messageID, messageSequence, now); err != nil {
+		if _, err := durable.SettleToolCall(
+			ctx,
+			call.ID,
+			callStatus,
+			domain.ToolCallResultSystem,
+			messageID,
+			messageSequence,
+			now,
+		); err != nil {
 			return nil, err
 		}
 		if _, err := durable.SettleRunningToolCallAttempts(ctx, call.ID, callStatus, now); err != nil {

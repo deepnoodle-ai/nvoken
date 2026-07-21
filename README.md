@@ -82,8 +82,10 @@ authoritative state by durable ID or a scope-bound cursor. A Session SSE stream
 replays that same cursor model and adds id-less token previews; disconnecting it
 never affects execution. Hosts can bound or idempotently cancel accepted work;
 Postgres decides the terminal winner. If an execution owner is lost, the same
-Invocation is requeued and continues from its last validated checkpoint. Host
-and client tools build on that record in later slices. The exact surface is in
+Invocation is requeued and continues from its last validated checkpoint. A
+client tool parks that Invocation without holding compute; the host can recover
+the pending call by ID, submit its result idempotently, and let any engine
+continue it. The exact surface is in
 [openapi/runtime.yaml](openapi/runtime.yaml).
 
 ## Your app owns the state

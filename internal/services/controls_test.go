@@ -68,6 +68,20 @@ func TestBudgetPolicyResolvesStructuredOutputIterationFloor(t *testing.T) {
 	}
 }
 
+func TestBudgetPolicyResolvesClientToolIterationFloor(t *testing.T) {
+	policy := DefaultBudgetPolicy()
+	resolved, err := policy.ResolveForFeatures(nil, false, true)
+	if err != nil || resolved.MaxIterations != 3 {
+		t.Fatalf("client tool default iterations = %d, error = %v", resolved.MaxIterations, err)
+	}
+	explicit := 1
+	if _, err := policy.ResolveForFeatures(&InvocationBudgetInput{
+		MaxIterations: &explicit,
+	}, false, true); err == nil {
+		t.Fatal("one client tool iteration was accepted")
+	}
+}
+
 func TestBudgetValidationRejectsUnsafeNumbers(t *testing.T) {
 	for name, cost := range map[string]float64{
 		"zero": 0, "negative": -1, "nan": math.NaN(), "infinite": math.Inf(1), "over precision": 0.1234567,
@@ -179,6 +193,84 @@ func TestV2FingerprintReplayRejectsAddedStructuredOutput(t *testing.T) {
 		v3,
 	); err == nil {
 		t.Fatal("output-bearing request matched a v2 row")
+	}
+}
+
+func TestFingerprintV4CanonicalizesClientToolSchemasAndPreservesToolOrder(t *testing.T) {
+	input := validServiceInput()
+	input.Spec.Tools = []ClientToolSpec{
+		{
+			Name:        "first",
+			Description: "First tool",
+			Mode:        "client",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"count":{"type":"number","minimum":1}}}`),
+		},
+		{
+			Name:        "second",
+			Description: "Second tool",
+			Mode:        "client",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+	}
+	first, err := InvocationFingerprintV4(input)
+	if err != nil {
+		t.Fatalf("first client tool fingerprint: %v", err)
+	}
+	input.Spec.Tools[0].InputSchema = json.RawMessage(`{"properties":{"count":{"minimum":1.0,"type":"number"}},"type":"object"}`)
+	equivalent, err := InvocationFingerprintV4(input)
+	if err != nil {
+		t.Fatalf("equivalent client tool fingerprint: %v", err)
+	}
+	if first != equivalent {
+		t.Fatal("semantically equal client tool schemas produced different fingerprints")
+	}
+	input.Spec.Tools[0], input.Spec.Tools[1] = input.Spec.Tools[1], input.Spec.Tools[0]
+	reordered, err := InvocationFingerprintV4(input)
+	if err != nil {
+		t.Fatalf("reordered client tool fingerprint: %v", err)
+	}
+	if first == reordered {
+		t.Fatal("reordered client tools produced the same fingerprint")
+	}
+}
+
+func TestV3FingerprintReplayRejectsAddedClientTools(t *testing.T) {
+	input := validServiceInput()
+	v3, err := InvocationFingerprintV3(input)
+	if err != nil {
+		t.Fatalf("v3 fingerprint: %v", err)
+	}
+	store := &legacyFingerprintStore{
+		invocation: domain.Invocation{
+			FingerprintVersion: 3,
+			RequestFingerprint: v3[:],
+		},
+	}
+	service := &RuntimeService{
+		store: store,
+	}
+	input.Spec.Tools = []ClientToolSpec{
+		{
+			Name:        "lookup",
+			Description: "Look up data",
+			Mode:        "client",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+	}
+	v4, err := InvocationFingerprintV4(input)
+	if err != nil {
+		t.Fatalf("v4 fingerprint: %v", err)
+	}
+	if _, _, err := service.findIdempotent(
+		context.Background(),
+		"account",
+		"partition",
+		"agent",
+		"key",
+		input,
+		v4,
+	); err == nil {
+		t.Fatal("tools-bearing request matched a v3 row")
 	}
 }
 
