@@ -86,7 +86,7 @@ terraform -chdir="${nvoken_deploy_dir}" apply \
   -target=google_cloud_run_v2_job.migrate
 
 nvoken_migration_job="$(terraform -chdir="${nvoken_deploy_dir}" output -raw migration_job_name)"
-nvoken_region="$(terraform -chdir="${nvoken_deploy_dir}" output -raw region)"
+nvoken_region="${TF_VAR_region:-us-central1}"
 gcloud run jobs execute "${nvoken_migration_job}" \
   --project="${TF_VAR_project_id}" \
   --region="${nvoken_region}" \

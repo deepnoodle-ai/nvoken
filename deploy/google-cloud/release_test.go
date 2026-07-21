@@ -26,6 +26,9 @@ func TestReleaseOrdersMigrationBeforeServiceApply(t *testing.T) {
 		"plan -out=",
 		"apply ",
 	)
+	if strings.Contains(log, "output -raw region") {
+		t.Fatalf("release queried an output that is absent after a first targeted apply:\n%s", log)
+	}
 }
 
 func TestBootstrapStateCreatesAndHardensMissingBucket(t *testing.T) {
@@ -156,7 +159,7 @@ case "$*" in
   *"output -raw build_service_account_name"*) echo 'projects/example-project/serviceAccounts/nvoken-test-build@example-project.iam.gserviceaccount.com' ;;
   *"output -raw build_source_bucket"*) echo 'example-project-nvoken-test-build-source' ;;
   *"output -raw migration_job_name"*) echo 'nvoken-test-migrate' ;;
-  *"output -raw region"*) echo 'us-central1' ;;
+  *"output -raw region"*) echo 'region output must not be queried before the full apply' >&2; exit 7 ;;
   *"output -raw service_url"*) echo 'https://nvoken-test.example.run.app' ;;
 esac
 exit 0
