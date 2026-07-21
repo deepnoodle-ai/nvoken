@@ -36,6 +36,8 @@ Read the active documents in this order:
 [`decisions.md`](decisions.md) is the running list of standing context: the
 inputs and decisions that shaped the packet. It is useful background, but it
 is not required reading once the four active documents are understood.
+Language-neutral compatibility fixtures for the admission idempotency hash
+live in [`admission-fingerprint-v1.json`](admission-fingerprint-v1.json).
 
 ## Document authority
 

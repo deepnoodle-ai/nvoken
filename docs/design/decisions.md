@@ -85,3 +85,12 @@ current version and dirty state and the command rejects a dirty or newer
 schema. This incorporates Mobius Cloud's useful transaction and advisory-lock
 precedent while avoiding the generated schema and concurrent-startup migration
 surface that accumulated there.
+
+19. Bounded admission and stable request fingerprint (2026-07-20): the
+background Invocation request is limited to 1 MiB of encoded JSON and 64 text
+blocks. `agent_ref`, `tenant_ref`, `session_key`, `idempotency_key`, and the
+model provider/name are each limited to 255 Unicode characters; whitespace-only
+required strings are invalid. Idempotency comparison uses the documented v1
+SHA-256 canonical representation under `docs/design/`, so JSON object order is
+irrelevant, array and string changes remain material, and retained work stays
+comparable across service releases.
