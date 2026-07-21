@@ -13,8 +13,12 @@ Runtime business history is preserved by default. Foreign keys use
 append-only. `execution_dispatches` are transport diagnostics rather than
 business outcomes, so terminal rows alone have an explicit bounded retention
 operation; their authoritative synthetic work rows are not pruned with them.
-Any broader retention design requires an explicit, ordered migration and
-operation rather than cascades.
+Terminal `callback_deliveries` have the same bounded diagnostic posture; their
+owning ToolCalls, attempts, results, checkpoints, Invocations, and transcript
+messages remain authoritative. Any broader retention design requires an
+explicit, ordered migration and operation rather than cascades. The operator
+policy, settings, and storage queries live in
+[`docs/guides/data-retention.md`](../../../../docs/guides/data-retention.md).
 
 Migration `000007` extends the outbox to scoped Invocation work. The generic
 `work_id` remains intentionally free of a foreign key because the table carries

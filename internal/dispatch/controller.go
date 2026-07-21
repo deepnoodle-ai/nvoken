@@ -28,8 +28,14 @@ func DefaultControllerConfig() ControllerConfig {
 }
 
 func ValidateControllerConfig(cfg ControllerConfig) error {
-	if cfg.PublishInterval <= 0 || cfg.ReconcileInterval <= 0 || cfg.RetentionInterval <= 0 {
-		return fmt.Errorf("dispatch controller intervals must be positive")
+	if cfg.PublishInterval <= 0 {
+		return fmt.Errorf("dispatch publish interval must be positive")
+	}
+	if cfg.ReconcileInterval <= 0 {
+		return fmt.Errorf("dispatch reconcile interval must be positive")
+	}
+	if cfg.RetentionInterval <= 0 {
+		return fmt.Errorf("dispatch retention interval must be positive")
 	}
 	if cfg.BatchLimit <= 0 || cfg.BatchLimit > 1000 {
 		return fmt.Errorf("dispatch controller batch limit must be from 1 through 1000")

@@ -34,6 +34,8 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 	}
 	if cfg.ProcessRole != "combined" || cfg.InvocationExecutionMode != "embedded" || cfg.Dispatch.Queue != "execution" ||
 		cfg.Dispatch.PublicationLease != 30*time.Second || cfg.Dispatch.StaleAfter != 5*time.Minute ||
+		cfg.Dispatch.Retention != 7*24*time.Hour || cfg.Dispatch.BatchLimit != 100 ||
+		cfg.DispatchController.RetentionInterval != time.Hour || cfg.DispatchController.BatchLimit != 100 ||
 		cfg.ExecutorAttemptTimeout != 29*time.Minute+55*time.Second {
 		t.Fatalf("dispatch defaults: %#v", cfg)
 	}
@@ -44,6 +46,8 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 	}
 	if cfg.CallbackSigningKey != "" || cfg.CallbackDelivery.LeaseDuration != 30*time.Second ||
 		cfg.CallbackDelivery.MaxAttempts != 5 || cfg.CallbackController.Concurrency != 4 ||
+		cfg.CallbackDelivery.Retention != 7*24*time.Hour || cfg.CallbackDelivery.BatchLimit != 100 ||
+		cfg.CallbackController.RetentionInterval != time.Hour ||
 		cfg.CallbackController.DrainGrace != 15*time.Second || cfg.CallbackRequestTimeout != 10*time.Second ||
 		cfg.CallbackDNSTimeout != 5*time.Second {
 		t.Fatalf("callback defaults: %#v", cfg)
@@ -82,6 +86,55 @@ func TestLoadDaemonConfigCallbackSigningIsCombinedOnlyAndBounded(t *testing.T) {
 	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "available only to the combined role") {
 		t.Fatalf("executor callback secret error = %v", err)
 	}
+}
+
+func TestLoadDaemonConfigRejectsInvalidRetentionSettings(t *testing.T) {
+	t.Run("dispatch retention", func(t *testing.T) {
+		setServeConfig(t)
+		t.Setenv("DISPATCH_RETENTION", "5m")
+		if _, err := loadDaemonConfig(); err == nil ||
+			!strings.Contains(err.Error(), "dispatch retention must exceed stale age") {
+			t.Fatalf("dispatch retention error = %v", err)
+		}
+	})
+
+	t.Run("dispatch retention interval", func(t *testing.T) {
+		setServeConfig(t)
+		t.Setenv("DISPATCH_RETENTION_INTERVAL", "0s")
+		if _, err := loadDaemonConfig(); err == nil ||
+			!strings.Contains(err.Error(), "dispatch retention interval must be positive") {
+			t.Fatalf("dispatch retention interval error = %v", err)
+		}
+	})
+
+	t.Run("enabled callback retention", func(t *testing.T) {
+		setServeConfig(t)
+		t.Setenv("CALLBACK_SIGNING_KEY", "0123456789abcdef0123456789abcdef")
+		t.Setenv("CALLBACK_RETENTION", "0s")
+		if _, err := loadDaemonConfig(); err == nil ||
+			!strings.Contains(err.Error(), "callback retention must be positive") {
+			t.Fatalf("callback retention error = %v", err)
+		}
+	})
+
+	t.Run("enabled callback retention interval", func(t *testing.T) {
+		setServeConfig(t)
+		t.Setenv("CALLBACK_SIGNING_KEY", "0123456789abcdef0123456789abcdef")
+		t.Setenv("CALLBACK_RETENTION_INTERVAL", "0s")
+		if _, err := loadDaemonConfig(); err == nil ||
+			!strings.Contains(err.Error(), "callback retention interval must be positive") {
+			t.Fatalf("callback retention interval error = %v", err)
+		}
+	})
+
+	t.Run("disabled callback settings are inert", func(t *testing.T) {
+		setServeConfig(t)
+		t.Setenv("CALLBACK_RETENTION", "0s")
+		t.Setenv("CALLBACK_RETENTION_INTERVAL", "0s")
+		if _, err := loadDaemonConfig(); err != nil {
+			t.Fatalf("disabled callback retention settings: %v", err)
+		}
+	})
 }
 
 func TestLoadDaemonConfigExecutorDoesNotRequirePublicRuntimeSecrets(t *testing.T) {
