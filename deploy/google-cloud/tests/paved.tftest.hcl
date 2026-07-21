@@ -160,7 +160,10 @@ run "paved_defaults" {
     condition = (
       google_cloud_tasks_queue.execution.rate_limits[0].max_concurrent_dispatches <= var.executor_max_instances * var.executor_request_concurrency &&
       google_cloud_run_v2_service.executor.template[0].timeout == "1800s" &&
-      one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "EXECUTOR_ATTEMPT_TIMEOUT"]) == "1795s"
+      one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "EXECUTOR_ATTEMPT_TIMEOUT"]) == "1795s" &&
+      one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "ENGINE_EXECUTION_SEGMENT_CEILING"]) == "900s" &&
+      one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "ENGINE_SETTLEMENT_RESERVE"]) == "5s" &&
+      var.engine_execution_segment_ceiling_seconds <= var.executor_attempt_timeout_seconds
     )
     error_message = "Queue concurrency and attempt timing must fit inside declared executor capacity and deadline."
   }
@@ -169,6 +172,8 @@ run "paved_defaults" {
     condition = (
       one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "NVOKEN_PROCESS_ROLE"]) == "combined" &&
       one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "NVOKEN_PROCESS_ROLE"]) == "executor" &&
+      one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "INVOCATION_EXECUTION_MODE"]) == "cloud_tasks" &&
+      one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "INVOCATION_EXECUTION_MODE"]) == "cloud_tasks" &&
       length([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item if item.name == "CLOUD_TASKS_EXECUTOR_URL"]) == 1 &&
       length([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item if item.name == "CLOUD_TASKS_OIDC_AUDIENCE"]) == 1
     )
@@ -176,11 +181,14 @@ run "paved_defaults" {
   }
 
   assert {
-    condition = alltrue([
-      for secret_name in ["RUNTIME_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"] :
-      !contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], secret_name)
-    ])
-    error_message = "The private executor must not receive Runtime or provider credentials in the foundation slice."
+    condition = (
+      !contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], "RUNTIME_API_KEY") &&
+      contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], "ANTHROPIC_API_KEY") &&
+      !contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "ANTHROPIC_API_KEY") &&
+      length(google_secret_manager_secret_iam_member.provider_executor) == 1 &&
+      length(google_secret_manager_secret_iam_member.provider_runtime) == 0
+    )
+    error_message = "Cloud Tasks mode must give provider credentials only to the private generating role."
   }
 
   assert {
@@ -189,17 +197,42 @@ run "paved_defaults" {
   }
 
   assert {
-    condition     = length(google_monitoring_alert_policy.dispatch_failures) == 4
-    error_message = "Aged dispatch, publication failure, and executor authentication signals must be alertable."
+    condition     = length(google_monitoring_alert_policy.dispatch_failures) == 5
+    error_message = "Aged dispatch, publication failure, sustained executor retry, and authentication signals must be alertable."
   }
 
   assert {
     condition = (
       google_monitoring_alert_policy.dispatch_failures["aged_pending"].conditions[0].condition_threshold[0].duration == "300s" &&
       google_monitoring_alert_policy.dispatch_failures["stale_published"].conditions[0].condition_threshold[0].duration == "300s" &&
+      google_monitoring_alert_policy.dispatch_failures["executor_retry"].conditions[0].condition_threshold[0].duration == "300s" &&
       google_monitoring_alert_policy.dispatch_failures["publish_failure"].conditions[0].condition_threshold[0].duration == "0s"
     )
     error_message = "Aged dispatch alerts must require sustained evidence without delaying discrete failure alerts."
+  }
+}
+
+run "embedded_mode_moves_provider_secrets" {
+  command = plan
+
+  variables {
+    project_id                   = "example-project"
+    environment                  = "test"
+    image_tag                    = "0123456789abcdef"
+    anthropic_api_key_secret_id  = "nvoken-test-anthropic"
+    invocation_execution_mode    = "embedded"
+    database_deletion_protection = false
+    service_deletion_protection  = false
+  }
+
+  assert {
+    condition = (
+      contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "ANTHROPIC_API_KEY") &&
+      !contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], "ANTHROPIC_API_KEY") &&
+      length(google_secret_manager_secret_iam_member.provider_runtime) == 1 &&
+      length(google_secret_manager_secret_iam_member.provider_executor) == 0
+    )
+    error_message = "Embedded mode must give provider credentials only to the combined generating role."
   }
 }
 
@@ -264,10 +297,25 @@ run "both_providers_are_allowed" {
   assert {
     condition = alltrue([
       for name in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"] :
-      contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], name)
-    ])
-    error_message = "Both provider secrets must be injectable together."
+      contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], name)
+    ]) && length(google_secret_manager_secret_iam_member.provider_executor) == 2
+    error_message = "Both provider secrets must be injectable together into the generating role."
   }
+}
+
+run "segment_ceiling_outside_attempt_is_rejected" {
+  command = plan
+
+  variables {
+    project_id                       = "example-project"
+    environment                      = "test"
+    image_tag                        = "abcdef0123456789"
+    anthropic_api_key_secret_id      = "nvoken-test-anthropic"
+    executor_attempt_timeout_seconds = 800
+    database_deletion_protection     = false
+  }
+
+  expect_failures = [google_cloud_run_v2_service.executor]
 }
 
 run "missing_provider_is_rejected" {

@@ -299,13 +299,22 @@ resource "google_secret_manager_secret_iam_member" "generated" {
   member    = "serviceAccount:${google_service_account.runtime.email}"
 }
 
-resource "google_secret_manager_secret_iam_member" "provider" {
-  for_each = local.provider_secrets
+resource "google_secret_manager_secret_iam_member" "provider_runtime" {
+  for_each = var.invocation_execution_mode == "embedded" ? local.provider_secrets : {}
 
   project   = var.project_id
   secret_id = each.value
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "provider_executor" {
+  for_each = var.invocation_execution_mode == "cloud_tasks" ? local.provider_secrets : {}
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.executor.email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "migration_database" {
@@ -450,6 +459,10 @@ resource "google_cloud_run_v2_service" "executor" {
       error_message = "executor attempt timeout must leave the configured settlement reserve inside the task deadline."
     }
     precondition {
+      condition     = var.engine_execution_segment_ceiling_seconds <= var.executor_attempt_timeout_seconds
+      error_message = "engine execution segment ceiling cannot exceed the executor attempt timeout."
+    }
+    precondition {
       condition     = var.task_dispatch_deadline_seconds <= 1800
       error_message = "Cloud Tasks HTTP dispatch deadline cannot exceed 1800 seconds."
     }
@@ -481,6 +494,25 @@ resource "google_cloud_run_v2_service" "executor" {
       }
 
       env {
+        name  = "INVOCATION_EXECUTION_MODE"
+        value = var.invocation_execution_mode
+      }
+
+      dynamic "env" {
+        for_each = var.invocation_execution_mode == "cloud_tasks" ? local.provider_secrets : {}
+
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      env {
         name = "DATABASE_URL"
         value_source {
           secret_key_ref {
@@ -503,6 +535,16 @@ resource "google_cloud_run_v2_service" "executor" {
       env {
         name  = "EXECUTOR_ATTEMPT_TIMEOUT"
         value = "${var.executor_attempt_timeout_seconds}s"
+      }
+
+      env {
+        name  = "ENGINE_EXECUTION_SEGMENT_CEILING"
+        value = "${var.engine_execution_segment_ceiling_seconds}s"
+      }
+
+      env {
+        name  = "ENGINE_SETTLEMENT_RESERVE"
+        value = "${var.engine_settlement_reserve_seconds}s"
       }
 
       env {
@@ -572,6 +614,7 @@ resource "google_cloud_run_v2_service" "executor" {
     google_cloud_run_v2_job.migrate,
     google_project_service.required,
     google_secret_manager_secret_iam_member.executor_database,
+    google_secret_manager_secret_iam_member.provider_executor,
     google_secret_manager_secret_version.database_url,
   ]
 }
@@ -665,6 +708,11 @@ resource "google_cloud_run_v2_service" "runtime" {
       }
 
       env {
+        name  = "INVOCATION_EXECUTION_MODE"
+        value = var.invocation_execution_mode
+      }
+
+      env {
         name = "DATABASE_URL"
         value_source {
           secret_key_ref {
@@ -685,7 +733,7 @@ resource "google_cloud_run_v2_service" "runtime" {
       }
 
       dynamic "env" {
-        for_each = local.provider_secrets
+        for_each = var.invocation_execution_mode == "embedded" ? local.provider_secrets : {}
 
         content {
           name = env.key
@@ -864,7 +912,7 @@ resource "google_cloud_run_v2_service" "runtime" {
     google_service_account_iam_member.runtime_acts_as_task_caller,
     google_project_service.required,
     google_secret_manager_secret_iam_member.generated,
-    google_secret_manager_secret_iam_member.provider,
+    google_secret_manager_secret_iam_member.provider_runtime,
     google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.runtime_api_key,
   ]
@@ -933,6 +981,7 @@ resource "google_logging_metric" "dispatch_failures" {
     aged_pending    = "jsonPayload.event=\"dispatch_aged_pending\""
     stale_published = "jsonPayload.event=\"dispatch_stale_published\""
     publish_failure = "jsonPayload.event=\"dispatch_publish_failure\""
+    executor_retry  = "resource.labels.service_name=\"${google_cloud_run_v2_service.executor.name}\" AND jsonPayload.event=\"dispatch_attempt_retry\""
     executor_auth   = "resource.labels.service_name=\"${google_cloud_run_v2_service.executor.name}\" AND (httpRequest.status=401 OR httpRequest.status=403)"
   }
 
@@ -963,7 +1012,7 @@ resource "google_monitoring_alert_policy" "dispatch_failures" {
       filter          = "metric.type=\"logging.googleapis.com/user/${each.value.name}\" AND resource.type=\"cloud_run_revision\""
       comparison      = "COMPARISON_GT"
       threshold_value = 0
-      duration        = contains(["aged_pending", "stale_published"], each.key) ? "300s" : "0s"
+      duration        = contains(["aged_pending", "stale_published", "executor_retry"], each.key) ? "300s" : "0s"
 
       aggregations {
         alignment_period   = "60s"

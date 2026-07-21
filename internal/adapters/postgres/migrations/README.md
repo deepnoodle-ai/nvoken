@@ -15,3 +15,7 @@ business outcomes, so terminal rows alone have an explicit bounded retention
 operation; their authoritative synthetic work rows are not pruned with them.
 Any broader retention design requires an explicit, ordered migration and
 operation rather than cascades.
+
+Migration `000007` extends the outbox to scoped Invocation work. The generic
+`work_id` remains intentionally free of a foreign key because the table carries
+multiple kinds; kind-specific checks and service transactions enforce shape.

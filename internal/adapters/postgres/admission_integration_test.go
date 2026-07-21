@@ -412,6 +412,26 @@ func TestRuntimeAdmissionRollsBackEveryWriteStage(t *testing.T) {
 	}
 }
 
+func TestRuntimeAdmissionRollsBackCloudDispatchFailure(t *testing.T) {
+	pool, _, store, auth := newRuntimeFixture(t)
+	clock := identity.SystemClock{}
+	faults := &faultingAdmissionStore{Store: store, failAt: "dispatch"}
+	service := services.NewRuntimeService(
+		faults, NewTransactionManager(pool), clock, identity.NewUUIDv7Generator(clock),
+		services.WithInvocationExecutionMode(services.InvocationExecutionCloudTasks, services.DefaultExecutionDispatchQueue),
+	)
+
+	_, err := service.Admit(context.Background(), auth, runtimeInput())
+	if err == nil {
+		t.Fatal("dispatch-faulted admission succeeded")
+	}
+	assertTableCount(t, pool, "accounts", 1)
+	assertTableCount(t, pool, "agents", 0)
+	assertTableCount(t, pool, "sessions", 0)
+	assertAdmissionCounts(t, pool, 0)
+	assertTableCount(t, pool, "execution_dispatches", 0)
+}
+
 func TestRuntimeAdmissionRollsBackOnCommitFailure(t *testing.T) {
 	pool, _, store, auth := newRuntimeFixture(t)
 	clock := identity.SystemClock{}
@@ -699,6 +719,13 @@ func (s *faultingAdmissionStore) AppendInvocationState(ctx context.Context, stat
 		return errors.New("injected state failure")
 	}
 	return s.Store.AppendInvocationState(ctx, state)
+}
+
+func (s *faultingAdmissionStore) CreateExecutionDispatch(ctx context.Context, dispatch domain.ExecutionDispatch) error {
+	if s.failAt == "dispatch" {
+		return errors.New("injected dispatch failure")
+	}
+	return s.Store.CreateExecutionDispatch(ctx, dispatch)
 }
 
 func newRuntimeFixture(t *testing.T) (*pgxpool.Pool, *services.RuntimeService, *Store, domain.RuntimeAuthContext) {

@@ -20,7 +20,10 @@ type SyntheticDispatchWork struct {
 
 type ExecutionDispatchKind string
 
-const ExecutionDispatchSynthetic ExecutionDispatchKind = "synthetic"
+const (
+	ExecutionDispatchSynthetic  ExecutionDispatchKind = "synthetic"
+	ExecutionDispatchInvocation ExecutionDispatchKind = "invocation"
+)
 
 type ExecutionDispatchStatus string
 
