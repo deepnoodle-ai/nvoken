@@ -183,7 +183,10 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 ## Durability mechanics
 
 - A stale engine instance cannot commit after losing its lease.
-- A turn executes entirely on one harness version; engine deploys drain rather than interrupt.
+- A turn segment executes entirely on one harness version. Request-bound split
+  executors drain on deploy; the early self-contained Cloud Run mode may instead
+  produce a visible `execution_lost` failure when a background turn outlives the
+  platform termination window.
 - nvoken supports the same public admission and read semantics in two execution
   topologies: a self-contained engine in `nvokend`, or a separate Cloud Tasks to
   Cloud Run executor. Delivery is only a wake-up mechanism; Postgres claims,

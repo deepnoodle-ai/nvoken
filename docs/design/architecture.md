@@ -179,9 +179,13 @@ Every tool declares one mode:
 | `nvokend` (control plane) | API, admission, Session projections, ToolCall delivery, signing, model gateway, reads | Continuous                            |
 | Turn engine               | Claims admitted Invocations and executes the turn end to end                     | Rare — only when harness code changes |
 
-The engine deploys by drain: stop claiming, finish in-flight turns, exit
-while the new version claims fresh work. A turn executes entirely on one
-harness version.
+The engine deploys by drain when its hosting platform keeps the execution
+segment alive: stop claiming, finish in-flight turns, and exit while the new
+version claims fresh work. A turn segment executes entirely on one harness
+version. Self-contained Cloud Run is an explicit early limitation: background
+turns are not request-bound, so revision shutdown or scale-in can interrupt work
+that exceeds the platform termination window. The lease/reaper then records the
+visible typed failure used before checkpoint recovery.
 
 Two runtime modes implement the internal dispatch seam (claim, lease,
 heartbeat, checkpoint, settle — a version-locked Go interface, never a

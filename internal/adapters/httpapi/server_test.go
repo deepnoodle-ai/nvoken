@@ -66,14 +66,14 @@ func (f *fakeRuntime) GetSession(context.Context, domain.RuntimeAuthContext, str
 	return f.session, f.err
 }
 
-func TestHealthzIsPublic(t *testing.T) {
+func TestHealthIsPublic(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 
 	testHandler(nil, nil, io.Discard).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK || recorder.Body.String() != "ok" {
-		t.Fatalf("GET /healthz = %d %q", recorder.Code, recorder.Body.String())
+		t.Fatalf("GET /health = %d %q", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -88,6 +88,13 @@ func TestServerTimeoutsAreBounded(t *testing.T) {
 	if server.http.WriteTimeout <= server.http.ReadTimeout {
 		t.Fatalf("write timeout %s must leave time after read timeout %s", server.http.WriteTimeout, server.http.ReadTimeout)
 	}
+	if server.shutdownTimeout != defaultShutdownTimeout {
+		t.Fatalf("shutdown timeout = %s, want %s", server.shutdownTimeout, defaultShutdownTimeout)
+	}
+	configured := NewServer(Config{ShutdownTimeout: 8 * time.Second})
+	if configured.shutdownTimeout != 8*time.Second {
+		t.Fatalf("configured shutdown timeout = %s", configured.shutdownTimeout)
+	}
 }
 
 func TestRoutingErrorsUseContractEnvelope(t *testing.T) {
@@ -95,7 +102,7 @@ func TestRoutingErrorsUseContractEnvelope(t *testing.T) {
 		name, method, target, code, allow string
 		status                            int
 	}{
-		{name: "wrong method", method: http.MethodPost, target: "/healthz", code: "invalid_request", allow: http.MethodGet, status: http.StatusMethodNotAllowed},
+		{name: "wrong health method", method: http.MethodPost, target: "/health", code: "invalid_request", allow: http.MethodGet, status: http.StatusMethodNotAllowed},
 		{name: "unknown route", method: http.MethodGet, target: "/v1/unknown", code: "not_found", status: http.StatusNotFound},
 	}
 	for _, test := range tests {

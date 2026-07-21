@@ -1,4 +1,4 @@
-.PHONY: fmt build generate sqlc sqlc-check test test-postgres vet openapi-check check run migrate
+.PHONY: fmt build generate sqlc sqlc-check test test-postgres vet openapi-check check check-deploy run migrate
 
 REDOCLY_VERSION := 1.34.11
 SQLC_VERSION := v1.31.1
@@ -30,6 +30,13 @@ vet:
 
 openapi-check:
 	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint openapi/runtime.yaml
+
+check-deploy:
+	terraform fmt -check -recursive deploy/google-cloud
+	terraform -chdir=deploy/google-cloud init -backend=false -input=false
+	terraform -chdir=deploy/google-cloud validate
+	terraform -chdir=deploy/google-cloud test
+	bash -n deploy/google-cloud/bootstrap-state.sh deploy/google-cloud/release.sh deploy/google-cloud/smoke.sh
 
 run:
 	go run ./cmd/nvokend
