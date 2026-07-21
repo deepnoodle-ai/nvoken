@@ -320,6 +320,17 @@ func (s *InvocationExecutionService) settle(
 		if err := validateUsageProjection(txCtx, s.store, invocation.ID, result); err != nil {
 			return err
 		}
+		if result.Status == domain.InvocationWaiting {
+			return s.parkForClientTools(
+				txCtx,
+				claim,
+				invocation,
+				currentState,
+				dispatchID,
+				settleDispatch,
+				now,
+			)
+		}
 		outputPayload, outputProvenancePayload, err := validateStructuredOutputSettlement(
 			txCtx,
 			s.store,
@@ -398,6 +409,210 @@ func (s *InvocationExecutionService) settle(
 		}
 		return nil
 	})
+}
+
+func (s *InvocationExecutionService) parkForClientTools(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	invocation domain.Invocation,
+	currentState domain.InvocationState,
+	dispatchID *string,
+	settleDispatch bool,
+	now time.Time,
+) error {
+	calls, err := s.store.ListOpenToolCallsForUpdate(ctx, invocation.ID)
+	if err != nil {
+		return err
+	}
+	if len(calls) == 0 || len(calls) > MaxClientTools {
+		return ports.ErrExecutionResultInvalid
+	}
+	invocation, err = s.settlePendingBuiltinSiblingsForClientWait(
+		ctx,
+		claim,
+		invocation,
+		calls,
+		now,
+	)
+	if err != nil {
+		return err
+	}
+	calls, err = s.store.ListOpenToolCallsForUpdate(ctx, invocation.ID)
+	if err != nil || len(calls) == 0 {
+		return ports.ErrExecutionResultInvalid
+	}
+	for _, call := range calls {
+		if call.Mode != domain.ToolCallModeClient ||
+			call.Iteration != invocation.CurrentIteration ||
+			call.Status != domain.ToolCallPending {
+			return ports.ErrExecutionResultInvalid
+		}
+	}
+	latest, err := s.store.GetLatestInvocationCheckpoint(ctx, invocation.ID)
+	if err != nil || latest.Iteration != invocation.CurrentIteration ||
+		latest.Sequence != invocation.CurrentCheckpointSequence {
+		return ports.ErrExecutionResultInvalid
+	}
+	stateID, err := s.ids.NewID(domain.PrefixInvocationState)
+	if err != nil {
+		return err
+	}
+	revision, err := s.store.ReserveLifecycleRevision(ctx, invocation.SessionID)
+	if err != nil {
+		return err
+	}
+	parked, err := s.store.ParkInvocationForClientTools(
+		ctx,
+		invocation.ID,
+		claim.Owner,
+		claim.Attempt,
+		revision,
+		now,
+	)
+	if err != nil {
+		return err
+	}
+	through := latest.ThroughMessageSequence
+	if currentState.ThroughMessageSequence != nil && *currentState.ThroughMessageSequence > through {
+		through = *currentState.ThroughMessageSequence
+	}
+	if err := s.store.AppendInvocationState(ctx, lifecycleState(
+		parked,
+		stateID,
+		revision,
+		domain.InvocationWaiting,
+		&through,
+		now,
+	)); err != nil {
+		return err
+	}
+	if settleDispatch {
+		if _, err := s.store.SettleExecutionDispatch(ctx, *dispatchID, now); err != nil {
+			return fmt.Errorf("settle execution dispatch with parked Invocation: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *InvocationExecutionService) settlePendingBuiltinSiblingsForClientWait(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	invocation domain.Invocation,
+	calls []domain.ToolCall,
+	now time.Time,
+) (domain.Invocation, error) {
+	builtins := make([]domain.ToolCall, 0, len(calls))
+	clientCount := 0
+	for _, call := range calls {
+		if call.Iteration != invocation.CurrentIteration {
+			return domain.Invocation{}, ports.ErrExecutionResultInvalid
+		}
+		switch call.Mode {
+		case domain.ToolCallModeClient:
+			if call.Status != domain.ToolCallPending {
+				return domain.Invocation{}, ports.ErrExecutionResultInvalid
+			}
+			clientCount++
+		case domain.ToolCallModeBuiltin:
+			if call.Status != domain.ToolCallPending && call.Status != domain.ToolCallRunning {
+				return domain.Invocation{}, ports.ErrExecutionResultInvalid
+			}
+			builtins = append(builtins, call)
+		default:
+			return domain.Invocation{}, ports.ErrExecutionResultInvalid
+		}
+	}
+	if clientCount == 0 {
+		return domain.Invocation{}, ports.ErrExecutionResultInvalid
+	}
+	if len(builtins) == 0 {
+		return invocation, nil
+	}
+	payload, err := syntheticToolResultPayload(
+		builtins,
+		"Tool execution was deferred while the Invocation waited for a client tool result.",
+	)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	messageID, err := s.ids.NewID(domain.PrefixSessionMessage)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	messageSequence, err := s.store.ReserveMessageSequence(ctx, invocation.SessionID)
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	if err := s.store.AppendSessionMessage(ctx, domain.SessionMessage{
+		ID:                messageID,
+		InvocationID:      invocation.ID,
+		SessionID:         invocation.SessionID,
+		AccountID:         invocation.AccountID,
+		TenantPartitionID: invocation.TenantPartitionID,
+		AgentID:           invocation.AgentID,
+		Sequence:          messageSequence,
+		Role:              domain.MessageRoleTool,
+		Content:           payload,
+		CreatedAt:         now,
+	}); err != nil {
+		return domain.Invocation{}, err
+	}
+	checkpointSequence := invocation.CurrentCheckpointSequence
+	for _, call := range builtins {
+		if call.Status == domain.ToolCallRunning {
+			if _, err := s.store.SettleRunningToolCallAttempts(
+				ctx,
+				call.ID,
+				domain.ToolCallFailed,
+				now,
+			); err != nil {
+				return domain.Invocation{}, err
+			}
+		}
+		if _, err := s.store.SettleToolCall(
+			ctx,
+			call.ID,
+			domain.ToolCallFailed,
+			domain.ToolCallResultSystem,
+			messageID,
+			messageSequence,
+			now,
+		); err != nil {
+			return domain.Invocation{}, err
+		}
+		checkpointID, err := s.ids.NewID(domain.PrefixInvocationCheckpoint)
+		if err != nil {
+			return domain.Invocation{}, err
+		}
+		checkpointSequence++
+		callID := call.ID
+		if err := s.store.CreateInvocationCheckpoint(ctx, domain.InvocationCheckpoint{
+			ID:                     checkpointID,
+			InvocationID:           invocation.ID,
+			SessionID:              invocation.SessionID,
+			AccountID:              invocation.AccountID,
+			TenantPartitionID:      invocation.TenantPartitionID,
+			AgentID:                invocation.AgentID,
+			Sequence:               checkpointSequence,
+			Iteration:              call.Iteration,
+			Kind:                   domain.InvocationCheckpointTool,
+			LeaseAttempt:           claim.Attempt,
+			ThroughMessageSequence: messageSequence,
+			ToolCallID:             &callID,
+			CreatedAt:              now,
+		}); err != nil {
+			return domain.Invocation{}, err
+		}
+	}
+	return s.store.AdvanceInvocationCheckpoint(
+		ctx,
+		invocation.ID,
+		claim.Owner,
+		claim.Attempt,
+		now,
+		checkpointSequence,
+		invocation.CurrentIteration,
+	)
 }
 
 func dispatchMatchesInvocation(dispatch domain.ExecutionDispatch, invocation domain.Invocation) bool {
@@ -649,8 +864,16 @@ func (s *InvocationExecutionService) ready(owner string, leaseDuration time.Dura
 }
 
 func validateExecutionResult(result domain.InvocationExecutionResult) error {
-	if result.Status != domain.InvocationCompleted && result.Status != domain.InvocationFailed {
-		return fmt.Errorf("execution result status must be completed or failed")
+	if result.Status != domain.InvocationCompleted &&
+		result.Status != domain.InvocationFailed &&
+		result.Status != domain.InvocationWaiting {
+		return fmt.Errorf("execution result status must be completed, failed, or waiting")
+	}
+	if result.Status == domain.InvocationWaiting {
+		if !result.MessagesCheckpointed || len(result.AssistantMessages) != 0 || len(result.Error) != 0 ||
+			result.Usage == nil || result.Provenance == nil || result.StructuredOutput != nil {
+			return fmt.Errorf("waiting execution result requires checkpointed evidence only")
+		}
 	}
 	if result.Status == domain.InvocationCompleted && len(result.Error) != 0 {
 		return fmt.Errorf("completed execution result cannot contain an error")

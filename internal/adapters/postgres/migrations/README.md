@@ -30,3 +30,8 @@ Migration `000009` adds immutable output-schema identity plus the terminal
 structured-output value/provenance projection. The projection may be written
 only with successful settlement and remains bound to the accepted transcript
 ToolCall by service equality checks and database shape constraints.
+
+Migration `000010` records whether a terminal ToolCall result came from its
+trusted builtin, the host client, or nvoken's own terminal-settlement path.
+That immutable origin lets retries distinguish an accepted host result from a
+synthetic cancellation/deadline result without comparing payloads.

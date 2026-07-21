@@ -15,6 +15,49 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
+func TestNormalizeToolResultMessagesCoalescesInModelBatchOrder(t *testing.T) {
+	messages := []domain.GenerationMessage{
+		{
+			Role: domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[
+				{"type":"tool_use","id":"call-a","name":"first","input":{}},
+				{"type":"tool_use","id":"call-b","name":"second","input":{}}
+			]`),
+		},
+		{
+			Role:    domain.MessageRoleTool,
+			Content: json.RawMessage(`[{"type":"tool_result","tool_use_id":"call-b","content":{"value":2}}]`),
+		},
+		{
+			Role:    domain.MessageRoleTool,
+			Content: json.RawMessage(`[{"type":"tool_result","tool_use_id":"call-a","content":{"value":1}}]`),
+		},
+	}
+	normalized, err := normalizeToolResultMessages(messages)
+	if err != nil {
+		t.Fatalf("normalize tool results: %v", err)
+	}
+	if len(normalized) != 2 || normalized[1].Role != domain.MessageRoleTool {
+		t.Fatalf("normalized messages = %#v", normalized)
+	}
+	var blocks []struct {
+		ToolUseID string `json:"tool_use_id"`
+	}
+	if err := json.Unmarshal(normalized[1].Content, &blocks); err != nil {
+		t.Fatalf("decode normalized results: %v", err)
+	}
+	if len(blocks) != 2 || blocks[0].ToolUseID != "call-a" || blocks[1].ToolUseID != "call-b" {
+		t.Fatalf("normalized result order = %#v", blocks)
+	}
+	mismatched := append([]domain.GenerationMessage(nil), messages...)
+	mismatched[2].Content = json.RawMessage(
+		`[{"type":"tool_result","tool_use_id":"call-c","content":{"value":1}}]`,
+	)
+	if _, err := normalizeToolResultMessages(mismatched); err == nil {
+		t.Fatal("tool result without a preceding request was accepted")
+	}
+}
+
 type fakeGenerationStore struct {
 	snapshot    domain.ExecutionSpecSnapshot
 	messages    []domain.SessionMessage
@@ -105,7 +148,15 @@ func (*fakeGenerationStore) CreateToolCallAttempt(context.Context, domain.ToolCa
 	return errors.New("not used")
 }
 
-func (*fakeGenerationStore) SettleToolCall(context.Context, string, domain.ToolCallStatus, string, int64, time.Time) (domain.ToolCall, error) {
+func (*fakeGenerationStore) SettleToolCall(
+	context.Context,
+	string,
+	domain.ToolCallStatus,
+	domain.ToolCallResultOrigin,
+	string,
+	int64,
+	time.Time,
+) (domain.ToolCall, error) {
 	return domain.ToolCall{}, errors.New("not used")
 }
 
@@ -115,6 +166,17 @@ func (*fakeGenerationStore) SettleToolCallAttempt(context.Context, string, domai
 
 func (*fakeGenerationStore) SettleRunningToolCallAttempts(context.Context, string, domain.ToolCallStatus, time.Time) (int64, error) {
 	return 0, errors.New("not used")
+}
+
+func (*fakeGenerationStore) AdvanceWaitingInvocationCheckpoint(
+	context.Context,
+	string,
+	int64,
+	int64,
+	int,
+	time.Time,
+) (domain.Invocation, error) {
+	return domain.Invocation{}, errors.New("not used")
 }
 
 func (*fakeGenerationStore) CreateModelUsageReceipt(context.Context, domain.ModelUsageReceipt) error {
@@ -319,6 +381,18 @@ func TestGenerationExecutorSettlesCommittedFinalCheckpointWithoutProviderCall(t 
 			UsageReceiptID:         &receiptID,
 		},
 	}
+	if _, err := transcriptForClaim(claim, store.messages, &store.checkpoints[0]); err != nil {
+		t.Fatalf("checkpointed transcript: %v", err)
+	}
+	if _, err := loadGenerationRecovery(
+		context.Background(),
+		store,
+		claim.Invocation,
+		store.messages,
+		nil,
+	); err != nil {
+		t.Fatalf("load checkpointed recovery: %v", err)
+	}
 	generator := &fakeModelGenerator{
 		response: successfulGenerationResponse(),
 	}
@@ -445,7 +519,7 @@ func TestGenerationExecutorRejectsInvalidDurableInputsWithoutModelCall(t *testin
 		mutate func(*fakeGenerationStore, domain.InvocationClaim)
 	}{
 		{"unknown spec field", func(store *fakeGenerationStore, _ domain.InvocationClaim) {
-			store.snapshot.Spec = json.RawMessage(`{"instructions":"x","model":{"provider":"openai","name":"gpt-test"},"tools":[]}`)
+			store.snapshot.Spec = json.RawMessage(`{"instructions":"x","model":{"provider":"openai","name":"gpt-test"},"unknown":true}`)
 		}},
 		{"tool history", func(store *fakeGenerationStore, _ domain.InvocationClaim) {
 			store.messages[0].Content = json.RawMessage(`[{"type":"tool_use","id":"secret"}]`)

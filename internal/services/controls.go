@@ -150,16 +150,30 @@ func (p BudgetPolicy) Resolve(input *InvocationBudgetInput) (ResolvedBudgets, er
 }
 
 func (p BudgetPolicy) ResolveForOutput(input *InvocationBudgetInput, structured bool) (ResolvedBudgets, error) {
+	return p.ResolveForFeatures(input, structured, false)
+}
+
+func (p BudgetPolicy) ResolveForFeatures(
+	input *InvocationBudgetInput,
+	structuredOutput bool,
+	clientTools bool,
+) (ResolvedBudgets, error) {
 	resolved, err := p.Resolve(input)
-	if err != nil || !structured {
+	if err != nil || (!structuredOutput && !clientTools) {
 		return resolved, err
 	}
 	if p.MaxIterations < 2 {
-		return ResolvedBudgets{}, invalidRequest("The installation iteration maximum does not support spec.output.")
+		return ResolvedBudgets{}, invalidRequest("The installation iteration maximum does not support multi-iteration specs.")
 	}
 	if input != nil && input.MaxIterations != nil {
 		if *input.MaxIterations < 2 {
-			return ResolvedBudgets{}, invalidRequest("spec.budgets.max_iterations must be at least 2 when spec.output is present.")
+			feature := "spec.output or spec.tools"
+			if structuredOutput && !clientTools {
+				feature = "spec.output"
+			} else if clientTools && !structuredOutput {
+				feature = "spec.tools"
+			}
+			return ResolvedBudgets{}, invalidRequest("spec.budgets.max_iterations must be at least 2 when " + feature + " is present.")
 		}
 		return resolved, nil
 	}

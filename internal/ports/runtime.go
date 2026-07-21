@@ -135,6 +135,8 @@ type InvocationRepository interface {
 	ClaimInvocation(context.Context, string, string, time.Time, int64, time.Time, time.Time, string) (domain.Invocation, error)
 	RenewInvocationLease(context.Context, string, string, int64, time.Time, time.Time) (domain.Invocation, error)
 	SettleInvocation(context.Context, string, string, int64, domain.InvocationStatus, int64, []byte, []byte, []byte, []byte, []byte, time.Time) (domain.Invocation, error)
+	ParkInvocationForClientTools(context.Context, string, string, int64, int64, time.Time) (domain.Invocation, error)
+	QueueWaitingInvocation(context.Context, string, int64, time.Time) (domain.Invocation, error)
 	RecoverInvocationLease(context.Context, string, int64, int64, time.Time) (domain.Invocation, error)
 	CancelInvocation(context.Context, string, int64, time.Time) (domain.Invocation, error)
 	ReapInvocationDeadline(context.Context, string, int64, []byte, time.Time) (domain.Invocation, error)
@@ -168,7 +170,7 @@ type ToolCallRepository interface {
 	RestartToolCallAttempt(context.Context, string, time.Time) (domain.ToolCall, error)
 	GetCurrentToolCallAttemptForUpdate(context.Context, string, int) (domain.ToolCallAttempt, error)
 	CreateToolCallAttempt(context.Context, domain.ToolCallAttempt) error
-	SettleToolCall(context.Context, string, domain.ToolCallStatus, string, int64, time.Time) (domain.ToolCall, error)
+	SettleToolCall(context.Context, string, domain.ToolCallStatus, domain.ToolCallResultOrigin, string, int64, time.Time) (domain.ToolCall, error)
 	SettleToolCallAttempt(context.Context, string, domain.ToolCallStatus, time.Time) (domain.ToolCallAttempt, error)
 	SettleRunningToolCallAttempts(context.Context, string, domain.ToolCallStatus, time.Time) (int64, error)
 	CreateModelUsageReceipt(context.Context, domain.ModelUsageReceipt) error
@@ -178,6 +180,7 @@ type ToolCallRepository interface {
 	GetLatestInvocationCheckpoint(context.Context, string) (domain.InvocationCheckpoint, error)
 	ListInvocationCheckpoints(context.Context, string) ([]domain.InvocationCheckpoint, error)
 	AdvanceInvocationCheckpoint(context.Context, string, string, int64, time.Time, int64, int) (domain.Invocation, error)
+	AdvanceWaitingInvocationCheckpoint(context.Context, string, int64, int64, int, time.Time) (domain.Invocation, error)
 	AdvanceInvocationCheckpointForTerminal(context.Context, string, int64, int) (domain.Invocation, error)
 }
 

@@ -11,8 +11,8 @@ info:
     durable Invocation admission, authoritative Invocation and Session reads,
     cursor-based transcript recovery, and resumable Session output streaming.
 
-    Tools, structured output, spec references, and administrative APIs are
-    outside this version of the contract.
+    Inline client tools and structured output are included. Callback tools,
+    spec references, and administrative APIs remain outside this version.
 servers:
   - url: /
     description: Current nvoken installation
@@ -334,6 +334,82 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/invocations/{invocation_id}/tool-results:
+    parameters:
+      - $ref: "#/components/parameters/InvocationID"
+    post:
+      tags: [Invocations]
+      operationId: submitClientToolResults
+      summary: Submit durable results for pending client ToolCalls
+      description: |
+        Atomically accepts one bounded batch for a waiting Invocation. The
+        first committed result for each ToolCall wins. An equal replay is
+        acknowledged as deduplicated; a changed replay conflicts. Partial
+        batches leave the Invocation waiting. Closing the final pending call
+        queues the same Invocation and its successor execution dispatch before
+        returning `202`.
+
+        This command accepts only client-mode calls owned by the path
+        Invocation and authenticated Account/tenant scope. It is not a generic
+        Session append endpoint. The body is limited to 1 MiB; each result
+        content value is valid JSON limited to 256 KiB and 32 nesting levels.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitClientToolResultsRequest"
+            example:
+              results:
+                - tool_call_id: tcal_019b0a12-9e61-7144-bed2-0e07c1bdb333
+                  content:
+                    order_id: order-123
+                    state: ready
+                - tool_call_id: tcal_019b0a12-af71-7254-8ed2-0e07c1bdb344
+                  content:
+                    delivered: false
+                  is_error: true
+      responses:
+        "202":
+          description: The complete batch committed, possibly as equal replays.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmitClientToolResultsResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The Invocation cannot accept the supplied result batch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                notWaiting:
+                  value:
+                    code: invocation_not_waiting
+                    message: The Invocation is not waiting for this client tool result.
+                    request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR3
+                conflict:
+                  value:
+                    code: tool_result_conflict
+                    message: A different result was already accepted for this ToolCall.
+                    request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR3
+                expired:
+                  value:
+                    code: tool_result_expired
+                    message: The client tool result deadline has expired.
+                    request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR3
         "500":
           $ref: "#/components/responses/Internal"
         "503":
@@ -714,10 +790,40 @@ components:
           $ref: "#/components/schemas/InvocationBudgetRequest"
         output:
           $ref: "#/components/schemas/StructuredOutputSpec"
+        tools:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/ClientToolSpec"
       description: |
-        Minimal immutable launch snapshot. Unknown or deferred fields,
-        including references and host-defined tools, are rejected rather than
-        ignored.
+        Immutable launch snapshot. Unknown or deferred fields, including spec
+        references and callback tools, are rejected rather than ignored. A
+        tools-bearing spec requires at least two model iterations; omission
+        resolves to three or the lower installation maximum.
+    ClientToolSpec:
+      type: object
+      additionalProperties: false
+      required: [name, description, mode, input_schema]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: Unique within the spec; the `nvoken_` prefix is reserved.
+        description:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        mode:
+          const: client
+        input_schema:
+          type: object
+          additionalProperties: true
+          description: |
+            Object-root JSON Schema using the same bounded, self-contained
+            subset as structured output. Compact canonical JSON is limited to
+            32 KiB.
     StructuredOutputSpec:
       type: object
       additionalProperties: false
@@ -781,10 +887,11 @@ components:
       enum: [queued, running, waiting, completed, failed, cancelled]
       description: |
         `completed`, `failed`, and `cancelled` are terminal and immutable.
-        Deadline or budget exhaustion settles as `failed`. `waiting` is
-        reserved for later durable ToolCalls. Checkpoint recovery may move a
-        nonterminal Invocation from `running` back to `queued`; lifecycle
-        revision orders that transition.
+        Deadline or budget exhaustion settles as `failed`. `waiting` means the
+        Invocation has durable pending client ToolCalls and owns no execution
+        lease. Final result acceptance moves it back to `queued`. Checkpoint
+        recovery may also move `running` back to `queued`; lifecycle revision
+        orders every transition.
     InvocationAcknowledgement:
       type: object
       additionalProperties: false
@@ -858,6 +965,11 @@ components:
             - type: string
               format: date-time
             - type: "null"
+        pending_tool_calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingClientToolCall"
+          description: Present for a waiting Invocation with unresolved client calls.
     InvocationList:
       type: object
       additionalProperties: false
@@ -952,6 +1064,74 @@ components:
       description: |
         Immutable proof that output equals the request of the accepted
         reserved durable ToolCall under the admitted schema digest.
+    ToolCallID:
+      type: string
+      pattern: "^tcal_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    PendingClientToolCall:
+      type: object
+      additionalProperties: false
+      required: [id, name, input, deadline_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/ToolCallID"
+        name:
+          type: string
+        input: {}
+        deadline_at:
+          type: string
+          format: date-time
+    SubmitClientToolResultsRequest:
+      type: object
+      additionalProperties: false
+      required: [results]
+      properties:
+        results:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: object
+            additionalProperties: false
+            required: [tool_call_id, content]
+            properties:
+              tool_call_id:
+                $ref: "#/components/schemas/ToolCallID"
+              content: {}
+              is_error:
+                type: boolean
+    ClientToolResultAcceptance:
+      type: object
+      additionalProperties: false
+      required: [tool_call_id, status, deduplicated]
+      properties:
+        tool_call_id:
+          $ref: "#/components/schemas/ToolCallID"
+        status:
+          type: string
+          enum: [completed, failed]
+        deduplicated:
+          type: boolean
+    SubmitClientToolResultsResponse:
+      type: object
+      additionalProperties: false
+      required: [invocation_id, session_id, status, results, pending_tool_calls]
+      properties:
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        status:
+          $ref: "#/components/schemas/InvocationStatus"
+        results:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/ClientToolResultAcceptance"
+        pending_tool_calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingClientToolCall"
     InvocationFailure:
       type: object
       additionalProperties: false
@@ -1034,6 +1214,11 @@ components:
         updated_at:
           type: string
           format: date-time
+        pending_tool_calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingClientToolCall"
+          description: Pending client calls for the active waiting Invocation.
     SessionList:
       type: object
       additionalProperties: false
@@ -1273,6 +1458,9 @@ components:
         - not_found
         - idempotency_conflict
         - session_invocation_active
+        - invocation_not_waiting
+        - tool_result_conflict
+        - tool_result_expired
         - rate_limited
         - internal
         - unavailable
@@ -1299,10 +1487,10 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             code: invalid_request
-            message: spec.tools is not supported by this contract version.
+            message: spec.tools[0].mode must be client.
             request_id: req_01K0NV9K7Z9WR3Y3Q3RMV2G7H0
             details:
-              field: spec.tools
+              field: spec.tools[0].mode
     Unauthenticated:
       description: Authentication is missing or invalid.
       content:

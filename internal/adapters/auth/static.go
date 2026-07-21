@@ -63,14 +63,15 @@ func (a *StaticAuthenticator) Authenticate(_ context.Context, token string) (dom
 		AccountID:        a.accountID,
 		TenantConstraint: cloneStringPointer(a.tenantConstraint),
 		Operations: map[domain.RuntimeOperation]struct{}{
-			domain.OperationCreateInvocation: {},
-			domain.OperationGetInvocation:    {},
-			domain.OperationCancelInvocation: {},
-			domain.OperationListInvocations:  {},
-			domain.OperationGetSession:       {},
-			domain.OperationListSessions:     {},
-			domain.OperationListMessages:     {},
-			domain.OperationGetTranscript:    {},
+			domain.OperationCreateInvocation:  {},
+			domain.OperationGetInvocation:     {},
+			domain.OperationSubmitToolResults: {},
+			domain.OperationCancelInvocation:  {},
+			domain.OperationListInvocations:   {},
+			domain.OperationGetSession:        {},
+			domain.OperationListSessions:      {},
+			domain.OperationListMessages:      {},
+			domain.OperationGetTranscript:     {},
 		},
 	}, nil
 }

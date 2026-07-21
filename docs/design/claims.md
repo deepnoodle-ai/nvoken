@@ -69,8 +69,9 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
   modes. Builtin tools are invoked directly by nvoken on the server side.
   Callback tools are defined by the host app, and when these are invoked
   nvoken makes a signed HTTP request to a remote endpoint to execute the
-  call. Client tool calls are streamed to the client (the host app) so that
-  they can be executed there and the output returned to nvoken.
+  call. Client tool calls are durably exposed to the client (the host app)
+  through Invocation/Session reads and the Session stream so they can be
+  executed there and their output returned idempotently to nvoken.
 
 ## API
 

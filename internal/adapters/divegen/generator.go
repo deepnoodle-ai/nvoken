@@ -173,6 +173,19 @@ func (g *Generator) generate(
 		}
 	}
 	var tools []dive.Tool
+	clientToolNames := make(map[string]struct{}, len(request.ClientTools))
+	for _, definition := range request.ClientTools {
+		var toolSchema dive.Schema
+		if err := json.Unmarshal(definition.InputSchema, &toolSchema); err != nil {
+			return domain.GenerationResponse{}, fmt.Errorf("%w: project client tool schema", ports.ErrGenerationInputInvalid)
+		}
+		clientToolNames[definition.Name] = struct{}{}
+		tools = append(tools, &clientTool{
+			name:        definition.Name,
+			description: definition.Description,
+			schema:      &toolSchema,
+		})
+	}
 	var outputCapture *structuredOutputCapture
 	if request.StructuredOutput != nil {
 		if request.Claim == nil || g.toolCoordinator == nil {
@@ -263,7 +276,12 @@ func (g *Generator) generate(
 				if servedModel == "" {
 					servedModel = request.Model
 				}
-				requests, err := toolRequests(item.Message, request.StructuredOutput != nil, g.testBuiltin)
+				requests, err := toolRequests(
+					item.Message,
+					request.StructuredOutput != nil,
+					g.testBuiltin,
+					clientToolNames,
+				)
 				if err != nil {
 					return err
 				}
@@ -314,6 +332,29 @@ func (g *Generator) generate(
 			return domain.GenerationResponse{}, ctx.Err()
 		}
 		return domain.GenerationResponse{}, fmt.Errorf("%w: Dive provider call", ports.ErrGenerationFailed)
+	}
+	if response != nil && response.Status == dive.ResponseStatusSuspended && response.Suspension != nil {
+		if len(response.Suspension.PendingToolCalls) == 0 {
+			return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
+		}
+		for _, pending := range response.Suspension.PendingToolCalls {
+			if pending == nil {
+				return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
+			}
+			if _, ok := clientToolNames[pending.Name]; !ok {
+				return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
+			}
+		}
+		servedModel := evidence.servedModel()
+		if servedModel == "" {
+			servedModel = request.Model
+		}
+		return domain.GenerationResponse{
+			Usage:                checkpointState.usageSnapshot(),
+			ServedModel:          servedModel,
+			MessagesCheckpointed: true,
+			ClientToolsPending:   true,
+		}, nil
 	}
 	if response == nil || response.Status == dive.ResponseStatusSuspended || response.Suspension != nil {
 		return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
@@ -473,7 +514,12 @@ func checkpointBudgetExceeded(request domain.GenerationRequest, usage domain.Mod
 	return ""
 }
 
-func toolRequests(message *llm.Message, structured, testBuiltin bool) ([]domain.ToolCallRequest, error) {
+func toolRequests(
+	message *llm.Message,
+	structured bool,
+	testBuiltin bool,
+	clientToolNames map[string]struct{},
+) ([]domain.ToolCallRequest, error) {
 	var requests []domain.ToolCallRequest
 	if message == nil {
 		return requests, nil
@@ -483,19 +529,51 @@ func toolRequests(message *llm.Message, structured, testBuiltin bool) ([]domain.
 		if !ok {
 			continue
 		}
-		allowed := (structured && call.Name == structuredoutput.ReservedToolName) ||
+		mode := domain.ToolCallModeBuiltin
+		_, client := clientToolNames[call.Name]
+		allowedBuiltin := (structured && call.Name == structuredoutput.ReservedToolName) ||
 			(testBuiltin && call.Name == deterministicEchoToolName)
-		if !allowed {
+		if client {
+			mode = domain.ToolCallModeClient
+		} else if !allowedBuiltin {
 			return nil, fmt.Errorf("%w: unsupported builtin tool %q", ports.ErrGenerationInputInvalid, call.Name)
 		}
 		requests = append(requests, domain.ToolCallRequest{
 			ProviderCallID: call.ID,
 			Name:           call.Name,
-			Mode:           domain.ToolCallModeBuiltin,
+			Mode:           mode,
 			Input:          append([]byte(nil), call.Input...),
 		})
 	}
 	return requests, nil
+}
+
+type clientTool struct {
+	name        string
+	description string
+	schema      *dive.Schema
+}
+
+func (t *clientTool) Name() string {
+	return t.name
+}
+
+func (t *clientTool) Description() string {
+	return t.description
+}
+
+func (t *clientTool) Schema() *dive.Schema {
+	return t.schema
+}
+
+func (*clientTool) Annotations() *dive.ToolAnnotations {
+	return &dive.ToolAnnotations{}
+}
+
+func (t *clientTool) Call(context.Context, any) (*dive.ToolResult, error) {
+	return dive.NewSuspendResult("Waiting for the host to provide the client tool result.", map[string]any{
+		"tool_name": t.name,
+	}), nil
 }
 
 type deterministicEchoTool struct {

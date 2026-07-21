@@ -13,6 +13,7 @@ import (
 const fingerprintVersionV1 = 1
 const fingerprintVersionV2 = 2
 const fingerprintVersionV3 = 3
+const fingerprintVersionV4 = 4
 
 // InvocationFingerprintV1 hashes a fixed JSON representation whose object-key
 // order is part of the versioned contract. Values are already typed, so source
@@ -56,19 +57,28 @@ func invocationFingerprintBytesV1(input CreateInvocationInput) ([]byte, error) {
 	if err := writeJSONString(&buffer, input.Spec.Model.Name); err != nil {
 		return nil, err
 	}
-	buffer.WriteString(`}},"input":{"content":[`)
-	for index, block := range input.Input.Content {
+	buffer.WriteString(`}},"input":`)
+	if err := writeFingerprintInput(&buffer, input.Input); err != nil {
+		return nil, err
+	}
+	buffer.WriteByte('}')
+	return buffer.Bytes(), nil
+}
+
+func writeFingerprintInput(buffer *bytes.Buffer, input InvocationInput) error {
+	buffer.WriteString(`{"content":[`)
+	for index, block := range input.Content {
 		if index > 0 {
 			buffer.WriteByte(',')
 		}
 		buffer.WriteString(`{"type":"text","text":`)
-		if err := writeJSONString(&buffer, block.Text); err != nil {
-			return nil, err
+		if err := writeJSONString(buffer, block.Text); err != nil {
+			return err
 		}
 		buffer.WriteByte('}')
 	}
-	buffer.WriteString(`]}}`)
-	return buffer.Bytes(), nil
+	buffer.WriteString(`]}`)
+	return nil
 }
 
 // InvocationFingerprintV2 extends the fixed v1 representation with the
@@ -174,6 +184,70 @@ func invocationFingerprintBytesV3(input CreateInvocationInput) ([]byte, error) {
 		output.WriteByte('}')
 	}
 	return []byte(canonical[:index] + output.String() + canonical[index:]), nil
+}
+
+// InvocationFingerprintV4 adds the ordered client-tool declarations. Schema
+// objects are recursively canonicalized, while definition order remains
+// material because providers observe that order.
+func InvocationFingerprintV4(input CreateInvocationInput) ([sha256.Size]byte, error) {
+	canonical, err := invocationFingerprintBytesV4(input)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(canonical), nil
+}
+
+func invocationFingerprintBytesV4(input CreateInvocationInput) ([]byte, error) {
+	v3, err := invocationFingerprintBytesV3(input)
+	if err != nil {
+		return nil, err
+	}
+	canonical := string(v3)
+	canonical = strings.Replace(
+		canonical,
+		`{"version":`+strconv.Itoa(fingerprintVersionV3),
+		`{"version":`+strconv.Itoa(fingerprintVersionV4),
+		1,
+	)
+	var inputSuffix bytes.Buffer
+	inputSuffix.WriteString(`},"input":`)
+	if err := writeFingerprintInput(&inputSuffix, input.Input); err != nil {
+		return nil, err
+	}
+	inputSuffix.WriteByte('}')
+	suffix := inputSuffix.Bytes()
+	if !bytes.HasSuffix(v3, suffix) {
+		return nil, fmt.Errorf("v3 fingerprint shape is invalid")
+	}
+	index := len(v3) - len(suffix)
+	var tools bytes.Buffer
+	tools.WriteString(`,"tools":[`)
+	for toolIndex, tool := range input.Spec.Tools {
+		if toolIndex > 0 {
+			tools.WriteByte(',')
+		}
+		tools.WriteString(`{"name":`)
+		if err := writeJSONString(&tools, tool.Name); err != nil {
+			return nil, err
+		}
+		tools.WriteString(`,"description":`)
+		if err := writeJSONString(&tools, tool.Description); err != nil {
+			return nil, err
+		}
+		tools.WriteString(`,"mode":`)
+		if err := writeJSONString(&tools, tool.Mode); err != nil {
+			return nil, err
+		}
+		schema, err := canonicalJSON(tool.InputSchema)
+		if err != nil {
+			return nil, err
+		}
+		tools.WriteString(`,"input_schema":`)
+		tools.Write(schema)
+		tools.WriteByte('}')
+	}
+	tools.WriteByte(']')
+	return []byte(canonical[:index] + tools.String() + canonical[index:]), nil
 }
 
 func writeOptionalInt(buffer *bytes.Buffer, value *int) {

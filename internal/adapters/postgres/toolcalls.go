@@ -163,12 +163,22 @@ func (s *Store) CreateToolCallAttempt(ctx context.Context, attempt domain.ToolCa
 	})
 }
 
-func (s *Store) SettleToolCall(ctx context.Context, id string, status domain.ToolCallStatus, messageID string, sequence int64, observedAt time.Time) (domain.ToolCall, error) {
+func (s *Store) SettleToolCall(
+	ctx context.Context,
+	id string,
+	status domain.ToolCallStatus,
+	origin domain.ToolCallResultOrigin,
+	messageID string,
+	sequence int64,
+	observedAt time.Time,
+) (domain.ToolCall, error) {
+	originValue := string(origin)
 	row, err := s.q(ctx).SettleToolCall(ctx, postgresdb.SettleToolCallParams{
 		ID:                    id,
 		Status:                string(status),
 		ResultMessageID:       &messageID,
 		ResultMessageSequence: &sequence,
+		ResultOrigin:          &originValue,
 		ObservedAt:            &observedAt,
 	})
 	if err != nil {
@@ -295,6 +305,33 @@ func (s *Store) AdvanceInvocationCheckpoint(ctx context.Context, id, owner strin
 	return invocationFromRow(row), nil
 }
 
+func (s *Store) AdvanceWaitingInvocationCheckpoint(
+	ctx context.Context,
+	id string,
+	expectedCheckpointSequence int64,
+	checkpointSequence int64,
+	iteration int,
+	observedAt time.Time,
+) (domain.Invocation, error) {
+	row, err := s.q(ctx).AdvanceWaitingInvocationCheckpoint(
+		ctx,
+		postgresdb.AdvanceWaitingInvocationCheckpointParams{
+			ID:                         id,
+			ExpectedCheckpointSequence: expectedCheckpointSequence,
+			CheckpointSequence:         checkpointSequence,
+			Iteration:                  int32(iteration),
+			ObservedAt:                 observedAt,
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Invocation{}, ports.ErrLeaseLost
+	}
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	return invocationFromRow(row), nil
+}
+
 func (s *Store) AdvanceInvocationCheckpointForTerminal(ctx context.Context, id string, sequence int64, iteration int) (domain.Invocation, error) {
 	row, err := s.q(ctx).AdvanceInvocationCheckpointForTerminal(ctx, postgresdb.AdvanceInvocationCheckpointForTerminalParams{
 		ID:                 id,
@@ -328,10 +365,19 @@ func toolCallFromRow(row postgresdb.ToolCall) domain.ToolCall {
 		CurrentAttempt:         int(row.CurrentAttempt),
 		ResultMessageID:        row.ResultMessageID,
 		ResultMessageSequence:  row.ResultMessageSequence,
+		ResultOrigin:           toolCallResultOriginPointer(row.ResultOrigin),
 		CreatedAt:              row.CreatedAt,
 		UpdatedAt:              row.UpdatedAt,
 		CompletedAt:            row.CompletedAt,
 	}
+}
+
+func toolCallResultOriginPointer(value *string) *domain.ToolCallResultOrigin {
+	if value == nil {
+		return nil
+	}
+	origin := domain.ToolCallResultOrigin(*value)
+	return &origin
 }
 
 func toolCallAttemptFromRow(row postgresdb.ToolCallAttempt) domain.ToolCallAttempt {

@@ -738,6 +738,48 @@ func (s *Store) SettleInvocation(
 	return invocationFromRow(row), nil
 }
 
+func (s *Store) ParkInvocationForClientTools(
+	ctx context.Context,
+	id, owner string,
+	attempt, stateRevision int64,
+	observedAt time.Time,
+) (domain.Invocation, error) {
+	row, err := s.q(ctx).ParkInvocationForClientTools(ctx, postgresdb.ParkInvocationForClientToolsParams{
+		ID:            id,
+		LeaseOwner:    &owner,
+		LeaseAttempt:  attempt,
+		StateRevision: stateRevision,
+		ObservedAt:    observedAt,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Invocation{}, ports.ErrLeaseLost
+	}
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) QueueWaitingInvocation(
+	ctx context.Context,
+	id string,
+	stateRevision int64,
+	observedAt time.Time,
+) (domain.Invocation, error) {
+	row, err := s.q(ctx).QueueWaitingInvocation(ctx, postgresdb.QueueWaitingInvocationParams{
+		ID:            id,
+		StateRevision: stateRevision,
+		ObservedAt:    observedAt,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Invocation{}, ports.ErrLeaseLost
+	}
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	return invocationFromRow(row), nil
+}
+
 func (s *Store) RecoverInvocationLease(
 	ctx context.Context,
 	id string,

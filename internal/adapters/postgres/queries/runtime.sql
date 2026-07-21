@@ -277,6 +277,40 @@ WHERE id = sqlc.arg(id)
   AND execution_deadline_at > sqlc.arg(observed_at)
 RETURNING *;
 
+-- name: ParkInvocationForClientTools :one
+UPDATE invocations
+SET status = 'waiting',
+    current_state_revision = sqlc.arg(state_revision),
+    lease_owner = NULL,
+    lease_expires_at = NULL,
+    active_execution_ms = LEAST(
+        active_execution_timeout_ms,
+        active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+            (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
+    ),
+    active_segment_started_at = NULL,
+    execution_deadline_at = NULL,
+    execution_deadline_scope = NULL,
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id)
+  AND status = 'running'
+  AND lease_owner = sqlc.arg(lease_owner)
+  AND lease_attempt = sqlc.arg(lease_attempt)
+  AND lease_expires_at > sqlc.arg(observed_at)
+  AND execution_deadline_at > sqlc.arg(observed_at)
+  AND wall_clock_deadline_at > sqlc.arg(observed_at)
+RETURNING *;
+
+-- name: QueueWaitingInvocation :one
+UPDATE invocations
+SET status = 'queued',
+    current_state_revision = sqlc.arg(state_revision),
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id)
+  AND status = 'waiting'
+  AND wall_clock_deadline_at > sqlc.arg(observed_at)
+RETURNING *;
+
 -- name: RecoverInvocationLease :one
 UPDATE invocations
 SET status = 'queued',
@@ -717,6 +751,7 @@ INSERT INTO tool_call_attempts (
 UPDATE tool_calls
 SET status = sqlc.arg(status), result_message_id = sqlc.arg(result_message_id),
     result_message_sequence = sqlc.arg(result_message_sequence),
+    result_origin = sqlc.arg(result_origin),
     completed_at = sqlc.arg(observed_at), updated_at = sqlc.arg(observed_at)
 WHERE id = sqlc.arg(id) AND status IN ('pending', 'running')
 RETURNING *;
@@ -785,6 +820,16 @@ WHERE id = sqlc.arg(id) AND status = 'running'
   AND execution_deadline_at > sqlc.arg(observed_at)
   AND current_checkpoint_sequence < sqlc.arg(checkpoint_sequence)
   AND current_iteration <= sqlc.arg(iteration)
+RETURNING *;
+
+-- name: AdvanceWaitingInvocationCheckpoint :one
+UPDATE invocations
+SET current_checkpoint_sequence = sqlc.arg(checkpoint_sequence),
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id)
+  AND status = 'waiting'
+  AND current_checkpoint_sequence = sqlc.arg(expected_checkpoint_sequence)
+  AND current_iteration = sqlc.arg(iteration)
 RETURNING *;
 
 -- name: AdvanceInvocationCheckpointForTerminal :one

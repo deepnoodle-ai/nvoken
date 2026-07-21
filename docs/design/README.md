@@ -40,7 +40,9 @@ Language-neutral compatibility fixtures for the admission idempotency hash
 live in [`admission-fingerprint-v1.json`](admission-fingerprint-v1.json) and
 [`admission-fingerprint-v2.json`](admission-fingerprint-v2.json). New
 structured-output admissions use the v3 vectors in
-[`admission-fingerprint-v3.json`](admission-fingerprint-v3.json).
+[`admission-fingerprint-v3.json`](admission-fingerprint-v3.json). New
+client-tool admissions use the v4 vectors in
+[`admission-fingerprint-v4.json`](admission-fingerprint-v4.json).
 
 ## Document authority
 
