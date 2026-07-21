@@ -98,18 +98,18 @@ topology. PRDs 009 and 010 add the split execution path.
   that HTTP or CPU autoscaling is not a promise to scale with Postgres backlog.
 
 - **R5 — Honest health and startup.** The container must listen on Cloud Run's
-  `PORT`. `GET /health` and the local-compatible `GET /healthz` alias must
-  remain unauthenticated, cheap, and contain no sensitive or dynamic content.
+  `PORT`. `GET /health` must remain unauthenticated, cheap, and contain no
+  sensitive or dynamic content.
   The public Cloud Run endpoint must disable its edge Invoker IAM check and
   leave application requests authenticated by nvoken's Runtime bearer
   credential; it must not depend on an `allUsers` IAM binding.
   The process must not begin listening until configuration, database
   connectivity, exact schema validation, installation bootstrap, and engine
-  construction have succeeded. Because Google Front End reserves the exact
-  external `/healthz` path, Cloud Run must use `/health` as its HTTP startup and
+  construction have succeeded. Because Google Front End reserves some external
+  paths ending in `z`, Cloud Run must use `/health` as its HTTP startup and
   liveness probe, so a bad configuration or schema never receives application
   traffic and the external smoke follows a routable path.
-  The fuller dynamic `/readyz` surface in the governing API design remains
+  The fuller dynamic `/ready` surface in the governing API design remains
   deferred; at this stage the process never listens in a not-ready state.
 
 - **R6 — Secrets stay configuration.** The database URL, Runtime bearer key,
@@ -171,8 +171,8 @@ topology. PRDs 009 and 010 add the split execution path.
 
 - [x] **A4 (R3, R5):** A service started with an empty, dirty, behind, or
   ahead-of-binary schema exits before listening. With the exact schema and valid
-  configuration, `/health` and `/healthz` return `200` without authentication
-  or database, account, prompt, or secret content.
+  configuration, `/health` returns `200` without authentication or database,
+  account, prompt, or secret content.
 
 - [x] **A5 (R4):** The default paved plan keeps exactly one background-capable
   instance warm, caps horizontal instances and per-instance engine claims, and

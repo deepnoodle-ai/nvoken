@@ -88,12 +88,12 @@ run "paved_defaults" {
 
   assert {
     condition     = google_cloud_run_v2_service.runtime.template[0].containers[0].startup_probe[0].http_get[0].path == "/health"
-    error_message = "The startup probe must avoid Cloud Run's reserved /healthz path."
+    error_message = "The startup probe must avoid Cloud Run's reserved paths ending in z."
   }
 
   assert {
     condition     = google_cloud_run_v2_service.runtime.template[0].containers[0].liveness_probe[0].http_get[0].path == "/health"
-    error_message = "The liveness probe must avoid Cloud Run's reserved /healthz path."
+    error_message = "The liveness probe must avoid Cloud Run's reserved paths ending in z."
   }
 
   assert {

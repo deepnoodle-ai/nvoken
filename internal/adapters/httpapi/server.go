@@ -94,7 +94,6 @@ func newHandler(cfg handlerConfig) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", h.requireMethod(http.MethodGet, h.health))
-	mux.HandleFunc("/healthz", h.requireMethod(http.MethodGet, h.health))
 	mux.HandleFunc("/v1/invocations", h.requireMethod(http.MethodPost, h.createInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
 	mux.HandleFunc("/v1/sessions/{session_id}", h.requireMethod(http.MethodGet, h.getSession))

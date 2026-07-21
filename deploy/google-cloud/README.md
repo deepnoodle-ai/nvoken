@@ -146,10 +146,10 @@ correlatable by Invocation ID. To prove restart readback during a release test,
 deploy the next unique image revision and repeat the final `GET` with the same
 ID; the state remains in Cloud SQL.
 
-Cloud Run reserves the exact external `/healthz` path at Google Front End and
-can return a Google-generated `404` before the request reaches nvoken. The
-runtime retains `/healthz` for local compatibility, but this paved deployment
-uses `/health` for startup, liveness, and external smoke checks.
+Cloud Run reserves some external paths ending in `z` at Google Front End and
+can return a Google-generated `404` before the request reaches nvoken. nvoken
+therefore uses `/health` consistently for local checks, Cloud Run startup and
+liveness probes, and external smoke checks.
 
 ## Capacity and shutdown
 
