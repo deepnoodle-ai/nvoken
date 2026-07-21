@@ -12,13 +12,23 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/auth"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/cloudtasks"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/divegen"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/executorhttp"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpapi"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/postgres"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/worksignal"
+	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
+)
+
+type ProcessRole string
+
+const (
+	ProcessRoleCombined ProcessRole = "combined"
+	ProcessRoleExecutor ProcessRole = "executor"
 )
 
 type Config struct {
@@ -31,8 +41,13 @@ type Config struct {
 	AnthropicAPIKey         string
 	OpenAIAPIKey            string
 	ShutdownTimeout         time.Duration
+	ProcessRole             ProcessRole
 	Engine                  engine.Config
 	Budgets                 services.BudgetPolicy
+	Dispatch                services.DispatchConfig
+	DispatchController      dispatchruntime.ControllerConfig
+	CloudTasks              cloudtasks.Config
+	ExecutorAttemptTimeout  time.Duration
 }
 
 type component interface {
@@ -42,6 +57,15 @@ type component interface {
 // Run starts the server and blocks until ctx is cancelled or the server
 // fails.
 func Run(ctx context.Context, cfg Config) error {
+	if cfg.ProcessRole == "" {
+		cfg.ProcessRole = ProcessRoleCombined
+	}
+	if cfg.Dispatch.Queue == "" {
+		cfg.Dispatch = services.DefaultDispatchConfig()
+	}
+	if cfg.DispatchController.PublishInterval == 0 {
+		cfg.DispatchController = dispatchruntime.DefaultControllerConfig()
+	}
 	pool, err := postgres.OpenPoolWithConfig(ctx, cfg.DatabaseURL, postgres.PoolConfig{MaxConns: cfg.DatabaseMaxConns})
 	if err != nil {
 		return fmt.Errorf("open runtime database: %w", err)
@@ -60,6 +84,30 @@ func Run(ctx context.Context, cfg Config) error {
 	ids := identity.NewUUIDv7Generator(clock)
 	store := postgres.NewStore(pool)
 	txm := postgres.NewTransactionManager(pool)
+	dispatchService, err := services.NewDispatchService(store, txm, clock, ids, cfg.Dispatch, slog.Default())
+	if err != nil {
+		return fmt.Errorf("configure execution dispatch service: %w", err)
+	}
+	if cfg.ProcessRole == ProcessRoleExecutor {
+		srv, err := executorhttp.NewServer(executorhttp.Config{
+			Addr: ":" + cfg.Port, Attempts: dispatchService, Logger: slog.Default(),
+			AttemptTimeout:  cfg.ExecutorAttemptTimeout,
+			ShutdownTimeout: cfg.ShutdownTimeout - time.Second,
+		})
+		if err != nil {
+			return fmt.Errorf("configure private executor: %w", err)
+		}
+		joined, err := runComponents(ctx, cfg.ShutdownTimeout, srv)
+		if !joined {
+			closePool = false
+			slog.Warn("executor shutdown budget expired before components joined",
+				"shutdown_timeout_ms", cfg.ShutdownTimeout.Milliseconds())
+		}
+		return err
+	}
+	if cfg.ProcessRole != ProcessRoleCombined {
+		return fmt.Errorf("unsupported process role %q", cfg.ProcessRole)
+	}
 	account, err := services.BootstrapInstallation(ctx, store, txm, clock, ids)
 	if err != nil {
 		return fmt.Errorf("bootstrap installation: %w", err)
@@ -96,7 +144,28 @@ func Run(ctx context.Context, cfg Config) error {
 		// close the database pool inside the total process budget.
 		ShutdownTimeout: cfg.ShutdownTimeout - time.Second,
 	})
-	joined, err := runComponents(ctx, cfg.ShutdownTimeout, srv, runner)
+	components := []component{srv, runner}
+	if cfg.CloudTasks.Queue != "" {
+		tasks, err := cloudtasks.New(ctx, cfg.CloudTasks)
+		if err != nil {
+			return fmt.Errorf("configure Cloud Tasks: %w", err)
+		}
+		defer func() {
+			if err := tasks.Close(); err != nil {
+				slog.Warn("close Cloud Tasks client", "error", err)
+			}
+		}()
+		publisherOwner, err := executionOwner()
+		if err != nil {
+			return fmt.Errorf("create dispatch publisher owner: %w", err)
+		}
+		controller, err := dispatchruntime.NewController(publisherOwner, dispatchService, tasks, slog.Default(), cfg.DispatchController)
+		if err != nil {
+			return fmt.Errorf("configure execution dispatch controller: %w", err)
+		}
+		components = append(components, controller)
+	}
+	joined, err := runComponents(ctx, cfg.ShutdownTimeout, components...)
 	if !joined {
 		// An uncooperative component can still hold a pool connection. Do not
 		// block past the process shutdown budget waiting for pgxpool.Close;

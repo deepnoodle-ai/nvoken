@@ -10,6 +10,55 @@ import (
 	"time"
 )
 
+const abandonExecutionDispatch = `-- name: AbandonExecutionDispatch :one
+UPDATE execution_dispatches
+SET status = 'abandoned', publisher_owner = NULL,
+    publisher_lease_expires_at = NULL, settled_at = $1,
+    updated_at = $1, last_error = $2
+WHERE id = $3 AND status IN ('pending', 'publishing', 'published')
+RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+`
+
+type AbandonExecutionDispatchParams struct {
+	ObservedAt *time.Time
+	LastError  *string
+	ID         string
+}
+
+// AbandonExecutionDispatch
+//
+//	UPDATE execution_dispatches
+//	SET status = 'abandoned', publisher_owner = NULL,
+//	    publisher_lease_expires_at = NULL, settled_at = $1,
+//	    updated_at = $1, last_error = $2
+//	WHERE id = $3 AND status IN ('pending', 'publishing', 'published')
+//	RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+func (q *Queries) AbandonExecutionDispatch(ctx context.Context, arg AbandonExecutionDispatchParams) (ExecutionDispatch, error) {
+	row := q.db.QueryRow(ctx, abandonExecutionDispatch, arg.ObservedAt, arg.LastError, arg.ID)
+	var i ExecutionDispatch
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.WorkID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Queue,
+		&i.Status,
+		&i.AvailableAt,
+		&i.TaskName,
+		&i.PublishAttempts,
+		&i.LastError,
+		&i.PublisherOwner,
+		&i.PublisherLeaseExpiresAt,
+		&i.PublisherAttempt,
+		&i.PublishedAt,
+		&i.SettledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const appendInvocationState = `-- name: AppendInvocationState :exec
 INSERT INTO invocation_states (
     id, invocation_id, session_id, account_id, tenant_partition_id,
@@ -280,6 +329,93 @@ func (q *Queries) ClaimInvocation(ctx context.Context, arg ClaimInvocationParams
 	return i, err
 }
 
+const claimNextExecutionDispatch = `-- name: ClaimNextExecutionDispatch :one
+WITH candidate AS (
+    SELECT source.id
+    FROM execution_dispatches AS source
+    WHERE source.queue = $4
+      AND (
+        (source.status = 'pending' AND source.available_at <= $3)
+        OR (source.status = 'publishing' AND source.publisher_lease_expires_at <= $3)
+      )
+    ORDER BY source.available_at, source.created_at, source.id
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+UPDATE execution_dispatches AS d
+SET status = 'publishing',
+    publisher_owner = $1,
+    publisher_lease_expires_at = $2,
+    publisher_attempt = d.publisher_attempt + 1,
+    publish_attempts = d.publish_attempts + 1,
+    updated_at = $3
+FROM candidate
+WHERE d.id = candidate.id
+RETURNING d.id, d.kind, d.work_id, d.account_id, d.tenant_partition_id, d.queue, d.status, d.available_at, d.task_name, d.publish_attempts, d.last_error, d.publisher_owner, d.publisher_lease_expires_at, d.publisher_attempt, d.published_at, d.settled_at, d.created_at, d.updated_at
+`
+
+type ClaimNextExecutionDispatchParams struct {
+	PublisherOwner          *string
+	PublisherLeaseExpiresAt *time.Time
+	ObservedAt              time.Time
+	QueueName               string
+}
+
+// ClaimNextExecutionDispatch
+//
+//	WITH candidate AS (
+//	    SELECT source.id
+//	    FROM execution_dispatches AS source
+//	    WHERE source.queue = $4
+//	      AND (
+//	        (source.status = 'pending' AND source.available_at <= $3)
+//	        OR (source.status = 'publishing' AND source.publisher_lease_expires_at <= $3)
+//	      )
+//	    ORDER BY source.available_at, source.created_at, source.id
+//	    FOR UPDATE SKIP LOCKED
+//	    LIMIT 1
+//	)
+//	UPDATE execution_dispatches AS d
+//	SET status = 'publishing',
+//	    publisher_owner = $1,
+//	    publisher_lease_expires_at = $2,
+//	    publisher_attempt = d.publisher_attempt + 1,
+//	    publish_attempts = d.publish_attempts + 1,
+//	    updated_at = $3
+//	FROM candidate
+//	WHERE d.id = candidate.id
+//	RETURNING d.id, d.kind, d.work_id, d.account_id, d.tenant_partition_id, d.queue, d.status, d.available_at, d.task_name, d.publish_attempts, d.last_error, d.publisher_owner, d.publisher_lease_expires_at, d.publisher_attempt, d.published_at, d.settled_at, d.created_at, d.updated_at
+func (q *Queries) ClaimNextExecutionDispatch(ctx context.Context, arg ClaimNextExecutionDispatchParams) (ExecutionDispatch, error) {
+	row := q.db.QueryRow(ctx, claimNextExecutionDispatch,
+		arg.PublisherOwner,
+		arg.PublisherLeaseExpiresAt,
+		arg.ObservedAt,
+		arg.QueueName,
+	)
+	var i ExecutionDispatch
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.WorkID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Queue,
+		&i.Status,
+		&i.AvailableAt,
+		&i.TaskName,
+		&i.PublishAttempts,
+		&i.LastError,
+		&i.PublisherOwner,
+		&i.PublisherLeaseExpiresAt,
+		&i.PublisherAttempt,
+		&i.PublishedAt,
+		&i.SettledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createAccount = `-- name: CreateAccount :exec
 INSERT INTO accounts (id, created_at)
 VALUES ($1, $2)
@@ -374,6 +510,84 @@ type CreateDefaultTenantPartitionIfAbsentParams struct {
 //	DO NOTHING
 func (q *Queries) CreateDefaultTenantPartitionIfAbsent(ctx context.Context, arg CreateDefaultTenantPartitionIfAbsentParams) error {
 	_, err := q.db.Exec(ctx, createDefaultTenantPartitionIfAbsent, arg.ID, arg.AccountID, arg.CreatedAt)
+	return err
+}
+
+const createExecutionDispatch = `-- name: CreateExecutionDispatch :exec
+INSERT INTO execution_dispatches (
+    id, kind, work_id, account_id, tenant_partition_id, queue, status,
+    available_at, task_name, publish_attempts, last_error, publisher_owner,
+    publisher_lease_expires_at, publisher_attempt, published_at, settled_at,
+    created_at, updated_at
+) VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9, $10,
+    $11, $12,
+    $13, $14,
+    $15, $16, $17,
+    $18
+)
+`
+
+type CreateExecutionDispatchParams struct {
+	ID                      string
+	Kind                    string
+	WorkID                  string
+	AccountID               *string
+	TenantPartitionID       *string
+	Queue                   string
+	Status                  string
+	AvailableAt             time.Time
+	TaskName                *string
+	PublishAttempts         int32
+	LastError               *string
+	PublisherOwner          *string
+	PublisherLeaseExpiresAt *time.Time
+	PublisherAttempt        int64
+	PublishedAt             *time.Time
+	SettledAt               *time.Time
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+}
+
+// CreateExecutionDispatch
+//
+//	INSERT INTO execution_dispatches (
+//	    id, kind, work_id, account_id, tenant_partition_id, queue, status,
+//	    available_at, task_name, publish_attempts, last_error, publisher_owner,
+//	    publisher_lease_expires_at, publisher_attempt, published_at, settled_at,
+//	    created_at, updated_at
+//	) VALUES (
+//	    $1, $2, $3, $4,
+//	    $5, $6, $7,
+//	    $8, $9, $10,
+//	    $11, $12,
+//	    $13, $14,
+//	    $15, $16, $17,
+//	    $18
+//	)
+func (q *Queries) CreateExecutionDispatch(ctx context.Context, arg CreateExecutionDispatchParams) error {
+	_, err := q.db.Exec(ctx, createExecutionDispatch,
+		arg.ID,
+		arg.Kind,
+		arg.WorkID,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.Queue,
+		arg.Status,
+		arg.AvailableAt,
+		arg.TaskName,
+		arg.PublishAttempts,
+		arg.LastError,
+		arg.PublisherOwner,
+		arg.PublisherLeaseExpiresAt,
+		arg.PublisherAttempt,
+		arg.PublishedAt,
+		arg.SettledAt,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
 	return err
 }
 
@@ -581,6 +795,38 @@ func (q *Queries) CreateSessionIfAbsent(ctx context.Context, arg CreateSessionIf
 		arg.NextLifecycleRevision,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+	)
+	return err
+}
+
+const createSyntheticDispatchWork = `-- name: CreateSyntheticDispatchWork :exec
+INSERT INTO synthetic_dispatch_works (
+    id, status, settlement_count, created_at, updated_at, settled_at
+) VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type CreateSyntheticDispatchWorkParams struct {
+	ID              string
+	Status          string
+	SettlementCount int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	SettledAt       *time.Time
+}
+
+// CreateSyntheticDispatchWork
+//
+//	INSERT INTO synthetic_dispatch_works (
+//	    id, status, settlement_count, created_at, updated_at, settled_at
+//	) VALUES ($1, $2, $3, $4, $5, $6)
+func (q *Queries) CreateSyntheticDispatchWork(ctx context.Context, arg CreateSyntheticDispatchWorkParams) error {
+	_, err := q.db.Exec(ctx, createSyntheticDispatchWork,
+		arg.ID,
+		arg.Status,
+		arg.SettlementCount,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.SettledAt,
 	)
 	return err
 }
@@ -801,6 +1047,72 @@ func (q *Queries) GetDefaultTenantPartition(ctx context.Context, accountID strin
 		&i.AccountID,
 		&i.TenantRef,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getExecutionDispatch = `-- name: GetExecutionDispatch :one
+SELECT id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at FROM execution_dispatches WHERE id = $1
+`
+
+// GetExecutionDispatch
+//
+//	SELECT id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at FROM execution_dispatches WHERE id = $1
+func (q *Queries) GetExecutionDispatch(ctx context.Context, id string) (ExecutionDispatch, error) {
+	row := q.db.QueryRow(ctx, getExecutionDispatch, id)
+	var i ExecutionDispatch
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.WorkID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Queue,
+		&i.Status,
+		&i.AvailableAt,
+		&i.TaskName,
+		&i.PublishAttempts,
+		&i.LastError,
+		&i.PublisherOwner,
+		&i.PublisherLeaseExpiresAt,
+		&i.PublisherAttempt,
+		&i.PublishedAt,
+		&i.SettledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getExecutionDispatchForUpdate = `-- name: GetExecutionDispatchForUpdate :one
+SELECT id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at FROM execution_dispatches WHERE id = $1 FOR UPDATE
+`
+
+// GetExecutionDispatchForUpdate
+//
+//	SELECT id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at FROM execution_dispatches WHERE id = $1 FOR UPDATE
+func (q *Queries) GetExecutionDispatchForUpdate(ctx context.Context, id string) (ExecutionDispatch, error) {
+	row := q.db.QueryRow(ctx, getExecutionDispatchForUpdate, id)
+	var i ExecutionDispatch
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.WorkID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Queue,
+		&i.Status,
+		&i.AvailableAt,
+		&i.TaskName,
+		&i.PublishAttempts,
+		&i.LastError,
+		&i.PublisherOwner,
+		&i.PublisherLeaseExpiresAt,
+		&i.PublisherAttempt,
+		&i.PublishedAt,
+		&i.SettledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -1158,6 +1470,48 @@ func (q *Queries) GetSessionForUpdate(ctx context.Context, id string) (Session, 
 	return i, err
 }
 
+const getSyntheticDispatchWork = `-- name: GetSyntheticDispatchWork :one
+SELECT id, status, settlement_count, created_at, updated_at, settled_at FROM synthetic_dispatch_works WHERE id = $1
+`
+
+// GetSyntheticDispatchWork
+//
+//	SELECT id, status, settlement_count, created_at, updated_at, settled_at FROM synthetic_dispatch_works WHERE id = $1
+func (q *Queries) GetSyntheticDispatchWork(ctx context.Context, id string) (SyntheticDispatchWork, error) {
+	row := q.db.QueryRow(ctx, getSyntheticDispatchWork, id)
+	var i SyntheticDispatchWork
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.SettlementCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SettledAt,
+	)
+	return i, err
+}
+
+const getSyntheticDispatchWorkForUpdate = `-- name: GetSyntheticDispatchWorkForUpdate :one
+SELECT id, status, settlement_count, created_at, updated_at, settled_at FROM synthetic_dispatch_works WHERE id = $1 FOR UPDATE
+`
+
+// GetSyntheticDispatchWorkForUpdate
+//
+//	SELECT id, status, settlement_count, created_at, updated_at, settled_at FROM synthetic_dispatch_works WHERE id = $1 FOR UPDATE
+func (q *Queries) GetSyntheticDispatchWorkForUpdate(ctx context.Context, id string) (SyntheticDispatchWork, error) {
+	row := q.db.QueryRow(ctx, getSyntheticDispatchWorkForUpdate, id)
+	var i SyntheticDispatchWork
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.SettlementCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SettledAt,
+	)
+	return i, err
+}
+
 const getTenantPartition = `-- name: GetTenantPartition :one
 SELECT id, account_id, tenant_ref, created_at
 FROM tenant_partitions
@@ -1234,6 +1588,65 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 	for rows.Next() {
 		var i Account
 		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgedExecutionDispatches = `-- name: ListAgedExecutionDispatches :many
+SELECT id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at FROM execution_dispatches
+WHERE status IN ('pending', 'publishing', 'published')
+  AND updated_at <= $1
+ORDER BY updated_at, id
+LIMIT $2
+`
+
+type ListAgedExecutionDispatchesParams struct {
+	StaleBefore time.Time
+	BatchLimit  int32
+}
+
+// ListAgedExecutionDispatches
+//
+//	SELECT id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at FROM execution_dispatches
+//	WHERE status IN ('pending', 'publishing', 'published')
+//	  AND updated_at <= $1
+//	ORDER BY updated_at, id
+//	LIMIT $2
+func (q *Queries) ListAgedExecutionDispatches(ctx context.Context, arg ListAgedExecutionDispatchesParams) ([]ExecutionDispatch, error) {
+	rows, err := q.db.Query(ctx, listAgedExecutionDispatches, arg.StaleBefore, arg.BatchLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExecutionDispatch{}
+	for rows.Next() {
+		var i ExecutionDispatch
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.WorkID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.Queue,
+			&i.Status,
+			&i.AvailableAt,
+			&i.TaskName,
+			&i.PublishAttempts,
+			&i.LastError,
+			&i.PublisherOwner,
+			&i.PublisherLeaseExpiresAt,
+			&i.PublisherAttempt,
+			&i.PublishedAt,
+			&i.SettledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1867,6 +2280,63 @@ func (q *Queries) ListSessionsForRecovery(ctx context.Context, arg ListSessionsF
 	return items, nil
 }
 
+const listStalePublishedExecutionDispatches = `-- name: ListStalePublishedExecutionDispatches :many
+SELECT id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at FROM execution_dispatches
+WHERE status = 'published' AND updated_at <= $1
+ORDER BY updated_at, id
+LIMIT $2
+`
+
+type ListStalePublishedExecutionDispatchesParams struct {
+	StaleBefore time.Time
+	BatchLimit  int32
+}
+
+// ListStalePublishedExecutionDispatches
+//
+//	SELECT id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at FROM execution_dispatches
+//	WHERE status = 'published' AND updated_at <= $1
+//	ORDER BY updated_at, id
+//	LIMIT $2
+func (q *Queries) ListStalePublishedExecutionDispatches(ctx context.Context, arg ListStalePublishedExecutionDispatchesParams) ([]ExecutionDispatch, error) {
+	rows, err := q.db.Query(ctx, listStalePublishedExecutionDispatches, arg.StaleBefore, arg.BatchLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExecutionDispatch{}
+	for rows.Next() {
+		var i ExecutionDispatch
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.WorkID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.Queue,
+			&i.Status,
+			&i.AvailableAt,
+			&i.TaskName,
+			&i.PublishAttempts,
+			&i.LastError,
+			&i.PublisherOwner,
+			&i.PublisherLeaseExpiresAt,
+			&i.PublisherAttempt,
+			&i.PublishedAt,
+			&i.SettledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockInstallationBootstrap = `-- name: LockInstallationBootstrap :one
 SELECT pg_advisory_xact_lock(hashtextextended('nvoken:installation-bootstrap', 0))
 `
@@ -1893,6 +2363,103 @@ func (q *Queries) LockInvocationAdmissionKey(ctx context.Context, lockKey string
 	var pg_advisory_xact_lock interface{}
 	err := row.Scan(&pg_advisory_xact_lock)
 	return pg_advisory_xact_lock, err
+}
+
+const markExecutionDispatchPublished = `-- name: MarkExecutionDispatchPublished :one
+UPDATE execution_dispatches
+SET status = 'published', task_name = $1,
+    publisher_owner = NULL, publisher_lease_expires_at = NULL,
+    published_at = $2, updated_at = $2,
+    last_error = NULL
+WHERE id = $3 AND status = 'publishing'
+  AND publisher_owner = $4
+  AND publisher_attempt = $5
+  AND publisher_lease_expires_at > $2
+RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+`
+
+type MarkExecutionDispatchPublishedParams struct {
+	TaskName         *string
+	ObservedAt       *time.Time
+	ID               string
+	PublisherOwner   *string
+	PublisherAttempt int64
+}
+
+// MarkExecutionDispatchPublished
+//
+//	UPDATE execution_dispatches
+//	SET status = 'published', task_name = $1,
+//	    publisher_owner = NULL, publisher_lease_expires_at = NULL,
+//	    published_at = $2, updated_at = $2,
+//	    last_error = NULL
+//	WHERE id = $3 AND status = 'publishing'
+//	  AND publisher_owner = $4
+//	  AND publisher_attempt = $5
+//	  AND publisher_lease_expires_at > $2
+//	RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+func (q *Queries) MarkExecutionDispatchPublished(ctx context.Context, arg MarkExecutionDispatchPublishedParams) (ExecutionDispatch, error) {
+	row := q.db.QueryRow(ctx, markExecutionDispatchPublished,
+		arg.TaskName,
+		arg.ObservedAt,
+		arg.ID,
+		arg.PublisherOwner,
+		arg.PublisherAttempt,
+	)
+	var i ExecutionDispatch
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.WorkID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Queue,
+		&i.Status,
+		&i.AvailableAt,
+		&i.TaskName,
+		&i.PublishAttempts,
+		&i.LastError,
+		&i.PublisherOwner,
+		&i.PublisherLeaseExpiresAt,
+		&i.PublisherAttempt,
+		&i.PublishedAt,
+		&i.SettledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const pruneTerminalExecutionDispatches = `-- name: PruneTerminalExecutionDispatches :execrows
+DELETE FROM execution_dispatches
+WHERE id IN (
+    SELECT prune.id FROM execution_dispatches AS prune
+    WHERE prune.status IN ('settled', 'abandoned') AND prune.settled_at < $1
+    ORDER BY prune.settled_at, prune.id
+    LIMIT $2
+)
+`
+
+type PruneTerminalExecutionDispatchesParams struct {
+	PruneBefore *time.Time
+	BatchLimit  int32
+}
+
+// PruneTerminalExecutionDispatches
+//
+//	DELETE FROM execution_dispatches
+//	WHERE id IN (
+//	    SELECT prune.id FROM execution_dispatches AS prune
+//	    WHERE prune.status IN ('settled', 'abandoned') AND prune.settled_at < $1
+//	    ORDER BY prune.settled_at, prune.id
+//	    LIMIT $2
+//	)
+func (q *Queries) PruneTerminalExecutionDispatches(ctx context.Context, arg PruneTerminalExecutionDispatchesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, pruneTerminalExecutionDispatches, arg.PruneBefore, arg.BatchLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const reapInvocationDeadline = `-- name: ReapInvocationDeadline :one
@@ -2105,6 +2672,67 @@ func (q *Queries) ReapInvocationLease(ctx context.Context, arg ReapInvocationLea
 	return i, err
 }
 
+const renewExecutionDispatchPublication = `-- name: RenewExecutionDispatchPublication :one
+UPDATE execution_dispatches
+SET publisher_lease_expires_at = $1,
+    updated_at = $2
+WHERE id = $3 AND status = 'publishing'
+  AND publisher_owner = $4
+  AND publisher_attempt = $5
+  AND publisher_lease_expires_at > $2
+RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+`
+
+type RenewExecutionDispatchPublicationParams struct {
+	PublisherLeaseExpiresAt *time.Time
+	ObservedAt              time.Time
+	ID                      string
+	PublisherOwner          *string
+	PublisherAttempt        int64
+}
+
+// RenewExecutionDispatchPublication
+//
+//	UPDATE execution_dispatches
+//	SET publisher_lease_expires_at = $1,
+//	    updated_at = $2
+//	WHERE id = $3 AND status = 'publishing'
+//	  AND publisher_owner = $4
+//	  AND publisher_attempt = $5
+//	  AND publisher_lease_expires_at > $2
+//	RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+func (q *Queries) RenewExecutionDispatchPublication(ctx context.Context, arg RenewExecutionDispatchPublicationParams) (ExecutionDispatch, error) {
+	row := q.db.QueryRow(ctx, renewExecutionDispatchPublication,
+		arg.PublisherLeaseExpiresAt,
+		arg.ObservedAt,
+		arg.ID,
+		arg.PublisherOwner,
+		arg.PublisherAttempt,
+	)
+	var i ExecutionDispatch
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.WorkID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Queue,
+		&i.Status,
+		&i.AvailableAt,
+		&i.TaskName,
+		&i.PublishAttempts,
+		&i.LastError,
+		&i.PublisherOwner,
+		&i.PublisherLeaseExpiresAt,
+		&i.PublisherAttempt,
+		&i.PublishedAt,
+		&i.SettledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const renewInvocationLease = `-- name: RenewInvocationLease :one
 UPDATE invocations
 SET lease_expires_at = $1,
@@ -2226,6 +2854,117 @@ func (q *Queries) ReserveMessageSequence(ctx context.Context, id string) (int64,
 	return column_1, err
 }
 
+const returnExecutionDispatchPending = `-- name: ReturnExecutionDispatchPending :one
+UPDATE execution_dispatches
+SET status = 'pending', available_at = $1,
+    publisher_owner = NULL, publisher_lease_expires_at = NULL,
+    last_error = $2, updated_at = $3
+WHERE id = $4 AND status = 'publishing'
+  AND publisher_owner = $5
+  AND publisher_attempt = $6
+RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+`
+
+type ReturnExecutionDispatchPendingParams struct {
+	AvailableAt      time.Time
+	LastError        *string
+	ObservedAt       time.Time
+	ID               string
+	PublisherOwner   *string
+	PublisherAttempt int64
+}
+
+// ReturnExecutionDispatchPending
+//
+//	UPDATE execution_dispatches
+//	SET status = 'pending', available_at = $1,
+//	    publisher_owner = NULL, publisher_lease_expires_at = NULL,
+//	    last_error = $2, updated_at = $3
+//	WHERE id = $4 AND status = 'publishing'
+//	  AND publisher_owner = $5
+//	  AND publisher_attempt = $6
+//	RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+func (q *Queries) ReturnExecutionDispatchPending(ctx context.Context, arg ReturnExecutionDispatchPendingParams) (ExecutionDispatch, error) {
+	row := q.db.QueryRow(ctx, returnExecutionDispatchPending,
+		arg.AvailableAt,
+		arg.LastError,
+		arg.ObservedAt,
+		arg.ID,
+		arg.PublisherOwner,
+		arg.PublisherAttempt,
+	)
+	var i ExecutionDispatch
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.WorkID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Queue,
+		&i.Status,
+		&i.AvailableAt,
+		&i.TaskName,
+		&i.PublishAttempts,
+		&i.LastError,
+		&i.PublisherOwner,
+		&i.PublisherLeaseExpiresAt,
+		&i.PublisherAttempt,
+		&i.PublishedAt,
+		&i.SettledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const settleExecutionDispatch = `-- name: SettleExecutionDispatch :one
+UPDATE execution_dispatches
+SET status = 'settled', publisher_owner = NULL,
+    publisher_lease_expires_at = NULL, settled_at = $1,
+    updated_at = $1, last_error = NULL
+WHERE id = $2 AND status IN ('pending', 'publishing', 'published')
+RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+`
+
+type SettleExecutionDispatchParams struct {
+	ObservedAt *time.Time
+	ID         string
+}
+
+// SettleExecutionDispatch
+//
+//	UPDATE execution_dispatches
+//	SET status = 'settled', publisher_owner = NULL,
+//	    publisher_lease_expires_at = NULL, settled_at = $1,
+//	    updated_at = $1, last_error = NULL
+//	WHERE id = $2 AND status IN ('pending', 'publishing', 'published')
+//	RETURNING id, kind, work_id, account_id, tenant_partition_id, queue, status, available_at, task_name, publish_attempts, last_error, publisher_owner, publisher_lease_expires_at, publisher_attempt, published_at, settled_at, created_at, updated_at
+func (q *Queries) SettleExecutionDispatch(ctx context.Context, arg SettleExecutionDispatchParams) (ExecutionDispatch, error) {
+	row := q.db.QueryRow(ctx, settleExecutionDispatch, arg.ObservedAt, arg.ID)
+	var i ExecutionDispatch
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.WorkID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Queue,
+		&i.Status,
+		&i.AvailableAt,
+		&i.TaskName,
+		&i.PublishAttempts,
+		&i.LastError,
+		&i.PublisherOwner,
+		&i.PublisherLeaseExpiresAt,
+		&i.PublisherAttempt,
+		&i.PublishedAt,
+		&i.SettledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const settleInvocation = `-- name: SettleInvocation :one
 UPDATE invocations
 SET status = $1,
@@ -2337,6 +3076,40 @@ func (q *Queries) SettleInvocation(ctx context.Context, arg SettleInvocationPara
 		&i.ActiveSegmentStartedAt,
 		&i.ExecutionDeadlineAt,
 		&i.ExecutionDeadlineScope,
+	)
+	return i, err
+}
+
+const settleSyntheticDispatchWork = `-- name: SettleSyntheticDispatchWork :one
+UPDATE synthetic_dispatch_works
+SET status = 'settled', settlement_count = settlement_count + 1,
+    settled_at = $1, updated_at = $1
+WHERE id = $2 AND status = 'pending'
+RETURNING id, status, settlement_count, created_at, updated_at, settled_at
+`
+
+type SettleSyntheticDispatchWorkParams struct {
+	ObservedAt *time.Time
+	ID         string
+}
+
+// SettleSyntheticDispatchWork
+//
+//	UPDATE synthetic_dispatch_works
+//	SET status = 'settled', settlement_count = settlement_count + 1,
+//	    settled_at = $1, updated_at = $1
+//	WHERE id = $2 AND status = 'pending'
+//	RETURNING id, status, settlement_count, created_at, updated_at, settled_at
+func (q *Queries) SettleSyntheticDispatchWork(ctx context.Context, arg SettleSyntheticDispatchWorkParams) (SyntheticDispatchWork, error) {
+	row := q.db.QueryRow(ctx, settleSyntheticDispatchWork, arg.ObservedAt, arg.ID)
+	var i SyntheticDispatchWork
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.SettlementCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SettledAt,
 	)
 	return i, err
 }

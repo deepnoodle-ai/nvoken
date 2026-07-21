@@ -32,8 +32,200 @@ var (
 	_ ports.InvocationRepository            = (*Store)(nil)
 	_ ports.InvocationStateRepository       = (*Store)(nil)
 	_ ports.RecoveryRepository              = (*Store)(nil)
+	_ ports.ExecutionDispatchRepository     = (*Store)(nil)
 	_ ports.TransactionManager              = (*TransactionManager)(nil)
 )
+
+func (s *Store) CreateSyntheticDispatchWork(ctx context.Context, work domain.SyntheticDispatchWork) error {
+	return s.q(ctx).CreateSyntheticDispatchWork(ctx, postgresdb.CreateSyntheticDispatchWorkParams{
+		ID: work.ID, Status: string(work.Status), SettlementCount: int32(work.SettlementCount),
+		CreatedAt: work.CreatedAt, UpdatedAt: work.UpdatedAt, SettledAt: work.SettledAt,
+	})
+}
+
+func (s *Store) GetSyntheticDispatchWork(ctx context.Context, id string) (domain.SyntheticDispatchWork, error) {
+	row, err := s.q(ctx).GetSyntheticDispatchWork(ctx, id)
+	if err != nil {
+		return domain.SyntheticDispatchWork{}, normalizeNotFound(err)
+	}
+	return syntheticDispatchWorkFromRow(row), nil
+}
+
+func (s *Store) GetSyntheticDispatchWorkForUpdate(ctx context.Context, id string) (domain.SyntheticDispatchWork, error) {
+	if _, ok := transactionFromContext(ctx); !ok {
+		return domain.SyntheticDispatchWork{}, fmt.Errorf("synthetic dispatch work row lock requires a transaction")
+	}
+	row, err := s.q(ctx).GetSyntheticDispatchWorkForUpdate(ctx, id)
+	if err != nil {
+		return domain.SyntheticDispatchWork{}, normalizeNotFound(err)
+	}
+	return syntheticDispatchWorkFromRow(row), nil
+}
+
+func (s *Store) SettleSyntheticDispatchWork(ctx context.Context, id string, observedAt time.Time) (domain.SyntheticDispatchWork, error) {
+	row, err := s.q(ctx).SettleSyntheticDispatchWork(ctx, postgresdb.SettleSyntheticDispatchWorkParams{
+		ID: id, ObservedAt: &observedAt,
+	})
+	if err != nil {
+		return domain.SyntheticDispatchWork{}, normalizeNotFound(err)
+	}
+	return syntheticDispatchWorkFromRow(row), nil
+}
+
+func syntheticDispatchWorkFromRow(row postgresdb.SyntheticDispatchWork) domain.SyntheticDispatchWork {
+	return domain.SyntheticDispatchWork{
+		ID: row.ID, Status: domain.SyntheticDispatchWorkStatus(row.Status),
+		SettlementCount: int(row.SettlementCount), CreatedAt: row.CreatedAt,
+		UpdatedAt: row.UpdatedAt, SettledAt: row.SettledAt,
+	}
+}
+
+func (s *Store) CreateExecutionDispatch(ctx context.Context, dispatch domain.ExecutionDispatch) error {
+	return s.q(ctx).CreateExecutionDispatch(ctx, postgresdb.CreateExecutionDispatchParams{
+		ID: dispatch.ID, Kind: string(dispatch.Kind), WorkID: dispatch.WorkID,
+		AccountID: dispatch.AccountID, TenantPartitionID: dispatch.TenantPartitionID,
+		Queue: dispatch.Queue, Status: string(dispatch.Status), AvailableAt: dispatch.AvailableAt,
+		TaskName: dispatch.TaskName, PublishAttempts: int32(dispatch.PublishAttempts),
+		LastError: dispatch.LastError, PublisherOwner: dispatch.PublisherOwner,
+		PublisherLeaseExpiresAt: dispatch.PublisherLeaseExpires,
+		PublisherAttempt:        dispatch.PublisherAttempt, PublishedAt: dispatch.PublishedAt,
+		SettledAt: dispatch.SettledAt, CreatedAt: dispatch.CreatedAt, UpdatedAt: dispatch.UpdatedAt,
+	})
+}
+
+func (s *Store) GetExecutionDispatch(ctx context.Context, id string) (domain.ExecutionDispatch, error) {
+	row, err := s.q(ctx).GetExecutionDispatch(ctx, id)
+	if err != nil {
+		return domain.ExecutionDispatch{}, normalizeNotFound(err)
+	}
+	return executionDispatchFromRow(row), nil
+}
+
+func (s *Store) GetExecutionDispatchForUpdate(ctx context.Context, id string) (domain.ExecutionDispatch, error) {
+	if _, ok := transactionFromContext(ctx); !ok {
+		return domain.ExecutionDispatch{}, fmt.Errorf("execution dispatch row lock requires a transaction")
+	}
+	row, err := s.q(ctx).GetExecutionDispatchForUpdate(ctx, id)
+	if err != nil {
+		return domain.ExecutionDispatch{}, normalizeNotFound(err)
+	}
+	return executionDispatchFromRow(row), nil
+}
+
+func (s *Store) ClaimNextExecutionDispatch(ctx context.Context, queue, owner string, observedAt, leaseExpiresAt time.Time) (domain.ExecutionDispatch, error) {
+	row, err := s.q(ctx).ClaimNextExecutionDispatch(ctx, postgresdb.ClaimNextExecutionDispatchParams{
+		QueueName: queue, PublisherOwner: &owner, PublisherLeaseExpiresAt: &leaseExpiresAt, ObservedAt: observedAt,
+	})
+	if err != nil {
+		return domain.ExecutionDispatch{}, normalizeNotFound(err)
+	}
+	return executionDispatchFromRow(row), nil
+}
+
+func (s *Store) RenewExecutionDispatchPublication(ctx context.Context, id, owner string, attempt int64, observedAt, leaseExpiresAt time.Time) (domain.ExecutionDispatch, error) {
+	row, err := s.q(ctx).RenewExecutionDispatchPublication(ctx, postgresdb.RenewExecutionDispatchPublicationParams{
+		ID: id, PublisherOwner: &owner, PublisherAttempt: attempt,
+		ObservedAt: observedAt, PublisherLeaseExpiresAt: &leaseExpiresAt,
+	})
+	if err != nil {
+		return domain.ExecutionDispatch{}, normalizeDispatchLeaseLost(err)
+	}
+	return executionDispatchFromRow(row), nil
+}
+
+func (s *Store) MarkExecutionDispatchPublished(ctx context.Context, id, owner string, attempt int64, taskName string, observedAt time.Time) (domain.ExecutionDispatch, error) {
+	row, err := s.q(ctx).MarkExecutionDispatchPublished(ctx, postgresdb.MarkExecutionDispatchPublishedParams{
+		ID: id, PublisherOwner: &owner, PublisherAttempt: attempt,
+		TaskName: &taskName, ObservedAt: &observedAt,
+	})
+	if err != nil {
+		return domain.ExecutionDispatch{}, normalizeDispatchLeaseLost(err)
+	}
+	return executionDispatchFromRow(row), nil
+}
+
+func (s *Store) ReturnExecutionDispatchPending(ctx context.Context, id, owner string, attempt int64, availableAt time.Time, lastError string, observedAt time.Time) (domain.ExecutionDispatch, error) {
+	row, err := s.q(ctx).ReturnExecutionDispatchPending(ctx, postgresdb.ReturnExecutionDispatchPendingParams{
+		ID: id, PublisherOwner: &owner, PublisherAttempt: attempt,
+		AvailableAt: availableAt, LastError: &lastError, ObservedAt: observedAt,
+	})
+	if err != nil {
+		return domain.ExecutionDispatch{}, normalizeDispatchLeaseLost(err)
+	}
+	return executionDispatchFromRow(row), nil
+}
+
+func (s *Store) SettleExecutionDispatch(ctx context.Context, id string, observedAt time.Time) (domain.ExecutionDispatch, error) {
+	row, err := s.q(ctx).SettleExecutionDispatch(ctx, postgresdb.SettleExecutionDispatchParams{ID: id, ObservedAt: &observedAt})
+	if err != nil {
+		return domain.ExecutionDispatch{}, normalizeNotFound(err)
+	}
+	return executionDispatchFromRow(row), nil
+}
+
+func (s *Store) AbandonExecutionDispatch(ctx context.Context, id, reason string, observedAt time.Time) (domain.ExecutionDispatch, error) {
+	row, err := s.q(ctx).AbandonExecutionDispatch(ctx, postgresdb.AbandonExecutionDispatchParams{
+		ID: id, LastError: &reason, ObservedAt: &observedAt,
+	})
+	if err != nil {
+		return domain.ExecutionDispatch{}, normalizeNotFound(err)
+	}
+	return executionDispatchFromRow(row), nil
+}
+
+func (s *Store) ListAgedExecutionDispatches(ctx context.Context, staleBefore time.Time, limit int) ([]domain.ExecutionDispatch, error) {
+	rows, err := s.q(ctx).ListAgedExecutionDispatches(ctx, postgresdb.ListAgedExecutionDispatchesParams{
+		StaleBefore: staleBefore, BatchLimit: boundedBatchLimit(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return executionDispatchesFromRows(rows), nil
+}
+
+func (s *Store) ListStalePublishedExecutionDispatches(ctx context.Context, staleBefore time.Time, limit int) ([]domain.ExecutionDispatch, error) {
+	rows, err := s.q(ctx).ListStalePublishedExecutionDispatches(ctx, postgresdb.ListStalePublishedExecutionDispatchesParams{
+		StaleBefore: staleBefore, BatchLimit: boundedBatchLimit(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return executionDispatchesFromRows(rows), nil
+}
+
+func (s *Store) PruneTerminalExecutionDispatches(ctx context.Context, before time.Time, limit int) (int64, error) {
+	return s.q(ctx).PruneTerminalExecutionDispatches(ctx, postgresdb.PruneTerminalExecutionDispatchesParams{
+		PruneBefore: &before, BatchLimit: boundedBatchLimit(limit),
+	})
+}
+
+func executionDispatchesFromRows(rows []postgresdb.ExecutionDispatch) []domain.ExecutionDispatch {
+	dispatches := make([]domain.ExecutionDispatch, len(rows))
+	for i, row := range rows {
+		dispatches[i] = executionDispatchFromRow(row)
+	}
+	return dispatches
+}
+
+func executionDispatchFromRow(row postgresdb.ExecutionDispatch) domain.ExecutionDispatch {
+	return domain.ExecutionDispatch{
+		ID: row.ID, Kind: domain.ExecutionDispatchKind(row.Kind), WorkID: row.WorkID,
+		AccountID: row.AccountID, TenantPartitionID: row.TenantPartitionID,
+		Queue: row.Queue, Status: domain.ExecutionDispatchStatus(row.Status),
+		AvailableAt: row.AvailableAt, TaskName: row.TaskName,
+		PublishAttempts: int(row.PublishAttempts), LastError: row.LastError,
+		PublisherOwner: row.PublisherOwner, PublisherLeaseExpires: row.PublisherLeaseExpiresAt,
+		PublisherAttempt: row.PublisherAttempt, PublishedAt: row.PublishedAt,
+		SettledAt: row.SettledAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+}
+
+func normalizeDispatchLeaseLost(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ports.ErrDispatchLeaseLost
+	}
+	return err
+}
 
 func (s *Store) q(ctx context.Context) *postgresdb.Queries {
 	if tx, ok := transactionFromContext(ctx); ok {

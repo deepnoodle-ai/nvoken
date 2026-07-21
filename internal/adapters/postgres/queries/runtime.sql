@@ -355,6 +355,140 @@ INSERT INTO invocation_states (
     agent_id, revision, status, lease_attempt, through_message_sequence, created_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
 
+-- name: CreateSyntheticDispatchWork :exec
+INSERT INTO synthetic_dispatch_works (
+    id, status, settlement_count, created_at, updated_at, settled_at
+) VALUES ($1, $2, $3, $4, $5, $6);
+
+-- name: GetSyntheticDispatchWork :one
+SELECT * FROM synthetic_dispatch_works WHERE id = $1;
+
+-- name: GetSyntheticDispatchWorkForUpdate :one
+SELECT * FROM synthetic_dispatch_works WHERE id = $1 FOR UPDATE;
+
+-- name: SettleSyntheticDispatchWork :one
+UPDATE synthetic_dispatch_works
+SET status = 'settled', settlement_count = settlement_count + 1,
+    settled_at = sqlc.arg(observed_at), updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status = 'pending'
+RETURNING *;
+
+-- name: CreateExecutionDispatch :exec
+INSERT INTO execution_dispatches (
+    id, kind, work_id, account_id, tenant_partition_id, queue, status,
+    available_at, task_name, publish_attempts, last_error, publisher_owner,
+    publisher_lease_expires_at, publisher_attempt, published_at, settled_at,
+    created_at, updated_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(kind), sqlc.arg(work_id), sqlc.narg(account_id),
+    sqlc.narg(tenant_partition_id), sqlc.arg(queue), sqlc.arg(status),
+    sqlc.arg(available_at), sqlc.narg(task_name), sqlc.arg(publish_attempts),
+    sqlc.narg(last_error), sqlc.narg(publisher_owner),
+    sqlc.narg(publisher_lease_expires_at), sqlc.arg(publisher_attempt),
+    sqlc.narg(published_at), sqlc.narg(settled_at), sqlc.arg(created_at),
+    sqlc.arg(updated_at)
+);
+
+-- name: GetExecutionDispatch :one
+SELECT * FROM execution_dispatches WHERE id = $1;
+
+-- name: GetExecutionDispatchForUpdate :one
+SELECT * FROM execution_dispatches WHERE id = $1 FOR UPDATE;
+
+-- name: ClaimNextExecutionDispatch :one
+WITH candidate AS (
+    SELECT source.id
+    FROM execution_dispatches AS source
+    WHERE source.queue = sqlc.arg(queue_name)
+      AND (
+        (source.status = 'pending' AND source.available_at <= sqlc.arg(observed_at))
+        OR (source.status = 'publishing' AND source.publisher_lease_expires_at <= sqlc.arg(observed_at))
+      )
+    ORDER BY source.available_at, source.created_at, source.id
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+UPDATE execution_dispatches AS d
+SET status = 'publishing',
+    publisher_owner = sqlc.arg(publisher_owner),
+    publisher_lease_expires_at = sqlc.arg(publisher_lease_expires_at),
+    publisher_attempt = d.publisher_attempt + 1,
+    publish_attempts = d.publish_attempts + 1,
+    updated_at = sqlc.arg(observed_at)
+FROM candidate
+WHERE d.id = candidate.id
+RETURNING d.*;
+
+-- name: RenewExecutionDispatchPublication :one
+UPDATE execution_dispatches
+SET publisher_lease_expires_at = sqlc.arg(publisher_lease_expires_at),
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status = 'publishing'
+  AND publisher_owner = sqlc.arg(publisher_owner)
+  AND publisher_attempt = sqlc.arg(publisher_attempt)
+  AND publisher_lease_expires_at > sqlc.arg(observed_at)
+RETURNING *;
+
+-- name: MarkExecutionDispatchPublished :one
+UPDATE execution_dispatches
+SET status = 'published', task_name = sqlc.arg(task_name),
+    publisher_owner = NULL, publisher_lease_expires_at = NULL,
+    published_at = sqlc.arg(observed_at), updated_at = sqlc.arg(observed_at),
+    last_error = NULL
+WHERE id = sqlc.arg(id) AND status = 'publishing'
+  AND publisher_owner = sqlc.arg(publisher_owner)
+  AND publisher_attempt = sqlc.arg(publisher_attempt)
+  AND publisher_lease_expires_at > sqlc.arg(observed_at)
+RETURNING *;
+
+-- name: ReturnExecutionDispatchPending :one
+UPDATE execution_dispatches
+SET status = 'pending', available_at = sqlc.arg(available_at),
+    publisher_owner = NULL, publisher_lease_expires_at = NULL,
+    last_error = sqlc.arg(last_error), updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status = 'publishing'
+  AND publisher_owner = sqlc.arg(publisher_owner)
+  AND publisher_attempt = sqlc.arg(publisher_attempt)
+RETURNING *;
+
+-- name: SettleExecutionDispatch :one
+UPDATE execution_dispatches
+SET status = 'settled', publisher_owner = NULL,
+    publisher_lease_expires_at = NULL, settled_at = sqlc.arg(observed_at),
+    updated_at = sqlc.arg(observed_at), last_error = NULL
+WHERE id = sqlc.arg(id) AND status IN ('pending', 'publishing', 'published')
+RETURNING *;
+
+-- name: AbandonExecutionDispatch :one
+UPDATE execution_dispatches
+SET status = 'abandoned', publisher_owner = NULL,
+    publisher_lease_expires_at = NULL, settled_at = sqlc.arg(observed_at),
+    updated_at = sqlc.arg(observed_at), last_error = sqlc.arg(last_error)
+WHERE id = sqlc.arg(id) AND status IN ('pending', 'publishing', 'published')
+RETURNING *;
+
+-- name: ListAgedExecutionDispatches :many
+SELECT * FROM execution_dispatches
+WHERE status IN ('pending', 'publishing', 'published')
+  AND updated_at <= sqlc.arg(stale_before)
+ORDER BY updated_at, id
+LIMIT sqlc.arg(batch_limit);
+
+-- name: ListStalePublishedExecutionDispatches :many
+SELECT * FROM execution_dispatches
+WHERE status = 'published' AND updated_at <= sqlc.arg(stale_before)
+ORDER BY updated_at, id
+LIMIT sqlc.arg(batch_limit);
+
+-- name: PruneTerminalExecutionDispatches :execrows
+DELETE FROM execution_dispatches
+WHERE id IN (
+    SELECT prune.id FROM execution_dispatches AS prune
+    WHERE prune.status IN ('settled', 'abandoned') AND prune.settled_at < sqlc.arg(prune_before)
+    ORDER BY prune.settled_at, prune.id
+    LIMIT sqlc.arg(batch_limit)
+);
+
 -- name: GetCurrentInvocationState :one
 SELECT *
 FROM invocation_states

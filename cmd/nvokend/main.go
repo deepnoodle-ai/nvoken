@@ -42,7 +42,21 @@ func run(args []string) error {
 		}
 		return daemon.Migrate(ctx, cfg)
 	}
-	return fmt.Errorf("usage: nvokend [serve|migrate]")
+	if len(args) == 1 && args[0] == "dispatch-smoke" {
+		cfg, err := loadDispatchSmokeConfig()
+		if err != nil {
+			return err
+		}
+		result, err := daemon.CreateDispatchSmoke(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		slog.Info("created synthetic execution dispatch",
+			"work_id", result.Work.ID, "dispatch_id", result.Dispatch.ID,
+			"dispatch_kind", result.Dispatch.Kind, "dispatch_status", result.Dispatch.Status)
+		return nil
+	}
+	return fmt.Errorf("usage: nvokend [serve|migrate|dispatch-smoke]")
 }
 
 func cloudLoggingReplaceAttr(groups []string, a slog.Attr) slog.Attr {

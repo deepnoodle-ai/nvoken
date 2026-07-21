@@ -125,6 +125,130 @@ variable "engine_concurrency" {
   }
 }
 
+variable "executor_max_instances" {
+  description = "Maximum private executor instances; executor minimum is fixed at zero."
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.executor_max_instances >= 1 && var.executor_max_instances == floor(var.executor_max_instances)
+    error_message = "executor_max_instances must be a positive whole number."
+  }
+}
+
+variable "executor_request_concurrency" {
+  description = "Maximum held Cloud Tasks requests per private executor instance."
+  type        = number
+  default     = 4
+
+  validation {
+    condition     = var.executor_request_concurrency >= 1 && var.executor_request_concurrency <= 1000 && var.executor_request_concurrency == floor(var.executor_request_concurrency)
+    error_message = "executor_request_concurrency must be a whole number from 1 through 1000."
+  }
+}
+
+variable "executor_database_max_connections" {
+  description = "Maximum Postgres pool connections per private executor instance."
+  type        = number
+  default     = 4
+
+  validation {
+    condition     = var.executor_database_max_connections >= 1 && var.executor_database_max_connections == floor(var.executor_database_max_connections)
+    error_message = "executor_database_max_connections must be a positive whole number."
+  }
+}
+
+variable "task_queue_max_concurrent_dispatches" {
+  description = "Maximum concurrent Cloud Tasks deliveries; cannot exceed total executor request capacity."
+  type        = number
+  default     = 40
+
+  validation {
+    condition     = var.task_queue_max_concurrent_dispatches >= 1 && var.task_queue_max_concurrent_dispatches == floor(var.task_queue_max_concurrent_dispatches)
+    error_message = "task_queue_max_concurrent_dispatches must be a positive whole number."
+  }
+}
+
+variable "task_queue_max_dispatches_per_second" {
+  description = "Regional execution queue rate limit."
+  type        = number
+  default     = 100
+
+  validation {
+    condition     = var.task_queue_max_dispatches_per_second > 0 && var.task_queue_max_dispatches_per_second <= 500
+    error_message = "task_queue_max_dispatches_per_second must be greater than zero and at most 500."
+  }
+}
+
+variable "task_queue_max_attempts" {
+  description = "Finite transport delivery attempts before reconciliation is required."
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.task_queue_max_attempts >= 1 && var.task_queue_max_attempts == floor(var.task_queue_max_attempts)
+    error_message = "task_queue_max_attempts must be a positive whole number."
+  }
+}
+
+variable "task_queue_max_retry_duration_seconds" {
+  description = "Finite transport retry window."
+  type        = number
+  default     = 3600
+
+  validation {
+    condition     = var.task_queue_max_retry_duration_seconds >= 60 && var.task_queue_max_retry_duration_seconds == floor(var.task_queue_max_retry_duration_seconds)
+    error_message = "task_queue_max_retry_duration_seconds must be a whole number of at least 60."
+  }
+}
+
+variable "task_dispatch_deadline_seconds" {
+  description = "Cloud Tasks and executor request deadline; the platform maximum is 1800 seconds."
+  type        = number
+  default     = 1800
+
+  validation {
+    condition     = var.task_dispatch_deadline_seconds >= 60 && var.task_dispatch_deadline_seconds <= 1800 && var.task_dispatch_deadline_seconds == floor(var.task_dispatch_deadline_seconds)
+    error_message = "task_dispatch_deadline_seconds must be a whole number from 60 through 1800."
+  }
+}
+
+variable "executor_attempt_timeout_seconds" {
+  description = "Application attempt ceiling, leaving time for durable settlement before task timeout."
+  type        = number
+  default     = 1795
+
+  validation {
+    condition     = var.executor_attempt_timeout_seconds >= 1 && var.executor_attempt_timeout_seconds == floor(var.executor_attempt_timeout_seconds)
+    error_message = "executor_attempt_timeout_seconds must be a positive whole number."
+  }
+}
+
+variable "synthetic_dispatch_delay_seconds" {
+  description = "Optional staging-only delay before synthetic settlement, used to prove request draining."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.synthetic_dispatch_delay_seconds >= 0 && var.synthetic_dispatch_delay_seconds <= 300 && var.synthetic_dispatch_delay_seconds == floor(var.synthetic_dispatch_delay_seconds)
+    error_message = "synthetic_dispatch_delay_seconds must be a whole number from 0 through 300."
+  }
+}
+
+variable "monitoring_notification_channels" {
+  description = "Existing Monitoring notification channel resource names to attach to dispatch alert policies."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for channel in var.monitoring_notification_channels :
+      can(regex("^projects/[^/]+/notificationChannels/[^/]+$", channel))
+    ])
+    error_message = "monitoring_notification_channels entries must be full projects/.../notificationChannels/... resource names."
+  }
+}
+
 variable "database_max_connections" {
   description = "Maximum Postgres pool connections per service instance."
   type        = number

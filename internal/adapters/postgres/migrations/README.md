@@ -8,7 +8,10 @@ edited. Correct a released migration with a new `.up.sql` migration.
 sqlc parses this directory in lexical order as the schema source, so migration
 filenames stay zero-padded and their numeric and lexical ordering must agree.
 
-Runtime history is preserved by default. Foreign keys use `ON DELETE RESTRICT`,
-Session messages and Invocation states are append-only, and this adapter exposes
-no deletion or pruning method. A future retention design must add an explicit,
-ordered migration and operation rather than relying on cascades.
+Runtime business history is preserved by default. Foreign keys use
+`ON DELETE RESTRICT`, and Session messages and Invocation states are
+append-only. `execution_dispatches` are transport diagnostics rather than
+business outcomes, so terminal rows alone have an explicit bounded retention
+operation; their authoritative synthetic work rows are not pruned with them.
+Any broader retention design requires an explicit, ordered migration and
+operation rather than cascades.

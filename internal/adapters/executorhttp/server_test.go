@@ -1,0 +1,97 @@
+package executorhttp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/deepnoodle-ai/nvoken/internal/services"
+)
+
+func TestExecutorRoutesArePrivateAndMinimal(t *testing.T) {
+	attempts := &fakeAttempts{}
+	handler := newHandler(attempts, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Second)
+
+	for _, test := range []struct {
+		method string
+		path   string
+		status int
+	}{
+		{http.MethodGet, "/health", http.StatusOK},
+		{http.MethodPost, "/internal/execution-dispatches/dsp_test/attempts", http.StatusNoContent},
+		{http.MethodGet, "/v1/invocations", http.StatusNotFound},
+		{http.MethodPost, "/v1/invocations", http.StatusNotFound},
+	} {
+		request := httptest.NewRequest(test.method, test.path, nil)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != test.status {
+			t.Fatalf("%s %s status = %d, want %d", test.method, test.path, response.Code, test.status)
+		}
+	}
+	if attempts.calls != 1 || attempts.lastID != "dsp_test" {
+		t.Fatalf("attempt calls = %d, ID = %q", attempts.calls, attempts.lastID)
+	}
+}
+
+func TestExecutorAcknowledgesPoisonBodyWithoutAttempt(t *testing.T) {
+	attempts := &fakeAttempts{}
+	handler := newHandler(attempts, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Second)
+	request := httptest.NewRequest(http.MethodPost, "/internal/execution-dispatches/dsp_test/attempts", strings.NewReader("unexpected"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || attempts.calls != 0 {
+		t.Fatalf("status/calls = %d/%d", response.Code, attempts.calls)
+	}
+}
+
+func TestExecutorRetriesOnlyUndecidedAttempt(t *testing.T) {
+	attempts := &fakeAttempts{err: errors.New("database unavailable")}
+	handler := newHandler(attempts, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Second)
+	request := httptest.NewRequest(http.MethodPost, "/internal/execution-dispatches/dsp_test/attempts", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", response.Code)
+	}
+}
+
+func TestExecutorCancelledRequestRemainsRetryable(t *testing.T) {
+	attempts := &fakeAttempts{waitForContext: true}
+	handler := newHandler(attempts, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	request := httptest.NewRequest(http.MethodPost, "/internal/execution-dispatches/dsp_test/attempts", nil).WithContext(ctx)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", response.Code)
+	}
+}
+
+type fakeAttempts struct {
+	mu             sync.Mutex
+	calls          int
+	lastID         string
+	err            error
+	waitForContext bool
+}
+
+func (f *fakeAttempts) Attempt(ctx context.Context, id string) (services.DispatchAttemptOutcome, error) {
+	f.mu.Lock()
+	f.calls++
+	f.lastID = id
+	f.mu.Unlock()
+	if f.waitForContext {
+		<-ctx.Done()
+		return services.DispatchAttemptNoop, ctx.Err()
+	}
+	return services.DispatchAttemptSettled, f.err
+}
