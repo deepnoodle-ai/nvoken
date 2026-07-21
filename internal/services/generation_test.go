@@ -225,6 +225,10 @@ type cancellingModelGenerator struct {
 	response domain.GenerationResponse
 }
 
+type cancelingErrorModelGenerator struct {
+	cancel context.CancelFunc
+}
+
 type streamingModelGenerator struct {
 	fakeModelGenerator
 	deltas []domain.GenerationDelta
@@ -256,6 +260,11 @@ func (p *recordingLivePublisher) Publish(_ context.Context, event ports.LiveEven
 func (g cancellingModelGenerator) Generate(context.Context, domain.GenerationRequest) (domain.GenerationResponse, error) {
 	g.cancel()
 	return g.response, nil
+}
+
+func (g cancelingErrorModelGenerator) Generate(ctx context.Context, _ domain.GenerationRequest) (domain.GenerationResponse, error) {
+	g.cancel()
+	return domain.GenerationResponse{}, ctx.Err()
 }
 
 func (g *fakeModelGenerator) Generate(ctx context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
@@ -300,6 +309,10 @@ func TestGenerationExecutorReconstructsExactDurableTurn(t *testing.T) {
 		t.Fatalf("provenance = %#v", result.Provenance)
 	}
 	logText := logs.String()
+	if !strings.Contains(logText, `"event":"provider_generation"`) ||
+		!strings.Contains(logText, `"outcome":"success"`) {
+		t.Fatalf("logs omit bounded provider outcome: %s", logText)
+	}
 	for _, forbidden := range []string{"durable instructions", `\"text\":\"first\"`, `\"text\":\"answer\"`, `\"text\":\"current\"`} {
 		if strings.Contains(logText, forbidden) {
 			t.Fatalf("logs contain durable content %q: %s", forbidden, logText)
@@ -635,6 +648,10 @@ func TestGenerationExecutorMapsProviderFailuresAndInvalidResponses(t *testing.T)
 				t.Fatalf("Execute: %v", err)
 			}
 			assertFailureCode(t, result, "provider_error")
+			if !strings.Contains(logs.String(), `"event":"provider_generation"`) ||
+				!strings.Contains(logs.String(), `"outcome":"failed"`) {
+				t.Fatalf("logs omit bounded provider failure: %s", logs.String())
+			}
 			if strings.Contains(logs.String(), "provider response contains secret") {
 				t.Fatalf("logs contain provider error: %s", logs.String())
 			}
@@ -787,6 +804,25 @@ func TestGenerationExecutorReturnsCancellationWithoutSemanticResult(t *testing.T
 	result, err := NewGenerationExecutor(generationStoreFixture(claim), generator, nil).Execute(ctx, claim)
 	if !errors.Is(err, context.Canceled) || result.Status != "" {
 		t.Fatalf("result = %#v, error = %v", result, err)
+	}
+}
+
+func TestGenerationExecutorRecordsProviderCancellation(t *testing.T) {
+	claim := generationClaim()
+	ctx, cancel := context.WithCancel(context.Background())
+	var logs bytes.Buffer
+	executor := NewGenerationExecutor(
+		generationStoreFixture(claim),
+		cancelingErrorModelGenerator{cancel: cancel},
+		slog.New(slog.NewJSONHandler(&logs, nil)),
+	)
+	result, err := executor.Execute(ctx, claim)
+	if !errors.Is(err, context.Canceled) || result.Status != "" {
+		t.Fatalf("result = %#v, error = %v", result, err)
+	}
+	if !strings.Contains(logs.String(), `"event":"provider_generation"`) ||
+		!strings.Contains(logs.String(), `"class":"provider_canceled"`) {
+		t.Fatalf("logs omit bounded provider cancellation: %s", logs.String())
 	}
 }
 

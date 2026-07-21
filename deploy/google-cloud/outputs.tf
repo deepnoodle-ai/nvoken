@@ -78,6 +78,11 @@ output "cloud_sql_instance" {
   value       = google_sql_database_instance.runtime.connection_name
 }
 
+output "cloud_sql_instance_name" {
+  description = "Cloud SQL instance name for gcloud operations and Monitoring correlation."
+  value       = google_sql_database_instance.runtime.name
+}
+
 output "maximum_engine_concurrency" {
   description = "Configured upper bound across all Cloud Run service instances."
   value       = var.max_instances * var.engine_concurrency
@@ -96,4 +101,32 @@ output "maximum_executor_concurrency" {
 output "maximum_executor_database_connections" {
   description = "Declared upper bound on private executor Postgres connections."
   value       = var.executor_max_instances * var.executor_database_max_connections
+}
+
+output "monitoring_dashboard_id" {
+  description = "Terraform-managed operations dashboard ID, or null when the dashboard is disabled."
+  value       = var.enable_monitoring_dashboard ? google_monitoring_dashboard.runtime[0].id : null
+}
+
+output "monitoring_notifications_configured" {
+  description = "Whether every nvoken alert policy has at least one notification channel. False is intentionally allowed for disposable environments and is not production ready."
+  value       = length(var.monitoring_notification_channels) > 0
+}
+
+output "monitoring_notification_channels" {
+  description = "Notification channel resource names attached to every nvoken alert policy. An empty list means incidents do not notify an operator."
+  value       = var.monitoring_notification_channels
+}
+
+output "configured_capacity_totals" {
+  description = "Declared service, executor, and database pool ceilings that must be reconciled with production Cloud SQL and queue capacity."
+  value = {
+    runtime_instances             = var.max_instances
+    runtime_requests              = var.max_instances * var.request_concurrency
+    embedded_engines              = var.max_instances * var.engine_concurrency
+    runtime_database_connections  = var.max_instances * var.database_max_connections
+    executor_requests             = var.executor_max_instances * var.executor_request_concurrency
+    executor_database_connections = var.executor_max_instances * var.executor_database_max_connections
+    task_concurrency              = var.task_queue_max_concurrent_dispatches
+  }
 }

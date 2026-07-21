@@ -1,6 +1,7 @@
 package executorhttp
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -18,7 +19,8 @@ import (
 
 func TestExecutorRoutesArePrivateAndMinimal(t *testing.T) {
 	attempts := &fakeAttempts{}
-	handler := newHandler(attempts, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Second)
+	var logs bytes.Buffer
+	handler := newHandler(attempts, slog.New(slog.NewJSONHandler(&logs, nil)), time.Second)
 
 	for _, test := range []struct {
 		method string
@@ -39,6 +41,10 @@ func TestExecutorRoutesArePrivateAndMinimal(t *testing.T) {
 	}
 	if attempts.calls != 1 || attempts.lastID != "dsp_test" {
 		t.Fatalf("attempt calls = %d, ID = %q", attempts.calls, attempts.lastID)
+	}
+	if !strings.Contains(logs.String(), `"event":"dispatch_attempt_decided"`) ||
+		!strings.Contains(logs.String(), `"handler_outcome":"settled"`) {
+		t.Fatalf("logs omit bounded executor outcome: %s", logs.String())
 	}
 }
 

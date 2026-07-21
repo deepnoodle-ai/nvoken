@@ -94,6 +94,7 @@ func newHandler(attempts AttemptService, logger *slog.Logger, attemptTimeout tim
 			return
 		}
 		logger.Info("execution dispatch attempt decided",
+			"event", "dispatch_attempt_decided",
 			"dispatch_id", r.PathValue("dispatch_id"), "handler_outcome", outcome)
 		w.WriteHeader(http.StatusNoContent)
 	})
