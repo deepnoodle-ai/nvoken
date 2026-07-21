@@ -25,13 +25,15 @@ type Ownership interface {
 }
 
 type Config struct {
-	Concurrency       int
-	PollInterval      time.Duration
-	LeaseDuration     time.Duration
-	HeartbeatInterval time.Duration
-	ReaperInterval    time.Duration
-	ReaperBatchLimit  int
-	DrainGrace        time.Duration
+	Concurrency             int
+	PollInterval            time.Duration
+	LeaseDuration           time.Duration
+	HeartbeatInterval       time.Duration
+	ReaperInterval          time.Duration
+	ReaperBatchLimit        int
+	DrainGrace              time.Duration
+	ExecutionSegmentCeiling time.Duration
+	SettlementReserve       time.Duration
 }
 
 func DefaultConfig() Config {
@@ -39,17 +41,27 @@ func DefaultConfig() Config {
 		Concurrency: 8, PollInterval: time.Second, LeaseDuration: 30 * time.Second,
 		HeartbeatInterval: 10 * time.Second, ReaperInterval: 10 * time.Second,
 		ReaperBatchLimit: 100, DrainGrace: 30 * time.Second,
+		ExecutionSegmentCeiling: 15 * time.Minute, SettlementReserve: 5 * time.Second,
 	}
 }
 
 type Runner struct {
-	owner     string
-	ownership Ownership
-	executor  ports.InvocationExecutor
-	signaller ports.WorkSignaller
-	logger    *slog.Logger
-	config    Config
-	inflight  atomic.Int64
+	owner         string
+	ownership     Ownership
+	executor      ports.InvocationExecutor
+	signaller     ports.WorkSignaller
+	cancellations ports.CancellationSignaller
+	logger        *slog.Logger
+	config        Config
+	inflight      atomic.Int64
+	cancelMu      sync.Mutex
+	claimCancels  map[string]context.CancelCauseFunc
+}
+
+type RunnerOption func(*Runner)
+
+func WithCancellationSignaller(signaller ports.CancellationSignaller) RunnerOption {
+	return func(runner *Runner) { runner.cancellations = signaller }
 }
 
 func NewRunner(
@@ -59,7 +71,9 @@ func NewRunner(
 	signaller ports.WorkSignaller,
 	logger *slog.Logger,
 	config Config,
+	options ...RunnerOption,
 ) (*Runner, error) {
+	config = normalizedConfig(config)
 	if strings.TrimSpace(owner) == "" {
 		return nil, fmt.Errorf("engine owner is required")
 	}
@@ -72,10 +86,26 @@ func NewRunner(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Runner{
+	runner := &Runner{
 		owner: owner, ownership: ownership, executor: executor,
 		signaller: signaller, logger: logger, config: config,
-	}, nil
+		claimCancels: make(map[string]context.CancelCauseFunc),
+	}
+	for _, option := range options {
+		if option != nil {
+			option(runner)
+		}
+	}
+	return runner, nil
+}
+
+func normalizedConfig(config Config) Config {
+	defaults := DefaultConfig()
+	if config.ExecutionSegmentCeiling == 0 && config.SettlementReserve == 0 {
+		config.ExecutionSegmentCeiling = defaults.ExecutionSegmentCeiling
+		config.SettlementReserve = defaults.SettlementReserve
+	}
+	return config
 }
 
 func ValidateConfig(config Config) error {
@@ -87,6 +117,9 @@ func ValidateConfig(config Config) error {
 		config.DrainGrace <= 0 {
 		return fmt.Errorf("engine intervals, lease duration, and drain grace must be positive")
 	}
+	if config.ExecutionSegmentCeiling <= 0 || config.SettlementReserve <= 0 || config.SettlementReserve >= config.ExecutionSegmentCeiling {
+		return fmt.Errorf("engine execution segment ceiling must exceed the positive settlement reserve")
+	}
 	if config.HeartbeatInterval >= config.LeaseDuration/2 {
 		return fmt.Errorf("engine heartbeat interval must be less than half the lease duration")
 	}
@@ -97,6 +130,8 @@ func ValidateConfig(config Config) error {
 }
 
 func (r *Runner) Run(ctx context.Context) error {
+	executionCtx, cancelExecutions := context.WithCancel(context.Background())
+	defer cancelExecutions()
 	var subscription ports.WorkSubscription
 	if r.signaller != nil {
 		// Subscribe before the startup reap and first claim so a notification
@@ -104,9 +139,12 @@ func (r *Runner) Run(ctx context.Context) error {
 		subscription = r.signaller.Subscribe(ctx, []string{ports.InvocationExecutionQueue})
 		defer subscription.Close()
 	}
-
-	executionCtx, cancelExecutions := context.WithCancel(context.Background())
-	defer cancelExecutions()
+	var cancellationSubscription ports.CancellationSubscription
+	if r.cancellations != nil {
+		cancellationSubscription = r.cancellations.SubscribeCancellations(executionCtx)
+		go r.listenForCancellations(executionCtx, cancellationSubscription)
+		defer cancellationSubscription.Close()
+	}
 	var workers sync.WaitGroup
 	nextReap := time.Time{}
 
@@ -185,9 +223,12 @@ func (r *Runner) Run(ctx context.Context) error {
 func (r *Runner) reap(ctx context.Context) {
 	reaped, err := r.ownership.ReapExpired(ctx, r.config.ReaperBatchLimit)
 	for _, invocation := range reaped {
-		r.logger.Warn("Invocation lease reaped",
+		fields := []any{
 			"invocation_id", invocation.ID, "lease_attempt", invocation.LeaseAttempt,
-			"status", invocation.Status)
+			"status", invocation.Status,
+		}
+		fields = append(fields, failureLogFields(invocation.Error)...)
+		r.logger.Warn("Invocation ownership or deadline reaped", fields...)
 	}
 	if err != nil {
 		if ctx.Err() == nil {
@@ -201,11 +242,17 @@ type claimState struct {
 	leaseLost atomic.Bool
 }
 
+var errCancellationWake = errors.New("invocation cancellation notification received")
+var errExecutionDeadline = errors.New("invocation execution deadline reached")
+
 func (r *Runner) runClaim(executorParent context.Context, claim domain.InvocationClaim) {
 	leaseCtx, cancelLease := context.WithCancel(context.Background())
 	defer cancelLease()
-	executorCtx, cancelExecutor := context.WithCancel(executorParent)
+	executorCtx, cancelExecutorCause := context.WithCancelCause(executorParent)
+	cancelExecutor := func() { cancelExecutorCause(context.Canceled) }
 	defer cancelExecutor()
+	r.registerClaimCancellation(claim.Invocation.ID, cancelExecutorCause)
+	defer r.unregisterClaimCancellation(claim.Invocation.ID)
 	state := &claimState{}
 	stopHeartbeat := make(chan struct{})
 	heartbeatDone := make(chan struct{})
@@ -215,9 +262,22 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 	}()
 
 	started := time.Now()
-	result, err := r.executor.Execute(executorCtx, claim)
+	modelCtx := executorCtx
+	cancelDeadline := func() {}
+	if claim.Invocation.ExecutionDeadlineAt != nil {
+		cutoff := claim.Invocation.ExecutionDeadlineAt.Add(-r.config.SettlementReserve)
+		modelCtx, cancelDeadline = context.WithDeadlineCause(executorCtx, cutoff, errExecutionDeadline)
+	}
+	result, err := r.executor.Execute(modelCtx, claim)
+	cancelDeadline()
 	hasResult := err == nil
-	if err != nil && executorCtx.Err() == nil {
+	if errors.Is(context.Cause(modelCtx), errExecutionDeadline) {
+		// Once the model cutoff fires, its durable deadline wins even if a
+		// provider or custom executor returns a late success. Preserve only
+		// paired accounting evidence from a valid result.
+		result = executionDeadlineResult(claim, result)
+		hasResult = true
+	} else if err != nil && executorCtx.Err() == nil {
 		r.logger.Warn("Invocation executor failed",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
 			"error", err.Error())
@@ -233,7 +293,11 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 	if hasResult && !state.leaseLost.Load() {
 		// Drain cancellation targets model execution, not an already-produced
 		// result. Settlement remains bounded and is cancelled by lease loss.
-		settleCtx, cancelSettle := context.WithTimeout(leaseCtx, r.config.LeaseDuration)
+		settleDeadline := time.Now().Add(r.config.LeaseDuration)
+		if claim.Invocation.ExecutionDeadlineAt != nil && claim.Invocation.ExecutionDeadlineAt.Before(settleDeadline) {
+			settleDeadline = *claim.Invocation.ExecutionDeadlineAt
+		}
+		settleCtx, cancelSettle := context.WithDeadline(leaseCtx, settleDeadline)
 		r.settleLoop(settleCtx, cancelLease, cancelExecutor, claim, result, state)
 		cancelSettle()
 	}
@@ -241,10 +305,41 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 	<-heartbeatDone
 
 	if state.settled.Load() {
-		r.logger.Info("Invocation settled",
+		fields := []any{
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
-			"status", result.Status, "execution_latency_ms", time.Since(started).Milliseconds())
+			"status", result.Status, "execution_latency_ms", time.Since(started).Milliseconds(),
+		}
+		fields = append(fields, failureLogFields(result.Error)...)
+		r.logger.Info("Invocation settled", fields...)
 	}
+}
+
+func (r *Runner) listenForCancellations(ctx context.Context, subscription ports.CancellationSubscription) {
+	for ctx.Err() == nil {
+		invocationID, ok := subscription.Wait(ctx, r.config.PollInterval)
+		if !ok {
+			continue
+		}
+		r.cancelMu.Lock()
+		cancel := r.claimCancels[invocationID]
+		r.cancelMu.Unlock()
+		if cancel != nil {
+			cancel(errCancellationWake)
+			r.logger.Info("Invocation cancellation wake delivered", "invocation_id", invocationID)
+		}
+	}
+}
+
+func (r *Runner) registerClaimCancellation(invocationID string, cancel context.CancelCauseFunc) {
+	r.cancelMu.Lock()
+	r.claimCancels[invocationID] = cancel
+	r.cancelMu.Unlock()
+}
+
+func (r *Runner) unregisterClaimCancellation(invocationID string) {
+	r.cancelMu.Lock()
+	delete(r.claimCancels, invocationID)
+	r.cancelMu.Unlock()
 }
 
 func (r *Runner) heartbeat(
@@ -372,7 +467,48 @@ func validResult(result domain.InvocationExecutionResult) bool {
 			result.Usage != nil && result.Provenance != nil
 	}
 	return result.Status == domain.InvocationFailed && len(result.Error) > 0 && json.Valid(result.Error) &&
-		len(result.AssistantMessages) == 0 && result.Usage == nil && result.Provenance == nil
+		len(result.AssistantMessages) == 0 && ((result.Usage == nil && result.Provenance == nil) ||
+		(result.Usage != nil && result.Provenance != nil))
+}
+
+func executionDeadlineResult(
+	claim domain.InvocationClaim,
+	evidence domain.InvocationExecutionResult,
+) domain.InvocationExecutionResult {
+	scope := "execution_segment"
+	if claim.Invocation.ExecutionDeadlineScope != nil {
+		scope = *claim.Invocation.ExecutionDeadlineScope
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"code": "deadline_exceeded", "message": "The execution deadline was exceeded.",
+		"details": map[string]string{"scope": scope},
+	})
+	result := domain.InvocationExecutionResult{Status: domain.InvocationFailed, Error: payload}
+	if validResult(evidence) && evidence.Usage != nil && evidence.Provenance != nil {
+		result.Usage = evidence.Usage
+		result.Provenance = evidence.Provenance
+	}
+	return result
+}
+
+func failureLogFields(payload []byte) []any {
+	if len(payload) == 0 {
+		return nil
+	}
+	var failure struct {
+		Code    string         `json:"code"`
+		Details map[string]any `json:"details"`
+	}
+	if json.Unmarshal(payload, &failure) != nil || failure.Code == "" {
+		return nil
+	}
+	fields := []any{"terminal_reason", failure.Code}
+	for _, key := range []string{"scope", "kind"} {
+		if value, ok := failure.Details[key].(string); ok && value != "" {
+			fields = append(fields, key, value)
+		}
+	}
+	return fields
 }
 
 func waitFor(ctx context.Context, duration time.Duration) bool {

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -37,8 +38,9 @@ type ModelSelection struct {
 }
 
 type InlineExecutionSpec struct {
-	Instructions string         `json:"instructions"`
-	Model        ModelSelection `json:"model"`
+	Instructions string                 `json:"instructions"`
+	Model        ModelSelection         `json:"model"`
+	Budgets      *InvocationBudgetInput `json:"budgets,omitempty"`
 }
 
 type CreateInvocationInput struct {
@@ -60,16 +62,19 @@ type InvocationAcknowledgement struct {
 }
 
 type InvocationRead struct {
-	ID          string
-	AgentID     string
-	SessionID   string
-	Status      domain.InvocationStatus
-	Error       json.RawMessage
-	Usage       json.RawMessage
-	Provenance  json.RawMessage
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	CompletedAt *time.Time
+	ID                  string
+	AgentID             string
+	SessionID           string
+	Status              domain.InvocationStatus
+	Error               json.RawMessage
+	Usage               json.RawMessage
+	Provenance          json.RawMessage
+	Budgets             InvocationBudgetRead
+	ActiveExecutionMS   int64
+	WallClockDeadlineAt time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	CompletedAt         *time.Time
 }
 
 type SessionRead struct {
@@ -96,17 +101,36 @@ type admissionStore interface {
 }
 
 type RuntimeService struct {
-	store     admissionStore
-	txm       ports.TransactionManager
-	clock     ports.Clock
-	ids       ports.IDGenerator
-	signaller ports.WorkSignaller
+	store         admissionStore
+	txm           ports.TransactionManager
+	clock         ports.Clock
+	ids           ports.IDGenerator
+	signaller     ports.WorkSignaller
+	cancellations ports.CancellationSignaller
+	budgetPolicy  BudgetPolicy
+	logger        *slog.Logger
 }
 
 type RuntimeOption func(*RuntimeService)
 
 func WithWorkSignaller(signaller ports.WorkSignaller) RuntimeOption {
 	return func(service *RuntimeService) { service.signaller = signaller }
+}
+
+func WithCancellationSignaller(signaller ports.CancellationSignaller) RuntimeOption {
+	return func(service *RuntimeService) { service.cancellations = signaller }
+}
+
+func WithBudgetPolicy(policy BudgetPolicy) RuntimeOption {
+	return func(service *RuntimeService) { service.budgetPolicy = policy }
+}
+
+func WithRuntimeLogger(logger *slog.Logger) RuntimeOption {
+	return func(service *RuntimeService) {
+		if logger != nil {
+			service.logger = logger
+		}
+	}
 }
 
 func NewRuntimeService(
@@ -116,7 +140,7 @@ func NewRuntimeService(
 	ids ports.IDGenerator,
 	options ...RuntimeOption,
 ) *RuntimeService {
-	service := &RuntimeService{store: store, txm: txm, clock: clock, ids: ids}
+	service := &RuntimeService{store: store, txm: txm, clock: clock, ids: ids, budgetPolicy: DefaultBudgetPolicy(), logger: slog.Default()}
 	for _, option := range options {
 		if option != nil {
 			option(service)
@@ -165,7 +189,10 @@ func ValidateCreateInvocation(input CreateInvocationInput) error {
 	if err := validateBoundedString("spec.model.provider", input.Spec.Model.Provider, MaxReferenceCharacters); err != nil {
 		return err
 	}
-	return validateBoundedString("spec.model.name", input.Spec.Model.Name, MaxReferenceCharacters)
+	if err := validateBoundedString("spec.model.name", input.Spec.Model.Name, MaxReferenceCharacters); err != nil {
+		return err
+	}
+	return validateRequestedBudgets(input.Spec.Budgets)
 }
 
 func validateBoundedString(field, value string, maximum int) error {
@@ -191,7 +218,11 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 	if auth.TenantConstraint != nil && input.TenantRef != nil && *auth.TenantConstraint != *input.TenantRef {
 		return InvocationAcknowledgement{}, forbidden("The requested tenant_ref conflicts with the credential constraint.")
 	}
-	fingerprint, err := InvocationFingerprintV1(input)
+	resolvedBudgets, err := s.budgetPolicy.Resolve(input.Spec.Budgets)
+	if err != nil {
+		return InvocationAcknowledgement{}, err
+	}
+	fingerprint, err := InvocationFingerprintV2(input)
 	if err != nil {
 		return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 	}
@@ -222,7 +253,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			if err := s.store.LockInvocationAdmissionKey(txCtx, invocationAdmissionLockKey(account.ID, partition.ID, agent.ID, input.IdempotencyKey)); err != nil {
 				return err
 			}
-			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, fingerprint); err != nil {
+			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, input, fingerprint); err != nil {
 				return err
 			} else if found {
 				acknowledgement = acknowledgementFor(existing, true)
@@ -240,7 +271,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			if session.AccountID != account.ID || session.TenantPartitionID != partition.ID || session.AgentID != agent.ID {
 				return notFound()
 			}
-			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, fingerprint); err != nil {
+			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, input, fingerprint); err != nil {
 				return err
 			} else if found {
 				acknowledgement = acknowledgementFor(existing, true)
@@ -282,7 +313,14 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 				ID: ids.invocation, SessionID: session.ID, AccountID: account.ID,
 				TenantPartitionID: partition.ID, AgentID: agent.ID, SpecSnapshotID: snapshot.ID,
 				IdempotencyKey: input.IdempotencyKey, RequestFingerprint: fingerprint[:],
-				Status: domain.InvocationQueued, CurrentStateRevision: revision, CreatedAt: now, UpdatedAt: now,
+				FingerprintVersion: 2, Status: domain.InvocationQueued, CurrentStateRevision: revision,
+				WallClockTimeoutMS:     resolvedBudgets.WallClockTimeout.Milliseconds(),
+				ActiveTimeoutMS:        resolvedBudgets.ActiveExecutionTimeout.Milliseconds(),
+				MaxOutputTokens:        resolvedBudgets.MaxOutputTokens,
+				MaxEstimatedCostMicros: resolvedBudgets.MaxEstimatedCostMicros,
+				MaxIterations:          resolvedBudgets.MaxIterations,
+				WallClockDeadlineAt:    now.Add(resolvedBudgets.WallClockTimeout),
+				CreatedAt:              now, UpdatedAt: now,
 			}
 			message := domain.SessionMessage{
 				ID: ids.message, SessionID: session.ID, AccountID: account.ID,
@@ -488,7 +526,9 @@ func invocationReadFromDomain(invocation domain.Invocation) InvocationRead {
 	return InvocationRead{
 		ID: invocation.ID, AgentID: invocation.AgentID, SessionID: invocation.SessionID,
 		Status: invocation.Status, Error: invocation.Error, Usage: invocation.Usage,
-		Provenance: invocation.Provenance, CreatedAt: invocation.CreatedAt,
+		Provenance: invocation.Provenance, Budgets: budgetReadFromDomain(invocation),
+		ActiveExecutionMS:   invocation.ActiveExecutionMS,
+		WallClockDeadlineAt: invocation.WallClockDeadlineAt, CreatedAt: invocation.CreatedAt,
 		UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
 	}
 }
@@ -522,6 +562,7 @@ func invocationAdmissionLockKey(accountID, partitionID, agentID, idempotencyKey 
 func (s *RuntimeService) findIdempotent(
 	ctx context.Context,
 	accountID, partitionID, agentID, key string,
+	input CreateInvocationInput,
 	fingerprint [sha256.Size]byte,
 ) (domain.Invocation, bool, error) {
 	existing, err := s.store.GetInvocationByIdempotencyKey(ctx, accountID, partitionID, agentID, key)
@@ -531,7 +572,22 @@ func (s *RuntimeService) findIdempotent(
 	if err != nil {
 		return domain.Invocation{}, false, err
 	}
-	if !bytes.Equal(existing.RequestFingerprint, fingerprint[:]) {
+	expected := fingerprint[:]
+	switch existing.FingerprintVersion {
+	case 1:
+		if input.Spec.Budgets != nil {
+			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
+		}
+		legacy, legacyErr := InvocationFingerprintV1(input)
+		if legacyErr != nil {
+			return domain.Invocation{}, false, legacyErr
+		}
+		expected = legacy[:]
+	case 2:
+	default:
+		return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
+	}
+	if !bytes.Equal(existing.RequestFingerprint, expected) {
 		return domain.Invocation{}, false, &PublicError{
 			Code:    CodeIdempotencyConflict,
 			Message: "The idempotency key was already used with a different request.",

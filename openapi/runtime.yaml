@@ -11,8 +11,8 @@ info:
     durable Invocation admission, authoritative Invocation and Session reads,
     and cursor-based transcript recovery.
 
-    Streaming, tools, structured output, budgets, spec references,
-    cancellation, external dispatch, and administrative APIs are outside this
+    Streaming, tools, structured output, spec references, external dispatch,
+    and administrative APIs are outside this
     version of the contract.
 servers:
   - url: /
@@ -95,7 +95,8 @@ paths:
         the Session's one-nonterminal-Invocation rule. It returns the original
         records without appending input, even when the Invocation is terminal.
         Material equality covers the Session selector kind and value, the inline
-        spec, and input after documented defaults are applied. JSON object member
+        spec, and input. Requested budgets are compared before default resolution,
+        so an explicit default differs from omission. JSON object member
         order is ignored, array order is significant, and strings are not
         rewritten. A changed material field returns `idempotency_conflict`.
 
@@ -259,6 +260,12 @@ paths:
                       message: The execution process ended before this Invocation could settle.
                     usage: null
                     provenance: null
+                    budgets:
+                      wall_clock_timeout_seconds: 1800
+                      active_execution_timeout_seconds: 1800
+                      max_iterations: 1
+                    active_execution_ms: 7000
+                    wall_clock_deadline_at: "2026-07-20T14:31:02Z"
                     created_at: "2026-07-20T14:01:02Z"
                     updated_at: "2026-07-20T14:01:09Z"
                     completed_at: "2026-07-20T14:01:09Z"
@@ -272,6 +279,38 @@ paths:
           $ref: "#/components/responses/NotFound"
         "429":
           $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/invocations/{invocation_id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/InvocationID"
+    post:
+      tags: [Invocations]
+      operationId: cancelInvocation
+      summary: Idempotently cancel an Invocation
+      description: |
+        Atomically makes nonterminal work `cancelled`. Repeating the request,
+        or cancelling an Invocation that already completed or failed, returns
+        the unchanged authoritative terminal row. A successful response means
+        cancellation is durable; provider work stops cooperatively and may
+        have already incurred external cost. The request body must be empty.
+      responses:
+        "200":
+          description: Authoritative terminal Invocation state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invocation"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/Internal"
         "503":
@@ -586,10 +625,37 @@ components:
           minLength: 1
         model:
           $ref: "#/components/schemas/ModelSelection"
+        budgets:
+          $ref: "#/components/schemas/InvocationBudgetRequest"
       description: |
         Minimal immutable launch snapshot. Unknown or deferred fields,
-        including references, tools, structured output, and budgets, are
+        including references, tools, and structured output, are
         rejected rather than ignored.
+    InvocationBudgetRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        wall_clock_timeout_seconds:
+          type: integer
+          minimum: 1
+        active_execution_timeout_seconds:
+          type: integer
+          minimum: 1
+        max_output_tokens:
+          type: integer
+          minimum: 1
+        max_estimated_cost_usd:
+          type: number
+          exclusiveMinimum: 0
+          multipleOf: 0.000001
+        max_iterations:
+          type: integer
+          minimum: 1
+      description: |
+        Optional requested limits. Installation defaults supply wall-clock,
+        active-execution, and iteration limits. Output-token and estimated-cost
+        limits are unlimited when omitted. Installation maxima may be lower
+        than the schema's numeric range.
     ModelSelection:
       type: object
       additionalProperties: false
@@ -628,7 +694,7 @@ components:
     Invocation:
       type: object
       additionalProperties: false
-      required: [id, agent_id, session_id, status, error, usage, provenance, created_at, updated_at, completed_at]
+      required: [id, agent_id, session_id, status, error, usage, provenance, budgets, active_execution_ms, wall_clock_deadline_at, created_at, updated_at, completed_at]
       properties:
         id:
           $ref: "#/components/schemas/InvocationID"
@@ -651,6 +717,14 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ModelProvenance"
             - type: "null"
+        budgets:
+          $ref: "#/components/schemas/InvocationBudgets"
+        active_execution_ms:
+          type: integer
+          minimum: 0
+        wall_clock_deadline_at:
+          type: string
+          format: date-time
         created_at:
           type: string
           format: date-time
@@ -697,6 +771,10 @@ components:
         reasoning_tokens:
           type: integer
           minimum: 0
+        iterations:
+          type: integer
+          minimum: 0
+          description: Model requests represented by this aggregate. Older retained evidence may omit it.
         estimated_cost:
           $ref: "#/components/schemas/ModelCost"
     ModelCost:
@@ -754,6 +832,31 @@ components:
         details:
           type: object
           additionalProperties: true
+      description: |
+        Failed Invocations may carry paired usage and provenance when a model
+        response produced safe normalized evidence before deadline or budget
+        settlement. Cancellation and pre-response failures carry neither.
+    InvocationBudgets:
+      type: object
+      additionalProperties: false
+      required: [wall_clock_timeout_seconds, active_execution_timeout_seconds, max_iterations]
+      properties:
+        wall_clock_timeout_seconds:
+          type: integer
+          minimum: 1
+        active_execution_timeout_seconds:
+          type: integer
+          minimum: 1
+        max_output_tokens:
+          type: integer
+          minimum: 1
+        max_estimated_cost_usd:
+          type: number
+          exclusiveMinimum: 0
+          multipleOf: 0.000001
+        max_iterations:
+          type: integer
+          minimum: 1
     Session:
       type: object
       additionalProperties: false

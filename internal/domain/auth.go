@@ -5,6 +5,7 @@ type RuntimeOperation string
 const (
 	OperationCreateInvocation RuntimeOperation = "create_invocation"
 	OperationGetInvocation    RuntimeOperation = "get_invocation"
+	OperationCancelInvocation RuntimeOperation = "cancel_invocation"
 	OperationListInvocations  RuntimeOperation = "list_invocations"
 	OperationGetSession       RuntimeOperation = "get_session"
 	OperationListSessions     RuntimeOperation = "list_sessions"

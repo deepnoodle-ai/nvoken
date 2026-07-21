@@ -63,7 +63,8 @@ Idempotency and concurrency:
 
 Admission accepts at most 1,048,576 encoded JSON bytes and 64 text blocks.
 `agent_ref`, `tenant_ref`, `session_key`, `idempotency_key`, model provider, and
-model name are each limited to 255 Unicode characters. Fingerprint v1 is the
+model name are each limited to 255 Unicode characters. Retained fingerprint v1
+records remain comparable by the
 SHA-256 of compact UTF-8 JSON in fixed member order: `version`,
 `session_selector` (`kind` then `value`), `spec` (`instructions`, then `model`
 with `provider` then `name`), and `input` (`content`, with each block encoded as
@@ -75,6 +76,14 @@ therefore does not matter, while array order and exact string values do. The
 language-neutral canonical bytes and digests in
 [`admission-fingerprint-v1.json`](admission-fingerprint-v1.json) are the
 compatibility fixtures.
+
+New admissions use fingerprint v2. It preserves the v1 order and inserts
+`budgets` after `model` inside `spec`. Omitted budgets are `null`; otherwise the
+fixed members are wall-clock seconds, active-execution seconds, output tokens,
+estimated cost normalized to integer micro-USD, and iterations, with omitted
+members encoded as `null`. Explicit defaults therefore differ from omission.
+The compatibility vectors are in
+[`admission-fingerprint-v2.json`](admission-fingerprint-v2.json).
 
 Streaming and recovery:
 
@@ -113,12 +122,16 @@ Runtime surface:
 | `POST` | `/v1/invocations`                 | Atomically admit one background Invocation and return its stable Agent, Session, and Invocation identity.          |
 | `GET`  | `/v1/invocations`                 | List authoritative Invocations with exact tenant, Session, Agent, and status filters.                              |
 | `GET`  | `/v1/invocations/{invocation_id}` | Read authoritative identity, lifecycle, terminal error, aggregate usage, and model provenance.                     |
+| `POST` | `/v1/invocations/{invocation_id}/cancel` | Idempotently make nonterminal work cancelled and return the authoritative terminal row.                    |
 
 The launch create request carries `agent_ref`, body `idempotency_key`, one or
 more text input blocks, an optional `tenant_ref`, at most one of `session_id`
 and `session_key`, and an inline spec containing instructions plus model and
-provider selection. Unknown and deferred fields — including spec references,
-tools, structured output, budgets, retention, indexed metadata, delegated actor,
+provider selection. The spec may also carry optional wall-clock,
+active-execution, output-token, estimated-cost, and iteration budgets.
+Installation defaults supply both time limits and iterations; output-token and
+cost limits are absent unless requested. Unknown and deferred fields — including spec references,
+tools, structured output, retention, indexed metadata, delegated actor,
 and delivery mode — are rejected rather than ignored. The admitted spec is an
 immutable Invocation snapshot, never mutable Agent configuration.
 
@@ -137,9 +150,11 @@ ToolCalls.
 There is no public retry or resume endpoint. Terminal Invocations stay
 terminal; the host creates a new Invocation for another turn.
 
-Cancellation, structured output, tool summaries, and streaming are later
-extensions. They must preserve this admission identity, lifecycle, idempotency,
-recovery, and background acknowledgement contract.
+Cancellation is durable, first-terminal-wins, and idempotent; its response does
+not promise that an in-flight provider request stopped before incurring cost.
+Structured output, tool summaries, and streaming remain later extensions and
+must preserve this admission identity, lifecycle, idempotency, recovery, and
+background acknowledgement contract.
 
 ## 3. Sessions
 

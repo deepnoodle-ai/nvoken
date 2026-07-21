@@ -380,6 +380,37 @@ resource "google_cloud_run_v2_service" "runtime" {
       condition     = var.engine_drain_grace_seconds <= var.shutdown_timeout_seconds - 1
       error_message = "engine_drain_grace_seconds must leave at least one second inside shutdown_timeout_seconds."
     }
+    precondition {
+      condition     = var.engine_settlement_reserve_seconds < var.engine_execution_segment_ceiling_seconds
+      error_message = "engine_settlement_reserve_seconds must be less than engine_execution_segment_ceiling_seconds."
+    }
+    precondition {
+      condition = (
+        var.invocation_default_wall_clock_timeout_seconds >= 1 &&
+        var.invocation_default_wall_clock_timeout_seconds == floor(var.invocation_default_wall_clock_timeout_seconds) &&
+        var.invocation_default_wall_clock_timeout_seconds <= var.invocation_max_wall_clock_timeout_seconds &&
+        var.invocation_max_wall_clock_timeout_seconds <= 604800 &&
+        var.invocation_max_wall_clock_timeout_seconds == floor(var.invocation_max_wall_clock_timeout_seconds) &&
+        var.invocation_default_active_execution_timeout_seconds >= 1 &&
+        var.invocation_default_active_execution_timeout_seconds == floor(var.invocation_default_active_execution_timeout_seconds) &&
+        var.invocation_default_active_execution_timeout_seconds <= var.invocation_max_active_execution_timeout_seconds &&
+        var.invocation_max_active_execution_timeout_seconds <= 604800
+        && var.invocation_max_active_execution_timeout_seconds == floor(var.invocation_max_active_execution_timeout_seconds)
+      )
+      error_message = "Invocation time defaults must be positive, no greater than their maxima, and maxima cannot exceed seven days."
+    }
+    precondition {
+      condition = (
+        var.invocation_default_max_iterations >= 1 &&
+        var.invocation_default_max_iterations == floor(var.invocation_default_max_iterations) &&
+        var.invocation_default_max_iterations <= var.invocation_max_iterations &&
+        var.invocation_max_iterations <= 10000 &&
+        var.invocation_max_iterations == floor(var.invocation_max_iterations) &&
+        var.invocation_max_output_tokens >= 1 && var.invocation_max_output_tokens <= 10000000 && var.invocation_max_output_tokens == floor(var.invocation_max_output_tokens) &&
+        var.invocation_max_estimated_cost_microusd >= 1 && var.invocation_max_estimated_cost_microusd <= 1000000000000 && var.invocation_max_estimated_cost_microusd == floor(var.invocation_max_estimated_cost_microusd)
+      )
+      error_message = "Invocation count and cost defaults/maxima exceed nvoken's fixed safety limits."
+    }
   }
 
   scaling {
@@ -458,6 +489,56 @@ resource "google_cloud_run_v2_service" "runtime" {
       env {
         name  = "ENGINE_DRAIN_GRACE"
         value = "${var.engine_drain_grace_seconds}s"
+      }
+
+      env {
+        name  = "ENGINE_EXECUTION_SEGMENT_CEILING"
+        value = "${var.engine_execution_segment_ceiling_seconds}s"
+      }
+
+      env {
+        name  = "ENGINE_SETTLEMENT_RESERVE"
+        value = "${var.engine_settlement_reserve_seconds}s"
+      }
+
+      env {
+        name  = "INVOCATION_DEFAULT_WALL_CLOCK_TIMEOUT"
+        value = "${var.invocation_default_wall_clock_timeout_seconds}s"
+      }
+
+      env {
+        name  = "INVOCATION_DEFAULT_ACTIVE_EXECUTION_TIMEOUT"
+        value = "${var.invocation_default_active_execution_timeout_seconds}s"
+      }
+
+      env {
+        name  = "INVOCATION_DEFAULT_MAX_ITERATIONS"
+        value = tostring(var.invocation_default_max_iterations)
+      }
+
+      env {
+        name  = "INVOCATION_MAX_WALL_CLOCK_TIMEOUT"
+        value = "${var.invocation_max_wall_clock_timeout_seconds}s"
+      }
+
+      env {
+        name  = "INVOCATION_MAX_ACTIVE_EXECUTION_TIMEOUT"
+        value = "${var.invocation_max_active_execution_timeout_seconds}s"
+      }
+
+      env {
+        name  = "INVOCATION_MAX_OUTPUT_TOKENS"
+        value = tostring(var.invocation_max_output_tokens)
+      }
+
+      env {
+        name  = "INVOCATION_MAX_ESTIMATED_COST_MICROUSD"
+        value = tostring(var.invocation_max_estimated_cost_microusd)
+      }
+
+      env {
+        name  = "INVOCATION_MAX_ITERATIONS"
+        value = tostring(var.invocation_max_iterations)
       }
 
       env {

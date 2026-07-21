@@ -1,0 +1,36 @@
+[
+  {
+    "name": "omitted-budgets",
+    "selector": { "kind": "none", "value": "" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "anthropic", "name": "test-model" }
+    },
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":2,\"session_selector\":{\"kind\":\"none\",\"value\":\"\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"name\":\"test-model\"},\"budgets\":null},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "ff3840d2c9e0e20a3355755d514f008ad4e5d9d846368f2cfad1e86c39078e79"
+  },
+  {
+    "name": "budget-bearing-request",
+    "selector": { "kind": "key", "value": "ticket-1" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "openai", "name": "gpt-test" },
+      "budgets": {
+        "wall_clock_timeout_seconds": 600,
+        "active_execution_timeout_seconds": 300,
+        "max_output_tokens": 4096,
+        "max_estimated_cost_usd": 0.125,
+        "max_iterations": 2
+      }
+    },
+    "input": {
+      "content": [
+        { "type": "text", "text": "first" },
+        { "type": "text", "text": "second" }
+      ]
+    },
+    "canonical": "{\"version\":2,\"session_selector\":{\"kind\":\"key\",\"value\":\"ticket-1\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"openai\",\"name\":\"gpt-test\"},\"budgets\":{\"wall_clock_timeout_seconds\":600,\"active_execution_timeout_seconds\":300,\"max_output_tokens\":4096,\"max_estimated_cost_microusd\":125000,\"max_iterations\":2}},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"first\"},{\"type\":\"text\",\"text\":\"second\"}]}}",
+    "sha256": "bf4d331248432e42d832a3ab0195162d876970b3fbf123b2716732249e9a35f0"
+  }
+]
