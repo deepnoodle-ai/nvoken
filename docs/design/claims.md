@@ -197,7 +197,9 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 
 ## Security and identity
 
-- Tool callback requests are runtime-signed and verified through either JWKS or a signing secret shared between nvoken and the host app.
+- Tool callback requests first use a versioned HMAC secret shared between one
+  nvoken installation and its host receivers. Headers carry a nonsecret key ID
+  and version; JWKS/public-key signing is a later scheme, not a current claim.
 - The Account is the hard security boundary; `tenant_ref` narrows authorization only when a credential is constrained to it.
 - A Session's `tenant_ref` is immutable after creation.
 - Human operator roles are fixed (Owner, Operator, Viewer); Owner is human-only and never assignable to an API credential.

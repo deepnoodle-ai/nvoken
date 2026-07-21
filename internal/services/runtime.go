@@ -53,6 +53,32 @@ type ClientToolSpec struct {
 	Description string          `json:"description"`
 	Mode        string          `json:"mode"`
 	InputSchema json.RawMessage `json:"input_schema"`
+	Callback    *CallbackTarget `json:"callback,omitempty"`
+	callbackSet bool
+}
+
+func (s *ClientToolSpec) UnmarshalJSON(payload []byte) error {
+	type wire ClientToolSpec
+	var decoded wire
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		return err
+	}
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &members); err != nil {
+		return err
+	}
+	*s = ClientToolSpec(decoded)
+	_, s.callbackSet = members["callback"]
+	return nil
+}
+
+type CallbackTarget struct {
+	URL string `json:"url"`
 }
 
 type StructuredOutputSpec struct {
@@ -140,6 +166,7 @@ type RuntimeService struct {
 	logger        *slog.Logger
 	executionMode InvocationExecutionMode
 	dispatchQueue string
+	callbackTools bool
 }
 
 type RuntimeOption func(*RuntimeService)
@@ -169,6 +196,10 @@ func WithInvocationExecutionMode(mode InvocationExecutionMode, dispatchQueue str
 		service.executionMode = mode
 		service.dispatchQueue = dispatchQueue
 	}
+}
+
+func WithCallbackTools(enabled bool) RuntimeOption {
+	return func(service *RuntimeService) { service.callbackTools = enabled }
 }
 
 func NewRuntimeService(
@@ -268,6 +299,9 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 	if err := ValidateCreateInvocation(input); err != nil {
 		return InvocationAcknowledgement{}, err
 	}
+	if hasCallbackTools(input.Spec.Tools) && !s.callbackTools {
+		return InvocationAcknowledgement{}, invalidRequest("spec.tools callback mode is not configured for this installation.")
+	}
 	if auth.TenantConstraint != nil && input.TenantRef != nil && *auth.TenantConstraint != *input.TenantRef {
 		return InvocationAcknowledgement{}, forbidden("The requested tenant_ref conflicts with the credential constraint.")
 	}
@@ -286,7 +320,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 		}
 	}
-	fingerprint, err := InvocationFingerprintV4(input)
+	fingerprint, err := InvocationFingerprintV5(input)
 	if err != nil {
 		return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 	}
@@ -387,7 +421,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 				SpecSnapshotID:         snapshot.ID,
 				IdempotencyKey:         input.IdempotencyKey,
 				RequestFingerprint:     fingerprint[:],
-				FingerprintVersion:     4,
+				FingerprintVersion:     5,
 				Status:                 domain.InvocationQueued,
 				CurrentStateRevision:   revision,
 				WallClockTimeoutMS:     resolvedBudgets.WallClockTimeout.Milliseconds(),
@@ -739,6 +773,18 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 4:
+		if hasCallbackTools(input.Spec.Tools) {
+			return domain.Invocation{}, false, &PublicError{
+				Code:    CodeIdempotencyConflict,
+				Message: "The idempotency key was already used with a different request.",
+			}
+		}
+		legacy, legacyErr := InvocationFingerprintV4(input)
+		if legacyErr != nil {
+			return domain.Invocation{}, false, legacyErr
+		}
+		expected = legacy[:]
+	case 5:
 	default:
 		return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
 	}

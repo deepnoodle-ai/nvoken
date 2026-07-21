@@ -1,0 +1,48 @@
+[
+  {
+    "name": "omitted-tools",
+    "selector": { "kind": "none", "value": "" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "anthropic", "name": "test-model" }
+    },
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":5,\"session_selector\":{\"kind\":\"none\",\"value\":\"\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"name\":\"test-model\"},\"budgets\":null,\"output\":null,\"tools\":[]},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "b98248c67485f8b7d8166b1c294c2905f80ef6722c57714a5ca955e4c1920e81"
+  },
+  {
+    "name": "mixed-callback-and-client-tools",
+    "selector": { "kind": "key", "value": "ticket-1" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "openai", "name": "gpt-test" },
+      "tools": [
+        {
+          "name": "lookup_order",
+          "description": "Look up an order",
+          "mode": "callback",
+          "input_schema": {
+            "required": ["order_id"],
+            "type": "object",
+            "properties": { "order_id": { "type": "string" } },
+            "additionalProperties": false
+          },
+          "callback": { "url": "https://callbacks.example.com/tools/lookup" }
+        },
+        {
+          "name": "notify_user",
+          "description": "Notify the user",
+          "mode": "client",
+          "input_schema": {
+            "type": "object",
+            "properties": { "message": { "type": "string" } },
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "input": { "content": [{ "type": "text", "text": "find and notify" }] },
+    "canonical": "{\"version\":5,\"session_selector\":{\"kind\":\"key\",\"value\":\"ticket-1\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"openai\",\"name\":\"gpt-test\"},\"budgets\":null,\"output\":null,\"tools\":[{\"name\":\"lookup_order\",\"description\":\"Look up an order\",\"mode\":\"callback\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"order_id\":{\"type\":\"string\"}},\"required\":[\"order_id\"],\"type\":\"object\"},\"callback\":{\"url\":\"https://callbacks.example.com/tools/lookup\"}},{\"name\":\"notify_user\",\"description\":\"Notify the user\",\"mode\":\"client\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"message\":{\"type\":\"string\"}},\"type\":\"object\"},\"callback\":null}]},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"find and notify\"}]}}",
+    "sha256": "a6a5e78fe3d20faf7a0119cba949a037feca4bb3c246bc7d2aef8e28817f2d7c"
+  }
+]

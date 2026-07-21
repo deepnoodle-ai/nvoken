@@ -62,6 +62,11 @@ SELECT id, account_id, agent_ref, created_at
 FROM agents
 WHERE account_id = $1 AND agent_ref = $2;
 
+-- name: GetAgentByID :one
+SELECT id, account_id, agent_ref, created_at
+FROM agents
+WHERE id = $1;
+
 -- name: CreateSession :exec
 INSERT INTO sessions (
     id, account_id, tenant_partition_id, agent_id, session_key,
@@ -840,3 +845,114 @@ WHERE id = sqlc.arg(id) AND status IN ('queued', 'running', 'waiting')
   AND current_checkpoint_sequence < sqlc.arg(checkpoint_sequence)
   AND current_iteration <= sqlc.arg(iteration)
 RETURNING *;
+
+-- name: CreateCallbackDelivery :exec
+INSERT INTO callback_deliveries (
+    id, tool_call_id, invocation_id, session_id, account_id,
+    tenant_partition_id, agent_id, endpoint_url, status, available_at,
+    owner, lease_expires_at, attempt, last_error_code, response_status,
+    created_at, updated_at, terminal_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(tool_call_id), sqlc.arg(invocation_id),
+    sqlc.arg(session_id), sqlc.arg(account_id), sqlc.arg(tenant_partition_id),
+    sqlc.arg(agent_id), sqlc.arg(endpoint_url), sqlc.arg(status),
+    sqlc.narg(available_at), sqlc.narg(owner), sqlc.narg(lease_expires_at),
+    sqlc.arg(attempt), sqlc.narg(last_error_code), sqlc.narg(response_status),
+    sqlc.arg(created_at), sqlc.arg(updated_at), sqlc.narg(terminal_at)
+);
+
+-- name: GetCallbackDelivery :one
+SELECT * FROM callback_deliveries WHERE id = $1;
+
+-- name: GetCallbackDeliveryForUpdate :one
+SELECT * FROM callback_deliveries WHERE id = $1 FOR UPDATE;
+
+-- name: ActivateCallbackDeliveries :execrows
+UPDATE callback_deliveries
+SET status = 'pending', available_at = sqlc.arg(observed_at),
+    updated_at = sqlc.arg(observed_at)
+WHERE invocation_id = sqlc.arg(invocation_id) AND status = 'blocked';
+
+-- name: ClaimNextCallbackDelivery :one
+WITH candidate AS (
+    SELECT delivery.id
+    FROM callback_deliveries AS delivery
+    JOIN tool_calls AS call ON call.id = delivery.tool_call_id
+    JOIN invocations AS invocation ON invocation.id = delivery.invocation_id
+    WHERE delivery.status = 'pending'
+      AND delivery.available_at <= sqlc.arg(observed_at)
+      AND call.status = 'pending'
+      AND call.mode = 'callback'
+      AND call.deadline_at > sqlc.arg(observed_at)
+      AND invocation.status = 'waiting'
+      AND invocation.current_iteration = call.iteration
+      AND invocation.wall_clock_deadline_at > sqlc.arg(observed_at)
+    ORDER BY delivery.available_at, delivery.created_at, delivery.id
+    FOR UPDATE OF delivery SKIP LOCKED
+    LIMIT 1
+)
+UPDATE callback_deliveries AS delivery
+SET status = 'delivering', owner = sqlc.arg(owner),
+    lease_expires_at = sqlc.arg(lease_expires_at), attempt = attempt + 1,
+    updated_at = sqlc.arg(observed_at)
+FROM candidate
+WHERE delivery.id = candidate.id
+RETURNING delivery.*;
+
+-- name: ReturnCallbackDeliveryPending :one
+UPDATE callback_deliveries
+SET status = 'pending', available_at = sqlc.arg(available_at),
+    owner = NULL, lease_expires_at = NULL,
+    last_error_code = sqlc.arg(last_error_code),
+    response_status = NULL, updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status = 'delivering'
+  AND owner = sqlc.arg(owner) AND attempt = sqlc.arg(attempt)
+  AND lease_expires_at > sqlc.arg(observed_at)
+RETURNING *;
+
+-- name: SettleCallbackDelivery :one
+UPDATE callback_deliveries
+SET status = sqlc.arg(status), owner = NULL, lease_expires_at = NULL,
+    last_error_code = sqlc.narg(last_error_code),
+    response_status = sqlc.narg(response_status),
+    updated_at = sqlc.arg(observed_at), terminal_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id) AND status = 'delivering'
+  AND owner = sqlc.arg(owner) AND attempt = sqlc.arg(attempt)
+  AND lease_expires_at > sqlc.arg(observed_at)
+RETURNING *;
+
+-- name: AbandonActiveCallbackDeliveries :execrows
+UPDATE callback_deliveries
+SET status = 'abandoned', owner = NULL, lease_expires_at = NULL,
+    last_error_code = sqlc.arg(last_error_code), updated_at = sqlc.arg(observed_at),
+    terminal_at = sqlc.arg(observed_at)
+WHERE invocation_id = sqlc.arg(invocation_id)
+  AND status IN ('blocked', 'pending', 'delivering');
+
+-- name: RecoverExpiredCallbackDeliveries :execrows
+WITH candidates AS (
+    SELECT id
+    FROM callback_deliveries
+    WHERE status = 'delivering' AND lease_expires_at <= sqlc.arg(observed_at)
+    ORDER BY lease_expires_at, id
+    FOR UPDATE SKIP LOCKED
+    LIMIT sqlc.arg(batch_limit)
+)
+UPDATE callback_deliveries AS delivery
+SET status = 'pending', available_at = sqlc.arg(observed_at), owner = NULL,
+    lease_expires_at = NULL, last_error_code = 'lease_expired',
+    updated_at = sqlc.arg(observed_at)
+FROM candidates
+WHERE delivery.id = candidates.id;
+
+-- name: PruneTerminalCallbackDeliveries :execrows
+WITH candidates AS (
+    SELECT delivery.id
+    FROM callback_deliveries AS delivery
+    WHERE delivery.status IN ('succeeded', 'failed', 'abandoned')
+      AND delivery.terminal_at < sqlc.arg(prune_before)
+    ORDER BY delivery.terminal_at, delivery.id
+    LIMIT sqlc.arg(batch_limit)
+)
+DELETE FROM callback_deliveries
+WHERE id IN (SELECT id FROM candidates);

@@ -74,6 +74,40 @@ variable "openai_api_key_secret_id" {
   }
 }
 
+variable "callback_signing_key_secret_id" {
+  description = "Existing Secret Manager secret ID whose latest version contains the installation callback HMAC key. Null disables callback admission."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.callback_signing_key_secret_id == null || trimspace(var.callback_signing_key_secret_id) != ""
+    error_message = "callback_signing_key_secret_id must be null or nonblank."
+  }
+}
+
+variable "callback_signing_key_id" {
+  description = "Nonsecret receiver-facing identifier for the callback signing key."
+  type        = string
+  default     = "nvoken/installation/callback"
+
+  validation {
+    condition     = trimspace(var.callback_signing_key_id) != "" && length(var.callback_signing_key_id) <= 255
+    error_message = "callback_signing_key_id must be nonblank and at most 255 characters."
+  }
+}
+
+variable "callback_signing_key_version" {
+  description = "Positive receiver-facing version of the callback signing key. Update with the Secret Manager version rollout."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.callback_signing_key_version >= 1 && var.callback_signing_key_version == floor(var.callback_signing_key_version)
+    error_message = "callback_signing_key_version must be a positive whole number."
+  }
+}
+
 variable "runtime_tenant_ref" {
   description = "Optional tenant constraint for the installation Runtime credential."
   type        = string

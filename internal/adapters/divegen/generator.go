@@ -173,13 +173,16 @@ func (g *Generator) generate(
 		}
 	}
 	var tools []dive.Tool
-	clientToolNames := make(map[string]struct{}, len(request.ClientTools))
+	externalTools := make(map[string]domain.ClientToolDefinition, len(request.ClientTools))
 	for _, definition := range request.ClientTools {
+		if definition.Mode == "" {
+			definition.Mode = domain.ToolCallModeClient
+		}
 		var toolSchema dive.Schema
 		if err := json.Unmarshal(definition.InputSchema, &toolSchema); err != nil {
 			return domain.GenerationResponse{}, fmt.Errorf("%w: project client tool schema", ports.ErrGenerationInputInvalid)
 		}
-		clientToolNames[definition.Name] = struct{}{}
+		externalTools[definition.Name] = definition
 		tools = append(tools, &clientTool{
 			name:        definition.Name,
 			description: definition.Description,
@@ -280,7 +283,7 @@ func (g *Generator) generate(
 					item.Message,
 					request.StructuredOutput != nil,
 					g.testBuiltin,
-					clientToolNames,
+					externalTools,
 				)
 				if err != nil {
 					return err
@@ -341,7 +344,7 @@ func (g *Generator) generate(
 			if pending == nil {
 				return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
 			}
-			if _, ok := clientToolNames[pending.Name]; !ok {
+			if _, ok := externalTools[pending.Name]; !ok {
 				return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
 			}
 		}
@@ -353,7 +356,7 @@ func (g *Generator) generate(
 			Usage:                checkpointState.usageSnapshot(),
 			ServedModel:          servedModel,
 			MessagesCheckpointed: true,
-			ClientToolsPending:   true,
+			ExternalToolsPending: true,
 		}, nil
 	}
 	if response == nil || response.Status == dive.ResponseStatusSuspended || response.Suspension != nil {
@@ -518,7 +521,7 @@ func toolRequests(
 	message *llm.Message,
 	structured bool,
 	testBuiltin bool,
-	clientToolNames map[string]struct{},
+	externalTools map[string]domain.ClientToolDefinition,
 ) ([]domain.ToolCallRequest, error) {
 	var requests []domain.ToolCallRequest
 	if message == nil {
@@ -530,11 +533,11 @@ func toolRequests(
 			continue
 		}
 		mode := domain.ToolCallModeBuiltin
-		_, client := clientToolNames[call.Name]
+		definition, external := externalTools[call.Name]
 		allowedBuiltin := (structured && call.Name == structuredoutput.ReservedToolName) ||
 			(testBuiltin && call.Name == deterministicEchoToolName)
-		if client {
-			mode = domain.ToolCallModeClient
+		if external {
+			mode = definition.Mode
 		} else if !allowedBuiltin {
 			return nil, fmt.Errorf("%w: unsupported builtin tool %q", ports.ErrGenerationInputInvalid, call.Name)
 		}
@@ -543,6 +546,7 @@ func toolRequests(
 			Name:           call.Name,
 			Mode:           mode,
 			Input:          append([]byte(nil), call.Input...),
+			CallbackURL:    definition.CallbackURL,
 		})
 	}
 	return requests, nil

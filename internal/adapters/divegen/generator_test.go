@@ -438,7 +438,7 @@ func TestClientToolSuspendsAfterDurableModelCheckpoint(t *testing.T) {
 		checkpoints[0].ToolCalls[0].Mode != domain.ToolCallModeClient {
 		t.Fatalf("client tool checkpoint = %#v", checkpoints[0])
 	}
-	if !response.ClientToolsPending || !response.MessagesCheckpointed || response.Usage.Iterations != 1 {
+	if !response.ExternalToolsPending || !response.MessagesCheckpointed || response.Usage.Iterations != 1 {
 		t.Fatalf("client tool response = %#v", response)
 	}
 }

@@ -418,10 +418,22 @@ func TestInvocationRequestRejectsInvalidJSONBeforeService(t *testing.T) {
 	oversized := `{"agent_ref":"` + strings.Repeat("a", services.MaxInvocationBodyBytes) + `"}`
 	cases := map[string][]byte{
 		"unknown field": bytes.Replace(valid, []byte(`"spec":{`), []byte(`"unknown":true,"spec":{`), 1),
-		"unsupported tool mode": bytes.Replace(
+		"callback missing target": bytes.Replace(
 			valid,
 			[]byte(`"instructions":"help",`),
 			[]byte(`"instructions":"help","tools":[{"name":"lookup","description":"Look up","mode":"callback","input_schema":{"type":"object"}}],`),
+			1,
+		),
+		"unknown callback field": bytes.Replace(
+			valid,
+			[]byte(`"instructions":"help",`),
+			[]byte(`"instructions":"help","tools":[{"name":"lookup","description":"Look up","mode":"callback","input_schema":{"type":"object"},"callback":{"url":"https://callbacks.example.test/tool","unknown":true}}],`),
+			1,
+		),
+		"client callback null": bytes.Replace(
+			valid,
+			[]byte(`"instructions":"help",`),
+			[]byte(`"instructions":"help","tools":[{"name":"lookup","description":"Look up","mode":"client","input_schema":{"type":"object"},"callback":null}],`),
 			1,
 		),
 		"duplicate key": bytes.Replace(valid, []byte(`"provider":"anthropic"`), []byte(`"provider":"anthropic","provider":"openai"`), 1),

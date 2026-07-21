@@ -194,13 +194,15 @@ type GenerationResponse struct {
 	BudgetExceeded          string
 	StructuredOutput        *StructuredOutput
 	StructuredOutputFailure string
-	ClientToolsPending      bool
+	ExternalToolsPending    bool
 }
 
 type ClientToolDefinition struct {
 	Name        string
 	Description string
 	InputSchema json.RawMessage
+	Mode        ToolCallMode
+	CallbackURL string
 }
 
 type StructuredOutputRequest struct {

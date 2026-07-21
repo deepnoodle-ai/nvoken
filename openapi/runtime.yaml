@@ -794,12 +794,17 @@ components:
           type: array
           maxItems: 32
           items:
-            $ref: "#/components/schemas/ClientToolSpec"
+            $ref: "#/components/schemas/ToolSpec"
       description: |
         Immutable launch snapshot. Unknown or deferred fields, including spec
-        references and callback tools, are rejected rather than ignored. A
-        tools-bearing spec requires at least two model iterations; omission
-        resolves to three or the lower installation maximum.
+        references, are rejected rather than ignored. Callback declarations
+        require installation callback signing configuration. A tools-bearing
+        spec requires at least two model iterations; omission resolves to three
+        or the lower installation maximum.
+    ToolSpec:
+      oneOf:
+        - $ref: "#/components/schemas/ClientToolSpec"
+        - $ref: "#/components/schemas/CallbackToolSpec"
     ClientToolSpec:
       type: object
       additionalProperties: false
@@ -824,6 +829,45 @@ components:
             Object-root JSON Schema using the same bounded, self-contained
             subset as structured output. Compact canonical JSON is limited to
             32 KiB.
+    CallbackToolSpec:
+      type: object
+      additionalProperties: false
+      required: [name, description, mode, input_schema, callback]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: Unique within the spec; the `nvoken_` prefix is reserved.
+        description:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        mode:
+          const: callback
+        input_schema:
+          type: object
+          additionalProperties: true
+          description: |
+            Object-root JSON Schema using the same bounded, self-contained
+            subset as structured output. Compact canonical JSON is limited to
+            32 KiB.
+        callback:
+          $ref: "#/components/schemas/CallbackTarget"
+    CallbackTarget:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          pattern: "^https://"
+          description: |
+            Public HTTPS endpoint. Userinfo and fragments are rejected. Every
+            dial revalidates resolved addresses and refuses redirects.
     StructuredOutputSpec:
       type: object
       additionalProperties: false

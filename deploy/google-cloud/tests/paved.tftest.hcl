@@ -36,17 +36,31 @@ run "paved_defaults" {
   command = plan
 
   variables {
-    project_id                   = "example-project"
-    environment                  = "test"
-    image_tag                    = "0123456789abcdef"
-    anthropic_api_key_secret_id  = "nvoken-test-anthropic"
-    database_deletion_protection = false
-    service_deletion_protection  = false
+    project_id                     = "example-project"
+    environment                    = "test"
+    image_tag                      = "0123456789abcdef"
+    anthropic_api_key_secret_id    = "nvoken-test-anthropic"
+    callback_signing_key_secret_id = "nvoken-test-callback-signing"
+    database_deletion_protection   = false
+    service_deletion_protection    = false
   }
 
   assert {
     condition     = google_sql_database_instance.runtime.settings[0].ip_configuration[0].ipv4_enabled == false
     error_message = "Cloud SQL must not have a public IPv4 address."
+  }
+
+  assert {
+    condition = (
+      contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "CALLBACK_SIGNING_KEY") &&
+      !contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], "CALLBACK_SIGNING_KEY") &&
+      length(google_secret_manager_secret_iam_member.callback_runtime) == 1 &&
+      one(google_secret_manager_secret_iam_member.callback_runtime).secret_id == var.callback_signing_key_secret_id &&
+      one(google_secret_manager_secret_iam_member.callback_runtime).role == "roles/secretmanager.secretAccessor" &&
+      one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "CALLBACK_SIGNING_KEY_VERSION"]) == "1" &&
+      one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "CALLBACK_DRAIN_GRACE"]) == "7s"
+    )
+    error_message = "The callback signing key must be optional and available only to the combined delivery role."
   }
 
   assert {
@@ -270,6 +284,15 @@ run "embedded_mode_moves_provider_secrets" {
       length(google_secret_manager_secret_iam_member.provider_executor) == 0
     )
     error_message = "Embedded mode must give provider credentials only to the combined generating role."
+  }
+
+  assert {
+    condition = (
+      !contains([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.name], "CALLBACK_SIGNING_KEY") &&
+      !contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], "CALLBACK_SIGNING_KEY") &&
+      length(google_secret_manager_secret_iam_member.callback_runtime) == 0
+    )
+    error_message = "Callback signing must remain optional when no existing secret is configured."
   }
 }
 

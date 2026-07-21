@@ -35,3 +35,8 @@ Migration `000010` records whether a terminal ToolCall result came from its
 trusted builtin, the host client, or nvoken's own terminal-settlement path.
 That immutable origin lets retries distinguish an accepted host result from a
 synthetic cancellation/deadline result without comparing payloads.
+
+Migration `000011` adds one durable callback delivery per callback ToolCall,
+including blocked-before-park activation, delivery leases and attempts,
+terminal retention, and callback result provenance. Request and result content
+remain canonical only in `session_messages`.

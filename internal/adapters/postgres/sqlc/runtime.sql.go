@@ -10,6 +10,37 @@ import (
 	"time"
 )
 
+const abandonActiveCallbackDeliveries = `-- name: AbandonActiveCallbackDeliveries :execrows
+UPDATE callback_deliveries
+SET status = 'abandoned', owner = NULL, lease_expires_at = NULL,
+    last_error_code = $1, updated_at = $2,
+    terminal_at = $2
+WHERE invocation_id = $3
+  AND status IN ('blocked', 'pending', 'delivering')
+`
+
+type AbandonActiveCallbackDeliveriesParams struct {
+	LastErrorCode *string
+	ObservedAt    time.Time
+	InvocationID  string
+}
+
+// AbandonActiveCallbackDeliveries
+//
+//	UPDATE callback_deliveries
+//	SET status = 'abandoned', owner = NULL, lease_expires_at = NULL,
+//	    last_error_code = $1, updated_at = $2,
+//	    terminal_at = $2
+//	WHERE invocation_id = $3
+//	  AND status IN ('blocked', 'pending', 'delivering')
+func (q *Queries) AbandonActiveCallbackDeliveries(ctx context.Context, arg AbandonActiveCallbackDeliveriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, abandonActiveCallbackDeliveries, arg.LastErrorCode, arg.ObservedAt, arg.InvocationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const abandonExecutionDispatch = `-- name: AbandonExecutionDispatch :one
 UPDATE execution_dispatches
 SET status = 'abandoned', publisher_owner = NULL,
@@ -57,6 +88,32 @@ func (q *Queries) AbandonExecutionDispatch(ctx context.Context, arg AbandonExecu
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const activateCallbackDeliveries = `-- name: ActivateCallbackDeliveries :execrows
+UPDATE callback_deliveries
+SET status = 'pending', available_at = $1,
+    updated_at = $1
+WHERE invocation_id = $2 AND status = 'blocked'
+`
+
+type ActivateCallbackDeliveriesParams struct {
+	ObservedAt   *time.Time
+	InvocationID string
+}
+
+// ActivateCallbackDeliveries
+//
+//	UPDATE callback_deliveries
+//	SET status = 'pending', available_at = $1,
+//	    updated_at = $1
+//	WHERE invocation_id = $2 AND status = 'blocked'
+func (q *Queries) ActivateCallbackDeliveries(ctx context.Context, arg ActivateCallbackDeliveriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, activateCallbackDeliveries, arg.ObservedAt, arg.InvocationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const advanceInvocationCheckpoint = `-- name: AdvanceInvocationCheckpoint :one
@@ -571,6 +628,91 @@ func (q *Queries) ClaimInvocation(ctx context.Context, arg ClaimInvocationParams
 	return i, err
 }
 
+const claimNextCallbackDelivery = `-- name: ClaimNextCallbackDelivery :one
+WITH candidate AS (
+    SELECT delivery.id
+    FROM callback_deliveries AS delivery
+    JOIN tool_calls AS call ON call.id = delivery.tool_call_id
+    JOIN invocations AS invocation ON invocation.id = delivery.invocation_id
+    WHERE delivery.status = 'pending'
+      AND delivery.available_at <= $3
+      AND call.status = 'pending'
+      AND call.mode = 'callback'
+      AND call.deadline_at > $3
+      AND invocation.status = 'waiting'
+      AND invocation.current_iteration = call.iteration
+      AND invocation.wall_clock_deadline_at > $3
+    ORDER BY delivery.available_at, delivery.created_at, delivery.id
+    FOR UPDATE OF delivery SKIP LOCKED
+    LIMIT 1
+)
+UPDATE callback_deliveries AS delivery
+SET status = 'delivering', owner = $1,
+    lease_expires_at = $2, attempt = attempt + 1,
+    updated_at = $3
+FROM candidate
+WHERE delivery.id = candidate.id
+RETURNING delivery.id, delivery.tool_call_id, delivery.invocation_id, delivery.session_id, delivery.account_id, delivery.tenant_partition_id, delivery.agent_id, delivery.endpoint_url, delivery.status, delivery.available_at, delivery.owner, delivery.lease_expires_at, delivery.attempt, delivery.last_error_code, delivery.response_status, delivery.created_at, delivery.updated_at, delivery.terminal_at
+`
+
+type ClaimNextCallbackDeliveryParams struct {
+	Owner          *string
+	LeaseExpiresAt *time.Time
+	ObservedAt     time.Time
+}
+
+// ClaimNextCallbackDelivery
+//
+//	WITH candidate AS (
+//	    SELECT delivery.id
+//	    FROM callback_deliveries AS delivery
+//	    JOIN tool_calls AS call ON call.id = delivery.tool_call_id
+//	    JOIN invocations AS invocation ON invocation.id = delivery.invocation_id
+//	    WHERE delivery.status = 'pending'
+//	      AND delivery.available_at <= $3
+//	      AND call.status = 'pending'
+//	      AND call.mode = 'callback'
+//	      AND call.deadline_at > $3
+//	      AND invocation.status = 'waiting'
+//	      AND invocation.current_iteration = call.iteration
+//	      AND invocation.wall_clock_deadline_at > $3
+//	    ORDER BY delivery.available_at, delivery.created_at, delivery.id
+//	    FOR UPDATE OF delivery SKIP LOCKED
+//	    LIMIT 1
+//	)
+//	UPDATE callback_deliveries AS delivery
+//	SET status = 'delivering', owner = $1,
+//	    lease_expires_at = $2, attempt = attempt + 1,
+//	    updated_at = $3
+//	FROM candidate
+//	WHERE delivery.id = candidate.id
+//	RETURNING delivery.id, delivery.tool_call_id, delivery.invocation_id, delivery.session_id, delivery.account_id, delivery.tenant_partition_id, delivery.agent_id, delivery.endpoint_url, delivery.status, delivery.available_at, delivery.owner, delivery.lease_expires_at, delivery.attempt, delivery.last_error_code, delivery.response_status, delivery.created_at, delivery.updated_at, delivery.terminal_at
+func (q *Queries) ClaimNextCallbackDelivery(ctx context.Context, arg ClaimNextCallbackDeliveryParams) (CallbackDelivery, error) {
+	row := q.db.QueryRow(ctx, claimNextCallbackDelivery, arg.Owner, arg.LeaseExpiresAt, arg.ObservedAt)
+	var i CallbackDelivery
+	err := row.Scan(
+		&i.ID,
+		&i.ToolCallID,
+		&i.InvocationID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.EndpointUrl,
+		&i.Status,
+		&i.AvailableAt,
+		&i.Owner,
+		&i.LeaseExpiresAt,
+		&i.Attempt,
+		&i.LastErrorCode,
+		&i.ResponseStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TerminalAt,
+	)
+	return i, err
+}
+
 const claimNextExecutionDispatch = `-- name: ClaimNextExecutionDispatch :one
 WITH candidate AS (
     SELECT source.id
@@ -727,6 +869,82 @@ func (q *Queries) CreateAgentIfAbsent(ctx context.Context, arg CreateAgentIfAbse
 		arg.AccountID,
 		arg.AgentRef,
 		arg.CreatedAt,
+	)
+	return err
+}
+
+const createCallbackDelivery = `-- name: CreateCallbackDelivery :exec
+INSERT INTO callback_deliveries (
+    id, tool_call_id, invocation_id, session_id, account_id,
+    tenant_partition_id, agent_id, endpoint_url, status, available_at,
+    owner, lease_expires_at, attempt, last_error_code, response_status,
+    created_at, updated_at, terminal_at
+) VALUES (
+    $1, $2, $3,
+    $4, $5, $6,
+    $7, $8, $9,
+    $10, $11, $12,
+    $13, $14, $15,
+    $16, $17, $18
+)
+`
+
+type CreateCallbackDeliveryParams struct {
+	ID                string
+	ToolCallID        string
+	InvocationID      string
+	SessionID         string
+	AccountID         string
+	TenantPartitionID string
+	AgentID           string
+	EndpointUrl       string
+	Status            string
+	AvailableAt       *time.Time
+	Owner             *string
+	LeaseExpiresAt    *time.Time
+	Attempt           int64
+	LastErrorCode     *string
+	ResponseStatus    *int32
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	TerminalAt        *time.Time
+}
+
+// CreateCallbackDelivery
+//
+//	INSERT INTO callback_deliveries (
+//	    id, tool_call_id, invocation_id, session_id, account_id,
+//	    tenant_partition_id, agent_id, endpoint_url, status, available_at,
+//	    owner, lease_expires_at, attempt, last_error_code, response_status,
+//	    created_at, updated_at, terminal_at
+//	) VALUES (
+//	    $1, $2, $3,
+//	    $4, $5, $6,
+//	    $7, $8, $9,
+//	    $10, $11, $12,
+//	    $13, $14, $15,
+//	    $16, $17, $18
+//	)
+func (q *Queries) CreateCallbackDelivery(ctx context.Context, arg CreateCallbackDeliveryParams) error {
+	_, err := q.db.Exec(ctx, createCallbackDelivery,
+		arg.ID,
+		arg.ToolCallID,
+		arg.InvocationID,
+		arg.SessionID,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.AgentID,
+		arg.EndpointUrl,
+		arg.Status,
+		arg.AvailableAt,
+		arg.Owner,
+		arg.LeaseExpiresAt,
+		arg.Attempt,
+		arg.LastErrorCode,
+		arg.ResponseStatus,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.TerminalAt,
 	)
 	return err
 }
@@ -1571,6 +1789,29 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 	return i, err
 }
 
+const getAgentByID = `-- name: GetAgentByID :one
+SELECT id, account_id, agent_ref, created_at
+FROM agents
+WHERE id = $1
+`
+
+// GetAgentByID
+//
+//	SELECT id, account_id, agent_ref, created_at
+//	FROM agents
+//	WHERE id = $1
+func (q *Queries) GetAgentByID(ctx context.Context, id string) (Agent, error) {
+	row := q.db.QueryRow(ctx, getAgentByID, id)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.AgentRef,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getAgentByRef = `-- name: GetAgentByRef :one
 SELECT id, account_id, agent_ref, created_at
 FROM agents
@@ -1595,6 +1836,72 @@ func (q *Queries) GetAgentByRef(ctx context.Context, arg GetAgentByRefParams) (A
 		&i.AccountID,
 		&i.AgentRef,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getCallbackDelivery = `-- name: GetCallbackDelivery :one
+SELECT id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, endpoint_url, status, available_at, owner, lease_expires_at, attempt, last_error_code, response_status, created_at, updated_at, terminal_at FROM callback_deliveries WHERE id = $1
+`
+
+// GetCallbackDelivery
+//
+//	SELECT id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, endpoint_url, status, available_at, owner, lease_expires_at, attempt, last_error_code, response_status, created_at, updated_at, terminal_at FROM callback_deliveries WHERE id = $1
+func (q *Queries) GetCallbackDelivery(ctx context.Context, id string) (CallbackDelivery, error) {
+	row := q.db.QueryRow(ctx, getCallbackDelivery, id)
+	var i CallbackDelivery
+	err := row.Scan(
+		&i.ID,
+		&i.ToolCallID,
+		&i.InvocationID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.EndpointUrl,
+		&i.Status,
+		&i.AvailableAt,
+		&i.Owner,
+		&i.LeaseExpiresAt,
+		&i.Attempt,
+		&i.LastErrorCode,
+		&i.ResponseStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TerminalAt,
+	)
+	return i, err
+}
+
+const getCallbackDeliveryForUpdate = `-- name: GetCallbackDeliveryForUpdate :one
+SELECT id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, endpoint_url, status, available_at, owner, lease_expires_at, attempt, last_error_code, response_status, created_at, updated_at, terminal_at FROM callback_deliveries WHERE id = $1 FOR UPDATE
+`
+
+// GetCallbackDeliveryForUpdate
+//
+//	SELECT id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, endpoint_url, status, available_at, owner, lease_expires_at, attempt, last_error_code, response_status, created_at, updated_at, terminal_at FROM callback_deliveries WHERE id = $1 FOR UPDATE
+func (q *Queries) GetCallbackDeliveryForUpdate(ctx context.Context, id string) (CallbackDelivery, error) {
+	row := q.db.QueryRow(ctx, getCallbackDeliveryForUpdate, id)
+	var i CallbackDelivery
+	err := row.Scan(
+		&i.ID,
+		&i.ToolCallID,
+		&i.InvocationID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.EndpointUrl,
+		&i.Status,
+		&i.AvailableAt,
+		&i.Owner,
+		&i.LeaseExpiresAt,
+		&i.Attempt,
+		&i.LastErrorCode,
+		&i.ResponseStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TerminalAt,
 	)
 	return i, err
 }
@@ -3779,6 +4086,44 @@ func (q *Queries) ParkInvocationForClientTools(ctx context.Context, arg ParkInvo
 	return i, err
 }
 
+const pruneTerminalCallbackDeliveries = `-- name: PruneTerminalCallbackDeliveries :execrows
+WITH candidates AS (
+    SELECT delivery.id
+    FROM callback_deliveries AS delivery
+    WHERE delivery.status IN ('succeeded', 'failed', 'abandoned')
+      AND delivery.terminal_at < $1
+    ORDER BY delivery.terminal_at, delivery.id
+    LIMIT $2
+)
+DELETE FROM callback_deliveries
+WHERE id IN (SELECT id FROM candidates)
+`
+
+type PruneTerminalCallbackDeliveriesParams struct {
+	PruneBefore *time.Time
+	BatchLimit  int32
+}
+
+// PruneTerminalCallbackDeliveries
+//
+//	WITH candidates AS (
+//	    SELECT delivery.id
+//	    FROM callback_deliveries AS delivery
+//	    WHERE delivery.status IN ('succeeded', 'failed', 'abandoned')
+//	      AND delivery.terminal_at < $1
+//	    ORDER BY delivery.terminal_at, delivery.id
+//	    LIMIT $2
+//	)
+//	DELETE FROM callback_deliveries
+//	WHERE id IN (SELECT id FROM candidates)
+func (q *Queries) PruneTerminalCallbackDeliveries(ctx context.Context, arg PruneTerminalCallbackDeliveriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, pruneTerminalCallbackDeliveries, arg.PruneBefore, arg.BatchLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const pruneTerminalExecutionDispatches = `-- name: PruneTerminalExecutionDispatches :execrows
 DELETE FROM execution_dispatches
 WHERE id IN (
@@ -3995,6 +4340,52 @@ func (q *Queries) ReapInvocationDeadline(ctx context.Context, arg ReapInvocation
 		&i.OutputProvenance,
 	)
 	return i, err
+}
+
+const recoverExpiredCallbackDeliveries = `-- name: RecoverExpiredCallbackDeliveries :execrows
+WITH candidates AS (
+    SELECT id
+    FROM callback_deliveries
+    WHERE status = 'delivering' AND lease_expires_at <= $1
+    ORDER BY lease_expires_at, id
+    FOR UPDATE SKIP LOCKED
+    LIMIT $2
+)
+UPDATE callback_deliveries AS delivery
+SET status = 'pending', available_at = $1, owner = NULL,
+    lease_expires_at = NULL, last_error_code = 'lease_expired',
+    updated_at = $1
+FROM candidates
+WHERE delivery.id = candidates.id
+`
+
+type RecoverExpiredCallbackDeliveriesParams struct {
+	ObservedAt *time.Time
+	BatchLimit int32
+}
+
+// RecoverExpiredCallbackDeliveries
+//
+//	WITH candidates AS (
+//	    SELECT id
+//	    FROM callback_deliveries
+//	    WHERE status = 'delivering' AND lease_expires_at <= $1
+//	    ORDER BY lease_expires_at, id
+//	    FOR UPDATE SKIP LOCKED
+//	    LIMIT $2
+//	)
+//	UPDATE callback_deliveries AS delivery
+//	SET status = 'pending', available_at = $1, owner = NULL,
+//	    lease_expires_at = NULL, last_error_code = 'lease_expired',
+//	    updated_at = $1
+//	FROM candidates
+//	WHERE delivery.id = candidates.id
+func (q *Queries) RecoverExpiredCallbackDeliveries(ctx context.Context, arg RecoverExpiredCallbackDeliveriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, recoverExpiredCallbackDeliveries, arg.ObservedAt, arg.BatchLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const recoverInvocationLease = `-- name: RecoverInvocationLease :one
@@ -4341,6 +4732,71 @@ func (q *Queries) RestartToolCallAttempt(ctx context.Context, arg RestartToolCal
 	return i, err
 }
 
+const returnCallbackDeliveryPending = `-- name: ReturnCallbackDeliveryPending :one
+UPDATE callback_deliveries
+SET status = 'pending', available_at = $1,
+    owner = NULL, lease_expires_at = NULL,
+    last_error_code = $2,
+    response_status = NULL, updated_at = $3
+WHERE id = $4 AND status = 'delivering'
+  AND owner = $5 AND attempt = $6
+  AND lease_expires_at > $3
+RETURNING id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, endpoint_url, status, available_at, owner, lease_expires_at, attempt, last_error_code, response_status, created_at, updated_at, terminal_at
+`
+
+type ReturnCallbackDeliveryPendingParams struct {
+	AvailableAt   *time.Time
+	LastErrorCode *string
+	ObservedAt    time.Time
+	ID            string
+	Owner         *string
+	Attempt       int64
+}
+
+// ReturnCallbackDeliveryPending
+//
+//	UPDATE callback_deliveries
+//	SET status = 'pending', available_at = $1,
+//	    owner = NULL, lease_expires_at = NULL,
+//	    last_error_code = $2,
+//	    response_status = NULL, updated_at = $3
+//	WHERE id = $4 AND status = 'delivering'
+//	  AND owner = $5 AND attempt = $6
+//	  AND lease_expires_at > $3
+//	RETURNING id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, endpoint_url, status, available_at, owner, lease_expires_at, attempt, last_error_code, response_status, created_at, updated_at, terminal_at
+func (q *Queries) ReturnCallbackDeliveryPending(ctx context.Context, arg ReturnCallbackDeliveryPendingParams) (CallbackDelivery, error) {
+	row := q.db.QueryRow(ctx, returnCallbackDeliveryPending,
+		arg.AvailableAt,
+		arg.LastErrorCode,
+		arg.ObservedAt,
+		arg.ID,
+		arg.Owner,
+		arg.Attempt,
+	)
+	var i CallbackDelivery
+	err := row.Scan(
+		&i.ID,
+		&i.ToolCallID,
+		&i.InvocationID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.EndpointUrl,
+		&i.Status,
+		&i.AvailableAt,
+		&i.Owner,
+		&i.LeaseExpiresAt,
+		&i.Attempt,
+		&i.LastErrorCode,
+		&i.ResponseStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TerminalAt,
+	)
+	return i, err
+}
+
 const returnExecutionDispatchPending = `-- name: ReturnExecutionDispatchPending :one
 UPDATE execution_dispatches
 SET status = 'pending', available_at = $1,
@@ -4433,6 +4889,73 @@ func (q *Queries) SettleActiveExecutionDispatchForWork(ctx context.Context, arg 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const settleCallbackDelivery = `-- name: SettleCallbackDelivery :one
+UPDATE callback_deliveries
+SET status = $1, owner = NULL, lease_expires_at = NULL,
+    last_error_code = $2,
+    response_status = $3,
+    updated_at = $4, terminal_at = $4
+WHERE id = $5 AND status = 'delivering'
+  AND owner = $6 AND attempt = $7
+  AND lease_expires_at > $4
+RETURNING id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, endpoint_url, status, available_at, owner, lease_expires_at, attempt, last_error_code, response_status, created_at, updated_at, terminal_at
+`
+
+type SettleCallbackDeliveryParams struct {
+	Status         string
+	LastErrorCode  *string
+	ResponseStatus *int32
+	ObservedAt     time.Time
+	ID             string
+	Owner          *string
+	Attempt        int64
+}
+
+// SettleCallbackDelivery
+//
+//	UPDATE callback_deliveries
+//	SET status = $1, owner = NULL, lease_expires_at = NULL,
+//	    last_error_code = $2,
+//	    response_status = $3,
+//	    updated_at = $4, terminal_at = $4
+//	WHERE id = $5 AND status = 'delivering'
+//	  AND owner = $6 AND attempt = $7
+//	  AND lease_expires_at > $4
+//	RETURNING id, tool_call_id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, endpoint_url, status, available_at, owner, lease_expires_at, attempt, last_error_code, response_status, created_at, updated_at, terminal_at
+func (q *Queries) SettleCallbackDelivery(ctx context.Context, arg SettleCallbackDeliveryParams) (CallbackDelivery, error) {
+	row := q.db.QueryRow(ctx, settleCallbackDelivery,
+		arg.Status,
+		arg.LastErrorCode,
+		arg.ResponseStatus,
+		arg.ObservedAt,
+		arg.ID,
+		arg.Owner,
+		arg.Attempt,
+	)
+	var i CallbackDelivery
+	err := row.Scan(
+		&i.ID,
+		&i.ToolCallID,
+		&i.InvocationID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.EndpointUrl,
+		&i.Status,
+		&i.AvailableAt,
+		&i.Owner,
+		&i.LeaseExpiresAt,
+		&i.Attempt,
+		&i.LastErrorCode,
+		&i.ResponseStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TerminalAt,
+	)
+	return i, err
 }
 
 const settleExecutionDispatch = `-- name: SettleExecutionDispatch :one

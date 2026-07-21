@@ -116,10 +116,16 @@ func (e *GenerationExecutor) Execute(
 		Claim:           &claim,
 	}
 	for _, tool := range spec.Tools {
+		callbackURL := ""
+		if tool.Callback != nil {
+			callbackURL = tool.Callback.URL
+		}
 		request.ClientTools = append(request.ClientTools, domain.ClientToolDefinition{
 			Name:        tool.Name,
 			Description: tool.Description,
 			InputSchema: append(json.RawMessage(nil), tool.InputSchema...),
+			Mode:        domain.ToolCallMode(tool.Mode),
+			CallbackURL: callbackURL,
 		})
 	}
 	if spec.Output != nil {
@@ -196,12 +202,12 @@ func (e *GenerationExecutor) Execute(
 	}
 	started := time.Now()
 	var response domain.GenerationResponse
-	if recovery.ClientToolsPending {
+	if recovery.ExternalToolsPending {
 		response = domain.GenerationResponse{
 			Usage:                recovery.Resume.Usage,
 			ServedModel:          recovery.Provenance.ServedModel,
 			MessagesCheckpointed: true,
-			ClientToolsPending:   true,
+			ExternalToolsPending: true,
 		}
 	} else if recovery.Final {
 		response = domain.GenerationResponse{
@@ -246,7 +252,7 @@ func (e *GenerationExecutor) Execute(
 		ServedModel:      servedModel,
 		CredentialSource: credentialSourceInstallationBYOK,
 	}
-	if response.ClientToolsPending {
+	if response.ExternalToolsPending {
 		result := domain.InvocationExecutionResult{
 			Status:               domain.InvocationWaiting,
 			MessagesCheckpointed: true,
@@ -258,7 +264,7 @@ func (e *GenerationExecutor) Execute(
 			return providerGenerationFailure(), nil
 		}
 		e.logger.Info(
-			"Model generation parked for client tools",
+			"Model generation parked for external tools",
 			"invocation_id",
 			claim.Invocation.ID,
 			"lease_attempt",

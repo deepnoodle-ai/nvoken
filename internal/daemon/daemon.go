@@ -12,14 +12,17 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/auth"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/callbackhttp"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/cloudtasks"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/divegen"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/executorhttp"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpapi"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpguard"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/liveevents"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/postgres"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/worksignal"
+	callbackruntime "github.com/deepnoodle-ai/nvoken/internal/callback"
 	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
@@ -56,6 +59,15 @@ type Config struct {
 	RedisCACertificate      string
 	LiveEventBuffer         int
 	Stream                  httpapi.StreamConfig
+	CallbackSigningKey      string
+	CallbackSigningKeyID    string
+	CallbackSigningVersion  int64
+	CallbackRequestTimeout  time.Duration
+	CallbackDNSTimeout      time.Duration
+	CallbackConnectTimeout  time.Duration
+	CallbackTLSTimeout      time.Duration
+	CallbackDelivery        services.CallbackDeliveryConfig
+	CallbackController      callbackruntime.Config
 }
 
 type component interface {
@@ -220,7 +232,8 @@ func Run(ctx context.Context, cfg Config) error {
 	runtime := services.NewRuntimeService(store, txm, clock, ids,
 		services.WithWorkSignaller(signaller), services.WithCancellationSignaller(cancellations),
 		services.WithBudgetPolicy(cfg.Budgets), services.WithRuntimeLogger(slog.Default()),
-		services.WithInvocationExecutionMode(cfg.InvocationExecutionMode, cfg.Dispatch.Queue))
+		services.WithInvocationExecutionMode(cfg.InvocationExecutionMode, cfg.Dispatch.Queue),
+		services.WithCallbackTools(cfg.CallbackSigningKey != ""))
 	ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
 		services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
 	srv := httpapi.NewServer(httpapi.Config{
@@ -280,6 +293,49 @@ func Run(ctx context.Context, cfg Config) error {
 		controller, err := dispatchruntime.NewController(publisherOwner, dispatchService, tasks, slog.Default(), cfg.DispatchController)
 		if err != nil {
 			return fmt.Errorf("configure execution dispatch controller: %w", err)
+		}
+		components = append(components, controller)
+	}
+	if cfg.CallbackSigningKey != "" {
+		callbackService, err := services.NewCallbackDeliveryService(
+			store,
+			txm,
+			clock,
+			ids,
+			signaller,
+			cfg.CallbackDelivery,
+			slog.Default(),
+		)
+		if err != nil {
+			return fmt.Errorf("configure callback delivery service: %w", err)
+		}
+		transport, err := callbackhttp.New(callbackhttp.Config{
+			SigningKey:     []byte(cfg.CallbackSigningKey),
+			SigningKeyID:   cfg.CallbackSigningKeyID,
+			SigningVersion: cfg.CallbackSigningVersion,
+			RequestTimeout: cfg.CallbackRequestTimeout,
+			Client: httpguard.NewPublicClient(
+				cfg.CallbackDNSTimeout,
+				cfg.CallbackConnectTimeout,
+				cfg.CallbackTLSTimeout,
+			),
+		})
+		if err != nil {
+			return fmt.Errorf("configure callback HTTP transport: %w", err)
+		}
+		callbackOwner, err := executionOwner()
+		if err != nil {
+			return fmt.Errorf("create callback delivery owner: %w", err)
+		}
+		controller, err := callbackruntime.NewController(
+			callbackOwner,
+			callbackService,
+			transport,
+			slog.Default(),
+			cfg.CallbackController,
+		)
+		if err != nil {
+			return fmt.Errorf("configure callback delivery controller: %w", err)
 		}
 		components = append(components, controller)
 	}
