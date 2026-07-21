@@ -178,6 +178,59 @@ func TestRunnerDrainsBeforeCancellingAndJoinsAfterGrace(t *testing.T) {
 			t.Fatalf("queued claims = %d, want 1 unclaimed after shutdown", got)
 		}
 	})
+
+	t.Run("valid result returned at cancellation is settled", func(t *testing.T) {
+		ownership := newFakeOwnership(1, time.Second)
+		executor := &successOnCancellationExecutor{started: make(chan struct{})}
+		config := testConfig()
+		config.Concurrency = 1
+		config.DrainGrace = 30 * time.Millisecond
+		runner := newTestRunner(t, ownership, executor, nil, config)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := runRunner(runner, ctx)
+		select {
+		case <-executor.started:
+		case <-time.After(time.Second):
+			t.Fatal("executor did not start")
+		}
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		if got := ownership.settlementCount(); got != 1 {
+			t.Fatalf("settlements = %d, want completed result persisted", got)
+		}
+	})
+
+	t.Run("settlement retry survives executor cancellation", func(t *testing.T) {
+		ownership := newFakeOwnership(1, time.Second)
+		ownership.settleErrors = []error{errors.New("temporary settlement failure")}
+		ownership.settleBlock = make(chan struct{})
+		ownership.settleStarted = make(chan struct{}, 1)
+		config := testConfig()
+		config.Concurrency = 1
+		config.DrainGrace = 30 * time.Millisecond
+		runner := newTestRunner(t, ownership, immediateExecutor{}, nil, config)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := runRunner(runner, ctx)
+		select {
+		case <-ownership.settleStarted:
+		case <-time.After(time.Second):
+			t.Fatal("settlement did not start")
+		}
+		cancel()
+		time.Sleep(config.DrainGrace + 20*time.Millisecond)
+		close(ownership.settleBlock)
+		if err := <-done; err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		if got := ownership.settlementCount(); got != 1 {
+			t.Fatalf("settlements = %d, want retry to persist result", got)
+		}
+		if got := ownership.settlementCallCount(); got < 2 {
+			t.Fatalf("settlement calls = %d, want retry after drain cancellation", got)
+		}
+	})
 }
 
 func TestRunnerLogsOperationalFieldsWithoutInvocationPayloads(t *testing.T) {
@@ -211,6 +264,10 @@ type fakeOwnership struct {
 	claims        []domain.InvocationClaim
 	settlements   []domain.InvocationExecutionResult
 	renewErrors   []error
+	settleErrors  []error
+	settleBlock   chan struct{}
+	settleStarted chan struct{}
+	settleCalls   int
 	renewals      int
 	reaps         int
 	leaseDuration time.Duration
@@ -264,7 +321,32 @@ func (f *fakeOwnership) Renew(_ context.Context, _ domain.InvocationClaim, lease
 	return time.Now().Add(leaseDuration), nil
 }
 
-func (f *fakeOwnership) Settle(_ context.Context, _ domain.InvocationClaim, result domain.InvocationExecutionResult) error {
+func (f *fakeOwnership) Settle(ctx context.Context, _ domain.InvocationClaim, result domain.InvocationExecutionResult) error {
+	f.mu.Lock()
+	f.settleCalls++
+	if f.settleStarted != nil {
+		select {
+		case f.settleStarted <- struct{}{}:
+		default:
+		}
+	}
+	block := f.settleBlock
+	var settleErr error
+	if len(f.settleErrors) > 0 {
+		settleErr = f.settleErrors[0]
+		f.settleErrors = f.settleErrors[1:]
+	}
+	f.mu.Unlock()
+	if block != nil {
+		select {
+		case <-block:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if settleErr != nil {
+		return settleErr
+	}
 	f.mu.Lock()
 	f.settlements = append(f.settlements, result)
 	f.mu.Unlock()
@@ -282,6 +364,12 @@ func (f *fakeOwnership) settlementCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.settlements)
+}
+
+func (f *fakeOwnership) settlementCallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.settleCalls
 }
 
 func (f *fakeOwnership) renewalCount() int {
@@ -344,6 +432,17 @@ type cancellationExecutor struct {
 	started   chan struct{}
 	cancelled chan struct{}
 	once      sync.Once
+}
+
+type successOnCancellationExecutor struct{ started chan struct{} }
+
+func (e *successOnCancellationExecutor) Execute(
+	ctx context.Context,
+	_ domain.InvocationClaim,
+) (domain.InvocationExecutionResult, error) {
+	close(e.started)
+	<-ctx.Done()
+	return completed(), nil
 }
 
 func (e *cancellationExecutor) Execute(ctx context.Context, _ domain.InvocationClaim) (domain.InvocationExecutionResult, error) {

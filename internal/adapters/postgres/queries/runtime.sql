@@ -147,11 +147,13 @@ FROM invocations
 WHERE id = $1
 FOR UPDATE;
 
--- name: FindNextQueuedInvocation :one
-SELECT *
-FROM invocations
-WHERE status = 'queued'
-ORDER BY created_at, id
+-- name: FindNextQueuedInvocationForUpdate :one
+SELECT i.*
+FROM invocations AS i
+JOIN sessions AS s ON s.id = i.session_id
+WHERE i.status = 'queued'
+ORDER BY i.created_at, i.id
+FOR UPDATE OF s SKIP LOCKED
 LIMIT 1;
 
 -- name: ListExpiredInvocationLeases :many

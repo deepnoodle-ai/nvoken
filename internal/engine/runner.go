@@ -184,43 +184,45 @@ func (r *Runner) Run(ctx context.Context) error {
 
 func (r *Runner) reap(ctx context.Context) {
 	reaped, err := r.ownership.ReapExpired(ctx, r.config.ReaperBatchLimit)
-	if err != nil {
-		if ctx.Err() == nil {
-			r.logger.Warn("Invocation lease scan failed; retrying", "error", err.Error())
-		}
-		return
-	}
 	for _, invocation := range reaped {
 		r.logger.Warn("Invocation lease reaped",
 			"invocation_id", invocation.ID, "lease_attempt", invocation.LeaseAttempt,
 			"status", invocation.Status)
 	}
+	if err != nil {
+		if ctx.Err() == nil {
+			r.logger.Warn("Invocation lease scan failed; retrying", "error", err.Error())
+		}
+	}
 }
 
 type claimState struct {
-	mu        sync.Mutex
-	settled   bool
+	settled   atomic.Bool
 	leaseLost atomic.Bool
 }
 
-func (r *Runner) runClaim(parent context.Context, claim domain.InvocationClaim) {
-	ctx, cancel := context.WithCancel(parent)
-	defer cancel()
+func (r *Runner) runClaim(executorParent context.Context, claim domain.InvocationClaim) {
+	leaseCtx, cancelLease := context.WithCancel(context.Background())
+	defer cancelLease()
+	executorCtx, cancelExecutor := context.WithCancel(executorParent)
+	defer cancelExecutor()
 	state := &claimState{}
 	stopHeartbeat := make(chan struct{})
 	heartbeatDone := make(chan struct{})
 	go func() {
 		defer close(heartbeatDone)
-		r.heartbeat(ctx, cancel, claim, state, stopHeartbeat)
+		r.heartbeat(leaseCtx, cancelLease, cancelExecutor, claim, state, stopHeartbeat)
 	}()
 
 	started := time.Now()
-	result, err := r.executor.Execute(ctx, claim)
-	if err != nil && ctx.Err() == nil {
+	result, err := r.executor.Execute(executorCtx, claim)
+	hasResult := err == nil
+	if err != nil && executorCtx.Err() == nil {
 		r.logger.Warn("Invocation executor failed",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
 			"error", err.Error())
 		result = internalFailureResult()
+		hasResult = true
 	}
 	if err == nil && !validResult(result) {
 		r.logger.Warn("Invocation executor returned invalid result",
@@ -228,13 +230,17 @@ func (r *Runner) runClaim(parent context.Context, claim domain.InvocationClaim) 
 		result = internalFailureResult()
 	}
 
-	if ctx.Err() == nil && !state.leaseLost.Load() {
-		r.settleLoop(ctx, cancel, claim, result, state)
+	if hasResult && !state.leaseLost.Load() {
+		// Drain cancellation targets model execution, not an already-produced
+		// result. Settlement remains bounded and is cancelled by lease loss.
+		settleCtx, cancelSettle := context.WithTimeout(leaseCtx, r.config.LeaseDuration)
+		r.settleLoop(settleCtx, cancelLease, cancelExecutor, claim, result, state)
+		cancelSettle()
 	}
 	close(stopHeartbeat)
 	<-heartbeatDone
 
-	if state.settled {
+	if state.settled.Load() {
 		r.logger.Info("Invocation settled",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
 			"status", result.Status, "execution_latency_ms", time.Since(started).Milliseconds())
@@ -243,7 +249,8 @@ func (r *Runner) runClaim(parent context.Context, claim domain.InvocationClaim) 
 
 func (r *Runner) heartbeat(
 	ctx context.Context,
-	cancel context.CancelFunc,
+	cancelLease context.CancelFunc,
+	cancelExecutor context.CancelFunc,
 	claim domain.InvocationClaim,
 	state *claimState,
 	stop <-chan struct{},
@@ -260,24 +267,24 @@ func (r *Runner) heartbeat(
 		case <-ticker.C:
 		}
 		if !time.Now().UTC().Before(leaseExpiresAt) {
-			r.loseLease(cancel, claim, state, "lease deadline passed")
+			r.loseLease(cancelLease, cancelExecutor, claim, state, "lease deadline passed")
 			return
 		}
-		state.mu.Lock()
-		if state.settled {
-			state.mu.Unlock()
+		if state.settled.Load() {
 			return
 		}
 		renewCtx, renewCancel := context.WithDeadline(ctx, leaseExpiresAt)
 		renewedUntil, err := r.ownership.Renew(renewCtx, claim, r.config.LeaseDuration)
 		renewCancel()
-		state.mu.Unlock()
 		if err == nil {
 			leaseExpiresAt = renewedUntil
 			continue
 		}
 		if errors.Is(err, ports.ErrLeaseLost) {
-			r.loseLease(cancel, claim, state, "fence rejected renewal")
+			if state.settled.Load() {
+				return
+			}
+			r.loseLease(cancelLease, cancelExecutor, claim, state, "fence rejected renewal")
 			return
 		}
 		if ctx.Err() != nil {
@@ -287,7 +294,7 @@ func (r *Runner) heartbeat(
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
 			"error", err.Error(), "lease_expires_at", leaseExpiresAt)
 		if !time.Now().UTC().Before(leaseExpiresAt) {
-			r.loseLease(cancel, claim, state, "renewal failures exhausted lease")
+			r.loseLease(cancelLease, cancelExecutor, claim, state, "renewal failures exhausted lease")
 			return
 		}
 	}
@@ -295,23 +302,22 @@ func (r *Runner) heartbeat(
 
 func (r *Runner) settleLoop(
 	ctx context.Context,
-	cancel context.CancelFunc,
+	cancelLease context.CancelFunc,
+	cancelExecutor context.CancelFunc,
 	claim domain.InvocationClaim,
 	result domain.InvocationExecutionResult,
 	state *claimState,
 ) {
 	for ctx.Err() == nil && !state.leaseLost.Load() {
-		state.mu.Lock()
 		err := r.ownership.Settle(ctx, claim, result)
 		if err == nil {
-			state.settled = true
+			state.settled.Store(true)
 		}
-		state.mu.Unlock()
 		if err == nil {
 			return
 		}
 		if errors.Is(err, ports.ErrLeaseLost) {
-			r.loseLease(cancel, claim, state, "fence rejected settlement")
+			r.loseLease(cancelLease, cancelExecutor, claim, state, "fence rejected settlement")
 			return
 		}
 		r.logger.Warn("Invocation settlement failed; retrying",
@@ -324,7 +330,8 @@ func (r *Runner) settleLoop(
 }
 
 func (r *Runner) loseLease(
-	cancel context.CancelFunc,
+	cancelLease context.CancelFunc,
+	cancelExecutor context.CancelFunc,
 	claim domain.InvocationClaim,
 	state *claimState,
 	reason string,
@@ -335,7 +342,8 @@ func (r *Runner) loseLease(
 	r.logger.Warn("Invocation lease lost; cancelling execution",
 		"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
 		"reason", reason)
-	cancel()
+	cancelLease()
+	cancelExecutor()
 }
 
 func internalFailureResult() domain.InvocationExecutionResult {

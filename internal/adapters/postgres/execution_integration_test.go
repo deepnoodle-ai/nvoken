@@ -67,6 +67,75 @@ func TestInvocationRunnerPollsQueuedWorkAfterRestart(t *testing.T) {
 	}
 }
 
+func TestInvocationExecutionClaimNextSkipsContendedSessionsAcrossReplicas(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	const invocationCount = 24
+	for index := range invocationCount {
+		input := runtimeInput()
+		input.SessionKey = pointerString(fmt.Sprintf("backlog-session-%02d", index))
+		input.IdempotencyKey = fmt.Sprintf("backlog-request-%02d", index)
+		if _, err := runtime.Admit(context.Background(), auth, input); err != nil {
+			t.Fatalf("admit %d: %v", index, err)
+		}
+	}
+
+	clock := identity.SystemClock{}
+	start := make(chan struct{})
+	results := make(chan struct {
+		id  string
+		err error
+	}, invocationCount)
+	var replicas sync.WaitGroup
+	for replica := range 8 {
+		replicas.Add(1)
+		go func() {
+			defer replicas.Done()
+			execution := services.NewInvocationExecutionService(
+				store, NewTransactionManager(pool), clock, identity.NewUUIDv7Generator(clock),
+			)
+			<-start
+			for {
+				claim, ok, err := execution.ClaimNext(
+					context.Background(), fmt.Sprintf("replica-%d", replica), time.Minute,
+				)
+				if err != nil {
+					results <- struct {
+						id  string
+						err error
+					}{err: err}
+					return
+				}
+				if !ok {
+					return
+				}
+				results <- struct {
+					id  string
+					err error
+				}{id: claim.Invocation.ID}
+			}
+		}()
+	}
+	close(start)
+	go func() {
+		replicas.Wait()
+		close(results)
+	}()
+
+	claimed := make(map[string]struct{}, invocationCount)
+	for result := range results {
+		if result.err != nil {
+			t.Fatalf("ClaimNext: %v", result.err)
+		}
+		if _, duplicate := claimed[result.id]; duplicate {
+			t.Fatalf("Invocation %s was claimed twice", result.id)
+		}
+		claimed[result.id] = struct{}{}
+	}
+	if len(claimed) != invocationCount {
+		t.Fatalf("claimed %d Invocations, want %d", len(claimed), invocationCount)
+	}
+}
+
 func TestInvocationExecutionPollingSurvivesRestartAndClaimsFIFO(t *testing.T) {
 	pool, databaseURL := testDatabase(t, true)
 	store := NewStore(pool)
@@ -303,6 +372,51 @@ func TestInvocationExecutionRenewalWinsReaperScan(t *testing.T) {
 	}
 }
 
+func TestInvocationExecutionReaperContinuesAfterCandidateFailure(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	first, err := runtime.Admit(context.Background(), auth, runtimeInput())
+	if err != nil {
+		t.Fatalf("admit first: %v", err)
+	}
+	secondInput := runtimeInput()
+	secondInput.SessionKey = pointerString("second-expired-session")
+	secondInput.IdempotencyKey = "second-expired-request"
+	second, err := runtime.Admit(context.Background(), auth, secondInput)
+	if err != nil {
+		t.Fatalf("admit second: %v", err)
+	}
+	clock := newMutableClock(time.Now().UTC())
+	execution := services.NewInvocationExecutionService(
+		store, NewTransactionManager(pool), clock, identity.NewUUIDv7Generator(clock),
+	)
+	for index, invocationID := range []string{first.InvocationID, second.InvocationID} {
+		if _, disposition, err := execution.ClaimExact(
+			context.Background(), invocationID, fmt.Sprintf("expired-owner-%d", index), time.Minute,
+		); err != nil || disposition != services.Claimed {
+			t.Fatalf("claim %d disposition = %q, error = %v", index, disposition, err)
+		}
+	}
+	clock.Advance(time.Minute + time.Nanosecond)
+	candidates, err := store.ListExpiredInvocationLeases(context.Background(), clock.Now(), 10)
+	if err != nil || len(candidates) != 2 {
+		t.Fatalf("expired candidates = %#v, error = %v", candidates, err)
+	}
+	faults := &faultingExecutionStore{
+		Store: store, failStatus: domain.InvocationFailed, failInvocationID: candidates[0].ID,
+	}
+	faulty := services.NewInvocationExecutionService(
+		faults, NewTransactionManager(pool), clock, identity.NewUUIDv7Generator(clock),
+	)
+	reaped, err := faulty.ReapExpired(context.Background(), 10)
+	if err == nil || len(reaped) != 1 || reaped[0].ID != candidates[1].ID {
+		t.Fatalf("reaped = %#v, error = %v; want second candidate and joined error", reaped, err)
+	}
+	remaining, err := store.GetInvocation(context.Background(), candidates[0].ID)
+	if err != nil || remaining.Status != domain.InvocationRunning {
+		t.Fatalf("faulted candidate = %#v, error = %v", remaining, err)
+	}
+}
+
 func TestInvocationExecutionTransitionsRollBackWithLifecycleState(t *testing.T) {
 	pool, runtime, store, auth := newRuntimeFixture(t)
 	ack, err := runtime.Admit(context.Background(), auth, runtimeInput())
@@ -363,11 +477,12 @@ func TestAdmissionWakeOccursOnlyAfterFreshCommit(t *testing.T) {
 
 type faultingExecutionStore struct {
 	*Store
-	failStatus domain.InvocationStatus
+	failStatus       domain.InvocationStatus
+	failInvocationID string
 }
 
 func (s *faultingExecutionStore) AppendInvocationState(ctx context.Context, state domain.InvocationState) error {
-	if state.Status == s.failStatus {
+	if state.Status == s.failStatus && (s.failInvocationID == "" || state.InvocationID == s.failInvocationID) {
 		return errors.New("injected lifecycle-state failure")
 	}
 	return s.Store.AppendInvocationState(ctx, state)

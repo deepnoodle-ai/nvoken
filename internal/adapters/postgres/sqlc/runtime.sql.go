@@ -491,23 +491,27 @@ func (q *Queries) CreateTenantPartitionByRefIfAbsent(ctx context.Context, arg Cr
 	return err
 }
 
-const findNextQueuedInvocation = `-- name: FindNextQueuedInvocation :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
-FROM invocations
-WHERE status = 'queued'
-ORDER BY created_at, id
+const findNextQueuedInvocationForUpdate = `-- name: FindNextQueuedInvocationForUpdate :one
+SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt
+FROM invocations AS i
+JOIN sessions AS s ON s.id = i.session_id
+WHERE i.status = 'queued'
+ORDER BY i.created_at, i.id
+FOR UPDATE OF s SKIP LOCKED
 LIMIT 1
 `
 
-// FindNextQueuedInvocation
+// FindNextQueuedInvocationForUpdate
 //
-//	SELECT id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt
-//	FROM invocations
-//	WHERE status = 'queued'
-//	ORDER BY created_at, id
+//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt
+//	FROM invocations AS i
+//	JOIN sessions AS s ON s.id = i.session_id
+//	WHERE i.status = 'queued'
+//	ORDER BY i.created_at, i.id
+//	FOR UPDATE OF s SKIP LOCKED
 //	LIMIT 1
-func (q *Queries) FindNextQueuedInvocation(ctx context.Context) (Invocation, error) {
-	row := q.db.QueryRow(ctx, findNextQueuedInvocation)
+func (q *Queries) FindNextQueuedInvocationForUpdate(ctx context.Context) (Invocation, error) {
+	row := q.db.QueryRow(ctx, findNextQueuedInvocationForUpdate)
 	var i Invocation
 	err := row.Scan(
 		&i.ID,

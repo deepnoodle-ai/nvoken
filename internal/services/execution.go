@@ -12,10 +12,9 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
-const (
-	MaxExecutionOwnerCharacters = 255
-	maxClaimContentionRetries   = 64
-)
+const MaxExecutionOwnerCharacters = 255
+
+var errQueuedInvocationChanged = errors.New("queued Invocation changed after its Session was locked")
 
 type ClaimDisposition string
 
@@ -56,28 +55,35 @@ func (s *InvocationExecutionService) ClaimNext(
 	if err := s.ready(owner, leaseDuration); err != nil {
 		return domain.InvocationClaim{}, false, err
 	}
-	for range maxClaimContentionRetries {
-		candidate, err := s.store.FindNextQueuedInvocation(ctx)
-		if errors.Is(err, ports.ErrNotFound) {
-			return domain.InvocationClaim{}, false, nil
+	var claim domain.InvocationClaim
+	found := false
+	err := s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
+		for {
+			candidate, err := s.store.FindNextQueuedInvocationForUpdate(txCtx)
+			if errors.Is(err, ports.ErrNotFound) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			claim, err = s.claimWithSessionLocked(txCtx, candidate, owner, leaseDuration)
+			if errors.Is(err, errQueuedInvocationChanged) {
+				// The SELECT may have started before another claimant committed,
+				// then acquired the Session lock with an older joined Invocation
+				// snapshot. A new statement gets a fresh READ COMMITTED snapshot.
+				if err := txCtx.Err(); err != nil {
+					return err
+				}
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			found = true
+			return nil
 		}
-		if err != nil {
-			return domain.InvocationClaim{}, false, err
-		}
-		claim, disposition, err := s.ClaimExact(ctx, candidate.ID, owner, leaseDuration)
-		if err != nil {
-			return domain.InvocationClaim{}, false, err
-		}
-		if disposition == Claimed {
-			return claim, true, nil
-		}
-		if err := ctx.Err(); err != nil {
-			return domain.InvocationClaim{}, false, err
-		}
-	}
-	// Another replica won each observed row. The polling correctness fallback
-	// will probe again without turning contention into a process failure.
-	return domain.InvocationClaim{}, false, nil
+	})
+	return claim, found, err
 }
 
 func (s *InvocationExecutionService) ClaimExact(
@@ -116,35 +122,57 @@ func (s *InvocationExecutionService) ClaimExact(
 			}
 			return nil
 		}
-		currentState, err := s.store.GetCurrentInvocationState(txCtx, invocation.ID)
+		claim, err = s.claimWithSessionLocked(txCtx, invocation, owner, leaseDuration)
 		if err != nil {
 			return err
 		}
-		stateID, err := s.ids.NewID(domain.PrefixInvocationState)
-		if err != nil {
-			return err
-		}
-		revision, err := s.store.ReserveLifecycleRevision(txCtx, invocation.SessionID)
-		if err != nil {
-			return err
-		}
-		now := s.clock.Now().UTC()
-		claimed, err := s.store.ClaimInvocation(txCtx, invocation.ID, owner, now.Add(leaseDuration), revision, now)
-		if errors.Is(err, ports.ErrNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		state := lifecycleState(claimed, stateID, revision, domain.InvocationRunning, currentState.ThroughMessageSequence, now)
-		if err := s.store.AppendInvocationState(txCtx, state); err != nil {
-			return err
-		}
-		claim = claimFromInvocation(claimed)
 		disposition = Claimed
 		return nil
 	})
 	return claim, disposition, err
+}
+
+// claimWithSessionLocked completes a queued claim after the caller has locked
+// its Session. ClaimNext acquires that lock with SKIP LOCKED; ClaimExact uses
+// GetSessionForUpdate. Both then take the Invocation lock in the same order.
+func (s *InvocationExecutionService) claimWithSessionLocked(
+	ctx context.Context,
+	observed domain.Invocation,
+	owner string,
+	leaseDuration time.Duration,
+) (domain.InvocationClaim, error) {
+	invocation, err := s.store.GetInvocationForUpdate(ctx, observed.ID)
+	if err != nil {
+		return domain.InvocationClaim{}, err
+	}
+	if invocation.Status != domain.InvocationQueued {
+		return domain.InvocationClaim{}, errQueuedInvocationChanged
+	}
+	currentState, err := s.store.GetCurrentInvocationState(ctx, invocation.ID)
+	if err != nil {
+		return domain.InvocationClaim{}, err
+	}
+	stateID, err := s.ids.NewID(domain.PrefixInvocationState)
+	if err != nil {
+		return domain.InvocationClaim{}, err
+	}
+	revision, err := s.store.ReserveLifecycleRevision(ctx, invocation.SessionID)
+	if err != nil {
+		return domain.InvocationClaim{}, err
+	}
+	now := s.clock.Now().UTC()
+	claimed, err := s.store.ClaimInvocation(ctx, invocation.ID, owner, now.Add(leaseDuration), revision, now)
+	if errors.Is(err, ports.ErrNotFound) {
+		return domain.InvocationClaim{}, fmt.Errorf("claim queued Invocation after row lock: %w", err)
+	}
+	if err != nil {
+		return domain.InvocationClaim{}, err
+	}
+	state := lifecycleState(claimed, stateID, revision, domain.InvocationRunning, currentState.ThroughMessageSequence, now)
+	if err := s.store.AppendInvocationState(ctx, state); err != nil {
+		return domain.InvocationClaim{}, err
+	}
+	return claimFromInvocation(claimed), nil
 }
 
 func (s *InvocationExecutionService) Renew(
@@ -240,16 +268,21 @@ func (s *InvocationExecutionService) ReapExpired(ctx context.Context, limit int)
 		return nil, err
 	}
 	reaped := make([]domain.Invocation, 0, len(candidates))
+	var candidateErrors []error
 	for _, candidate := range candidates {
 		invocation, changed, err := s.reapCandidate(ctx, candidate, now)
 		if err != nil {
-			return reaped, err
+			candidateErrors = append(candidateErrors, fmt.Errorf("reap Invocation %s: %w", candidate.ID, err))
+			if ctx.Err() != nil {
+				break
+			}
+			continue
 		}
 		if changed {
 			reaped = append(reaped, invocation)
 		}
 	}
-	return reaped, nil
+	return reaped, errors.Join(candidateErrors...)
 }
 
 func (s *InvocationExecutionService) reapCandidate(

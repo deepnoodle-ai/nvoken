@@ -77,7 +77,7 @@ type InvocationRepository interface {
 	CreateInvocation(context.Context, domain.Invocation) error
 	GetInvocation(context.Context, string) (domain.Invocation, error)
 	GetInvocationForUpdate(context.Context, string) (domain.Invocation, error)
-	FindNextQueuedInvocation(context.Context) (domain.Invocation, error)
+	FindNextQueuedInvocationForUpdate(context.Context) (domain.Invocation, error)
 	ListExpiredInvocationLeases(context.Context, time.Time, int) ([]domain.Invocation, error)
 	GetInvocationByIdempotencyKey(context.Context, string, string, string, string) (domain.Invocation, error)
 	GetNonterminalInvocationBySession(context.Context, string) (domain.Invocation, error)
