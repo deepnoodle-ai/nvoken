@@ -307,6 +307,7 @@ run "paved_defaults" {
       length(google_monitoring_alert_policy.runtime_health.notification_channels) == 0 &&
       google_monitoring_alert_policy.provider_failures.conditions[0].condition_threshold[0].threshold_value == 5 &&
       google_monitoring_alert_policy.provider_failures.conditions[0].condition_threshold[0].duration == "300s" &&
+      strcontains(google_monitoring_alert_policy.provider_failures.conditions[0].condition_threshold[0].filter, "metric.label.outcome=\"failed\"") &&
       google_monitoring_alert_policy.callback_failures.conditions[0].condition_threshold[0].duration == "0s" &&
       google_monitoring_alert_policy.database_capacity.conditions[1].condition_threshold[0].threshold_value == 0.85 &&
       strcontains(google_monitoring_alert_policy.runtime_health.documentation[0].content, "runbooks.md#runtime-unavailable-or-5xx") &&

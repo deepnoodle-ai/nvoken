@@ -232,8 +232,10 @@ func (e *GenerationExecutor) Execute(
 	}
 	if err != nil {
 		class := generationErrorClass(err)
+		interrupted := false
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			class = generationErrorClass(ctxErr)
+			interrupted = true
 		}
 		if providerCalled &&
 			!errors.Is(err, ports.ErrGenerationInputInvalid) &&
@@ -244,6 +246,7 @@ func (e *GenerationExecutor) Execute(
 				request.Provider,
 				request.Model,
 				time.Since(providerStarted),
+				interrupted,
 			)
 		}
 		if ctx.Err() != nil {
@@ -298,6 +301,7 @@ func (e *GenerationExecutor) Execute(
 					request.Provider,
 					request.Model,
 					time.Since(providerStarted),
+					false,
 				)
 			} else {
 				e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
@@ -351,6 +355,7 @@ func (e *GenerationExecutor) Execute(
 				request.Provider,
 				request.Model,
 				time.Since(providerStarted),
+				false,
 			)
 		} else {
 			e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
@@ -475,13 +480,20 @@ func (e *GenerationExecutor) logProviderFailure(
 	provider string,
 	requestedModel string,
 	latency time.Duration,
+	interrupted bool,
 ) {
+	message := "Provider generation failed"
+	outcome := "failed"
+	if interrupted {
+		message = "Provider generation canceled"
+		outcome = "canceled"
+	}
 	e.logger.Warn(
-		"Provider generation failed",
+		message,
 		"event",
 		"provider_generation",
 		"outcome",
-		"failed",
+		outcome,
 		"invocation_id",
 		claim.Invocation.ID,
 		"lease_attempt",

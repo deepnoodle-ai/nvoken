@@ -119,7 +119,7 @@ output "monitoring_notification_channels" {
 }
 
 output "configured_capacity_totals" {
-  description = "Declared service, executor, and database pool ceilings that must be reconciled with production Cloud SQL and queue capacity."
+  description = "Declared service, executor, and database pool ceilings that must be reconciled with production Cloud SQL, queue capacity, and the independently configured connection alert threshold."
   value = {
     runtime_instances             = var.max_instances
     runtime_requests              = var.max_instances * var.request_concurrency

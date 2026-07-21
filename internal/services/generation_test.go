@@ -821,7 +821,9 @@ func TestGenerationExecutorRecordsProviderCancellation(t *testing.T) {
 		t.Fatalf("result = %#v, error = %v", result, err)
 	}
 	if !strings.Contains(logs.String(), `"event":"provider_generation"`) ||
-		!strings.Contains(logs.String(), `"class":"provider_canceled"`) {
+		!strings.Contains(logs.String(), `"outcome":"canceled"`) ||
+		!strings.Contains(logs.String(), `"class":"provider_canceled"`) ||
+		strings.Contains(logs.String(), `"outcome":"failed"`) {
 		t.Fatalf("logs omit bounded provider cancellation: %s", logs.String())
 	}
 }

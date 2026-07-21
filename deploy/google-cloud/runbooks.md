@@ -154,6 +154,9 @@ when a retrying request cannot load its authoritative row.
 
 **Meaning.** Provider generation failures exceeded the conservative sustained
 threshold. A single normal provider rejection does not open this alert.
+Provider work interrupted by lease loss, client cancellation, or the execution
+deadline is recorded with `outcome=canceled` for dashboard diagnosis and does
+not feed this failure alert.
 
 **First queries.** Group the bounded failure classes, then check the provider's
 status and the configured Secret Manager version without reading the secret:

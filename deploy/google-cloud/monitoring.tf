@@ -78,11 +78,11 @@ resource "google_monitoring_uptime_check_config" "runtime" {
 resource "google_logging_metric" "invocation_outcomes" {
   project     = var.project_id
   name        = "${local.resource_name}-invocation-outcomes"
-  description = "Terminal nvoken Invocation outcomes. The status label is a bounded lifecycle enum."
+  description = "nvoken Invocation settlement outcomes, including waiting. The status label is a bounded lifecycle enum."
   filter      = "${local.application_log_filter} AND jsonPayload.event=\"invocation_settled\""
 
   metric_descriptor {
-    display_name = "nvoken Invocation outcomes"
+    display_name = "nvoken Invocation settlement outcomes"
     metric_kind  = "DELTA"
     value_type   = "INT64"
     unit         = "1"
@@ -90,7 +90,7 @@ resource "google_logging_metric" "invocation_outcomes" {
     labels {
       key         = "status"
       value_type  = "STRING"
-      description = "Bounded terminal Invocation status."
+      description = "Bounded Invocation status recorded after settlement."
     }
   }
 
@@ -104,7 +104,7 @@ resource "google_logging_metric" "invocation_outcomes" {
 resource "google_logging_metric" "provider_outcomes" {
   project     = var.project_id
   name        = "${local.resource_name}-provider-outcomes"
-  description = "Provider generation outcomes. Only the bounded success or failed outcome is extracted."
+  description = "Provider generation outcomes. Only bounded success, failed, or canceled outcomes are extracted."
   filter      = "${local.application_log_filter} AND jsonPayload.event=\"provider_generation\""
 
   metric_descriptor {
@@ -116,7 +116,7 @@ resource "google_logging_metric" "provider_outcomes" {
     labels {
       key         = "outcome"
       value_type  = "STRING"
-      description = "Bounded provider outcome: success or failed."
+      description = "Bounded provider outcome: success, failed, or canceled."
     }
   }
 
@@ -677,7 +677,7 @@ resource "google_monitoring_dashboard" "runtime" {
           }
         },
         {
-          title = "Invocation terminal outcomes"
+          title = "Invocation settlement outcomes"
           xyChart = {
             dataSets = [{
               plotType       = "STACKED_BAR"

@@ -50,12 +50,17 @@ func TestExecutorRoutesArePrivateAndMinimal(t *testing.T) {
 
 func TestExecutorAcknowledgesPoisonBodyWithoutAttempt(t *testing.T) {
 	attempts := &fakeAttempts{}
-	handler := newHandler(attempts, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Second)
+	var logs bytes.Buffer
+	handler := newHandler(attempts, slog.New(slog.NewJSONHandler(&logs, nil)), time.Second)
 	request := httptest.NewRequest(http.MethodPost, "/internal/execution-dispatches/dsp_test/attempts", strings.NewReader("unexpected"))
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusNoContent || attempts.calls != 0 {
 		t.Fatalf("status/calls = %d/%d", response.Code, attempts.calls)
+	}
+	if !strings.Contains(logs.String(), `"event":"dispatch_attempt_decided"`) ||
+		!strings.Contains(logs.String(), `"handler_outcome":"poison_body"`) {
+		t.Fatalf("logs omit bounded poison delivery outcome: %s", logs.String())
 	}
 }
 

@@ -184,6 +184,10 @@ export TF_VAR_monitoring_notification_channels='["projects/PROJECT/notificationC
 The default database connection alert opens above 80 connections. Confirm that
 this remains below the selected instance's actual `max_connections`, with room
 for the summed runtime/executor pool ceilings, migrations, and operator access.
+The alert threshold is independent of `configured_capacity_totals`; Terraform
+does not derive it from the declared pools or the selected Cloud SQL tier. Any
+pool, instance-count, queue-concurrency, or database-tier change therefore
+requires an explicit capacity reconciliation and threshold review.
 Change `monitoring_alert_thresholds` and `monitoring_alert_windows_seconds` as
 reviewed objects when the deployment needs different conservative bounds.
 
@@ -275,7 +279,7 @@ lost work.
 Terraform creates one dashboard by default. Set
 `enable_monitoring_dashboard = false` only when another managed view replaces
 it. The dashboard shows public request volume/5xx/latency, uptime checks,
-Invocation terminal outcomes, provider outcome/latency, callback activity,
+Invocation settlement outcomes, provider outcome/latency, callback activity,
 aged dispatch evidence, dispatch/executor outcomes, Cloud Tasks depth/attempt
 delay, Cloud SQL connections/storage, and Redis memory/clients. Empty charts
 mean **unknown or no events**, not healthy. Log-based metrics begin collecting

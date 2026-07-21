@@ -72,7 +72,8 @@ func newHandler(attempts AttemptService, logger *slog.Logger, attemptTimeout tim
 		r.Body = http.MaxBytesReader(w, r.Body, 0)
 		if _, err := io.ReadAll(r.Body); err != nil {
 			logger.Warn("ignored malformed execution dispatch delivery",
-				"dispatch_id", r.PathValue("dispatch_id"), "handler_outcome", "poison_body")
+				"event", "dispatch_attempt_decided", "dispatch_id", r.PathValue("dispatch_id"),
+				"handler_outcome", "poison_body")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
