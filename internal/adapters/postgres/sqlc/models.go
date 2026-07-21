@@ -42,6 +42,9 @@ type Invocation struct {
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	CompletedAt          *time.Time
+	LeaseOwner           *string
+	LeaseExpiresAt       *time.Time
+	LeaseAttempt         int64
 }
 
 type InvocationState struct {
@@ -55,6 +58,7 @@ type InvocationState struct {
 	Status                 string
 	ThroughMessageSequence *int64
 	CreatedAt              time.Time
+	LeaseAttempt           int64
 }
 
 type Session struct {

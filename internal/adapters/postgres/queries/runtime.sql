@@ -137,16 +137,35 @@ INSERT INTO invocations (
 );
 
 -- name: GetInvocation :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id,
-       spec_snapshot_id, idempotency_key, request_fingerprint, status,
-       current_state_revision, error, created_at, updated_at, completed_at
+SELECT *
 FROM invocations
 WHERE id = $1;
 
+-- name: GetInvocationForUpdate :one
+SELECT *
+FROM invocations
+WHERE id = $1
+FOR UPDATE;
+
+-- name: FindNextQueuedInvocationForUpdate :one
+SELECT i.*
+FROM invocations AS i
+JOIN sessions AS s ON s.id = i.session_id
+WHERE i.status = 'queued'
+ORDER BY i.created_at, i.id
+FOR UPDATE OF s SKIP LOCKED
+LIMIT 1;
+
+-- name: ListExpiredInvocationLeases :many
+SELECT *
+FROM invocations
+WHERE status = 'running'
+  AND lease_expires_at <= sqlc.arg(observed_at)
+ORDER BY lease_expires_at, id
+LIMIT sqlc.arg(batch_limit);
+
 -- name: GetInvocationByIdempotencyKey :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id,
-       spec_snapshot_id, idempotency_key, request_fingerprint, status,
-       current_state_revision, error, created_at, updated_at, completed_at
+SELECT *
 FROM invocations
 WHERE account_id = $1
   AND tenant_partition_id = $2
@@ -154,9 +173,7 @@ WHERE account_id = $1
   AND idempotency_key = $4;
 
 -- name: GetNonterminalInvocationBySession :one
-SELECT id, session_id, account_id, tenant_partition_id, agent_id,
-       spec_snapshot_id, idempotency_key, request_fingerprint, status,
-       current_state_revision, error, created_at, updated_at, completed_at
+SELECT *
 FROM invocations
 WHERE session_id = $1
   AND status IN ('queued', 'running', 'waiting')
@@ -165,14 +182,59 @@ LIMIT 1;
 -- name: LockInvocationAdmissionKey :one
 SELECT pg_advisory_xact_lock(hashtextextended(sqlc.arg(lock_key)::text, 0));
 
--- name: UpdateInvocationStatus :exec
+-- name: ClaimInvocation :one
+UPDATE invocations
+SET status = 'running',
+    current_state_revision = sqlc.arg(state_revision),
+    lease_owner = sqlc.arg(lease_owner),
+    lease_expires_at = sqlc.arg(lease_expires_at),
+    lease_attempt = lease_attempt + 1,
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id)
+  AND status = 'queued'
+RETURNING *;
+
+-- name: RenewInvocationLease :one
+UPDATE invocations
+SET lease_expires_at = sqlc.arg(lease_expires_at),
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id)
+  AND status = 'running'
+  AND lease_owner = sqlc.arg(lease_owner)
+  AND lease_attempt = sqlc.arg(lease_attempt)
+  AND lease_expires_at > sqlc.arg(observed_at)
+RETURNING *;
+
+-- name: SettleInvocation :one
 UPDATE invocations
 SET status = sqlc.arg(status),
     current_state_revision = sqlc.arg(state_revision),
+    lease_owner = NULL,
+    lease_expires_at = NULL,
     error = sqlc.narg(error_payload),
-    completed_at = sqlc.narg(completed_at),
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = sqlc.arg(id);
+    completed_at = sqlc.arg(observed_at),
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id)
+  AND status = 'running'
+  AND lease_owner = sqlc.arg(lease_owner)
+  AND lease_attempt = sqlc.arg(lease_attempt)
+  AND lease_expires_at > sqlc.arg(observed_at)
+RETURNING *;
+
+-- name: ReapInvocationLease :one
+UPDATE invocations
+SET status = 'failed',
+    current_state_revision = sqlc.arg(state_revision),
+    lease_owner = NULL,
+    lease_expires_at = NULL,
+    error = sqlc.arg(error_payload),
+    completed_at = sqlc.arg(observed_at),
+    updated_at = sqlc.arg(observed_at)
+WHERE id = sqlc.arg(id)
+  AND status = 'running'
+  AND lease_attempt = sqlc.arg(lease_attempt)
+  AND lease_expires_at <= sqlc.arg(observed_at)
+RETURNING *;
 
 -- name: AppendSessionMessage :exec
 INSERT INTO session_messages (
@@ -190,12 +252,18 @@ ORDER BY sequence;
 -- name: AppendInvocationState :exec
 INSERT INTO invocation_states (
     id, invocation_id, session_id, account_id, tenant_partition_id,
-    agent_id, revision, status, through_message_sequence, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+    agent_id, revision, status, lease_attempt, through_message_sequence, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+
+-- name: GetCurrentInvocationState :one
+SELECT *
+FROM invocation_states
+WHERE invocation_id = $1
+ORDER BY revision DESC
+LIMIT 1;
 
 -- name: ListInvocationStates :many
-SELECT id, invocation_id, session_id, account_id, tenant_partition_id,
-       agent_id, revision, status, through_message_sequence, created_at
+SELECT *
 FROM invocation_states
 WHERE session_id = $1
 ORDER BY revision;

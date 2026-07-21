@@ -13,6 +13,7 @@ var (
 	ErrUnauthenticated     = errors.New("unauthenticated")
 	ErrRetryable           = errors.New("retryable database conflict")
 	ErrConcurrentAdmission = errors.New("concurrent admission conflict")
+	ErrLeaseLost           = errors.New("invocation lease lost")
 )
 
 // Clock makes persisted timestamps deterministic in services and tests.
@@ -75,10 +76,16 @@ type SessionMessageRepository interface {
 type InvocationRepository interface {
 	CreateInvocation(context.Context, domain.Invocation) error
 	GetInvocation(context.Context, string) (domain.Invocation, error)
+	GetInvocationForUpdate(context.Context, string) (domain.Invocation, error)
+	FindNextQueuedInvocationForUpdate(context.Context) (domain.Invocation, error)
+	ListExpiredInvocationLeases(context.Context, time.Time, int) ([]domain.Invocation, error)
 	GetInvocationByIdempotencyKey(context.Context, string, string, string, string) (domain.Invocation, error)
 	GetNonterminalInvocationBySession(context.Context, string) (domain.Invocation, error)
 	LockInvocationAdmissionKey(context.Context, string) error
-	UpdateInvocationStatus(context.Context, string, domain.InvocationStatus, int64, []byte, *time.Time) error
+	ClaimInvocation(context.Context, string, string, time.Time, int64, time.Time) (domain.Invocation, error)
+	RenewInvocationLease(context.Context, string, string, int64, time.Time, time.Time) (domain.Invocation, error)
+	SettleInvocation(context.Context, string, string, int64, domain.InvocationStatus, int64, []byte, time.Time) (domain.Invocation, error)
+	ReapInvocationLease(context.Context, string, int64, int64, []byte, time.Time) (domain.Invocation, error)
 }
 
 // RuntimeAuthenticator turns a presented bearer secret into the durable scope
@@ -90,5 +97,27 @@ type RuntimeAuthenticator interface {
 
 type InvocationStateRepository interface {
 	AppendInvocationState(context.Context, domain.InvocationState) error
+	GetCurrentInvocationState(context.Context, string) (domain.InvocationState, error)
 	ListInvocationStates(context.Context, string) ([]domain.InvocationState, error)
+}
+
+const InvocationExecutionQueue = "invocation_execution"
+
+// WorkSignaller reduces queue latency. Postgres remains authoritative, so
+// callers must remain correct when notifications are absent or duplicated.
+type WorkSignaller interface {
+	Notify(context.Context, string)
+	Subscribe(context.Context, []string) WorkSubscription
+}
+
+type WorkSubscription interface {
+	Wait(context.Context, time.Duration) bool
+	Close()
+}
+
+// InvocationExecutor performs one claimed execution. Implementations must
+// honor context cancellation and return only the desired terminal result; the
+// ownership service performs the fenced durable settlement.
+type InvocationExecutor interface {
+	Execute(context.Context, domain.InvocationClaim) (domain.InvocationExecutionResult, error)
 }

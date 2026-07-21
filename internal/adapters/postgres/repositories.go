@@ -268,6 +268,48 @@ func (s *Store) GetInvocation(ctx context.Context, id string) (domain.Invocation
 	return invocationFromRow(row), nil
 }
 
+func (s *Store) GetInvocationForUpdate(ctx context.Context, id string) (domain.Invocation, error) {
+	if _, ok := transactionFromContext(ctx); !ok {
+		return domain.Invocation{}, fmt.Errorf("invocation row lock requires a transaction")
+	}
+	row, err := s.q(ctx).GetInvocationForUpdate(ctx, id)
+	if err != nil {
+		return domain.Invocation{}, normalizeNotFound(err)
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) FindNextQueuedInvocationForUpdate(ctx context.Context) (domain.Invocation, error) {
+	if _, ok := transactionFromContext(ctx); !ok {
+		return domain.Invocation{}, fmt.Errorf("queued Invocation Session lock requires a transaction")
+	}
+	row, err := s.q(ctx).FindNextQueuedInvocationForUpdate(ctx)
+	if err != nil {
+		return domain.Invocation{}, normalizeNotFound(err)
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) ListExpiredInvocationLeases(ctx context.Context, observedAt time.Time, limit int) ([]domain.Invocation, error) {
+	if limit <= 0 {
+		return []domain.Invocation{}, nil
+	}
+	if limit > int(^uint32(0)>>1) {
+		limit = int(^uint32(0) >> 1)
+	}
+	rows, err := s.q(ctx).ListExpiredInvocationLeases(ctx, postgresdb.ListExpiredInvocationLeasesParams{
+		ObservedAt: &observedAt, BatchLimit: int32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	invocations := make([]domain.Invocation, len(rows))
+	for i, row := range rows {
+		invocations[i] = invocationFromRow(row)
+	}
+	return invocations, nil
+}
+
 func (s *Store) GetInvocationByIdempotencyKey(ctx context.Context, accountID, partitionID, agentID, key string) (domain.Invocation, error) {
 	row, err := s.q(ctx).GetInvocationByIdempotencyKey(ctx, postgresdb.GetInvocationByIdempotencyKeyParams{
 		AccountID: accountID, TenantPartitionID: partitionID, AgentID: agentID, IdempotencyKey: key,
@@ -300,23 +342,92 @@ func invocationFromRow(row postgresdb.Invocation) domain.Invocation {
 		TenantPartitionID: row.TenantPartitionID, AgentID: row.AgentID,
 		SpecSnapshotID: row.SpecSnapshotID, IdempotencyKey: row.IdempotencyKey,
 		RequestFingerprint: row.RequestFingerprint, Status: domain.InvocationStatus(row.Status),
-		CurrentStateRevision: row.CurrentStateRevision, Error: row.Error,
-		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, CompletedAt: row.CompletedAt,
+		CurrentStateRevision: row.CurrentStateRevision,
+		LeaseOwner:           row.LeaseOwner,
+		LeaseExpiresAt:       row.LeaseExpiresAt,
+		LeaseAttempt:         row.LeaseAttempt,
+		Error:                row.Error,
+		CreatedAt:            row.CreatedAt, UpdatedAt: row.UpdatedAt, CompletedAt: row.CompletedAt,
 	}
 }
 
-func (s *Store) UpdateInvocationStatus(
+func (s *Store) ClaimInvocation(
 	ctx context.Context,
-	id string,
+	id, owner string,
+	leaseExpiresAt time.Time,
+	stateRevision int64,
+	observedAt time.Time,
+) (domain.Invocation, error) {
+	row, err := s.q(ctx).ClaimInvocation(ctx, postgresdb.ClaimInvocationParams{
+		ID: id, LeaseOwner: &owner, LeaseExpiresAt: &leaseExpiresAt,
+		StateRevision: stateRevision, ObservedAt: observedAt,
+	})
+	if err != nil {
+		return domain.Invocation{}, normalizeNotFound(err)
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) RenewInvocationLease(
+	ctx context.Context,
+	id, owner string,
+	attempt int64,
+	leaseExpiresAt, observedAt time.Time,
+) (domain.Invocation, error) {
+	row, err := s.q(ctx).RenewInvocationLease(ctx, postgresdb.RenewInvocationLeaseParams{
+		ID: id, LeaseOwner: &owner, LeaseAttempt: attempt,
+		LeaseExpiresAt: &leaseExpiresAt, ObservedAt: observedAt,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Invocation{}, ports.ErrLeaseLost
+	}
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) SettleInvocation(
+	ctx context.Context,
+	id, owner string,
+	attempt int64,
 	status domain.InvocationStatus,
 	stateRevision int64,
 	errorPayload []byte,
-	completedAt *time.Time,
-) error {
-	return s.q(ctx).UpdateInvocationStatus(ctx, postgresdb.UpdateInvocationStatusParams{
-		ID: id, Status: string(status), StateRevision: stateRevision,
-		ErrorPayload: errorPayload, CompletedAt: completedAt,
+	observedAt time.Time,
+) (domain.Invocation, error) {
+	row, err := s.q(ctx).SettleInvocation(ctx, postgresdb.SettleInvocationParams{
+		ID: id, LeaseOwner: &owner, LeaseAttempt: attempt,
+		Status: string(status), StateRevision: stateRevision,
+		ErrorPayload: errorPayload, ObservedAt: &observedAt,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Invocation{}, ports.ErrLeaseLost
+	}
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) ReapInvocationLease(
+	ctx context.Context,
+	id string,
+	attempt, stateRevision int64,
+	errorPayload []byte,
+	observedAt time.Time,
+) (domain.Invocation, error) {
+	row, err := s.q(ctx).ReapInvocationLease(ctx, postgresdb.ReapInvocationLeaseParams{
+		ID: id, LeaseAttempt: attempt, StateRevision: stateRevision,
+		ErrorPayload: errorPayload, ObservedAt: &observedAt,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Invocation{}, ports.ErrLeaseLost
+	}
+	if err != nil {
+		return domain.Invocation{}, err
+	}
+	return invocationFromRow(row), nil
 }
 
 func (s *Store) AppendSessionMessage(ctx context.Context, message domain.SessionMessage) error {
@@ -350,8 +461,17 @@ func (s *Store) AppendInvocationState(ctx context.Context, state domain.Invocati
 		ID: state.ID, InvocationID: state.InvocationID, SessionID: state.SessionID,
 		AccountID: state.AccountID, TenantPartitionID: state.TenantPartitionID,
 		AgentID: state.AgentID, Revision: state.Revision, Status: string(state.Status),
+		LeaseAttempt:           state.LeaseAttempt,
 		ThroughMessageSequence: state.ThroughMessageSequence, CreatedAt: state.CreatedAt,
 	})
+}
+
+func (s *Store) GetCurrentInvocationState(ctx context.Context, invocationID string) (domain.InvocationState, error) {
+	row, err := s.q(ctx).GetCurrentInvocationState(ctx, invocationID)
+	if err != nil {
+		return domain.InvocationState{}, normalizeNotFound(err)
+	}
+	return invocationStateFromRow(row), nil
 }
 
 func (s *Store) ListInvocationStates(ctx context.Context, sessionID string) ([]domain.InvocationState, error) {
@@ -361,15 +481,19 @@ func (s *Store) ListInvocationStates(ctx context.Context, sessionID string) ([]d
 	}
 	states := make([]domain.InvocationState, len(rows))
 	for i, row := range rows {
-		states[i] = domain.InvocationState{
-			ID: row.ID, InvocationID: row.InvocationID, SessionID: row.SessionID,
-			AccountID: row.AccountID, TenantPartitionID: row.TenantPartitionID,
-			AgentID: row.AgentID, Revision: row.Revision,
-			Status:                 domain.InvocationStatus(row.Status),
-			ThroughMessageSequence: row.ThroughMessageSequence, CreatedAt: row.CreatedAt,
-		}
+		states[i] = invocationStateFromRow(row)
 	}
 	return states, nil
+}
+
+func invocationStateFromRow(row postgresdb.InvocationState) domain.InvocationState {
+	return domain.InvocationState{
+		ID: row.ID, InvocationID: row.InvocationID, SessionID: row.SessionID,
+		AccountID: row.AccountID, TenantPartitionID: row.TenantPartitionID,
+		AgentID: row.AgentID, Revision: row.Revision,
+		Status: domain.InvocationStatus(row.Status), LeaseAttempt: row.LeaseAttempt,
+		ThroughMessageSequence: row.ThroughMessageSequence, CreatedAt: row.CreatedAt,
+	}
 }
 
 func normalizeNotFound(err error) error {

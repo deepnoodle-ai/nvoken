@@ -114,12 +114,12 @@ func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("dirty version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = 1",
+			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = 2",
 		); err != nil {
 			t.Fatalf("mark migration dirty: %v", err)
 		}
 		err := NewMigrator(databaseURL, 2*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil))).Apply(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "000001 is dirty") {
+		if err == nil || !strings.Contains(err.Error(), "000002 is dirty") {
 			t.Fatalf("migrate error = %v", err)
 		}
 	})
@@ -127,7 +127,7 @@ func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("unknown version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false WHERE version = 1",
+			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false WHERE version = 2",
 		); err != nil {
 			t.Fatalf("set future migration: %v", err)
 		}
@@ -298,7 +298,7 @@ func TestRuntimeRepositoriesCommitRollbackAndReadback(t *testing.T) {
 		if err := store.AppendInvocationState(ctx, secondState); err != nil {
 			return err
 		}
-		return store.UpdateInvocationStatus(ctx, invocation.ID, domain.InvocationQueued, revision, nil, nil)
+		return updateInvocationStatusForTest(ctx, pool, invocation.ID, domain.InvocationQueued, revision, nil, nil)
 	}); err != nil {
 		t.Fatalf("append second message and state: %v", err)
 	}
@@ -704,7 +704,7 @@ func TestInvocationUniquenessAndRetention(t *testing.T) {
 	}
 
 	completedAt := now.Add(time.Second)
-	if err := store.UpdateInvocationStatus(ctx, winner.ID, domain.InvocationCompleted, 2, nil, &completedAt); err != nil {
+	if err := updateInvocationStatusForTest(ctx, pool, winner.ID, domain.InvocationCompleted, 2, nil, &completedAt); err != nil {
 		t.Fatalf("complete winner: %v", err)
 	}
 	replacementSnapshot, replacement := createInvocationRecords(t, fixture, now, "replacement", domain.InvocationQueued)
@@ -798,6 +798,27 @@ func stringPointer(value string) *string { return &value }
 
 func execError(ctx context.Context, pool *pgxpool.Pool, sql string, args ...any) error {
 	_, err := pool.Exec(ctx, sql, args...)
+	return err
+}
+
+// updateInvocationStatusForTest is intentionally test-only. Production
+// execution transitions go through the fenced ownership service.
+func updateInvocationStatusForTest(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	id string,
+	status domain.InvocationStatus,
+	revision int64,
+	errorPayload []byte,
+	completedAt *time.Time,
+) error {
+	_, err := pool.Exec(ctx, `
+		UPDATE invocations
+		SET status = $2, current_state_revision = $3, error = $4,
+		    completed_at = $5, updated_at = CURRENT_TIMESTAMP,
+		    lease_owner = NULL, lease_expires_at = NULL
+		WHERE id = $1
+	`, id, string(status), revision, errorPayload, completedAt)
 	return err
 }
 

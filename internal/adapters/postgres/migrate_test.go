@@ -17,7 +17,7 @@ func TestEmbeddedMigrationVersions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("migrationVersions: %v", err)
 	}
-	if len(versions) != 1 || versions[0] != 1 {
-		t.Fatalf("migration versions = %v, want [1]", versions)
+	if len(versions) != 2 || versions[0] != 1 || versions[1] != 2 {
+		t.Fatalf("migration versions = %v, want [1 2]", versions)
 	}
 }
