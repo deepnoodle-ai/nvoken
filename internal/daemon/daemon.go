@@ -42,6 +42,7 @@ type Config struct {
 	OpenAIAPIKey            string
 	ShutdownTimeout         time.Duration
 	ProcessRole             ProcessRole
+	InvocationExecutionMode services.InvocationExecutionMode
 	Engine                  engine.Config
 	Budgets                 services.BudgetPolicy
 	Dispatch                services.DispatchConfig
@@ -54,6 +55,37 @@ type component interface {
 	Run(context.Context) error
 }
 
+type runtimeTopology struct {
+	privateExecutor bool
+	publicAPI       bool
+	embeddedRunner  bool
+	reaper          bool
+	dispatchControl bool
+}
+
+func resolveRuntimeTopology(role ProcessRole, mode services.InvocationExecutionMode, cloudTasksConfigured bool) (runtimeTopology, error) {
+	switch role {
+	case ProcessRoleExecutor:
+		return runtimeTopology{privateExecutor: true}, nil
+	case ProcessRoleCombined:
+		topology := runtimeTopology{publicAPI: true, dispatchControl: cloudTasksConfigured}
+		switch mode {
+		case services.InvocationExecutionEmbedded:
+			topology.embeddedRunner = true
+		case services.InvocationExecutionCloudTasks:
+			if !cloudTasksConfigured {
+				return runtimeTopology{}, fmt.Errorf("cloud_tasks Invocation execution requires Cloud Tasks configuration")
+			}
+			topology.reaper = true
+		default:
+			return runtimeTopology{}, fmt.Errorf("unsupported Invocation execution mode %q", mode)
+		}
+		return topology, nil
+	default:
+		return runtimeTopology{}, fmt.Errorf("unsupported process role %q", role)
+	}
+}
+
 // Run starts the server and blocks until ctx is cancelled or the server
 // fails.
 func Run(ctx context.Context, cfg Config) error {
@@ -64,7 +96,19 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.Dispatch = services.DefaultDispatchConfig()
 	}
 	if cfg.DispatchController.PublishInterval == 0 {
+		repairInvocations := cfg.DispatchController.RepairInvocations
 		cfg.DispatchController = dispatchruntime.DefaultControllerConfig()
+		cfg.DispatchController.RepairInvocations = repairInvocations
+	}
+	if cfg.InvocationExecutionMode == "" {
+		cfg.InvocationExecutionMode = services.InvocationExecutionEmbedded
+	}
+	if cfg.InvocationExecutionMode != services.InvocationExecutionEmbedded && cfg.InvocationExecutionMode != services.InvocationExecutionCloudTasks {
+		return fmt.Errorf("unsupported Invocation execution mode %q", cfg.InvocationExecutionMode)
+	}
+	topology, err := resolveRuntimeTopology(cfg.ProcessRole, cfg.InvocationExecutionMode, cfg.CloudTasks.Queue != "")
+	if err != nil {
+		return err
 	}
 	pool, err := postgres.OpenPoolWithConfig(ctx, cfg.DatabaseURL, postgres.PoolConfig{MaxConns: cfg.DatabaseMaxConns})
 	if err != nil {
@@ -88,25 +132,40 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("configure execution dispatch service: %w", err)
 	}
-	if cfg.ProcessRole == ProcessRoleExecutor {
+	if topology.privateExecutor {
+		generator := divegen.New(divegen.Config{
+			AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
+		})
+		invocationExecutor := services.NewGenerationExecutor(store, generator, slog.Default())
+		ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
+			services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
+		owner, err := executionOwner()
+		if err != nil {
+			return fmt.Errorf("create executor owner: %w", err)
+		}
+		cancellations := worksignal.NewPostgresCancellation(pool)
+		attempts, err := dispatchruntime.NewAttemptService(
+			dispatchService, ownership, invocationExecutor, store, txm, clock,
+			owner, cfg.Engine, cancellations, slog.Default(),
+		)
+		if err != nil {
+			return fmt.Errorf("configure request-bound Invocation attempts: %w", err)
+		}
 		srv, err := executorhttp.NewServer(executorhttp.Config{
-			Addr: ":" + cfg.Port, Attempts: dispatchService, Logger: slog.Default(),
+			Addr: ":" + cfg.Port, Attempts: attempts, Logger: slog.Default(),
 			AttemptTimeout:  cfg.ExecutorAttemptTimeout,
 			ShutdownTimeout: cfg.ShutdownTimeout - time.Second,
 		})
 		if err != nil {
 			return fmt.Errorf("configure private executor: %w", err)
 		}
-		joined, err := runComponents(ctx, cfg.ShutdownTimeout, srv)
+		joined, err := runComponents(ctx, cfg.ShutdownTimeout, srv, attempts)
 		if !joined {
 			closePool = false
 			slog.Warn("executor shutdown budget expired before components joined",
 				"shutdown_timeout_ms", cfg.ShutdownTimeout.Milliseconds())
 		}
 		return err
-	}
-	if cfg.ProcessRole != ProcessRoleCombined {
-		return fmt.Errorf("unsupported process role %q", cfg.ProcessRole)
 	}
 	account, err := services.BootstrapInstallation(ctx, store, txm, clock, ids)
 	if err != nil {
@@ -122,30 +181,40 @@ func Run(ctx context.Context, cfg Config) error {
 	cancellations := worksignal.NewPostgresCancellation(pool)
 	runtime := services.NewRuntimeService(store, txm, clock, ids,
 		services.WithWorkSignaller(signaller), services.WithCancellationSignaller(cancellations),
-		services.WithBudgetPolicy(cfg.Budgets), services.WithRuntimeLogger(slog.Default()))
-	generator := divegen.New(divegen.Config{
-		AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
-	})
-	executor := services.NewGenerationExecutor(store, generator, slog.Default())
+		services.WithBudgetPolicy(cfg.Budgets), services.WithRuntimeLogger(slog.Default()),
+		services.WithInvocationExecutionMode(cfg.InvocationExecutionMode, cfg.Dispatch.Queue))
 	ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
 		services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
-	owner, err := executionOwner()
-	if err != nil {
-		return fmt.Errorf("create execution owner: %w", err)
-	}
-	runner, err := engine.NewRunner(owner, ownership, executor, signaller, slog.Default(), cfg.Engine,
-		engine.WithCancellationSignaller(cancellations))
-	if err != nil {
-		return fmt.Errorf("configure Invocation engine: %w", err)
-	}
 	srv := httpapi.NewServer(httpapi.Config{
 		Addr: ":" + cfg.Port, Authenticator: authenticator, Runtime: runtime,
 		// Leave the supervisor one second to observe component completion and
 		// close the database pool inside the total process budget.
 		ShutdownTimeout: cfg.ShutdownTimeout - time.Second,
 	})
-	components := []component{srv, runner}
-	if cfg.CloudTasks.Queue != "" {
+	components := []component{srv}
+	if topology.embeddedRunner {
+		generator := divegen.New(divegen.Config{
+			AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
+		})
+		executor := services.NewGenerationExecutor(store, generator, slog.Default())
+		owner, err := executionOwner()
+		if err != nil {
+			return fmt.Errorf("create execution owner: %w", err)
+		}
+		runner, err := engine.NewRunner(owner, ownership, executor, signaller, slog.Default(), cfg.Engine,
+			engine.WithCancellationSignaller(cancellations))
+		if err != nil {
+			return fmt.Errorf("configure Invocation engine: %w", err)
+		}
+		components = append(components, runner)
+	} else if topology.reaper {
+		reaper, err := engine.NewReaper(ownership, cfg.Engine.ReaperInterval, cfg.Engine.ReaperBatchLimit, slog.Default())
+		if err != nil {
+			return fmt.Errorf("configure Invocation reaper: %w", err)
+		}
+		components = append(components, reaper)
+	}
+	if topology.dispatchControl {
 		tasks, err := cloudtasks.New(ctx, cfg.CloudTasks)
 		if err != nil {
 			return fmt.Errorf("configure Cloud Tasks: %w", err)

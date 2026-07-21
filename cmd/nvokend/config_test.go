@@ -32,7 +32,7 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 		cfg.Budgets.DefaultActiveExecutionTimeout != 30*time.Minute || cfg.Budgets.DefaultMaxIterations != 1 {
 		t.Fatalf("budget defaults: %#v", cfg.Budgets)
 	}
-	if cfg.ProcessRole != "combined" || cfg.Dispatch.Queue != "execution" ||
+	if cfg.ProcessRole != "combined" || cfg.InvocationExecutionMode != "embedded" || cfg.Dispatch.Queue != "execution" ||
 		cfg.Dispatch.PublicationLease != 30*time.Second || cfg.Dispatch.StaleAfter != 5*time.Minute ||
 		cfg.ExecutorAttemptTimeout != 29*time.Minute+55*time.Second {
 		t.Fatalf("dispatch defaults: %#v", cfg)
@@ -62,6 +62,60 @@ func TestLoadDaemonConfigRequiresCompleteCloudTasksIdentity(t *testing.T) {
 	_, err := loadDaemonConfig()
 	if err == nil || !strings.Contains(err.Error(), "must be configured together") {
 		t.Fatalf("partial Cloud Tasks error = %v", err)
+	}
+}
+
+func TestLoadDaemonConfigCloudTasksModeRequiresIdentityAndEnablesRepair(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("INVOCATION_EXECUTION_MODE", "cloud_tasks")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "requires complete Cloud Tasks") {
+		t.Fatalf("missing Cloud Tasks mode error = %v", err)
+	}
+
+	t.Setenv("CLOUD_TASKS_QUEUE", "projects/test/locations/us-central1/queues/execution")
+	t.Setenv("CLOUD_TASKS_EXECUTOR_URL", "https://executor.example.run.app")
+	t.Setenv("CLOUD_TASKS_OIDC_SERVICE_ACCOUNT", "task-caller@example-project.iam.gserviceaccount.com")
+	t.Setenv("CLOUD_TASKS_OIDC_AUDIENCE", "https://executor.example.run.app")
+	cfg, err := loadDaemonConfig()
+	if err != nil {
+		t.Fatalf("load Cloud Tasks mode: %v", err)
+	}
+	if cfg.InvocationExecutionMode != "cloud_tasks" || !cfg.DispatchController.RepairInvocations {
+		t.Fatalf("Cloud Tasks config = %#v", cfg)
+	}
+}
+
+func TestLoadDaemonConfigCloudExecutorRequiresCapacityTimeoutAndProvider(t *testing.T) {
+	t.Setenv("NVOKEN_PROCESS_ROLE", "executor")
+	t.Setenv("INVOCATION_EXECUTION_MODE", "cloud_tasks")
+	t.Setenv("DATABASE_URL", "postgres://nvoken:secret@localhost/nvoken")
+	t.Setenv("DATABASE_MAX_CONNS", "1")
+	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "at least 2") {
+		t.Fatalf("executor connection reserve error = %v", err)
+	}
+
+	t.Setenv("DATABASE_MAX_CONNS", "2")
+	t.Setenv("ENGINE_EXECUTION_SEGMENT_CEILING", "10m")
+	t.Setenv("EXECUTOR_ATTEMPT_TIMEOUT", "9m")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "must not exceed") {
+		t.Fatalf("executor segment nesting error = %v", err)
+	}
+
+	t.Setenv("EXECUTOR_ATTEMPT_TIMEOUT", "11m")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "Invocation-generating role") {
+		t.Fatalf("executor provider error = %v", err)
+	}
+}
+
+func TestLoadDaemonConfigRejectsInvalidInvocationExecutionMode(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("INVOCATION_EXECUTION_MODE", "automatic")
+	_, err := loadDaemonConfig()
+	if err == nil || !strings.Contains(err.Error(), "embedded or cloud_tasks") {
+		t.Fatalf("execution mode error = %v", err)
 	}
 }
 
@@ -177,4 +231,5 @@ func setServeConfig(t *testing.T) {
 	t.Helper()
 	t.Setenv("DATABASE_URL", "postgres://nvoken:secret@localhost/nvoken")
 	t.Setenv("RUNTIME_API_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret")
 }

@@ -225,9 +225,13 @@ func (s *RuntimeService) CancelInvocation(ctx context.Context, auth domain.Runti
 			return err
 		}
 		transitioned = true
-		return s.store.AppendInvocationState(txCtx, lifecycleState(
+		if err := s.store.AppendInvocationState(txCtx, lifecycleState(
 			result, stateID, revision, domain.InvocationCancelled, currentState.ThroughMessageSequence, now,
-		))
+		)); err != nil {
+			return err
+		}
+		_, err = s.store.SettleActiveExecutionDispatchForWork(txCtx, domain.ExecutionDispatchInvocation, invocation.ID, now)
+		return err
 	})
 	if err != nil {
 		return InvocationRead{}, err

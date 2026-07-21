@@ -163,6 +163,12 @@ func (s *Store) SettleExecutionDispatch(ctx context.Context, id string, observed
 	return executionDispatchFromRow(row), nil
 }
 
+func (s *Store) SettleActiveExecutionDispatchForWork(ctx context.Context, kind domain.ExecutionDispatchKind, workID string, observedAt time.Time) (int64, error) {
+	return s.q(ctx).SettleActiveExecutionDispatchForWork(ctx, postgresdb.SettleActiveExecutionDispatchForWorkParams{
+		ObservedAt: &observedAt, Kind: string(kind), WorkID: workID,
+	})
+}
+
 func (s *Store) AbandonExecutionDispatch(ctx context.Context, id, reason string, observedAt time.Time) (domain.ExecutionDispatch, error) {
 	row, err := s.q(ctx).AbandonExecutionDispatch(ctx, postgresdb.AbandonExecutionDispatchParams{
 		ID: id, LastError: &reason, ObservedAt: &observedAt,
@@ -181,6 +187,20 @@ func (s *Store) ListAgedExecutionDispatches(ctx context.Context, staleBefore tim
 		return nil, err
 	}
 	return executionDispatchesFromRows(rows), nil
+}
+
+func (s *Store) ListAlertableAgedExecutionDispatches(ctx context.Context, staleBefore, observedAt time.Time, limit int) ([]domain.ExecutionDispatch, error) {
+	rows, err := s.q(ctx).ListAlertableAgedExecutionDispatches(ctx, postgresdb.ListAlertableAgedExecutionDispatchesParams{
+		StaleBefore: staleBefore, ObservedAt: &observedAt, BatchLimit: boundedBatchLimit(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]domain.ExecutionDispatch, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, executionDispatchFromRow(row))
+	}
+	return items, nil
 }
 
 func (s *Store) ListStalePublishedExecutionDispatches(ctx context.Context, staleBefore time.Time, limit int) ([]domain.ExecutionDispatch, error) {
@@ -489,6 +509,17 @@ func (s *Store) FindNextQueuedInvocationForUpdate(ctx context.Context, observedA
 		return domain.Invocation{}, fmt.Errorf("queued Invocation Session lock requires a transaction")
 	}
 	row, err := s.q(ctx).FindNextQueuedInvocationForUpdate(ctx, observedAt)
+	if err != nil {
+		return domain.Invocation{}, normalizeNotFound(err)
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) FindQueuedInvocationWithoutActiveDispatchForUpdate(ctx context.Context, observedAt time.Time) (domain.Invocation, error) {
+	if _, ok := transactionFromContext(ctx); !ok {
+		return domain.Invocation{}, fmt.Errorf("queued Invocation dispatch repair requires a transaction")
+	}
+	row, err := s.q(ctx).FindQueuedInvocationWithoutActiveDispatchForUpdate(ctx, observedAt)
 	if err != nil {
 		return domain.Invocation{}, normalizeNotFound(err)
 	}

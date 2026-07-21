@@ -242,10 +242,22 @@ type claimState struct {
 	leaseLost atomic.Bool
 }
 
+type ClaimExecutionOutcome struct {
+	Settled   bool
+	LeaseLost bool
+}
+
 var errCancellationWake = errors.New("invocation cancellation notification received")
 var errExecutionDeadline = errors.New("invocation execution deadline reached")
 
-func (r *Runner) runClaim(executorParent context.Context, claim domain.InvocationClaim) {
+func (r *Runner) ExecuteClaim(executorParent context.Context, claim domain.InvocationClaim) (ClaimExecutionOutcome, error) {
+	if claim.Owner != r.owner || claim.Attempt <= 0 || claim.Invocation.ID == "" {
+		return ClaimExecutionOutcome{}, fmt.Errorf("Invocation claim does not belong to this runner")
+	}
+	return r.runClaim(executorParent, claim), nil
+}
+
+func (r *Runner) runClaim(executorParent context.Context, claim domain.InvocationClaim) ClaimExecutionOutcome {
 	leaseCtx, cancelLease := context.WithCancel(context.Background())
 	defer cancelLease()
 	executorCtx, cancelExecutorCause := context.WithCancelCause(executorParent)
@@ -312,6 +324,7 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 		fields = append(fields, failureLogFields(result.Error)...)
 		r.logger.Info("Invocation settled", fields...)
 	}
+	return ClaimExecutionOutcome{Settled: state.settled.Load(), LeaseLost: state.leaseLost.Load()}
 }
 
 func (r *Runner) listenForCancellations(ctx context.Context, subscription ports.CancellationSubscription) {

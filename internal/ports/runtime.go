@@ -22,6 +22,8 @@ var (
 	ErrExecutionResultInvalid = errors.New("invocation execution result invalid")
 	ErrDispatchLeaseLost      = errors.New("execution dispatch publication lease lost")
 	ErrTaskAlreadyExists      = errors.New("task already exists")
+	ErrDispatchAttemptActive  = errors.New("execution dispatch attempt already active")
+	ErrDispatchAttemptPending = errors.New("execution dispatch attempt decision pending")
 )
 
 // Clock makes persisted timestamps deterministic in services and tests.
@@ -132,6 +134,7 @@ type InvocationRepository interface {
 	ReapInvocationLease(context.Context, string, int64, int64, []byte, time.Time) (domain.Invocation, error)
 	CancelInvocation(context.Context, string, int64, time.Time) (domain.Invocation, error)
 	ReapInvocationDeadline(context.Context, string, int64, []byte, time.Time) (domain.Invocation, error)
+	FindQueuedInvocationWithoutActiveDispatchForUpdate(context.Context, time.Time) (domain.Invocation, error)
 }
 
 // RuntimeAuthenticator turns a presented bearer secret into the durable scope
@@ -160,8 +163,10 @@ type ExecutionDispatchRepository interface {
 	MarkExecutionDispatchPublished(context.Context, string, string, int64, string, time.Time) (domain.ExecutionDispatch, error)
 	ReturnExecutionDispatchPending(context.Context, string, string, int64, time.Time, string, time.Time) (domain.ExecutionDispatch, error)
 	SettleExecutionDispatch(context.Context, string, time.Time) (domain.ExecutionDispatch, error)
+	SettleActiveExecutionDispatchForWork(context.Context, domain.ExecutionDispatchKind, string, time.Time) (int64, error)
 	AbandonExecutionDispatch(context.Context, string, string, time.Time) (domain.ExecutionDispatch, error)
 	ListAgedExecutionDispatches(context.Context, time.Time, int) ([]domain.ExecutionDispatch, error)
+	ListAlertableAgedExecutionDispatches(context.Context, time.Time, time.Time, int) ([]domain.ExecutionDispatch, error)
 	ListStalePublishedExecutionDispatches(context.Context, time.Time, int) ([]domain.ExecutionDispatch, error)
 	PruneTerminalExecutionDispatches(context.Context, time.Time, int) (int64, error)
 }

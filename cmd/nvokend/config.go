@@ -16,16 +16,17 @@ import (
 )
 
 type config struct {
-	ProcessRole            string        `env:"NVOKEN_PROCESS_ROLE" envDefault:"combined"`
-	Port                   string        `env:"PORT" envDefault:"8080"`
-	DatabaseURL            string        `env:"DATABASE_URL"`
-	DatabaseMaxConns       int32         `env:"DATABASE_MAX_CONNS" envDefault:"10"`
-	RuntimeAPIKey          string        `env:"RUNTIME_API_KEY"`
-	RuntimeTenantRef       string        `env:"RUNTIME_TENANT_REF"`
-	AnthropicAPIKey        string        `env:"ANTHROPIC_API_KEY"`
-	OpenAIAPIKey           string        `env:"OPENAI_API_KEY"`
-	ShutdownTimeout        time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
-	ExecutorAttemptTimeout time.Duration `env:"EXECUTOR_ATTEMPT_TIMEOUT" envDefault:"29m55s"`
+	ProcessRole             string        `env:"NVOKEN_PROCESS_ROLE" envDefault:"combined"`
+	InvocationExecutionMode string        `env:"INVOCATION_EXECUTION_MODE" envDefault:"embedded"`
+	Port                    string        `env:"PORT" envDefault:"8080"`
+	DatabaseURL             string        `env:"DATABASE_URL"`
+	DatabaseMaxConns        int32         `env:"DATABASE_MAX_CONNS" envDefault:"10"`
+	RuntimeAPIKey           string        `env:"RUNTIME_API_KEY"`
+	RuntimeTenantRef        string        `env:"RUNTIME_TENANT_REF"`
+	AnthropicAPIKey         string        `env:"ANTHROPIC_API_KEY"`
+	OpenAIAPIKey            string        `env:"OPENAI_API_KEY"`
+	ShutdownTimeout         time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
+	ExecutorAttemptTimeout  time.Duration `env:"EXECUTOR_ATTEMPT_TIMEOUT" envDefault:"29m55s"`
 
 	DispatchQueue                 string        `env:"DISPATCH_QUEUE" envDefault:"execution"`
 	DispatchPublicationLease      time.Duration `env:"DISPATCH_PUBLICATION_LEASE" envDefault:"30s"`
@@ -92,8 +93,12 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if role != daemon.ProcessRoleCombined && role != daemon.ProcessRoleExecutor {
 		return daemon.Config{}, fmt.Errorf("serve: NVOKEN_PROCESS_ROLE must be combined or executor")
 	}
+	executionMode := services.InvocationExecutionMode(cfg.InvocationExecutionMode)
+	if executionMode != services.InvocationExecutionEmbedded && executionMode != services.InvocationExecutionCloudTasks {
+		return daemon.Config{}, fmt.Errorf("serve: INVOCATION_EXECUTION_MODE must be embedded or cloud_tasks")
+	}
 	minimumConns := int32(1)
-	if role == daemon.ProcessRoleCombined {
+	if role == daemon.ProcessRoleCombined || (role == daemon.ProcessRoleExecutor && executionMode == services.InvocationExecutionCloudTasks) {
 		minimumConns = 2
 	}
 	if cfg.DatabaseMaxConns < minimumConns {
@@ -150,6 +155,7 @@ func loadDaemonConfig() (daemon.Config, error) {
 	controllerConfig := dispatchruntime.ControllerConfig{
 		PublishInterval: cfg.DispatchPublishInterval, ReconcileInterval: cfg.DispatchReconcileInterval,
 		RetentionInterval: cfg.DispatchRetentionInterval, BatchLimit: cfg.DispatchBatchLimit,
+		RepairInvocations: executionMode == services.InvocationExecutionCloudTasks,
 	}
 	if err := dispatchruntime.ValidateControllerConfig(controllerConfig); err != nil {
 		return daemon.Config{}, fmt.Errorf("invalid execution dispatch controller configuration: %w", err)
@@ -177,8 +183,19 @@ func loadDaemonConfig() (daemon.Config, error) {
 			return daemon.Config{}, fmt.Errorf("invalid Cloud Tasks configuration: %w", err)
 		}
 	}
+	if role == daemon.ProcessRoleCombined && executionMode == services.InvocationExecutionCloudTasks && configuredCloudTasksFields != len(cloudTasksFields) {
+		return daemon.Config{}, fmt.Errorf("serve: cloud_tasks Invocation execution requires complete Cloud Tasks queue and OIDC configuration")
+	}
 	if cfg.ExecutorAttemptTimeout <= 0 || cfg.ExecutorAttemptTimeout >= cfg.CloudTasksDispatchDeadline {
 		return daemon.Config{}, fmt.Errorf("serve: EXECUTOR_ATTEMPT_TIMEOUT must be positive and less than CLOUD_TASKS_DISPATCH_DEADLINE")
+	}
+	if role == daemon.ProcessRoleExecutor && executionMode == services.InvocationExecutionCloudTasks && cfg.EngineExecutionSegmentCeiling > cfg.ExecutorAttemptTimeout {
+		return daemon.Config{}, fmt.Errorf("serve: ENGINE_EXECUTION_SEGMENT_CEILING must not exceed EXECUTOR_ATTEMPT_TIMEOUT")
+	}
+	generatesInvocations := (role == daemon.ProcessRoleCombined && executionMode == services.InvocationExecutionEmbedded) ||
+		(role == daemon.ProcessRoleExecutor && executionMode == services.InvocationExecutionCloudTasks)
+	if generatesInvocations && cfg.AnthropicAPIKey == "" && cfg.OpenAIAPIKey == "" {
+		return daemon.Config{}, fmt.Errorf("serve: the Invocation-generating role requires ANTHROPIC_API_KEY, OPENAI_API_KEY, or both")
 	}
 	var tenantConstraint *string
 	if cfg.RuntimeTenantRef != "" {
@@ -192,8 +209,9 @@ func loadDaemonConfig() (daemon.Config, error) {
 	}
 	return daemon.Config{
 		Port: cfg.Port, DatabaseURL: cfg.DatabaseURL, DatabaseMaxConns: cfg.DatabaseMaxConns,
-		ProcessRole:   role,
-		RuntimeAPIKey: cfg.RuntimeAPIKey, RuntimeTenantConstraint: tenantConstraint,
+		ProcessRole:             role,
+		InvocationExecutionMode: executionMode,
+		RuntimeAPIKey:           cfg.RuntimeAPIKey, RuntimeTenantConstraint: tenantConstraint,
 		AnthropicAPIKey: cfg.AnthropicAPIKey, OpenAIAPIKey: cfg.OpenAIAPIKey,
 		ShutdownTimeout: cfg.ShutdownTimeout, Engine: engineConfig, Budgets: budgetPolicy,
 		Dispatch: dispatchConfig, DispatchController: controllerConfig, CloudTasks: cloudTasksConfig,

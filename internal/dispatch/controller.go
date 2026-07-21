@@ -17,6 +17,7 @@ type ControllerConfig struct {
 	ReconcileInterval time.Duration
 	RetentionInterval time.Duration
 	BatchLimit        int
+	RepairInvocations bool
 }
 
 func DefaultControllerConfig() ControllerConfig {
@@ -65,6 +66,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	defer reconcile.Stop()
 	defer retention.Stop()
 
+	c.repair(ctx)
 	c.publish(ctx)
 	for {
 		select {
@@ -73,6 +75,7 @@ func (c *Controller) Run(ctx context.Context) error {
 		case <-publish.C:
 			c.publish(ctx)
 		case <-reconcile.C:
+			c.repair(ctx)
 			c.reconcile(ctx)
 		case <-retention.C:
 			c.prune(ctx)
@@ -100,6 +103,22 @@ func (c *Controller) publish(ctx context.Context) {
 	}
 }
 
+func (c *Controller) repair(ctx context.Context) {
+	if !c.config.RepairInvocations {
+		return
+	}
+	repaired, err := c.service.RepairQueuedInvocations(ctx, c.config.BatchLimit)
+	if err != nil {
+		// Repair covers mode enablement and must not block publication of
+		// already durable dispatches.
+		c.logger.Error("repair queued Invocation dispatches", "error", err)
+		return
+	}
+	if repaired > 0 {
+		c.logger.Info("repaired queued Invocation dispatches", "count", repaired)
+	}
+}
+
 func (c *Controller) reconcile(ctx context.Context) {
 	if err := c.service.LogAged(ctx); err != nil {
 		c.logger.Error("inspect aged execution dispatches", "error", err)
@@ -109,9 +128,10 @@ func (c *Controller) reconcile(ctx context.Context) {
 		c.logger.Error("reconcile execution dispatches", "error", err)
 		return
 	}
-	if result.Settled+result.Succeeded > 0 {
+	if result.Settled+result.Succeeded+result.Retained > 0 {
 		c.logger.Info("reconciled execution dispatches",
 			"existing_tasks", result.Existing, "settled_dispatches", result.Settled,
+			"retained_uncertain_dispatches", result.Retained,
 			"successor_dispatches", result.Succeeded)
 	}
 }

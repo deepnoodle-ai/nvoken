@@ -948,6 +948,77 @@ func (q *Queries) FindNextQueuedInvocationForUpdate(ctx context.Context, observe
 	return i, err
 }
 
+const findQueuedInvocationWithoutActiveDispatchForUpdate = `-- name: FindQueuedInvocationWithoutActiveDispatchForUpdate :one
+SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope
+FROM invocations AS i
+WHERE i.status = 'queued'
+  AND i.wall_clock_deadline_at > $1
+  AND NOT EXISTS (
+      SELECT 1
+      FROM execution_dispatches AS d
+      WHERE d.kind = 'invocation'
+        AND d.work_id = i.id
+        AND d.status IN ('pending', 'publishing', 'published')
+  )
+ORDER BY i.created_at, i.id
+FOR UPDATE OF i SKIP LOCKED
+LIMIT 1
+`
+
+// FindQueuedInvocationWithoutActiveDispatchForUpdate
+//
+//	SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope
+//	FROM invocations AS i
+//	WHERE i.status = 'queued'
+//	  AND i.wall_clock_deadline_at > $1
+//	  AND NOT EXISTS (
+//	      SELECT 1
+//	      FROM execution_dispatches AS d
+//	      WHERE d.kind = 'invocation'
+//	        AND d.work_id = i.id
+//	        AND d.status IN ('pending', 'publishing', 'published')
+//	  )
+//	ORDER BY i.created_at, i.id
+//	FOR UPDATE OF i SKIP LOCKED
+//	LIMIT 1
+func (q *Queries) FindQueuedInvocationWithoutActiveDispatchForUpdate(ctx context.Context, observedAt time.Time) (Invocation, error) {
+	row := q.db.QueryRow(ctx, findQueuedInvocationWithoutActiveDispatchForUpdate, observedAt)
+	var i Invocation
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.SpecSnapshotID,
+		&i.IdempotencyKey,
+		&i.RequestFingerprint,
+		&i.Status,
+		&i.CurrentStateRevision,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.LeaseOwner,
+		&i.LeaseExpiresAt,
+		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
+		&i.RequestFingerprintVersion,
+		&i.WallClockTimeoutMs,
+		&i.ActiveExecutionTimeoutMs,
+		&i.MaxOutputTokens,
+		&i.MaxEstimatedCostMicrousd,
+		&i.MaxIterations,
+		&i.ActiveExecutionMs,
+		&i.WallClockDeadlineAt,
+		&i.ActiveSegmentStartedAt,
+		&i.ExecutionDeadlineAt,
+		&i.ExecutionDeadlineScope,
+	)
+	return i, err
+}
+
 const getAccount = `-- name: GetAccount :one
 SELECT id, created_at
 FROM accounts
@@ -1620,6 +1691,86 @@ type ListAgedExecutionDispatchesParams struct {
 //	LIMIT $2
 func (q *Queries) ListAgedExecutionDispatches(ctx context.Context, arg ListAgedExecutionDispatchesParams) ([]ExecutionDispatch, error) {
 	rows, err := q.db.Query(ctx, listAgedExecutionDispatches, arg.StaleBefore, arg.BatchLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExecutionDispatch{}
+	for rows.Next() {
+		var i ExecutionDispatch
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.WorkID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.Queue,
+			&i.Status,
+			&i.AvailableAt,
+			&i.TaskName,
+			&i.PublishAttempts,
+			&i.LastError,
+			&i.PublisherOwner,
+			&i.PublisherLeaseExpiresAt,
+			&i.PublisherAttempt,
+			&i.PublishedAt,
+			&i.SettledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAlertableAgedExecutionDispatches = `-- name: ListAlertableAgedExecutionDispatches :many
+SELECT d.id, d.kind, d.work_id, d.account_id, d.tenant_partition_id, d.queue, d.status, d.available_at, d.task_name, d.publish_attempts, d.last_error, d.publisher_owner, d.publisher_lease_expires_at, d.publisher_attempt, d.published_at, d.settled_at, d.created_at, d.updated_at FROM execution_dispatches AS d
+WHERE d.status IN ('pending', 'publishing', 'published')
+  AND d.updated_at <= $1
+  AND NOT (
+      d.kind = 'invocation'
+      AND d.status = 'published'
+      AND EXISTS (
+          SELECT 1 FROM invocations AS i
+          WHERE i.id = d.work_id
+            AND i.status = 'running'
+            AND i.lease_expires_at > $2
+      )
+  )
+ORDER BY d.updated_at, d.id
+LIMIT $3
+`
+
+type ListAlertableAgedExecutionDispatchesParams struct {
+	StaleBefore time.Time
+	ObservedAt  *time.Time
+	BatchLimit  int32
+}
+
+// ListAlertableAgedExecutionDispatches
+//
+//	SELECT d.id, d.kind, d.work_id, d.account_id, d.tenant_partition_id, d.queue, d.status, d.available_at, d.task_name, d.publish_attempts, d.last_error, d.publisher_owner, d.publisher_lease_expires_at, d.publisher_attempt, d.published_at, d.settled_at, d.created_at, d.updated_at FROM execution_dispatches AS d
+//	WHERE d.status IN ('pending', 'publishing', 'published')
+//	  AND d.updated_at <= $1
+//	  AND NOT (
+//	      d.kind = 'invocation'
+//	      AND d.status = 'published'
+//	      AND EXISTS (
+//	          SELECT 1 FROM invocations AS i
+//	          WHERE i.id = d.work_id
+//	            AND i.status = 'running'
+//	            AND i.lease_expires_at > $2
+//	      )
+//	  )
+//	ORDER BY d.updated_at, d.id
+//	LIMIT $3
+func (q *Queries) ListAlertableAgedExecutionDispatches(ctx context.Context, arg ListAlertableAgedExecutionDispatchesParams) ([]ExecutionDispatch, error) {
+	rows, err := q.db.Query(ctx, listAlertableAgedExecutionDispatches, arg.StaleBefore, arg.ObservedAt, arg.BatchLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -2915,6 +3066,37 @@ func (q *Queries) ReturnExecutionDispatchPending(ctx context.Context, arg Return
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const settleActiveExecutionDispatchForWork = `-- name: SettleActiveExecutionDispatchForWork :execrows
+UPDATE execution_dispatches
+SET status = 'settled', publisher_owner = NULL,
+    publisher_lease_expires_at = NULL, settled_at = $1,
+    updated_at = $1, last_error = NULL
+WHERE kind = $2 AND work_id = $3
+  AND status IN ('pending', 'publishing', 'published')
+`
+
+type SettleActiveExecutionDispatchForWorkParams struct {
+	ObservedAt *time.Time
+	Kind       string
+	WorkID     string
+}
+
+// SettleActiveExecutionDispatchForWork
+//
+//	UPDATE execution_dispatches
+//	SET status = 'settled', publisher_owner = NULL,
+//	    publisher_lease_expires_at = NULL, settled_at = $1,
+//	    updated_at = $1, last_error = NULL
+//	WHERE kind = $2 AND work_id = $3
+//	  AND status IN ('pending', 'publishing', 'published')
+func (q *Queries) SettleActiveExecutionDispatchForWork(ctx context.Context, arg SettleActiveExecutionDispatchForWorkParams) (int64, error) {
+	result, err := q.db.Exec(ctx, settleActiveExecutionDispatchForWork, arg.ObservedAt, arg.Kind, arg.WorkID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const settleExecutionDispatch = `-- name: SettleExecutionDispatch :one

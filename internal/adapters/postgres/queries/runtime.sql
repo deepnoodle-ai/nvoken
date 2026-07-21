@@ -459,6 +459,14 @@ SET status = 'settled', publisher_owner = NULL,
 WHERE id = sqlc.arg(id) AND status IN ('pending', 'publishing', 'published')
 RETURNING *;
 
+-- name: SettleActiveExecutionDispatchForWork :execrows
+UPDATE execution_dispatches
+SET status = 'settled', publisher_owner = NULL,
+    publisher_lease_expires_at = NULL, settled_at = sqlc.arg(observed_at),
+    updated_at = sqlc.arg(observed_at), last_error = NULL
+WHERE kind = sqlc.arg(kind) AND work_id = sqlc.arg(work_id)
+  AND status IN ('pending', 'publishing', 'published');
+
 -- name: AbandonExecutionDispatch :one
 UPDATE execution_dispatches
 SET status = 'abandoned', publisher_owner = NULL,
@@ -472,6 +480,23 @@ SELECT * FROM execution_dispatches
 WHERE status IN ('pending', 'publishing', 'published')
   AND updated_at <= sqlc.arg(stale_before)
 ORDER BY updated_at, id
+LIMIT sqlc.arg(batch_limit);
+
+-- name: ListAlertableAgedExecutionDispatches :many
+SELECT d.* FROM execution_dispatches AS d
+WHERE d.status IN ('pending', 'publishing', 'published')
+  AND d.updated_at <= sqlc.arg(stale_before)
+  AND NOT (
+      d.kind = 'invocation'
+      AND d.status = 'published'
+      AND EXISTS (
+          SELECT 1 FROM invocations AS i
+          WHERE i.id = d.work_id
+            AND i.status = 'running'
+            AND i.lease_expires_at > sqlc.arg(observed_at)
+      )
+  )
+ORDER BY d.updated_at, d.id
 LIMIT sqlc.arg(batch_limit);
 
 -- name: ListStalePublishedExecutionDispatches :many
@@ -488,6 +513,22 @@ WHERE id IN (
     ORDER BY prune.settled_at, prune.id
     LIMIT sqlc.arg(batch_limit)
 );
+
+-- name: FindQueuedInvocationWithoutActiveDispatchForUpdate :one
+SELECT i.*
+FROM invocations AS i
+WHERE i.status = 'queued'
+  AND i.wall_clock_deadline_at > sqlc.arg(observed_at)
+  AND NOT EXISTS (
+      SELECT 1
+      FROM execution_dispatches AS d
+      WHERE d.kind = 'invocation'
+        AND d.work_id = i.id
+        AND d.status IN ('pending', 'publishing', 'published')
+  )
+ORDER BY i.created_at, i.id
+FOR UPDATE OF i SKIP LOCKED
+LIMIT 1;
 
 -- name: GetCurrentInvocationState :one
 SELECT *

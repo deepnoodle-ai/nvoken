@@ -98,7 +98,15 @@ type admissionStore interface {
 	ports.InvocationRepository
 	ports.InvocationStateRepository
 	ports.RecoveryRepository
+	ports.ExecutionDispatchRepository
 }
+
+type InvocationExecutionMode string
+
+const (
+	InvocationExecutionEmbedded   InvocationExecutionMode = "embedded"
+	InvocationExecutionCloudTasks InvocationExecutionMode = "cloud_tasks"
+)
 
 type RuntimeService struct {
 	store         admissionStore
@@ -109,6 +117,8 @@ type RuntimeService struct {
 	cancellations ports.CancellationSignaller
 	budgetPolicy  BudgetPolicy
 	logger        *slog.Logger
+	executionMode InvocationExecutionMode
+	dispatchQueue string
 }
 
 type RuntimeOption func(*RuntimeService)
@@ -133,6 +143,13 @@ func WithRuntimeLogger(logger *slog.Logger) RuntimeOption {
 	}
 }
 
+func WithInvocationExecutionMode(mode InvocationExecutionMode, dispatchQueue string) RuntimeOption {
+	return func(service *RuntimeService) {
+		service.executionMode = mode
+		service.dispatchQueue = dispatchQueue
+	}
+}
+
 func NewRuntimeService(
 	store admissionStore,
 	txm ports.TransactionManager,
@@ -140,7 +157,11 @@ func NewRuntimeService(
 	ids ports.IDGenerator,
 	options ...RuntimeOption,
 ) *RuntimeService {
-	service := &RuntimeService{store: store, txm: txm, clock: clock, ids: ids, budgetPolicy: DefaultBudgetPolicy(), logger: slog.Default()}
+	service := &RuntimeService{
+		store: store, txm: txm, clock: clock, ids: ids,
+		budgetPolicy: DefaultBudgetPolicy(), logger: slog.Default(),
+		executionMode: InvocationExecutionEmbedded,
+	}
 	for _, option := range options {
 		if option != nil {
 			option(service)
@@ -296,7 +317,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			if err != nil {
 				return err
 			}
-			ids, err := s.newAdmissionIDs()
+			ids, err := s.newAdmissionIDs(s.executionMode == InvocationExecutionCloudTasks)
 			if err != nil {
 				return err
 			}
@@ -344,11 +365,23 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			if err := s.store.AppendInvocationState(txCtx, state); err != nil {
 				return err
 			}
+			if s.executionMode == InvocationExecutionCloudTasks {
+				accountID := account.ID
+				partitionID := partition.ID
+				if err := s.store.CreateExecutionDispatch(txCtx, domain.ExecutionDispatch{
+					ID: ids.dispatch, Kind: domain.ExecutionDispatchInvocation, WorkID: invocation.ID,
+					AccountID: &accountID, TenantPartitionID: &partitionID,
+					Queue: s.dispatchQueue, Status: domain.ExecutionDispatchPending,
+					AvailableAt: now, CreatedAt: now, UpdatedAt: now,
+				}); err != nil {
+					return err
+				}
+			}
 			acknowledgement = acknowledgementFor(invocation, false)
 			return nil
 		})
 		if err == nil {
-			if !acknowledgement.Deduplicated && s.signaller != nil {
+			if !acknowledgement.Deduplicated && s.executionMode == InvocationExecutionEmbedded && s.signaller != nil {
 				s.signaller.Notify(ctx, ports.InvocationExecutionQueue)
 			}
 			return acknowledgement, nil
@@ -537,6 +570,12 @@ func (s *RuntimeService) ready() error {
 	if s == nil || s.store == nil || s.txm == nil || s.clock == nil || s.ids == nil {
 		return &PublicError{Code: CodeUnavailable, Message: "The service is temporarily unavailable."}
 	}
+	if s.executionMode != InvocationExecutionEmbedded && s.executionMode != InvocationExecutionCloudTasks {
+		return &PublicError{Code: CodeUnavailable, Message: "The service is temporarily unavailable."}
+	}
+	if s.executionMode == InvocationExecutionCloudTasks && strings.TrimSpace(s.dispatchQueue) == "" {
+		return &PublicError{Code: CodeUnavailable, Message: "The service is temporarily unavailable."}
+	}
 	return nil
 }
 
@@ -596,9 +635,9 @@ func (s *RuntimeService) findIdempotent(
 	return existing, true, nil
 }
 
-type admissionIDs struct{ snapshot, invocation, message, state string }
+type admissionIDs struct{ snapshot, invocation, message, state, dispatch string }
 
-func (s *RuntimeService) newAdmissionIDs() (admissionIDs, error) {
+func (s *RuntimeService) newAdmissionIDs(includeDispatch bool) (admissionIDs, error) {
 	var ids admissionIDs
 	var err error
 	if ids.snapshot, err = s.ids.NewID(domain.PrefixExecutionSpecSnapshot); err != nil {
@@ -612,6 +651,11 @@ func (s *RuntimeService) newAdmissionIDs() (admissionIDs, error) {
 	}
 	if ids.state, err = s.ids.NewID(domain.PrefixInvocationState); err != nil {
 		return ids, err
+	}
+	if includeDispatch {
+		if ids.dispatch, err = s.ids.NewID(domain.PrefixExecutionDispatch); err != nil {
+			return ids, err
+		}
 	}
 	return ids, nil
 }
