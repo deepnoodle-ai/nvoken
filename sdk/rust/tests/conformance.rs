@@ -1,0 +1,312 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::{Duration, UNIX_EPOCH};
+
+use futures_util::StreamExt;
+use http::HeaderMap;
+use nvoken::{
+    deduplicate_callback_result, verify_callback, CallbackResultStore, Client, ErrorCategory,
+    ExecutionSpec, InvokeRequest, ListInvocationsOptions, MessageListOptions, Model, Reducer,
+    RetryPolicy, StreamEvent, ToolResult,
+};
+use serde::Deserialize;
+use serde_json::{json, Value};
+
+const INVOCATION_ID: &str = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
+const SESSION_ID: &str = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
+const TOOL_CALL_ID: &str = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
+const WAIT_ID: &str = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
+
+#[tokio::test]
+async fn shared_fault_server_semantics() {
+    let Ok(base_url) = std::env::var("NVOKEN_CONFORMANCE_URL") else {
+        return;
+    };
+    reqwest::Client::new()
+        .post(format!("{base_url}/__test/reset"))
+        .send()
+        .await
+        .unwrap();
+    let client = Client::with_retry_policy(
+        &base_url,
+        "test-key",
+        RetryPolicy {
+            maximum_attempts: 3,
+            minimum_delay: Duration::from_millis(1),
+            maximum_delay: Duration::from_millis(5),
+        },
+    )
+    .unwrap();
+    let handle = client
+        .invoke(InvokeRequest {
+            agent_ref: "support".to_owned(),
+            tenant_ref: None,
+            session_id: None,
+            session_key: None,
+            idempotency_key: "rust-lost-ack".to_owned(),
+            input: "hello".to_owned(),
+            spec: ExecutionSpec {
+                instructions: "help".to_owned(),
+                model: Model {
+                    provider: "openai".to_owned(),
+                    name: "gpt-test".to_owned(),
+                },
+                budgets: None,
+                tools: Vec::new(),
+                output_schema: None,
+            },
+        })
+        .await
+        .unwrap();
+    assert_eq!(handle.invocation_id, INVOCATION_ID);
+    assert_eq!(handle.session_id, SESSION_ID);
+
+    let resumed = client.resume(INVOCATION_ID).await.unwrap();
+    assert_eq!(resumed.status, nvoken::models::InvocationStatus::Completed);
+
+    let mut waiting = client.resume(WAIT_ID).await.unwrap();
+    let timeout = waiting
+        .wait(Some(Duration::from_millis(10)))
+        .await
+        .unwrap_err();
+    assert_eq!(timeout.category, ErrorCategory::Timeout);
+
+    let first_page = client
+        .list_invocations(ListInvocationsOptions::default())
+        .await
+        .unwrap();
+    assert!(first_page.has_more);
+    assert_eq!(
+        first_page.next_cursor.as_deref(),
+        Some("invocations-page-2")
+    );
+    let second_page = client
+        .list_invocations(ListInvocationsOptions {
+            cursor: first_page.next_cursor,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(!second_page.has_more);
+    let messages = client
+        .list_messages(SESSION_ID, MessageListOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(messages.next_cursor.as_deref(), Some("messages-page-2"));
+
+    let mut mutable_handle = handle.clone();
+    let result = mutable_handle
+        .submit_tool_results(vec![ToolResult {
+            tool_call_id: TOOL_CALL_ID.to_owned(),
+            content: json!({"ok": true}),
+            is_error: false,
+        }])
+        .await
+        .unwrap();
+    assert!(result.results[0].deduplicated);
+    assert_eq!(
+        mutable_handle.cancel().await.unwrap().status,
+        nvoken::models::InvocationStatus::Cancelled
+    );
+
+    assert_error(&client, "conflict", ErrorCategory::Conflict, 409).await;
+    assert_eq!(
+        client.get("rate-limit").await.unwrap().status,
+        nvoken::models::InvocationStatus::Completed
+    );
+    assert_error(&client, "rate-limit-always", ErrorCategory::RateLimit, 429).await;
+    assert_error(&client, "server-error", ErrorCategory::Server, 503).await;
+
+    let stream_handle = client.resume(INVOCATION_ID).await.unwrap();
+    let stream = stream_handle.stream();
+    futures_util::pin_mut!(stream);
+    let mut reduced = None;
+    while let Some(item) = stream.next().await {
+        let (_, snapshot) = item.unwrap();
+        reduced = Some(snapshot);
+    }
+    let reduced = reduced.unwrap();
+    assert_eq!(reduced.messages.len(), 2);
+    assert_eq!(reduced.invocation_changes.len(), 2);
+    assert_eq!(reduced.resume_cursor.as_deref(), Some("cursor-2"));
+
+    let state = reqwest::get(format!("{base_url}/__test/state"))
+        .await
+        .unwrap()
+        .json::<ServerState>()
+        .await
+        .unwrap();
+    assert_eq!(state.admission_attempts, 2);
+    assert_eq!(state.result_attempts, 2);
+    assert_eq!(state.cancel_attempts, 1);
+    assert_eq!(state.stream_attempts, 3);
+    assert_eq!(state.last_event_id, "cursor-1");
+}
+
+#[test]
+fn shared_reducer_vector() {
+    let fixture: ReducerFixture = serde_json::from_str(
+        &std::fs::read_to_string("../conformance/fixtures/reducer.json").unwrap(),
+    )
+    .unwrap();
+    let mut reducer = Reducer::default();
+    for event in fixture.events {
+        reducer
+            .apply(&StreamEvent {
+                id: Some(event.id),
+                event_type: event.event,
+                data: event.data,
+                retry: None,
+            })
+            .unwrap();
+    }
+    let snapshot = reducer.snapshot();
+    assert_eq!(
+        snapshot
+            .messages
+            .iter()
+            .map(|message| message.sequence)
+            .collect::<Vec<_>>(),
+        fixture.expected.message_sequences
+    );
+    assert_eq!(
+        snapshot
+            .invocation_changes
+            .iter()
+            .map(|change| change.revision)
+            .collect::<Vec<_>>(),
+        fixture.expected.invocation_revisions
+    );
+    assert_eq!(
+        snapshot.resume_cursor.as_deref(),
+        Some(fixture.expected.resume_cursor.as_str())
+    );
+}
+
+#[derive(Deserialize)]
+struct ReducerFixture {
+    events: Vec<ReducerEvent>,
+    expected: ReducerExpected,
+}
+
+#[derive(Deserialize)]
+struct ReducerEvent {
+    id: String,
+    event: String,
+    data: Value,
+}
+
+#[derive(Deserialize)]
+struct ReducerExpected {
+    message_sequences: Vec<u64>,
+    invocation_revisions: Vec<u64>,
+    resume_cursor: String,
+}
+
+async fn assert_error(client: &Client, id: &str, category: ErrorCategory, status: u16) {
+    let error = client.get(id).await.unwrap_err();
+    assert_eq!(error.category, category);
+    assert_eq!(error.status, Some(status));
+    assert!(error.request_id.is_some());
+    if category == ErrorCategory::RateLimit {
+        assert_eq!(error.retry_after, Some(Duration::from_secs(1)));
+    }
+}
+
+#[derive(Deserialize)]
+struct ServerState {
+    admission_attempts: u32,
+    result_attempts: u32,
+    cancel_attempts: u32,
+    stream_attempts: u32,
+    last_event_id: String,
+}
+
+#[tokio::test]
+async fn shared_callback_signing_and_deduplication_vector() {
+    let vector: CallbackVector = serde_json::from_str(
+        &std::fs::read_to_string("../../docs/design/callback-signing-v1.json").unwrap(),
+    )
+    .unwrap();
+    let headers = header_map(&vector.headers);
+    let now = UNIX_EPOCH + Duration::from_secs(vector.now);
+    let verified =
+        verify_callback(vector.key.as_bytes(), &headers, vector.body.as_bytes(), now).unwrap();
+    assert_eq!(verified.tool_call_id, TOOL_CALL_ID);
+
+    assert!(verify_callback(
+        vector.key.as_bytes(),
+        &headers,
+        format!("{} ", vector.body).as_bytes(),
+        now,
+    )
+    .is_err());
+    for (name, value) in [
+        ("x-nvoken-timestamp", "1784635801"),
+        ("x-nvoken-delivery-id", "different"),
+        ("x-nvoken-signature", "sha256=00"),
+    ] {
+        let mut tampered = headers.clone();
+        tampered.insert(name, value.parse().unwrap());
+        assert!(verify_callback(
+            vector.key.as_bytes(),
+            &tampered,
+            vector.body.as_bytes(),
+            now,
+        )
+        .is_err());
+    }
+
+    let store = MemoryStore::default();
+    let (_, replayed) = deduplicate_callback_result(&store, TOOL_CALL_ID, json!({"ok": true}))
+        .await
+        .unwrap();
+    assert!(!replayed);
+    let (stored, replayed) =
+        deduplicate_callback_result(&store, TOOL_CALL_ID, json!({"ok": false}))
+            .await
+            .unwrap();
+    assert!(replayed);
+    assert_eq!(stored, json!({"ok": true}));
+}
+
+#[derive(Deserialize)]
+struct CallbackVector {
+    key: String,
+    now: u64,
+    headers: HashMap<String, String>,
+    body: String,
+}
+
+fn header_map(values: &HashMap<String, String>) -> HeaderMap {
+    values
+        .iter()
+        .map(|(name, value)| {
+            (
+                http::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                value.parse().unwrap(),
+            )
+        })
+        .collect()
+}
+
+#[derive(Default)]
+struct MemoryStore {
+    value: Mutex<Option<Value>>,
+}
+
+#[async_trait::async_trait]
+impl CallbackResultStore<Value> for MemoryStore {
+    async fn put_if_absent(
+        &self,
+        _tool_call_id: &str,
+        result: Value,
+    ) -> Result<(Value, bool), String> {
+        let mut stored = self.value.lock().map_err(|error| error.to_string())?;
+        if let Some(value) = stored.as_ref() {
+            return Ok((value.clone(), false));
+        }
+        *stored = Some(result.clone());
+        Ok((result, true))
+    }
+}

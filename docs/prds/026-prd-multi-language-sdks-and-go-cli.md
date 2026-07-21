@@ -1,6 +1,6 @@
 # Generate four polished SDKs and the Go client CLI
 
-**Status:** Draft
+**Status:** Implemented
 **Sequence:** 026
 **Depends on:** `007-prd-recovery-and-transcript-reads.md`,
 `011-prd-resumable-streaming.md`, `015-prd-durable-client-tools.md`, and
@@ -126,28 +126,28 @@ long-term versioning policy.
 
 ## Acceptance
 
-- [ ] **A1 (R1, R2, R10):** A clean generation command produces byte-identical
+- [x] **A1 (R1, R2, R10):** A clean generation command produces byte-identical
   outputs. Contract changes update all four clients; stale output fails CI. The
   stale description saying callback tools are absent is corrected first.
-- [ ] **A2 (R1–R4, R8):** All Runtime operations and schemas are
+- [x] **A2 (R1–R4, R8):** All Runtime operations and schemas are
   reachable through compiling generated clients. 3.1 fixtures retain their
   intended constraints, quickstarts avoid generated-type leakage, and a Go SDK
   consumer does not inherit daemon-only dependencies.
-- [ ] **A3 (R4–R6, R8):** Against one shared fault-injecting server, every SDK
+- [x] **A3 (R4–R6, R8):** Against one shared fault-injecting server, every SDK
   proves lost-ack admission retry, wait timeout without remote cancellation,
   resume-by-ID, cursor pagination, ToolCall result replay, explicit cancel, and
   typed 409/429/5xx behavior.
-- [ ] **A4 (R7, R10):** Every SDK survives stream disconnect and rotation,
+- [x] **A4 (R7, R10):** Every SDK survives stream disconnect and rotation,
   resumes from the durable cursor, reconciles terminal state, and reduces the
   shared event fixture to an identical snapshot without duplicating messages
   or ToolCalls.
-- [ ] **A5 (R7, R10):** Shared callback vectors pass for valid requests and fail
+- [x] **A5 (R7, R10):** Shared callback vectors pass for valid requests and fail
   for body, timestamp, delivery-ID, and signature tampering. The deduplication
   contract returns the stored result for a repeated ToolCall identity.
-- [ ] **A6 (R9):** CLI tests cover Runtime workflows, configuration precedence,
+- [x] **A6 (R9):** CLI tests cover Runtime workflows, configuration precedence,
   missing credentials, and text/JSON modes. No independently maintained route
   or payload definitions exist outside the generated client/SDK seam.
-- [ ] **A7 (R1–R10):** Both check targets pass. Documentation records required
+- [x] **A7 (R1–R10):** Both check targets pass. Documentation records required
   toolchains and distinguishes generated transport, facade, raw client,
   `nvoken`, and `nvokend`.
 
@@ -163,3 +163,15 @@ long-term versioning policy.
   package boundaries stabilize.
 - Identity/admin and device auth remain a separate generated surface rather
   than turning the Runtime client into a control-plane catch-all.
+
+## Implementation evidence
+
+- The generator selection and package seams are recorded in
+  [`docs/codebase/sdk-and-cli.md`](../codebase/sdk-and-cli.md); facade and CLI
+  usage is in [`docs/guides/sdks-and-cli.md`](../guides/sdks-and-cli.md).
+- `sdk/conformance` injects lost acknowledgements, status retries, local wait
+  timeouts, cursor pages, result replay, explicit cancellation, stream
+  disconnect and rotation, and terminal reconciliation into all four SDKs.
+- `make sdk-check` proves generation drift, package builds, shared reducer and
+  callback vectors, facade quickstarts, and CLI coverage. `make check` remains
+  the full daemon gate. Both passed on 2026-07-21.

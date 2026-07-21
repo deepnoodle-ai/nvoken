@@ -41,9 +41,11 @@ they are **stateless**. nvoken aims to retain that approach as much as possible.
 > generation-only Anthropic and OpenAI turns. Hosts can list durable work,
 > page the canonical transcript, and drain fixed-cut incremental recovery
 > snapshots or tail the same state over resumable SSE with ephemeral live
-> generation deltas. Durable builtin checkpoints and crash continuation now
-> resume a lost execution owner from its last committed boundary; client and
-> signed callback tools use the same durable ToolCall path.
+> generation deltas. Durable builtin checkpoints and crash continuation resume
+> a lost execution owner from its last committed boundary, and durable client
+> and signed callback tools can safely continue parked work. Generated Go,
+> TypeScript, Python, and Rust SDKs wrap that surface with workflow helpers;
+> the Go `nvoken` client CLI uses the same SDK contract.
 > A reproducible [Google Cloud Run paved deployment](deploy/google-cloud/README.md)
 > packages this slice with private Cloud SQL, Secret Manager, and an explicit
 > migration job.

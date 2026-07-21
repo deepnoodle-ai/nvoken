@@ -1,0 +1,55 @@
+{
+  "generated_by": "openapi/runtime.yaml; do not edit",
+  "operations": [
+    {
+      "operation_id": "cancelInvocation",
+      "method": "POST",
+      "path": "/v1/invocations/{invocation_id}/cancel"
+    },
+    {
+      "operation_id": "createInvocation",
+      "method": "POST",
+      "path": "/v1/invocations"
+    },
+    {
+      "operation_id": "getInvocation",
+      "method": "GET",
+      "path": "/v1/invocations/{invocation_id}"
+    },
+    {
+      "operation_id": "getSession",
+      "method": "GET",
+      "path": "/v1/sessions/{session_id}"
+    },
+    {
+      "operation_id": "getSessionTranscript",
+      "method": "GET",
+      "path": "/v1/sessions/{session_id}/transcript"
+    },
+    {
+      "operation_id": "listInvocations",
+      "method": "GET",
+      "path": "/v1/invocations"
+    },
+    {
+      "operation_id": "listSessionMessages",
+      "method": "GET",
+      "path": "/v1/sessions/{session_id}/messages"
+    },
+    {
+      "operation_id": "listSessions",
+      "method": "GET",
+      "path": "/v1/sessions"
+    },
+    {
+      "operation_id": "streamSessionTranscript",
+      "method": "GET",
+      "path": "/v1/sessions/{session_id}/transcript/stream"
+    },
+    {
+      "operation_id": "submitClientToolResults",
+      "method": "POST",
+      "path": "/v1/invocations/{invocation_id}/tool-results"
+    }
+  ]
+}

@@ -1,0 +1,237 @@
+use std::collections::BTreeMap;
+use std::time::Duration;
+
+use async_stream::try_stream;
+use futures_util::StreamExt;
+use reqwest::header::{HeaderName, ACCEPT, AUTHORIZATION};
+use serde_json::Value;
+
+use crate::client::{Handle, NvokenError};
+use crate::models;
+use crate::routes;
+
+#[derive(Debug, Clone)]
+pub struct StreamEvent {
+    pub id: Option<String>,
+    pub event_type: String,
+    pub data: Value,
+    pub retry: Option<Duration>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ReducedSnapshot {
+    pub messages: Vec<models::SessionMessage>,
+    pub invocation_changes: Vec<models::InvocationChange>,
+    pub resume_cursor: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct Reducer {
+    messages: BTreeMap<u64, models::SessionMessage>,
+    changes: BTreeMap<(String, u64), models::InvocationChange>,
+    cursor: Option<String>,
+}
+
+impl Reducer {
+    pub fn apply(&mut self, event: &StreamEvent) -> Result<(), NvokenError> {
+        if event.event_type != "transcript.snapshot" {
+            return Ok(());
+        }
+        let snapshot: models::TranscriptSnapshot = serde_json::from_value(event.data.clone())
+            .map_err(|error| {
+                NvokenError::unexpected(format!(
+                    "decode {} event payload: {error}",
+                    event.event_type
+                ))
+            })?;
+        for message in snapshot.messages {
+            self.messages.insert(message.sequence, message);
+        }
+        for change in snapshot.invocation_changes {
+            self.changes
+                .insert((change.invocation_id.clone(), change.revision), change);
+        }
+        self.cursor = event.id.clone().or(Some(snapshot.resume_cursor));
+        Ok(())
+    }
+
+    pub fn snapshot(&self) -> ReducedSnapshot {
+        ReducedSnapshot {
+            messages: self.messages.values().cloned().collect(),
+            invocation_changes: self.changes.values().cloned().collect(),
+            resume_cursor: self.cursor.clone(),
+        }
+    }
+}
+
+pub fn stream_handle(
+    handle: &Handle,
+) -> impl futures_core::Stream<Item = Result<(StreamEvent, ReducedSnapshot), NvokenError>> + '_ {
+    try_stream! {
+        let mut reducer = Reducer::default();
+        let mut retry = Duration::from_secs(1);
+        loop {
+            let path = routes::STREAM_SESSION_TRANSCRIPT.replace(
+                "{session_id}",
+                &crate::apis::urlencode(&handle.session_id),
+            );
+            let url = format!("{}{}", handle.client.configuration.base_path, path);
+            let mut request = handle
+                .client
+                .stream_client
+                .get(url)
+                .header(ACCEPT, "text/event-stream");
+            if let Some(token) = &handle.client.configuration.bearer_access_token {
+                request = request.header(AUTHORIZATION, format!("Bearer {token}"));
+            }
+            if let Some(cursor) = &reducer.snapshot().resume_cursor {
+                request = request.header(HeaderName::from_static("last-event-id"), cursor);
+            }
+            let response = match request.send().await {
+                Ok(response) => response,
+                Err(_) => {
+                    tokio::time::sleep(retry).await;
+                    continue;
+                }
+            };
+            if !response.status().is_success() {
+                let status = response.status();
+                let headers = response.headers().clone();
+                let body = response.json::<Value>().await.unwrap_or(Value::Null);
+                Err(NvokenError::response_with_headers(status, body, &headers))?;
+                continue;
+            }
+            let mut decoder = Decoder::default();
+            let mut bytes = response.bytes_stream();
+            let mut terminal_end = false;
+            while let Some(chunk) = bytes.next().await {
+                let chunk = match chunk {
+                    Ok(chunk) => chunk,
+                    Err(_) => break,
+                };
+                for event in decoder.push(&chunk)? {
+                    if let Some(value) = event.retry {
+                        retry = value.min(Duration::from_secs(30));
+                    }
+                    reducer.apply(&event)?;
+                    if event.event_type == "stream.end" {
+                        if let Ok(end) = serde_json::from_value::<models::StreamEndEvent>(event.data.clone()) {
+                            terminal_end = end.reason == models::stream_end_event::Reason::Terminal;
+                        }
+                    }
+                    yield (event, reducer.snapshot());
+                }
+            }
+            for event in decoder.finish()? {
+                reducer.apply(&event)?;
+                yield (event, reducer.snapshot());
+            }
+            if terminal_end {
+                let invocation = handle.client.get(&handle.invocation_id).await?;
+                if matches!(
+                    invocation.status,
+                    models::InvocationStatus::Completed
+                        | models::InvocationStatus::Failed
+                        | models::InvocationStatus::Cancelled
+                ) {
+                    break;
+                }
+            }
+            tokio::time::sleep(retry).await;
+        }
+    }
+}
+
+#[derive(Default)]
+struct Decoder {
+    buffer: String,
+    event_type: Option<String>,
+    event_id: Option<String>,
+    retry: Option<Duration>,
+    data: Vec<String>,
+}
+
+impl Decoder {
+    fn push(&mut self, bytes: &[u8]) -> Result<Vec<StreamEvent>, NvokenError> {
+        self.buffer.push_str(
+            std::str::from_utf8(bytes)
+                .map_err(|error| NvokenError::unexpected(error.to_string()))?,
+        );
+        let mut events = Vec::new();
+        while let Some(newline) = self.buffer.find('\n') {
+            let line = self.buffer[..newline].trim_end_matches('\r').to_owned();
+            self.buffer.drain(..=newline);
+            if let Some(event) = self.line(&line)? {
+                events.push(event);
+            }
+        }
+        Ok(events)
+    }
+
+    fn finish(&mut self) -> Result<Vec<StreamEvent>, NvokenError> {
+        let mut events = Vec::new();
+        if !self.buffer.is_empty() {
+            let line = std::mem::take(&mut self.buffer);
+            if let Some(event) = self.line(&line)? {
+                events.push(event);
+            }
+        }
+        if let Some(event) = self.dispatch()? {
+            events.push(event);
+        }
+        Ok(events)
+    }
+
+    fn line(&mut self, line: &str) -> Result<Option<StreamEvent>, NvokenError> {
+        if line.is_empty() {
+            return self.dispatch();
+        }
+        if line.starts_with(':') {
+            return Ok(None);
+        }
+        let (field, value) = line
+            .split_once(':')
+            .map(|(field, value)| (field, value.strip_prefix(' ').unwrap_or(value)))
+            .unwrap_or((line, ""));
+        match field {
+            "event" => self.event_type = Some(value.to_owned()),
+            "id" => self.event_id = Some(value.to_owned()),
+            "retry" => {
+                if let Ok(milliseconds) = value.parse::<u64>() {
+                    self.retry = Some(Duration::from_millis(milliseconds));
+                }
+            }
+            "data" => self.data.push(value.to_owned()),
+            _ => {}
+        }
+        Ok(None)
+    }
+
+    fn dispatch(&mut self) -> Result<Option<StreamEvent>, NvokenError> {
+        if self.event_type.is_none()
+            && self.event_id.is_none()
+            && self.retry.is_none()
+            && self.data.is_empty()
+        {
+            return Ok(None);
+        }
+        let raw_data = std::mem::take(&mut self.data);
+        let data = if raw_data.is_empty() {
+            Value::Null
+        } else {
+            let joined = raw_data.join("\n");
+            serde_json::from_str(&joined).map_err(|error| {
+                NvokenError::unexpected(format!("decode SSE data {joined:?}: {error}"))
+            })?
+        };
+        Ok(Some(StreamEvent {
+            id: self.event_id.take(),
+            event_type: self
+                .event_type
+                .take()
+                .unwrap_or_else(|| "message".to_owned()),
+            data,
+            retry: self.retry.take(),
+        }))
+    }
+}
