@@ -135,7 +135,10 @@ func (s *RuntimeService) ListInvocations(ctx context.Context, auth domain.Runtim
 	}
 	if page.HasMore && len(rows) > 0 {
 		last := rows[len(rows)-1]
-		cursor := encodeCollectionCursor("invocations", auth.AccountID, filters, last.CreatedAt, last.ID)
+		cursor, err := encodeCollectionCursor("invocations", auth.AccountID, filters, last.CreatedAt, last.ID)
+		if err != nil {
+			return InvocationList{}, recoveryCursorEncodingError(err)
+		}
 		page.NextCursor = &cursor
 	}
 	return page, nil
@@ -206,7 +209,10 @@ func (s *RuntimeService) ListSessions(ctx context.Context, auth domain.RuntimeAu
 	}
 	if page.HasMore && len(rows) > 0 {
 		last := rows[len(rows)-1].Session
-		cursor := encodeCollectionCursor("sessions", auth.AccountID, filters, last.CreatedAt, last.ID)
+		cursor, err := encodeCollectionCursor("sessions", auth.AccountID, filters, last.CreatedAt, last.ID)
+		if err != nil {
+			return SessionList{}, recoveryCursorEncodingError(err)
+		}
 		page.NextCursor = &cursor
 	}
 	return page, nil
@@ -247,7 +253,10 @@ func (s *RuntimeService) ListSessionMessages(ctx context.Context, auth domain.Ru
 		page.Items = rows[:limit]
 	}
 	if page.HasMore && len(page.Items) > 0 {
-		cursor := encodeMessageCursor(auth.AccountID, session.ID, page.Items[len(page.Items)-1].Sequence)
+		cursor, err := encodeMessageCursor(auth.AccountID, session.ID, page.Items[len(page.Items)-1].Sequence)
+		if err != nil {
+			return SessionMessageList{}, recoveryCursorEncodingError(err)
+		}
 		page.NextCursor = &cursor
 	}
 	return page, nil
@@ -309,10 +318,16 @@ func (s *RuntimeService) GetSessionTranscript(ctx context.Context, auth domain.R
 		snapshot.Messages = rows
 		snapshot.HasMore = lower != high
 		if lower != high {
-			token := encodeTranscriptPageToken(auth.AccountID, session.ID, lower, high)
+			token, err := encodeTranscriptPageToken(auth.AccountID, session.ID, lower, high)
+			if err != nil {
+				return TranscriptSnapshot{}, recoveryCursorEncodingError(err)
+			}
 			snapshot.NextPageToken = &token
 		}
-		snapshot.ResumeCursor = encodeTranscriptCursor(auth.AccountID, session.ID, lower)
+		snapshot.ResumeCursor, err = encodeTranscriptCursor(auth.AccountID, session.ID, lower)
+		if err != nil {
+			return TranscriptSnapshot{}, recoveryCursorEncodingError(err)
+		}
 		return snapshot, nil
 	}
 
@@ -334,10 +349,16 @@ func (s *RuntimeService) GetSessionTranscript(ctx context.Context, auth domain.R
 	}
 	snapshot.HasMore = lower != high
 	if snapshot.HasMore {
-		token := encodeTranscriptPageToken(auth.AccountID, session.ID, lower, high)
+		token, err := encodeTranscriptPageToken(auth.AccountID, session.ID, lower, high)
+		if err != nil {
+			return TranscriptSnapshot{}, recoveryCursorEncodingError(err)
+		}
 		snapshot.NextPageToken = &token
 	}
-	snapshot.ResumeCursor = encodeTranscriptCursor(auth.AccountID, session.ID, lower)
+	snapshot.ResumeCursor, err = encodeTranscriptCursor(auth.AccountID, session.ID, lower)
+	if err != nil {
+		return TranscriptSnapshot{}, recoveryCursorEncodingError(err)
+	}
 	return snapshot, nil
 }
 

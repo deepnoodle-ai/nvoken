@@ -1449,6 +1449,7 @@ LEFT JOIN LATERAL (
     FROM invocations AS i
     WHERE i.session_id = s.id
       AND i.status IN ('queued', 'running', 'waiting')
+    ORDER BY i.created_at, i.id
     LIMIT 1
 ) AS active ON true
 WHERE s.account_id = $1
@@ -1502,6 +1503,7 @@ type ListSessionsForRecoveryRow struct {
 //	    FROM invocations AS i
 //	    WHERE i.session_id = s.id
 //	      AND i.status IN ('queued', 'running', 'waiting')
+//	    ORDER BY i.created_at, i.id
 //	    LIMIT 1
 //	) AS active ON true
 //	WHERE s.account_id = $1

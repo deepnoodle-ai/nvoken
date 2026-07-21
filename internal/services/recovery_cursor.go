@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 )
@@ -58,9 +59,12 @@ type transcriptPageToken struct {
 	High      transcriptPosition `json:"high"`
 }
 
-func encodeRecoveryCursor(value any) string {
-	payload, _ := json.Marshal(value)
-	return base64.RawURLEncoding.EncodeToString(payload)
+func encodeRecoveryCursor(value any) (string, error) {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return "", fmt.Errorf("encode recovery cursor: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(payload), nil
 }
 
 func decodeRecoveryCursor(encoded string, target any) error {
@@ -82,7 +86,7 @@ func decodeRecoveryCursor(encoded string, target any) error {
 	return nil
 }
 
-func encodeCollectionCursor(kind, accountID string, filters collectionFilter, createdAt time.Time, resourceID string) string {
+func encodeCollectionCursor(kind, accountID string, filters collectionFilter, createdAt time.Time, resourceID string) (string, error) {
 	return encodeRecoveryCursor(collectionCursor{
 		Version: 1, Kind: kind, AccountID: accountID, Filters: filters,
 		CreatedAt: createdAt.UTC(), ResourceID: resourceID,
@@ -99,7 +103,7 @@ func decodeCollectionCursor(encoded, kind, accountID string, filters collectionF
 	return cursor.CreatedAt.UTC(), cursor.ResourceID, nil
 }
 
-func encodeMessageCursor(accountID, sessionID string, sequence int64) string {
+func encodeMessageCursor(accountID, sessionID string, sequence int64) (string, error) {
 	return encodeRecoveryCursor(messageCursor{
 		Version: 1, Kind: "session_messages", AccountID: accountID,
 		SessionID: sessionID, Sequence: sequence,
@@ -116,7 +120,7 @@ func decodeMessageCursor(encoded, accountID, sessionID string) (int64, error) {
 	return cursor.Sequence, nil
 }
 
-func encodeTranscriptCursor(accountID, sessionID string, position transcriptPosition) string {
+func encodeTranscriptCursor(accountID, sessionID string, position transcriptPosition) (string, error) {
 	return encodeRecoveryCursor(transcriptCursor{
 		Version: 1, Kind: "session_transcript", AccountID: accountID,
 		SessionID: sessionID, Position: position,
@@ -133,7 +137,7 @@ func decodeTranscriptCursor(encoded, accountID, sessionID string) (transcriptPos
 	return cursor.Position, nil
 }
 
-func encodeTranscriptPageToken(accountID, sessionID string, lower, high transcriptPosition) string {
+func encodeTranscriptPageToken(accountID, sessionID string, lower, high transcriptPosition) (string, error) {
 	return encodeRecoveryCursor(transcriptPageToken{
 		Version: 1, Kind: "session_transcript_page", AccountID: accountID,
 		SessionID: sessionID, Lower: lower, High: high,
@@ -157,4 +161,8 @@ func (p transcriptPosition) valid() bool {
 
 func (p transcriptPosition) atOrBefore(other transcriptPosition) bool {
 	return p.MessageSequence <= other.MessageSequence && p.LifecycleRevision <= other.LifecycleRevision
+}
+
+func recoveryCursorEncodingError(err error) error {
+	return &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 }

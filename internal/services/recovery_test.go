@@ -22,7 +22,10 @@ const (
 func TestRecoveryCollectionCursorBindsScopeAndFilters(t *testing.T) {
 	createdAt := time.Date(2026, 7, 21, 12, 0, 0, 123, time.UTC)
 	filters := collectionFilter{TenantScope: "ref:tenant-a", AgentID: recoveryAgentID}
-	cursor := encodeCollectionCursor("sessions", recoveryAccountID, filters, createdAt, recoverySessionID)
+	cursor, err := encodeCollectionCursor("sessions", recoveryAccountID, filters, createdAt, recoverySessionID)
+	if err != nil {
+		t.Fatalf("encode cursor: %v", err)
+	}
 
 	decodedTime, decodedID, err := decodeCollectionCursor(cursor, "sessions", recoveryAccountID, filters)
 	if err != nil || !decodedTime.Equal(createdAt) || decodedID != recoverySessionID {
@@ -44,6 +47,12 @@ func TestRecoveryCollectionCursorBindsScopeAndFilters(t *testing.T) {
 	}
 	if _, _, err := decodeCollectionCursor("not-base64", "sessions", recoveryAccountID, filters); err == nil {
 		t.Fatal("malformed cursor accepted")
+	}
+}
+
+func TestRecoveryCursorEncodingReportsMarshalFailure(t *testing.T) {
+	if _, err := encodeRecoveryCursor(func() {}); err == nil {
+		t.Fatal("unsupported cursor value encoded without an error")
 	}
 }
 
@@ -133,11 +142,17 @@ func TestTranscriptRejectsAheadAndCrossSessionCursors(t *testing.T) {
 	}
 	service := newRecoveryTestService(store)
 	auth := recoveryAuth(domain.OperationGetTranscript)
-	ahead := encodeTranscriptCursor(recoveryAccountID, recoverySessionID, transcriptPosition{MessageSequence: 1})
+	ahead, err := encodeTranscriptCursor(recoveryAccountID, recoverySessionID, transcriptPosition{MessageSequence: 1})
+	if err != nil {
+		t.Fatalf("encode ahead cursor: %v", err)
+	}
 	if _, err := service.GetSessionTranscript(context.Background(), auth, recoverySessionID, TranscriptInput{Cursor: ahead}); err == nil {
 		t.Fatal("ahead-of-head cursor accepted")
 	}
-	other := encodeTranscriptCursor(recoveryAccountID, "sesn_019b0a12-0000-7000-8000-000000000099", transcriptPosition{})
+	other, err := encodeTranscriptCursor(recoveryAccountID, "sesn_019b0a12-0000-7000-8000-000000000099", transcriptPosition{})
+	if err != nil {
+		t.Fatalf("encode other cursor: %v", err)
+	}
 	if _, err := service.GetSessionTranscript(context.Background(), auth, recoverySessionID, TranscriptInput{Cursor: other}); err == nil {
 		t.Fatal("cross-Session cursor accepted")
 	}
