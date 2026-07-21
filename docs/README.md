@@ -9,7 +9,8 @@ This directory is organized by document type:
 - [guides/](guides/) — developer guides, including [database migrations](guides/database-migrations.md), [Runtime admission](guides/runtime-admission.md), [callback receivers](guides/callback-receivers.md), and the [Google Cloud Run paved deployment](../deploy/google-cloud/README.md)
 - [research/](research/) — market, competitive, and technical research
 - [reviews/](reviews/) — code reviews
-- [testing/](testing/) — test procedures
+- [testing/](testing/) — test procedures, including the planned
+  [Google Cloud qualification exercise](testing/google-cloud-qualification.md)
 - [codebase/](codebase/) — condensed codebase guides
 
 Conventions:

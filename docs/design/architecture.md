@@ -25,17 +25,18 @@ Architectural consequences:
 - Project is not a provisioning resource; the host supplies an optional
   `tenant_ref` and nvoken partitions internal state automatically.
 - Registry, Release, deployment-track, integration, OAuth, skill, toolkit,
-  and secret APIs are not part of Runtime; hosts may register named
-  custom tool definitions and opt into agent-memory storage.
+  and general secret APIs are not part of Runtime; hosts may register named
+  custom tool definitions, opt into agent-memory storage, and supply or select
+  narrowly scoped model-provider credentials.
 - nvoken hosts no execution environments and executes no host or end-user
   code; every tool with side effects executes host-side. An Environment
   sandbox concept is deferred to a possible future version.
 - Identity/admin and internal surfaces are separate from the Runtime API.
 
 State is admitted when durable execution requires it, plus a small set of
-opt-in conveniences: agent memory, custom tool definitions, and indexed
-request metadata. Everything explicitly cut from the runtime is listed in
-`api.md` ("Explicitly absent from the Runtime API").
+opt-in conveniences: agent memory, custom tool definitions, model-provider
+credentials, and indexed request metadata. Everything explicitly cut from the
+runtime is listed in `api.md` ("Explicitly absent from the Runtime API").
 
 ## Goals
 
@@ -48,7 +49,8 @@ request metadata. Everything explicitly cut from the runtime is listed in
    submission resumes the parked turn.
 5. Callback tools retain signed, durable server-to-server delivery.
 6. The host remains source of truth for definitions, versions, integrations,
-   credentials, tenancy, orchestration, and application data.
+   non-model business credentials, tenancy, orchestration, and application
+   data.
 7. The same Runtime API works self-hosted and as nvoken Cloud.
 8. The Runtime, identity/admin, and internal API categories are
    independently understandable and generated; the engine dispatch seam
@@ -69,7 +71,7 @@ request metadata. Everything explicitly cut from the runtime is listed in
 | Tool exchange       | Durable ToolCalls across builtin, callback, and client modes                                        |
 | Recovery            | Leases, fencing, checkpoints, replay cursors, retry policy, stale-engine rejection                  |
 | Trust boundary      | Runtime credentials, signed callbacks, model gateway, budgets, normalized metering                  |
-| Opt-in conveniences | Agent memory (optional), named custom tool definitions                                              |
+| Opt-in conveniences | Agent memory, named custom tool definitions, narrowly scoped model-provider credentials            |
 
 ### The host application owns
 
@@ -78,7 +80,7 @@ request metadata. Everything explicitly cut from the runtime is listed in
 | Agent specification          | Instructions, model preference, tools, output contract, limits  |
 | Versioning and rollout       | Git history, CI, environment selection, canaries, rollback      |
 | Tenants and end users        | Authentication, authorization, lifecycle, entitlements          |
-| Integrations and credentials | OAuth clients, connections, refresh tokens, long-lived secrets  |
+| Integrations and credentials | OAuth clients, connections, refresh tokens, and non-model business secrets |
 | Orchestration                | Schedules, triggers, workflows, retries between Invocations     |
 | Execution environments       | Sandboxes keyed to Sessions, exposed as host-executed tools     |
 | Product state and UX         | Database records, files, host-side memory, chat and approval UI |
@@ -338,23 +340,27 @@ Authoritative data: agent anchors; Sessions and `SessionMessage` transcript
 items; indexed request metadata; Invocations, append-only lifecycle state
 revisions, and spec snapshots/digests; ToolCalls, attempts, immutable normalized
 model-usage receipts, and append-only checkpoints; change view cursors; leases;
-usage and provenance; opt-in agent memory
-records; named custom tool definitions. Lifecycle revisions and change views
-may reference transcript sequence numbers but never store another copy of
-message or ToolCall-result content, except the equality-proven terminal
-structured-output projection described under Invocation. Tool lifecycle
-records have no independent
+usage and provenance; opt-in agent memory records; named custom tool
+definitions; reusable model-provider credential metadata and encrypted
+versions; and per-Invocation provider-credential bindings. Lifecycle revisions
+and change views may reference transcript sequence numbers but never store
+another copy of message or ToolCall-result content, except the equality-proven
+terminal structured-output projection described under Invocation. Tool
+lifecycle records have no independent
 pruning path and remain with the owning Invocation/Session trace. No host
-tables, business records, OAuth
-connections, business credentials, release catalogs, or durable user files.
+tables, business records, OAuth connections, non-model business credentials,
+release catalogs, or durable user files.
 Spec snapshots live no longer than the Invocation/Session trace.
 
-Runtime is not a credential vault: hosts use client tools, callback
-tools, or a credential-broker tool, and custom-tool registration stores
-tool contracts, never business credentials. Self-hosted model credentials
-are installation configuration; nvoken Cloud may offer account-level BYOK
-and platform credits through its control plane, with the Runtime receiving
-only resolved model availability and clamps.
+Runtime is not a general credential vault: hosts use client tools, callback
+tools, or a credential-broker tool for integrations and business credentials,
+and custom-tool registration stores tool contracts, never secrets. The narrow
+exception is model-provider access. Each provider used by an Invocation binds
+exactly one source: an Invocation-supplied ephemeral credential, reusable
+Account BYOK, reusable tenant BYOK, or a platform-funded credential. Existing
+self-hosted installation BYOK remains deployment configuration. Durable
+bindings make the selected source available to any fenced execution owner;
+there is no silent fallback to another source.
 
 ## Heritage
 
