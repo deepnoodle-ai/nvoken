@@ -20,6 +20,27 @@ type Agent struct {
 	CreatedAt time.Time
 }
 
+type ExecutionDispatch struct {
+	ID                      string
+	Kind                    string
+	WorkID                  string
+	AccountID               *string
+	TenantPartitionID       *string
+	Queue                   string
+	Status                  string
+	AvailableAt             time.Time
+	TaskName                *string
+	PublishAttempts         int32
+	LastError               *string
+	PublisherOwner          *string
+	PublisherLeaseExpiresAt *time.Time
+	PublisherAttempt        int64
+	PublishedAt             *time.Time
+	SettledAt               *time.Time
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+}
+
 type ExecutionSpecSnapshot struct {
 	ID        string
 	AccountID string
@@ -97,6 +118,15 @@ type SessionMessage struct {
 	Role              string
 	Content           []byte
 	CreatedAt         time.Time
+}
+
+type SyntheticDispatchWork struct {
+	ID              string
+	Status          string
+	SettlementCount int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	SettledAt       *time.Time
 }
 
 type TenantPartition struct {

@@ -28,6 +28,26 @@ output "service_url" {
   value       = google_cloud_run_v2_service.runtime.uri
 }
 
+output "executor_service_name" {
+  description = "Private request-bound executor Cloud Run service name."
+  value       = google_cloud_run_v2_service.executor.name
+}
+
+output "executor_service_url" {
+  description = "Stable private executor service URL used for task OIDC audience and target."
+  value       = google_cloud_run_v2_service.executor.uri
+}
+
+output "execution_queue" {
+  description = "Fully qualified regional Cloud Tasks execution queue."
+  value       = google_cloud_tasks_queue.execution.id
+}
+
+output "dispatch_smoke_job_name" {
+  description = "Cloud Run Job that creates one harmless synthetic dispatch."
+  value       = google_cloud_run_v2_job.dispatch_smoke.name
+}
+
 output "migration_job_name" {
   description = "Cloud Run migration job name."
   value       = google_cloud_run_v2_job.migrate.name
@@ -66,4 +86,14 @@ output "maximum_engine_concurrency" {
 output "maximum_database_connections" {
   description = "Configured upper bound across all Cloud Run service instances."
   value       = var.max_instances * var.database_max_connections
+}
+
+output "maximum_executor_concurrency" {
+  description = "Declared upper bound on concurrent private executor requests."
+  value       = var.executor_max_instances * var.executor_request_concurrency
+}
+
+output "maximum_executor_database_connections" {
+  description = "Declared upper bound on private executor Postgres connections."
+  value       = var.executor_max_instances * var.executor_database_max_connections
 }

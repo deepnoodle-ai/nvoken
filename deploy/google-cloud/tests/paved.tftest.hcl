@@ -56,7 +56,9 @@ run "paved_defaults" {
     condition = (
       length(google_service_account.runtime.account_id) <= 30 &&
       length(google_service_account.build.account_id) <= 30 &&
-      length(google_service_account.migrate.account_id) <= 30
+      length(google_service_account.migrate.account_id) <= 30 &&
+      length(google_service_account.executor.account_id) <= 30 &&
+      length(google_service_account.task_caller.account_id) <= 30
     )
     error_message = "Runtime, migration, and build identities must be valid and purpose-specific."
   }
@@ -125,6 +127,61 @@ run "paved_defaults" {
     condition     = google_cloud_run_v2_service.runtime.template[0].containers[0].args == tolist(["serve"])
     error_message = "The service must use the same image's serve command."
   }
+
+  assert {
+    condition = (
+      google_cloud_run_v2_service.executor.ingress == "INGRESS_TRAFFIC_INTERNAL_ONLY" &&
+      google_cloud_run_v2_service.executor.invoker_iam_disabled == false &&
+      google_cloud_run_v2_service.executor.scaling[0].min_instance_count == 0 &&
+      google_cloud_run_v2_service.executor.template[0].containers[0].resources[0].cpu_idle == true
+    )
+    error_message = "The executor must be private, IAM-protected, request-bound, and scale to zero."
+  }
+
+  assert {
+    condition = (
+      google_cloud_run_v2_service_iam_member.task_caller_invokes_executor.role == "roles/run.invoker" &&
+      google_service_account_iam_member.runtime_acts_as_task_caller.role == "roles/iam.serviceAccountUser"
+    )
+    error_message = "Only the dedicated OIDC caller may invoke the executor, and the publisher may act as that identity."
+  }
+
+  assert {
+    condition = (
+      google_cloud_tasks_queue.execution.rate_limits[0].max_concurrent_dispatches <= var.executor_max_instances * var.executor_request_concurrency &&
+      google_cloud_run_v2_service.executor.template[0].timeout == "1800s" &&
+      one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "EXECUTOR_ATTEMPT_TIMEOUT"]) == "1795s"
+    )
+    error_message = "Queue concurrency and attempt timing must fit inside declared executor capacity and deadline."
+  }
+
+  assert {
+    condition = (
+      one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "NVOKEN_PROCESS_ROLE"]) == "combined" &&
+      one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "NVOKEN_PROCESS_ROLE"]) == "executor" &&
+      length([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item if item.name == "CLOUD_TASKS_EXECUTOR_URL"]) == 1 &&
+      length([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item if item.name == "CLOUD_TASKS_OIDC_AUDIENCE"]) == 1
+    )
+    error_message = "Process roles and the stable executor URL/audience must be explicit."
+  }
+
+  assert {
+    condition = alltrue([
+      for secret_name in ["RUNTIME_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"] :
+      !contains([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.name], secret_name)
+    ])
+    error_message = "The private executor must not receive Runtime or provider credentials in the foundation slice."
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_job.dispatch_smoke.template[0].template[0].containers[0].args == tolist(["dispatch-smoke"])
+    error_message = "The staging proof must use the same image's synthetic dispatch command."
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.dispatch_failures) == 4
+    error_message = "Aged dispatch, publication failure, and executor authentication signals must be alertable."
+  }
 }
 
 run "long_names_produce_valid_service_accounts" {
@@ -144,6 +201,8 @@ run "long_names_produce_valid_service_accounts" {
       length(google_service_account.runtime.account_id) <= 30,
       length(google_service_account.build.account_id) <= 30,
       length(google_service_account.migrate.account_id) <= 30,
+      length(google_service_account.executor.account_id) <= 30,
+      length(google_service_account.task_caller.account_id) <= 30,
     ])
     error_message = "Every derived service-account ID must fit Google's 30-character limit."
   }

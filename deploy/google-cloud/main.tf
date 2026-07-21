@@ -1,12 +1,16 @@
 locals {
-  resource_name        = "${var.name}-${var.environment}"
-  runtime_account_id   = length(local.resource_name) <= 30 ? local.resource_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.resource_name), 0, 8)}"
-  build_account_name   = "${local.resource_name}-build"
-  build_account_id     = length(local.build_account_name) <= 30 ? local.build_account_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.build_account_name), 0, 8)}"
-  migrate_account_name = "${local.resource_name}-migrate"
-  migrate_account_id   = length(local.migrate_account_name) <= 30 ? local.migrate_account_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.migrate_account_name), 0, 8)}"
-  build_source_bucket  = "${var.project_id}-${substr(sha256("${var.project_id}/${local.resource_name}"), 0, 12)}-nvoken-build"
-  image                = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}/nvokend:${var.image_tag}"
+  resource_name         = "${var.name}-${var.environment}"
+  runtime_account_id    = length(local.resource_name) <= 30 ? local.resource_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.resource_name), 0, 8)}"
+  build_account_name    = "${local.resource_name}-build"
+  build_account_id      = length(local.build_account_name) <= 30 ? local.build_account_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.build_account_name), 0, 8)}"
+  migrate_account_name  = "${local.resource_name}-migrate"
+  migrate_account_id    = length(local.migrate_account_name) <= 30 ? local.migrate_account_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.migrate_account_name), 0, 8)}"
+  executor_account_name = "${local.resource_name}-executor"
+  executor_account_id   = length(local.executor_account_name) <= 30 ? local.executor_account_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.executor_account_name), 0, 8)}"
+  task_caller_name      = "${local.resource_name}-task-call"
+  task_caller_id        = length(local.task_caller_name) <= 30 ? local.task_caller_name : "${substr(local.resource_name, 0, 21)}-${substr(sha256(local.task_caller_name), 0, 8)}"
+  build_source_bucket   = "${var.project_id}-${substr(sha256("${var.project_id}/${local.resource_name}"), 0, 12)}-nvoken-build"
+  image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}/nvokend:${var.image_tag}"
   labels = merge(var.labels, {
     application = "nvoken"
     environment = var.environment
@@ -29,8 +33,11 @@ resource "google_project_service" "required" {
   for_each = toset([
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
+    "cloudtasks.googleapis.com",
     "compute.googleapis.com",
     "iam.googleapis.com",
+    "logging.googleapis.com",
+    "monitoring.googleapis.com",
     "run.googleapis.com",
     "secretmanager.googleapis.com",
     "servicenetworking.googleapis.com",
@@ -268,6 +275,18 @@ resource "google_service_account" "migrate" {
   display_name = "${local.resource_name} database migration"
 }
 
+resource "google_service_account" "executor" {
+  project      = var.project_id
+  account_id   = local.executor_account_id
+  display_name = "${local.resource_name} private executor"
+}
+
+resource "google_service_account" "task_caller" {
+  project      = var.project_id
+  account_id   = local.task_caller_id
+  display_name = "${local.resource_name} Cloud Tasks OIDC caller"
+}
+
 resource "google_secret_manager_secret_iam_member" "generated" {
   for_each = {
     database_url    = google_secret_manager_secret.database_url.secret_id
@@ -294,6 +313,56 @@ resource "google_secret_manager_secret_iam_member" "migration_database" {
   secret_id = google_secret_manager_secret.database_url.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.migrate.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "executor_database" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.database_url.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_project_iam_member" "runtime_cloud_tasks_enqueuer" {
+  project = var.project_id
+  role    = "roles/cloudtasks.enqueuer"
+  member  = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_project_iam_member" "runtime_cloud_tasks_viewer" {
+  project = var.project_id
+  role    = "roles/cloudtasks.viewer"
+  member  = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_service_account_iam_member" "runtime_acts_as_task_caller" {
+  service_account_id = google_service_account.task_caller.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_cloud_tasks_queue" "execution" {
+  project  = var.project_id
+  location = var.region
+  name     = "${local.resource_name}-execution"
+
+  rate_limits {
+    max_dispatches_per_second = var.task_queue_max_dispatches_per_second
+    max_concurrent_dispatches = var.task_queue_max_concurrent_dispatches
+  }
+
+  retry_config {
+    max_attempts       = var.task_queue_max_attempts
+    max_retry_duration = "${var.task_queue_max_retry_duration_seconds}s"
+    min_backoff        = "1s"
+    max_backoff        = "60s"
+    max_doublings      = 5
+  }
+
+  stackdriver_logging_config {
+    sampling_ratio = 1
+  }
+
+  depends_on = [google_project_service.required]
 }
 
 resource "google_cloud_run_v2_job" "migrate" {
@@ -356,6 +425,159 @@ resource "google_cloud_run_v2_job" "migrate" {
     google_secret_manager_secret_iam_member.migration_database,
     google_secret_manager_secret_version.database_url,
   ]
+}
+
+resource "google_cloud_run_v2_service" "executor" {
+  project              = var.project_id
+  name                 = "${local.resource_name}-executor"
+  location             = var.region
+  ingress              = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  invoker_iam_disabled = false
+  deletion_protection  = var.service_deletion_protection
+  labels               = local.labels
+
+  lifecycle {
+    precondition {
+      condition     = var.task_queue_max_concurrent_dispatches <= var.executor_max_instances * var.executor_request_concurrency
+      error_message = "task queue concurrency cannot exceed declared executor request capacity."
+    }
+    precondition {
+      condition     = var.executor_attempt_timeout_seconds + var.engine_settlement_reserve_seconds <= var.task_dispatch_deadline_seconds
+      error_message = "executor attempt timeout must leave the configured settlement reserve inside the task deadline."
+    }
+    precondition {
+      condition     = var.task_dispatch_deadline_seconds <= 1800
+      error_message = "Cloud Tasks HTTP dispatch deadline cannot exceed 1800 seconds."
+    }
+  }
+
+  scaling {
+    min_instance_count = 0
+    max_instance_count = var.executor_max_instances
+  }
+
+  template {
+    service_account                  = google_service_account.executor.email
+    timeout                          = "${var.task_dispatch_deadline_seconds}s"
+    max_instance_request_concurrency = var.executor_request_concurrency
+
+    containers {
+      name  = "nvokend"
+      image = local.image
+      args  = ["serve"]
+
+      ports {
+        name           = "http1"
+        container_port = 8080
+      }
+
+      env {
+        name  = "NVOKEN_PROCESS_ROLE"
+        value = "executor"
+      }
+
+      env {
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.database_url.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "DATABASE_MAX_CONNS"
+        value = tostring(var.executor_database_max_connections)
+      }
+
+      env {
+        name  = "DISPATCH_QUEUE"
+        value = "execution"
+      }
+
+      env {
+        name  = "EXECUTOR_ATTEMPT_TIMEOUT"
+        value = "${var.executor_attempt_timeout_seconds}s"
+      }
+
+      env {
+        name  = "DISPATCH_SYNTHETIC_ATTEMPT_DELAY"
+        value = "${var.synthetic_dispatch_delay_seconds}s"
+      }
+
+      env {
+        name  = "CLOUD_TASKS_DISPATCH_DEADLINE"
+        value = "${var.task_dispatch_deadline_seconds}s"
+      }
+
+      env {
+        name  = "SHUTDOWN_TIMEOUT"
+        value = "${var.shutdown_timeout_seconds}s"
+      }
+
+      resources {
+        limits = {
+          cpu    = var.cpu
+          memory = var.memory
+        }
+
+        cpu_idle          = true
+        startup_cpu_boost = true
+      }
+
+      startup_probe {
+        timeout_seconds   = 2
+        period_seconds    = 3
+        failure_threshold = 20
+
+        http_get {
+          path = "/health"
+          port = 8080
+        }
+      }
+
+      liveness_probe {
+        timeout_seconds   = 2
+        period_seconds    = 30
+        failure_threshold = 3
+
+        http_get {
+          path = "/health"
+          port = 8080
+        }
+      }
+    }
+
+    vpc_access {
+      egress = "PRIVATE_RANGES_ONLY"
+
+      network_interfaces {
+        network    = google_compute_network.runtime.id
+        subnetwork = google_compute_subnetwork.runtime.id
+      }
+    }
+  }
+
+  traffic {
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
+  }
+
+  depends_on = [
+    google_cloud_run_v2_job.migrate,
+    google_project_service.required,
+    google_secret_manager_secret_iam_member.executor_database,
+    google_secret_manager_secret_version.database_url,
+  ]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "task_caller_invokes_executor" {
+  project  = var.project_id
+  location = google_cloud_run_v2_service.executor.location
+  name     = google_cloud_run_v2_service.executor.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.task_caller.email}"
 }
 
 resource "google_cloud_run_v2_service" "runtime" {
@@ -434,6 +656,11 @@ resource "google_cloud_run_v2_service" "runtime" {
       }
 
       env {
+        name  = "NVOKEN_PROCESS_ROLE"
+        value = "combined"
+      }
+
+      env {
         name = "DATABASE_URL"
         value_source {
           secret_key_ref {
@@ -479,6 +706,36 @@ resource "google_cloud_run_v2_service" "runtime" {
       env {
         name  = "DATABASE_MAX_CONNS"
         value = tostring(var.database_max_connections)
+      }
+
+      env {
+        name  = "DISPATCH_QUEUE"
+        value = "execution"
+      }
+
+      env {
+        name  = "CLOUD_TASKS_QUEUE"
+        value = google_cloud_tasks_queue.execution.id
+      }
+
+      env {
+        name  = "CLOUD_TASKS_EXECUTOR_URL"
+        value = google_cloud_run_v2_service.executor.uri
+      }
+
+      env {
+        name  = "CLOUD_TASKS_OIDC_SERVICE_ACCOUNT"
+        value = google_service_account.task_caller.email
+      }
+
+      env {
+        name  = "CLOUD_TASKS_OIDC_AUDIENCE"
+        value = google_cloud_run_v2_service.executor.uri
+      }
+
+      env {
+        name  = "CLOUD_TASKS_DISPATCH_DEADLINE"
+        value = "${var.task_dispatch_deadline_seconds}s"
       }
 
       env {
@@ -597,10 +854,126 @@ resource "google_cloud_run_v2_service" "runtime" {
 
   depends_on = [
     google_cloud_run_v2_job.migrate,
+    google_cloud_run_v2_service_iam_member.task_caller_invokes_executor,
+    google_project_iam_member.runtime_cloud_tasks_enqueuer,
+    google_project_iam_member.runtime_cloud_tasks_viewer,
+    google_service_account_iam_member.runtime_acts_as_task_caller,
     google_project_service.required,
     google_secret_manager_secret_iam_member.generated,
     google_secret_manager_secret_iam_member.provider,
     google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.runtime_api_key,
   ]
+}
+
+resource "google_cloud_run_v2_job" "dispatch_smoke" {
+  project             = var.project_id
+  name                = "${local.resource_name}-dispatch-smoke"
+  location            = var.region
+  deletion_protection = false
+  labels              = local.labels
+
+  template {
+    task_count  = 1
+    parallelism = 1
+
+    template {
+      service_account = google_service_account.migrate.email
+      timeout         = "300s"
+      max_retries     = 0
+
+      containers {
+        name  = "nvokend"
+        image = local.image
+        args  = ["dispatch-smoke"]
+
+        env {
+          name = "DATABASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.database_url.secret_id
+              version = "latest"
+            }
+          }
+        }
+
+        env {
+          name  = "DISPATCH_QUEUE"
+          value = "execution"
+        }
+
+        resources {
+          limits = {
+            cpu    = var.cpu
+            memory = var.memory
+          }
+        }
+      }
+
+      vpc_access {
+        egress = "PRIVATE_RANGES_ONLY"
+
+        network_interfaces {
+          network    = google_compute_network.runtime.id
+          subnetwork = google_compute_subnetwork.runtime.id
+        }
+      }
+    }
+  }
+
+  depends_on = [google_cloud_run_v2_service.runtime]
+}
+
+resource "google_logging_metric" "dispatch_failures" {
+  for_each = {
+    aged_pending    = "jsonPayload.event=\"dispatch_aged_pending\""
+    stale_published = "jsonPayload.event=\"dispatch_stale_published\""
+    publish_failure = "jsonPayload.event=\"dispatch_publish_failure\""
+    executor_auth   = "resource.labels.service_name=\"${google_cloud_run_v2_service.executor.name}\" AND (httpRequest.status=401 OR httpRequest.status=403)"
+  }
+
+  project = var.project_id
+  name    = "${local.resource_name}-${replace(each.key, "_", "-")}"
+  filter  = "resource.type=\"cloud_run_revision\" AND ${each.value}"
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+  }
+
+  depends_on = [google_project_service.required]
+}
+
+resource "google_monitoring_alert_policy" "dispatch_failures" {
+  for_each = google_logging_metric.dispatch_failures
+
+  project      = var.project_id
+  display_name = "${local.resource_name}: ${replace(each.key, "_", " ")}"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "${replace(each.key, "_", " ")} observed"
+
+    condition_threshold {
+      filter          = "metric.type=\"logging.googleapis.com/user/${each.value.name}\" AND resource.type=\"cloud_run_revision\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_DELTA"
+      }
+    }
+  }
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+
+  documentation {
+    content   = "Investigate nvoken execution dispatch publication, reconciliation, or executor IAM. See deploy/google-cloud/README.md."
+    mime_type = "text/markdown"
+  }
 }

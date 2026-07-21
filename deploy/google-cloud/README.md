@@ -1,9 +1,9 @@
 # Google Cloud Run paved deployment
 
 This Terraform root deploys the current self-contained nvoken runtime to one
-public Cloud Run service. The service admits HTTP requests and polls Postgres
-for durable Invocation work in the same process. It therefore deliberately uses
-instance-based CPU and keeps at least one instance running.
+public Cloud Run service and the Cloud Tasks dispatch foundation to a separate
+private executor service. Real Invocations still run in the combined service;
+only harmless synthetic dispatches use the private executor until PRD 010.
 
 This is the small-installation path, not the final production scaling model.
 Cloud Run request or CPU autoscaling does not track Postgres queue depth, and a
@@ -22,15 +22,20 @@ the later request-bound Cloud Tasks executor is available.
 - Secret Manager access for existing Anthropic and/or OpenAI key secrets;
 - separate runtime and database-migration service accounts with no project-wide
   application role;
-- a one-task Cloud Run migration Job; and
+- a one-task Cloud Run migration Job and a synthetic dispatch smoke Job;
 - a public Cloud Run service with the edge Invoker IAM check disabled, Runtime
   bearer authentication, a startup probe, instance-based CPU, one minimum
-  instance, and explicit capacity caps.
+  instance, and explicit capacity caps;
+- a regional Cloud Tasks queue, transactional Postgres dispatch publisher and
+  reconciler, and a dedicated OIDC caller identity; and
+- an internal-ingress, IAM-protected executor Cloud Run service that receives
+  only the database credential, uses request-based CPU, and scales to zero.
 
 The defaults cap the installation at three service instances, four model turns
 per instance, and ten Postgres connections per instance: at most 12 executing
-turns and 30 pooled database connections. These are configuration ceilings, not
-an autoscaling guarantee.
+turns and 30 pooled database connections. The queue holds at most 40 concurrent
+requests, matching ten executor instances at concurrency four. These are
+configuration ceilings, not an autoscaling guarantee.
 
 ## Prerequisites
 
@@ -151,13 +156,70 @@ can return a Google-generated `404` before the request reaches nvoken. nvoken
 therefore uses `/health` consistently for local checks, Cloud Run startup and
 liveness probes, and external smoke checks.
 
+After the normal Runtime smoke passes, prove the private authenticated handoff:
+
+```bash
+deploy/google-cloud/dispatch-smoke.sh
+```
+
+The script executes the one-shot `dispatch-smoke` Job, reads its generated
+dispatch ID from structured logs, and waits for the private executor to record
+durable synthetic settlement. The job writes synthetic work and dispatch intent
+in one transaction; the combined service publishes the named task, and the
+executor reloads all authority from Postgres. No model or provider key is used.
+
+To exercise recoverability, pause the queue, run the smoke Job, verify an aged
+pending warning appears after `DISPATCH_STALE_AFTER`, and resume the queue. The
+same Postgres dispatch then publishes and settles. Do not delete or manually
+acknowledge an uncertain task. A published task that disappears is checked by
+the reconciler; safely replayable synthetic work gets one new successor
+dispatch, while already-settled work does not.
+
+Use the Terraform `execution_queue` output with `gcloud tasks queues pause` and
+`gcloud tasks queues resume`; always pass the Terraform `project_id` and
+`region` outputs explicitly. To prove revision draining, temporarily set
+`TF_VAR_synthetic_dispatch_delay_seconds=20`, start the dispatch smoke, and
+deploy a new executor revision while its request is held. The old revision must
+log `handler_outcome=settled` before it exits. Cancelling the held request
+instead produces `503` and leaves both work and dispatch unsettled for delivery
+retry. Return the delay to zero after the test.
+
+Cloud Tasks retries only an HTTP request for which nvoken could not make a
+durable decision. Missing, terminal, malformed, or duplicate synthetic
+deliveries return `204`. Real long-running Invocation attempts adopt the more
+conservative live-owner duplicate response in PRD 010.
+
+Terraform creates alert policies for aged pending dispatches, stale published
+dispatches, repeated publication failure, and executor `401`/`403` responses.
+Attach the installation's notification channels to those policies before a
+production rollout.
+
+Because PRD 009 does not route real Invocations, rollback is intentionally
+simple: pause the queue, stop creating synthetic dispatches, and roll the
+combined service and executor back together. Existing public Invocation work
+continues on the embedded Postgres runner. Leave active dispatch rows in
+Postgres; a compatible publisher can resume them later. Never delete uncertain
+tasks or remove rows from Terraform state to force convergence. Terminal
+dispatch diagnostics are pruned in bounded batches after seven days by default;
+synthetic work rows are retained.
+
 ## Capacity and shutdown
 
 `request_concurrency`, `engine_concurrency`, `database_max_connections`, and
-`max_instances` are separate limits. Size Cloud SQL for
+`max_instances` are separate combined-service limits. Executor request
+concurrency, queue concurrency, and executor instance/database limits are also
+separate. Terraform rejects queue concurrency above declared executor request
+capacity. Size Cloud SQL for
 `max_instances * database_max_connections`; do not infer engine autoscaling
-from API traffic. At least one instance and instance-based CPU are correctness
-requirements for the Postgres poller after an admission request returns.
+from API traffic, and add the executor connection ceiling before sizing the
+database. At least one combined instance and instance-based CPU remain
+correctness requirements for its Postgres publisher and embedded Invocation
+poller after an admission request returns.
+
+The executor request and Cloud Tasks dispatch deadline are 1,800 seconds. The
+application attempt ceiling is 1,795 seconds, retaining the PRD 008 settlement
+reserve. This foundation's synthetic work settles immediately; the bound is in
+place for the real segment cutover.
 
 Cloud Run currently provides a ten-second termination window. The paved service
 sets `SHUTDOWN_TIMEOUT=8s` and `ENGINE_DRAIN_GRACE=7s`. On `SIGTERM`, HTTP stops
