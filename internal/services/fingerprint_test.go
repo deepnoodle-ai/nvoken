@@ -24,8 +24,17 @@ type fingerprintVector struct {
 }
 
 func TestInvocationFingerprintV1DesignVectors(t *testing.T) {
-	_, filename, _, _ := runtime.Caller(0)
-	path := filepath.Join(filepath.Dir(filename), "..", "..", "docs", "design", "admission-fingerprint-v1.json")
+	testFingerprintDesignVectors(t, "admission-fingerprint-v1.json", 1)
+}
+
+func TestInvocationFingerprintV2DesignVectors(t *testing.T) {
+	testFingerprintDesignVectors(t, "admission-fingerprint-v2.json", 2)
+}
+
+func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
+	t.Helper()
+	_, callerFile, _, _ := runtime.Caller(0)
+	path := filepath.Join(filepath.Dir(callerFile), "..", "..", "docs", "design", filename)
 	payload, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read fingerprint vectors: %v", err)
@@ -46,16 +55,21 @@ func TestInvocationFingerprintV1DesignVectors(t *testing.T) {
 			default:
 				t.Fatalf("unknown selector kind %q", vector.Selector.Kind)
 			}
-			canonical, err := invocationFingerprintBytesV1(input)
+			var canonical []byte
+			var fingerprint [sha256.Size]byte
+			var err error
+			if version == 1 {
+				canonical, err = invocationFingerprintBytesV1(input)
+				fingerprint, _ = InvocationFingerprintV1(input)
+			} else {
+				canonical, err = invocationFingerprintBytesV2(input)
+				fingerprint, _ = InvocationFingerprintV2(input)
+			}
 			if err != nil {
 				t.Fatalf("canonicalize: %v", err)
 			}
 			if string(canonical) != vector.Canonical {
 				t.Fatalf("canonical = %q, want %q", canonical, vector.Canonical)
-			}
-			fingerprint, err := InvocationFingerprintV1(input)
-			if err != nil {
-				t.Fatalf("fingerprint: %v", err)
 			}
 			if hex.EncodeToString(fingerprint[:]) != vector.SHA256 {
 				t.Fatalf("sha256 = %x, want %s", fingerprint, vector.SHA256)

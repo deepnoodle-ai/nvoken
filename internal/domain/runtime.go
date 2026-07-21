@@ -64,25 +64,36 @@ func (s InvocationStatus) Terminal() bool {
 }
 
 type Invocation struct {
-	ID                   string
-	SessionID            string
-	AccountID            string
-	TenantPartitionID    string
-	AgentID              string
-	SpecSnapshotID       string
-	IdempotencyKey       string
-	RequestFingerprint   []byte
-	Status               InvocationStatus
-	CurrentStateRevision int64
-	LeaseOwner           *string
-	LeaseExpiresAt       *time.Time
-	LeaseAttempt         int64
-	Error                json.RawMessage
-	Usage                json.RawMessage
-	Provenance           json.RawMessage
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	CompletedAt          *time.Time
+	ID                     string
+	SessionID              string
+	AccountID              string
+	TenantPartitionID      string
+	AgentID                string
+	SpecSnapshotID         string
+	IdempotencyKey         string
+	RequestFingerprint     []byte
+	FingerprintVersion     int
+	Status                 InvocationStatus
+	CurrentStateRevision   int64
+	LeaseOwner             *string
+	LeaseExpiresAt         *time.Time
+	LeaseAttempt           int64
+	WallClockTimeoutMS     int64
+	ActiveTimeoutMS        int64
+	MaxOutputTokens        *int
+	MaxEstimatedCostMicros *int64
+	MaxIterations          int
+	ActiveExecutionMS      int64
+	WallClockDeadlineAt    time.Time
+	ActiveSegmentStartedAt *time.Time
+	ExecutionDeadlineAt    *time.Time
+	ExecutionDeadlineScope *string
+	Error                  json.RawMessage
+	Usage                  json.RawMessage
+	Provenance             json.RawMessage
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	CompletedAt            *time.Time
 }
 
 type MessageRole string
@@ -154,10 +165,12 @@ type GenerationMessage struct {
 }
 
 type GenerationRequest struct {
-	Instructions string
-	Provider     string
-	Model        string
-	Messages     []GenerationMessage
+	Instructions    string
+	Provider        string
+	Model           string
+	Messages        []GenerationMessage
+	MaxOutputTokens *int
+	MaxIterations   int
 }
 
 type GenerationResponse struct {
@@ -173,6 +186,7 @@ type ModelUsage struct {
 	CacheReadInputTokens     int        `json:"cache_read_input_tokens,omitempty"`
 	ReasoningTokens          int        `json:"reasoning_tokens,omitempty"`
 	EstimatedCost            *ModelCost `json:"estimated_cost,omitempty"`
+	Iterations               int        `json:"iterations,omitempty"`
 }
 
 // ModelCost is Dive's normalized list-price estimate, not a billing ledger.

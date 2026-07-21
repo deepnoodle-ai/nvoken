@@ -35,6 +35,7 @@ func (a fakeAuthenticator) Authenticate(context.Context, string) (domain.Runtime
 type fakeRuntime struct {
 	admitInput  services.CreateInvocationInput
 	admitCalls  int
+	cancelCalls int
 	ack         services.InvocationAcknowledgement
 	invocation  services.InvocationRead
 	session     services.SessionRead
@@ -66,6 +67,11 @@ func (f *fakeRuntime) GetInvocation(context.Context, domain.RuntimeAuthContext, 
 	return f.invocation, f.err
 }
 
+func (f *fakeRuntime) CancelInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error) {
+	f.cancelCalls++
+	return f.invocation, f.err
+}
+
 func (f *fakeRuntime) GetSession(context.Context, domain.RuntimeAuthContext, string) (services.SessionRead, error) {
 	return f.session, f.err
 }
@@ -94,6 +100,31 @@ func TestHealthIsPublic(t *testing.T) {
 
 	if recorder.Code != http.StatusOK || recorder.Body.String() != "ok" {
 		t.Fatalf("GET /health = %d %q", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestCancelInvocationRequiresEmptyBodyAndReturnsAuthoritativeRow(t *testing.T) {
+	runtime := &fakeRuntime{invocation: services.InvocationRead{
+		ID: testInvocationID, AgentID: testAgentID, SessionID: testSessionID,
+		Status: domain.InvocationCancelled, Budgets: services.InvocationBudgetRead{
+			WallClockTimeoutSeconds: 1800, ActiveExecutionTimeoutSeconds: 1800, MaxIterations: 1,
+		}, WallClockDeadlineAt: time.Date(2026, 7, 21, 12, 30, 0, 0, time.UTC),
+	}}
+	handler := testHandler(runtime, nil, io.Discard)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, authenticatedRequest(http.MethodPost, "/v1/invocations/"+testInvocationID+"/cancel", nil))
+	if recorder.Code != http.StatusOK || runtime.cancelCalls != 1 {
+		t.Fatalf("cancel = %d %s, calls = %d", recorder.Code, recorder.Body.String(), runtime.cancelCalls)
+	}
+	var response invocationResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil || response.Status != domain.InvocationCancelled {
+		t.Fatalf("cancel response = %#v, error = %v", response, err)
+	}
+
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, authenticatedRequest(http.MethodPost, "/v1/invocations/"+testInvocationID+"/cancel", []byte(`{}`)))
+	if recorder.Code != http.StatusBadRequest || runtime.cancelCalls != 1 {
+		t.Fatalf("cancel with body = %d %s, calls = %d", recorder.Code, recorder.Body.String(), runtime.cancelCalls)
 	}
 }
 
@@ -415,7 +446,7 @@ func testHandler(runtime RuntimeService, authenticator *fakeAuthenticator, logWr
 		authenticator = &fakeAuthenticator{auth: domain.RuntimeAuthContext{
 			AccountID: testAccountID,
 			Operations: map[domain.RuntimeOperation]struct{}{
-				domain.OperationCreateInvocation: {}, domain.OperationGetInvocation: {}, domain.OperationGetSession: {},
+				domain.OperationCreateInvocation: {}, domain.OperationGetInvocation: {}, domain.OperationCancelInvocation: {}, domain.OperationGetSession: {},
 				domain.OperationListInvocations: {}, domain.OperationListSessions: {},
 				domain.OperationListMessages: {}, domain.OperationGetTranscript: {},
 			},

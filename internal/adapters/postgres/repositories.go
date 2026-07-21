@@ -250,13 +250,25 @@ func (s *Store) GetExecutionSpecSnapshot(ctx context.Context, id string) (domain
 }
 
 func (s *Store) CreateInvocation(ctx context.Context, invocation domain.Invocation) error {
+	var maxOutputTokens *int32
+	if invocation.MaxOutputTokens != nil {
+		value := int32(*invocation.MaxOutputTokens)
+		maxOutputTokens = &value
+	}
 	return s.q(ctx).CreateInvocation(ctx, postgresdb.CreateInvocationParams{
 		ID: invocation.ID, SessionID: invocation.SessionID, AccountID: invocation.AccountID,
 		TenantPartitionID: invocation.TenantPartitionID, AgentID: invocation.AgentID,
 		SpecSnapshotID: invocation.SpecSnapshotID, IdempotencyKey: invocation.IdempotencyKey,
 		RequestFingerprint: invocation.RequestFingerprint, Status: string(invocation.Status),
-		CurrentStateRevision: invocation.CurrentStateRevision, ErrorPayload: invocation.Error,
-		CreatedAt: invocation.CreatedAt, UpdatedAt: invocation.UpdatedAt,
+		RequestFingerprintVersion: int16(invocation.FingerprintVersion),
+		CurrentStateRevision:      invocation.CurrentStateRevision, ErrorPayload: invocation.Error,
+		WallClockTimeoutMs:       invocation.WallClockTimeoutMS,
+		ActiveExecutionTimeoutMs: invocation.ActiveTimeoutMS,
+		MaxOutputTokens:          maxOutputTokens,
+		MaxEstimatedCostMicrousd: invocation.MaxEstimatedCostMicros,
+		MaxIterations:            int32(invocation.MaxIterations), ActiveExecutionMs: invocation.ActiveExecutionMS,
+		WallClockDeadlineAt: invocation.WallClockDeadlineAt,
+		CreatedAt:           invocation.CreatedAt, UpdatedAt: invocation.UpdatedAt,
 		CompletedAt: invocation.CompletedAt,
 	})
 }
@@ -280,11 +292,11 @@ func (s *Store) GetInvocationForUpdate(ctx context.Context, id string) (domain.I
 	return invocationFromRow(row), nil
 }
 
-func (s *Store) FindNextQueuedInvocationForUpdate(ctx context.Context) (domain.Invocation, error) {
+func (s *Store) FindNextQueuedInvocationForUpdate(ctx context.Context, observedAt time.Time) (domain.Invocation, error) {
 	if _, ok := transactionFromContext(ctx); !ok {
 		return domain.Invocation{}, fmt.Errorf("queued Invocation Session lock requires a transaction")
 	}
-	row, err := s.q(ctx).FindNextQueuedInvocationForUpdate(ctx)
+	row, err := s.q(ctx).FindNextQueuedInvocationForUpdate(ctx, observedAt)
 	if err != nil {
 		return domain.Invocation{}, normalizeNotFound(err)
 	}
@@ -300,6 +312,23 @@ func (s *Store) ListExpiredInvocationLeases(ctx context.Context, observedAt time
 	}
 	rows, err := s.q(ctx).ListExpiredInvocationLeases(ctx, postgresdb.ListExpiredInvocationLeasesParams{
 		ObservedAt: &observedAt, BatchLimit: int32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	invocations := make([]domain.Invocation, len(rows))
+	for i, row := range rows {
+		invocations[i] = invocationFromRow(row)
+	}
+	return invocations, nil
+}
+
+func (s *Store) ListExpiredInvocationDeadlines(ctx context.Context, observedAt time.Time, limit int) ([]domain.Invocation, error) {
+	if limit <= 0 {
+		return []domain.Invocation{}, nil
+	}
+	rows, err := s.q(ctx).ListExpiredInvocationDeadlines(ctx, postgresdb.ListExpiredInvocationDeadlinesParams{
+		ObservedAt: observedAt, BatchLimit: boundedBatchLimit(limit),
 	})
 	if err != nil {
 		return nil, err
@@ -338,19 +367,34 @@ func (s *Store) LockInvocationAdmissionKey(ctx context.Context, key string) erro
 }
 
 func invocationFromRow(row postgresdb.Invocation) domain.Invocation {
+	var maxOutputTokens *int
+	if row.MaxOutputTokens != nil {
+		value := int(*row.MaxOutputTokens)
+		maxOutputTokens = &value
+	}
 	return domain.Invocation{
 		ID: row.ID, SessionID: row.SessionID, AccountID: row.AccountID,
 		TenantPartitionID: row.TenantPartitionID, AgentID: row.AgentID,
 		SpecSnapshotID: row.SpecSnapshotID, IdempotencyKey: row.IdempotencyKey,
 		RequestFingerprint: row.RequestFingerprint, Status: domain.InvocationStatus(row.Status),
-		CurrentStateRevision: row.CurrentStateRevision,
-		LeaseOwner:           row.LeaseOwner,
-		LeaseExpiresAt:       row.LeaseExpiresAt,
-		LeaseAttempt:         row.LeaseAttempt,
-		Error:                row.Error,
-		Usage:                row.Usage,
-		Provenance:           row.Provenance,
-		CreatedAt:            row.CreatedAt, UpdatedAt: row.UpdatedAt, CompletedAt: row.CompletedAt,
+		FingerprintVersion:     int(row.RequestFingerprintVersion),
+		CurrentStateRevision:   row.CurrentStateRevision,
+		LeaseOwner:             row.LeaseOwner,
+		LeaseExpiresAt:         row.LeaseExpiresAt,
+		LeaseAttempt:           row.LeaseAttempt,
+		WallClockTimeoutMS:     row.WallClockTimeoutMs,
+		ActiveTimeoutMS:        row.ActiveExecutionTimeoutMs,
+		MaxOutputTokens:        maxOutputTokens,
+		MaxEstimatedCostMicros: row.MaxEstimatedCostMicrousd,
+		MaxIterations:          int(row.MaxIterations), ActiveExecutionMS: row.ActiveExecutionMs,
+		WallClockDeadlineAt:    row.WallClockDeadlineAt,
+		ActiveSegmentStartedAt: row.ActiveSegmentStartedAt,
+		ExecutionDeadlineAt:    row.ExecutionDeadlineAt,
+		ExecutionDeadlineScope: row.ExecutionDeadlineScope,
+		Error:                  row.Error,
+		Usage:                  row.Usage,
+		Provenance:             row.Provenance,
+		CreatedAt:              row.CreatedAt, UpdatedAt: row.UpdatedAt, CompletedAt: row.CompletedAt,
 	}
 }
 
@@ -360,13 +404,39 @@ func (s *Store) ClaimInvocation(
 	leaseExpiresAt time.Time,
 	stateRevision int64,
 	observedAt time.Time,
+	executionDeadlineAt time.Time,
+	executionDeadlineScope string,
 ) (domain.Invocation, error) {
 	row, err := s.q(ctx).ClaimInvocation(ctx, postgresdb.ClaimInvocationParams{
 		ID: id, LeaseOwner: &owner, LeaseExpiresAt: &leaseExpiresAt,
-		StateRevision: stateRevision, ObservedAt: observedAt,
+		StateRevision: stateRevision, ObservedAt: &observedAt,
+		ExecutionDeadlineAt: &executionDeadlineAt, ExecutionDeadlineScope: &executionDeadlineScope,
 	})
 	if err != nil {
 		return domain.Invocation{}, normalizeNotFound(err)
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) CancelInvocation(ctx context.Context, id string, stateRevision int64, observedAt time.Time) (domain.Invocation, error) {
+	row, err := s.q(ctx).CancelInvocation(ctx, postgresdb.CancelInvocationParams{
+		ID: id, StateRevision: stateRevision, ObservedAt: &observedAt,
+	})
+	if err != nil {
+		return domain.Invocation{}, normalizeNotFound(err)
+	}
+	return invocationFromRow(row), nil
+}
+
+func (s *Store) ReapInvocationDeadline(ctx context.Context, id string, stateRevision int64, errorPayload []byte, observedAt time.Time) (domain.Invocation, error) {
+	row, err := s.q(ctx).ReapInvocationDeadline(ctx, postgresdb.ReapInvocationDeadlineParams{
+		ID: id, StateRevision: stateRevision, ErrorPayload: errorPayload, ObservedAt: &observedAt,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Invocation{}, ports.ErrLeaseLost
+	}
+	if err != nil {
+		return domain.Invocation{}, err
 	}
 	return invocationFromRow(row), nil
 }

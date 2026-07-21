@@ -23,10 +23,20 @@ back to another provider or ambient credentials. Engine capacity and timing are
 bounded by `ENGINE_CONCURRENCY`, `ENGINE_POLL_INTERVAL`,
 `ENGINE_LEASE_DURATION`, `ENGINE_HEARTBEAT_INTERVAL`,
 `ENGINE_REAPER_INTERVAL`, `ENGINE_REAPER_BATCH_LIMIT`, and
-`ENGINE_DRAIN_GRACE`. `SHUTDOWN_TIMEOUT` bounds HTTP shutdown and the overall
+`ENGINE_DRAIN_GRACE`. `ENGINE_EXECUTION_SEGMENT_CEILING` bounds one model
+segment, and `ENGINE_SETTLEMENT_RESERVE` stops model work early enough to
+persist its outcome. `SHUTDOWN_TIMEOUT` bounds HTTP shutdown and the overall
 component join; engine drain grace must be shorter than that total. Defaults are
 suitable for local self-contained operation. The Cloud Run paved path overrides
 both shutdown values to fit the platform termination window.
+
+`INVOCATION_DEFAULT_WALL_CLOCK_TIMEOUT`,
+`INVOCATION_DEFAULT_ACTIVE_EXECUTION_TIMEOUT`, and
+`INVOCATION_DEFAULT_MAX_ITERATIONS` supply omitted limits. The corresponding
+`INVOCATION_MAX_*` settings reject requests above installation policy; output
+tokens and estimated cost have no default and remain unlimited unless the host
+requests them. `DATABASE_MAX_CONNS` must be at least two because the
+cross-process cancellation listener reserves one pool connection.
 
 On its first start, the static self-hosted authenticator serializes creation of
 one installation Account and its default tenant partition. Later starts resolve
@@ -48,7 +58,14 @@ curl --fail-with-body http://localhost:8080/v1/invocations \
     "input": {"content": [{"type": "text", "text": "Why was I charged twice?"}]},
     "spec": {
       "instructions": "You are a concise billing support agent.",
-      "model": {"provider": "anthropic", "name": "claude-sonnet-5"}
+      "model": {"provider": "anthropic", "name": "claude-sonnet-5"},
+      "budgets": {
+        "wall_clock_timeout_seconds": 600,
+        "active_execution_timeout_seconds": 300,
+        "max_output_tokens": 4096,
+        "max_estimated_cost_usd": 0.25,
+        "max_iterations": 1
+      }
     }
   }'
 ```
@@ -76,7 +93,19 @@ curl --fail-with-body \
 ```
 
 The Invocation read includes terminal `error`, normalized aggregate `usage`,
-and model `provenance`. Collection reads are bounded, newest-first, and use the
+model `provenance`, resolved `budgets`, accrued `active_execution_ms`, and its
+wall-clock deadline. Cancel accepted work idempotently with an empty body:
+
+```bash
+curl --fail-with-body -X POST \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  http://localhost:8080/v1/invocations/invk_…/cancel
+```
+
+A `200` response means `cancelled` is durable, not that a racing provider call
+incurred no cost. Cross-process notification lowers stop latency; renewal and
+settlement fencing remain correct if it is lost. Collection reads are bounded,
+newest-first, and use the
 returned opaque cursor with the exact same filters:
 
 ```bash

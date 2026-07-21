@@ -24,8 +24,13 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 	if cfg.Engine.Concurrency != 8 || cfg.Engine.PollInterval != time.Second ||
 		cfg.Engine.LeaseDuration != 30*time.Second || cfg.Engine.HeartbeatInterval != 10*time.Second ||
 		cfg.Engine.ReaperInterval != 10*time.Second || cfg.Engine.ReaperBatchLimit != 100 ||
-		cfg.Engine.DrainGrace != 30*time.Second {
+		cfg.Engine.DrainGrace != 30*time.Second || cfg.Engine.ExecutionSegmentCeiling != 15*time.Minute ||
+		cfg.Engine.SettlementReserve != 5*time.Second {
 		t.Fatalf("Engine defaults: %#v", cfg.Engine)
+	}
+	if cfg.Budgets.DefaultWallClockTimeout != 30*time.Minute ||
+		cfg.Budgets.DefaultActiveExecutionTimeout != 30*time.Minute || cfg.Budgets.DefaultMaxIterations != 1 {
+		t.Fatalf("budget defaults: %#v", cfg.Budgets)
 	}
 }
 
@@ -126,6 +131,14 @@ func TestLoadDaemonConfigRequiresRuntimeDependencies(t *testing.T) {
 	t.Setenv("RUNTIME_TENANT_REF", strings.Repeat("界", 256))
 	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "255 Unicode characters") {
 		t.Fatalf("long tenant constraint error = %v", err)
+	}
+}
+
+func TestLoadDaemonConfigReservesDatabaseConnectionForCancellation(t *testing.T) {
+	setServeConfig(t)
+	t.Setenv("DATABASE_MAX_CONNS", "1")
+	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "at least 2") {
+		t.Fatalf("database connection error = %v", err)
 	}
 }
 

@@ -37,7 +37,8 @@ Read the active documents in this order:
 inputs and decisions that shaped the packet. It is useful background, but it
 is not required reading once the four active documents are understood.
 Language-neutral compatibility fixtures for the admission idempotency hash
-live in [`admission-fingerprint-v1.json`](admission-fingerprint-v1.json).
+live in [`admission-fingerprint-v1.json`](admission-fingerprint-v1.json) and
+[`admission-fingerprint-v2.json`](admission-fingerprint-v2.json).
 
 ## Document authority
 

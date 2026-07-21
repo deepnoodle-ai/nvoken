@@ -220,6 +220,18 @@ checkpoint recovery ships, the reaper may settle expired execution as a typed
 failure. After replay safety ships, a recoverable checkpoint may instead become
 claimable again.
 
+Cancellation uses the same first-terminal transaction and Session-before-
+Invocation lock order as settlement. A committed cancellation may notify other
+instances through PostgreSQL LISTEN/NOTIFY, but notification grants no
+authority; a missed wake is recovered when renewal or settlement loses its
+fence. Each claim also persists one active-execution segment and a deadline
+chosen from wall-clock remainder, active-execution remainder, and the
+installation segment ceiling. Model work stops before that deadline to reserve
+settlement time. Segment accrual and terminal state commit atomically and never
+move backward. Queue time consumes wall clock only. Before checkpoint resume,
+segment exhaustion is a typed terminal deadline failure rather than a hidden
+continuation.
+
 ### Checkpoints and resume
 
 The durable transcript is the basis of the future checkpoint system. Once

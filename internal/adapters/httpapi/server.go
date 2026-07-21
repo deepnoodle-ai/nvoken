@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -38,6 +39,10 @@ type RuntimeService interface {
 	ListSessions(context.Context, domain.RuntimeAuthContext, services.SessionListInput) (services.SessionList, error)
 	ListSessionMessages(context.Context, domain.RuntimeAuthContext, string, services.MessageListInput) (services.SessionMessageList, error)
 	GetSessionTranscript(context.Context, domain.RuntimeAuthContext, string, services.TranscriptInput) (services.TranscriptSnapshot, error)
+}
+
+type cancellationRuntimeService interface {
+	CancelInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error)
 }
 
 type Config struct {
@@ -102,6 +107,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 	mux.HandleFunc("/health", h.requireMethod(http.MethodGet, h.health))
 	mux.HandleFunc("/v1/invocations", h.invocations)
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
+	mux.HandleFunc("/v1/invocations/{invocation_id}/cancel", h.requireMethod(http.MethodPost, h.cancelInvocation))
 	mux.HandleFunc("/v1/sessions", h.requireMethod(http.MethodGet, h.listSessions))
 	mux.HandleFunc("/v1/sessions/{session_id}/messages", h.requireMethod(http.MethodGet, h.listSessionMessages))
 	mux.HandleFunc("/v1/sessions/{session_id}/transcript", h.requireMethod(http.MethodGet, h.getSessionTranscript))
@@ -191,6 +197,35 @@ func (h *handler) getInvocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	invocation, err := h.runtime.GetInvocation(r.Context(), auth, r.PathValue("invocation_id"))
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, invocationResponseFromService(invocation))
+}
+
+func (h *handler) cancelInvocation(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	var body [1]byte
+	if count, readErr := r.Body.Read(body[:]); count != 0 || (readErr != nil && !errors.Is(readErr, io.EOF)) {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeInvalidRequest, Message: "The cancellation request body must be empty."})
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	cancellationRuntime, ok := h.runtime.(cancellationRuntimeService)
+	if !ok {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	invocation, err := cancellationRuntime.CancelInvocation(r.Context(), auth, r.PathValue("invocation_id"))
 	if err != nil {
 		h.writeError(w, requestID, err)
 		return
@@ -448,16 +483,19 @@ type invocationAcknowledgementResponse struct {
 }
 
 type invocationResponse struct {
-	ID          string                  `json:"id"`
-	AgentID     string                  `json:"agent_id"`
-	SessionID   string                  `json:"session_id"`
-	Status      domain.InvocationStatus `json:"status"`
-	Error       any                     `json:"error"`
-	Usage       any                     `json:"usage"`
-	Provenance  any                     `json:"provenance"`
-	CreatedAt   time.Time               `json:"created_at"`
-	UpdatedAt   time.Time               `json:"updated_at"`
-	CompletedAt *time.Time              `json:"completed_at"`
+	ID                  string                        `json:"id"`
+	AgentID             string                        `json:"agent_id"`
+	SessionID           string                        `json:"session_id"`
+	Status              domain.InvocationStatus       `json:"status"`
+	Error               any                           `json:"error"`
+	Usage               any                           `json:"usage"`
+	Provenance          any                           `json:"provenance"`
+	Budgets             services.InvocationBudgetRead `json:"budgets"`
+	ActiveExecutionMS   int64                         `json:"active_execution_ms"`
+	WallClockDeadlineAt time.Time                     `json:"wall_clock_deadline_at"`
+	CreatedAt           time.Time                     `json:"created_at"`
+	UpdatedAt           time.Time                     `json:"updated_at"`
+	CompletedAt         *time.Time                    `json:"completed_at"`
 }
 
 type invocationListResponse struct {
@@ -524,7 +562,9 @@ func invocationResponseFromService(invocation services.InvocationRead) invocatio
 		ID: invocation.ID, AgentID: invocation.AgentID, SessionID: invocation.SessionID,
 		Status: invocation.Status, Error: rawJSONOrNil(invocation.Error),
 		Usage: rawJSONOrNil(invocation.Usage), Provenance: rawJSONOrNil(invocation.Provenance),
-		CreatedAt: invocation.CreatedAt, UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
+		Budgets: invocation.Budgets, ActiveExecutionMS: invocation.ActiveExecutionMS,
+		WallClockDeadlineAt: invocation.WallClockDeadlineAt,
+		CreatedAt:           invocation.CreatedAt, UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
 	}
 }
 

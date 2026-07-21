@@ -59,9 +59,12 @@ func TestGeneratorUsesExplicitProviderKeyAndToolFreeDiveCall(t *testing.T) {
 				model.config.Messages[1].LastText() != "prior answer" {
 				t.Fatalf("Dive messages = %#v", model.config.Messages)
 			}
+			if model.config.MaxTokens == nil || *model.config.MaxTokens != 321 {
+				t.Fatalf("Dive max tokens = %v, want 321", model.config.MaxTokens)
+			}
 			wantUsage := domain.ModelUsage{
 				InputTokens: 11, OutputTokens: 7, CacheCreationInputTokens: 3,
-				CacheReadInputTokens: 2, ReasoningTokens: 1,
+				CacheReadInputTokens: 2, ReasoningTokens: 1, Iterations: 1,
 				EstimatedCost: &domain.ModelCost{
 					Input: .1, Output: .2, CacheRead: .01, CacheWrite: .02,
 					Total: .33, Currency: "USD",
@@ -142,8 +145,10 @@ func TestGeneratorClassifiesDurableInputConversionSeparately(t *testing.T) {
 }
 
 func generationRequest(provider string) domain.GenerationRequest {
+	maxTokens := 321
 	return domain.GenerationRequest{
 		Instructions: "durable instructions", Provider: provider, Model: "requested-model",
+		MaxOutputTokens: &maxTokens, MaxIterations: 2,
 		Messages: []domain.GenerationMessage{
 			{Role: domain.MessageRoleUser, Content: []byte(`[{"type":"text","text":"question"}]`)},
 			{Role: domain.MessageRoleAssistant, Content: []byte(`[{"type":"text","text":"prior answer"}]`)},

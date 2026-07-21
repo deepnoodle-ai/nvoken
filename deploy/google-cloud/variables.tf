@@ -131,8 +131,8 @@ variable "database_max_connections" {
   default     = 10
 
   validation {
-    condition     = var.database_max_connections >= 1 && var.database_max_connections == floor(var.database_max_connections)
-    error_message = "database_max_connections must be a positive whole number."
+    condition     = var.database_max_connections >= 2 && var.database_max_connections == floor(var.database_max_connections)
+    error_message = "database_max_connections must be a whole number of at least 2; cancellation notifications reserve one connection."
   }
 }
 
@@ -156,6 +156,76 @@ variable "engine_drain_grace_seconds" {
     condition     = var.engine_drain_grace_seconds >= 1 && var.engine_drain_grace_seconds == floor(var.engine_drain_grace_seconds)
     error_message = "engine_drain_grace_seconds must be a positive whole number."
   }
+}
+
+variable "engine_execution_segment_ceiling_seconds" {
+  description = "Maximum model-execution segment before durable settlement; checkpointing is not yet available."
+  type        = number
+  default     = 900
+
+  validation {
+    condition     = var.engine_execution_segment_ceiling_seconds >= 2 && var.engine_execution_segment_ceiling_seconds == floor(var.engine_execution_segment_ceiling_seconds)
+    error_message = "engine_execution_segment_ceiling_seconds must be a whole number of at least 2."
+  }
+}
+
+variable "engine_settlement_reserve_seconds" {
+  description = "Time reserved after model cancellation for fenced settlement."
+  type        = number
+  default     = 5
+
+  validation {
+    condition     = var.engine_settlement_reserve_seconds >= 1 && var.engine_settlement_reserve_seconds == floor(var.engine_settlement_reserve_seconds)
+    error_message = "engine_settlement_reserve_seconds must be a positive whole number."
+  }
+}
+
+variable "invocation_default_wall_clock_timeout_seconds" {
+  description = "Default logical wall-clock limit for an Invocation."
+  type        = number
+  default     = 1800
+}
+
+variable "invocation_default_active_execution_timeout_seconds" {
+  description = "Default active model-execution limit for an Invocation."
+  type        = number
+  default     = 1800
+}
+
+variable "invocation_default_max_iterations" {
+  description = "Default model-request limit for an Invocation."
+  type        = number
+  default     = 1
+}
+
+variable "invocation_max_wall_clock_timeout_seconds" {
+  description = "Installation maximum logical wall-clock limit."
+  type        = number
+  default     = 86400
+}
+
+variable "invocation_max_active_execution_timeout_seconds" {
+  description = "Installation maximum active model-execution limit."
+  type        = number
+  default     = 86400
+}
+
+variable "invocation_max_output_tokens" {
+  description = "Installation maximum requested output-token limit."
+  type        = number
+  default     = 1000000
+}
+
+variable "invocation_max_estimated_cost_microusd" {
+  description = "Installation maximum requested estimated-cost limit in integer micro-USD."
+  type        = number
+  default     = 1000000000
+}
+
+variable "invocation_max_iterations" {
+  description = "Installation maximum model-request limit."
+  type        = number
+  default     = 100
 }
 
 variable "cpu" {

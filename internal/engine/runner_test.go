@@ -122,6 +122,106 @@ func TestRunnerWakeAndPollingFallback(t *testing.T) {
 	})
 }
 
+func TestRunnerCancellationNotificationStopsExactClaimWithoutSettlement(t *testing.T) {
+	config := testConfig()
+	config.PollInterval = 10 * time.Millisecond
+	ownership := newFakeOwnership(1, config.LeaseDuration)
+	ownership.mu.Lock()
+	ownership.claims[0].Invocation.ID = "invocation-cancelled"
+	ownership.mu.Unlock()
+	executor := &cancellationExecutor{started: make(chan struct{}, 1), cancelled: make(chan struct{})}
+	signaller := newFakeCancellationSignaller()
+	runner := newTestRunnerWithOptions(t, ownership, executor, nil, config, WithCancellationSignaller(signaller))
+	ctx, cancel := context.WithCancel(context.Background())
+	done := runRunner(runner, ctx)
+	select {
+	case <-executor.started:
+	case <-time.After(time.Second):
+		t.Fatal("executor did not start")
+	}
+	signaller.NotifyCancellation(context.Background(), "invocation-cancelled")
+	select {
+	case <-executor.cancelled:
+	case <-time.After(time.Second):
+		t.Fatal("executor did not observe cancellation notification")
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("runner: %v", err)
+	}
+	if ownership.settlementCallCount() != 0 {
+		t.Fatalf("settlement calls = %d, want 0", ownership.settlementCallCount())
+	}
+}
+
+func TestRunnerExecutionCutoffLeavesTimeForTerminalSettlement(t *testing.T) {
+	t.Run("result before cutoff completes", func(t *testing.T) {
+		config := testConfig()
+		config.Concurrency = 1
+		config.SettlementReserve = 100 * time.Millisecond
+		config.ExecutionSegmentCeiling = time.Second
+		ownership := newFakeOwnership(1, config.LeaseDuration)
+		deadline := time.Now().Add(250 * time.Millisecond)
+		ownership.mu.Lock()
+		ownership.claims[0].Invocation.ExecutionDeadlineAt = &deadline
+		ownership.mu.Unlock()
+		runner := newTestRunner(t, ownership, &delayExecutor{delay: 10 * time.Millisecond}, nil, config)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := runRunner(runner, ctx)
+		waitUntil(t, time.Second, func() bool { return ownership.settlementCount() == 1 })
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatalf("runner: %v", err)
+		}
+		ownership.mu.Lock()
+		result := ownership.settlements[0]
+		ownership.mu.Unlock()
+		if result.Status != domain.InvocationCompleted {
+			t.Fatalf("result status = %q, want completed", result.Status)
+		}
+	})
+
+	t.Run("blocking work fails before stored deadline", func(t *testing.T) {
+		config := testConfig()
+		config.Concurrency = 1
+		config.SettlementReserve = 100 * time.Millisecond
+		config.ExecutionSegmentCeiling = time.Second
+		ownership := newFakeOwnership(1, config.LeaseDuration)
+		deadline := time.Now().Add(250 * time.Millisecond)
+		scope := "active_execution"
+		ownership.mu.Lock()
+		ownership.claims[0].Invocation.ExecutionDeadlineAt = &deadline
+		ownership.claims[0].Invocation.ExecutionDeadlineScope = &scope
+		ownership.mu.Unlock()
+		executor := &cancellationExecutor{cancelled: make(chan struct{})}
+		runner := newTestRunner(t, ownership, executor, nil, config)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := runRunner(runner, ctx)
+		waitUntil(t, time.Second, func() bool { return ownership.settlementCount() == 1 })
+		settledAt := time.Now()
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatalf("runner: %v", err)
+		}
+		if !settledAt.Before(deadline) {
+			t.Fatalf("settlement at %s, deadline %s", settledAt, deadline)
+		}
+		ownership.mu.Lock()
+		result := ownership.settlements[0]
+		ownership.mu.Unlock()
+		if result.Status != domain.InvocationFailed {
+			t.Fatalf("result status = %q, want failed", result.Status)
+		}
+		var failure struct {
+			Code    string            `json:"code"`
+			Details map[string]string `json:"details"`
+		}
+		if err := json.Unmarshal(result.Error, &failure); err != nil || failure.Code != "deadline_exceeded" || failure.Details["scope"] != scope {
+			t.Fatalf("failure = %s, decoded %#v, error %v", result.Error, failure, err)
+		}
+	})
+}
+
 func TestRunnerDrainsBeforeCancellingAndJoinsAfterGrace(t *testing.T) {
 	t.Run("execution finishes during grace", func(t *testing.T) {
 		ownership := newFakeOwnership(1, time.Second)
@@ -523,14 +623,59 @@ func newTestRunner(
 	signaller ports.WorkSignaller,
 	config Config,
 ) *Runner {
+	return newTestRunnerWithOptions(t, ownership, executor, signaller, config)
+}
+
+func newTestRunnerWithOptions(
+	t *testing.T,
+	ownership Ownership,
+	executor ports.InvocationExecutor,
+	signaller ports.WorkSignaller,
+	config Config,
+	options ...RunnerOption,
+) *Runner {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	runner, err := NewRunner("runner-1", ownership, executor, signaller, logger, config)
+	runner, err := NewRunner("runner-1", ownership, executor, signaller, logger, config, options...)
 	if err != nil {
 		t.Fatalf("new runner: %v", err)
 	}
 	return runner
 }
+
+type fakeCancellationSignaller struct{ notifications chan string }
+
+func newFakeCancellationSignaller() *fakeCancellationSignaller {
+	return &fakeCancellationSignaller{notifications: make(chan string, 8)}
+}
+
+func (s *fakeCancellationSignaller) NotifyCancellation(_ context.Context, invocationID string) {
+	select {
+	case s.notifications <- invocationID:
+	default:
+	}
+}
+
+func (s *fakeCancellationSignaller) SubscribeCancellations(context.Context) ports.CancellationSubscription {
+	return &fakeCancellationSubscription{notifications: s.notifications}
+}
+
+type fakeCancellationSubscription struct{ notifications <-chan string }
+
+func (s *fakeCancellationSubscription) Wait(ctx context.Context, timeout time.Duration) (string, bool) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return "", false
+	case <-timer.C:
+		return "", false
+	case invocationID := <-s.notifications:
+		return invocationID, true
+	}
+}
+
+func (*fakeCancellationSubscription) Close() {}
 
 func runRunner(runner *Runner, ctx context.Context) <-chan error {
 	done := make(chan error, 1)

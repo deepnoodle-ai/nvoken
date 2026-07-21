@@ -48,7 +48,7 @@ func newModel(provider, model, apiKey string) (llm.LLM, error) {
 
 func (g *Generator) Generate(ctx context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
 	if g == nil || g.factory == nil {
-		return domain.GenerationResponse{}, fmt.Errorf("Dive generator is not configured")
+		return domain.GenerationResponse{}, fmt.Errorf("dive generator is not configured")
 	}
 	provider := strings.ToLower(strings.TrimSpace(request.Provider))
 	var apiKey string
@@ -78,9 +78,11 @@ func (g *Generator) Generate(ctx context.Context, request domain.GenerationReque
 	}
 	evidence := &evidenceModel{LLM: model}
 	agent, err := dive.NewAgent(dive.AgentOptions{
-		SystemPrompt: request.Instructions,
-		Model:        evidence,
-		Tools:        nil,
+		SystemPrompt:       request.Instructions,
+		Model:              evidence,
+		Tools:              nil,
+		ModelSettings:      &dive.ModelSettings{MaxTokens: request.MaxOutputTokens},
+		ToolIterationLimit: request.MaxIterations,
 	})
 	if err != nil {
 		return domain.GenerationResponse{}, fmt.Errorf("configure Dive agent: %w", err)
@@ -110,7 +112,9 @@ func (g *Generator) Generate(ctx context.Context, request domain.GenerationReque
 	if servedModel == "" {
 		servedModel = request.Model
 	}
-	return domain.GenerationResponse{Messages: output, Usage: normalizeUsage(response.Usage), ServedModel: servedModel}, nil
+	usage := normalizeUsage(response.Usage)
+	usage.Iterations = evidence.iterations()
+	return domain.GenerationResponse{Messages: output, Usage: usage, ServedModel: servedModel}, nil
 }
 
 // evidenceModel captures the provider's response model without exposing the
@@ -120,9 +124,13 @@ type evidenceModel struct {
 	llm.LLM
 	mu     sync.Mutex
 	served string
+	calls  int
 }
 
 func (m *evidenceModel) Generate(ctx context.Context, options ...llm.Option) (*llm.Response, error) {
+	m.mu.Lock()
+	m.calls++
+	m.mu.Unlock()
 	response, err := m.LLM.Generate(ctx, options...)
 	if response != nil && strings.TrimSpace(response.Model) != "" {
 		m.mu.Lock()
@@ -130,6 +138,12 @@ func (m *evidenceModel) Generate(ctx context.Context, options ...llm.Option) (*l
 		m.mu.Unlock()
 	}
 	return response, err
+}
+
+func (m *evidenceModel) iterations() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.calls
 }
 
 func (m *evidenceModel) servedModel() string {
@@ -159,7 +173,7 @@ func toDiveMessage(message domain.GenerationMessage) (*llm.Message, error) {
 
 func fromDiveMessage(message *llm.Message) (domain.GenerationMessage, error) {
 	if message == nil || message.Role != llm.Assistant || len(message.Content) == 0 {
-		return domain.GenerationMessage{}, errors.New("Dive output is not a nonempty assistant message")
+		return domain.GenerationMessage{}, errors.New("dive output is not a nonempty assistant message")
 	}
 	content, err := json.Marshal(message.Content)
 	if err != nil {
