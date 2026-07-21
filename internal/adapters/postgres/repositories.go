@@ -31,6 +31,7 @@ var (
 	_ ports.SessionMessageRepository        = (*Store)(nil)
 	_ ports.InvocationRepository            = (*Store)(nil)
 	_ ports.InvocationStateRepository       = (*Store)(nil)
+	_ ports.RecoveryRepository              = (*Store)(nil)
 	_ ports.TransactionManager              = (*TransactionManager)(nil)
 )
 
@@ -449,14 +450,18 @@ func (s *Store) ListSessionMessages(ctx context.Context, sessionID string) ([]do
 	}
 	messages := make([]domain.SessionMessage, len(rows))
 	for i, row := range rows {
-		messages[i] = domain.SessionMessage{
-			ID: row.ID, SessionID: row.SessionID, AccountID: row.AccountID,
-			TenantPartitionID: row.TenantPartitionID, AgentID: row.AgentID,
-			InvocationID: row.InvocationID, Sequence: row.Sequence,
-			Role: domain.MessageRole(row.Role), Content: row.Content, CreatedAt: row.CreatedAt,
-		}
+		messages[i] = sessionMessageFromRow(row)
 	}
 	return messages, nil
+}
+
+func sessionMessageFromRow(row postgresdb.SessionMessage) domain.SessionMessage {
+	return domain.SessionMessage{
+		ID: row.ID, SessionID: row.SessionID, AccountID: row.AccountID,
+		TenantPartitionID: row.TenantPartitionID, AgentID: row.AgentID,
+		InvocationID: row.InvocationID, Sequence: row.Sequence,
+		Role: domain.MessageRole(row.Role), Content: row.Content, CreatedAt: row.CreatedAt,
+	}
 }
 
 func (s *Store) AppendInvocationState(ctx context.Context, state domain.InvocationState) error {
@@ -497,6 +502,117 @@ func invocationStateFromRow(row postgresdb.InvocationState) domain.InvocationSta
 		Status: domain.InvocationStatus(row.Status), LeaseAttempt: row.LeaseAttempt,
 		ThroughMessageSequence: row.ThroughMessageSequence, CreatedAt: row.CreatedAt,
 	}
+}
+
+func (s *Store) ListInvocations(ctx context.Context, query ports.InvocationListQuery) ([]domain.Invocation, error) {
+	status := (*string)(nil)
+	if query.Status != nil {
+		value := string(*query.Status)
+		status = &value
+	}
+	rows, err := s.q(ctx).ListInvocationsForRecovery(ctx, postgresdb.ListInvocationsForRecoveryParams{
+		AccountID:         query.AccountID,
+		TenantPartitionID: query.TenantPartitionID,
+		SessionID:         query.SessionID,
+		AgentID:           query.AgentID,
+		Status:            status,
+		BeforeCreatedAt:   query.BeforeCreatedAt,
+		BeforeID:          query.BeforeInvocationID,
+		BatchLimit:        boundedBatchLimit(query.Limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]domain.Invocation, len(rows))
+	for i, row := range rows {
+		items[i] = invocationFromRow(row)
+	}
+	return items, nil
+}
+
+func (s *Store) ListSessions(ctx context.Context, query ports.SessionListQuery) ([]ports.SessionRecoveryRow, error) {
+	rows, err := s.q(ctx).ListSessionsForRecovery(ctx, postgresdb.ListSessionsForRecoveryParams{
+		AccountID:         query.AccountID,
+		TenantPartitionID: query.TenantPartitionID,
+		AgentID:           query.AgentID,
+		SessionKey:        query.SessionKey,
+		BeforeCreatedAt:   query.BeforeCreatedAt,
+		BeforeID:          query.BeforeSessionID,
+		BatchLimit:        boundedBatchLimit(query.Limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]ports.SessionRecoveryRow, len(rows))
+	for i, row := range rows {
+		items[i] = ports.SessionRecoveryRow{
+			Session: domain.Session{
+				ID: row.ID, AccountID: row.AccountID, TenantPartitionID: row.TenantPartitionID,
+				AgentID: row.AgentID, SessionKey: row.SessionKey,
+				NextMessageSequence: row.NextMessageSequence, NextLifecycleRevision: row.NextLifecycleRevision,
+				CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+			},
+			TenantRef: row.TenantRef,
+		}
+		if row.ActiveInvocationID != "" {
+			status := domain.InvocationStatus(row.ActiveInvocationStatus)
+			items[i].ActiveInvocationID = &row.ActiveInvocationID
+			items[i].ActiveInvocationStatus = &status
+		}
+	}
+	return items, nil
+}
+
+func (s *Store) ListSessionMessagesRange(ctx context.Context, sessionID string, after, through int64, limit int) ([]domain.SessionMessage, error) {
+	rows, err := s.q(ctx).ListSessionMessagesRange(ctx, postgresdb.ListSessionMessagesRangeParams{
+		SessionID: sessionID, AfterSequence: after, ThroughSequence: through,
+		BatchLimit: boundedBatchLimit(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]domain.SessionMessage, len(rows))
+	for i, row := range rows {
+		items[i] = sessionMessageFromRow(row)
+	}
+	return items, nil
+}
+
+func (s *Store) ListInvocationLifecycleChanges(ctx context.Context, sessionID string, after, through int64, limit int) ([]domain.InvocationLifecycleChange, error) {
+	rows, err := s.q(ctx).ListInvocationLifecycleChanges(ctx, postgresdb.ListInvocationLifecycleChangesParams{
+		SessionID: sessionID, AfterRevision: after, ThroughRevision: through,
+		BatchLimit: boundedBatchLimit(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]domain.InvocationLifecycleChange, len(rows))
+	for i, row := range rows {
+		state := domain.InvocationState{
+			ID: row.ID, InvocationID: row.InvocationID, SessionID: row.SessionID,
+			AccountID: row.AccountID, TenantPartitionID: row.TenantPartitionID,
+			AgentID: row.AgentID, Revision: row.Revision,
+			Status: domain.InvocationStatus(row.Status), LeaseAttempt: row.LeaseAttempt,
+			ThroughMessageSequence: row.ThroughMessageSequence, CreatedAt: row.CreatedAt,
+		}
+		items[i].InvocationState = state
+		if state.Status.Terminal() {
+			items[i].Error = row.Error
+			items[i].Usage = row.Usage
+			items[i].Provenance = row.Provenance
+		}
+	}
+	return items, nil
+}
+
+func boundedBatchLimit(limit int) int32 {
+	if limit <= 0 {
+		return 0
+	}
+	if limit > int(^uint32(0)>>1) {
+		return int32(^uint32(0) >> 1)
+	}
+	return int32(limit)
 }
 
 func normalizeNotFound(err error) error {

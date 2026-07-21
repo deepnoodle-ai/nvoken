@@ -78,15 +78,15 @@ compatibility fixtures.
 
 Streaming and recovery:
 
-- Background JSON admission and authoritative JSON reads are the frozen launch
-  contract. SSE and change-feed endpoints are added only after the durable read
-  model is specified.
+- Background JSON admission and authoritative JSON recovery are the frozen
+  launch contract. SSE is added only after this durable read model.
 - Ordered `SessionMessage` rows are the sole durable representation of caller,
   agent, and future ToolCall content. Append-only Invocation state revisions
   record lifecycle without copying message payloads.
-- A later incremental view composes message sequence and Invocation revision;
-  a stream projects that view plus optional ephemeral deltas. Neither transport
-  is authoritative or persists a second content representation.
+- The incremental Session transcript composes message sequence and Invocation
+  revision with one fixed upper cut, draining messages before lifecycle changes.
+  A later stream projects that view plus optional ephemeral deltas. Neither
+  transport is authoritative or persists a second content representation.
 
 ## 1. Service discovery
 
@@ -111,7 +111,8 @@ Runtime surface:
 | Method | Endpoint                          | Purpose                                                                                                             |
 | ------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `POST` | `/v1/invocations`                 | Atomically admit one background Invocation and return its stable Agent, Session, and Invocation identity.          |
-| `GET`  | `/v1/invocations/{invocation_id}` | Read authoritative identity and lifecycle state, including any typed post-admission terminal failure.              |
+| `GET`  | `/v1/invocations`                 | List authoritative Invocations with exact tenant, Session, Agent, and status filters.                              |
+| `GET`  | `/v1/invocations/{invocation_id}` | Read authoritative identity, lifecycle, terminal error, aggregate usage, and model provenance.                     |
 
 The launch create request carries `agent_ref`, body `idempotency_key`, one or
 more text input blocks, an optional `tenant_ref`, at most one of `session_id`
@@ -136,15 +137,18 @@ ToolCalls.
 There is no public retry or resume endpoint. Terminal Invocations stay
 terminal; the host creates a new Invocation for another turn.
 
-Invocation history, cancellation, usage, output, provenance, tool summaries,
-and streaming are later extensions. They must preserve this admission identity,
-lifecycle, idempotency, and background acknowledgement contract.
+Cancellation, structured output, tool summaries, and streaming are later
+extensions. They must preserve this admission identity, lifecycle, idempotency,
+recovery, and background acknowledgement contract.
 
 ## 3. Sessions
 
-| Method | Endpoint                    | Purpose                                                                                             |
-| ------ | --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `GET`  | `/v1/sessions/{session_id}` | Read immutable Session identity, partition and host key, plus the current nonterminal Invocation.  |
+| Method | Endpoint                                      | Purpose                                                                                             |
+| ------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `GET`  | `/v1/sessions`                               | List Sessions with exact tenant, Agent, and host-key filters.                                      |
+| `GET`  | `/v1/sessions/{session_id}`                  | Read immutable Session identity, partition and host key, plus the current nonterminal Invocation.  |
+| `GET`  | `/v1/sessions/{session_id}/messages`         | Page forward through canonical `SessionMessage` rows.                                              |
+| `GET`  | `/v1/sessions/{session_id}/transcript`       | Drain fixed-cut message and Invocation-lifecycle changes for a reducer or reconnect.                |
 
 There is no public create: Invocation creates Sessions. A Session key is unique
 within Account, effective tenant partition, Agent, and key, so the same key in
@@ -152,12 +156,17 @@ two tenant partitions resolves two Sessions. An Account-wide credential may
 read either by ID; a tenant-constrained credential can read only its own
 partition. Agent and partition are immutable.
 
-Session lists, transcript pagination, incremental changes, streaming, metadata,
-retention, and destructive operations are later contracts. The transcript
-surface will read canonical `SessionMessage` rows; the incremental surface will
-compose their sequence with Invocation revisions. There is no generic public
-Session-event append endpoint. Client ToolCall results and future steering use
-narrow commands defined with those features.
+Collection and message cursors are versioned, opaque, and bound to Account,
+resource, and normalized filters. The transcript cursor carries delivered
+message-sequence and lifecycle-revision watermarks; a continuation token also
+retains the fixed upper cut. Pages drain messages first, then lifecycle changes,
+so terminal settlement cannot precede its referenced transcript watermark.
+Tokens grant no authority and every request re-authorizes the durable Session.
+
+Streaming, metadata, retention, and destructive operations remain later
+contracts. There is no generic public Session-event append endpoint. Client
+ToolCall results and future steering use narrow commands defined with those
+features.
 
 ## 4. ToolCalls
 

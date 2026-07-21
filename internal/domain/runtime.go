@@ -120,6 +120,16 @@ type InvocationState struct {
 	CreatedAt              time.Time
 }
 
+// InvocationLifecycleChange is the public recovery projection of one durable
+// state revision. Terminal evidence comes from the immutable Invocation row;
+// message content remains exclusively in SessionMessage.
+type InvocationLifecycleChange struct {
+	InvocationState
+	Error      json.RawMessage
+	Usage      json.RawMessage
+	Provenance json.RawMessage
+}
+
 type InvocationClaim struct {
 	Invocation     Invocation
 	Owner          string

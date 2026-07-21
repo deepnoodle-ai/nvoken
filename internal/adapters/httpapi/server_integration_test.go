@@ -65,7 +65,11 @@ func TestRuntimeHTTPStateSurvivesAPIRestart(t *testing.T) {
 	defer restartedPool.Close()
 	for _, path := range []string{
 		"/v1/invocations/" + acknowledgement.InvocationID,
+		"/v1/invocations?session_id=" + acknowledgement.SessionID,
+		"/v1/sessions?session_key=ticket-1",
 		"/v1/sessions/" + acknowledgement.SessionID,
+		"/v1/sessions/" + acknowledgement.SessionID + "/messages",
+		"/v1/sessions/" + acknowledgement.SessionID + "/transcript",
 	} {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, path, nil)

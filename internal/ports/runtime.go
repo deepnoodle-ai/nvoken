@@ -69,6 +69,41 @@ type SessionRepository interface {
 	ReserveLifecycleRevision(context.Context, string) (int64, error)
 }
 
+type InvocationListQuery struct {
+	AccountID          string
+	TenantPartitionID  *string
+	SessionID          *string
+	AgentID            *string
+	Status             *domain.InvocationStatus
+	BeforeCreatedAt    *time.Time
+	BeforeInvocationID *string
+	Limit              int
+}
+
+type SessionListQuery struct {
+	AccountID         string
+	TenantPartitionID *string
+	AgentID           *string
+	SessionKey        *string
+	BeforeCreatedAt   *time.Time
+	BeforeSessionID   *string
+	Limit             int
+}
+
+type SessionRecoveryRow struct {
+	Session                domain.Session
+	TenantRef              *string
+	ActiveInvocationID     *string
+	ActiveInvocationStatus *domain.InvocationStatus
+}
+
+type RecoveryRepository interface {
+	ListInvocations(context.Context, InvocationListQuery) ([]domain.Invocation, error)
+	ListSessions(context.Context, SessionListQuery) ([]SessionRecoveryRow, error)
+	ListSessionMessagesRange(context.Context, string, int64, int64, int) ([]domain.SessionMessage, error)
+	ListInvocationLifecycleChanges(context.Context, string, int64, int64, int) ([]domain.InvocationLifecycleChange, error)
+}
+
 type ExecutionSpecSnapshotRepository interface {
 	CreateExecutionSpecSnapshot(context.Context, domain.ExecutionSpecSnapshot) error
 	GetExecutionSpecSnapshot(context.Context, string) (domain.ExecutionSpecSnapshot, error)

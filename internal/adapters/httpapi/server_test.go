@@ -33,12 +33,16 @@ func (a fakeAuthenticator) Authenticate(context.Context, string) (domain.Runtime
 }
 
 type fakeRuntime struct {
-	admitInput services.CreateInvocationInput
-	admitCalls int
-	ack        services.InvocationAcknowledgement
-	invocation services.InvocationRead
-	session    services.SessionRead
-	err        error
+	admitInput  services.CreateInvocationInput
+	admitCalls  int
+	ack         services.InvocationAcknowledgement
+	invocation  services.InvocationRead
+	session     services.SessionRead
+	invocations services.InvocationList
+	sessions    services.SessionList
+	messages    services.SessionMessageList
+	transcript  services.TranscriptSnapshot
+	err         error
 }
 
 type operationCheckingRuntime struct{ fakeRuntime }
@@ -64,6 +68,22 @@ func (f *fakeRuntime) GetInvocation(context.Context, domain.RuntimeAuthContext, 
 
 func (f *fakeRuntime) GetSession(context.Context, domain.RuntimeAuthContext, string) (services.SessionRead, error) {
 	return f.session, f.err
+}
+
+func (f *fakeRuntime) ListInvocations(context.Context, domain.RuntimeAuthContext, services.InvocationListInput) (services.InvocationList, error) {
+	return f.invocations, f.err
+}
+
+func (f *fakeRuntime) ListSessions(context.Context, domain.RuntimeAuthContext, services.SessionListInput) (services.SessionList, error) {
+	return f.sessions, f.err
+}
+
+func (f *fakeRuntime) ListSessionMessages(context.Context, domain.RuntimeAuthContext, string, services.MessageListInput) (services.SessionMessageList, error) {
+	return f.messages, f.err
+}
+
+func (f *fakeRuntime) GetSessionTranscript(context.Context, domain.RuntimeAuthContext, string, services.TranscriptInput) (services.TranscriptSnapshot, error) {
+	return f.transcript, f.err
 }
 
 func TestHealthIsPublic(t *testing.T) {
@@ -275,16 +295,20 @@ func TestAuthoritativeReadsUseContractShapes(t *testing.T) {
 	runtime := &fakeRuntime{
 		invocation: services.InvocationRead{
 			ID: testInvocationID, AgentID: testAgentID, SessionID: testSessionID,
-			Status: domain.InvocationQueued, CreatedAt: now, UpdatedAt: now,
+			Status:     domain.InvocationCompleted,
+			Usage:      json.RawMessage(`{"input_tokens":2,"output_tokens":1}`),
+			Provenance: json.RawMessage(`{"provider":"anthropic","requested_model":"requested","served_model":"served","credential_source":"installation_byok"}`),
+			CreatedAt:  now, UpdatedAt: now, CompletedAt: &now,
 		},
 		session: services.SessionRead{
 			ID: testSessionID, AgentID: testAgentID, TenantRef: &tenant, SessionKey: &key,
-			ActiveInvocationID: &active, CreatedAt: now, UpdatedAt: now,
+			ActiveInvocationID: &active, ActiveInvocationStatus: statusPointer(domain.InvocationRunning),
+			CreatedAt: now, UpdatedAt: now,
 		},
 	}
 	for path, required := range map[string][]string{
-		"/v1/invocations/" + testInvocationID: {`"id":"` + testInvocationID + `"`, `"error":null`, `"completed_at":null`},
-		"/v1/sessions/" + testSessionID:       {`"tenant_ref":"tenant-a"`, `"active_invocation_id":"` + testInvocationID + `"`},
+		"/v1/invocations/" + testInvocationID: {`"id":"` + testInvocationID + `"`, `"input_tokens":2`, `"provider":"anthropic"`},
+		"/v1/sessions/" + testSessionID:       {`"tenant_ref":"tenant-a"`, `"active_invocation_id":"` + testInvocationID + `"`, `"active_invocation_status":"running"`},
 	} {
 		recorder := httptest.NewRecorder()
 		testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, authenticatedRequest(http.MethodGet, path, nil))
@@ -296,6 +320,79 @@ func TestAuthoritativeReadsUseContractShapes(t *testing.T) {
 				t.Errorf("GET %s body %s lacks %s", path, recorder.Body.String(), fragment)
 			}
 		}
+	}
+}
+
+func TestRecoveryCollectionAndTranscriptShapes(t *testing.T) {
+	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	tenant, key, next, active := "tenant-a", "ticket-1", "opaque-next", testInvocationID
+	runtime := &fakeRuntime{
+		invocations: services.InvocationList{
+			Items: []services.InvocationRead{{
+				ID: testInvocationID, AgentID: testAgentID, SessionID: testSessionID,
+				Status: domain.InvocationQueued, CreatedAt: now, UpdatedAt: now,
+			}}, HasMore: true, NextCursor: &next,
+		},
+		sessions: services.SessionList{Items: []services.SessionRead{{
+			ID: testSessionID, AgentID: testAgentID, TenantRef: &tenant, SessionKey: &key,
+			ActiveInvocationID: &active, ActiveInvocationStatus: statusPointer(domain.InvocationQueued),
+			CreatedAt: now, UpdatedAt: now,
+		}}},
+		messages: services.SessionMessageList{Items: []domain.SessionMessage{{
+			ID: "smsg_019b0a12-0000-7000-8000-000000000005", SessionID: testSessionID,
+			AgentID: testAgentID, InvocationID: testInvocationID, Sequence: 1,
+			Role: domain.MessageRoleUser, Content: json.RawMessage(`[{"type":"text","text":"hello"}]`), CreatedAt: now,
+		}}},
+		transcript: services.TranscriptSnapshot{
+			Messages: []domain.SessionMessage{},
+			InvocationChanges: []domain.InvocationLifecycleChange{{
+				InvocationState: domain.InvocationState{
+					InvocationID: testInvocationID, Revision: 2, Status: domain.InvocationCompleted,
+					ThroughMessageSequence: int64Pointer(1), CreatedAt: now,
+				},
+				Usage: json.RawMessage(`{"input_tokens":2,"output_tokens":1}`),
+			}},
+			ResumeCursor: "opaque-resume",
+		},
+	}
+
+	tests := map[string][]string{
+		"/v1/invocations?limit=1&tenant_ref=tenant-a":   {`"items":[{"id":"` + testInvocationID + `"`, `"has_more":true`, `"next_cursor":"opaque-next"`},
+		"/v1/sessions?default_tenant=false":             {`"active_invocation_status":"queued"`, `"has_more":false`},
+		"/v1/sessions/" + testSessionID + "/messages":   {`"sequence":1`, `"text":"hello"`, `"next_cursor":null`},
+		"/v1/sessions/" + testSessionID + "/transcript": {`"messages":[]`, `"revision":2`, `"input_tokens":2`, `"resume_cursor":"opaque-resume"`},
+	}
+	for path, fragments := range tests {
+		recorder := httptest.NewRecorder()
+		testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, authenticatedRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d %s", path, recorder.Code, recorder.Body.String())
+		}
+		for _, fragment := range fragments {
+			if !strings.Contains(recorder.Body.String(), fragment) {
+				t.Errorf("GET %s body %s lacks %s", path, recorder.Body.String(), fragment)
+			}
+		}
+	}
+}
+
+func TestRecoveryRoutesRejectAmbiguousQueriesBeforeService(t *testing.T) {
+	for _, path := range []string{
+		"/v1/invocations?limit=1&limit=2",
+		"/v1/invocations?unknown=true",
+		"/v1/invocations?default_tenant=1",
+		"/v1/invocations?limit=0",
+		"/v1/invocations?limit=201",
+		"/v1/sessions?limit=not-a-number",
+		"/v1/sessions/" + testSessionID + "/messages?cursor=",
+		"/v1/sessions/" + testSessionID + "/transcript?page_token=a&page_token=b",
+	} {
+		recorder := httptest.NewRecorder()
+		testHandler(&fakeRuntime{}, nil, io.Discard).ServeHTTP(recorder, authenticatedRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("GET %s = %d %s", path, recorder.Code, recorder.Body.String())
+		}
+		assertErrorEnvelope(t, recorder.Body.Bytes(), string(services.CodeInvalidRequest))
 	}
 }
 
@@ -319,6 +416,8 @@ func testHandler(runtime RuntimeService, authenticator *fakeAuthenticator, logWr
 			AccountID: testAccountID,
 			Operations: map[domain.RuntimeOperation]struct{}{
 				domain.OperationCreateInvocation: {}, domain.OperationGetInvocation: {}, domain.OperationGetSession: {},
+				domain.OperationListInvocations: {}, domain.OperationListSessions: {},
+				domain.OperationListMessages: {}, domain.OperationGetTranscript: {},
 			},
 		}}
 	}
@@ -349,3 +448,7 @@ func assertErrorEnvelope(t *testing.T, body []byte, code string) {
 		t.Fatalf("error response = %#v", response)
 	}
 }
+
+func statusPointer(value domain.InvocationStatus) *domain.InvocationStatus { return &value }
+
+func int64Pointer(value int64) *int64 { return &value }

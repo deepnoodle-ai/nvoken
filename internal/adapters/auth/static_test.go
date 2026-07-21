@@ -21,7 +21,10 @@ func TestStaticAuthenticator(t *testing.T) {
 		t.Fatalf("new authenticator: %v", err)
 	}
 	auth, err := authenticator.Authenticate(context.Background(), "0123456789abcdef0123456789abcdef")
-	if err != nil || auth.AccountID == "" || auth.TenantConstraint == nil || !auth.Allows(domain.OperationCreateInvocation) {
+	if err != nil || auth.AccountID == "" || auth.TenantConstraint == nil ||
+		!auth.Allows(domain.OperationCreateInvocation) || !auth.Allows(domain.OperationListInvocations) ||
+		!auth.Allows(domain.OperationListSessions) || !auth.Allows(domain.OperationListMessages) ||
+		!auth.Allows(domain.OperationGetTranscript) {
 		t.Fatalf("auth = %#v, error = %v", auth, err)
 	}
 	if _, err := authenticator.Authenticate(context.Background(), "wrong"); !errors.Is(err, ports.ErrUnauthenticated) {

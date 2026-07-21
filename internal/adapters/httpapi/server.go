@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,7 +33,11 @@ const (
 type RuntimeService interface {
 	Admit(context.Context, domain.RuntimeAuthContext, services.CreateInvocationInput) (services.InvocationAcknowledgement, error)
 	GetInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error)
+	ListInvocations(context.Context, domain.RuntimeAuthContext, services.InvocationListInput) (services.InvocationList, error)
 	GetSession(context.Context, domain.RuntimeAuthContext, string) (services.SessionRead, error)
+	ListSessions(context.Context, domain.RuntimeAuthContext, services.SessionListInput) (services.SessionList, error)
+	ListSessionMessages(context.Context, domain.RuntimeAuthContext, string, services.MessageListInput) (services.SessionMessageList, error)
+	GetSessionTranscript(context.Context, domain.RuntimeAuthContext, string, services.TranscriptInput) (services.TranscriptSnapshot, error)
 }
 
 type Config struct {
@@ -94,11 +100,29 @@ func newHandler(cfg handlerConfig) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", h.requireMethod(http.MethodGet, h.health))
-	mux.HandleFunc("/v1/invocations", h.requireMethod(http.MethodPost, h.createInvocation))
+	mux.HandleFunc("/v1/invocations", h.invocations)
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
+	mux.HandleFunc("/v1/sessions", h.requireMethod(http.MethodGet, h.listSessions))
+	mux.HandleFunc("/v1/sessions/{session_id}/messages", h.requireMethod(http.MethodGet, h.listSessionMessages))
+	mux.HandleFunc("/v1/sessions/{session_id}/transcript", h.requireMethod(http.MethodGet, h.getSessionTranscript))
 	mux.HandleFunc("/v1/sessions/{session_id}", h.requireMethod(http.MethodGet, h.getSession))
 	mux.HandleFunc("/", h.notFound)
 	return h.logRequests(mux)
+}
+
+func (h *handler) invocations(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		h.createInvocation(w, r)
+	case http.MethodGet:
+		h.listInvocations(w, r)
+	default:
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
+			Code: "invalid_request", Message: "The request method is not allowed.",
+			RequestID: requestIDFromContext(r.Context()),
+		})
+	}
 }
 
 func (h *handler) requireMethod(method string, next http.HandlerFunc) http.HandlerFunc {
@@ -171,11 +195,40 @@ func (h *handler) getInvocation(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, requestID, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, invocationResponse{
-		ID: invocation.ID, AgentID: invocation.AgentID, SessionID: invocation.SessionID,
-		Status: invocation.Status, Error: rawJSONOrNil(invocation.Error),
-		CreatedAt: invocation.CreatedAt, UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
-	})
+	writeJSON(w, http.StatusOK, invocationResponseFromService(invocation))
+}
+
+func (h *handler) listInvocations(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	query, err := strictQuery(r, "tenant_ref", "default_tenant", "session_id", "agent_id", "status", "cursor", "limit")
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	input, err := invocationListInput(query)
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	page, err := h.runtime.ListInvocations(r.Context(), auth, input)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	items := make([]invocationResponse, len(page.Items))
+	for i, item := range page.Items {
+		items[i] = invocationResponseFromService(item)
+	}
+	writeJSON(w, http.StatusOK, invocationListResponse{Items: items, HasMore: page.HasMore, NextCursor: page.NextCursor})
 }
 
 func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +250,118 @@ func (h *handler) getSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessionResponse{
 		ID: session.ID, AgentID: session.AgentID, TenantRef: session.TenantRef,
 		SessionKey: session.SessionKey, ActiveInvocationID: session.ActiveInvocationID,
-		CreatedAt: session.CreatedAt, UpdatedAt: session.UpdatedAt,
+		ActiveInvocationStatus: session.ActiveInvocationStatus,
+		CreatedAt:              session.CreatedAt, UpdatedAt: session.UpdatedAt,
+	})
+}
+
+func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	query, err := strictQuery(r, "tenant_ref", "default_tenant", "agent_id", "session_key", "cursor", "limit")
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	input, err := sessionListInput(query)
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	page, err := h.runtime.ListSessions(r.Context(), auth, input)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	items := make([]sessionResponse, len(page.Items))
+	for i, item := range page.Items {
+		items[i] = sessionResponseFromService(item)
+	}
+	writeJSON(w, http.StatusOK, sessionListResponse{Items: items, HasMore: page.HasMore, NextCursor: page.NextCursor})
+}
+
+func (h *handler) listSessionMessages(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	query, err := strictQuery(r, "cursor", "limit")
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	limit, err := queryLimit(query)
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	page, err := h.runtime.ListSessionMessages(r.Context(), auth, r.PathValue("session_id"), services.MessageListInput{
+		Cursor: query.Get("cursor"), Limit: limit,
+	})
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	items := make([]sessionMessageResponse, len(page.Items))
+	for i, item := range page.Items {
+		items[i] = sessionMessageResponseFromDomain(item)
+	}
+	writeJSON(w, http.StatusOK, sessionMessageListResponse{Items: items, HasMore: page.HasMore, NextCursor: page.NextCursor})
+}
+
+func (h *handler) getSessionTranscript(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	query, err := strictQuery(r, "cursor", "page_token", "limit")
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	limit, err := queryLimit(query)
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	snapshot, err := h.runtime.GetSessionTranscript(r.Context(), auth, r.PathValue("session_id"), services.TranscriptInput{
+		Cursor: query.Get("cursor"), PageToken: query.Get("page_token"), Limit: limit,
+	})
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	messages := make([]sessionMessageResponse, len(snapshot.Messages))
+	for i, item := range snapshot.Messages {
+		messages[i] = sessionMessageResponseFromDomain(item)
+	}
+	changes := make([]invocationChangeResponse, len(snapshot.InvocationChanges))
+	for i, item := range snapshot.InvocationChanges {
+		changes[i] = invocationChangeResponseFromDomain(item)
+	}
+	writeJSON(w, http.StatusOK, transcriptSnapshotResponse{
+		Messages: messages, InvocationChanges: changes, HasMore: snapshot.HasMore,
+		ResumeCursor: snapshot.ResumeCursor, NextPageToken: snapshot.NextPageToken,
 	})
 }
 
@@ -289,19 +453,204 @@ type invocationResponse struct {
 	SessionID   string                  `json:"session_id"`
 	Status      domain.InvocationStatus `json:"status"`
 	Error       any                     `json:"error"`
+	Usage       any                     `json:"usage"`
+	Provenance  any                     `json:"provenance"`
 	CreatedAt   time.Time               `json:"created_at"`
 	UpdatedAt   time.Time               `json:"updated_at"`
 	CompletedAt *time.Time              `json:"completed_at"`
 }
 
+type invocationListResponse struct {
+	Items      []invocationResponse `json:"items"`
+	HasMore    bool                 `json:"has_more"`
+	NextCursor *string              `json:"next_cursor"`
+}
+
 type sessionResponse struct {
-	ID                 string    `json:"id"`
-	AgentID            string    `json:"agent_id"`
-	TenantRef          *string   `json:"tenant_ref"`
-	SessionKey         *string   `json:"session_key"`
-	ActiveInvocationID *string   `json:"active_invocation_id"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                     string                   `json:"id"`
+	AgentID                string                   `json:"agent_id"`
+	TenantRef              *string                  `json:"tenant_ref"`
+	SessionKey             *string                  `json:"session_key"`
+	ActiveInvocationID     *string                  `json:"active_invocation_id"`
+	ActiveInvocationStatus *domain.InvocationStatus `json:"active_invocation_status"`
+	CreatedAt              time.Time                `json:"created_at"`
+	UpdatedAt              time.Time                `json:"updated_at"`
+}
+
+type sessionListResponse struct {
+	Items      []sessionResponse `json:"items"`
+	HasMore    bool              `json:"has_more"`
+	NextCursor *string           `json:"next_cursor"`
+}
+
+type sessionMessageResponse struct {
+	ID           string             `json:"id"`
+	SessionID    string             `json:"session_id"`
+	AgentID      string             `json:"agent_id"`
+	InvocationID string             `json:"invocation_id"`
+	Sequence     int64              `json:"sequence"`
+	Role         domain.MessageRole `json:"role"`
+	Content      json.RawMessage    `json:"content"`
+	CreatedAt    time.Time          `json:"created_at"`
+}
+
+type sessionMessageListResponse struct {
+	Items      []sessionMessageResponse `json:"items"`
+	HasMore    bool                     `json:"has_more"`
+	NextCursor *string                  `json:"next_cursor"`
+}
+
+type invocationChangeResponse struct {
+	InvocationID           string                  `json:"invocation_id"`
+	Revision               int64                   `json:"revision"`
+	Status                 domain.InvocationStatus `json:"status"`
+	ThroughMessageSequence *int64                  `json:"through_message_sequence"`
+	Error                  any                     `json:"error"`
+	Usage                  any                     `json:"usage"`
+	Provenance             any                     `json:"provenance"`
+	OccurredAt             time.Time               `json:"occurred_at"`
+}
+
+type transcriptSnapshotResponse struct {
+	Messages          []sessionMessageResponse   `json:"messages"`
+	InvocationChanges []invocationChangeResponse `json:"invocation_changes"`
+	HasMore           bool                       `json:"has_more"`
+	ResumeCursor      string                     `json:"resume_cursor"`
+	NextPageToken     *string                    `json:"next_page_token"`
+}
+
+func invocationResponseFromService(invocation services.InvocationRead) invocationResponse {
+	return invocationResponse{
+		ID: invocation.ID, AgentID: invocation.AgentID, SessionID: invocation.SessionID,
+		Status: invocation.Status, Error: rawJSONOrNil(invocation.Error),
+		Usage: rawJSONOrNil(invocation.Usage), Provenance: rawJSONOrNil(invocation.Provenance),
+		CreatedAt: invocation.CreatedAt, UpdatedAt: invocation.UpdatedAt, CompletedAt: invocation.CompletedAt,
+	}
+}
+
+func sessionResponseFromService(session services.SessionRead) sessionResponse {
+	return sessionResponse{
+		ID: session.ID, AgentID: session.AgentID, TenantRef: session.TenantRef,
+		SessionKey: session.SessionKey, ActiveInvocationID: session.ActiveInvocationID,
+		ActiveInvocationStatus: session.ActiveInvocationStatus,
+		CreatedAt:              session.CreatedAt, UpdatedAt: session.UpdatedAt,
+	}
+}
+
+func sessionMessageResponseFromDomain(message domain.SessionMessage) sessionMessageResponse {
+	return sessionMessageResponse{
+		ID: message.ID, SessionID: message.SessionID, AgentID: message.AgentID,
+		InvocationID: message.InvocationID, Sequence: message.Sequence, Role: message.Role,
+		Content: message.Content, CreatedAt: message.CreatedAt,
+	}
+}
+
+func invocationChangeResponseFromDomain(change domain.InvocationLifecycleChange) invocationChangeResponse {
+	return invocationChangeResponse{
+		InvocationID: change.InvocationID, Revision: change.Revision, Status: change.Status,
+		ThroughMessageSequence: change.ThroughMessageSequence,
+		Error:                  rawJSONOrNil(change.Error), Usage: rawJSONOrNil(change.Usage),
+		Provenance: rawJSONOrNil(change.Provenance), OccurredAt: change.CreatedAt,
+	}
+}
+
+func strictQuery(r *http.Request, allowed ...string) (url.Values, error) {
+	values, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return nil, errors.New("query parameters are invalid")
+	}
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, key := range allowed {
+		allowedSet[key] = struct{}{}
+	}
+	for key, entries := range values {
+		if _, ok := allowedSet[key]; !ok {
+			return nil, fmt.Errorf("query parameter %s is not supported", key)
+		}
+		if len(entries) != 1 {
+			return nil, fmt.Errorf("query parameter %s must appear once", key)
+		}
+		if (key == "cursor" || key == "page_token") && entries[0] == "" {
+			return nil, fmt.Errorf("query parameter %s must not be blank", key)
+		}
+	}
+	return values, nil
+}
+
+func invocationListInput(query url.Values) (services.InvocationListInput, error) {
+	limit, err := queryLimit(query)
+	if err != nil {
+		return services.InvocationListInput{}, err
+	}
+	defaultTenant, err := queryBool(query, "default_tenant")
+	if err != nil {
+		return services.InvocationListInput{}, err
+	}
+	input := services.InvocationListInput{
+		TenantRef: optionalQueryString(query, "tenant_ref"), DefaultTenant: defaultTenant,
+		SessionID: optionalQueryString(query, "session_id"), AgentID: optionalQueryString(query, "agent_id"),
+		Cursor: query.Get("cursor"), Limit: limit,
+	}
+	if value := optionalQueryString(query, "status"); value != nil {
+		status := domain.InvocationStatus(*value)
+		input.Status = &status
+	}
+	return input, nil
+}
+
+func sessionListInput(query url.Values) (services.SessionListInput, error) {
+	limit, err := queryLimit(query)
+	if err != nil {
+		return services.SessionListInput{}, err
+	}
+	defaultTenant, err := queryBool(query, "default_tenant")
+	if err != nil {
+		return services.SessionListInput{}, err
+	}
+	return services.SessionListInput{
+		TenantRef: optionalQueryString(query, "tenant_ref"), DefaultTenant: defaultTenant,
+		AgentID: optionalQueryString(query, "agent_id"), SessionKey: optionalQueryString(query, "session_key"),
+		Cursor: query.Get("cursor"), Limit: limit,
+	}, nil
+}
+
+func optionalQueryString(query url.Values, key string) *string {
+	values, ok := query[key]
+	if !ok {
+		return nil
+	}
+	value := values[0]
+	return &value
+}
+
+func queryLimit(query url.Values) (int, error) {
+	value := optionalQueryString(query, "limit")
+	if value == nil {
+		return 0, nil
+	}
+	limit, err := strconv.Atoi(*value)
+	if err != nil {
+		return 0, errors.New("limit must be an integer")
+	}
+	if limit < 1 || limit > services.MaxRecoveryPageSize {
+		return 0, fmt.Errorf("limit must be between 1 and %d", services.MaxRecoveryPageSize)
+	}
+	return limit, nil
+}
+
+func queryBool(query url.Values, key string) (bool, error) {
+	value := optionalQueryString(query, key)
+	if value == nil || *value == "false" {
+		return false, nil
+	}
+	if *value == "true" {
+		return true, nil
+	}
+	return false, fmt.Errorf("%s must be true or false", key)
+}
+
+func invalidQuery(err error) error {
+	return &services.PublicError{Code: services.CodeInvalidRequest, Message: err.Error() + "."}
 }
 
 func rawJSONOrNil(value json.RawMessage) any {
