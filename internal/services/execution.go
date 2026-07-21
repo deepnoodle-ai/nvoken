@@ -311,7 +311,24 @@ func (s *InvocationExecutionService) settle(
 		if err != nil {
 			return err
 		}
+		if err := validateUsageProjection(txCtx, s.store, invocation.ID, result); err != nil {
+			return err
+		}
 		throughMessageSequence := currentState.ThroughMessageSequence
+		checkpointWatermark, err := closeOpenToolCallsForTerminal(
+			txCtx, s.store, s.ids, invocation, result.Status,
+			"Tool execution stopped because the Invocation settled.", now,
+		)
+		if err != nil {
+			return err
+		}
+		if checkpointWatermark != nil {
+			if throughMessageSequence == nil || *checkpointWatermark > *throughMessageSequence {
+				throughMessageSequence = checkpointWatermark
+			}
+		} else if result.MessagesCheckpointed {
+			return fmt.Errorf("checkpointed execution result has no durable checkpoint")
+		}
 		for _, output := range result.AssistantMessages {
 			messageID, err := s.ids.NewID(domain.PrefixSessionMessage)
 			if err != nil {
@@ -322,11 +339,16 @@ func (s *InvocationExecutionService) settle(
 				return err
 			}
 			if err := s.store.AppendSessionMessage(txCtx, domain.SessionMessage{
-				ID: messageID, SessionID: invocation.SessionID,
-				AccountID: invocation.AccountID, TenantPartitionID: invocation.TenantPartitionID,
-				AgentID: invocation.AgentID, InvocationID: invocation.ID,
-				Sequence: sequence, Role: domain.MessageRoleAssistant,
-				Content: output.Content, CreatedAt: now,
+				ID:                messageID,
+				SessionID:         invocation.SessionID,
+				AccountID:         invocation.AccountID,
+				TenantPartitionID: invocation.TenantPartitionID,
+				AgentID:           invocation.AgentID,
+				InvocationID:      invocation.ID,
+				Sequence:          sequence,
+				Role:              domain.MessageRoleAssistant,
+				Content:           output.Content,
+				CreatedAt:         now,
 			}); err != nil {
 				return err
 			}
@@ -470,6 +492,17 @@ func (s *InvocationExecutionService) reapDeadlineWithSessionLocked(ctx context.C
 		return domain.Invocation{}, false, err
 	}
 	payload := invocationFailureWithDetails("deadline_exceeded", "The execution deadline was exceeded.", map[string]string{"scope": scope})
+	throughMessageSequence := currentState.ThroughMessageSequence
+	checkpointWatermark, err := closeOpenToolCallsForTerminal(
+		ctx, s.store, s.ids, invocation, domain.InvocationFailed,
+		"Tool execution stopped because the Invocation deadline was exceeded.", now,
+	)
+	if err != nil {
+		return domain.Invocation{}, false, err
+	}
+	if checkpointWatermark != nil && (throughMessageSequence == nil || *checkpointWatermark > *throughMessageSequence) {
+		throughMessageSequence = checkpointWatermark
+	}
 	reaped, err := s.store.ReapInvocationDeadline(ctx, invocation.ID, revision, payload, now)
 	if errors.Is(err, ports.ErrLeaseLost) {
 		return domain.Invocation{}, false, nil
@@ -478,7 +511,7 @@ func (s *InvocationExecutionService) reapDeadlineWithSessionLocked(ctx context.C
 		return domain.Invocation{}, false, err
 	}
 	if err := s.store.AppendInvocationState(ctx, lifecycleState(
-		reaped, stateID, revision, domain.InvocationFailed, currentState.ThroughMessageSequence, now,
+		reaped, stateID, revision, domain.InvocationFailed, throughMessageSequence, now,
 	)); err != nil {
 		return domain.Invocation{}, false, err
 	}
@@ -524,6 +557,17 @@ func (s *InvocationExecutionService) reapCandidate(
 			return err
 		}
 		payload := invocationFailure("execution_lost", "The execution owner was lost.")
+		throughMessageSequence := currentState.ThroughMessageSequence
+		checkpointWatermark, err := closeOpenToolCallsForTerminal(
+			txCtx, s.store, s.ids, invocation, domain.InvocationFailed,
+			"Tool execution stopped because the execution owner was lost.", now,
+		)
+		if err != nil {
+			return err
+		}
+		if checkpointWatermark != nil && (throughMessageSequence == nil || *checkpointWatermark > *throughMessageSequence) {
+			throughMessageSequence = checkpointWatermark
+		}
 		reaped, err = s.store.ReapInvocationLease(
 			txCtx, invocation.ID, invocation.LeaseAttempt, revision, payload, now,
 		)
@@ -534,7 +578,7 @@ func (s *InvocationExecutionService) reapCandidate(
 			return err
 		}
 		if err := s.store.AppendInvocationState(txCtx, lifecycleState(
-			reaped, stateID, revision, domain.InvocationFailed, currentState.ThroughMessageSequence, now,
+			reaped, stateID, revision, domain.InvocationFailed, throughMessageSequence, now,
 		)); err != nil {
 			return err
 		}
@@ -567,8 +611,11 @@ func validateExecutionResult(result domain.InvocationExecutionResult) error {
 	if result.Status == domain.InvocationCompleted && len(result.Error) != 0 {
 		return fmt.Errorf("completed execution result cannot contain an error")
 	}
-	if result.Status == domain.InvocationCompleted && len(result.AssistantMessages) == 0 {
+	if result.Status == domain.InvocationCompleted && len(result.AssistantMessages) == 0 && !result.MessagesCheckpointed {
 		return fmt.Errorf("completed execution result requires an assistant message")
+	}
+	if result.MessagesCheckpointed && len(result.AssistantMessages) != 0 {
+		return fmt.Errorf("checkpointed execution result cannot contain unpublished assistant messages")
 	}
 	if result.Status == domain.InvocationCompleted && (result.Usage == nil || result.Provenance == nil) {
 		return fmt.Errorf("completed execution result requires usage and provenance")
@@ -630,8 +677,10 @@ func claimOwns(invocation domain.Invocation, claim domain.InvocationClaim, now t
 
 func claimFromInvocation(invocation domain.Invocation) domain.InvocationClaim {
 	return domain.InvocationClaim{
-		Invocation: invocation, Owner: *invocation.LeaseOwner,
-		Attempt: invocation.LeaseAttempt, LeaseExpiresAt: *invocation.LeaseExpiresAt,
+		Invocation:     invocation,
+		Owner:          *invocation.LeaseOwner,
+		Attempt:        invocation.LeaseAttempt,
+		LeaseExpiresAt: *invocation.LeaseExpiresAt,
 	}
 }
 
@@ -644,11 +693,17 @@ func lifecycleState(
 	now time.Time,
 ) domain.InvocationState {
 	return domain.InvocationState{
-		ID: stateID, InvocationID: invocation.ID, SessionID: invocation.SessionID,
-		AccountID: invocation.AccountID, TenantPartitionID: invocation.TenantPartitionID,
-		AgentID: invocation.AgentID, Revision: revision, Status: status,
+		ID:                     stateID,
+		InvocationID:           invocation.ID,
+		SessionID:              invocation.SessionID,
+		AccountID:              invocation.AccountID,
+		TenantPartitionID:      invocation.TenantPartitionID,
+		AgentID:                invocation.AgentID,
+		Revision:               revision,
+		Status:                 status,
 		LeaseAttempt:           invocation.LeaseAttempt,
-		ThroughMessageSequence: throughMessageSequence, CreatedAt: now,
+		ThroughMessageSequence: throughMessageSequence,
+		CreatedAt:              now,
 	}
 }
 

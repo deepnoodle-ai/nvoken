@@ -17,7 +17,7 @@ func (c fixedClock) Now() time.Time { return c.now }
 func TestUUIDv7Generator(t *testing.T) {
 	wantTime := time.Date(2026, time.July, 20, 12, 34, 56, 789000000, time.UTC)
 	randomness := []byte{0xff, 0x12, 0xff, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0}
-	generator := newUUIDv7Generator(fixedClock{now: wantTime}, bytes.NewReader(bytes.Repeat(randomness, 8)))
+	generator := newUUIDv7Generator(fixedClock{now: wantTime}, bytes.NewReader(bytes.Repeat(randomness, 16)))
 
 	for _, prefix := range []domain.StableIDPrefix{
 		domain.PrefixAccount,
@@ -28,6 +28,12 @@ func TestUUIDv7Generator(t *testing.T) {
 		domain.PrefixSessionMessage,
 		domain.PrefixInvocation,
 		domain.PrefixInvocationState,
+		domain.PrefixToolCall,
+		domain.PrefixToolCallAttempt,
+		domain.PrefixModelUsageReceipt,
+		domain.PrefixInvocationCheckpoint,
+		domain.PrefixSyntheticDispatchWork,
+		domain.PrefixExecutionDispatch,
 	} {
 		id, err := generator.NewID(prefix)
 		if err != nil {

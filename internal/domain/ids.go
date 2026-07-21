@@ -15,6 +15,10 @@ const (
 	PrefixSessionMessage        StableIDPrefix = "smsg"
 	PrefixInvocation            StableIDPrefix = "invk"
 	PrefixInvocationState       StableIDPrefix = "ivst"
+	PrefixToolCall              StableIDPrefix = "tcal"
+	PrefixToolCallAttempt       StableIDPrefix = "tcat"
+	PrefixModelUsageReceipt     StableIDPrefix = "usgr"
+	PrefixInvocationCheckpoint  StableIDPrefix = "icpt"
 	PrefixSyntheticDispatchWork StableIDPrefix = "synw"
 	PrefixExecutionDispatch     StableIDPrefix = "dsp"
 )
@@ -23,7 +27,9 @@ func (p StableIDPrefix) Valid() bool {
 	switch p {
 	case PrefixAccount, PrefixTenantPartition, PrefixAgent, PrefixSession,
 		PrefixExecutionSpecSnapshot, PrefixSessionMessage, PrefixInvocation,
-		PrefixInvocationState, PrefixSyntheticDispatchWork, PrefixExecutionDispatch:
+		PrefixInvocationState, PrefixToolCall, PrefixToolCallAttempt,
+		PrefixModelUsageReceipt, PrefixInvocationCheckpoint,
+		PrefixSyntheticDispatchWork, PrefixExecutionDispatch:
 		return true
 	default:
 		return false

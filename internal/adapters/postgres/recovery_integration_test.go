@@ -113,7 +113,7 @@ func TestRecoveryReadsPageFilterAndPreserveTranscriptOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("admit other Account Invocation: %v", err)
 	}
-	equalCreatedAt := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	equalCreatedAt := time.Now().UTC().Truncate(time.Second)
 	if _, err := pool.Exec(ctx,
 		"UPDATE sessions SET created_at = $1 WHERE id = ANY($2::text[])",
 		equalCreatedAt, []string{first.SessionID, second.SessionID},

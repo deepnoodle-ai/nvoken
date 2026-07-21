@@ -476,7 +476,9 @@ func internalFailureResult() domain.InvocationExecutionResult {
 
 func validResult(result domain.InvocationExecutionResult) bool {
 	if result.Status == domain.InvocationCompleted {
-		return len(result.Error) == 0 && len(result.AssistantMessages) > 0 &&
+		messagesValid := (len(result.AssistantMessages) > 0 && !result.MessagesCheckpointed) ||
+			(len(result.AssistantMessages) == 0 && result.MessagesCheckpointed)
+		return len(result.Error) == 0 && messagesValid &&
 			result.Usage != nil && result.Provenance != nil
 	}
 	return result.Status == domain.InvocationFailed && len(result.Error) > 0 && json.Valid(result.Error) &&
@@ -500,6 +502,7 @@ func executionDeadlineResult(
 	if validResult(evidence) && evidence.Usage != nil && evidence.Provenance != nil {
 		result.Usage = evidence.Usage
 		result.Provenance = evidence.Provenance
+		result.MessagesCheckpointed = evidence.MessagesCheckpointed
 	}
 	return result
 }

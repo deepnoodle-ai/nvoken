@@ -1,7 +1,7 @@
 # Runtime admission
 
-The self-contained Runtime durably admits, executes, and reads tool-free
-Invocations. Admission still returns before model generation begins.
+The self-contained Runtime durably admits, executes, and reads public
+tool-free Invocations. Admission still returns before model generation begins.
 
 Apply migrations explicitly, then start the service with a Postgres URL and a
 random bearer secret of at least 32 bytes. Supply the installation key for each
@@ -90,6 +90,21 @@ A changed request using the same scoped key returns
 `409 idempotency_conflict`.
 Treat `503 unavailable` the same way as any ambiguous acknowledgement: retry
 the exact body and key rather than inventing a new key for the same turn.
+
+The database now retains internal checkpoint evidence at each accepted model
+iteration: the canonical assistant message, normalized usage/provenance
+receipt, any prepared ToolCalls, and a transcript watermark commit together.
+Accepted builtin outcomes likewise commit one canonical tool-role result and a
+fenced checkpoint. ToolCall rows contain lifecycle and message references, not
+a second copy of content. These records are intentionally not exposed as a
+public tool surface yet.
+
+Checkpoint evidence does not currently turn process loss into continuation.
+An expired engine claim still becomes the durable `execution_lost` failure;
+cancellation, deadlines, and reaping close any prepared calls with a synthetic
+tool-result message so transcript replay remains structurally complete. Do not
+retry a terminal Invocation in place. Create a new Invocation when the host
+wants another attempt.
 
 Read the durable state after any API restart:
 
