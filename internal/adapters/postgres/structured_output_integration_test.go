@@ -23,6 +23,115 @@ type structuredCheckpointGenerator struct {
 	coordinator ports.ToolCallCoordinator
 }
 
+type structuredRecoveryGenerator struct {
+	coordinator ports.ToolCallCoordinator
+}
+
+func (g structuredRecoveryGenerator) Generate(
+	ctx context.Context,
+	request domain.GenerationRequest,
+) (domain.GenerationResponse, error) {
+	if request.Claim == nil || request.Resume == nil || request.StructuredOutput == nil {
+		return domain.GenerationResponse{}, ports.ErrGenerationInputInvalid
+	}
+	claim := *request.Claim
+	usage := request.Resume.Usage
+	output := request.Resume.StructuredOutput
+	iteration := request.Resume.Iteration
+	if output == nil {
+		if request.Resume.StructuredOutputFailure != "invalid" {
+			return domain.GenerationResponse{}, ports.ErrGenerationInputInvalid
+		}
+		iteration++
+		value := json.RawMessage(`{"answer":"corrected"}`)
+		providerCallID := "recovery-correction-call"
+		recorded, err := g.coordinator.RecordModelCheckpoint(ctx, claim, domain.ModelCheckpointInput{
+			Iteration: iteration,
+			Message: domain.GenerationMessage{
+				Role: domain.MessageRoleAssistant,
+				Content: json.RawMessage(
+					`[{"type":"tool_use","id":"recovery-correction-call","name":"nvoken_submit_output","input":{"answer":"corrected"}}]`,
+				),
+			},
+			Usage: domain.ModelUsage{
+				InputTokens:  4,
+				OutputTokens: 1,
+				Iterations:   1,
+			},
+			Provenance: testModelProvenance(),
+			ToolCalls: []domain.ToolCallRequest{
+				{
+					ProviderCallID: providerCallID,
+					Name:           structuredoutput.ReservedToolName,
+					Mode:           domain.ToolCallModeBuiltin,
+					Input:          value,
+				},
+			},
+		})
+		if err != nil {
+			return domain.GenerationResponse{}, err
+		}
+		running, err := g.coordinator.StartBuiltinToolCall(
+			ctx,
+			claim,
+			iteration,
+			providerCallID,
+		)
+		if err != nil {
+			return domain.GenerationResponse{}, err
+		}
+		accepted, err := g.coordinator.AcceptBuiltinToolResult(
+			ctx,
+			claim,
+			running,
+			json.RawMessage(`"Output accepted."`),
+			false,
+		)
+		if err != nil {
+			return domain.GenerationResponse{}, err
+		}
+		if accepted.ID != recorded.ToolCalls[0].ID {
+			return domain.GenerationResponse{}, ports.ErrToolCallConflict
+		}
+		usage.InputTokens += 4
+		usage.OutputTokens++
+		usage.Iterations++
+		output = &domain.StructuredOutput{
+			Value: value,
+			Provenance: domain.StructuredOutputProvenance{
+				Source:       structuredoutput.ProvenanceSource,
+				ToolCallID:   accepted.ID,
+				SchemaSHA256: hex.EncodeToString(request.StructuredOutput.SchemaDigest),
+			},
+		}
+	}
+	iteration++
+	if _, err := g.coordinator.RecordModelCheckpoint(ctx, claim, domain.ModelCheckpointInput{
+		Iteration: iteration,
+		Message: domain.GenerationMessage{
+			Role:    domain.MessageRoleAssistant,
+			Content: json.RawMessage(`[{"type":"text","text":"done after recovery"}]`),
+		},
+		Usage: domain.ModelUsage{
+			InputTokens:  5,
+			OutputTokens: 2,
+			Iterations:   1,
+		},
+		Provenance: testModelProvenance(),
+	}); err != nil {
+		return domain.GenerationResponse{}, err
+	}
+	usage.InputTokens += 5
+	usage.OutputTokens += 2
+	usage.Iterations++
+	return domain.GenerationResponse{
+		Usage:                usage,
+		ServedModel:          "test-model-served",
+		MessagesCheckpointed: true,
+		StructuredOutput:     output,
+	}, nil
+}
+
 func (g structuredCheckpointGenerator) Generate(
 	ctx context.Context,
 	request domain.GenerationRequest,
@@ -260,6 +369,213 @@ func TestStructuredOutputSettlementFaultRollsBackProjection(t *testing.T) {
 	}
 }
 
+func TestStructuredOutputFinalCheckpointRecoversBeforeTerminalSettlement(t *testing.T) {
+	pool, runtime, store, auth := newRuntimeFixture(t)
+	ctx := context.Background()
+	ack, err := runtime.Admit(ctx, auth, structuredRuntimeInput())
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	clock := newMutableClock(time.Now().UTC())
+	ids := identity.NewUUIDv7Generator(clock)
+	txm := NewTransactionManager(pool)
+	ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+	firstClaim, disposition, err := ownership.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"lost-structured-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed {
+		t.Fatalf("first claim = %#v, disposition = %q, error = %v", firstClaim, disposition, err)
+	}
+	coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	firstExecutor := services.NewGenerationExecutor(
+		store,
+		structuredCheckpointGenerator{
+			coordinator: coordinator,
+		},
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	firstResult, err := firstExecutor.Execute(ctx, firstClaim)
+	if err != nil || firstResult.StructuredOutput == nil {
+		t.Fatalf("first execution = %#v, error = %v", firstResult, err)
+	}
+	clock.Advance(time.Minute + time.Nanosecond)
+	recovered, err := ownership.ReapExpired(ctx, 10)
+	if err != nil || len(recovered) != 1 || recovered[0].Status != domain.InvocationQueued {
+		t.Fatalf("recovered = %#v, error = %v", recovered, err)
+	}
+	secondClaim, disposition, err := ownership.ClaimExact(
+		ctx,
+		ack.InvocationID,
+		"replacement-structured-owner",
+		time.Minute,
+	)
+	if err != nil || disposition != services.Claimed || secondClaim.Attempt != 2 {
+		t.Fatalf("replacement claim = %#v, disposition = %q, error = %v", secondClaim, disposition, err)
+	}
+	generator := &postgresModelGenerator{}
+	secondResult, err := services.NewGenerationExecutor(
+		store,
+		generator,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	).Execute(ctx, secondClaim)
+	if err != nil {
+		t.Fatalf("recover structured output: %v", err)
+	}
+	if len(generator.Requests()) != 0 || secondResult.StructuredOutput == nil ||
+		!jsonObjectEqual(secondResult.StructuredOutput.Value, json.RawMessage(`{"answer":"yes"}`)) ||
+		secondResult.StructuredOutput.Provenance.ToolCallID != firstResult.StructuredOutput.Provenance.ToolCallID {
+		t.Fatalf("recovered output = %#v, provider calls = %d", secondResult, len(generator.Requests()))
+	}
+	if err := ownership.Settle(ctx, secondClaim, secondResult); err != nil {
+		t.Fatalf("settle recovered structured output: %v", err)
+	}
+	assertStructuredOutputTrace(t, pool, runtime, store, auth, ack)
+}
+
+func TestStructuredOutputResumesAcceptedAndRejectedSubmissions(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		initialValue  json.RawMessage
+		initialError  bool
+		wantValue     json.RawMessage
+		wantToolCalls int
+	}{
+		{
+			name:          "rejected submission is corrected",
+			initialValue:  json.RawMessage(`{}`),
+			initialError:  true,
+			wantValue:     json.RawMessage(`{"answer":"corrected"}`),
+			wantToolCalls: 2,
+		},
+		{
+			name:          "accepted submission is not rerun",
+			initialValue:  json.RawMessage(`{"answer":"yes"}`),
+			wantValue:     json.RawMessage(`{"answer":"yes"}`),
+			wantToolCalls: 1,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			pool, runtime, store, auth := newRuntimeFixture(t)
+			ctx := context.Background()
+			ack, err := runtime.Admit(ctx, auth, structuredRuntimeInput())
+			if err != nil {
+				t.Fatalf("admit: %v", err)
+			}
+			clock := newMutableClock(time.Now().UTC())
+			ids := identity.NewUUIDv7Generator(clock)
+			txm := NewTransactionManager(pool)
+			ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+			firstClaim, disposition, err := ownership.ClaimExact(
+				ctx,
+				ack.InvocationID,
+				"lost-submission-owner",
+				time.Minute,
+			)
+			if err != nil || disposition != services.Claimed {
+				t.Fatalf("first claim = %#v, disposition = %q, error = %v", firstClaim, disposition, err)
+			}
+			coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+			recorded, err := coordinator.RecordModelCheckpoint(ctx, firstClaim, domain.ModelCheckpointInput{
+				Iteration: 1,
+				Message: domain.GenerationMessage{
+					Role: domain.MessageRoleAssistant,
+					Content: json.RawMessage(
+						`[{"type":"tool_use","id":"initial-submission-call","name":"nvoken_submit_output","input":` +
+							string(test.initialValue) + `}]`,
+					),
+				},
+				Usage: domain.ModelUsage{
+					InputTokens:  3,
+					OutputTokens: 1,
+					Iterations:   1,
+				},
+				Provenance: testModelProvenance(),
+				ToolCalls: []domain.ToolCallRequest{
+					{
+						ProviderCallID: "initial-submission-call",
+						Name:           structuredoutput.ReservedToolName,
+						Mode:           domain.ToolCallModeBuiltin,
+						Input:          test.initialValue,
+					},
+				},
+			})
+			if err != nil {
+				t.Fatalf("record initial submission: %v", err)
+			}
+			running, err := coordinator.StartBuiltinToolCall(
+				ctx,
+				firstClaim,
+				1,
+				"initial-submission-call",
+			)
+			if err != nil {
+				t.Fatalf("start initial submission: %v", err)
+			}
+			resultMessage := json.RawMessage(`"Output accepted."`)
+			if test.initialError {
+				resultMessage = json.RawMessage(`"Output rejected."`)
+			}
+			accepted, err := coordinator.AcceptBuiltinToolResult(
+				ctx,
+				firstClaim,
+				running,
+				resultMessage,
+				test.initialError,
+			)
+			if err != nil || accepted.ID != recorded.ToolCalls[0].ID {
+				t.Fatalf("settle initial submission = %#v, error = %v", accepted, err)
+			}
+			clock.Advance(time.Minute + time.Nanosecond)
+			if recovered, err := ownership.ReapExpired(ctx, 10); err != nil ||
+				len(recovered) != 1 || recovered[0].Status != domain.InvocationQueued {
+				t.Fatalf("recovered = %#v, error = %v", recovered, err)
+			}
+			secondClaim, disposition, err := ownership.ClaimExact(
+				ctx,
+				ack.InvocationID,
+				"replacement-submission-owner",
+				time.Minute,
+			)
+			if err != nil || disposition != services.Claimed || secondClaim.Attempt != 2 {
+				t.Fatalf("replacement claim = %#v, disposition = %q, error = %v", secondClaim, disposition, err)
+			}
+			result, err := services.NewGenerationExecutor(
+				store,
+				structuredRecoveryGenerator{
+					coordinator: coordinator,
+				},
+				slog.New(slog.NewTextHandler(io.Discard, nil)),
+			).Execute(ctx, secondClaim)
+			if err != nil || result.StructuredOutput == nil ||
+				!jsonObjectEqual(result.StructuredOutput.Value, test.wantValue) {
+				t.Fatalf("recovered result = %#v, error = %v", result, err)
+			}
+			if err := ownership.Settle(ctx, secondClaim, result); err != nil {
+				t.Fatalf("settle recovered result: %v", err)
+			}
+			var callCount int
+			if err := pool.QueryRow(
+				ctx,
+				"SELECT count(*) FROM tool_calls WHERE invocation_id = $1",
+				ack.InvocationID,
+			).Scan(&callCount); err != nil || callCount != test.wantToolCalls {
+				t.Fatalf("ToolCall count = %d, error = %v", callCount, err)
+			}
+			assertRecoveredStructuredOutput(
+				t,
+				runtime,
+				store,
+				auth,
+				ack,
+				test.wantValue,
+			)
+		})
+	}
+}
+
 func TestInvalidStructuredOutputAdmissionCreatesNoRuntimeRows(t *testing.T) {
 	pool, runtime, _, auth := newRuntimeFixture(t)
 	input := structuredRuntimeInput()
@@ -363,6 +679,47 @@ func structuredRuntimeInput() services.CreateInvocationInput {
 		),
 	}
 	return input
+}
+
+func assertRecoveredStructuredOutput(
+	t *testing.T,
+	runtime *services.RuntimeService,
+	store *Store,
+	auth domain.RuntimeAuthContext,
+	ack services.InvocationAcknowledgement,
+	want json.RawMessage,
+) {
+	t.Helper()
+	ctx := context.Background()
+	invocation, err := store.GetInvocation(ctx, ack.InvocationID)
+	if err != nil || invocation.Status != domain.InvocationCompleted ||
+		!jsonObjectEqual(invocation.Output, want) {
+		t.Fatalf("completed recovered Invocation = %#v, error = %v", invocation, err)
+	}
+	var provenance domain.StructuredOutputProvenance
+	if err := json.Unmarshal(invocation.OutputProvenance, &provenance); err != nil {
+		t.Fatalf("decode recovered provenance: %v", err)
+	}
+	call, err := store.GetToolCall(ctx, provenance.ToolCallID)
+	if err != nil || call.Status != domain.ToolCallCompleted ||
+		call.Name != structuredoutput.ReservedToolName {
+		t.Fatalf("recovered output ToolCall = %#v, error = %v", call, err)
+	}
+	read, err := runtime.GetInvocation(ctx, auth, ack.InvocationID)
+	if err != nil || !jsonObjectEqual(read.Output, want) ||
+		!jsonObjectEqual(read.OutputProvenance, invocation.OutputProvenance) {
+		t.Fatalf("recovered output read = %#v, error = %v", read, err)
+	}
+	changes, err := store.ListInvocationLifecycleChanges(ctx, ack.SessionID, 0, 100, 100)
+	if err != nil || len(changes) == 0 {
+		t.Fatalf("recovered lifecycle = %#v, error = %v", changes, err)
+	}
+	terminal := changes[len(changes)-1]
+	if terminal.Status != domain.InvocationCompleted ||
+		!jsonObjectEqual(terminal.Output, want) ||
+		!jsonObjectEqual(terminal.OutputProvenance, invocation.OutputProvenance) {
+		t.Fatalf("recovered terminal lifecycle = %#v", terminal)
+	}
 }
 
 func assertStructuredOutputTrace(

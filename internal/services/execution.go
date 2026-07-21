@@ -432,9 +432,9 @@ func (s *InvocationExecutionService) ReapExpired(ctx context.Context, limit int)
 		}
 	}
 	if len(candidateErrors) != 0 {
-		// Do not let the lease-only fallback turn a logical deadline into
-		// execution_lost after its deadline transaction failed. Retry the
-		// authoritative deadline outcome on the next scan.
+		// Do not let lease recovery override a logical deadline after its
+		// terminal transaction failed. Retry the authoritative deadline outcome
+		// on the next scan.
 		return reaped, errors.Join(candidateErrors...)
 	}
 	remaining := limit - len(reaped)
@@ -485,12 +485,18 @@ func (s *InvocationExecutionService) reapDeadlineWithSessionLocked(ctx context.C
 	scope := ""
 	if !invocation.WallClockDeadlineAt.After(now) {
 		scope = "wall_clock"
-	} else if invocation.ActiveExecutionMS >= invocation.ActiveTimeoutMS {
+	} else if effectiveActiveExecutionMS(invocation, now) >= invocation.ActiveTimeoutMS {
 		scope = "active_execution"
 	} else if invocation.Status == domain.InvocationRunning && invocation.ExecutionDeadlineAt != nil && !invocation.ExecutionDeadlineAt.After(now) {
 		if invocation.ExecutionDeadlineScope != nil {
 			scope = *invocation.ExecutionDeadlineScope
 		}
+	}
+	if scope == "execution_segment" && invocation.LeaseExpiresAt != nil && !invocation.LeaseExpiresAt.After(now) {
+		// An owner that reached its cutoff can settle a segment deadline while
+		// its lease is live. Once ownership itself expires, the replacement
+		// owner resumes from the durable prefix instead.
+		return domain.Invocation{}, false, nil
 	}
 	if scope == "" || invocation.Status.Terminal() {
 		return domain.Invocation{}, false, nil
@@ -537,6 +543,24 @@ func (s *InvocationExecutionService) reapDeadlineWithSessionLocked(ctx context.C
 	return reaped, true, nil
 }
 
+func effectiveActiveExecutionMS(invocation domain.Invocation, now time.Time) int64 {
+	active := invocation.ActiveExecutionMS
+	if invocation.Status != domain.InvocationRunning || invocation.ActiveSegmentStartedAt == nil {
+		return active
+	}
+	through := now
+	if invocation.LeaseExpiresAt != nil && invocation.LeaseExpiresAt.Before(through) {
+		through = *invocation.LeaseExpiresAt
+	}
+	if invocation.ExecutionDeadlineAt != nil && invocation.ExecutionDeadlineAt.Before(through) {
+		through = *invocation.ExecutionDeadlineAt
+	}
+	if through.After(*invocation.ActiveSegmentStartedAt) {
+		active += through.Sub(*invocation.ActiveSegmentStartedAt).Milliseconds()
+	}
+	return active
+}
+
 func (s *InvocationExecutionService) reapCandidate(
 	ctx context.Context,
 	candidate domain.Invocation,
@@ -572,20 +596,22 @@ func (s *InvocationExecutionService) reapCandidate(
 		if err != nil {
 			return err
 		}
-		payload := invocationFailure("execution_lost", "The execution owner was lost.")
 		throughMessageSequence := currentState.ThroughMessageSequence
-		checkpointWatermark, err := closeOpenToolCallsForTerminal(
-			txCtx, s.store, s.ids, invocation, domain.InvocationFailed,
-			"Tool execution stopped because the execution owner was lost.", now,
-		)
-		if err != nil {
+		latest, err := s.store.GetLatestInvocationCheckpoint(txCtx, invocation.ID)
+		if err == nil {
+			checkpointWatermark := latest.ThroughMessageSequence
+			if throughMessageSequence == nil || checkpointWatermark > *throughMessageSequence {
+				throughMessageSequence = &checkpointWatermark
+			}
+		} else if !errors.Is(err, ports.ErrNotFound) {
 			return err
 		}
-		if checkpointWatermark != nil && (throughMessageSequence == nil || *checkpointWatermark > *throughMessageSequence) {
-			throughMessageSequence = checkpointWatermark
-		}
-		reaped, err = s.store.ReapInvocationLease(
-			txCtx, invocation.ID, invocation.LeaseAttempt, revision, payload, now,
+		reaped, err = s.store.RecoverInvocationLease(
+			txCtx,
+			invocation.ID,
+			invocation.LeaseAttempt,
+			revision,
+			now,
 		)
 		if errors.Is(err, ports.ErrLeaseLost) {
 			return nil
@@ -594,11 +620,13 @@ func (s *InvocationExecutionService) reapCandidate(
 			return err
 		}
 		if err := s.store.AppendInvocationState(txCtx, lifecycleState(
-			reaped, stateID, revision, domain.InvocationFailed, throughMessageSequence, now,
+			reaped,
+			stateID,
+			revision,
+			domain.InvocationQueued,
+			throughMessageSequence,
+			now,
 		)); err != nil {
-			return err
-		}
-		if _, err := s.store.SettleActiveExecutionDispatchForWork(txCtx, domain.ExecutionDispatchInvocation, invocation.ID, now); err != nil {
 			return err
 		}
 		changed = true
@@ -758,7 +786,11 @@ func validateStructuredOutputSettlement(
 	return outputPayload, provenancePayload, nil
 }
 
-func storedToolCallInput(ctx context.Context, store executionStore, call domain.ToolCall) (json.RawMessage, error) {
+func storedToolCallInput(
+	ctx context.Context,
+	store ports.SessionMessageRepository,
+	call domain.ToolCall,
+) (json.RawMessage, error) {
 	messages, err := store.ListSessionMessages(ctx, call.SessionID)
 	if err != nil {
 		return nil, err

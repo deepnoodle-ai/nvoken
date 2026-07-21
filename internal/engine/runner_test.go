@@ -86,6 +86,30 @@ func TestRunnerHeartbeatRetriesTransientFailureAndLosesDefinitiveLease(t *testin
 	})
 }
 
+func TestRunnerTreatsExecutorLeaseLossAsStaleOwnership(t *testing.T) {
+	ownership := newFakeOwnership(1, time.Second)
+	runner := newTestRunner(
+		t,
+		ownership,
+		errorExecutor{
+			err: ports.ErrLeaseLost,
+		},
+		nil,
+		testConfig(),
+	)
+	claim, ok, err := ownership.ClaimNext(context.Background(), "runner-1", time.Second)
+	if err != nil || !ok {
+		t.Fatalf("claim = %#v, ok = %v, error = %v", claim, ok, err)
+	}
+	outcome, err := runner.ExecuteClaim(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("execute claim: %v", err)
+	}
+	if !outcome.LeaseLost || outcome.Settled || ownership.settlementCount() != 0 {
+		t.Fatalf("outcome = %#v, settlements = %d", outcome, ownership.settlementCount())
+	}
+}
+
 func TestRunnerWakeAndPollingFallback(t *testing.T) {
 	t.Run("signal wakes subscribed runner", func(t *testing.T) {
 		ownership := newFakeOwnership(0, time.Second)
@@ -545,6 +569,17 @@ func (e *trackingExecutor) Execute(ctx context.Context, _ domain.InvocationClaim
 }
 
 type delayExecutor struct{ delay time.Duration }
+
+type errorExecutor struct {
+	err error
+}
+
+func (e errorExecutor) Execute(
+	context.Context,
+	domain.InvocationClaim,
+) (domain.InvocationExecutionResult, error) {
+	return domain.InvocationExecutionResult{}, e.err
+}
 
 func (e *delayExecutor) Execute(ctx context.Context, _ domain.InvocationClaim) (domain.InvocationExecutionResult, error) {
 	timer := time.NewTimer(e.delay)

@@ -9,16 +9,35 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
 type fakeGenerationStore struct {
-	snapshot domain.ExecutionSpecSnapshot
-	messages []domain.SessionMessage
-	err      error
+	snapshot    domain.ExecutionSpecSnapshot
+	messages    []domain.SessionMessage
+	checkpoints []domain.InvocationCheckpoint
+	receipts    []domain.ModelUsageReceipt
+	toolCalls   []domain.ToolCall
+	err         error
 }
+
+type claimAwareGenerationStore struct {
+	*fakeGenerationStore
+	invocation domain.Invocation
+}
+
+func (s *claimAwareGenerationStore) GetInvocation(context.Context, string) (domain.Invocation, error) {
+	return s.invocation, nil
+}
+
+type fixedGenerationClock struct {
+	now time.Time
+}
+
+func (c fixedGenerationClock) Now() time.Time { return c.now }
 
 func (s *fakeGenerationStore) GetExecutionSpecSnapshot(context.Context, string) (domain.ExecutionSpecSnapshot, error) {
 	if s.err != nil {
@@ -40,6 +59,97 @@ func (s *fakeGenerationStore) ListSessionMessages(context.Context, string) ([]do
 
 func (*fakeGenerationStore) AppendSessionMessage(context.Context, domain.SessionMessage) error {
 	return errors.New("not used")
+}
+
+func (*fakeGenerationStore) CreateToolCall(context.Context, domain.ToolCall) error {
+	return errors.New("not used")
+}
+
+func (*fakeGenerationStore) GetToolCall(context.Context, string) (domain.ToolCall, error) {
+	return domain.ToolCall{}, errors.New("not used")
+}
+
+func (*fakeGenerationStore) GetToolCallForUpdate(context.Context, string) (domain.ToolCall, error) {
+	return domain.ToolCall{}, errors.New("not used")
+}
+
+func (*fakeGenerationStore) GetToolCallByProviderIdentityForUpdate(context.Context, string, int, string) (domain.ToolCall, error) {
+	return domain.ToolCall{}, errors.New("not used")
+}
+
+func (*fakeGenerationStore) ListOpenToolCallsForUpdate(context.Context, string) ([]domain.ToolCall, error) {
+	return nil, errors.New("not used")
+}
+
+func (s *fakeGenerationStore) ListToolCallsByInvocation(context.Context, string) ([]domain.ToolCall, error) {
+	return append([]domain.ToolCall(nil), s.toolCalls...), nil
+}
+
+func (*fakeGenerationStore) ListToolCallsByIteration(context.Context, string, int) ([]domain.ToolCall, error) {
+	return nil, errors.New("not used")
+}
+
+func (*fakeGenerationStore) StartToolCallAttempt(context.Context, string, time.Time) (domain.ToolCall, error) {
+	return domain.ToolCall{}, errors.New("not used")
+}
+
+func (*fakeGenerationStore) RestartToolCallAttempt(context.Context, string, time.Time) (domain.ToolCall, error) {
+	return domain.ToolCall{}, errors.New("not used")
+}
+
+func (*fakeGenerationStore) GetCurrentToolCallAttemptForUpdate(context.Context, string, int) (domain.ToolCallAttempt, error) {
+	return domain.ToolCallAttempt{}, errors.New("not used")
+}
+
+func (*fakeGenerationStore) CreateToolCallAttempt(context.Context, domain.ToolCallAttempt) error {
+	return errors.New("not used")
+}
+
+func (*fakeGenerationStore) SettleToolCall(context.Context, string, domain.ToolCallStatus, string, int64, time.Time) (domain.ToolCall, error) {
+	return domain.ToolCall{}, errors.New("not used")
+}
+
+func (*fakeGenerationStore) SettleToolCallAttempt(context.Context, string, domain.ToolCallStatus, time.Time) (domain.ToolCallAttempt, error) {
+	return domain.ToolCallAttempt{}, errors.New("not used")
+}
+
+func (*fakeGenerationStore) SettleRunningToolCallAttempts(context.Context, string, domain.ToolCallStatus, time.Time) (int64, error) {
+	return 0, errors.New("not used")
+}
+
+func (*fakeGenerationStore) CreateModelUsageReceipt(context.Context, domain.ModelUsageReceipt) error {
+	return errors.New("not used")
+}
+
+func (*fakeGenerationStore) GetModelUsageReceiptByIteration(context.Context, string, int) (domain.ModelUsageReceipt, error) {
+	return domain.ModelUsageReceipt{}, errors.New("not used")
+}
+
+func (s *fakeGenerationStore) ListModelUsageReceipts(context.Context, string) ([]domain.ModelUsageReceipt, error) {
+	return append([]domain.ModelUsageReceipt(nil), s.receipts...), nil
+}
+
+func (*fakeGenerationStore) CreateInvocationCheckpoint(context.Context, domain.InvocationCheckpoint) error {
+	return errors.New("not used")
+}
+
+func (s *fakeGenerationStore) GetLatestInvocationCheckpoint(context.Context, string) (domain.InvocationCheckpoint, error) {
+	if len(s.checkpoints) == 0 {
+		return domain.InvocationCheckpoint{}, ports.ErrNotFound
+	}
+	return s.checkpoints[len(s.checkpoints)-1], nil
+}
+
+func (s *fakeGenerationStore) ListInvocationCheckpoints(context.Context, string) ([]domain.InvocationCheckpoint, error) {
+	return append([]domain.InvocationCheckpoint(nil), s.checkpoints...), nil
+}
+
+func (*fakeGenerationStore) AdvanceInvocationCheckpoint(context.Context, string, string, int64, time.Time, int64, int) (domain.Invocation, error) {
+	return domain.Invocation{}, errors.New("not used")
+}
+
+func (*fakeGenerationStore) AdvanceInvocationCheckpointForTerminal(context.Context, string, int64, int) (domain.Invocation, error) {
+	return domain.Invocation{}, errors.New("not used")
 }
 
 type fakeModelGenerator struct {
@@ -137,6 +247,140 @@ func TestGenerationExecutorReconstructsExactDurableTurn(t *testing.T) {
 		if !strings.Contains(logText, required) {
 			t.Fatalf("logs do not contain %q: %s", required, logText)
 		}
+	}
+}
+
+func TestGenerationExecutorSettlesCommittedFinalCheckpointWithoutProviderCall(t *testing.T) {
+	claim := generationClaim()
+	claim.Invocation.CurrentCheckpointSequence = 1
+	claim.Invocation.CurrentIteration = 1
+	claim.Invocation.MaxIterations = 3
+	store := generationStoreFixture(claim)
+	store.messages = append(store.messages, domain.SessionMessage{
+		ID:                "msg_final",
+		InvocationID:      claim.Invocation.ID,
+		SessionID:         claim.Invocation.SessionID,
+		AccountID:         claim.Invocation.AccountID,
+		TenantPartitionID: claim.Invocation.TenantPartitionID,
+		AgentID:           claim.Invocation.AgentID,
+		Sequence:          4,
+		Role:              domain.MessageRoleAssistant,
+		Content:           json.RawMessage(`[{"type":"text","text":"saved final"}]`),
+	})
+	receiptID := "mrec_final"
+	usage := domain.ModelUsage{
+		InputTokens:  12,
+		OutputTokens: 3,
+		Iterations:   1,
+	}
+	provenance := domain.ModelProvenance{
+		Provider:         "anthropic",
+		RequestedModel:   "claude-test",
+		ServedModel:      "claude-served",
+		CredentialSource: credentialSourceInstallationBYOK,
+	}
+	usagePayload, err := json.Marshal(usage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provenancePayload, err := json.Marshal(provenance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.receipts = []domain.ModelUsageReceipt{
+		{
+			ID:                receiptID,
+			InvocationID:      claim.Invocation.ID,
+			SessionID:         claim.Invocation.SessionID,
+			AccountID:         claim.Invocation.AccountID,
+			TenantPartitionID: claim.Invocation.TenantPartitionID,
+			AgentID:           claim.Invocation.AgentID,
+			Iteration:         1,
+			MessageID:         "msg_final",
+			MessageSequence:   4,
+			Usage:             usagePayload,
+			Provenance:        provenancePayload,
+			EvidenceDigest:    make([]byte, 32),
+		},
+	}
+	store.checkpoints = []domain.InvocationCheckpoint{
+		{
+			ID:                     "ckpt_final",
+			InvocationID:           claim.Invocation.ID,
+			SessionID:              claim.Invocation.SessionID,
+			AccountID:              claim.Invocation.AccountID,
+			TenantPartitionID:      claim.Invocation.TenantPartitionID,
+			AgentID:                claim.Invocation.AgentID,
+			Sequence:               1,
+			Iteration:              1,
+			Kind:                   domain.InvocationCheckpointModel,
+			LeaseAttempt:           1,
+			ThroughMessageSequence: 4,
+			UsageReceiptID:         &receiptID,
+		},
+	}
+	generator := &fakeModelGenerator{
+		response: successfulGenerationResponse(),
+	}
+
+	result, err := NewGenerationExecutor(store, generator, nil).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(generator.requests) != 0 {
+		t.Fatalf("provider calls = %d, want 0", len(generator.requests))
+	}
+	if result.Status != domain.InvocationCompleted || !result.MessagesCheckpointed ||
+		result.Usage == nil || !reflect.DeepEqual(*result.Usage, usage) ||
+		result.Provenance == nil || !reflect.DeepEqual(*result.Provenance, provenance) {
+		t.Fatalf("terminal replay = %#v", result)
+	}
+
+	store.checkpoints[0].ThroughMessageSequence = 3
+	result, err = NewGenerationExecutor(store, generator, nil).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute corrupt recovery: %v", err)
+	}
+	assertFailureCode(t, result, "internal")
+	if result.MessagesCheckpointed || len(generator.requests) != 0 {
+		t.Fatalf("corrupt recovery result = %#v, calls = %d", result, len(generator.requests))
+	}
+}
+
+func TestGenerationExecutorUsesInjectedClockWhenCheckingLostClaim(t *testing.T) {
+	claim := generationClaim()
+	now := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+	owner := claim.Owner
+	leaseExpiresAt := now.Add(time.Hour)
+	executionDeadlineAt := now.Add(time.Hour)
+	current := claim.Invocation
+	current.Status = domain.InvocationRunning
+	current.LeaseOwner = &owner
+	current.LeaseExpiresAt = &leaseExpiresAt
+	current.LeaseAttempt = claim.Attempt
+	current.ExecutionDeadlineAt = &executionDeadlineAt
+	store := &claimAwareGenerationStore{
+		fakeGenerationStore: generationStoreFixture(claim),
+		invocation:          current,
+	}
+	store.messages[len(store.messages)-1].Role = domain.MessageRoleAssistant
+	generator := &fakeModelGenerator{
+		response: successfulGenerationResponse(),
+	}
+	result, err := NewGenerationExecutor(
+		store,
+		generator,
+		nil,
+		WithGenerationClock(fixedGenerationClock{
+			now: now,
+		}),
+	).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	assertFailureCode(t, result, "internal")
+	if len(generator.requests) != 0 {
+		t.Fatalf("model calls = %d, want 0", len(generator.requests))
 	}
 }
 

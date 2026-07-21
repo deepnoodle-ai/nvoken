@@ -223,18 +223,34 @@ func (r *Runner) Run(ctx context.Context) error {
 func (r *Runner) reap(ctx context.Context) {
 	reaped, err := r.ownership.ReapExpired(ctx, r.config.ReaperBatchLimit)
 	for _, invocation := range reaped {
-		fields := []any{
-			"invocation_id", invocation.ID, "lease_attempt", invocation.LeaseAttempt,
-			"status", invocation.Status,
-		}
-		fields = append(fields, failureLogFields(invocation.Error)...)
-		r.logger.Warn("Invocation ownership or deadline reaped", fields...)
+		logReapedInvocation(r.logger, invocation)
 	}
 	if err != nil {
 		if ctx.Err() == nil {
 			r.logger.Warn("Invocation lease scan failed; retrying", "error", err.Error())
 		}
 	}
+}
+
+func logReapedInvocation(logger *slog.Logger, invocation domain.Invocation) {
+	fields := []any{
+		"invocation_id",
+		invocation.ID,
+		"lease_attempt",
+		invocation.LeaseAttempt,
+		"status",
+		invocation.Status,
+		"checkpoint_sequence",
+		invocation.CurrentCheckpointSequence,
+		"iteration",
+		invocation.CurrentIteration,
+	}
+	if invocation.Status == domain.InvocationQueued {
+		logger.Info("Invocation lease recovered", fields...)
+		return
+	}
+	fields = append(fields, failureLogFields(invocation.Error)...)
+	logger.Warn("Invocation deadline reaped", fields...)
 }
 
 type claimState struct {
@@ -289,6 +305,17 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 		// paired accounting evidence from a valid result.
 		result = executionDeadlineResult(claim, result)
 		hasResult = true
+	} else if errors.Is(err, ports.ErrLeaseLost) {
+		state.leaseLost.Store(true)
+		cancelLease()
+		cancelExecutor()
+		r.logger.Info(
+			"Invocation executor observed stale ownership",
+			"invocation_id",
+			claim.Invocation.ID,
+			"lease_attempt",
+			claim.Attempt,
+		)
 	} else if err != nil && executorCtx.Err() == nil {
 		r.logger.Warn("Invocation executor failed",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,

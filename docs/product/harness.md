@@ -87,9 +87,8 @@ The stateful spine of the product:
   concurrent turns cannot interleave one conversation.
 - **Durable turns.** Admission survives API crashes, restarts, deploys, and
   client disconnects, with a lease protocol so exactly one worker drives a turn
-  at a time. Before checkpoint recovery ships, engine loss becomes a visible
-  typed failure; checkpointed continuation from the interrupted point is a
-  later durability level.
+  at a time. If that worker disappears, the same Invocation is requeued and a
+  replacement continues from its last committed model or builtin checkpoint.
 - **Streaming that survives disconnects.** Generation and event streams can
   drop and rejoin; the transport is never the source of truth.
 - **History management.** Forking to branch a conversation, compaction

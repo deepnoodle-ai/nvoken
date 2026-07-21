@@ -156,10 +156,10 @@ func TestInvocationDispatchCancellationAndLostOwnerDoNotReplay(t *testing.T) {
 		if _, err := fixture.attempts.Attempt(context.Background(), fixture.dispatch.ID); err != nil {
 			t.Fatalf("delivery after reaper: %v", err)
 		}
-		if len(generator.Requests()) != 0 {
-			t.Fatal("lost owner was regenerated")
+		if len(generator.Requests()) != 1 {
+			t.Fatalf("replacement generation calls = %d, want 1", len(generator.Requests()))
 		}
-		assertInvocationDispatchTerminal(t, fixture.store, fixture.ack, fixture.dispatch.ID, domain.InvocationFailed)
+		assertInvocationDispatchTerminal(t, fixture.store, fixture.ack, fixture.dispatch.ID, domain.InvocationCompleted)
 	})
 }
 
@@ -419,6 +419,106 @@ func TestInvocationDispatchReconcilesMissingTasksFromAuthoritativeState(t *testi
 			t.Fatalf("terminal dispatch status = %s, want settled", current.Status)
 		}
 	})
+}
+
+func TestRecoveredInvocationConvergesAcrossOriginalAndSuccessorDeliveries(t *testing.T) {
+	fixture := newInvocationReconcileFixture(t)
+	fixture.publishAndLoseTask(t)
+	ctx := context.Background()
+	ownership := services.NewInvocationExecutionService(
+		fixture.store,
+		fixture.txm,
+		fixture.clock,
+		fixture.ids,
+		services.WithExecutionSegmentCeiling(10*time.Second),
+	)
+	if _, disposition, err := ownership.ClaimExact(
+		ctx,
+		fixture.ack.InvocationID,
+		"lost-dispatch-owner",
+		time.Second,
+	); err != nil || disposition != services.Claimed {
+		t.Fatalf("lost claim disposition = %q, error = %v", disposition, err)
+	}
+	fixture.clock.Advance(2 * time.Second)
+	recovered, err := ownership.ReapExpired(ctx, 10)
+	if err != nil || len(recovered) != 1 || recovered[0].Status != domain.InvocationQueued {
+		t.Fatalf("recovered = %#v, error = %v", recovered, err)
+	}
+	result, err := fixture.dispatches.Reconcile(ctx, fixture.tasks)
+	if err != nil || result.Succeeded != 1 {
+		t.Fatalf("reconcile = %#v, error = %v", result, err)
+	}
+	successor := activeInvocationDispatch(t, fixture.store, fixture.ack.InvocationID)
+	if successor.ID == fixture.dispatch.ID {
+		t.Fatal("reconcile did not create a successor dispatch")
+	}
+	generator := &postgresModelGenerator{}
+	config := dispatchEngineConfig()
+	config.LeaseDuration = time.Second
+	config.HeartbeatInterval = 100 * time.Millisecond
+	attempts, err := dispatchruntime.NewAttemptService(
+		fixture.dispatches,
+		ownership,
+		services.NewGenerationExecutor(
+			fixture.store,
+			generator,
+			slog.New(slog.NewTextHandler(io.Discard, nil)),
+		),
+		fixture.store,
+		fixture.txm,
+		fixture.clock,
+		"replacement-dispatch-owner",
+		config,
+		nil,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	if err != nil {
+		t.Fatalf("configure attempts: %v", err)
+	}
+	type deliveryResult struct {
+		dispatchID string
+		outcome    services.DispatchAttemptOutcome
+		err        error
+	}
+	results := make(chan deliveryResult, 2)
+	for _, dispatchID := range []string{fixture.dispatch.ID, successor.ID} {
+		go func() {
+			outcome, err := attempts.Attempt(ctx, dispatchID)
+			results <- deliveryResult{
+				dispatchID: dispatchID,
+				outcome:    outcome,
+				err:        err,
+			}
+		}()
+	}
+	got := make(map[string]deliveryResult, 2)
+	for range 2 {
+		result := <-results
+		got[result.dispatchID] = result
+	}
+	if got[fixture.dispatch.ID].err != nil ||
+		got[fixture.dispatch.ID].outcome != services.DispatchAttemptNoop {
+		t.Fatalf("original delivery = %#v", got[fixture.dispatch.ID])
+	}
+	if got[successor.ID].err != nil ||
+		got[successor.ID].outcome != services.DispatchAttemptSettled {
+		t.Fatalf("successor delivery = %#v", got[successor.ID])
+	}
+	if len(generator.Requests()) != 1 {
+		t.Fatalf("generation calls = %d, want 1", len(generator.Requests()))
+	}
+	assertInvocationDispatchTerminal(
+		t,
+		fixture.store,
+		fixture.ack,
+		successor.ID,
+		domain.InvocationCompleted,
+	)
+	old, err := fixture.store.GetExecutionDispatch(ctx, fixture.dispatch.ID)
+	if err != nil || old.Status != domain.ExecutionDispatchSettled {
+		t.Fatalf("original dispatch = %#v, error = %v", old, err)
+	}
 }
 
 type invocationReconcileFixture struct {
