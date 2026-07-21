@@ -114,12 +114,12 @@ func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("dirty version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = 8",
+			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = 9",
 		); err != nil {
 			t.Fatalf("mark migration dirty: %v", err)
 		}
 		err := NewMigrator(databaseURL, 2*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil))).Apply(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "000008 is dirty") {
+		if err == nil || !strings.Contains(err.Error(), "000009 is dirty") {
 			t.Fatalf("migrate error = %v", err)
 		}
 	})
@@ -127,7 +127,7 @@ func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("unknown version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false WHERE version = 8",
+			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false WHERE version = 9",
 		); err != nil {
 			t.Fatalf("set future migration: %v", err)
 		}

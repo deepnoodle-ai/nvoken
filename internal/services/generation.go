@@ -99,6 +99,20 @@ func (e *GenerationExecutor) Execute(
 		MaxIterations:   claim.Invocation.MaxIterations,
 		Claim:           &claim,
 	}
+	if spec.Output != nil {
+		digest, err := structuredOutputSchemaDigest(spec.Output.Schema)
+		if err != nil || !bytes.Equal(digest, claim.Invocation.OutputSchemaDigest) {
+			e.logFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.Name)
+			return internalGenerationFailure(), nil
+		}
+		request.StructuredOutput = &domain.StructuredOutputRequest{
+			Schema:       append(json.RawMessage(nil), spec.Output.Schema...),
+			SchemaDigest: append([]byte(nil), digest...),
+		}
+	} else if len(claim.Invocation.OutputSchemaDigest) != 0 {
+		e.logFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.Name)
+		return internalGenerationFailure(), nil
+	}
 	if err := ctx.Err(); err != nil {
 		return domain.InvocationExecutionResult{}, err
 	}
@@ -133,6 +147,7 @@ func (e *GenerationExecutor) Execute(
 			ServedModel:      servedModel,
 			CredentialSource: credentialSourceInstallationBYOK,
 		},
+		StructuredOutput: response.StructuredOutput,
 	}
 	if response.MessagesCheckpointed {
 		result.AssistantMessages = nil
@@ -141,6 +156,15 @@ func (e *GenerationExecutor) Execute(
 		e.logger.Warn("Model generation budget exceeded",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt, "budget_kind", response.BudgetExceeded)
 		failed := budgetGenerationFailure(response.BudgetExceeded, response.Usage, *result.Provenance)
+		failed.MessagesCheckpointed = response.MessagesCheckpointed
+		return failed, nil
+	}
+	if response.StructuredOutputFailure != "" {
+		failed := structuredOutputGenerationFailure(
+			response.StructuredOutputFailure,
+			response.Usage,
+			*result.Provenance,
+		)
 		failed.MessagesCheckpointed = response.MessagesCheckpointed
 		return failed, nil
 	}
@@ -384,6 +408,22 @@ func budgetGenerationFailure(kind string, usage domain.ModelUsage, provenance do
 	return domain.InvocationExecutionResult{
 		Status:     domain.InvocationFailed,
 		Error:      invocationFailureWithDetails("budget_exceeded", "The execution budget was exceeded.", map[string]string{"kind": kind}),
+		Usage:      &usage,
+		Provenance: &provenance,
+	}
+}
+
+func structuredOutputGenerationFailure(reason string, usage domain.ModelUsage, provenance domain.ModelProvenance) domain.InvocationExecutionResult {
+	if reason != "missing" && reason != "invalid" && reason != "oversized" {
+		reason = "invalid"
+	}
+	return domain.InvocationExecutionResult{
+		Status: domain.InvocationFailed,
+		Error: invocationFailureWithDetails(
+			"structured_output_unsatisfied",
+			"The structured output contract was not satisfied.",
+			map[string]string{"reason": reason},
+		),
 		Usage:      &usage,
 		Provenance: &provenance,
 	}

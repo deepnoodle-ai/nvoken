@@ -77,13 +77,21 @@ language-neutral canonical bytes and digests in
 [`admission-fingerprint-v1.json`](admission-fingerprint-v1.json) are the
 compatibility fixtures.
 
-New admissions use fingerprint v2. It preserves the v1 order and inserts
+Fingerprint v2 preserves the v1 order and inserts
 `budgets` after `model` inside `spec`. Omitted budgets are `null`; otherwise the
 fixed members are wall-clock seconds, active-execution seconds, output tokens,
 estimated cost normalized to integer micro-USD, and iterations, with omitted
 members encoded as `null`. Explicit defaults therefore differ from omission.
 The compatibility vectors are in
 [`admission-fingerprint-v2.json`](admission-fingerprint-v2.json).
+
+New admissions use fingerprint v3. It preserves the v2 order and inserts
+`output` after `budgets`. Omitted output is `null`; otherwise it is an object
+containing `schema`, canonicalized recursively so object member order and
+equivalent JSON number spellings do not change the fingerprint. A request with
+output never replays a retained v1 or v2 row. A schema-free request may still
+replay those rows with their recorded algorithm. The compatibility vectors are
+in [`admission-fingerprint-v3.json`](admission-fingerprint-v3.json).
 
 Streaming and recovery:
 
@@ -121,7 +129,7 @@ Runtime surface:
 | ------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `POST` | `/v1/invocations`                 | Atomically admit one background Invocation and return its stable Agent, Session, and Invocation identity.          |
 | `GET`  | `/v1/invocations`                 | List authoritative Invocations with exact tenant, Session, Agent, and status filters.                              |
-| `GET`  | `/v1/invocations/{invocation_id}` | Read authoritative identity, lifecycle, terminal error, aggregate usage, and model provenance.                     |
+| `GET`  | `/v1/invocations/{invocation_id}` | Read authoritative identity, lifecycle, terminal error, aggregate usage, model provenance, and validated output. |
 | `POST` | `/v1/invocations/{invocation_id}/cancel` | Idempotently make nonterminal work cancelled and return the authoritative terminal row.                    |
 
 The launch create request carries `agent_ref`, body `idempotency_key`, one or
@@ -130,8 +138,13 @@ and `session_key`, and an inline spec containing instructions plus model and
 provider selection. The spec may also carry optional wall-clock,
 active-execution, output-token, estimated-cost, and iteration budgets.
 Installation defaults supply both time limits and iterations; output-token and
-cost limits are absent unless requested. Unknown and deferred fields — including spec references,
-tools, structured output, retention, indexed metadata, delegated actor,
+cost limits are absent unless requested. An optional `output.schema` declares
+a bounded, self-contained object schema. nvoken exposes it to the model as the
+reserved `nvoken_submit_output` builtin and validates every submission itself.
+Schema-bearing requests require at least two model iterations; when the host
+omits that budget nvoken resolves it to three or the lower installation maximum.
+Unknown and deferred fields — including spec references,
+host-defined tools, retention, indexed metadata, delegated actor,
 and delivery mode — are rejected rather than ignored. The admitted spec is an
 immutable Invocation snapshot, never mutable Agent configuration.
 
@@ -478,5 +491,9 @@ unchanged to the self-contained and split Cloud Run modes.
 Caller and agent content is reconstructed only from ordered `SessionMessage`
 rows. Invocation state and append-only state revisions contribute lifecycle and
 may reference message sequences, but never contain message or ToolCall-result
-payloads. The recovery slice will define the fixed-cut composite cursor that
-merges those two ordered sources into one incremental view.
+payloads. The one deliberate content projection is terminal structured output:
+after settlement proves semantic equality with the accepted reserved ToolCall
+request, the Invocation and lifecycle revision may carry that validated object
+plus its ToolCall/schema provenance for direct host consumption. The request
+and result messages remain the canonical replay record; no other assistant or
+tool content is copied into lifecycle state.

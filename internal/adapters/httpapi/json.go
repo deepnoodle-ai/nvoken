@@ -14,7 +14,10 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
-const maxJSONNestingDepth = 16
+// Structured-output schemas consume several JSON object levels per logical
+// schema position. Keep the request scanner's hard recursion bound explicit
+// and above the separately enforced 16-position schema limit.
+const maxJSONNestingDepth = 64
 
 // requestErrorf preserves polished client-facing response text without using
 // Go error strings as an internal API. The HTTP handler copies these messages

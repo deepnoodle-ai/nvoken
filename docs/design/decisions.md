@@ -188,3 +188,19 @@ resume: expired claims still fail as `execution_lost` until the later recovery
 slice makes recorded prefixes reclaimable. It replaces Mobius Cloud's mutable
 checkpoint blob with first-class lifecycle records and keeps all new business
 evidence under the owning Invocation/Session retention trace.
+
+26. Equality-proven structured output projection (2026-07-21): a host may
+attach one bounded, self-contained object schema to an Invocation. nvoken
+projects that schema through the reserved `nvoken_submit_output` builtin,
+persists every request and result through the durable ToolCall/checkpoint path,
+and independently validates submissions. Only completed terminal settlement
+may copy the first accepted value plus ToolCall/schema provenance onto the
+Invocation and its lifecycle revision, in the same transaction and after
+proving semantic equality with the canonical ToolCall request. This is the one
+sanctioned content projection outside `SessionMessage`: it exists for direct
+machine-readable host recovery, while the transcript remains canonical for
+conversation replay. Final text, including JSON-looking text, is not a fallback.
+New admissions use fingerprint v3 so adding, removing, or changing the output
+contract changes idempotency identity; retained v1/v2 schema-free rows remain
+comparable by their recorded algorithm. Crash recovery remains deferred: a
+lost engine still settles `execution_lost` and publishes no output.

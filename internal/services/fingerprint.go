@@ -12,6 +12,7 @@ import (
 
 const fingerprintVersionV1 = 1
 const fingerprintVersionV2 = 2
+const fingerprintVersionV3 = 3
 
 // InvocationFingerprintV1 hashes a fixed JSON representation whose object-key
 // order is part of the versioned contract. Values are already typed, so source
@@ -126,6 +127,53 @@ func invocationFingerprintBytesV2(input CreateInvocationInput) ([]byte, error) {
 		budgets.WriteByte('}')
 	}
 	return []byte(canonical[:index] + budgets.String() + canonical[index+1:]), nil
+}
+
+// InvocationFingerprintV3 adds the structured-output contract. The schema is
+// exact-canonical JSON so source member order and equivalent number spellings
+// do not change idempotency identity.
+func InvocationFingerprintV3(input CreateInvocationInput) ([sha256.Size]byte, error) {
+	canonical, err := invocationFingerprintBytesV3(input)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(canonical), nil
+}
+
+func invocationFingerprintBytesV3(input CreateInvocationInput) ([]byte, error) {
+	v2, err := invocationFingerprintBytesV2(input)
+	if err != nil {
+		return nil, err
+	}
+	canonical := string(v2)
+	canonical = strings.Replace(
+		canonical,
+		`{"version":`+strconv.Itoa(fingerprintVersionV2),
+		`{"version":`+strconv.Itoa(fingerprintVersionV3),
+		1,
+	)
+	needle := `},"input":`
+	// Do not carry this delimiter search forward mechanically: a later
+	// version must build its fixed object directly because v3 schemas may
+	// themselves contain an object member named "input".
+	index := strings.Index(canonical, needle)
+	if index < 0 {
+		return nil, fmt.Errorf("v2 fingerprint shape is invalid")
+	}
+	var output bytes.Buffer
+	output.WriteString(`,"output":`)
+	if input.Spec.Output == nil {
+		output.WriteString("null")
+	} else {
+		schema, err := canonicalJSON(input.Spec.Output.Schema)
+		if err != nil {
+			return nil, err
+		}
+		output.WriteString(`{"schema":`)
+		output.Write(schema)
+		output.WriteByte('}')
+	}
+	return []byte(canonical[:index] + output.String() + canonical[index:]), nil
 }
 
 func writeOptionalInt(buffer *bytes.Buffer, value *int) {

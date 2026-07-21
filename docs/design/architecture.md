@@ -122,8 +122,11 @@ budget exhaustion are typed failures, not additional lifecycle states.
 context; resolved spec bytes and digest; attempts, leases, and checkpoints;
 model requests and normalized usage; ToolCalls and results; output — including
 structured output, produced by an internal tool call against a host-provided
-schema — and terminal error. Input and output content themselves live only in
-the Session transcript. A new turn is a new Invocation.
+schema — and terminal error. Input and conversational output content live only
+in the Session transcript. Validated structured output is the sole exception:
+terminal settlement may project the accepted reserved ToolCall request onto the
+Invocation after proving equality and recording its ToolCall/schema provenance.
+The transcript remains canonical for replay. A new turn is a new Invocation.
 
 | State | Terminal | Meaning |
 | --- | :---: | --- |
@@ -320,7 +323,9 @@ model-usage receipts, and append-only checkpoints; change view cursors; leases;
 usage and provenance; opt-in agent memory
 records; named custom tool definitions. Lifecycle revisions and change views
 may reference transcript sequence numbers but never store another copy of
-message or ToolCall-result content. Tool lifecycle records have no independent
+message or ToolCall-result content, except the equality-proven terminal
+structured-output projection described under Invocation. Tool lifecycle
+records have no independent
 pruning path and remain with the owning Invocation/Session trace. No host
 tables, business records, OAuth
 connections, business credentials, release catalogs, or durable user files.

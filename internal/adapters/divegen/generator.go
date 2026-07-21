@@ -4,6 +4,8 @@ package divegen
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/deepnoodle-ai/dive"
 	"github.com/deepnoodle-ai/dive/llm"
@@ -20,6 +23,7 @@ import (
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
+	"github.com/deepnoodle-ai/nvoken/internal/structuredoutput"
 )
 
 type Config struct {
@@ -46,6 +50,14 @@ func WithDeterministicTestBuiltin(coordinator ports.ToolCallCoordinator) Option 
 	return func(generator *Generator) {
 		generator.toolCoordinator = coordinator
 		generator.testBuiltin = coordinator != nil
+	}
+}
+
+// WithToolCoordinator enables production reserved builtins declared by the
+// immutable execution spec. It does not enable host-defined tools.
+func WithToolCoordinator(coordinator ports.ToolCallCoordinator) Option {
+	return func(generator *Generator) {
+		generator.toolCoordinator = coordinator
 	}
 }
 
@@ -147,14 +159,42 @@ func (g *Generator) generate(
 		}
 	}
 	var tools []dive.Tool
+	var outputCapture *structuredOutputCapture
+	if request.StructuredOutput != nil {
+		if request.Claim == nil || g.toolCoordinator == nil {
+			return domain.GenerationResponse{}, fmt.Errorf("structured output requires a durable Invocation claim")
+		}
+		compiled, err := structuredoutput.CompileSchema(request.StructuredOutput.Schema)
+		if err != nil || len(request.StructuredOutput.SchemaDigest) != sha256.Size {
+			return domain.GenerationResponse{}, fmt.Errorf("%w: invalid structured-output contract", ports.ErrGenerationInputInvalid)
+		}
+		var toolSchema dive.Schema
+		if err := json.Unmarshal(request.StructuredOutput.Schema, &toolSchema); err != nil {
+			return domain.GenerationResponse{}, fmt.Errorf("%w: project structured-output schema", ports.ErrGenerationInputInvalid)
+		}
+		outputCapture = newStructuredOutputCapture()
+		tools = append(tools, newStructuredOutputTool(
+			g.toolCoordinator,
+			*request.Claim,
+			checkpointState,
+			&toolSchema,
+			compiled,
+			request.StructuredOutput.SchemaDigest,
+			outputCapture,
+		))
+	}
 	if g.testBuiltin {
 		if request.Claim == nil || g.toolCoordinator == nil {
 			return domain.GenerationResponse{}, fmt.Errorf("durable test builtin requires an Invocation claim")
 		}
-		tools = []dive.Tool{newDeterministicEchoTool(g.toolCoordinator, *request.Claim, checkpointState)}
+		tools = append(tools, newDeterministicEchoTool(g.toolCoordinator, *request.Claim, checkpointState))
+	}
+	systemPrompt := request.Instructions
+	if request.StructuredOutput != nil {
+		systemPrompt += "\n\n# Output Contract\nWhen your work is finished, call nvoken_submit_output exactly once with the final object. Its input schema is the required shape. After the tool confirms acceptance, end with a brief status note. Prose and fenced JSON do not satisfy the output contract."
 	}
 	agent, err := dive.NewAgent(dive.AgentOptions{
-		SystemPrompt:       request.Instructions,
+		SystemPrompt:       systemPrompt,
 		Model:              agentModel,
 		Tools:              tools,
 		ModelSettings:      &dive.ModelSettings{MaxTokens: request.MaxOutputTokens},
@@ -164,14 +204,15 @@ func (g *Generator) generate(
 		return domain.GenerationResponse{}, fmt.Errorf("configure Dive agent: %w", err)
 	}
 	options := []dive.CreateResponseOption{dive.WithMessages(messages...)}
-	if emit != nil || g.testBuiltin {
+	durableTools := g.testBuiltin || request.StructuredOutput != nil
+	if emit != nil || durableTools {
 		options = append(options, dive.WithEventCallback(func(_ context.Context, item *dive.ResponseItem) error {
 			if delta, ok := normalizedDelta(item); ok {
 				if emit != nil {
 					emit(delta)
 				}
 			}
-			if g.testBuiltin && item != nil && item.Type == dive.ResponseItemTypeMessage && item.Message != nil && item.Usage != nil {
+			if durableTools && item != nil && item.Type == dive.ResponseItemTypeMessage && item.Message != nil && item.Usage != nil {
 				iteration := int(checkpointState.iteration.Add(1))
 				message, err := fromDiveMessage(item.Message)
 				if err != nil {
@@ -183,7 +224,7 @@ func (g *Generator) generate(
 				if servedModel == "" {
 					servedModel = request.Model
 				}
-				requests, err := toolRequests(item.Message)
+				requests, err := toolRequests(item.Message, request.StructuredOutput != nil, g.testBuiltin)
 				if err != nil {
 					return err
 				}
@@ -242,20 +283,39 @@ func (g *Generator) generate(
 		return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
 	}
 	output := make([]domain.GenerationMessage, 0, len(response.OutputMessages))
-	if g.testBuiltin {
+	if durableTools {
 		if strings.TrimSpace(response.OutputText()) == "" {
-			return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
+			if outputCapture == nil {
+				return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
+			}
+			servedModel := evidence.servedModel()
+			if servedModel == "" {
+				servedModel = request.Model
+			}
+			return domain.GenerationResponse{
+				Usage:                   checkpointState.usageSnapshot(),
+				ServedModel:             servedModel,
+				MessagesCheckpointed:    true,
+				StructuredOutputFailure: "invalid",
+			}, nil
 		}
 		servedModel := evidence.servedModel()
 		if servedModel == "" {
 			servedModel = request.Model
 		}
 		usage := checkpointState.usageSnapshot()
-		return domain.GenerationResponse{
+		generated := domain.GenerationResponse{
 			Usage:                usage,
 			ServedModel:          servedModel,
 			MessagesCheckpointed: true,
-		}, nil
+		}
+		if outputCapture != nil {
+			generated.StructuredOutput = outputCapture.output()
+			if generated.StructuredOutput == nil {
+				generated.StructuredOutputFailure = outputCapture.failure()
+			}
+		}
+		return generated, nil
 	}
 	for _, message := range response.OutputMessages {
 		converted, err := fromDiveMessage(message)
@@ -363,7 +423,7 @@ func checkpointBudgetExceeded(request domain.GenerationRequest, usage domain.Mod
 	return ""
 }
 
-func toolRequests(message *llm.Message) ([]domain.ToolCallRequest, error) {
+func toolRequests(message *llm.Message, structured, testBuiltin bool) ([]domain.ToolCallRequest, error) {
 	var requests []domain.ToolCallRequest
 	if message == nil {
 		return requests, nil
@@ -373,7 +433,9 @@ func toolRequests(message *llm.Message) ([]domain.ToolCallRequest, error) {
 		if !ok {
 			continue
 		}
-		if call.Name != deterministicEchoToolName {
+		allowed := (structured && call.Name == structuredoutput.ReservedToolName) ||
+			(testBuiltin && call.Name == deterministicEchoToolName)
+		if !allowed {
 			return nil, fmt.Errorf("%w: unsupported builtin tool %q", ports.ErrGenerationInputInvalid, call.Name)
 		}
 		requests = append(requests, domain.ToolCallRequest{
@@ -390,6 +452,179 @@ type deterministicEchoTool struct {
 	coordinator ports.ToolCallCoordinator
 	claim       domain.InvocationClaim
 	state       *generationCheckpointState
+}
+
+type structuredOutputCapture struct {
+	mu       sync.Mutex
+	accepted *domain.StructuredOutput
+	last     string
+}
+
+func newStructuredOutputCapture() *structuredOutputCapture {
+	return &structuredOutputCapture{last: "missing"}
+}
+
+func (c *structuredOutputCapture) output() *domain.StructuredOutput {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.accepted == nil {
+		return nil
+	}
+	copy := *c.accepted
+	copy.Value = append(json.RawMessage(nil), c.accepted.Value...)
+	return &copy
+}
+
+func (c *structuredOutputCapture) failure() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.accepted != nil {
+		return ""
+	}
+	return c.last
+}
+
+type structuredOutputTool struct {
+	coordinator  ports.ToolCallCoordinator
+	claim        domain.InvocationClaim
+	state        *generationCheckpointState
+	schema       *dive.Schema
+	compiled     *structuredoutput.Compiled
+	schemaDigest []byte
+	capture      *structuredOutputCapture
+}
+
+func newStructuredOutputTool(
+	coordinator ports.ToolCallCoordinator,
+	claim domain.InvocationClaim,
+	state *generationCheckpointState,
+	schema *dive.Schema,
+	compiled *structuredoutput.Compiled,
+	schemaDigest []byte,
+	capture *structuredOutputCapture,
+) dive.Tool {
+	return &structuredOutputTool{
+		coordinator:  coordinator,
+		claim:        claim,
+		state:        state,
+		schema:       schema,
+		compiled:     compiled,
+		schemaDigest: append([]byte(nil), schemaDigest...),
+		capture:      capture,
+	}
+}
+
+func (*structuredOutputTool) Name() string { return structuredoutput.ReservedToolName }
+
+func (*structuredOutputTool) Description() string {
+	return "Submit the final structured output object. After acceptance, finish with a brief status note."
+}
+
+func (t *structuredOutputTool) Schema() *dive.Schema { return t.schema }
+
+func (*structuredOutputTool) Annotations() *dive.ToolAnnotations {
+	return &dive.ToolAnnotations{
+		Title:              "Submit output",
+		ReadOnlyHint:       true,
+		IdempotentHint:     true,
+		SequentialOnlyHint: true,
+	}
+}
+
+func (t *structuredOutputTool) Call(ctx context.Context, input any) (*dive.ToolResult, error) {
+	providerCallID := dive.ToolCallID(ctx)
+	iteration := int(t.state.iteration.Load())
+	execution, err := t.coordinator.StartBuiltinToolCall(ctx, t.claim, iteration, providerCallID)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := rawToolInput(input)
+	if err != nil {
+		return nil, err
+	}
+
+	t.capture.mu.Lock()
+	defer t.capture.mu.Unlock()
+	if t.capture.accepted != nil {
+		message := "Output was already accepted. Do not submit it again; finish with a brief status note."
+		if err := t.acceptResult(ctx, execution, message, false); err != nil {
+			return nil, err
+		}
+		return dive.NewToolResultText(message), nil
+	}
+	reason := "invalid"
+	if len(raw) > structuredoutput.MaxValueBytes {
+		reason = "oversized"
+	}
+	var validationErr error
+	if reason != "oversized" {
+		validationErr = t.compiled.ValidateValue(raw)
+	}
+	if reason == "oversized" || validationErr != nil {
+		t.capture.last = reason
+		message := "Output rejected: " + boundedValidationFeedback(validationErr) + ". Correct it and call nvoken_submit_output again."
+		if reason == "oversized" {
+			message = "Output rejected because it is too large. Return a smaller object and call nvoken_submit_output again."
+		}
+		if err := t.acceptResult(ctx, execution, message, true); err != nil {
+			return nil, err
+		}
+		return dive.NewToolResultError(message), nil
+	}
+	message := "Output accepted. Finish with a brief status note."
+	settled, err := t.acceptResultCall(ctx, execution, message, false)
+	if err != nil {
+		return nil, err
+	}
+	t.capture.accepted = &domain.StructuredOutput{
+		Value: append(json.RawMessage(nil), raw...),
+		Provenance: domain.StructuredOutputProvenance{
+			Source:       structuredoutput.ProvenanceSource,
+			ToolCallID:   settled.ID,
+			SchemaSHA256: hex.EncodeToString(t.schemaDigest),
+		},
+	}
+	t.capture.last = ""
+	return dive.NewToolResultText(message), nil
+}
+
+func boundedValidationFeedback(err error) string {
+	if err == nil {
+		return "it does not satisfy the bounded schema contract"
+	}
+	message := strings.Join(strings.Fields(err.Error()), " ")
+	const maximumBytes = 512
+	if len(message) <= maximumBytes {
+		return message
+	}
+	cut := maximumBytes
+	for cut > 0 && !utf8.RuneStart(message[cut]) {
+		cut--
+	}
+	return message[:cut] + "…"
+}
+
+func (t *structuredOutputTool) acceptResult(
+	ctx context.Context,
+	execution domain.ToolCallExecution,
+	message string,
+	isError bool,
+) error {
+	_, err := t.acceptResultCall(ctx, execution, message, isError)
+	return err
+}
+
+func (t *structuredOutputTool) acceptResultCall(
+	ctx context.Context,
+	execution domain.ToolCallExecution,
+	message string,
+	isError bool,
+) (domain.ToolCall, error) {
+	content, err := json.Marshal(message)
+	if err != nil {
+		return domain.ToolCall{}, err
+	}
+	return t.coordinator.AcceptBuiltinToolResult(ctx, t.claim, execution, content, isError)
 }
 
 func newDeterministicEchoTool(coordinator ports.ToolCallCoordinator, claim domain.InvocationClaim, state *generationCheckpointState) dive.Tool {
@@ -420,7 +655,7 @@ func (t *deterministicEchoTool) Call(ctx context.Context, input any) (*dive.Tool
 	if err != nil {
 		return nil, err
 	}
-	canonical, err := json.Marshal(input)
+	canonical, err := rawToolInput(input)
 	if err != nil {
 		return nil, err
 	}
@@ -430,6 +665,26 @@ func (t *deterministicEchoTool) Call(ctx context.Context, input any) (*dive.Tool
 		return nil, err
 	}
 	return dive.NewToolResultText(text), nil
+}
+
+func rawToolInput(input any) (json.RawMessage, error) {
+	var raw json.RawMessage
+	switch value := input.(type) {
+	case []byte:
+		raw = append(json.RawMessage(nil), value...)
+	case json.RawMessage:
+		raw = append(json.RawMessage(nil), value...)
+	default:
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		raw = encoded
+	}
+	if !json.Valid(raw) {
+		return nil, fmt.Errorf("tool input is not valid JSON")
+	}
+	return raw, nil
 }
 
 // evidenceModel captures blocking-provider evidence without exposing the raw

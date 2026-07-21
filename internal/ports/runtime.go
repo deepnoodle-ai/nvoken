@@ -133,7 +133,7 @@ type InvocationRepository interface {
 	LockInvocationAdmissionKey(context.Context, string) error
 	ClaimInvocation(context.Context, string, string, time.Time, int64, time.Time, time.Time, string) (domain.Invocation, error)
 	RenewInvocationLease(context.Context, string, string, int64, time.Time, time.Time) (domain.Invocation, error)
-	SettleInvocation(context.Context, string, string, int64, domain.InvocationStatus, int64, []byte, []byte, []byte, time.Time) (domain.Invocation, error)
+	SettleInvocation(context.Context, string, string, int64, domain.InvocationStatus, int64, []byte, []byte, []byte, []byte, []byte, time.Time) (domain.Invocation, error)
 	ReapInvocationLease(context.Context, string, int64, int64, []byte, time.Time) (domain.Invocation, error)
 	CancelInvocation(context.Context, string, int64, time.Time) (domain.Invocation, error)
 	ReapInvocationDeadline(context.Context, string, int64, []byte, time.Time) (domain.Invocation, error)

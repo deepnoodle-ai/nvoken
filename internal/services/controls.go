@@ -149,6 +149,24 @@ func (p BudgetPolicy) Resolve(input *InvocationBudgetInput) (ResolvedBudgets, er
 	return resolved, nil
 }
 
+func (p BudgetPolicy) ResolveForOutput(input *InvocationBudgetInput, structured bool) (ResolvedBudgets, error) {
+	resolved, err := p.Resolve(input)
+	if err != nil || !structured {
+		return resolved, err
+	}
+	if p.MaxIterations < 2 {
+		return ResolvedBudgets{}, invalidRequest("The installation iteration maximum does not support spec.output.")
+	}
+	if input != nil && input.MaxIterations != nil {
+		if *input.MaxIterations < 2 {
+			return ResolvedBudgets{}, invalidRequest("spec.budgets.max_iterations must be at least 2 when spec.output is present.")
+		}
+		return resolved, nil
+	}
+	resolved.MaxIterations = min(3, p.MaxIterations)
+	return resolved, nil
+}
+
 func budgetReadFromDomain(invocation domain.Invocation) InvocationBudgetRead {
 	read := InvocationBudgetRead{
 		WallClockTimeoutSeconds:       invocation.WallClockTimeoutMS / 1000,

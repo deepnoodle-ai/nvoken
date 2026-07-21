@@ -1,7 +1,10 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +13,7 @@ import (
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
+	"github.com/deepnoodle-ai/nvoken/internal/structuredoutput"
 )
 
 const MaxExecutionOwnerCharacters = 255
@@ -32,6 +36,8 @@ type executionStore interface {
 	ports.InvocationRepository
 	ports.InvocationStateRepository
 	ports.ExecutionDispatchRepository
+	ports.ExecutionSpecSnapshotRepository
+	ports.ToolCallRepository
 }
 
 type InvocationExecutionService struct {
@@ -314,6 +320,15 @@ func (s *InvocationExecutionService) settle(
 		if err := validateUsageProjection(txCtx, s.store, invocation.ID, result); err != nil {
 			return err
 		}
+		outputPayload, outputProvenancePayload, err := validateStructuredOutputSettlement(
+			txCtx,
+			s.store,
+			invocation,
+			result,
+		)
+		if err != nil {
+			return err
+		}
 		throughMessageSequence := currentState.ThroughMessageSequence
 		checkpointWatermark, err := closeOpenToolCallsForTerminal(
 			txCtx, s.store, s.ids, invocation, result.Status,
@@ -365,7 +380,8 @@ func (s *InvocationExecutionService) settle(
 		}
 		settled, err := s.store.SettleInvocation(
 			txCtx, invocation.ID, claim.Owner, claim.Attempt,
-			result.Status, revision, result.Error, usagePayload, provenancePayload, now,
+			result.Status, revision, result.Error, usagePayload, provenancePayload,
+			outputPayload, outputProvenancePayload, now,
 		)
 		if err != nil {
 			return err
@@ -626,6 +642,19 @@ func validateExecutionResult(result domain.InvocationExecutionResult) error {
 	if result.Status == domain.InvocationFailed && len(result.AssistantMessages) != 0 {
 		return fmt.Errorf("failed execution result cannot contain assistant messages")
 	}
+	if result.Status != domain.InvocationCompleted && result.StructuredOutput != nil {
+		return fmt.Errorf("only completed execution may contain structured output")
+	}
+	if result.StructuredOutput != nil {
+		if len(result.StructuredOutput.Value) == 0 || !json.Valid(result.StructuredOutput.Value) {
+			return fmt.Errorf("structured output value must be valid JSON")
+		}
+		if result.StructuredOutput.Provenance.Source != structuredoutput.ProvenanceSource ||
+			!domain.ValidStableID(result.StructuredOutput.Provenance.ToolCallID, domain.PrefixToolCall) ||
+			len(result.StructuredOutput.Provenance.SchemaSHA256) != sha256.Size*2 {
+			return fmt.Errorf("structured output provenance is invalid")
+		}
+	}
 	if (result.Usage == nil) != (result.Provenance == nil) {
 		return fmt.Errorf("execution evidence must contain both usage and provenance")
 	}
@@ -648,6 +677,115 @@ func validateExecutionResult(result domain.InvocationExecutionResult) error {
 		}
 	}
 	return nil
+}
+
+func validateStructuredOutputSettlement(
+	ctx context.Context,
+	store executionStore,
+	invocation domain.Invocation,
+	result domain.InvocationExecutionResult,
+) ([]byte, []byte, error) {
+	if len(invocation.OutputSchemaDigest) == 0 {
+		if result.StructuredOutput != nil {
+			return nil, nil, fmt.Errorf("output-free Invocation cannot publish structured output")
+		}
+		return nil, nil, nil
+	}
+	if len(invocation.OutputSchemaDigest) != sha256.Size {
+		return nil, nil, fmt.Errorf("Invocation output schema digest is invalid")
+	}
+	if result.Status != domain.InvocationCompleted {
+		if result.StructuredOutput != nil {
+			return nil, nil, fmt.Errorf("failed Invocation cannot publish structured output")
+		}
+		return nil, nil, nil
+	}
+	if result.StructuredOutput == nil {
+		return nil, nil, fmt.Errorf("completed schema-bearing Invocation requires structured output")
+	}
+	snapshot, err := store.GetExecutionSpecSnapshot(ctx, invocation.SpecSnapshotID)
+	if err != nil {
+		return nil, nil, err
+	}
+	spec, err := decodeInlineSpec(snapshot.Spec)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decode structured-output contract: %w", err)
+	}
+	if spec.Output == nil {
+		return nil, nil, fmt.Errorf("structured-output contract is missing from the execution snapshot")
+	}
+	digest, err := structuredOutputSchemaDigest(spec.Output.Schema)
+	if err != nil || !bytes.Equal(digest, invocation.OutputSchemaDigest) {
+		return nil, nil, fmt.Errorf("structured-output schema digest does not match Invocation")
+	}
+	provenance := result.StructuredOutput.Provenance
+	if provenance.Source != structuredoutput.ProvenanceSource ||
+		provenance.SchemaSHA256 != hex.EncodeToString(invocation.OutputSchemaDigest) {
+		return nil, nil, fmt.Errorf("structured-output provenance does not match Invocation")
+	}
+	call, err := store.GetToolCall(ctx, provenance.ToolCallID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if call.InvocationID != invocation.ID || call.Name != structuredoutput.ReservedToolName ||
+		call.Mode != domain.ToolCallModeBuiltin || call.Status != domain.ToolCallCompleted ||
+		call.ResultMessageID == nil {
+		return nil, nil, fmt.Errorf("structured-output ToolCall is not an accepted reserved call")
+	}
+	input, err := storedToolCallInput(ctx, store, call)
+	if err != nil || !jsonEqual(input, result.StructuredOutput.Value) {
+		return nil, nil, fmt.Errorf("structured output does not equal accepted ToolCall request")
+	}
+	requestDigest, err := toolRequestDigest(call.Name, call.Mode, input)
+	if err != nil || !bytes.Equal(requestDigest, call.RequestDigest) {
+		return nil, nil, fmt.Errorf("structured-output ToolCall request digest does not match")
+	}
+	compiled, err := structuredoutput.CompileSchema(spec.Output.Schema)
+	if err != nil {
+		return nil, nil, fmt.Errorf("structured-output settlement schema is invalid")
+	}
+	if err := compiled.ValidateValue(result.StructuredOutput.Value); err != nil {
+		return nil, nil, fmt.Errorf("structured-output settlement value failed validation")
+	}
+	outputPayload, err := canonicalJSON(result.StructuredOutput.Value)
+	if err != nil {
+		return nil, nil, err
+	}
+	provenancePayload, err := json.Marshal(provenance)
+	if err != nil {
+		return nil, nil, err
+	}
+	return outputPayload, provenancePayload, nil
+}
+
+func storedToolCallInput(ctx context.Context, store executionStore, call domain.ToolCall) (json.RawMessage, error) {
+	messages, err := store.ListSessionMessages(ctx, call.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	for _, message := range messages {
+		if message.ID != call.RequestMessageID {
+			continue
+		}
+		var blocks []map[string]json.RawMessage
+		if err := json.Unmarshal(message.Content, &blocks); err != nil {
+			return nil, err
+		}
+		for _, block := range blocks {
+			var kind, id, name string
+			if json.Unmarshal(block["type"], &kind) != nil || kind != "tool_use" ||
+				json.Unmarshal(block["id"], &id) != nil || id != call.ID ||
+				json.Unmarshal(block["name"], &name) != nil || name != call.Name {
+				continue
+			}
+			var input json.RawMessage
+			if err := json.Unmarshal(block["input"], &input); err != nil {
+				return nil, err
+			}
+			return input, nil
+		}
+	}
+	return nil, fmt.Errorf("structured-output ToolCall request message is missing")
 }
 
 func executionEvidencePayloads(result domain.InvocationExecutionResult) ([]byte, []byte, error) {
