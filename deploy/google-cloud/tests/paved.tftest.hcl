@@ -67,6 +67,11 @@ run "paved_defaults" {
   }
 
   assert {
+    condition     = google_cloud_run_v2_service.runtime.invoker_iam_disabled == true
+    error_message = "The public service must disable Cloud Run's edge IAM check and defer authentication to the Runtime bearer credential."
+  }
+
+  assert {
     condition     = google_cloud_run_v2_service.runtime.scaling[0].max_instance_count == 3
     error_message = "Default instance capacity must be bounded."
   }

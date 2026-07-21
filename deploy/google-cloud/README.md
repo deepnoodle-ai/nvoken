@@ -23,8 +23,9 @@ the later request-bound Cloud Tasks executor is available.
 - separate runtime and database-migration service accounts with no project-wide
   application role;
 - a one-task Cloud Run migration Job; and
-- a public Cloud Run service with Runtime bearer authentication, a startup
-  probe, instance-based CPU, one minimum instance, and explicit capacity caps.
+- a public Cloud Run service with the edge Invoker IAM check disabled, Runtime
+  bearer authentication, a startup probe, instance-based CPU, one minimum
+  instance, and explicit capacity caps.
 
 The defaults cap the installation at three service instances, four model turns
 per instance, and ten Postgres connections per instance: at most 12 executing

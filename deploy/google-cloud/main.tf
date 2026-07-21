@@ -359,12 +359,13 @@ resource "google_cloud_run_v2_job" "migrate" {
 }
 
 resource "google_cloud_run_v2_service" "runtime" {
-  project             = var.project_id
-  name                = local.resource_name
-  location            = var.region
-  ingress             = "INGRESS_TRAFFIC_ALL"
-  deletion_protection = var.service_deletion_protection
-  labels              = local.labels
+  project              = var.project_id
+  name                 = local.resource_name
+  location             = var.region
+  ingress              = "INGRESS_TRAFFIC_ALL"
+  invoker_iam_disabled = true
+  deletion_protection  = var.service_deletion_protection
+  labels               = local.labels
 
   lifecycle {
     precondition {
@@ -521,12 +522,4 @@ resource "google_cloud_run_v2_service" "runtime" {
     google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.runtime_api_key,
   ]
-}
-
-resource "google_cloud_run_v2_service_iam_member" "public" {
-  project  = var.project_id
-  location = var.region
-  name     = google_cloud_run_v2_service.runtime.name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
 }

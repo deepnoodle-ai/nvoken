@@ -100,6 +100,9 @@ topology. PRDs 009 and 010 add the split execution path.
 - **R5 — Honest health and startup.** The container must listen on Cloud Run's
   `PORT`. `GET /healthz` must remain unauthenticated, cheap, and contain no
   sensitive or dynamic content.
+  The public Cloud Run endpoint must disable its edge Invoker IAM check and
+  leave application requests authenticated by nvoken's Runtime bearer
+  credential; it must not depend on an `allUsers` IAM binding.
   The process must not begin listening until configuration, database
   connectivity, exact schema validation, installation bootstrap, and engine
   construction have succeeded. Cloud Run must use `/healthz` as an HTTP startup
@@ -151,7 +154,9 @@ topology. PRDs 009 and 010 add the split execution path.
   The plan proves instance-based CPU, minimum instances `>= 1`, bounded maximum
   instances, explicit request/engine/database concurrency, and the `/healthz`
   startup probe. Validation rejects zero provider secrets and accepts Anthropic,
-  OpenAI, or both. Automated release tests prove the GCS backend bootstrap is
+  OpenAI, or both, and proves the public endpoint disables the Cloud Run IAM
+  check while retaining Runtime authentication. Automated release tests prove
+  the GCS backend bootstrap is
   ordered before `terraform init` and enforces versioning, uniform access, and
   public access prevention without attempting to manage its own bucket in that
   state.
