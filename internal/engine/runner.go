@@ -502,6 +502,14 @@ func internalFailureResult() domain.InvocationExecutionResult {
 }
 
 func validResult(result domain.InvocationExecutionResult) bool {
+	if result.Status == domain.InvocationWaiting {
+		return result.MessagesCheckpointed &&
+			len(result.AssistantMessages) == 0 &&
+			len(result.Error) == 0 &&
+			result.Usage != nil &&
+			result.Provenance != nil &&
+			result.StructuredOutput == nil
+	}
 	if result.Status == domain.InvocationCompleted {
 		messagesValid := (len(result.AssistantMessages) > 0 && !result.MessagesCheckpointed) ||
 			(len(result.AssistantMessages) == 0 && result.MessagesCheckpointed)

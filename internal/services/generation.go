@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -114,6 +115,13 @@ func (e *GenerationExecutor) Execute(
 		MaxIterations:   claim.Invocation.MaxIterations,
 		Claim:           &claim,
 	}
+	for _, tool := range spec.Tools {
+		request.ClientTools = append(request.ClientTools, domain.ClientToolDefinition{
+			Name:        tool.Name,
+			Description: tool.Description,
+			InputSchema: append(json.RawMessage(nil), tool.InputSchema...),
+		})
+	}
 	if spec.Output != nil {
 		digest, err := structuredOutputSchemaDigest(spec.Output.Schema)
 		if err != nil || !bytes.Equal(digest, claim.Invocation.OutputSchemaDigest) {
@@ -188,7 +196,14 @@ func (e *GenerationExecutor) Execute(
 	}
 	started := time.Now()
 	var response domain.GenerationResponse
-	if recovery.Final {
+	if recovery.ClientToolsPending {
+		response = domain.GenerationResponse{
+			Usage:                recovery.Resume.Usage,
+			ServedModel:          recovery.Provenance.ServedModel,
+			MessagesCheckpointed: true,
+			ClientToolsPending:   true,
+		}
+	} else if recovery.Final {
 		response = domain.GenerationResponse{
 			Usage:                   recovery.Resume.Usage,
 			ServedModel:             recovery.Provenance.ServedModel,
@@ -225,18 +240,39 @@ func (e *GenerationExecutor) Execute(
 	if strings.TrimSpace(servedModel) == "" {
 		servedModel = request.Model
 	}
+	provenance := &domain.ModelProvenance{
+		Provider:         request.Provider,
+		RequestedModel:   request.Model,
+		ServedModel:      servedModel,
+		CredentialSource: credentialSourceInstallationBYOK,
+	}
+	if response.ClientToolsPending {
+		result := domain.InvocationExecutionResult{
+			Status:               domain.InvocationWaiting,
+			MessagesCheckpointed: true,
+			Usage:                &response.Usage,
+			Provenance:           provenance,
+		}
+		if err := validateExecutionResult(result); err != nil {
+			e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
+			return providerGenerationFailure(), nil
+		}
+		e.logger.Info(
+			"Model generation parked for client tools",
+			"invocation_id",
+			claim.Invocation.ID,
+			"lease_attempt",
+			claim.Attempt,
+		)
+		return result, nil
+	}
 	result := domain.InvocationExecutionResult{
 		Status:               domain.InvocationCompleted,
 		AssistantMessages:    response.Messages,
 		MessagesCheckpointed: response.MessagesCheckpointed,
 		Usage:                &response.Usage,
-		Provenance: &domain.ModelProvenance{
-			Provider:         request.Provider,
-			RequestedModel:   request.Model,
-			ServedModel:      servedModel,
-			CredentialSource: credentialSourceInstallationBYOK,
-		},
-		StructuredOutput: response.StructuredOutput,
+		Provenance:           provenance,
+		StructuredOutput:     response.StructuredOutput,
 	}
 	if response.MessagesCheckpointed {
 		result.AssistantMessages = nil
@@ -425,7 +461,117 @@ func transcriptForClaim(
 		latest.ThroughMessageSequence != last.Sequence || last.Role == domain.MessageRoleUser {
 		return nil, fmt.Errorf("checkpoint does not cover the current transcript")
 	}
-	return messages, nil
+	return normalizeToolResultMessages(messages)
+}
+
+func normalizeToolResultMessages(messages []domain.GenerationMessage) ([]domain.GenerationMessage, error) {
+	normalized := make([]domain.GenerationMessage, 0, len(messages))
+	toolOrder := map[string]int{}
+	for index := 0; index < len(messages); {
+		message := messages[index]
+		if message.Role == domain.MessageRoleAssistant {
+			order, err := assistantToolCallOrder(message.Content)
+			if err != nil {
+				return nil, err
+			}
+			toolOrder = order
+			normalized = append(normalized, message)
+			index++
+			continue
+		}
+		if message.Role != domain.MessageRoleTool {
+			normalized = append(normalized, message)
+			index++
+			continue
+		}
+
+		var blocks []json.RawMessage
+		for index < len(messages) && messages[index].Role == domain.MessageRoleTool {
+			var current []json.RawMessage
+			if err := json.Unmarshal(messages[index].Content, &current); err != nil {
+				return nil, fmt.Errorf("decode tool result content: %w", err)
+			}
+			blocks = append(blocks, current...)
+			index++
+		}
+		if len(blocks) > MaxInputBlocks {
+			return nil, fmt.Errorf("tool result batch exceeds %d blocks", MaxInputBlocks)
+		}
+		type orderedBlock struct {
+			raw      json.RawMessage
+			ordinal  int
+			original int
+		}
+		ordered := make([]orderedBlock, len(blocks))
+		seen := make(map[string]struct{}, len(blocks))
+		for blockIndex, raw := range blocks {
+			var block struct {
+				ToolUseID string `json:"tool_use_id"`
+			}
+			if err := json.Unmarshal(raw, &block); err != nil || block.ToolUseID == "" {
+				return nil, fmt.Errorf("decode tool result identity")
+			}
+			if _, duplicate := seen[block.ToolUseID]; duplicate {
+				return nil, fmt.Errorf("duplicate tool result %q", block.ToolUseID)
+			}
+			seen[block.ToolUseID] = struct{}{}
+			ordinal, known := toolOrder[block.ToolUseID]
+			if !known {
+				return nil, fmt.Errorf("tool result %q has no preceding request", block.ToolUseID)
+			}
+			ordered[blockIndex] = orderedBlock{
+				raw:      raw,
+				ordinal:  ordinal,
+				original: blockIndex,
+			}
+		}
+		sort.SliceStable(ordered, func(left, right int) bool {
+			if ordered[left].ordinal == ordered[right].ordinal {
+				return ordered[left].original < ordered[right].original
+			}
+			return ordered[left].ordinal < ordered[right].ordinal
+		})
+		blocks = blocks[:0]
+		for _, block := range ordered {
+			blocks = append(blocks, block.raw)
+		}
+		content, err := json.Marshal(blocks)
+		if err != nil {
+			return nil, err
+		}
+		normalized = append(normalized, domain.GenerationMessage{
+			Role:    domain.MessageRoleTool,
+			Content: content,
+		})
+		toolOrder = map[string]int{}
+	}
+	return normalized, nil
+}
+
+func assistantToolCallOrder(content json.RawMessage) (map[string]int, error) {
+	var blocks []map[string]json.RawMessage
+	if err := json.Unmarshal(content, &blocks); err != nil {
+		return nil, err
+	}
+	order := make(map[string]int)
+	for _, block := range blocks {
+		var kind string
+		if err := json.Unmarshal(block["type"], &kind); err != nil {
+			return nil, err
+		}
+		if kind != "tool_use" {
+			continue
+		}
+		var id string
+		if err := json.Unmarshal(block["id"], &id); err != nil || id == "" {
+			return nil, fmt.Errorf("assistant tool call identity is invalid")
+		}
+		if _, duplicate := order[id]; duplicate {
+			return nil, fmt.Errorf("assistant tool call identity is duplicated")
+		}
+		order[id] = len(order)
+	}
+	return order, nil
 }
 
 func resumeBudgetExceeded(invocation domain.Invocation, resume domain.GenerationResume) string {

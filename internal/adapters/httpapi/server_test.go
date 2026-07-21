@@ -33,17 +33,20 @@ func (a fakeAuthenticator) Authenticate(context.Context, string) (domain.Runtime
 }
 
 type fakeRuntime struct {
-	admitInput  services.CreateInvocationInput
-	admitCalls  int
-	cancelCalls int
-	ack         services.InvocationAcknowledgement
-	invocation  services.InvocationRead
-	session     services.SessionRead
-	invocations services.InvocationList
-	sessions    services.SessionList
-	messages    services.SessionMessageList
-	transcript  services.TranscriptSnapshot
-	err         error
+	admitInput       services.CreateInvocationInput
+	toolResultsInput services.SubmitClientToolResultsInput
+	admitCalls       int
+	cancelCalls      int
+	toolResultCalls  int
+	ack              services.InvocationAcknowledgement
+	toolResults      services.SubmitClientToolResultsResult
+	invocation       services.InvocationRead
+	session          services.SessionRead
+	invocations      services.InvocationList
+	sessions         services.SessionList
+	messages         services.SessionMessageList
+	transcript       services.TranscriptSnapshot
+	err              error
 }
 
 type operationCheckingRuntime struct{ fakeRuntime }
@@ -70,6 +73,17 @@ func (f *fakeRuntime) GetInvocation(context.Context, domain.RuntimeAuthContext, 
 func (f *fakeRuntime) CancelInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error) {
 	f.cancelCalls++
 	return f.invocation, f.err
+}
+
+func (f *fakeRuntime) SubmitClientToolResults(
+	_ context.Context,
+	_ domain.RuntimeAuthContext,
+	_ string,
+	input services.SubmitClientToolResultsInput,
+) (services.SubmitClientToolResultsResult, error) {
+	f.toolResultCalls++
+	f.toolResultsInput = input
+	return f.toolResults, f.err
 }
 
 func (f *fakeRuntime) GetSession(context.Context, domain.RuntimeAuthContext, string) (services.SessionRead, error) {
@@ -228,6 +242,121 @@ func TestCreateInvocationDecodesStructuredOutputContract(t *testing.T) {
 	}
 }
 
+func TestCreateInvocationDecodesClientToolContract(t *testing.T) {
+	runtime := &fakeRuntime{
+		ack: services.InvocationAcknowledgement{
+			AgentID:      testAgentID,
+			SessionID:    testSessionID,
+			InvocationID: testInvocationID,
+			Status:       domain.InvocationQueued,
+		},
+	}
+	body := []byte(`{
+		"agent_ref":"support",
+		"idempotency_key":"request-1",
+		"input":{"content":[{"type":"text","text":"look it up"}]},
+		"spec":{
+			"instructions":"help",
+			"model":{"provider":"anthropic","name":"test-model"},
+			"tools":[{
+				"name":"lookup_order",
+				"description":"Look up an order",
+				"mode":"client",
+				"input_schema":{"type":"object","properties":{"order_id":{"type":"string"}},"additionalProperties":false}
+			}]
+		}
+	}`)
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodPost, "/v1/invocations", body)
+
+	testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusAccepted || runtime.admitCalls != 1 {
+		t.Fatalf("client tool admission = %d, calls = %d, body = %s", recorder.Code, runtime.admitCalls, recorder.Body.String())
+	}
+	if len(runtime.admitInput.Spec.Tools) != 1 || runtime.admitInput.Spec.Tools[0].Name != "lookup_order" {
+		t.Fatalf("decoded client tools = %#v", runtime.admitInput.Spec.Tools)
+	}
+}
+
+func TestSubmitClientToolResultsReturnsDurableAcknowledgement(t *testing.T) {
+	deadline := time.Date(2026, 7, 21, 12, 30, 0, 0, time.UTC)
+	toolCallID := "tcal_019f84a5-7838-7b57-a180-000000000001"
+	runtime := &fakeRuntime{
+		toolResults: services.SubmitClientToolResultsResult{
+			InvocationID: testInvocationID,
+			SessionID:    testSessionID,
+			Status:       domain.InvocationWaiting,
+			Results: []services.ClientToolResultAcceptance{
+				{
+					ToolCallID: toolCallID,
+					Status:     domain.ToolCallCompleted,
+				},
+			},
+			PendingToolCalls: []services.PendingClientToolCall{
+				{
+					ID:         "tcal_019f84a5-7838-7b57-a180-000000000002",
+					Name:       "notify_user",
+					Input:      json.RawMessage(`{"message":"hello"}`),
+					DeadlineAt: deadline,
+				},
+			},
+		},
+	}
+	body := []byte(`{"results":[{"tool_call_id":"` + toolCallID + `","content":{"order":"ready"}}]}`)
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(
+		http.MethodPost,
+		"/v1/invocations/"+testInvocationID+"/tool-results",
+		body,
+	)
+
+	testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusAccepted || runtime.toolResultCalls != 1 {
+		t.Fatalf("tool results = %d, calls = %d, body = %s", recorder.Code, runtime.toolResultCalls, recorder.Body.String())
+	}
+	if len(runtime.toolResultsInput.Results) != 1 ||
+		string(runtime.toolResultsInput.Results[0].Content) != `{"order":"ready"}` {
+		t.Fatalf("decoded tool results = %#v", runtime.toolResultsInput)
+	}
+	if !strings.Contains(recorder.Body.String(), `"status":"waiting"`) ||
+		!strings.Contains(recorder.Body.String(), `"pending_tool_calls"`) {
+		t.Fatalf("tool result response = %s", recorder.Body.String())
+	}
+}
+
+func TestSubmitClientToolResultsRejectsMalformedJSONBeforeService(t *testing.T) {
+	toolCallID := "tcal_019f84a5-7838-7b57-a180-000000000001"
+	tests := map[string][]byte{
+		"unknown field":    []byte(`{"results":[{"tool_call_id":"` + toolCallID + `","content":{},"unknown":true}]}`),
+		"duplicate member": []byte(`{"results":[{"tool_call_id":"` + toolCallID + `","content":{},"content":true}]}`),
+		"trailing value":   []byte(`{"results":[{"tool_call_id":"` + toolCallID + `","content":{}}]} {}`),
+		"too deep": []byte(
+			`{"results":[{"tool_call_id":"` + toolCallID + `","content":` +
+				strings.Repeat("[", maxJSONNestingDepth+1) +
+				"0" +
+				strings.Repeat("]", maxJSONNestingDepth+1) +
+				`}]}`,
+		),
+	}
+	for name, body := range tests {
+		t.Run(name, func(t *testing.T) {
+			runtime := &fakeRuntime{}
+			recorder := httptest.NewRecorder()
+			request := authenticatedRequest(
+				http.MethodPost,
+				"/v1/invocations/"+testInvocationID+"/tool-results",
+				body,
+			)
+			testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusBadRequest || runtime.toolResultCalls != 0 {
+				t.Fatalf("malformed result = %d, calls = %d, body = %s", recorder.Code, runtime.toolResultCalls, recorder.Body.String())
+			}
+		})
+	}
+}
+
 func TestInvocationReadAndTranscriptProjectStructuredOutput(t *testing.T) {
 	output := json.RawMessage(`{"answer":"yes"}`)
 	provenance := json.RawMessage(`{"source":"tool_call","tool_call_id":"tcal_019f84a5-7838-7b57-a180-000000000001","schema_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`)
@@ -288,9 +417,14 @@ func TestInvocationRequestRejectsInvalidJSONBeforeService(t *testing.T) {
 	valid := validInvocationJSON()
 	oversized := `{"agent_ref":"` + strings.Repeat("a", services.MaxInvocationBodyBytes) + `"}`
 	cases := map[string][]byte{
-		"unknown field":  bytes.Replace(valid, []byte(`"spec":{`), []byte(`"unknown":true,"spec":{`), 1),
-		"deferred tools": bytes.Replace(valid, []byte(`"instructions":"help",`), []byte(`"instructions":"help","tools":[],`), 1),
-		"duplicate key":  bytes.Replace(valid, []byte(`"provider":"anthropic"`), []byte(`"provider":"anthropic","provider":"openai"`), 1),
+		"unknown field": bytes.Replace(valid, []byte(`"spec":{`), []byte(`"unknown":true,"spec":{`), 1),
+		"unsupported tool mode": bytes.Replace(
+			valid,
+			[]byte(`"instructions":"help",`),
+			[]byte(`"instructions":"help","tools":[{"name":"lookup","description":"Look up","mode":"callback","input_schema":{"type":"object"}}],`),
+			1,
+		),
+		"duplicate key": bytes.Replace(valid, []byte(`"provider":"anthropic"`), []byte(`"provider":"anthropic","provider":"openai"`), 1),
 		"duplicate schema key": bytes.Replace(
 			structuredInvocationJSON(),
 			[]byte(`"type":"object","properties"`),
@@ -393,6 +527,21 @@ func TestRuntimePublicErrorsHaveStableHTTPMappings(t *testing.T) {
 		{name: "not found", code: services.CodeNotFound, status: http.StatusNotFound},
 		{name: "idempotency conflict", code: services.CodeIdempotencyConflict, status: http.StatusConflict},
 		{name: "active invocation", code: services.CodeSessionInvocationActive, status: http.StatusConflict},
+		{
+			name:   "invocation not waiting",
+			code:   services.CodeInvocationNotWaiting,
+			status: http.StatusConflict,
+		},
+		{
+			name:   "tool result conflict",
+			code:   services.CodeToolResultConflict,
+			status: http.StatusConflict,
+		},
+		{
+			name:   "tool result expired",
+			code:   services.CodeToolResultExpired,
+			status: http.StatusConflict,
+		},
 		{name: "unavailable", code: services.CodeUnavailable, status: http.StatusServiceUnavailable},
 	}
 	for _, test := range tests {
@@ -537,7 +686,7 @@ func testHandler(runtime RuntimeService, authenticator *fakeAuthenticator, logWr
 		authenticator = &fakeAuthenticator{auth: domain.RuntimeAuthContext{
 			AccountID: testAccountID,
 			Operations: map[domain.RuntimeOperation]struct{}{
-				domain.OperationCreateInvocation: {}, domain.OperationGetInvocation: {}, domain.OperationCancelInvocation: {}, domain.OperationGetSession: {},
+				domain.OperationCreateInvocation: {}, domain.OperationGetInvocation: {}, domain.OperationCancelInvocation: {}, domain.OperationSubmitToolResults: {}, domain.OperationGetSession: {},
 				domain.OperationListInvocations: {}, domain.OperationListSessions: {},
 				domain.OperationListMessages: {}, domain.OperationGetTranscript: {},
 			},

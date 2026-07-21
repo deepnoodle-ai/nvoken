@@ -31,38 +31,12 @@ type requestDecodeError string
 func (e requestDecodeError) Error() string { return string(e) }
 
 func decodeInvocationRequest(w http.ResponseWriter, r *http.Request, target *services.CreateInvocationInput) error {
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "application/json" {
-		return requestErrorf("Content-Type must be application/json.")
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, services.MaxInvocationBodyBytes)
-	payload, err := io.ReadAll(r.Body)
+	payload, err := decodeBoundedStrictJSONPayload(w, r, target, services.MaxInvocationBodyBytes)
 	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if strings.Contains(err.Error(), "request body too large") || errors.As(err, &tooLarge) {
-			return requestErrorf("Request body must be at most %d bytes.", services.MaxInvocationBodyBytes)
-		}
-		return requestErrorf("Request body could not be read.")
-	}
-	if len(payload) == 0 {
-		return requestErrorf("Request body is required.")
-	}
-	if !utf8.Valid(payload) {
-		return requestErrorf("Request body must contain valid UTF-8.")
-	}
-	if err := validateJSONSurrogates(payload); err != nil {
-		return err
-	}
-	if err := validateJSONMembers(payload); err != nil {
 		return err
 	}
 	if err := rejectNullOptionalStrings(payload); err != nil {
 		return err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return requestErrorf("Invalid request body: %v.", err)
 	}
 	if err := services.ValidateCreateInvocation(*target); err != nil {
 		var public *services.PublicError
@@ -72,6 +46,50 @@ func decodeInvocationRequest(w http.ResponseWriter, r *http.Request, target *ser
 		return requestErrorf("Invalid request body.")
 	}
 	return nil
+}
+
+func decodeBoundedStrictJSON(w http.ResponseWriter, r *http.Request, target any, maxBytes int64) error {
+	_, err := decodeBoundedStrictJSONPayload(w, r, target, maxBytes)
+	return err
+}
+
+func decodeBoundedStrictJSONPayload(
+	w http.ResponseWriter,
+	r *http.Request,
+	target any,
+	maxBytes int64,
+) ([]byte, error) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return nil, requestErrorf("Content-Type must be application/json.")
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	payload, err := io.ReadAll(r.Body)
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if strings.Contains(err.Error(), "request body too large") || errors.As(err, &tooLarge) {
+			return nil, requestErrorf("Request body must be at most %d bytes.", maxBytes)
+		}
+		return nil, requestErrorf("Request body could not be read.")
+	}
+	if len(payload) == 0 {
+		return nil, requestErrorf("Request body is required.")
+	}
+	if !utf8.Valid(payload) {
+		return nil, requestErrorf("Request body must contain valid UTF-8.")
+	}
+	if err := validateJSONSurrogates(payload); err != nil {
+		return nil, err
+	}
+	if err := validateJSONMembers(payload); err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return nil, requestErrorf("Invalid request body: %v.", err)
+	}
+	return payload, nil
 }
 
 // encoding/json replaces unpaired UTF-16 surrogate escapes with U+FFFD.

@@ -178,6 +178,7 @@ type GenerationRequest struct {
 	Provider         string
 	Model            string
 	Messages         []GenerationMessage
+	ClientTools      []ClientToolDefinition
 	MaxOutputTokens  *int
 	MaxIterations    int
 	Claim            *InvocationClaim
@@ -193,6 +194,13 @@ type GenerationResponse struct {
 	BudgetExceeded          string
 	StructuredOutput        *StructuredOutput
 	StructuredOutputFailure string
+	ClientToolsPending      bool
+}
+
+type ClientToolDefinition struct {
+	Name        string
+	Description string
+	InputSchema json.RawMessage
 }
 
 type StructuredOutputRequest struct {

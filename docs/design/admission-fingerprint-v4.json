@@ -1,0 +1,47 @@
+[
+  {
+    "name": "omitted-tools",
+    "selector": { "kind": "none", "value": "" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "anthropic", "name": "test-model" }
+    },
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":4,\"session_selector\":{\"kind\":\"none\",\"value\":\"\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"name\":\"test-model\"},\"budgets\":null,\"output\":null,\"tools\":[]},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "25406b132bd72f7ab34a0f33672ee61787f4e18293e6ddd9abff739b24bcbbfa"
+  },
+  {
+    "name": "ordered-client-tools",
+    "selector": { "kind": "key", "value": "ticket-1" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "openai", "name": "gpt-test" },
+      "tools": [
+        {
+          "name": "lookup_order",
+          "description": "Look up an order",
+          "mode": "client",
+          "input_schema": {
+            "required": ["order_id"],
+            "type": "object",
+            "properties": { "order_id": { "type": "string" } },
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "notify_user",
+          "description": "Notify the user",
+          "mode": "client",
+          "input_schema": {
+            "type": "object",
+            "properties": { "message": { "type": "string" } },
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "input": { "content": [{ "type": "text", "text": "find and notify" }] },
+    "canonical": "{\"version\":4,\"session_selector\":{\"kind\":\"key\",\"value\":\"ticket-1\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"openai\",\"name\":\"gpt-test\"},\"budgets\":null,\"output\":null,\"tools\":[{\"name\":\"lookup_order\",\"description\":\"Look up an order\",\"mode\":\"client\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"order_id\":{\"type\":\"string\"}},\"required\":[\"order_id\"],\"type\":\"object\"}},{\"name\":\"notify_user\",\"description\":\"Notify the user\",\"mode\":\"client\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"message\":{\"type\":\"string\"}},\"type\":\"object\"}}]},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"find and notify\"}]}}",
+    "sha256": "4294681d643d6da8cbda2859072d6e559fba26652799492d89acfad3b4ddb03f"
+  }
+]

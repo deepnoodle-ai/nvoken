@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -35,6 +36,10 @@ func TestInvocationFingerprintV2DesignVectors(t *testing.T) {
 
 func TestInvocationFingerprintV3DesignVectors(t *testing.T) {
 	testFingerprintDesignVectors(t, "admission-fingerprint-v3.json", 3)
+}
+
+func TestInvocationFingerprintV4DesignVectors(t *testing.T) {
+	testFingerprintDesignVectors(t, "admission-fingerprint-v4.json", 4)
 }
 
 func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
@@ -70,9 +75,12 @@ func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
 			} else if version == 2 {
 				canonical, err = invocationFingerprintBytesV2(input)
 				fingerprint, _ = InvocationFingerprintV2(input)
-			} else {
+			} else if version == 3 {
 				canonical, err = invocationFingerprintBytesV3(input)
 				fingerprint, _ = InvocationFingerprintV3(input)
+			} else {
+				canonical, err = invocationFingerprintBytesV4(input)
+				fingerprint, _ = InvocationFingerprintV4(input)
 			}
 			if err != nil {
 				t.Fatalf("canonicalize: %v", err)
@@ -211,6 +219,55 @@ func TestValidateCreateInvocationStructuredSchemaSizeBoundary(t *testing.T) {
 	input.Spec.Output.Schema = json.RawMessage(prefix + strings.Repeat("x", structuredoutput.MaxSchemaBytes-len(prefix)-len(suffix)+1) + suffix)
 	if err := ValidateCreateInvocation(input); err == nil {
 		t.Fatal("schema above compact size limit was accepted")
+	}
+}
+
+func TestValidateCreateInvocationClientToolBoundaries(t *testing.T) {
+	validTool := ClientToolSpec{
+		Name:        "lookup_order",
+		Description: "Look up an order",
+		Mode:        "client",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"order_id":{"type":"string"}},"additionalProperties":false}`),
+	}
+	input := validServiceInput()
+	input.Spec.Tools = make([]ClientToolSpec, MaxClientTools)
+	for index := range input.Spec.Tools {
+		input.Spec.Tools[index] = validTool
+		input.Spec.Tools[index].Name = fmt.Sprintf("tool_%d", index)
+	}
+	if err := ValidateCreateInvocation(input); err != nil {
+		t.Fatalf("maximum client tools rejected: %v", err)
+	}
+
+	tests := map[string]func(*CreateInvocationInput){
+		"too many": func(input *CreateInvocationInput) {
+			input.Spec.Tools = append(input.Spec.Tools, validTool)
+		},
+		"duplicate name": func(input *CreateInvocationInput) {
+			input.Spec.Tools[1].Name = input.Spec.Tools[0].Name
+		},
+		"reserved name": func(input *CreateInvocationInput) {
+			input.Spec.Tools[0].Name = "nvoken_private"
+		},
+		"unsupported mode": func(input *CreateInvocationInput) {
+			input.Spec.Tools[0].Mode = "callback"
+		},
+		"blank description": func(input *CreateInvocationInput) {
+			input.Spec.Tools[0].Description = " "
+		},
+		"invalid schema": func(input *CreateInvocationInput) {
+			input.Spec.Tools[0].InputSchema = json.RawMessage(`{"type":"string"}`)
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			candidate := input
+			candidate.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
+			mutate(&candidate)
+			if err := ValidateCreateInvocation(candidate); err == nil {
+				t.Fatal("invalid client tools were accepted")
+			}
+		})
 	}
 }
 

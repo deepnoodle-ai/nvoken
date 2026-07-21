@@ -27,6 +27,14 @@ func (s ToolCallStatus) Terminal() bool {
 	return s == ToolCallCompleted || s == ToolCallFailed || s == ToolCallCancelled
 }
 
+type ToolCallResultOrigin string
+
+const (
+	ToolCallResultBuiltin ToolCallResultOrigin = "builtin"
+	ToolCallResultClient  ToolCallResultOrigin = "client"
+	ToolCallResultSystem  ToolCallResultOrigin = "system"
+)
+
 type ToolCall struct {
 	ID                     string
 	InvocationID           string
@@ -47,6 +55,7 @@ type ToolCall struct {
 	CurrentAttempt         int
 	ResultMessageID        *string
 	ResultMessageSequence  *int64
+	ResultOrigin           *ToolCallResultOrigin
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
 	CompletedAt            *time.Time

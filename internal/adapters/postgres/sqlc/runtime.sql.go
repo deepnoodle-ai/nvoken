@@ -213,6 +213,84 @@ func (q *Queries) AdvanceInvocationCheckpointForTerminal(ctx context.Context, ar
 	return i, err
 }
 
+const advanceWaitingInvocationCheckpoint = `-- name: AdvanceWaitingInvocationCheckpoint :one
+UPDATE invocations
+SET current_checkpoint_sequence = $1,
+    updated_at = $2
+WHERE id = $3
+  AND status = 'waiting'
+  AND current_checkpoint_sequence = $4
+  AND current_iteration = $5
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
+`
+
+type AdvanceWaitingInvocationCheckpointParams struct {
+	CheckpointSequence         int64
+	ObservedAt                 time.Time
+	ID                         string
+	ExpectedCheckpointSequence int64
+	Iteration                  int32
+}
+
+// AdvanceWaitingInvocationCheckpoint
+//
+//	UPDATE invocations
+//	SET current_checkpoint_sequence = $1,
+//	    updated_at = $2
+//	WHERE id = $3
+//	  AND status = 'waiting'
+//	  AND current_checkpoint_sequence = $4
+//	  AND current_iteration = $5
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
+func (q *Queries) AdvanceWaitingInvocationCheckpoint(ctx context.Context, arg AdvanceWaitingInvocationCheckpointParams) (Invocation, error) {
+	row := q.db.QueryRow(ctx, advanceWaitingInvocationCheckpoint,
+		arg.CheckpointSequence,
+		arg.ObservedAt,
+		arg.ID,
+		arg.ExpectedCheckpointSequence,
+		arg.Iteration,
+	)
+	var i Invocation
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.SpecSnapshotID,
+		&i.IdempotencyKey,
+		&i.RequestFingerprint,
+		&i.Status,
+		&i.CurrentStateRevision,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.LeaseOwner,
+		&i.LeaseExpiresAt,
+		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
+		&i.RequestFingerprintVersion,
+		&i.WallClockTimeoutMs,
+		&i.ActiveExecutionTimeoutMs,
+		&i.MaxOutputTokens,
+		&i.MaxEstimatedCostMicrousd,
+		&i.MaxIterations,
+		&i.ActiveExecutionMs,
+		&i.WallClockDeadlineAt,
+		&i.ActiveSegmentStartedAt,
+		&i.ExecutionDeadlineAt,
+		&i.ExecutionDeadlineScope,
+		&i.CurrentCheckpointSequence,
+		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
+	)
+	return i, err
+}
+
 const appendInvocationState = `-- name: AppendInvocationState :exec
 INSERT INTO invocation_states (
     id, invocation_id, session_id, account_id, tenant_partition_id,
@@ -2217,12 +2295,12 @@ func (q *Queries) GetTenantPartitionByRef(ctx context.Context, arg GetTenantPart
 }
 
 const getToolCall = `-- name: GetToolCall :one
-SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls WHERE id = $1
+SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls WHERE id = $1
 `
 
 // GetToolCall
 //
-//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls WHERE id = $1
+//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls WHERE id = $1
 func (q *Queries) GetToolCall(ctx context.Context, id string) (ToolCall, error) {
 	row := q.db.QueryRow(ctx, getToolCall, id)
 	var i ToolCall
@@ -2249,12 +2327,13 @@ func (q *Queries) GetToolCall(ctx context.Context, id string) (ToolCall, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CompletedAt,
+		&i.ResultOrigin,
 	)
 	return i, err
 }
 
 const getToolCallByProviderIdentityForUpdate = `-- name: GetToolCallByProviderIdentityForUpdate :one
-SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls
 WHERE invocation_id = $1 AND iteration = $2 AND provider_call_id = $3
 FOR UPDATE
 `
@@ -2267,7 +2346,7 @@ type GetToolCallByProviderIdentityForUpdateParams struct {
 
 // GetToolCallByProviderIdentityForUpdate
 //
-//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls
 //	WHERE invocation_id = $1 AND iteration = $2 AND provider_call_id = $3
 //	FOR UPDATE
 func (q *Queries) GetToolCallByProviderIdentityForUpdate(ctx context.Context, arg GetToolCallByProviderIdentityForUpdateParams) (ToolCall, error) {
@@ -2296,17 +2375,18 @@ func (q *Queries) GetToolCallByProviderIdentityForUpdate(ctx context.Context, ar
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CompletedAt,
+		&i.ResultOrigin,
 	)
 	return i, err
 }
 
 const getToolCallForUpdate = `-- name: GetToolCallForUpdate :one
-SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls WHERE id = $1 FOR UPDATE
+SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls WHERE id = $1 FOR UPDATE
 `
 
 // GetToolCallForUpdate
 //
-//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls WHERE id = $1 FOR UPDATE
+//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls WHERE id = $1 FOR UPDATE
 func (q *Queries) GetToolCallForUpdate(ctx context.Context, id string) (ToolCall, error) {
 	row := q.db.QueryRow(ctx, getToolCallForUpdate, id)
 	var i ToolCall
@@ -2333,6 +2413,7 @@ func (q *Queries) GetToolCallForUpdate(ctx context.Context, id string) (ToolCall
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CompletedAt,
+		&i.ResultOrigin,
 	)
 	return i, err
 }
@@ -3040,7 +3121,7 @@ func (q *Queries) ListModelUsageReceipts(ctx context.Context, invocationID strin
 }
 
 const listOpenToolCallsForUpdate = `-- name: ListOpenToolCallsForUpdate :many
-SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls
 WHERE invocation_id = $1 AND status IN ('pending', 'running')
 ORDER BY iteration, batch_ordinal, id
 FOR UPDATE
@@ -3048,7 +3129,7 @@ FOR UPDATE
 
 // ListOpenToolCallsForUpdate
 //
-//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls
 //	WHERE invocation_id = $1 AND status IN ('pending', 'running')
 //	ORDER BY iteration, batch_ordinal, id
 //	FOR UPDATE
@@ -3084,6 +3165,7 @@ func (q *Queries) ListOpenToolCallsForUpdate(ctx context.Context, invocationID s
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CompletedAt,
+			&i.ResultOrigin,
 		); err != nil {
 			return nil, err
 		}
@@ -3384,14 +3466,14 @@ func (q *Queries) ListStalePublishedExecutionDispatches(ctx context.Context, arg
 }
 
 const listToolCallsByInvocation = `-- name: ListToolCallsByInvocation :many
-SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls
 WHERE invocation_id = $1
 ORDER BY iteration, batch_ordinal, id
 `
 
 // ListToolCallsByInvocation
 //
-//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls
 //	WHERE invocation_id = $1
 //	ORDER BY iteration, batch_ordinal, id
 func (q *Queries) ListToolCallsByInvocation(ctx context.Context, invocationID string) ([]ToolCall, error) {
@@ -3426,6 +3508,7 @@ func (q *Queries) ListToolCallsByInvocation(ctx context.Context, invocationID st
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CompletedAt,
+			&i.ResultOrigin,
 		); err != nil {
 			return nil, err
 		}
@@ -3438,7 +3521,7 @@ func (q *Queries) ListToolCallsByInvocation(ctx context.Context, invocationID st
 }
 
 const listToolCallsByIteration = `-- name: ListToolCallsByIteration :many
-SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls
 WHERE invocation_id = $1 AND iteration = $2
 ORDER BY batch_ordinal, id
 `
@@ -3450,7 +3533,7 @@ type ListToolCallsByIterationParams struct {
 
 // ListToolCallsByIteration
 //
-//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at FROM tool_calls
+//	SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin FROM tool_calls
 //	WHERE invocation_id = $1 AND iteration = $2
 //	ORDER BY batch_ordinal, id
 func (q *Queries) ListToolCallsByIteration(ctx context.Context, arg ListToolCallsByIterationParams) ([]ToolCall, error) {
@@ -3485,6 +3568,7 @@ func (q *Queries) ListToolCallsByIteration(ctx context.Context, arg ListToolCall
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CompletedAt,
+			&i.ResultOrigin,
 		); err != nil {
 			return nil, err
 		}
@@ -3589,6 +3673,112 @@ func (q *Queries) MarkExecutionDispatchPublished(ctx context.Context, arg MarkEx
 	return i, err
 }
 
+const parkInvocationForClientTools = `-- name: ParkInvocationForClientTools :one
+UPDATE invocations
+SET status = 'waiting',
+    current_state_revision = $1,
+    lease_owner = NULL,
+    lease_expires_at = NULL,
+    active_execution_ms = LEAST(
+        active_execution_timeout_ms,
+        active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+            ($2::timestamptz - active_segment_started_at)) * 1000)::bigint)
+    ),
+    active_segment_started_at = NULL,
+    execution_deadline_at = NULL,
+    execution_deadline_scope = NULL,
+    updated_at = $2
+WHERE id = $3
+  AND status = 'running'
+  AND lease_owner = $4
+  AND lease_attempt = $5
+  AND lease_expires_at > $2
+  AND execution_deadline_at > $2
+  AND wall_clock_deadline_at > $2
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
+`
+
+type ParkInvocationForClientToolsParams struct {
+	StateRevision int64
+	ObservedAt    time.Time
+	ID            string
+	LeaseOwner    *string
+	LeaseAttempt  int64
+}
+
+// ParkInvocationForClientTools
+//
+//	UPDATE invocations
+//	SET status = 'waiting',
+//	    current_state_revision = $1,
+//	    lease_owner = NULL,
+//	    lease_expires_at = NULL,
+//	    active_execution_ms = LEAST(
+//	        active_execution_timeout_ms,
+//	        active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+//	            ($2::timestamptz - active_segment_started_at)) * 1000)::bigint)
+//	    ),
+//	    active_segment_started_at = NULL,
+//	    execution_deadline_at = NULL,
+//	    execution_deadline_scope = NULL,
+//	    updated_at = $2
+//	WHERE id = $3
+//	  AND status = 'running'
+//	  AND lease_owner = $4
+//	  AND lease_attempt = $5
+//	  AND lease_expires_at > $2
+//	  AND execution_deadline_at > $2
+//	  AND wall_clock_deadline_at > $2
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
+func (q *Queries) ParkInvocationForClientTools(ctx context.Context, arg ParkInvocationForClientToolsParams) (Invocation, error) {
+	row := q.db.QueryRow(ctx, parkInvocationForClientTools,
+		arg.StateRevision,
+		arg.ObservedAt,
+		arg.ID,
+		arg.LeaseOwner,
+		arg.LeaseAttempt,
+	)
+	var i Invocation
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.SpecSnapshotID,
+		&i.IdempotencyKey,
+		&i.RequestFingerprint,
+		&i.Status,
+		&i.CurrentStateRevision,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.LeaseOwner,
+		&i.LeaseExpiresAt,
+		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
+		&i.RequestFingerprintVersion,
+		&i.WallClockTimeoutMs,
+		&i.ActiveExecutionTimeoutMs,
+		&i.MaxOutputTokens,
+		&i.MaxEstimatedCostMicrousd,
+		&i.MaxIterations,
+		&i.ActiveExecutionMs,
+		&i.WallClockDeadlineAt,
+		&i.ActiveSegmentStartedAt,
+		&i.ExecutionDeadlineAt,
+		&i.ExecutionDeadlineScope,
+		&i.CurrentCheckpointSequence,
+		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
+	)
+	return i, err
+}
+
 const pruneTerminalExecutionDispatches = `-- name: PruneTerminalExecutionDispatches :execrows
 DELETE FROM execution_dispatches
 WHERE id IN (
@@ -3619,6 +3809,76 @@ func (q *Queries) PruneTerminalExecutionDispatches(ctx context.Context, arg Prun
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const queueWaitingInvocation = `-- name: QueueWaitingInvocation :one
+UPDATE invocations
+SET status = 'queued',
+    current_state_revision = $1,
+    updated_at = $2
+WHERE id = $3
+  AND status = 'waiting'
+  AND wall_clock_deadline_at > $2
+RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
+`
+
+type QueueWaitingInvocationParams struct {
+	StateRevision int64
+	ObservedAt    time.Time
+	ID            string
+}
+
+// QueueWaitingInvocation
+//
+//	UPDATE invocations
+//	SET status = 'queued',
+//	    current_state_revision = $1,
+//	    updated_at = $2
+//	WHERE id = $3
+//	  AND status = 'waiting'
+//	  AND wall_clock_deadline_at > $2
+//	RETURNING id, session_id, account_id, tenant_partition_id, agent_id, spec_snapshot_id, idempotency_key, request_fingerprint, status, current_state_revision, error, created_at, updated_at, completed_at, lease_owner, lease_expires_at, lease_attempt, usage, provenance, request_fingerprint_version, wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens, max_estimated_cost_microusd, max_iterations, active_execution_ms, wall_clock_deadline_at, active_segment_started_at, execution_deadline_at, execution_deadline_scope, current_checkpoint_sequence, current_iteration, output_schema_digest, output, output_provenance
+func (q *Queries) QueueWaitingInvocation(ctx context.Context, arg QueueWaitingInvocationParams) (Invocation, error) {
+	row := q.db.QueryRow(ctx, queueWaitingInvocation, arg.StateRevision, arg.ObservedAt, arg.ID)
+	var i Invocation
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.AgentID,
+		&i.SpecSnapshotID,
+		&i.IdempotencyKey,
+		&i.RequestFingerprint,
+		&i.Status,
+		&i.CurrentStateRevision,
+		&i.Error,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.LeaseOwner,
+		&i.LeaseExpiresAt,
+		&i.LeaseAttempt,
+		&i.Usage,
+		&i.Provenance,
+		&i.RequestFingerprintVersion,
+		&i.WallClockTimeoutMs,
+		&i.ActiveExecutionTimeoutMs,
+		&i.MaxOutputTokens,
+		&i.MaxEstimatedCostMicrousd,
+		&i.MaxIterations,
+		&i.ActiveExecutionMs,
+		&i.WallClockDeadlineAt,
+		&i.ActiveSegmentStartedAt,
+		&i.ExecutionDeadlineAt,
+		&i.ExecutionDeadlineScope,
+		&i.CurrentCheckpointSequence,
+		&i.CurrentIteration,
+		&i.OutputSchemaDigest,
+		&i.Output,
+		&i.OutputProvenance,
+	)
+	return i, err
 }
 
 const reapInvocationDeadline = `-- name: ReapInvocationDeadline :one
@@ -4035,7 +4295,7 @@ UPDATE tool_calls
 SET current_attempt = current_attempt + 1,
     updated_at = $1
 WHERE id = $2 AND status = 'running'
-RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
+RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin
 `
 
 type RestartToolCallAttemptParams struct {
@@ -4049,7 +4309,7 @@ type RestartToolCallAttemptParams struct {
 //	SET current_attempt = current_attempt + 1,
 //	    updated_at = $1
 //	WHERE id = $2 AND status = 'running'
-//	RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
+//	RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin
 func (q *Queries) RestartToolCallAttempt(ctx context.Context, arg RestartToolCallAttemptParams) (ToolCall, error) {
 	row := q.db.QueryRow(ctx, restartToolCallAttempt, arg.ObservedAt, arg.ID)
 	var i ToolCall
@@ -4076,6 +4336,7 @@ func (q *Queries) RestartToolCallAttempt(ctx context.Context, arg RestartToolCal
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CompletedAt,
+		&i.ResultOrigin,
 	)
 	return i, err
 }
@@ -4413,15 +4674,17 @@ const settleToolCall = `-- name: SettleToolCall :one
 UPDATE tool_calls
 SET status = $1, result_message_id = $2,
     result_message_sequence = $3,
-    completed_at = $4, updated_at = $4
-WHERE id = $5 AND status IN ('pending', 'running')
-RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
+    result_origin = $4,
+    completed_at = $5, updated_at = $5
+WHERE id = $6 AND status IN ('pending', 'running')
+RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin
 `
 
 type SettleToolCallParams struct {
 	Status                string
 	ResultMessageID       *string
 	ResultMessageSequence *int64
+	ResultOrigin          *string
 	ObservedAt            *time.Time
 	ID                    string
 }
@@ -4431,14 +4694,16 @@ type SettleToolCallParams struct {
 //	UPDATE tool_calls
 //	SET status = $1, result_message_id = $2,
 //	    result_message_sequence = $3,
-//	    completed_at = $4, updated_at = $4
-//	WHERE id = $5 AND status IN ('pending', 'running')
-//	RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
+//	    result_origin = $4,
+//	    completed_at = $5, updated_at = $5
+//	WHERE id = $6 AND status IN ('pending', 'running')
+//	RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin
 func (q *Queries) SettleToolCall(ctx context.Context, arg SettleToolCallParams) (ToolCall, error) {
 	row := q.db.QueryRow(ctx, settleToolCall,
 		arg.Status,
 		arg.ResultMessageID,
 		arg.ResultMessageSequence,
+		arg.ResultOrigin,
 		arg.ObservedAt,
 		arg.ID,
 	)
@@ -4466,6 +4731,7 @@ func (q *Queries) SettleToolCall(ctx context.Context, arg SettleToolCallParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CompletedAt,
+		&i.ResultOrigin,
 	)
 	return i, err
 }
@@ -4514,7 +4780,7 @@ UPDATE tool_calls
 SET status = 'running', current_attempt = current_attempt + 1,
     updated_at = $1
 WHERE id = $2 AND status = 'pending'
-RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
+RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin
 `
 
 type StartToolCallAttemptParams struct {
@@ -4530,7 +4796,7 @@ type StartToolCallAttemptParams struct {
 //	SET status = 'running', current_attempt = current_attempt + 1,
 //	    updated_at = $1
 //	WHERE id = $2 AND status = 'pending'
-//	RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at
+//	RETURNING id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, iteration, batch_ordinal, provider_call_id, name, mode, request_message_id, request_message_sequence, request_digest, status, deadline_at, current_attempt, result_message_id, result_message_sequence, created_at, updated_at, completed_at, result_origin
 func (q *Queries) StartToolCallAttempt(ctx context.Context, arg StartToolCallAttemptParams) (ToolCall, error) {
 	row := q.db.QueryRow(ctx, startToolCallAttempt, arg.ObservedAt, arg.ID)
 	var i ToolCall
@@ -4557,6 +4823,7 @@ func (q *Queries) StartToolCallAttempt(ctx context.Context, arg StartToolCallAtt
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CompletedAt,
+		&i.ResultOrigin,
 	)
 	return i, err
 }

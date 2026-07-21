@@ -746,14 +746,15 @@ func runtimeAuth(accountID string) domain.RuntimeAuthContext {
 	return domain.RuntimeAuthContext{
 		AccountID: accountID,
 		Operations: map[domain.RuntimeOperation]struct{}{
-			domain.OperationCreateInvocation: {},
-			domain.OperationGetInvocation:    {},
-			domain.OperationCancelInvocation: {},
-			domain.OperationListInvocations:  {},
-			domain.OperationGetSession:       {},
-			domain.OperationListSessions:     {},
-			domain.OperationListMessages:     {},
-			domain.OperationGetTranscript:    {},
+			domain.OperationCreateInvocation:  {},
+			domain.OperationGetInvocation:     {},
+			domain.OperationCancelInvocation:  {},
+			domain.OperationSubmitToolResults: {},
+			domain.OperationListInvocations:   {},
+			domain.OperationGetSession:        {},
+			domain.OperationListSessions:      {},
+			domain.OperationListMessages:      {},
+			domain.OperationGetTranscript:     {},
 		},
 	}
 }

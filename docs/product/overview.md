@@ -44,8 +44,8 @@ users and tenants, integrations and credentials, orchestration, and
 product data. Agent behavior arrives with each request as the execution
 spec; nothing is provisioned or registered first.
 
-Every tool with side effects executes on your side of the boundary,
-either as a client tool call returned over the stream or as a signed
+Every tool with side effects executes on your side of the boundary, either as
+a client tool call recoverable through reads and the stream or as a signed
 callback to your endpoints.
 
 ## Deployment

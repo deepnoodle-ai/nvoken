@@ -45,9 +45,10 @@ to run unattended:
 Tools are where the agent touches the world:
 
 - **Execution modes.** Builtin tools execute service-side, callback tools are
-  signed calls to your endpoints, and client tools return over the stream for
-  your application to execute. The exchange is durable: stable tool call IDs,
-  deadlines, and exactly one accepted result per call.
+  signed calls to your endpoints, and client tools are recoverable through
+  reads and the stream for your application to execute. The exchange is
+  durable: stable tool call IDs, deadlines, and exactly one accepted result
+  per call.
 - **Annotations and previews.** Read-only, destructive, idempotent, and
   open-world hints drive permission decisions, and a tool can render a
   human-readable summary of what a call will do before it runs, which is what

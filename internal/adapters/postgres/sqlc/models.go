@@ -197,6 +197,7 @@ type ToolCall struct {
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
 	CompletedAt            *time.Time
+	ResultOrigin           *string
 }
 
 type ToolCallAttempt struct {
