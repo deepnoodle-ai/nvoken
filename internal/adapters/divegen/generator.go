@@ -48,7 +48,7 @@ func newModel(provider, model, apiKey string) (llm.LLM, error) {
 
 func (g *Generator) Generate(ctx context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
 	if g == nil || g.factory == nil {
-		return domain.GenerationResponse{}, fmt.Errorf("Dive generator is not configured")
+		return domain.GenerationResponse{}, fmt.Errorf("dive generator is not configured")
 	}
 	provider := strings.ToLower(strings.TrimSpace(request.Provider))
 	var apiKey string
@@ -173,7 +173,7 @@ func toDiveMessage(message domain.GenerationMessage) (*llm.Message, error) {
 
 func fromDiveMessage(message *llm.Message) (domain.GenerationMessage, error) {
 	if message == nil || message.Role != llm.Assistant || len(message.Content) == 0 {
-		return domain.GenerationMessage{}, errors.New("Dive output is not a nonempty assistant message")
+		return domain.GenerationMessage{}, errors.New("dive output is not a nonempty assistant message")
 	}
 	content, err := json.Marshal(message.Content)
 	if err != nil {

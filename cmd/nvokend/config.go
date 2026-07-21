@@ -58,13 +58,13 @@ func loadDaemonConfig() (daemon.Config, error) {
 		return daemon.Config{}, fmt.Errorf("failed to load configuration: %w", err)
 	}
 	if cfg.DatabaseURL == "" {
-		return daemon.Config{}, fmt.Errorf("DATABASE_URL is required for serve")
+		return daemon.Config{}, fmt.Errorf("serve: DATABASE_URL is required")
 	}
 	if cfg.DatabaseMaxConns < 2 {
-		return daemon.Config{}, fmt.Errorf("DATABASE_MAX_CONNS must be at least 2 (one connection is reserved for cancellation notifications)")
+		return daemon.Config{}, fmt.Errorf("serve: DATABASE_MAX_CONNS must be at least 2 (one connection is reserved for cancellation notifications)")
 	}
 	if cfg.RuntimeAPIKey == "" {
-		return daemon.Config{}, fmt.Errorf("RUNTIME_API_KEY is required for serve")
+		return daemon.Config{}, fmt.Errorf("serve: RUNTIME_API_KEY is required")
 	}
 	engineConfig := engine.Config{
 		Concurrency: cfg.EngineConcurrency, PollInterval: cfg.EnginePollInterval,
@@ -91,21 +91,21 @@ func loadDaemonConfig() (daemon.Config, error) {
 		return daemon.Config{}, fmt.Errorf("invalid engine configuration: %w", err)
 	}
 	if cfg.ShutdownTimeout <= 0 {
-		return daemon.Config{}, fmt.Errorf("SHUTDOWN_TIMEOUT must be positive")
+		return daemon.Config{}, fmt.Errorf("serve: SHUTDOWN_TIMEOUT must be positive")
 	}
 	if cfg.EngineDrainGrace > cfg.ShutdownTimeout-time.Second {
-		return daemon.Config{}, fmt.Errorf("ENGINE_DRAIN_GRACE must leave at least 1s inside SHUTDOWN_TIMEOUT")
+		return daemon.Config{}, fmt.Errorf("serve: ENGINE_DRAIN_GRACE must leave at least 1s inside SHUTDOWN_TIMEOUT")
 	}
 	if len(cfg.RuntimeAPIKey) < 32 {
-		return daemon.Config{}, fmt.Errorf("RUNTIME_API_KEY must be at least 32 bytes")
+		return daemon.Config{}, fmt.Errorf("serve: RUNTIME_API_KEY must be at least 32 bytes")
 	}
 	var tenantConstraint *string
 	if cfg.RuntimeTenantRef != "" {
 		if !utf8.ValidString(cfg.RuntimeTenantRef) || strings.TrimSpace(cfg.RuntimeTenantRef) == "" {
-			return daemon.Config{}, fmt.Errorf("RUNTIME_TENANT_REF must be valid UTF-8 and not blank")
+			return daemon.Config{}, fmt.Errorf("serve: RUNTIME_TENANT_REF must be valid UTF-8 and not blank")
 		}
 		if utf8.RuneCountInString(cfg.RuntimeTenantRef) > 255 {
-			return daemon.Config{}, fmt.Errorf("RUNTIME_TENANT_REF must be at most 255 Unicode characters")
+			return daemon.Config{}, fmt.Errorf("serve: RUNTIME_TENANT_REF must be at most 255 Unicode characters")
 		}
 		tenantConstraint = &cfg.RuntimeTenantRef
 	}
@@ -125,7 +125,7 @@ func loadMigrationConfig() (daemon.MigrationConfig, error) {
 		return daemon.MigrationConfig{}, fmt.Errorf("failed to load migration configuration: %w", err)
 	}
 	if cfg.DatabaseURL == "" {
-		return daemon.MigrationConfig{}, fmt.Errorf("DATABASE_URL is required for migrate")
+		return daemon.MigrationConfig{}, fmt.Errorf("migrate: DATABASE_URL is required")
 	}
 	return daemon.MigrationConfig{
 		DatabaseURL: cfg.DatabaseURL,

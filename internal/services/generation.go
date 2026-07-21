@@ -177,7 +177,7 @@ func requireJSONEOF(decoder *json.Decoder) error {
 
 func transcriptForClaim(claim domain.InvocationClaim, stored []domain.SessionMessage) ([]domain.GenerationMessage, error) {
 	if len(stored) == 0 {
-		return nil, fmt.Errorf("Session transcript is empty")
+		return nil, fmt.Errorf("session transcript is empty")
 	}
 	messages := make([]domain.GenerationMessage, 0, len(stored))
 	var previousSequence int64
@@ -186,10 +186,10 @@ func transcriptForClaim(claim domain.InvocationClaim, stored []domain.SessionMes
 			message.AccountID != claim.Invocation.AccountID ||
 			message.TenantPartitionID != claim.Invocation.TenantPartitionID ||
 			message.AgentID != claim.Invocation.AgentID {
-			return nil, fmt.Errorf("Session message scope does not match Invocation")
+			return nil, fmt.Errorf("session message scope does not match Invocation")
 		}
 		if index > 0 && message.Sequence <= previousSequence {
-			return nil, fmt.Errorf("Session message sequence is not strictly increasing")
+			return nil, fmt.Errorf("session message sequence is not strictly increasing")
 		}
 		previousSequence = message.Sequence
 		generationMessage := domain.GenerationMessage{Role: message.Role, Content: message.Content}

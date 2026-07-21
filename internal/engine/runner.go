@@ -242,8 +242,8 @@ type claimState struct {
 	leaseLost atomic.Bool
 }
 
-var errCancellationWake = errors.New("Invocation cancellation notification received")
-var errExecutionDeadline = errors.New("Invocation execution deadline reached")
+var errCancellationWake = errors.New("invocation cancellation notification received")
+var errExecutionDeadline = errors.New("invocation execution deadline reached")
 
 func (r *Runner) runClaim(executorParent context.Context, claim domain.InvocationClaim) {
 	leaseCtx, cancelLease := context.WithCancel(context.Background())

@@ -316,7 +316,7 @@ func (s *InvocationExecutionService) Settle(
 
 func (s *InvocationExecutionService) ReapExpired(ctx context.Context, limit int) ([]domain.Invocation, error) {
 	if s == nil || s.store == nil || s.txm == nil || s.clock == nil || s.ids == nil {
-		return nil, fmt.Errorf("Invocation execution service is not configured")
+		return nil, fmt.Errorf("invocation execution service is not configured")
 	}
 	if limit <= 0 {
 		return nil, fmt.Errorf("reaper batch limit must be positive")
@@ -486,7 +486,7 @@ func (s *InvocationExecutionService) reapCandidate(
 
 func (s *InvocationExecutionService) ready(owner string, leaseDuration time.Duration) error {
 	if s == nil || s.store == nil || s.txm == nil || s.clock == nil || s.ids == nil || s.segmentCeiling <= 0 {
-		return fmt.Errorf("Invocation execution service is not configured")
+		return fmt.Errorf("invocation execution service is not configured")
 	}
 	if strings.TrimSpace(owner) == "" || len(owner) > MaxExecutionOwnerCharacters {
 		return fmt.Errorf("execution owner must contain 1 to %d bytes", MaxExecutionOwnerCharacters)
@@ -605,7 +605,7 @@ func invocationFailureWithDetails(code, message string, details map[string]strin
 
 func executionDeadline(invocation domain.Invocation, startedAt time.Time, segmentCeiling time.Duration) (time.Time, string, error) {
 	if segmentCeiling <= 0 || invocation.ActiveTimeoutMS <= 0 {
-		return time.Time{}, "", fmt.Errorf("Invocation execution controls are invalid")
+		return time.Time{}, "", fmt.Errorf("invocation execution controls are invalid")
 	}
 	remainingActive := time.Duration(invocation.ActiveTimeoutMS-invocation.ActiveExecutionMS) * time.Millisecond
 	if remainingActive <= 0 {

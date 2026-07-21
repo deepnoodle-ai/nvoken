@@ -41,9 +41,12 @@ type postgresCancellationSubscription struct {
 }
 
 func (s *postgresCancellationSubscription) Wait(caller context.Context, timeout time.Duration) (string, bool) {
+	if s == nil {
+		return "", false
+	}
 	s.waitMu.Lock()
 	defer s.waitMu.Unlock()
-	if s == nil || s.pool == nil || timeout <= 0 || s.ctx.Err() != nil {
+	if s.pool == nil || timeout <= 0 || s.ctx.Err() != nil {
 		return "", false
 	}
 	conn, ok := s.connection()

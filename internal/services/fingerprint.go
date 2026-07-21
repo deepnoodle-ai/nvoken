@@ -34,7 +34,7 @@ func invocationFingerprintBytesV1(input CreateInvocationInput) ([]byte, error) {
 
 	var buffer bytes.Buffer
 	buffer.WriteString(`{"version":`)
-	buffer.WriteString(fmt.Sprint(fingerprintVersionV1))
+	buffer.WriteString(strconv.Itoa(fingerprintVersionV1))
 	buffer.WriteString(`,"session_selector":{"kind":`)
 	if err := writeJSONString(&buffer, kind); err != nil {
 		return nil, err
@@ -89,7 +89,12 @@ func invocationFingerprintBytesV2(input CreateInvocationInput) ([]byte, error) {
 	// Reuse v1's language-neutral string encoding while changing the version
 	// and inserting budgets at the end of spec before input.
 	canonical := string(v1)
-	canonical = strings.Replace(canonical, `{"version":1`, `{"version":2`, 1)
+	canonical = strings.Replace(
+		canonical,
+		`{"version":`+strconv.Itoa(fingerprintVersionV1),
+		`{"version":`+strconv.Itoa(fingerprintVersionV2),
+		1,
+	)
 	needle := `}},"input":`
 	index := strings.Index(canonical, needle)
 	if index < 0 {

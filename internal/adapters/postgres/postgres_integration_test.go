@@ -166,7 +166,9 @@ func TestMigrationLockReleasesWithConnection(t *testing.T) {
 
 	// Releasing the dedicated session models process or connection loss:
 	// Postgres drops the session-scoped lock without a cooperating unlock.
-	lockConn.Conn().Close(ctx)
+	if err := lockConn.Conn().Close(ctx); err != nil {
+		t.Fatalf("close migration lock connection: %v", err)
+	}
 	lockConn.Release()
 	proceedCtx, proceedCancel := context.WithTimeout(ctx, 2*time.Second)
 	defer proceedCancel()

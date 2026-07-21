@@ -125,15 +125,16 @@ func TestConcurrentCancellationAndSettlementHaveOneTerminalWinner(t *testing.T) 
 		t.Fatalf("terminal lifecycle = %#v, Invocation = %#v", states, invocation)
 	}
 	messages, _ := store.ListSessionMessages(context.Background(), ack.SessionID)
-	if invocation.Status == domain.InvocationCompleted {
+	switch invocation.Status {
+	case domain.InvocationCompleted:
 		if settleErr != nil || len(messages) != 2 {
 			t.Fatalf("completed winner: settlement = %v, messages = %#v", settleErr, messages)
 		}
-	} else if invocation.Status == domain.InvocationCancelled {
+	case domain.InvocationCancelled:
 		if !errors.Is(settleErr, ports.ErrLeaseLost) || len(messages) != 1 {
 			t.Fatalf("cancelled winner: settlement = %v, messages = %#v", settleErr, messages)
 		}
-	} else {
+	default:
 		t.Fatalf("unexpected terminal winner %q", invocation.Status)
 	}
 }

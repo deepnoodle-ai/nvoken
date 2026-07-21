@@ -16,25 +16,36 @@ import (
 
 const maxJSONNestingDepth = 16
 
+// requestErrorf preserves polished client-facing response text without using
+// Go error strings as an internal API. The HTTP handler copies these messages
+// verbatim into its invalid_request envelope.
+func requestErrorf(format string, args ...any) error {
+	return requestDecodeError(fmt.Sprintf(format, args...))
+}
+
+type requestDecodeError string
+
+func (e requestDecodeError) Error() string { return string(e) }
+
 func decodeInvocationRequest(w http.ResponseWriter, r *http.Request, target *services.CreateInvocationInput) error {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
-		return fmt.Errorf("Content-Type must be application/json.")
+		return requestErrorf("Content-Type must be application/json.")
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, services.MaxInvocationBodyBytes)
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if strings.Contains(err.Error(), "request body too large") || errors.As(err, &tooLarge) {
-			return fmt.Errorf("Request body must be at most %d bytes.", services.MaxInvocationBodyBytes)
+			return requestErrorf("Request body must be at most %d bytes.", services.MaxInvocationBodyBytes)
 		}
-		return fmt.Errorf("Request body could not be read.")
+		return requestErrorf("Request body could not be read.")
 	}
 	if len(payload) == 0 {
-		return fmt.Errorf("Request body is required.")
+		return requestErrorf("Request body is required.")
 	}
 	if !utf8.Valid(payload) {
-		return fmt.Errorf("Request body must contain valid UTF-8.")
+		return requestErrorf("Request body must contain valid UTF-8.")
 	}
 	if err := validateJSONSurrogates(payload); err != nil {
 		return err
@@ -48,14 +59,14 @@ func decodeInvocationRequest(w http.ResponseWriter, r *http.Request, target *ser
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("Invalid request body: %v.", err)
+		return requestErrorf("Invalid request body: %v.", err)
 	}
 	if err := services.ValidateCreateInvocation(*target); err != nil {
 		var public *services.PublicError
 		if errors.As(err, &public) {
-			return fmt.Errorf("%s", public.Message)
+			return requestErrorf("%s", public.Message)
 		}
-		return fmt.Errorf("Invalid request body.")
+		return requestErrorf("Invalid request body.")
 	}
 	return nil
 }
@@ -98,15 +109,15 @@ func scanJSONStringSurrogates(payload []byte, index int) (int, error) {
 			switch {
 			case codeUnit >= 0xd800 && codeUnit <= 0xdbff:
 				if index+6 > len(payload) || payload[index] != '\\' || payload[index+1] != 'u' {
-					return 0, fmt.Errorf("Request body contains an unpaired JSON surrogate escape.")
+					return 0, requestErrorf("Request body contains an unpaired JSON surrogate escape.")
 				}
 				low, ok := parseHexCodeUnit(payload, index+2)
 				if !ok || low < 0xdc00 || low > 0xdfff {
-					return 0, fmt.Errorf("Request body contains an unpaired JSON surrogate escape.")
+					return 0, requestErrorf("Request body contains an unpaired JSON surrogate escape.")
 				}
 				index += 6
 			case codeUnit >= 0xdc00 && codeUnit <= 0xdfff:
-				return 0, fmt.Errorf("Request body contains an unpaired JSON surrogate escape.")
+				return 0, requestErrorf("Request body contains an unpaired JSON surrogate escape.")
 			}
 		default:
 			index++
@@ -141,39 +152,39 @@ func validateJSONMembers(payload []byte) error {
 	decoder.UseNumber()
 	first, err := decoder.Token()
 	if err != nil {
-		return fmt.Errorf("Invalid request body: %v.", err)
+		return requestErrorf("Invalid request body: %v.", err)
 	}
 	if delimiter, ok := first.(json.Delim); !ok || delimiter != '{' {
-		return fmt.Errorf("Request body must be a JSON object.")
+		return requestErrorf("Request body must be a JSON object.")
 	}
 	if err := scanJSONObject(decoder, 1); err != nil {
 		return err
 	}
 	if _, err := decoder.Token(); err != io.EOF {
 		if err == nil {
-			return fmt.Errorf("Request body must contain exactly one JSON value.")
+			return requestErrorf("Request body must contain exactly one JSON value.")
 		}
-		return fmt.Errorf("Invalid request body: %v.", err)
+		return requestErrorf("Invalid request body: %v.", err)
 	}
 	return nil
 }
 
 func scanJSONObject(decoder *json.Decoder, depth int) error {
 	if depth > maxJSONNestingDepth {
-		return fmt.Errorf("Request body exceeds the maximum JSON nesting depth.")
+		return requestErrorf("Request body exceeds the maximum JSON nesting depth.")
 	}
 	seen := make(map[string]struct{})
 	for decoder.More() {
 		keyToken, err := decoder.Token()
 		if err != nil {
-			return fmt.Errorf("Invalid request body: %v.", err)
+			return requestErrorf("Invalid request body: %v.", err)
 		}
 		key, ok := keyToken.(string)
 		if !ok {
-			return fmt.Errorf("Invalid request body: object member name must be a string.")
+			return requestErrorf("Invalid request body: object member name must be a string.")
 		}
 		if _, duplicate := seen[key]; duplicate {
-			return fmt.Errorf("Request body contains duplicate JSON member %q.", key)
+			return requestErrorf("Request body contains duplicate JSON member %q.", key)
 		}
 		seen[key] = struct{}{}
 		if err := scanJSONValue(decoder, depth); err != nil {
@@ -182,10 +193,10 @@ func scanJSONObject(decoder *json.Decoder, depth int) error {
 	}
 	closing, err := decoder.Token()
 	if err != nil {
-		return fmt.Errorf("Invalid request body: %v.", err)
+		return requestErrorf("Invalid request body: %v.", err)
 	}
 	if closing != json.Delim('}') {
-		return fmt.Errorf("Invalid request body: expected object end.")
+		return requestErrorf("Invalid request body: expected object end.")
 	}
 	return nil
 }
@@ -193,7 +204,7 @@ func scanJSONObject(decoder *json.Decoder, depth int) error {
 func scanJSONValue(decoder *json.Decoder, depth int) error {
 	token, err := decoder.Token()
 	if err != nil {
-		return fmt.Errorf("Invalid request body: %v.", err)
+		return requestErrorf("Invalid request body: %v.", err)
 	}
 	delimiter, ok := token.(json.Delim)
 	if !ok {
@@ -204,7 +215,7 @@ func scanJSONValue(decoder *json.Decoder, depth int) error {
 		return scanJSONObject(decoder, depth+1)
 	case '[':
 		if depth+1 > maxJSONNestingDepth {
-			return fmt.Errorf("Request body exceeds the maximum JSON nesting depth.")
+			return requestErrorf("Request body exceeds the maximum JSON nesting depth.")
 		}
 		for decoder.More() {
 			if err := scanJSONValue(decoder, depth+1); err != nil {
@@ -213,25 +224,25 @@ func scanJSONValue(decoder *json.Decoder, depth int) error {
 		}
 		closing, err := decoder.Token()
 		if err != nil {
-			return fmt.Errorf("Invalid request body: %v.", err)
+			return requestErrorf("Invalid request body: %v.", err)
 		}
 		if closing != json.Delim(']') {
-			return fmt.Errorf("Invalid request body: expected array end.")
+			return requestErrorf("Invalid request body: expected array end.")
 		}
 		return nil
 	default:
-		return fmt.Errorf("Invalid request body: unexpected delimiter.")
+		return requestErrorf("Invalid request body: unexpected delimiter.")
 	}
 }
 
 func rejectNullOptionalStrings(payload []byte) error {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(payload, &object); err != nil {
-		return fmt.Errorf("Invalid request body: %v.", err)
+		return requestErrorf("Invalid request body: %v.", err)
 	}
 	for _, field := range []string{"tenant_ref", "session_id", "session_key"} {
 		if raw, present := object[field]; present && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return fmt.Errorf("%s must be a string when supplied.", field)
+			return requestErrorf("%s must be a string when supplied.", field)
 		}
 	}
 	return nil

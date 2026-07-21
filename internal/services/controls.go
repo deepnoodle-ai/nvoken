@@ -93,17 +93,17 @@ func (p BudgetPolicy) Resolve(input *InvocationBudgetInput) (ResolvedBudgets, er
 	if p.DefaultWallClockTimeout <= 0 || p.DefaultActiveExecutionTimeout <= 0 || p.DefaultMaxIterations <= 0 ||
 		p.MaxWallClockTimeout < p.DefaultWallClockTimeout || p.MaxActiveExecutionTimeout < p.DefaultActiveExecutionTimeout ||
 		p.MaxOutputTokens <= 0 || p.MaxEstimatedCostMicros <= 0 || p.MaxIterations < p.DefaultMaxIterations {
-		return ResolvedBudgets{}, fmt.Errorf("Invocation budget policy is invalid")
+		return ResolvedBudgets{}, fmt.Errorf("invocation budget policy is invalid")
 	}
 	if p.MaxWallClockTimeout > time.Duration(maxBudgetSeconds)*time.Second ||
 		p.MaxActiveExecutionTimeout > time.Duration(maxBudgetSeconds)*time.Second ||
 		p.MaxOutputTokens > maxBudgetOutputTokens || p.MaxEstimatedCostMicros > maxBudgetCostMicros ||
 		p.MaxIterations > maxBudgetIterations {
-		return ResolvedBudgets{}, fmt.Errorf("Invocation budget policy exceeds fixed safety limits")
+		return ResolvedBudgets{}, fmt.Errorf("invocation budget policy exceeds fixed safety limits")
 	}
 	if p.DefaultWallClockTimeout%time.Second != 0 || p.DefaultActiveExecutionTimeout%time.Second != 0 ||
 		p.MaxWallClockTimeout%time.Second != 0 || p.MaxActiveExecutionTimeout%time.Second != 0 {
-		return ResolvedBudgets{}, fmt.Errorf("Invocation time budgets must use whole seconds")
+		return ResolvedBudgets{}, fmt.Errorf("invocation time budgets must use whole seconds")
 	}
 	if err := validateRequestedBudgets(input); err != nil {
 		return ResolvedBudgets{}, err
