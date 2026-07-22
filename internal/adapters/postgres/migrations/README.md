@@ -62,6 +62,12 @@ index so the composed Invocation result read can fetch one turn's canonical
 messages without scanning the Session. It is an ordinary migration; the
 schema-14 binary remains safe against it.
 
+Migration `000016` lowers per-table autovacuum thresholds on the five
+high-churn tables (`sessions`, `invocations`, `tool_calls`,
+`execution_dispatches`, `callback_deliveries`). Their updates always change
+an indexed column and are never HOT, so dead tuples accumulate faster than
+row counts suggest. Storage parameters only; no shape change.
+
 Migration `000014` is the one-release compatibility transition. Starting with
 this migration, every new migration must add one entry to
 `compatibility.json` and update the singleton
@@ -70,3 +76,16 @@ versions in its transaction. Use `classification: ordinary` only when the
 immediately previous production binary remains safe. A breaking change needs a
 prior expand release and a later contract migration; it cannot raise the
 minimum binary version in an ordinary release.
+
+## Large-table rules
+
+Migration statements run under `MIGRATION_TIMEOUT` and take ordinary
+Postgres locks. Once a deployment has large, busy tables, two operations are
+no longer acceptable in an ordinary migration: a plain `CREATE INDEX`, which
+blocks all writes to the table for the duration of the build, and an
+unbatched full-table backfill, which holds one long transaction and stalls
+autovacuum. Do not raise `MIGRATION_TIMEOUT` to force either through.
+`CREATE INDEX CONCURRENTLY` cannot run inside a transaction and so conflicts
+with the compatibility-row convention above; the dedicated mechanism for it
+is deferred and the constraint is recorded in
+[`docs/guides/database-migrations.md`](../../../../docs/guides/database-migrations.md).
