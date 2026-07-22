@@ -11,6 +11,20 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: nvoken_test
+          POSTGRES_PASSWORD: nvoken-test
+          POSTGRES_USER: nvoken
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=nvoken --dbname=nvoken_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -35,5 +49,8 @@ jobs:
         with:
           components: rustfmt
       - run: make check
-      - run: make test-postgres
+      - name: Check single-daemon diagnostic against PostgreSQL 17
+        env:
+          NVOKEN_TEST_DATABASE_URL: postgres://nvoken:nvoken-test@127.0.0.1:5432/nvoken_test?sslmode=disable
+        run: go test ./cmd/nvokend -run '^TestSingleDaemonProfileExamplePassesDiagnostic$' -count=1
       - run: make sdk-check
