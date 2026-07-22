@@ -140,3 +140,39 @@ output "configured_capacity_totals" {
     task_concurrency              = var.task_queue_max_concurrent_dispatches
   }
 }
+
+output "qualification_profile" {
+  description = "Nonsecret deployed resource identities and mutable starting values consumed by the bounded Google Cloud qualification runner."
+  value = {
+    project_id                           = var.project_id
+    environment                          = var.environment
+    region                               = var.region
+    image                                = local.image
+    invocation_execution_mode            = var.invocation_execution_mode
+    service_name                         = google_cloud_run_v2_service.runtime.name
+    service_url                          = google_cloud_run_v2_service.runtime.uri
+    executor_service_name                = google_cloud_run_v2_service.executor.name
+    executor_service_url                 = google_cloud_run_v2_service.executor.uri
+    execution_queue                      = google_cloud_tasks_queue.execution.id
+    execution_queue_name                 = google_cloud_tasks_queue.execution.name
+    dispatch_smoke_job_name              = google_cloud_run_v2_job.dispatch_smoke.name
+    migration_job_name                   = google_cloud_run_v2_job.migrate.name
+    redis_instance_name                  = google_redis_instance.live_events.name
+    redis_memory_size_gb                 = var.redis_memory_size_gb
+    runtime_api_key_secret_id            = google_secret_manager_secret.runtime_api_key.secret_id
+    task_caller_service_account_email    = google_service_account.task_caller.email
+    runtime_service_account_email        = google_service_account.runtime.email
+    executor_max_instances               = var.executor_max_instances
+    executor_request_concurrency         = var.executor_request_concurrency
+    task_queue_max_concurrent_dispatches = var.task_queue_max_concurrent_dispatches
+    synthetic_dispatch_delay_seconds     = var.synthetic_dispatch_delay_seconds
+    provider_secrets_configured = {
+      anthropic = var.anthropic_api_key_secret_id != null
+      openai    = var.openai_api_key_secret_id != null
+    }
+    callback_signing_configured      = var.callback_signing_key_secret_id != null
+    monitoring_notification_channels = var.monitoring_notification_channels
+    executor_auth_alert_policy       = google_monitoring_alert_policy.dispatch_failures["executor_auth"].name
+    task_rejection_alert_policy      = google_monitoring_alert_policy.task_delivery_rejections.name
+  }
+}
