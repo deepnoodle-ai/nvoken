@@ -65,27 +65,22 @@ make onboarding-check   # prove the packed TypeScript newcomer path (requires di
 ## TypeScript npm releases
 
 `@deepnoodle/nvoken` is a public package in the existing `@deepnoodle` npm
-organization. The first 0.1.0 publish is interactive after the exact merged
-`main` artifact passes `make onboarding-check`:
+organization. Install the published package with:
 
 ```bash
-cd sdk/typescript
-npm ci
-npm run build
-npm test
-npm pack --dry-run
-npm publish --access public
+npm install @deepnoodle/nvoken
 ```
 
-Verify the registry rather than treating the publish command as evidence:
+Version 0.1.0 was published interactively from the exact merged `main` artifact after
+`make onboarding-check`. Verify the registry rather than treating a publish command
+or workflow result as evidence:
 
 ```bash
 npm view @deepnoodle/nvoken@0.1.0 name version dist-tags repository --json
 ```
 
-After the first publish, configure npm trusted publishing for GitHub repository
-`deepnoodle-ai/nvoken`, workflow `release-npm.yml`, allowed action
-`npm publish`, and no environment unless the workflow gains one. Later releases
-must update the package version on `main`, pass the gates, and push the exact
-`npm-vX.Y.Z` tag. The workflow uses short-lived OIDC authentication, publishes
+npm trusted publishing is configured for GitHub repository `deepnoodle-ai/nvoken`,
+workflow `release-npm.yml`, allowed action `npm publish`, and no environment. Later
+releases must update the package version on `main`, pass the gates, and push the
+exact `npm-vX.Y.Z` tag. The workflow uses short-lived OIDC authentication, publishes
 with provenance, and verifies the public version.
