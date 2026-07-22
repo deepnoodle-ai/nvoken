@@ -1,4 +1,4 @@
-.PHONY: fmt build generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres test-restore vet openapi-check scripts-check sdk-generate sdk-generate-check sdk-check onboarding-check check check-deploy readiness run upgrade-preflight migrate
+.PHONY: fmt build release generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres test-restore vet openapi-check scripts-check sdk-generate sdk-generate-check sdk-check onboarding-check check check-deploy readiness run upgrade-preflight migrate
 
 REDOCLY_VERSION := 1.34.11
 SQLC_VERSION := v1.31.1
@@ -9,6 +9,10 @@ fmt:
 
 build:
 	go build ./...
+
+release:
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=0.1.1"; exit 1; fi
+	python3 scripts/release.py "$(VERSION)"
 
 generate: sqlc
 
@@ -44,7 +48,7 @@ openapi-check:
 
 scripts-check:
 	bash -n scripts/test-postgres.sh
-	python3 -c 'import ast, pathlib; [ast.parse(pathlib.Path(path).read_text(), filename=path) for path in ("deploy/local/configure.py", "deploy/local/configure_test.py", "deploy/single-daemon/smoke.py", "deploy/single-daemon/smoke_test.py", "deploy/single-daemon/load.py", "scripts/test_typescript_onboarding.py")]'
+	python3 -c 'import ast, pathlib; [ast.parse(pathlib.Path(path).read_text(), filename=path) for path in ("deploy/local/configure.py", "deploy/local/configure_test.py", "deploy/single-daemon/smoke.py", "deploy/single-daemon/smoke_test.py", "deploy/single-daemon/load.py", "scripts/release.py", "scripts/release_test.py", "scripts/test_typescript_onboarding.py")]'
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s deploy/local -p '*_test.py'
 	python3 deploy/single-daemon/smoke.py --help >/dev/null
 	PYTHONDONTWRITEBYTECODE=1 python3 deploy/single-daemon/smoke_test.py >/dev/null

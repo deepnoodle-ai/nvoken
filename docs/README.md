@@ -1,12 +1,28 @@
 # Documentation
 
-This directory is organized by document type:
+## Start here
+
+- **Run:** [try nvoken locally](guides/run-locally.md) with the official
+  Homebrew binaries and public TypeScript package.
+- **Develop:** [build and change nvoken](guides/developing-nvoken.md) from a
+  source checkout.
+- **Deploy:** operate the [single-daemon](../deploy/single-daemon/README.md) or
+  [Google Cloud](../deploy/google-cloud/README.md) production profile.
+
+Run is the first-time user path. Develop is for repository contributors. Deploy
+assumes the local proof already worked and intentionally includes production
+configuration, availability, backup, upgrade, and incident requirements.
+
+## Documentation layout
+
+The rest of this directory is organized by document type:
 
 - [product/](product/) — high level product definition and overview
 - [design/](design/) — the governing design packet: claims register, vision, architecture, API contract, decision log
 - [prds/](prds/) — product requirement documents
 - [../openapi/runtime.yaml](../openapi/runtime.yaml) and [../openapi/identity.yaml](../openapi/identity.yaml) — focused Runtime and identity contracts
-- [guides/](guides/) — developer guides, including the [local development quickstart](guides/local-development.md), [database migrations](guides/database-migrations.md), [compatible upgrades and one-release rollback](guides/compatible-upgrades.md), [backup and restore](guides/backup-and-restore.md), [operational signals and diagnostics](guides/operational-signals.md), [data retention and storage growth](guides/data-retention.md), [Runtime admission](guides/runtime-admission.md), [SDKs and the client CLI](guides/sdks-and-cli.md), [credentials and CLI authentication](guides/credentials-and-cli-auth.md), [callback receivers](guides/callback-receivers.md), the [single-daemon profile](../deploy/single-daemon/README.md), and the [Google Cloud Run paved deployment](../deploy/google-cloud/README.md)
+- [guides/](guides/README.md) — task-oriented paths grouped into Try,
+  Integrate, and Operate
 - [research/](research/) — market, competitive, and technical research
 - [reviews/](reviews/) — code reviews
 - [testing/](testing/) — the authoritative

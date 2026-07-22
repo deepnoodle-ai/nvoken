@@ -1,5 +1,9 @@
 # Single-daemon production profile
 
+> **Production deployment guide.** If you are evaluating nvoken or building
+> your first integration, start with [Run nvoken locally](../../docs/guides/run-locally.md).
+> If you intend to change the repository, use [Develop nvoken](../../docs/guides/developing-nvoken.md).
+
 This package is the canonical operating guide for nvoken's `single_daemon`
 profile: one `nvokend` process in the `combined` role, embedded execution,
 in-process live events, and one operator-provided PostgreSQL database. It is a
@@ -10,6 +14,22 @@ API is unavailable too.
 The authoritative readiness state remains in the
 [production-readiness matrix](../../docs/testing/production-readiness-profiles.md).
 Having this package does not make an unexercised installation production ready.
+
+## Before you start
+
+This guide is for the person who will operate nvoken, Postgres, ingress, and
+backups. It assumes you already completed the local Run guide and now have:
+
+- a PostgreSQL 17 database with durable storage and a tested backup plan;
+- a process supervisor plus HTTPS ingress;
+- a secret store and at least one active provider API key;
+- Python 3.11+ on an operator workstation for smoke and load checks; and
+- authority to stop, migrate, restart, and restore this installation.
+
+For a first deployment, work through sections 1–5. Sections 6 onward are the
+day-two stop, upgrade, backup, capacity, and incident procedures that must be
+owned before production traffic. They are detailed because those choices
+cannot be made safely by a local convenience command.
 
 ## Supported boundary
 
@@ -43,8 +63,21 @@ from an operator workstation, not inside the minimal daemon container.
 
 ## 1. Obtain one immutable build
 
-Prefer a release binary or container pinned by checksum or digest. When
-building from source, check out the exact revision and record it:
+Install the official Homebrew release on macOS or Linux and record exactly what
+the supervisor will run:
+
+```bash
+brew install deepnoodle-ai/tap/nvoken
+nvokend --version
+command -v nvokend
+```
+
+The same checksummed archives are attached to the corresponding
+[GitHub Release](https://github.com/deepnoodle-ai/nvoken/releases) for hosts
+without Homebrew. Pin one version; do not allow an unattended package upgrade
+to replace a running production binary.
+
+When testing an unreleased source revision instead, check out and record it:
 
 ```bash
 git checkout --detach <revision>
@@ -187,6 +220,11 @@ python3 deploy/single-daemon/smoke.py callback
 Model/tool selection is probabilistic. A model that ignores an explicit smoke
 tool instruction is a failed exercise, not evidence that the durable ToolCall
 path ran.
+
+## Day-two operations
+
+The remaining sections are not extra first-run setup. They define how this
+production profile is stopped, upgraded, recovered, measured, and investigated.
 
 ## 6. Stop, restart, and remove disposable data
 

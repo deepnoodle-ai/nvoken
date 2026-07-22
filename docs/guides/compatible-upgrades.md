@@ -1,5 +1,9 @@
 # Compatible upgrades and one-release rollback
 
+> **For deployment operators and migration authors.** First-time users do not
+> need this guide. The Run quickstart starts a fresh disposable database; this
+> contract governs production upgrades and schema changes.
+
 nvoken keeps database migrations forward-only and applies them with
 `golang-migrate`. It does not migrate down during application rollback. Instead,
 each post-transition migration declares the oldest binary schema version that

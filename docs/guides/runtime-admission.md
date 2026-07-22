@@ -1,5 +1,10 @@
 # Runtime admission
 
+> **API behavior reference.** For a first working application, complete
+> [Run nvoken locally](run-locally.md) and start from an SDK quickstart. Return
+> here when you need durable retry, Session, streaming, cancellation, budget,
+> structured-output, or ToolCall semantics.
+
 The self-contained Runtime durably admits, executes, and reads Invocations,
 including structured output and host-executed client tools. Admission still
 returns before model generation begins.
@@ -8,23 +13,12 @@ This guide explains the runtime, not a production-readiness claim. The exact
 single-daemon operating boundary and its current proof status live in the
 [production-readiness profiles and evidence matrix](../testing/production-readiness-profiles.md).
 
-Apply migrations explicitly, then start the service with Postgres, the initial
-Runtime bearer, and the separate bootstrap and delivery-protection secrets
-described in [Machine credentials and CLI authentication](credentials-and-cli-auth.md).
-Supply the installation key for each provider your admitted specs may select:
-
-```bash
-DATABASE_URL='postgres://…' go run ./cmd/nvokend migrate
-
-DATABASE_URL='postgres://…' \
-RUNTIME_API_KEY='replace-with-a-random-32-byte-or-longer-secret' \
-BOOTSTRAP_OWNER_SECRET='replace-with-a-separate-random-32-byte-secret' \
-CREDENTIAL_DELIVERY_KEY='replace-with-32-bytes-as-unpadded-base64url' \
-NVOKEN_PUBLIC_BASE_URL='http://localhost:8080' \
-ANTHROPIC_API_KEY='replace-with-an-Anthropic-key' \
-OPENAI_API_KEY='' \
-go run ./cmd/nvokend serve
-```
+This reference assumes a Runtime is already serving, the application has a
+Runtime credential, and at least one provider key is configured. The local Run
+command prepares those inputs automatically. Production operators should use a
+[deployment profile](../../deploy/single-daemon/README.md) and the
+[credential guide](credentials-and-cli-auth.md), not reconstruct daemon
+configuration from API examples in this document.
 
 The self-hosted default is `installation_byok`, so an omitted credential
 selection uses the matching `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. If that
