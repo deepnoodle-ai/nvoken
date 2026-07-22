@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 
-import { Client, NvokenError, type Handle } from "../index.js";
+import {
+  Client,
+  formatInvocationFailure,
+  formatNvokenError,
+} from "../index.js";
 
 try {
   await main();
 } catch (error) {
-  reportError(error);
+  console.error(formatNvokenError(error));
   process.exitCode = 1;
 }
 
@@ -50,51 +54,15 @@ async function main(): Promise<void> {
     });
     sessionId = handle.sessionId;
     const invocation = await handle.wait();
-    requireCompleted(handle, invocation, provider);
+    if (invocation.status !== "completed") {
+      throw new Error(formatInvocationFailure(
+        handle.invocationId,
+        invocation,
+        provider,
+        { includeLogGuidance: true },
+      ));
+    }
     console.log(`agent> ${await handle.text()}`);
   }
   console.log(`session_key=${sessionKey}`);
-}
-
-function reportError(error: unknown): void {
-  if (error instanceof NvokenError) {
-    const code = error.code ? ` code=${error.code}` : "";
-    const request = error.requestId ? ` request_id=${error.requestId}` : "";
-    console.error(`nvoken error [${error.category}]${code}${request}: ${error.message}`);
-  } else {
-    console.error(error instanceof Error ? error.message : error);
-  }
-}
-
-function requireCompleted(
-  handle: Handle,
-  invocation: Awaited<ReturnType<Handle["wait"]>>,
-  provider: "anthropic" | "openai",
-): void {
-  if (invocation.status === "completed") return;
-  const publicReason = invocation.error
-    ? `${invocation.error.code}: ${terminalSentence(invocation.error.message)}`
-    : terminalSentence(invocation.status);
-  const details = invocation.error?.details
-    ? ` Safe details: ${JSON.stringify(invocation.error.details)}.`
-    : "";
-  const modelHelp = invocation.error?.code === "provider_error"
-    ? ` Check available model IDs at ${modelDocumentation(provider)}.`
-    : "";
-  throw new Error(
-    `Invocation ${handle.invocationId} ${invocation.status}: ${publicReason}${details}${modelHelp} `
-      + `Inspect structured daemon logs for invocation_id=${handle.invocationId}; `
-      + "raw provider responses are intentionally private.",
-  );
-}
-
-function terminalSentence(value: string): string {
-  const trimmed = value.trim();
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
-}
-
-function modelDocumentation(value: "anthropic" | "openai"): string {
-  return value === "openai"
-    ? "https://developers.openai.com/api/docs/models"
-    : "https://platform.claude.com/docs/en/about-claude/models/overview";
 }

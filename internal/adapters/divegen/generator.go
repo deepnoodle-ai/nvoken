@@ -45,6 +45,7 @@ type Generator struct {
 	clock              ports.Clock
 	logger             *slog.Logger
 	credentialResolver ports.ProviderCredentialResolver
+	registryVersion    func(string) string
 }
 
 type Option func(*Generator)
@@ -97,10 +98,11 @@ func (systemClock) Now() time.Time { return time.Now() }
 
 func New(config Config, options ...Option) *Generator {
 	generator := &Generator{
-		config:  config,
-		factory: newModel,
-		clock:   systemClock{},
-		logger:  slog.Default(),
+		config:          config,
+		factory:         newModel,
+		clock:           systemClock{},
+		logger:          slog.Default(),
+		registryVersion: diveRegistryVersion,
 	}
 	for _, option := range options {
 		if option != nil {
@@ -110,12 +112,12 @@ func New(config Config, options ...Option) *Generator {
 	return generator
 }
 
-func (*Generator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
+func (g *Generator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
 	capability := domain.ModelPricingCapability{
 		Provider:        domain.ModelProvider(provider),
 		Model:           model,
 		Status:          domain.ModelPricingUnknown,
-		RegistryVersion: diveRegistryVersion(provider),
+		RegistryVersion: g.registryVersion(provider),
 	}
 	var pricing llm.PricingInfo
 	var ok bool
@@ -136,20 +138,22 @@ func (*Generator) ResolveModelPricing(provider, model string) domain.ModelPricin
 }
 
 func diveRegistryVersion(provider string) string {
-	var dependencyPath string
-	switch provider {
-	case string(domain.ModelProviderAnthropic):
-		dependencyPath = "github.com/deepnoodle-ai/dive"
-	case string(domain.ModelProviderOpenAI):
-		dependencyPath = "github.com/deepnoodle-ai/dive/providers/openai"
-	default:
-		return "unknown"
-	}
 	build, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "unknown"
 	}
-	for _, dependency := range build.Deps {
+	return diveRegistryVersionFromDependencies(provider, build.Deps)
+}
+
+func diveRegistryVersionFromDependencies(provider string, dependencies []*debug.Module) string {
+	dependencyPath := map[string]string{
+		string(domain.ModelProviderAnthropic): "github.com/deepnoodle-ai/dive",
+		string(domain.ModelProviderOpenAI):    "github.com/deepnoodle-ai/dive/providers/openai",
+	}[provider]
+	if dependencyPath == "" {
+		return "unknown"
+	}
+	for _, dependency := range dependencies {
 		if dependency.Path != dependencyPath {
 			continue
 		}

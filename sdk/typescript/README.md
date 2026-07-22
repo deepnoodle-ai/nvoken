@@ -24,18 +24,16 @@ then save this complete example as `quickstart.mjs` next to the consumer's
 <!-- public-quickstart:start -->
 ```js
 import { randomUUID } from "node:crypto";
-import { Client, NvokenError } from "@deepnoodle/nvoken";
+import {
+  Client,
+  formatInvocationFailure,
+  formatNvokenError,
+} from "@deepnoodle/nvoken";
 
 try {
   await main();
 } catch (error) {
-  if (error instanceof NvokenError) {
-    const code = error.code ? ` code=${error.code}` : "";
-    const request = error.requestId ? ` request_id=${error.requestId}` : "";
-    console.error(`nvoken error [${error.category}]${code}${request}: ${error.message}`);
-  } else {
-    console.error(error instanceof Error ? error.message : error);
-  }
+  console.error(formatNvokenError(error));
   process.exitCode = 1;
 }
 
@@ -69,31 +67,9 @@ async function main() {
   });
   const invocation = await handle.wait();
   if (invocation.status !== "completed") {
-    const reason = invocation.error
-      ? `${invocation.error.code}: ${terminalSentence(invocation.error.message)}`
-      : terminalSentence(invocation.status);
-    const details = invocation.error?.details
-      ? ` Safe details: ${JSON.stringify(invocation.error.details)}.`
-      : "";
-    const modelHelp = invocation.error?.code === "provider_error"
-      ? ` Check available model IDs at ${modelDocumentation(provider)}.`
-      : "";
-    throw new Error(
-      `Invocation ${handle.invocationId} ${invocation.status}: ${reason}${details}${modelHelp}`,
-    );
+    throw new Error(formatInvocationFailure(handle.invocationId, invocation, provider));
   }
   console.log(`agent> ${await handle.text()}`);
-}
-
-function terminalSentence(value) {
-  const trimmed = value.trim();
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
-}
-
-function modelDocumentation(provider) {
-  return provider === "openai"
-    ? "https://developers.openai.com/api/docs/models"
-    : "https://platform.claude.com/docs/en/about-claude/models/overview";
 }
 ```
 <!-- public-quickstart:end -->
@@ -183,7 +159,10 @@ known. Known-unpriceable work is rejected before a provider call.
 
 Failed and cancelled Invocations print their ID, public code/message, safe
 details, and a structured-log pointer, then exit nonzero. Raw provider bodies
-and credentials are never public diagnostics.
+and credentials are never public diagnostics. Applications can reuse the
+exported `formatNvokenError` and `formatInvocationFailure` helpers to keep that
+rendering consistent; `includeLogGuidance` adds the local-daemon pointer when it
+is useful to an operator.
 
 ## Canonical assistant text
 

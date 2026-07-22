@@ -76,6 +76,12 @@ def stop(process: subprocess.Popen[bytes]) -> None:
         process.wait(timeout=5)
 
 
+def require_fragments(label: str, output: str, fragments: tuple[str, ...]) -> None:
+    missing = [fragment for fragment in fragments if fragment not in output]
+    if missing:
+        raise RuntimeError(f"{label} missed {missing}: {output}")
+
+
 def check_daemon(work: Path, database_url: str) -> None:
     binary = work / "nvokend"
     run(["go", "build", "-o", str(binary), "./cmd/nvokend"])
@@ -310,13 +316,19 @@ console.log(await handle.text());
         expected=1,
     )
     model_error = invalid_model.stdout + invalid_model.stderr
-    expected_model_error = (
-        "failed: provider_error: The provider rejected the requested model. "
-        'Safe details: {"classification":"upstream_rejected"}. '
-        "Check available model IDs at https://developers.openai.com/api/docs/models."
+    require_fragments(
+        "packed public quickstart model error",
+        model_error,
+        (
+            "Invocation invk_",
+            "failed: provider_error:",
+            "The provider rejected the requested model.",
+            "Safe details:",
+            "classification",
+            "upstream_rejected",
+            "https://developers.openai.com/api/docs/models.",
+        ),
     )
-    if expected_model_error not in model_error:
-        raise RuntimeError(f"packed public quickstart model error was not actionable: {model_error}")
     for output in (credential_error, model_error):
         if any(forbidden in output for forbidden in ("ResponseError", "node:internal", "\n    at ")):
             raise RuntimeError(f"packed public quickstart printed an internal stack: {output}")
@@ -396,14 +408,20 @@ def check_examples(base_url: str) -> None:
         expected=1,
     )
     rendered_failure = failed_quickstart.stdout + failed_quickstart.stderr
-    expected_failure = (
-        "failed: provider_error: The provider rejected the requested model. "
-        'Safe details: {"classification":"upstream_rejected"}. '
-        "Check available model IDs at https://developers.openai.com/api/docs/models. "
-        "Inspect structured daemon logs"
+    require_fragments(
+        "source quickstart model error",
+        rendered_failure,
+        (
+            "Invocation invk_",
+            "failed: provider_error:",
+            "The provider rejected the requested model.",
+            "Safe details:",
+            "classification",
+            "upstream_rejected",
+            "https://developers.openai.com/api/docs/models.",
+            "Inspect structured daemon logs",
+        ),
     )
-    if expected_failure not in rendered_failure:
-        raise RuntimeError(f"quickstart failure was not rendered exactly: {rendered_failure}")
 
     run(["npm", "ci", "--prefix", "examples/typescript-chat"])
     run(["npm", "run", "build", "--prefix", "examples/typescript-chat"])

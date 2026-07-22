@@ -323,3 +323,11 @@ entrypoints now use one-line public error rendering, and the packed-artifact gat
 exercises invalid credentials and invalid models in addition to success. Version
 0.1.1 remains deliberately unpublished until these corrections merge and pass from
 the exact `main` revision.
+
+PR review then hardened the correction without changing its release scope. Supported
+providers now fail tests if their registry version degrades to `unknown`, and a
+synthetic dependency graph proves Anthropic and OpenAI use their respective module
+versions when those versions diverge. Public error rendering moved into exported SDK
+helpers shared by the packed README, source quickstart, and chat example. The
+end-to-end checks now assert diagnostic meaning rather than the exact serialized
+shape of safe detail objects, so additive fields do not break onboarding.
