@@ -74,6 +74,13 @@ func run(args []string) error {
 		cfg.TargetBuildVersion = buildVersion
 		return daemon.PreflightMigration(ctx, cfg)
 	}
+	if len(args) == 1 && args[0] == "verify-restore" {
+		cfg, err := loadRestoreVerificationConfig()
+		if err != nil {
+			return err
+		}
+		return daemon.VerifyRestore(ctx, cfg)
+	}
 	if len(args) == 1 && args[0] == "dispatch-smoke" {
 		cfg, err := loadDispatchSmokeConfig()
 		if err != nil {
@@ -88,7 +95,7 @@ func run(args []string) error {
 			"dispatch_kind", result.Dispatch.Kind, "dispatch_status", result.Dispatch.Status)
 		return nil
 	}
-	return fmt.Errorf("usage: nvokend [serve|diagnose|upgrade-preflight|migrate|dispatch-smoke]")
+	return fmt.Errorf("usage: nvokend [serve|diagnose|upgrade-preflight|migrate|verify-restore|dispatch-smoke]")
 }
 
 func cloudLoggingReplaceAttr(groups []string, a slog.Attr) slog.Attr {

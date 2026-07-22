@@ -346,6 +346,34 @@ func TestLoadMigrationConfigRequiresDatabaseURL(t *testing.T) {
 	}
 }
 
+func TestLoadRestoreVerificationConfig(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://nvoken:secret@localhost/restored")
+	t.Setenv("DATABASE_MAX_CONNS", "3")
+	t.Setenv("RESTORE_VERIFY_TIMEOUT", "90s")
+
+	cfg, err := loadRestoreVerificationConfig()
+	if err != nil {
+		t.Fatalf("loadRestoreVerificationConfig: %v", err)
+	}
+	if cfg.DatabaseURL != "postgres://nvoken:secret@localhost/restored" ||
+		cfg.DatabaseMaxConns != 3 || cfg.Timeout != 90*time.Second {
+		t.Fatalf("restore verification config = %#v", cfg)
+	}
+}
+
+func TestLoadRestoreVerificationConfigRejectsUnsafeBounds(t *testing.T) {
+	t.Setenv("DATABASE_URL", "")
+	if _, err := loadRestoreVerificationConfig(); err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
+		t.Fatalf("missing restore database error = %v", err)
+	}
+
+	t.Setenv("DATABASE_URL", "postgres://localhost/restored")
+	t.Setenv("RESTORE_VERIFY_TIMEOUT", "31m")
+	if _, err := loadRestoreVerificationConfig(); err == nil || !strings.Contains(err.Error(), "at most 30m") {
+		t.Fatalf("restore timeout error = %v", err)
+	}
+}
+
 func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	setServeConfig(t)
 	t.Setenv("PORT", "9090")

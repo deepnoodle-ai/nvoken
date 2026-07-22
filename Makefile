@@ -1,4 +1,4 @@
-.PHONY: fmt build generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres vet openapi-check scripts-check sdk-generate sdk-generate-check sdk-check check check-deploy readiness run upgrade-preflight migrate
+.PHONY: fmt build generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres test-restore vet openapi-check scripts-check sdk-generate sdk-generate-check sdk-check check check-deploy readiness run upgrade-preflight migrate
 
 REDOCLY_VERSION := 1.34.11
 SQLC_VERSION := v1.31.1
@@ -32,6 +32,9 @@ test:
 test-postgres:
 	@scripts/test-postgres.sh
 
+test-restore:
+	@python3 scripts/test_restore.py
+
 vet:
 	go vet ./...
 
@@ -45,6 +48,7 @@ scripts-check:
 	python3 deploy/single-daemon/smoke.py --help >/dev/null
 	PYTHONDONTWRITEBYTECODE=1 python3 deploy/single-daemon/smoke_test.py >/dev/null
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p '*_test.py'
+	python3 scripts/test_restore.py --check
 
 sdk-generate:
 	sdk/scripts/generate.sh

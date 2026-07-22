@@ -120,6 +120,12 @@ type migrationConfig struct {
 	Mode                       string        `env:"NVOKEN_MIGRATION_MODE" envDefault:"ordinary"`
 }
 
+type restoreVerificationConfig struct {
+	DatabaseURL      string        `env:"DATABASE_URL"`
+	DatabaseMaxConns int32         `env:"DATABASE_MAX_CONNS" envDefault:"2"`
+	Timeout          time.Duration `env:"RESTORE_VERIFY_TIMEOUT" envDefault:"2m"`
+}
+
 type dispatchSmokeConfig struct {
 	DatabaseURL      string `env:"DATABASE_URL"`
 	DatabaseMaxConns int32  `env:"DATABASE_MAX_CONNS" envDefault:"2"`
@@ -425,6 +431,29 @@ func loadMigrationConfig() (daemon.MigrationConfig, error) {
 		CurrentBuildVersion:        cfg.CurrentBuildVersion,
 		CurrentBinarySchemaVersion: cfg.CurrentBinarySchemaVersion,
 		Mode:                       mode,
+	}, nil
+}
+
+func loadRestoreVerificationConfig() (daemon.RestoreVerificationConfig, error) {
+	_ = env.LoadEnvFile(".env")
+
+	cfg, err := env.Parse[restoreVerificationConfig]()
+	if err != nil {
+		return daemon.RestoreVerificationConfig{}, fmt.Errorf("failed to load restore verification configuration: %w", err)
+	}
+	if cfg.DatabaseURL == "" {
+		return daemon.RestoreVerificationConfig{}, fmt.Errorf("verify-restore: DATABASE_URL is required")
+	}
+	if cfg.DatabaseMaxConns < 1 {
+		return daemon.RestoreVerificationConfig{}, fmt.Errorf("verify-restore: DATABASE_MAX_CONNS must be positive")
+	}
+	if cfg.Timeout <= 0 || cfg.Timeout > 30*time.Minute {
+		return daemon.RestoreVerificationConfig{}, fmt.Errorf("verify-restore: RESTORE_VERIFY_TIMEOUT must be positive and at most 30m")
+	}
+	return daemon.RestoreVerificationConfig{
+		DatabaseURL:      cfg.DatabaseURL,
+		DatabaseMaxConns: cfg.DatabaseMaxConns,
+		Timeout:          cfg.Timeout,
 	}, nil
 }
 
