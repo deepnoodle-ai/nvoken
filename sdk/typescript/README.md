@@ -24,43 +24,53 @@ then save this complete example as `quickstart.mjs` next to the consumer's
 <!-- public-quickstart:start -->
 ```js
 import { randomUUID } from "node:crypto";
-import { Client } from "@deepnoodle/nvoken";
+import {
+  Client,
+  formatInvocationFailure,
+  formatNvokenError,
+} from "@deepnoodle/nvoken";
 
-const apiKey = process.env.NVOKEN_API_KEY;
-const provider = process.env.NVOKEN_PROVIDER;
-const model = process.env.NVOKEN_MODEL;
-if (!apiKey) throw new Error("NVOKEN_API_KEY is required");
-if (provider !== "anthropic" && provider !== "openai") {
-  throw new Error("NVOKEN_PROVIDER must be anthropic or openai");
+try {
+  await main();
+} catch (error) {
+  console.error(formatNvokenError(error));
+  process.exitCode = 1;
 }
-if (!model) throw new Error("NVOKEN_MODEL is required");
 
-const client = new Client({
-  baseUrl: process.env.NVOKEN_BASE_URL ?? "http://localhost:8080",
-  apiKey,
-});
-const pricing = await client.pricingCapability({ provider, name: model });
-console.log(`pricing=${pricing.status} registry=${pricing.registryVersion}`);
+async function main() {
+  const apiKey = process.env.NVOKEN_API_KEY;
+  const provider = process.env.NVOKEN_PROVIDER;
+  const model = process.env.NVOKEN_MODEL;
+  if (!apiKey) throw new Error("NVOKEN_API_KEY is required");
+  if (provider !== "anthropic" && provider !== "openai") {
+    throw new Error("NVOKEN_PROVIDER must be anthropic or openai");
+  }
+  if (!model) throw new Error("NVOKEN_MODEL is required");
 
-const handle = await client.invoke({
-  agentRef: "typescript-package-quickstart",
-  sessionKey: `typescript-package-${randomUUID()}`,
-  idempotencyKey: `typescript-package-message-${randomUUID()}`,
-  input: "Reply with a short hello.",
-  spec: {
-    instructions: "Be concise.",
-    model: { provider, name: model },
-    budgets: { maxOutputTokens: 100, maxIterations: 1 },
-  },
-});
-const invocation = await handle.wait();
-if (invocation.status !== "completed") {
-  const reason = invocation.error
-    ? `${invocation.error.code}: ${invocation.error.message}`
-    : invocation.status;
-  throw new Error(`Invocation ${handle.invocationId} ${invocation.status}: ${reason}`);
+  const client = new Client({
+    baseUrl: process.env.NVOKEN_BASE_URL ?? "http://localhost:8080",
+    apiKey,
+  });
+  const pricing = await client.pricingCapability({ provider, name: model });
+  console.log(`pricing=${pricing.status} registry=${pricing.registryVersion}`);
+
+  const handle = await client.invoke({
+    agentRef: "typescript-package-quickstart",
+    sessionKey: `typescript-package-${randomUUID()}`,
+    idempotencyKey: `typescript-package-message-${randomUUID()}`,
+    input: "Reply with a short hello.",
+    spec: {
+      instructions: "Be concise.",
+      model: { provider, name: model },
+      budgets: { maxOutputTokens: 100, maxIterations: 1 },
+    },
+  });
+  const invocation = await handle.wait();
+  if (invocation.status !== "completed") {
+    throw new Error(formatInvocationFailure(handle.invocationId, invocation, provider));
+  }
+  console.log(`agent> ${await handle.text()}`);
 }
-console.log(`agent> ${await handle.text()}`);
 ```
 <!-- public-quickstart:end -->
 
@@ -149,7 +159,10 @@ known. Known-unpriceable work is rejected before a provider call.
 
 Failed and cancelled Invocations print their ID, public code/message, safe
 details, and a structured-log pointer, then exit nonzero. Raw provider bodies
-and credentials are never public diagnostics.
+and credentials are never public diagnostics. Applications can reuse the
+exported `formatNvokenError` and `formatInvocationFailure` helpers to keep that
+rendering consistent; `includeLogGuidance` adds the local-daemon pointer when it
+is useful to an operator.
 
 ## Canonical assistant text
 

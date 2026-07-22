@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
-import { Client, NvokenError } from "@deepnoodle/nvoken";
+import {
+  Client,
+  formatInvocationFailure,
+  formatNvokenError,
+} from "@deepnoodle/nvoken";
 
 const baseUrl = process.env.NVOKEN_BASE_URL ?? "http://localhost:8080";
 const apiKey = process.env.NVOKEN_API_KEY;
@@ -64,26 +68,19 @@ for await (const line of input) {
     sessionId = handle.sessionId;
     const invocation = await handle.wait();
     if (invocation.status !== "completed") {
-      const reason = invocation.error
-        ? `${invocation.error.code}: ${terminalSentence(invocation.error.message)}`
-        : invocation.status;
-      const modelHelp = invocation.error?.code === "provider_error"
-        ? ` Check available model IDs at ${modelDocumentation(provider)}.`
-        : "";
-      throw new Error(`Invocation ${invocation.id} did not complete: ${reason}${modelHelp}`);
+      throw new Error(formatInvocationFailure(
+        handle.invocationId,
+        invocation,
+        provider,
+        { includeLogGuidance: true },
+      ));
     }
 
     const answer = await handle.text();
     console.log(`agent> ${answer}\n`);
   } catch (error) {
     hadError = true;
-    if (error instanceof NvokenError) {
-      const code = error.code ? ` code=${error.code}` : "";
-      const request = error.requestId ? ` request_id=${error.requestId}` : "";
-      console.error(`nvoken error [${error.category}]${code}${request}: ${error.message}`);
-    } else {
-      console.error(error instanceof Error ? error.message : error);
-    }
+    console.error(formatNvokenError(error));
   }
 
   if (process.stdin.isTTY) input.prompt();
@@ -91,14 +88,3 @@ for await (const line of input) {
 
 input.close();
 if (hadError) process.exitCode = 1;
-
-function modelDocumentation(value: "anthropic" | "openai"): string {
-  return value === "openai"
-    ? "https://developers.openai.com/api/docs/models"
-    : "https://platform.claude.com/docs/en/about-claude/models/overview";
-}
-
-function terminalSentence(value: string): string {
-  const trimmed = value.trim();
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
-}

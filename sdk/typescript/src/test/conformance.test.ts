@@ -7,6 +7,8 @@ import {
   NvokenError,
   Reducer,
   deduplicateCallbackResult,
+  formatInvocationFailure,
+  formatNvokenError,
   verifyCallback,
 } from "../index.js";
 
@@ -14,6 +16,49 @@ const invocationId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
 const sessionId = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const toolCallId = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
 const waitId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
+
+test("public diagnostics stay concise and provider-aware", () => {
+  assert.equal(
+    formatNvokenError(new NvokenError(
+      "authentication",
+      "invalid runtime API key",
+      401,
+      "unauthenticated",
+      "req_test",
+    )),
+    "nvoken error [authentication] code=unauthenticated request_id=req_test: invalid runtime API key",
+  );
+  assert.equal(formatNvokenError(new Error("NVOKEN_MODEL is required")), "NVOKEN_MODEL is required");
+
+  const invocation = {
+    status: "failed" as const,
+    error: {
+      code: "provider_error" as const,
+      message: "The provider rejected the requested model",
+      details: { classification: "upstream_rejected", retryable: false },
+    },
+  };
+  const publicDiagnostic = formatInvocationFailure(invocationId, invocation, "openai");
+  assert.match(publicDiagnostic, /^Invocation invk_.* failed: provider_error:/);
+  assert.match(publicDiagnostic, /"classification":"upstream_rejected"/);
+  assert.match(publicDiagnostic, /https:\/\/developers\.openai\.com\/api\/docs\/models\.$/);
+  assert.doesNotMatch(publicDiagnostic, /structured daemon logs/);
+
+  const anthropicDiagnostic = formatInvocationFailure(invocationId, invocation, "anthropic");
+  assert.match(
+    anthropicDiagnostic,
+    /https:\/\/platform\.claude\.com\/docs\/en\/about-claude\/models\/overview\.$/,
+  );
+
+  const localDiagnostic = formatInvocationFailure(
+    invocationId,
+    invocation,
+    "openai",
+    { includeLogGuidance: true },
+  );
+  assert.match(localDiagnostic, new RegExp(`structured daemon logs for invocation_id=${invocationId}`));
+  assert.match(localDiagnostic, /private upstream response bodies are intentionally omitted\.$/);
+});
 
 test("shared fault server semantics", async (context) => {
   const baseUrl = process.env.NVOKEN_CONFORMANCE_URL;

@@ -22,7 +22,6 @@ import (
 
 	"github.com/deepnoodle-ai/dive"
 	"github.com/deepnoodle-ai/dive/llm"
-	diveproviders "github.com/deepnoodle-ai/dive/providers"
 	"github.com/deepnoodle-ai/dive/providers/anthropic"
 	"github.com/deepnoodle-ai/dive/providers/openai"
 
@@ -46,6 +45,7 @@ type Generator struct {
 	clock              ports.Clock
 	logger             *slog.Logger
 	credentialResolver ports.ProviderCredentialResolver
+	registryVersion    func(string) string
 }
 
 type Option func(*Generator)
@@ -98,10 +98,11 @@ func (systemClock) Now() time.Time { return time.Now() }
 
 func New(config Config, options ...Option) *Generator {
 	generator := &Generator{
-		config:  config,
-		factory: newModel,
-		clock:   systemClock{},
-		logger:  slog.Default(),
+		config:          config,
+		factory:         newModel,
+		clock:           systemClock{},
+		logger:          slog.Default(),
+		registryVersion: diveRegistryVersion,
 	}
 	for _, option := range options {
 		if option != nil {
@@ -111,18 +112,23 @@ func New(config Config, options ...Option) *Generator {
 	return generator
 }
 
-func (*Generator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
+func (g *Generator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
 	capability := domain.ModelPricingCapability{
 		Provider:        domain.ModelProvider(provider),
 		Model:           model,
 		Status:          domain.ModelPricingUnknown,
-		RegistryVersion: diveRegistryVersion(),
+		RegistryVersion: g.registryVersion(provider),
 	}
-	if provider != string(domain.ModelProviderAnthropic) &&
-		provider != string(domain.ModelProviderOpenAI) {
+	var pricing llm.PricingInfo
+	var ok bool
+	switch provider {
+	case string(domain.ModelProviderAnthropic):
+		pricing, ok = anthropic.TextModelPricing[model]
+	case string(domain.ModelProviderOpenAI):
+		pricing, ok = openai.TextModelPricing[model]
+	default:
 		return capability
 	}
-	pricing, ok := diveproviders.PricingFor(model, false)
 	if !ok || !strings.EqualFold(pricing.Currency, "USD") {
 		capability.Status = domain.ModelPricingUnpriced
 		return capability
@@ -131,13 +137,24 @@ func (*Generator) ResolveModelPricing(provider, model string) domain.ModelPricin
 	return capability
 }
 
-func diveRegistryVersion() string {
+func diveRegistryVersion(provider string) string {
 	build, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "unknown"
 	}
-	for _, dependency := range build.Deps {
-		if dependency.Path != "github.com/deepnoodle-ai/dive" {
+	return diveRegistryVersionFromDependencies(provider, build.Deps)
+}
+
+func diveRegistryVersionFromDependencies(provider string, dependencies []*debug.Module) string {
+	dependencyPath := map[string]string{
+		string(domain.ModelProviderAnthropic): "github.com/deepnoodle-ai/dive",
+		string(domain.ModelProviderOpenAI):    "github.com/deepnoodle-ai/dive/providers/openai",
+	}[provider]
+	if dependencyPath == "" {
+		return "unknown"
+	}
+	for _, dependency := range dependencies {
+		if dependency.Path != dependencyPath {
 			continue
 		}
 		if dependency.Replace != nil {
