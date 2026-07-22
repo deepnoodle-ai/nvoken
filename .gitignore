@@ -34,6 +34,7 @@ go.work.sum
 # Build output
 /bin/
 /dist/
+/server
 
 # SDK build output and local environments
 sdk/typescript/node_modules/

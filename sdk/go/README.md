@@ -1,8 +1,8 @@
 # nvoken Go SDK
 
 The supported entry point is `nvoken.Client`. It returns durable handles and
-owns replay-safe retries, polling, typed errors, SSE recovery, and callback
-verification. `Client.Raw()` exposes the generated Runtime client when a
+owns replay-safe retries, polling, typed errors, SSE recovery, composed
+result reads (`Result`, `ListMessages`, `Text`), and callback verification. `Client.Raw()` exposes the generated Runtime client when a
 low-level operation is needed.
 
 ```bash
