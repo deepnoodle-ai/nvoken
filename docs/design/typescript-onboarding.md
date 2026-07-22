@@ -1,6 +1,6 @@
 # Local TypeScript onboarding
 
-**Status:** Implemented; first npm publication pending  
+**Status:** Implemented; `@deepnoodle/nvoken` 0.1.0 published
 **Author:** OpenAI Codex  
 **Date:** 2026-07-22  
 **Workflow:** Spec and build in parallel; the field report supplies the acceptance criteria.
@@ -8,12 +8,11 @@
 ## Context
 
 The [local TypeScript onboarding field report](../research/2026-07-21-local-typescript-onboarding.md)
-proved that the Runtime and TypeScript facade work, but also found 33 distribution,
-bootstrap, failure-semantics, ergonomics, and CI gaps. The public npm coordinate is
-not yet published, the first local response requires assembling several production
-documents, and the existing quickstart neither prints assistant text nor fails
-usefully. Estimated-cost enforcement also needs a sharper contract now that durable
-model checkpoints can retain a provider response before terminal budget settlement.
+proved that the Runtime and TypeScript facade worked, but also found 33 distribution,
+bootstrap, failure-semantics, ergonomics, and CI gaps. The implementation closed those
+gaps and the reviewed 0.1.0 artifact is now public at `@deepnoodle/nvoken`. It also
+sharpened estimated-cost enforcement now that durable model checkpoints can retain a
+provider response before terminal budget settlement.
 
 ## Goals
 
@@ -46,14 +45,12 @@ model checkpoints can retain a provider response before terminal budget settleme
 ### Distribution and release
 
 The package is corrected from the nonexistent `@deepnoodle-ai` scope to the
-existing `@deepnoodle/nvoken` coordinate and gains complete public package
-metadata, explicit exports, public access configuration, and build/test gates before
-packing. Until the first registry publish is verified, its README labels the package
-unreleased and leads with the local checkout path. A dedicated GitHub Actions workflow
-will publish an exact `npm-vX.Y.Z` tag only when the tag and `package.json` versions
-match. The first interactive publish creates the public scoped package; subsequent
-publishes should use npm trusted publishing for `deepnoodle-ai/nvoken` and the exact
-workflow filename.
+existing `@deepnoodle/nvoken` coordinate and has complete public package metadata,
+explicit exports, public access configuration, and build/test gates before packing.
+Version 0.1.0 was published interactively from the exact reviewed `main` revision. A
+dedicated GitHub Actions workflow publishes a later exact `npm-vX.Y.Z` tag only when
+the tag and `package.json` versions match; it uses npm trusted publishing for
+`deepnoodle-ai/nvoken` and the exact workflow filename.
 
 CI packs the package, installs the tarball into an otherwise empty TypeScript
 project, compiles a facade-only consumer, and runs it against the deterministic SDK
@@ -173,24 +170,20 @@ profile keeps both paths honest.
   remains available, and the public reason tells the host how to proceed.
 - The onboarding check adds npm and process lifecycle time to CI. It runs as a
   named step after the core Go and SDK gates so failures remain attributable.
-- The initial npm publish and trusted-publisher registration require an npm account
-  with permission in the `@deepnoodle` organization; code cannot create that
-  authority.
+- npm package administration and trusted-publisher changes still require an npm
+  account with permission in the `@deepnoodle` organization; code cannot create
+  that authority.
 
 ## Rollout
 
-1. Merge the implementation while the package README says unreleased.
-2. From merged `main`, pack and inspect 0.1.0, authenticate interactively, and publish
-   the scoped package publicly.
-3. Verify `npm view`, install the registry artifact into the empty consumer, and run
-   the facade smoke.
-4. Configure npm trusted publishing for repository `deepnoodle-ai/nvoken`, workflow
-   `release-npm.yml`, and the `npm publish` action.
-5. Change the README availability notice to published, merge it, and use exact
-   `npm-vX.Y.Z` tags for later releases.
+The implementation and published-availability README are merged. Version 0.1.0 was
+packed, inspected, tested, and published interactively from the exact merged `main`
+revision. npm trusted publishing is connected to repository `deepnoodle-ai/nvoken`,
+workflow `release-npm.yml`, and the `npm publish` action. Later releases update the
+version on `main`, pass the gates, and push the exact `npm-vX.Y.Z` tag.
 
 ## Open questions
 
-There are no unresolved design questions. The authenticated npm identity
-`curtis-deepnoodle` is an owner of the existing `deepnoodle` organization; the
-first publish can create `@deepnoodle/nvoken` after the artifact passes its gates.
+There are no unresolved design questions. The public package coordinate is
+`@deepnoodle/nvoken`, and later releases use the tag-driven trusted-publishing
+workflow.
