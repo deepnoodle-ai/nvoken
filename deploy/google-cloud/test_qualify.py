@@ -424,6 +424,9 @@ class EvidenceTests(unittest.TestCase):
             path = qualification.write_evidence()
             content = path.read_text()
         self.assertIn("Invocation completed", content)
+        self.assertIn("| Profile | `google_cloud` |", content)
+        self.assertIn(f"| Tested revision | `{'a' * 40}` |", content)
+        self.assertIn("| Result | `incomplete` |", content)
         self.assertNotIn("test-token", content)
         self.assertNotIn("Reply with", content)
 

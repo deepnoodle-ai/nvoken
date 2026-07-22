@@ -1,9 +1,13 @@
 # Keep production-readiness evidence current
 
-**Status:** Draft
+**Status:** Implemented
 **Sequence:** 025
 **Depends on:** `022-prd-single-daemon-production-profile.md` and
 `024-prd-google-cloud-qualification.md`
+
+This status covers the conformance gate itself. It does not claim either
+deployment profile is ready: live qualification and the manual proof still
+missing from the readiness matrix remain explicit follow-up work.
 
 ## ELI5
 
@@ -77,18 +81,18 @@ archives; a mandatory calendar cadence unsupported by operator needs.
 
 ## Acceptance
 
-- [ ] **A1 (R1):** On a clean checkout with an operator-supplied disposable
+- [x] **A1 (R1):** On a clean checkout with an operator-supplied disposable
   Postgres, the single-daemon gate runs its safe automated checks without Google
   credentials; the Google gate includes Terraform/deployment checks and clearly
   skips live integration steps unless explicitly enabled.
-- [ ] **A2 (R2–R4):** Missing restore evidence, a stale rollback record, and a
+- [x] **A2 (R2–R4):** Missing restore evidence, a stale rollback record, and a
   failing automated smoke each produce a non-ready result naming the exact row;
   an explicitly deferred optional capability does not.
-- [ ] **A3 (R3):** With machine-readable output enabled, the human and machine
+- [x] **A3 (R3):** With machine-readable output enabled, the human and machine
   results identify the same revision, profile, checks, and outcome, and a
   secret-content test finds no credential, payload, transcript, or Terraform-
   state value.
-- [ ] **A4 (R4, R5):** A fixture documentation contradiction or failed required
+- [x] **A4 (R4, R5):** A fixture documentation contradiction or failed required
   check makes the command reject a stronger recorded claim; an explicitly
   labeled design aspiration is ignored. Fixing the mismatch returns the summary
   to ready without modifying runtime state.

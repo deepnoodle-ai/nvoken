@@ -39,7 +39,8 @@ sdk/typescript/node_modules/
 sdk/typescript/dist/
 sdk/python/.venv/
 sdk/python/.pytest_cache/
-sdk/python/**/__pycache__/
+**/__pycache__/
+*.py[cod]
 sdk/rust/target/
 
 # Terraform working data and saved plans (state contains generated secrets)
