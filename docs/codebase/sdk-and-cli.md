@@ -59,7 +59,8 @@ Each SDK has three layers:
 
 1. A read-only generated transport exposing every Runtime operation and model.
 2. A handwritten client with `invoke`, `get`, `list`, `wait`, `stream`,
-   `resume`, `submitToolResults`, and `cancel`, plus typed errors and bounded
+   `resume`, `submitToolResults`, `cancel`, and the composed result read
+   (`result`, `listMessages`, `text`), plus typed errors and bounded
    replay-safe retries.
 3. A durable handle carrying Invocation and Session IDs. Local timeout or
    cancellation stops only the caller's wait; explicit `cancel` is the only

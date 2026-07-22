@@ -345,12 +345,21 @@ export class Handle {
     }
   }
 
+  /**
+   * Reads the composed InvocationResult at any status: the authoritative
+   * Invocation, this Invocation's canonical messages, and the output_text
+   * projection.
+   */
   async result(signal?: AbortSignal): Promise<InvocationResult> {
     const result = await this.client.getResult(this.invocationId, signal);
     this.status = result.invocation.status;
     return result;
   }
 
+  /**
+   * Returns this Invocation's canonical messages from the composed result
+   * read.
+   */
   async listMessages(signal?: AbortSignal): Promise<SessionMessage[]> {
     return (await this.result(signal)).messages;
   }

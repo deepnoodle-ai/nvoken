@@ -378,11 +378,18 @@ class Handle:
             raise NvokenError("timeout", "local wait timed out or was cancelled") from error
 
     async def result(self) -> InvocationResult:
+        """Read the composed InvocationResult at any status: the
+        authoritative Invocation, this Invocation's canonical messages, and
+        the ``output_text`` projection.
+        """
         result = await self.client.get_result(self.invocation_id)
         self.status = result.invocation.status
         return result
 
     async def list_messages(self) -> list[SessionMessage]:
+        """Return this Invocation's canonical messages from the composed
+        result read.
+        """
         return (await self.result()).messages
 
     async def text(self) -> str:

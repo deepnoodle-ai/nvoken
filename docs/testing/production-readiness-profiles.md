@@ -27,8 +27,8 @@ authority, or recovery semantics.
 
 | Profile | Status | Current evidence summary |
 | --- | --- | --- |
-| `single_daemon` | **Pending** | The checked profile package, diagnostic configuration proof, smoke/load tooling, failure drills, incident guidance, retention posture, and backup/restore path are implemented. Live smoke, restart/failure, upgrade/rollback, diagnosis, capacity, and operator secret-handling evidence has not been recorded. |
-| `google_cloud` | **Pending** | The paved topology, offline Terraform checks, retention posture, and backup/restore path are proven, but live qualification, upgrade/rollback, operational, and secret-handling evidence has not been recorded for this profile. |
+| `single_daemon` | **Pending** | The checked profile package, diagnostic configuration proof, smoke/load tooling, failure drills, incident guidance, retention posture, and backup/restore path are implemented. The recorded backup/restore drill evidence is stale against the current migration head and awaits a fresh drill. Live smoke, restart/failure, upgrade/rollback, diagnosis, capacity, and operator secret-handling evidence has not been recorded. |
+| `google_cloud` | **Pending** | The paved topology, offline Terraform checks, and retention posture are proven. The recorded backup/restore drill evidence is stale against the current migration head and awaits a fresh drill, and live qualification, upgrade/rollback, operational, and secret-handling evidence has not been recorded for this profile. |
 
 A profile is ready only when every required row is `proven` and `current`.
 Optional capabilities outside the exact profile do not add implicit rows.
