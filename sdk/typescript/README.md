@@ -1,15 +1,17 @@
 # nvoken TypeScript SDK
 
-> **Unreleased:** `@deepnoodle/nvoken` 0.1.0 is not yet available from npm.
-> Use the local-checkout installation below until the registry package is
-> published and verified.
-
 Use `Client` for durable Runtime workflows. It provides durable handles,
 replay-safe retries, async pagination, typed errors, resumable SSE, callback
 verification, and canonical assistant-text helpers. Generated operations remain
 available from the `raw` export.
 
-## Install from this checkout
+## Install
+
+```bash
+npm install @deepnoodle/nvoken
+```
+
+## Install from a source checkout
 
 Build `dist/` before installing the local package; generated output is not
 committed:
@@ -30,12 +32,7 @@ points to `sdk/typescript`:
 }
 ```
 
-Then run `npm install` in the consumer. Once 0.1.0 is verified on npm, the
-registry command will be:
-
-```bash
-npm install @deepnoodle/nvoken
-```
+Then run `npm install` in the consumer.
 
 ## Two-turn quickstart
 

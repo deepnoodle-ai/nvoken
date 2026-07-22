@@ -72,8 +72,8 @@ a provider.
 
 ## 4. Build the local TypeScript SDK and chat
 
-Until `@deepnoodle/nvoken` 0.1.0 is verified on npm, build the checkout and
-install the example's local `file:` dependency:
+The checked repository example intentionally uses the SDK checkout through a
+local `file:` dependency. Build both packages before running it:
 
 ```bash
 npm ci --prefix sdk/typescript
