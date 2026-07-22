@@ -255,10 +255,9 @@ python3 deploy/google-cloud/qualify.py \
 Remove `--dry-run` only in a disposable or staging environment. The runner
 prints the resolved project, region, revisions, immutable image, queue, Redis
 instance, bounds, Terraform plan status, and intended temporary mutations. It
-then requires the exact project ID before changing queue state, Terraform
-limits, Redis size, or known qualification tasks. It owns cleanup after success,
-failure, or interruption and writes a scrubbed result under
-`docs/testing/readiness/evidence/`.
+then requires the exact project ID before starting any live scenario. It owns
+cleanup after success, failure, or interruption and writes a scrubbed result
+under `docs/testing/readiness/evidence/`.
 
 Use repeated `--scenario` flags to rerun a failed scenario without inventing a
 second entry point. For example:

@@ -334,12 +334,7 @@ class Qualification:
             print("Dry run complete; no provider request or resource mutation was made.")
             return 0
 
-        if set(self.config.scenarios) & MUTATING_SCENARIOS:
-            confirmation = input(
-                f"Type the exact project ID {self.project!r} to start the qualification: "
-            )
-            if confirmation != self.project:
-                raise QualificationError("project confirmation did not match; no mutation made")
+        self.confirm_project()
 
         failure: BaseException | None = None
         current_scenario: str | None = None
@@ -396,6 +391,17 @@ class Qualification:
         if any(result.status != "pass" for result in self.cleanup_results):
             raise QualificationError("one or more cleanup actions failed")
         return 0
+
+    def confirm_project(self, read: Callable[[str], str] | None = None) -> None:
+        if read is None:
+            read = input
+        confirmation = read(
+            f"Type the exact project ID {self.project!r} to start the qualification: "
+        )
+        if confirmation != self.project:
+            raise QualificationError(
+                "project confirmation did not match; qualification scenarios were not started"
+            )
 
     def preflight(self) -> None:
         if sys.version_info < MINIMUM_PYTHON:
@@ -557,8 +563,12 @@ class Qualification:
             "describe",
             required_string(self.profile, "image"),
         )
-        runtime_uri = nested(runtime, "status", "url") or nested(runtime, "uri")
-        if runtime_uri and str(runtime_uri).rstrip("/") != required_string(
+        runtime_uri = first_string(
+            nested(runtime, "uri"), nested(runtime, "status", "url")
+        )
+        if runtime_uri is None:
+            raise QualificationError("Cloud Run public service URI could not be resolved")
+        if runtime_uri.rstrip("/") != required_string(
             self.profile, "service_url"
         ).rstrip("/"):
             raise QualificationError("Terraform and Cloud Run public service URLs disagree")
@@ -584,23 +594,26 @@ class Qualification:
             raise QualificationError("deployed image digest could not be resolved")
         configured_image = required_string(self.profile, "image")
         image_repository = configured_image.rsplit(":", 1)[0]
-        self.references["immutable_image"] = f"{image_repository}@{digest}"
+        immutable_image = f"{image_repository}@{digest}"
+        self.references["immutable_image"] = immutable_image
         for service_name, service in (("Runtime", runtime), ("executor", executor)):
-            service_image = nested(service, "template", "containers", 0, "image")
-            if service_image is not None and service_image != configured_image:
+            service_image = cloud_run_image(service)
+            if service_image is None:
+                raise QualificationError(
+                    f"{service_name} image could not be resolved from Cloud Run"
+                )
+            if service_image not in (configured_image, immutable_image):
                 raise QualificationError(
                     f"{service_name} image does not match the Terraform qualification profile"
                 )
-        self.references["runtime_revision"] = str(
-            nested(runtime, "status", "latestReadyRevisionName")
-            or nested(runtime, "status", "traffic", 0, "revisionName")
-            or "unknown"
-        )
-        self.references["executor_revision"] = str(
-            nested(executor, "status", "latestReadyRevisionName")
-            or nested(executor, "status", "traffic", 0, "revisionName")
-            or "unknown"
-        )
+        runtime_revision = cloud_run_revision(runtime)
+        executor_revision = cloud_run_revision(executor)
+        if runtime_revision is None:
+            raise QualificationError("Runtime latest ready revision is unavailable")
+        if executor_revision is None:
+            raise QualificationError("executor latest ready revision is unavailable")
+        self.references["runtime_revision"] = runtime_revision
+        self.references["executor_revision"] = executor_revision
         self.references["queue_start_state"] = queue_state
         self.references["redis_start_state"] = redis_state
 
@@ -1374,8 +1387,8 @@ class Qualification:
             required_string(self.profile, "executor_service_name"),
             f"--region={self.region}",
         )
-        revision = nested(payload, "status", "latestReadyRevisionName")
-        if not isinstance(revision, str) or not revision:
+        revision = cloud_run_revision(payload)
+        if revision is None:
             raise QualificationError("executor latest ready revision is unavailable")
         return revision
 
@@ -1489,7 +1502,7 @@ class Qualification:
         return self.commands.json(command)
 
     def read_logs(self, filter_text: str, *, limit: int = 20) -> list[dict[str, Any]]:
-        payload = self.commands.json(
+        result = self.commands.run(
             [
                 "gcloud",
                 "logging",
@@ -1502,6 +1515,12 @@ class Qualification:
                 "--format=json",
             ]
         )
+        if not result.stdout.strip():
+            return []
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise QualificationError("gcloud logging read did not return JSON") from error
         if not isinstance(payload, list):
             return []
         return [entry for entry in payload if isinstance(entry, dict)]
@@ -1706,6 +1725,32 @@ def nested(value: Any, *path: str | int) -> Any:
     return current
 
 
+def first_string(*values: Any) -> str | None:
+    for value in values:
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def cloud_run_image(service: Any) -> str | None:
+    return first_string(
+        nested(service, "template", "containers", 0, "image"),
+        nested(service, "spec", "template", "spec", "containers", 0, "image"),
+    )
+
+
+def cloud_run_revision(service: Any) -> str | None:
+    revision = first_string(
+        nested(service, "latestReadyRevision"),
+        nested(service, "status", "latestReadyRevisionName"),
+        nested(service, "status", "traffic", 0, "revisionName"),
+    )
+    if revision is None:
+        return None
+    normalized = revision.rstrip("/").rsplit("/", 1)[-1]
+    return normalized or None
+
+
 def required_string(value: dict[str, Any], key: str) -> str:
     selected = value.get(key)
     if not isinstance(selected, str) or not selected.strip():
@@ -1737,6 +1782,8 @@ def cleanup_summary(results: Sequence[CleanupResult]) -> str:
 
 
 def assert_secret_free(content: str) -> None:
+    # Evidence is assembled from an explicit nonsecret allowlist. This scan is
+    # defense in depth for common accidental credential-bearing additions.
     forbidden = (
         "authorization: bearer",
         "api_key=",

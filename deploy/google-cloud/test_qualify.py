@@ -1,11 +1,48 @@
 import contextlib
 import http.server
+import json
 import pathlib
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 import qualify
+
+
+FIXTURE_DIR = pathlib.Path(__file__).with_name("testdata")
+
+
+def fixture(name):
+    return json.loads((FIXTURE_DIR / name).read_text())
+
+
+def runtime_v2_fixture():
+    service = fixture("cloud-run-v2-service.json")
+    service["name"] = "projects/nvoken-stage/locations/us-central1/services/nvoken-stage"
+    service["latestReadyRevision"] = (
+        "projects/nvoken-stage/locations/us-central1/services/nvoken-stage/"
+        "revisions/nvoken-stage-00042-new"
+    )
+    service["uri"] = "https://runtime.example.test"
+    return service
+
+
+class PayloadCommands:
+    def __init__(self, payloads):
+        self.payloads = list(payloads)
+
+    def json(self, _args, *, timeout=120):
+        del timeout
+        return self.payloads.pop(0)
+
+
+class OutputCommands:
+    def __init__(self, stdout):
+        self.stdout = stdout
+
+    def run(self, args, **_kwargs):
+        return qualify.CommandResult(tuple(str(part) for part in args), 0, self.stdout, "")
 
 
 class RuntimeHandler(http.server.BaseHTTPRequestHandler):
@@ -203,6 +240,112 @@ class ProfileTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(qualify.QualificationError, "not attached"):
             qualification.validate_profile()
+
+    def test_baseline_live_run_requires_project_confirmation(self):
+        qualification = self.qualification(config(dry_run=False))
+        qualification.preflight = mock.Mock()
+        qualification.print_plan = mock.Mock()
+        qualification.confirm_project = mock.Mock(
+            side_effect=qualify.QualificationError("stop after confirmation")
+        )
+        with self.assertRaisesRegex(qualify.QualificationError, "stop after confirmation"):
+            qualification.run()
+        qualification.confirm_project.assert_called_once_with()
+
+
+class CloudRunPayloadTests(unittest.TestCase):
+    def test_reads_knative_v1_describe_shape(self):
+        service = fixture("cloud-run-v1-service.json")
+        self.assertEqual(
+            qualify.cloud_run_image(service),
+            "us-central1-docker.pkg.dev/nvoken-stage/nvoken/nvokend:abc123",
+        )
+        self.assertEqual(
+            qualify.cloud_run_revision(service),
+            "nvoken-stage-executor-00041-old",
+        )
+
+    def test_reads_run_v2_describe_shape_and_normalizes_revision_name(self):
+        service = fixture("cloud-run-v2-service.json")
+        self.assertEqual(
+            qualify.cloud_run_image(service),
+            "us-central1-docker.pkg.dev/nvoken-stage/nvoken/nvokend:abc123",
+        )
+        self.assertEqual(
+            qualify.cloud_run_revision(service),
+            "nvoken-stage-executor-00042-new",
+        )
+
+    def test_executor_revision_accepts_run_v2_describe_shape(self):
+        qualification = qualify.Qualification(
+            config(), PayloadCommands([fixture("cloud-run-v2-service.json")])
+        )
+        qualification.profile = profile()
+        self.assertEqual(
+            qualification.executor_revision(),
+            "nvoken-stage-executor-00042-new",
+        )
+
+    def test_resource_validation_fails_closed_when_service_image_is_missing(self):
+        runtime = runtime_v2_fixture()
+        del runtime["template"]["containers"][0]["image"]
+        executor = fixture("cloud-run-v1-service.json")
+        commands = PayloadCommands(
+            [
+                runtime,
+                executor,
+                {"state": "RUNNING"},
+                {"state": "READY"},
+                {"imageSummary": {"digest": "sha256:" + "a" * 64}},
+            ]
+        )
+        qualification = qualify.Qualification(config(), commands)
+        qualification.profile = profile()
+        with self.assertRaisesRegex(
+            qualify.QualificationError, "Runtime image could not be resolved"
+        ):
+            qualification.validate_google_resources()
+
+    def test_resource_validation_accepts_v1_and_v2_describe_shapes(self):
+        runtime = runtime_v2_fixture()
+        executor = fixture("cloud-run-v1-service.json")
+        commands = PayloadCommands(
+            [
+                runtime,
+                executor,
+                {"state": "RUNNING"},
+                {"state": "READY"},
+                {"imageSummary": {"digest": "sha256:" + "a" * 64}},
+            ]
+        )
+        qualification = qualify.Qualification(config(), commands)
+        qualification.profile = profile()
+        qualification.validate_google_resources()
+        self.assertEqual(
+            qualification.references["runtime_revision"],
+            "nvoken-stage-00042-new",
+        )
+        self.assertEqual(
+            qualification.references["executor_revision"],
+            "nvoken-stage-executor-00041-old",
+        )
+
+
+class LoggingTests(unittest.TestCase):
+    def qualification(self, stdout):
+        qualification = qualify.Qualification(config(), OutputCommands(stdout))
+        qualification.profile = profile()
+        return qualification
+
+    def test_empty_logging_stdout_means_no_matches(self):
+        self.assertEqual(self.qualification("").read_logs("test-filter"), [])
+
+    def test_non_list_logging_payload_means_no_matches(self):
+        self.assertEqual(self.qualification("{}").read_logs("test-filter"), [])
+
+    def test_invalid_logging_payload_still_fails(self):
+        with self.assertRaisesRegex(qualify.QualificationError, "did not return JSON"):
+            self.qualification("not-json").read_logs("test-filter")
 
 
 class RuntimeClientTests(unittest.TestCase):
