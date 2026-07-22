@@ -9,7 +9,7 @@ result replay, and callback verification.
 | Package | Supported facade | Raw generated client |
 | --- | --- | --- |
 | Go | `sdk/go` package `nvoken` | `Client.Raw()` |
-| TypeScript | `Client` from `@deepnoodle-ai/nvoken` | `raw` export |
+| TypeScript | `Client` from `@deepnoodle/nvoken` | `raw` export |
 | Python | `nvoken.Client` | `nvoken_generated` |
 | Rust | `nvoken::Client` | `nvoken::apis` |
 
@@ -59,4 +59,33 @@ The pinned generator toolchains and package boundary are recorded in the
 make sdk-generate       # refresh all generated transports
 make sdk-generate-check # fail if committed output is stale
 make sdk-check          # build and test every SDK and the CLI
+make onboarding-check   # prove the packed TypeScript newcomer path (requires disposable Postgres)
 ```
+
+## TypeScript npm releases
+
+`@deepnoodle/nvoken` is a public package in the existing `@deepnoodle` npm
+organization. The first 0.1.0 publish is interactive after the exact merged
+`main` artifact passes `make onboarding-check`:
+
+```bash
+cd sdk/typescript
+npm ci
+npm run build
+npm test
+npm pack --dry-run
+npm publish --access public
+```
+
+Verify the registry rather than treating the publish command as evidence:
+
+```bash
+npm view @deepnoodle/nvoken@0.1.0 name version dist-tags repository --json
+```
+
+After the first publish, configure npm trusted publishing for GitHub repository
+`deepnoodle-ai/nvoken`, workflow `release-npm.yml`, allowed action
+`npm publish`, and no environment unless the workflow gains one. Later releases
+must update the package version on `main`, pass the gates, and push the exact
+`npm-vX.Y.Z` tag. The workflow uses short-lived OIDC authentication, publishes
+with provenance, and verifies the public version.

@@ -31,7 +31,7 @@ class InvocationBudgets(BaseModel):
     wall_clock_timeout_seconds: Annotated[int, Field(strict=True, ge=1)]
     active_execution_timeout_seconds: Annotated[int, Field(strict=True, ge=1)]
     max_output_tokens: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
-    max_estimated_cost_usd: Optional[Union[Annotated[float, Field(multiple_of=0.0000010, strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = None
+    max_estimated_cost_usd: Optional[Union[Annotated[float, Field(multiple_of=0.0000010, strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = Field(default=None, description="Resolved USD list-price guardrail. It is present only when the host requested a cost limit; unknown price metadata fails closed. ")
     max_iterations: Annotated[int, Field(strict=True, ge=1)]
     __properties: ClassVar[List[str]] = ["wall_clock_timeout_seconds", "active_execution_timeout_seconds", "max_output_tokens", "max_estimated_cost_usd", "max_iterations"]
 

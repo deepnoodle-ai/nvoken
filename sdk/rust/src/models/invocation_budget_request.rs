@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// InvocationBudgetRequest : Optional requested limits. Installation defaults supply wall-clock, active-execution, and iteration limits. Output-token and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range.
+/// InvocationBudgetRequest : Optional requested limits. Installation defaults supply wall-clock, active-execution, and iteration limits. Output-token and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range. A requested estimated-cost limit requires known USD pricing metadata and fails closed when unavailable.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InvocationBudgetRequest {
     #[serde(
@@ -26,6 +26,7 @@ pub struct InvocationBudgetRequest {
     pub active_execution_timeout_seconds: Option<u32>,
     #[serde(rename = "max_output_tokens", skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
+    /// Dive list-price guardrail, not preauthorization or a billing ledger. Requires known USD pricing for the selected model and otherwise fails closed with `budget_exceeded` and `details.kind = estimated_cost_unavailable`. When pricing absence is knowable before execution, nvoken rejects before a provider call.
     #[serde(
         rename = "max_estimated_cost_usd",
         skip_serializing_if = "Option::is_none"
@@ -36,7 +37,7 @@ pub struct InvocationBudgetRequest {
 }
 
 impl InvocationBudgetRequest {
-    /// Optional requested limits. Installation defaults supply wall-clock, active-execution, and iteration limits. Output-token and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range.
+    /// Optional requested limits. Installation defaults supply wall-clock, active-execution, and iteration limits. Output-token and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range. A requested estimated-cost limit requires known USD pricing metadata and fails closed when unavailable.
     pub fn new() -> InvocationBudgetRequest {
         InvocationBudgetRequest {
             wall_clock_timeout_seconds: None,

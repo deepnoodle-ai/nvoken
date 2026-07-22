@@ -52,7 +52,7 @@ The packages live under `sdk/go`, `sdk/typescript`, `sdk/python`, and
 `github.com/deepnoodle-ai/nvoken/sdk/go` does not pull daemon dependencies.
 The root module uses a local `replace` only so `cmd/nvoken` can import that
 module while the repositories are released together. TypeScript publishes
-`@deepnoodle-ai/nvoken`; Python and Rust use `nvoken`. Registry publication is
+`@deepnoodle/nvoken`; Python and Rust use `nvoken`. Registry publication is
 deferred.
 
 Each SDK has three layers:

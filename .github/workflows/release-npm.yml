@@ -1,0 +1,46 @@
+name: release-npm
+
+on:
+  push:
+    tags:
+      - npm-v*
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Use an npm CLI with trusted publishing support
+        run: npm install --global npm@latest
+      - name: Verify release tag matches package version
+        working-directory: sdk/typescript
+        run: |
+          version="$(node --print "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "npm-v${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match package version ${version}" >&2
+            exit 1
+          fi
+      - run: npm ci
+        working-directory: sdk/typescript
+      - run: npm run build
+        working-directory: sdk/typescript
+      - run: npm test
+        working-directory: sdk/typescript
+      - run: npm pack --dry-run
+        working-directory: sdk/typescript
+      - run: npm publish
+        working-directory: sdk/typescript
+      - name: Verify the public registry artifact
+        working-directory: sdk/typescript
+        run: |
+          version="$(node --print "require('./package.json').version")"
+          published="$(npm view "@deepnoodle/nvoken@${version}" version)"
+          test "${published}" = "${version}"

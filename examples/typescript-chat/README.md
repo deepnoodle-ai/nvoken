@@ -5,6 +5,10 @@ creates one durable Session, sends each line as a new Invocation, waits for the
 turn to finish, and reads the assistant reply from the canonical Session
 messages.
 
+Start the daemon, generate credentials, and choose a provider by following the
+[local development quickstart](../../docs/guides/local-development.md). The
+steps below cover only the SDK and app build.
+
 Build the local SDK and app:
 
 ```bash
@@ -31,3 +35,9 @@ a fresh key for each process.
 This demo creates an idempotency key in memory for each line. A production host
 should derive that key from its durable message record and reuse it after an
 uncertain admission response or process restart.
+
+The demo intentionally omits an estimated-cost cap. Cost limits fail closed
+when nvoken does not have USD pricing for the selected model. A local wait
+timeout or stopped app does not cancel durable work; explicit cancellation is
+the server-state transition. Stop the daemon with Ctrl-C and use the local
+guide's exact Compose cleanup command when finished.

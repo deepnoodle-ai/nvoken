@@ -157,6 +157,15 @@ tokens and estimated cost have no default and remain unlimited unless the host
 requests them. `DATABASE_MAX_CONNS` must be at least two because the
 cross-process cancellation listener reserves one pool connection.
 
+`max_estimated_cost_usd` is a fail-closed list-price guardrail, not a charge
+reservation or billing ledger. It requires known USD pricing for the exact
+selected model. When the local pricing registry can determine that price data
+is absent, nvoken fails the Invocation before a provider call with
+`budget_exceeded` and `details.kind = "estimated_cost_unavailable"`. If an
+adapter can determine the gap only from returned usage, the same public reason
+is used after the call. Omit the field when trying a newly available model whose
+price metadata has not yet shipped.
+
 A request may add `spec.output.schema` for one validated object result. nvoken
 admits a bounded JSON Schema subset, presents it as the reserved
 `nvoken_submit_output` builtin, and persists its request/result through the
@@ -196,7 +205,6 @@ curl --fail-with-body http://localhost:8080/v1/invocations \
         "wall_clock_timeout_seconds": 600,
         "active_execution_timeout_seconds": 300,
         "max_output_tokens": 4096,
-        "max_estimated_cost_usd": 0.25,
         "max_iterations": 1
       }
     }
@@ -212,6 +220,13 @@ A changed request using the same scoped key returns
 `409 idempotency_conflict`.
 Treat `503 unavailable` the same way as any ambiguous acknowledgement: retry
 the exact body and key rather than inventing a new key for the same turn.
+
+Canonical messages remain durable evidence even when a later budget or
+deadline settlement fails the Invocation. Future provider requests include the
+failed Invocation's user input but exclude its assistant and tool messages, so
+a rejected answer cannot silently steer a later turn. Hosts can make the same
+distinction by joining each message's `invocation_id` to the authoritative
+Invocation status.
 
 The database retains checkpoint evidence at each accepted model
 iteration: the canonical assistant message, normalized usage/provenance
