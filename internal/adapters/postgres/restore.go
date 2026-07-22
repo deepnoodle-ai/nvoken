@@ -12,7 +12,7 @@ import (
 // expectations to one embedded schema. A new migration must update the
 // manifest and its invariant queries before a newer binary can verify a
 // restore.
-const restoreManifestSchemaVersion uint = 15
+const restoreManifestSchemaVersion uint = 16
 
 var restoreRequiredTables = []string{
 	"account_memberships",
@@ -203,6 +203,26 @@ func VerifyRestore(ctx context.Context, pool *pgxpool.Pool) (RestoreVerification
 		errorClass string
 		query      string
 	}{
+		{
+			component:  "churn_table_autovacuum_parameters",
+			errorClass: "missing_storage_parameters",
+			query: `SELECT EXISTS (
+				SELECT 1
+				FROM unnest(ARRAY[
+					'sessions', 'invocations', 'tool_calls',
+					'execution_dispatches', 'callback_deliveries'
+				]) AS churn(relname)
+				LEFT JOIN pg_catalog.pg_class c
+				  ON c.relname = churn.relname
+				 AND c.relnamespace = (
+					SELECT oid FROM pg_catalog.pg_namespace
+					WHERE nspname = current_schema()
+				 )
+				WHERE c.oid IS NULL
+				   OR NOT COALESCE(c.reloptions @> ARRAY['autovacuum_vacuum_scale_factor=0.05'], false)
+				   OR NOT COALESCE(c.reloptions @> ARRAY['autovacuum_analyze_scale_factor=0.02'], false)
+			)`,
+		},
 		{
 			component:  "one_nonterminal_invocation_per_session",
 			errorClass: "conflict",

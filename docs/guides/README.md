@@ -28,6 +28,7 @@ or [Google Cloud](../../deploy/google-cloud/README.md). Use these references for
 specific operator tasks:
 
 - [Database migrations](database-migrations.md)
+- [Postgres operations](postgres-operations.md)
 - [Compatible upgrades](compatible-upgrades.md)
 - [Operational signals](operational-signals.md)
 - [Backup, restore, and recovery drills](backup-and-restore.md)
