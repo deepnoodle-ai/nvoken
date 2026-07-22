@@ -25,6 +25,8 @@
     "dist/callback.js",
     "dist/client.d.ts",
     "dist/client.js",
+    "dist/diagnostics.d.ts",
+    "dist/diagnostics.js",
     "dist/generated",
     "dist/index.d.ts",
     "dist/index.js",

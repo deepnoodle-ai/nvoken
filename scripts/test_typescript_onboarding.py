@@ -14,6 +14,7 @@ import tarfile
 import tempfile
 import time
 from urllib.error import URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
@@ -75,6 +76,12 @@ def stop(process: subprocess.Popen[bytes]) -> None:
         process.wait(timeout=5)
 
 
+def require_fragments(label: str, output: str, fragments: tuple[str, ...]) -> None:
+    missing = [fragment for fragment in fragments if fragment not in output]
+    if missing:
+        raise RuntimeError(f"{label} missed {missing}: {output}")
+
+
 def check_daemon(work: Path, database_url: str) -> None:
     binary = work / "nvokend"
     run(["go", "build", "-o", str(binary), "./cmd/nvokend"])
@@ -102,6 +109,12 @@ def check_daemon(work: Path, database_url: str) -> None:
         raise RuntimeError(f"configurator did not warn about ambient provider: {configured.stderr}")
     if selected_provider_key in configured.stdout + configured.stderr or ambient_provider_key in configured.stdout + configured.stderr:
         raise RuntimeError("configurator warning exposed a provider key")
+    configured_values = dict(
+        line.split("=", 1)
+        for line in (work / ".env").read_text(encoding="utf-8").splitlines()
+        if "=" in line
+    )
+    runtime_api_key = configured_values["RUNTIME_API_KEY"]
     local_environment = dict(configure_environment)
     local_environment.pop("OPENAI_API_KEY", None)
     local_environment.pop("ANTHROPIC_API_KEY", None)
@@ -121,6 +134,24 @@ def check_daemon(work: Path, database_url: str) -> None:
         process = subprocess.Popen([str(binary), "serve"], cwd=work, env=environment, stdout=log, stderr=log)
         try:
             wait_for(f"http://127.0.0.1:{port}/health", process)
+            pricing_cases = (
+                ("openai", "gpt-5.4-mini", "priced"),
+                ("anthropic", "claude-sonnet-4-6", "priced"),
+                ("openai", "claude-sonnet-4-6", "unpriced"),
+                ("anthropic", "gpt-5.4-mini", "unpriced"),
+            )
+            for provider, model, expected_status in pricing_cases:
+                query = urlencode({"provider": provider, "model": model})
+                request = Request(
+                    f"http://127.0.0.1:{port}/v1/model-pricing-capabilities?{query}",
+                    headers={"Authorization": f"Bearer {runtime_api_key}"},
+                )
+                with urlopen(request, timeout=2) as response:
+                    capability = json.load(response)
+                if capability.get("status") != expected_status or not capability.get("registry_version"):
+                    raise RuntimeError(
+                        f"pricing capability for {provider}/{model} = {capability}, want {expected_status}"
+                    )
         finally:
             stop(process)
 
@@ -253,19 +284,54 @@ console.log(await handle.text());
     if snippet is None:
         raise RuntimeError("packed README has no executable public quickstart")
     (consumer / "quickstart.mjs").write_text(snippet.group(1) + "\n", encoding="utf-8")
+    public_environment = {
+        **os.environ,
+        "NVOKEN_BASE_URL": base_url,
+        "NVOKEN_API_KEY": "test-key",
+        "NVOKEN_PROVIDER": "openai",
+        "NVOKEN_MODEL": "gpt-test",
+    }
     public_quickstart = run(
         ["node", "quickstart.mjs"],
         cwd=consumer,
-        environment={
-            **os.environ,
-            "NVOKEN_BASE_URL": base_url,
-            "NVOKEN_API_KEY": "test-key",
-            "NVOKEN_PROVIDER": "openai",
-            "NVOKEN_MODEL": "gpt-test",
-        },
+        environment=public_environment,
     )
     if "pricing=priced registry=conformance-v1" not in public_quickstart.stdout or "agent> world" not in public_quickstart.stdout:
         raise RuntimeError(f"packed public quickstart output = {public_quickstart.stdout!r}")
+
+    invalid_credential = run(
+        ["node", "quickstart.mjs"],
+        cwd=consumer,
+        environment={**public_environment, "NVOKEN_API_KEY": "invalid-key"},
+        expected=1,
+    )
+    credential_error = invalid_credential.stdout + invalid_credential.stderr
+    if "nvoken error [authentication] code=unauthenticated request_id=req_" not in credential_error:
+        raise RuntimeError(f"packed public quickstart credential error was not actionable: {credential_error}")
+
+    invalid_model = run(
+        ["node", "quickstart.mjs"],
+        cwd=consumer,
+        environment={**public_environment, "NVOKEN_MODEL": "invalid-model"},
+        expected=1,
+    )
+    model_error = invalid_model.stdout + invalid_model.stderr
+    require_fragments(
+        "packed public quickstart model error",
+        model_error,
+        (
+            "Invocation invk_",
+            "failed: provider_error:",
+            "The provider rejected the requested model.",
+            "Safe details:",
+            "classification",
+            "upstream_rejected",
+            "https://developers.openai.com/api/docs/models.",
+        ),
+    )
+    for output in (credential_error, model_error):
+        if any(forbidden in output for forbidden in ("ResponseError", "node:internal", "\n    at ")):
+            raise RuntimeError(f"packed public quickstart printed an internal stack: {output}")
 
 
 def run_node(
@@ -317,6 +383,15 @@ def check_examples(base_url: str) -> None:
     session = re.search(r"^session_key=(.+)$", quickstart.stdout, re.MULTILINE)
     if session is None:
         raise RuntimeError(f"quickstart did not print a Session key: {quickstart.stdout}")
+    missing_run_key = run_node(
+        ["node", "sdk/typescript/dist/examples/quickstart.js"],
+        base_url,
+        session_key=session.group(1),
+        expected=1,
+    )
+    missing_run_error = missing_run_key.stdout + missing_run_key.stderr
+    if missing_run_error.strip() != "NVOKEN_RUN_KEY is required when NVOKEN_SESSION_KEY resumes an existing Session":
+        raise RuntimeError(f"quickstart missing-run-key error was not concise: {missing_run_error}")
     resumed_quickstart = run_node(
         ["node", "sdk/typescript/dist/examples/quickstart.js"],
         base_url,
@@ -333,14 +408,20 @@ def check_examples(base_url: str) -> None:
         expected=1,
     )
     rendered_failure = failed_quickstart.stdout + failed_quickstart.stderr
-    expected_failure = (
-        "failed: provider_error: The provider rejected the requested model. "
-        'Safe details: {"classification":"upstream_rejected"}. '
-        "Check available model IDs at https://developers.openai.com/api/docs/models. "
-        "Inspect structured daemon logs"
+    require_fragments(
+        "source quickstart model error",
+        rendered_failure,
+        (
+            "Invocation invk_",
+            "failed: provider_error:",
+            "The provider rejected the requested model.",
+            "Safe details:",
+            "classification",
+            "upstream_rejected",
+            "https://developers.openai.com/api/docs/models.",
+            "Inspect structured daemon logs",
+        ),
     )
-    if expected_failure not in rendered_failure:
-        raise RuntimeError(f"quickstart failure was not rendered exactly: {rendered_failure}")
 
     run(["npm", "ci", "--prefix", "examples/typescript-chat"])
     run(["npm", "run", "build", "--prefix", "examples/typescript-chat"])

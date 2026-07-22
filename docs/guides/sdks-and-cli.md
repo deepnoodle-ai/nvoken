@@ -80,9 +80,10 @@ or workflow result as evidence:
 npm view @deepnoodle/nvoken@0.1.0 name version dist-tags repository --json
 ```
 
-Version 0.1.1 is prepared in source with the second-pass onboarding corrections.
-It is not public until those changes merge, the exact `main` revision passes the
-gates, and the `npm-v0.1.1` release workflow succeeds.
+Version 0.1.1 is prepared in source with the onboarding corrections. It remains
+unpublished until the provider-scoped pricing and quickstart-failure corrections
+merge, the exact corrected `main` revision passes the gates, and the
+`npm-v0.1.1` release workflow succeeds.
 
 npm trusted publishing is configured for GitHub repository `deepnoodle-ai/nvoken`,
 workflow `release-npm.yml`, allowed action `npm publish`, and no environment. Later
