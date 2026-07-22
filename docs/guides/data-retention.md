@@ -47,7 +47,8 @@ logging transcript content.
 
 Run these metadata-only queries through a read-only connection to the nvoken
 database. They return byte counts and relation names, not transcript or tool
-payloads.
+payloads. For autovacuum health and dead-tuple churn on the high-update
+tables, see [Postgres operations](postgres-operations.md).
 
 Total database size:
 
@@ -94,3 +95,9 @@ holds, per-tenant quotas, and automatic pruning of authoritative data are also
 out of scope. Until those contracts ship, do not manually delete related rows:
 the restrictive foreign keys and canonical transcript invariants are designed
 for retained traces, not ad hoc partial erasure.
+
+One mechanism constraint is already known. The composite tenant-boundary
+foreign keys, including references to `(session_id, sequence)`, rule out
+partition-and-drop retention for the transcript tables. When a deletion
+contract ships, its mechanism will be bounded batched deletes in dependency
+order, the same shape the diagnostic pruners use today.

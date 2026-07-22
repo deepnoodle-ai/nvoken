@@ -161,7 +161,7 @@ func TestReleasePassesServingRevisionToMigrationPreflight(t *testing.T) {
 		"13",
 		"transition",
 	)
-	if !strings.Contains(log, "migration-vars current_image=us-central1-docker.pkg.dev/example-project/nvoken-test/nvokend:build-13 current_schema=13 target_schema=15 mode=transition") {
+	if !strings.Contains(log, "migration-vars current_image=us-central1-docker.pkg.dev/example-project/nvoken-test/nvokend:build-13 current_schema=13 target_schema=16 mode=transition") {
 		t.Fatalf("migration preflight did not receive the release pair:\n%s", log)
 	}
 }

@@ -49,6 +49,7 @@ func TestVerifyRestoreChecksHealthyRepresentativeStateWithoutMutation(t *testing
 		"required_tables",
 		"required_constraints",
 		"nonterminal_unique_index",
+		"churn_table_autovacuum_parameters",
 		"one_nonterminal_invocation_per_session",
 		"terminal_state_consistency",
 		"transcript_cursor_bounds",
