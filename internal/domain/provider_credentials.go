@@ -9,6 +9,21 @@ const (
 	ModelProviderOpenAI    ModelProvider = "openai"
 )
 
+type ModelPricingStatus string
+
+const (
+	ModelPricingPriced   ModelPricingStatus = "priced"
+	ModelPricingUnpriced ModelPricingStatus = "unpriced"
+	ModelPricingUnknown  ModelPricingStatus = "unknown"
+)
+
+type ModelPricingCapability struct {
+	Provider        ModelProvider
+	Model           string
+	Status          ModelPricingStatus
+	RegistryVersion string
+}
+
 type ProviderCredentialSource string
 
 const (

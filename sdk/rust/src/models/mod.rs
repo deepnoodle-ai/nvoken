@@ -50,6 +50,8 @@ pub mod invocation_status;
 pub use self::invocation_status::InvocationStatus;
 pub mod model_cost;
 pub use self::model_cost::ModelCost;
+pub mod model_pricing_capability;
+pub use self::model_pricing_capability::ModelPricingCapability;
 pub mod model_provenance;
 pub use self::model_provenance::ModelProvenance;
 pub mod model_provider;

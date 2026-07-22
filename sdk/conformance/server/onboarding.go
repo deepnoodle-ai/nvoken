@@ -60,6 +60,11 @@ func (s *onboardingState) serve(response http.ResponseWriter, request *http.Requ
 		return
 	}
 	switch {
+	case request.URL.Path == "/v1/model-pricing-capabilities" && request.Method == http.MethodGet:
+		writeJSON(response, http.StatusOK, map[string]any{
+			"provider": request.URL.Query().Get("provider"), "model": request.URL.Query().Get("model"),
+			"status": "priced", "registry_version": "conformance-v1",
+		})
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
 		s.create(response, request)
 	case strings.HasPrefix(request.URL.Path, "/v1/invocations/") && request.Method == http.MethodGet:

@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -78,25 +78,47 @@ def stop(process: subprocess.Popen[bytes]) -> None:
 def check_daemon(work: Path, database_url: str) -> None:
     binary = work / "nvokend"
     run(["go", "build", "-o", str(binary), "./cmd/nvokend"])
-    run([str(binary), "migrate"], environment={**os.environ, "DATABASE_URL": database_url})
+
+    selected_provider_key = "onboarding-provider-key"
+    ambient_provider_key = "ambient-provider-key"
+    configure_environment = {
+        **os.environ,
+        "OPENAI_API_KEY": selected_provider_key,
+        "ANTHROPIC_API_KEY": ambient_provider_key,
+    }
+    configured = run(
+        [
+            "python3",
+            str(ROOT / "deploy/local/configure.py"),
+            "--provider",
+            "openai",
+            "--output",
+            str(work / ".env"),
+        ],
+        cwd=work,
+        environment=configure_environment,
+    )
+    if "ANTHROPIC_API_KEY is already exported" not in configured.stderr:
+        raise RuntimeError(f"configurator did not warn about ambient provider: {configured.stderr}")
+    if selected_provider_key in configured.stdout + configured.stderr or ambient_provider_key in configured.stdout + configured.stderr:
+        raise RuntimeError("configurator warning exposed a provider key")
+    local_environment = dict(configure_environment)
+    local_environment.pop("OPENAI_API_KEY", None)
+    local_environment.pop("ANTHROPIC_API_KEY", None)
+    local_environment["DATABASE_URL"] = database_url
+    run([str(binary), "migrate"], cwd=work, environment=local_environment)
 
     port = available_port()
     log_path = work / "nvokend.log"
     environment = {
-        **os.environ,
-        "DATABASE_URL": database_url,
+        **local_environment,
         "PORT": str(port),
         "NVOKEN_PUBLIC_BASE_URL": f"http://127.0.0.1:{port}",
-        "RUNTIME_API_KEY": "runtime-local-onboarding-secret-000000000000",
-        "BOOTSTRAP_OWNER_SECRET": "bootstrap-local-onboarding-secret-00000000",
-        "CREDENTIAL_DELIVERY_KEY": base64.urlsafe_b64encode(b"d" * 32).decode().rstrip("="),
-        "OPENAI_API_KEY": "onboarding-provider-key",
-        "ANTHROPIC_API_KEY": "",
         "SHUTDOWN_TIMEOUT": "5s",
         "ENGINE_DRAIN_GRACE": "2s",
     }
     with log_path.open("wb") as log:
-        process = subprocess.Popen([str(binary), "serve"], cwd=ROOT, env=environment, stdout=log, stderr=log)
+        process = subprocess.Popen([str(binary), "serve"], cwd=work, env=environment, stdout=log, stderr=log)
         try:
             wait_for(f"http://127.0.0.1:{port}/health", process)
         finally:
@@ -114,11 +136,12 @@ def check_daemon(work: Path, database_url: str) -> None:
         "execution_mode": "embedded",
         "schema_compatibility": "compatible",
         "openai_enabled": True,
+        "anthropic_enabled": False,
     }
     if started is None or any(started.get(key) != value for key, value in expected.items()):
         raise RuntimeError(f"process_started did not match local guide: {started}")
     log_text = log_path.read_text(encoding="utf-8")
-    for secret in (environment["RUNTIME_API_KEY"], environment["OPENAI_API_KEY"]):
+    for secret in (selected_provider_key, ambient_provider_key):
         if secret in log_text:
             raise RuntimeError("daemon onboarding log exposed a secret")
 
@@ -147,7 +170,7 @@ def pack_sdk(work: Path) -> Path:
     )
     metadata = json.loads(packed.stdout)
     artifact = work / metadata[0]["filename"]
-    if metadata[0]["name"] != "@deepnoodle/nvoken" or metadata[0]["version"] != "0.1.0":
+    if metadata[0]["name"] != "@deepnoodle/nvoken" or metadata[0]["version"] != "0.1.1":
         raise RuntimeError(f"unexpected packed identity: {metadata[0]}")
     with tarfile.open(artifact, "r:gz") as archive:
         names = set(archive.getnames())
@@ -221,6 +244,29 @@ console.log(await handle.text());
     if result.stdout.strip() != "world":
         raise RuntimeError(f"packed facade output = {result.stdout!r}")
 
+    installed_readme = (consumer / "node_modules/@deepnoodle/nvoken/README.md").read_text(encoding="utf-8")
+    snippet = re.search(
+        r"<!-- public-quickstart:start -->\s*```js\n(.*?)\n```\s*<!-- public-quickstart:end -->",
+        installed_readme,
+        re.DOTALL,
+    )
+    if snippet is None:
+        raise RuntimeError("packed README has no executable public quickstart")
+    (consumer / "quickstart.mjs").write_text(snippet.group(1) + "\n", encoding="utf-8")
+    public_quickstart = run(
+        ["node", "quickstart.mjs"],
+        cwd=consumer,
+        environment={
+            **os.environ,
+            "NVOKEN_BASE_URL": base_url,
+            "NVOKEN_API_KEY": "test-key",
+            "NVOKEN_PROVIDER": "openai",
+            "NVOKEN_MODEL": "gpt-test",
+        },
+    )
+    if "pricing=priced registry=conformance-v1" not in public_quickstart.stdout or "agent> world" not in public_quickstart.stdout:
+        raise RuntimeError(f"packed public quickstart output = {public_quickstart.stdout!r}")
+
 
 def run_node(
     command: list[str],
@@ -230,6 +276,7 @@ def run_node(
     api_key: str = "test-key",
     model: str = "gpt-test",
     session_key: str | None = None,
+    run_key: str | None = None,
     expected: int = 0,
 ) -> subprocess.CompletedProcess[str]:
     environment = {
@@ -241,6 +288,8 @@ def run_node(
     }
     if session_key is not None:
         environment["NVOKEN_SESSION_KEY"] = session_key
+    if run_key is not None:
+        environment["NVOKEN_RUN_KEY"] = run_key
     result = subprocess.run(
         command,
         cwd=ROOT,
@@ -265,6 +314,33 @@ def check_examples(base_url: str) -> None:
     )
     if "code word is cedar" not in quickstart.stdout or "agent> cedar" not in quickstart.stdout:
         raise RuntimeError(f"quickstart did not prove two-turn context: {quickstart.stdout}")
+    session = re.search(r"^session_key=(.+)$", quickstart.stdout, re.MULTILINE)
+    if session is None:
+        raise RuntimeError(f"quickstart did not print a Session key: {quickstart.stdout}")
+    resumed_quickstart = run_node(
+        ["node", "sdk/typescript/dist/examples/quickstart.js"],
+        base_url,
+        session_key=session.group(1),
+        run_key="onboarding-quickstart-resume",
+    )
+    if resumed_quickstart.stdout.count("agent> cedar") != 1:
+        raise RuntimeError(f"quickstart did not append a resumed turn: {resumed_quickstart.stdout}")
+
+    failed_quickstart = run_node(
+        ["node", "sdk/typescript/dist/examples/quickstart.js"],
+        base_url,
+        model="invalid-model",
+        expected=1,
+    )
+    rendered_failure = failed_quickstart.stdout + failed_quickstart.stderr
+    expected_failure = (
+        "failed: provider_error: The provider rejected the requested model. "
+        'Safe details: {"classification":"upstream_rejected"}. '
+        "Check available model IDs at https://developers.openai.com/api/docs/models. "
+        "Inspect structured daemon logs"
+    )
+    if expected_failure not in rendered_failure:
+        raise RuntimeError(f"quickstart failure was not rendered exactly: {rendered_failure}")
 
     run(["npm", "ci", "--prefix", "examples/typescript-chat"])
     run(["npm", "run", "build", "--prefix", "examples/typescript-chat"])
@@ -321,6 +397,16 @@ def check_documentation() -> None:
     for path, text in expectations.items():
         if text not in path.read_text(encoding="utf-8"):
             raise RuntimeError(f"{path.relative_to(ROOT)} is missing {text!r}")
+    local_guide = (ROOT / "docs/guides/local-development.md").read_text(encoding="utf-8")
+    for text in (
+        "Python 3.9 or newer",
+        "unset ANTHROPIC_API_KEY OPENAI_API_KEY",
+        "curl --silent --show-error --fail",
+        "https://developers.openai.com/api/docs/models",
+        "https://platform.claude.com/docs/en/about-claude/models/overview",
+    ):
+        if text not in local_guide:
+            raise RuntimeError(f"local guide is missing {text!r}")
     for relative in (
         "deploy/local/compose.yaml",
         "deploy/local/nvoken.env.example",

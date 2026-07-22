@@ -232,7 +232,27 @@ type unpricedModelGenerator struct {
 	fakeModelGenerator
 }
 
-func (*unpricedModelGenerator) HasUSDModelPricing(string, string) bool { return false }
+func (*unpricedModelGenerator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
+	return domain.ModelPricingCapability{
+		Provider:        domain.ModelProvider(provider),
+		Model:           model,
+		Status:          domain.ModelPricingUnpriced,
+		RegistryVersion: "test",
+	}
+}
+
+type unknownPricingModelGenerator struct {
+	fakeModelGenerator
+}
+
+func (*unknownPricingModelGenerator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
+	return domain.ModelPricingCapability{
+		Provider:        domain.ModelProvider(provider),
+		Model:           model,
+		Status:          domain.ModelPricingUnknown,
+		RegistryVersion: "test",
+	}
+}
 
 type cancellingModelGenerator struct {
 	cancel   context.CancelFunc
@@ -878,6 +898,43 @@ func TestGenerationExecutorRejectsKnownUnpricedModelBeforeProviderCall(t *testin
 	if result.Status != domain.InvocationFailed || failure.Code != "budget_exceeded" ||
 		failure.Details["kind"] != "estimated_cost_unavailable" ||
 		!strings.Contains(failure.Message, "unavailable") {
+		t.Fatalf("failure = %#v", failure)
+	}
+}
+
+func TestGenerationExecutorAllowsUnknownPricingAndFailsFromReturnedEvidence(t *testing.T) {
+	claim := generationClaim()
+	limit := int64(100_000)
+	claim.Invocation.MaxEstimatedCostMicros = &limit
+	response := successfulGenerationResponse()
+	response.Usage.EstimatedCost = nil
+	generator := &unknownPricingModelGenerator{
+		fakeModelGenerator: fakeModelGenerator{response: response},
+	}
+
+	result, err := NewGenerationExecutor(
+		generationStoreFixture(claim),
+		generator,
+		nil,
+	).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(generator.requests) != 1 {
+		t.Fatalf("provider requests = %d, want 1", len(generator.requests))
+	}
+	if result.Usage == nil || result.Provenance == nil {
+		t.Fatalf("post-provider failure lost evidence: %#v", result)
+	}
+	var failure struct {
+		Code    string            `json:"code"`
+		Details map[string]string `json:"details"`
+	}
+	if err := json.Unmarshal(result.Error, &failure); err != nil {
+		t.Fatalf("decode failure: %v", err)
+	}
+	if result.Status != domain.InvocationFailed || failure.Code != "budget_exceeded" ||
+		failure.Details["kind"] != "estimated_cost_unavailable" {
 		t.Fatalf("failure = %#v", failure)
 	}
 }

@@ -406,9 +406,10 @@ type ModelGenerator interface {
 	Generate(context.Context, domain.GenerationRequest) (domain.GenerationResponse, error)
 }
 
-// ModelPricingResolver reports whether the adapter can produce normalized USD
-// cost evidence before a provider call. A false result is authoritative for
-// capped work; adapters that cannot decide should not implement this interface.
+// ModelPricingResolver reports the exact local registry's USD pricing
+// capability before a provider call. Unpriced is authoritative for capped work;
+// unknown means the adapter cannot decide until normalized response evidence is
+// available.
 type ModelPricingResolver interface {
-	HasUSDModelPricing(provider, model string) bool
+	ResolveModelPricing(provider, model string) domain.ModelPricingCapability
 }

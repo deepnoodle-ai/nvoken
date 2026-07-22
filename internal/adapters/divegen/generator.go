@@ -13,6 +13,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -110,12 +111,46 @@ func New(config Config, options ...Option) *Generator {
 	return generator
 }
 
-func (*Generator) HasUSDModelPricing(provider, model string) bool {
-	if provider != "anthropic" && provider != "openai" {
-		return false
+func (*Generator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
+	capability := domain.ModelPricingCapability{
+		Provider:        domain.ModelProvider(provider),
+		Model:           model,
+		Status:          domain.ModelPricingUnknown,
+		RegistryVersion: diveRegistryVersion(),
+	}
+	if provider != string(domain.ModelProviderAnthropic) &&
+		provider != string(domain.ModelProviderOpenAI) {
+		return capability
 	}
 	pricing, ok := diveproviders.PricingFor(model, false)
-	return ok && strings.EqualFold(pricing.Currency, "USD")
+	if !ok || !strings.EqualFold(pricing.Currency, "USD") {
+		capability.Status = domain.ModelPricingUnpriced
+		return capability
+	}
+	capability.Status = domain.ModelPricingPriced
+	return capability
+}
+
+func diveRegistryVersion() string {
+	build, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	for _, dependency := range build.Deps {
+		if dependency.Path != "github.com/deepnoodle-ai/dive" {
+			continue
+		}
+		if dependency.Replace != nil {
+			if dependency.Replace.Version != "" {
+				return dependency.Replace.Version
+			}
+			return "local"
+		}
+		if dependency.Version != "" {
+			return dependency.Version
+		}
+	}
+	return "unknown"
 }
 
 func newModel(provider, model, apiKey string) (llm.LLM, error) {

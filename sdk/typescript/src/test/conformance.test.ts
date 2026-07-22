@@ -27,6 +27,13 @@ test("shared fault server semantics", async (context) => {
     apiKey: "test-key",
     retry: { maximumAttempts: 3, minimumDelayMs: 1, maximumDelayMs: 5 },
   });
+  const pricing = await client.pricingCapability({ provider: "openai", name: "gpt-test" });
+  assert.deepEqual(pricing, {
+    provider: "openai",
+    model: "gpt-test",
+    status: "priced",
+    registryVersion: "conformance-v1",
+  });
   const handle = await client.invoke({
     agentRef: "support",
     idempotencyKey: "typescript-lost-ack",

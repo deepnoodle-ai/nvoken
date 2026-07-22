@@ -204,6 +204,29 @@ func (c *Client) Cancel(ctx context.Context, invocationID string) (*Invocation, 
 	})
 }
 
+func (c *Client) PricingCapability(
+	ctx context.Context,
+	provider ModelProvider,
+	model string,
+) (*ModelPricingCapability, error) {
+	params := &generated.GetModelPricingCapabilityParams{
+		Provider: provider,
+		Model:    model,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ModelPricingCapability], error) {
+		response, err := c.raw.GetModelPricingCapabilityWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.ModelPricingCapability]{}, err
+		}
+		return callResult[generated.ModelPricingCapability]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
 func (c *Client) SubmitToolResults(ctx context.Context, invocationID string, results []ToolResult) (*ToolResultResponse, error) {
 	body, err := generatedToolResults(results)
 	if err != nil {

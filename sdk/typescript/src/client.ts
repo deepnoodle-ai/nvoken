@@ -1,8 +1,9 @@
-import { InvocationsApi, SessionsApi } from "./generated/apis/index.js";
+import { InvocationsApi, ModelPricingApi, SessionsApi } from "./generated/apis/index.js";
 import type {
   Invocation,
   InvocationList,
   InvocationStatus,
+  ModelPricingCapability,
   ModelProvider,
   Session,
   SessionContentBlock,
@@ -70,7 +71,10 @@ export interface ExecutionSpec {
     wallClockTimeoutSeconds?: number;
     activeExecutionTimeoutSeconds?: number;
     maxOutputTokens?: number;
-    /** Requires known USD model pricing and otherwise fails closed before generation. */
+    /**
+     * Requires known USD pricing. Absence fails closed before generation when
+     * knowable from the local registry, or after the response otherwise.
+     */
     maxEstimatedCostUsd?: number;
     maxIterations?: number;
   };
@@ -109,6 +113,7 @@ export interface ClientOptions {
 
 export class Client {
   readonly invocations: InvocationsApi;
+  readonly modelPricing: ModelPricingApi;
   readonly sessions: SessionsApi;
   readonly configuration: Configuration;
   readonly retry: Required<RetryPolicy>;
@@ -123,9 +128,10 @@ export class Client {
       basePath: options.baseUrl.replace(/\/$/, ""),
       accessToken: options.apiKey,
       fetchApi: this.fetch,
-      headers: { "User-Agent": "nvoken-typescript/0.1.0" },
+      headers: { "User-Agent": "nvoken-typescript/0.1.1" },
     });
     this.invocations = new InvocationsApi(this.configuration);
+    this.modelPricing = new ModelPricingApi(this.configuration);
     this.sessions = new SessionsApi(this.configuration);
     this.retry = {
       maximumAttempts: options.retry?.maximumAttempts ?? 4,
@@ -134,8 +140,21 @@ export class Client {
     };
   }
 
-  raw(): { invocations: InvocationsApi; sessions: SessionsApi } {
-    return { invocations: this.invocations, sessions: this.sessions };
+  raw(): { invocations: InvocationsApi; modelPricing: ModelPricingApi; sessions: SessionsApi } {
+    return { invocations: this.invocations, modelPricing: this.modelPricing, sessions: this.sessions };
+  }
+
+  pricingCapability(model: Model, signal?: AbortSignal): Promise<ModelPricingCapability> {
+    if (!model.name) {
+      throw new NvokenError("validation", "model name is required");
+    }
+    return this.replaySafe(
+      () => this.modelPricing.getModelPricingCapability(
+        { provider: model.provider, model: model.name },
+        { signal },
+      ),
+      signal,
+    );
   }
 
   async invoke(request: InvokeRequest, signal?: AbortSignal): Promise<Handle> {

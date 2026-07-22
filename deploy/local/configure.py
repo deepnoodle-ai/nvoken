@@ -55,6 +55,16 @@ def render(template: str, provider: str, environment: dict[str, str]) -> str:
     return "\n".join(rendered) + "\n"
 
 
+def ambient_provider_warnings(provider: str, environment: dict[str, str]) -> list[str]:
+    selected = PROVIDER_VARIABLES[provider]
+    return [
+        f"warning: {variable} is already exported and will override the empty value in .env; "
+        "unset both provider variables before migration and startup"
+        for variable in PROVIDER_VARIABLES.values()
+        if variable != selected and environment.get(variable)
+    ]
+
+
 def main() -> int:
     args = parse_args()
     output = args.output.resolve()
@@ -62,10 +72,14 @@ def main() -> int:
         print(f"refusing to replace existing {output}; move it or pass --force", file=sys.stderr)
         return 2
     try:
-        content = render(TEMPLATE.read_text(encoding="utf-8"), args.provider, dict(os.environ))
+        environment = dict(os.environ)
+        content = render(TEMPLATE.read_text(encoding="utf-8"), args.provider, environment)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
+
+    for warning in ambient_provider_warnings(args.provider, environment):
+        print(warning, file=sys.stderr)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -78,4 +92,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -157,14 +157,17 @@ func TestGeneratorPreservesCredentialUnavailableForDurableSettlement(t *testing.
 
 func TestGeneratorReportsRegisteredUSDModelPricing(t *testing.T) {
 	generator := New(Config{})
-	if !generator.HasUSDModelPricing("openai", "gpt-5.4-mini") {
-		t.Fatal("known OpenAI pricing was not reported")
+	priced := generator.ResolveModelPricing("openai", "gpt-5.4-mini")
+	if priced.Status != domain.ModelPricingPriced || priced.RegistryVersion == "" {
+		t.Fatalf("known OpenAI pricing = %#v", priced)
 	}
-	if generator.HasUSDModelPricing("openai", "unregistered-model") {
-		t.Fatal("unregistered model was reported as priced")
+	unpriced := generator.ResolveModelPricing("openai", "unregistered-model")
+	if unpriced.Status != domain.ModelPricingUnpriced {
+		t.Fatalf("unregistered model pricing = %#v", unpriced)
 	}
-	if generator.HasUSDModelPricing("unsupported", "gpt-5.4-mini") {
-		t.Fatal("unsupported provider was reported as priced")
+	unknown := generator.ResolveModelPricing("unsupported", "gpt-5.4-mini")
+	if unknown.Status != domain.ModelPricingUnknown {
+		t.Fatalf("unsupported provider pricing = %#v", unknown)
 	}
 }
 

@@ -21,6 +21,11 @@ npm run build
 With a local daemon running, provide its Runtime credential and a model that
 your provider account can use:
 
+- [OpenAI model catalog](https://developers.openai.com/api/docs/models)
+- [Anthropic model overview](https://platform.claude.com/docs/en/about-claude/models/overview)
+
+Account access is authoritative and changes over time.
+
 ```bash
 NVOKEN_API_KEY='<runtime-credential>' \
 NVOKEN_PROVIDER='openai' \
