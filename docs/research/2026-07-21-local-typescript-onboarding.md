@@ -4,6 +4,11 @@
 - Repository revision: `1393b5e62092b8d239aaf6c7d2c0c6abd1c9c9d9` (`main`)
 - SDK version: `@deepnoodle/nvoken` `0.1.0`
 
+> **Second pass (2026-07-22):** The core newcomer path now works, but live and
+> packed-package validation found remaining documentation, environment-precedence,
+> quickstart-resume, and pricing-discovery issues. See the
+> [second-pass report](2026-07-22-local-typescript-onboarding-second-pass.md).
+
 > **Correction (2026-07-22):** The checked package metadata used the nonexistent
 > `@deepnoodle-ai` npm scope. The established Deep Noodle organization is
 > `@deepnoodle` (for example, `@deepnoodle/mobius`). The corrected
@@ -399,7 +404,10 @@ A refined onboarding path passes only when all of the following are true:
 
 ## Resolution status (2026-07-22)
 
-The implementation now resolves the full adjustment backlog in source and CI:
+The implementation addressed the full adjustment backlog in source and CI. A later
+[second-pass validation](2026-07-22-local-typescript-onboarding-second-pass.md)
+confirmed the core path while finding partial regressions and additional follow-up;
+the table below records what this implementation intended to close.
 
 | Items | Resolution |
 | --- | --- |

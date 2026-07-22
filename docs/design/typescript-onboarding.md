@@ -1,6 +1,6 @@
 # Local TypeScript onboarding
 
-**Status:** Implemented; `@deepnoodle/nvoken` 0.1.0 published
+**Status:** Second-pass fixes implemented; `@deepnoodle/nvoken` 0.1.1 pending merge and release
 **Author:** OpenAI Codex  
 **Date:** 2026-07-22  
 **Workflow:** Spec and build in parallel; the field report supplies the acceptance criteria.
@@ -13,6 +13,13 @@ bootstrap, failure-semantics, ergonomics, and CI gaps. The implementation closed
 gaps and the reviewed 0.1.0 artifact is now public at `@deepnoodle/nvoken`. It also
 sharpened estimated-cost enforcement now that durable model checkpoints can retain a
 provider response before terminal budget settlement.
+
+A [second-pass validation](../research/2026-07-22-local-typescript-onboarding-second-pass.md)
+found eight remaining issues. The follow-up makes the packed README executable,
+separates Session identity from durable message identity, makes selected-provider
+startup deterministic, adds an authenticated pricing-capability preflight, and
+expands minimum-runtime and newcomer regressions. Those source changes target
+0.1.1; registry publication remains an explicit post-merge release step.
 
 ## Goals
 
@@ -54,8 +61,10 @@ the tag and `package.json` versions match; it uses npm trusted publishing for
 
 CI packs the package, installs the tarball into an otherwise empty TypeScript
 project, compiles a facade-only consumer, and runs it against the deterministic SDK
-conformance server. Registry verification remains a post-publication check; a green
-repository build is never reported as public availability.
+conformance server. It also extracts and executes the public README quickstart from
+the installed tarball under Node 20. Registry verification remains a
+post-publication check; a green repository build is never reported as public
+availability.
 
 ### Local development path
 
@@ -94,8 +103,8 @@ Invocation ID, public error code/message, safe detail, and a structured-log poin
 then exits nonzero. The chat example uses the same handle helper, accepts a durable
 Session key, and documents message-derived idempotency and local wait semantics.
 
-Node 20 remains the supported package runtime floor. Node 24 remains only the pinned
-repository development and CI baseline.
+Node 20 remains the supported package runtime floor and now runs the complete
+onboarding gate in CI. Node 24 remains the pinned repository development baseline.
 
 ### Estimated-cost and transcript semantics
 
@@ -114,6 +123,13 @@ absent, execution settles `failed` before credential resolution or a provider ca
 When pricing is available, the existing post-response cost calculation remains a
 guardrail rather than a reservation. Unknown or non-USD cost evidence still fails
 closed if an adapter could not decide before the call.
+
+Authenticated hosts can call `GET /v1/model-pricing-capabilities` for an exact
+provider/model before admission. Its `priced`, `unpriced`, or `unknown` result and
+local registry version describe only whether nvoken can enforce the USD cap without
+relying on a paid provider response; they do not claim provider-account access or
+served-model identity. The TypeScript facade exposes the same operation through
+`Client.pricingCapability()`.
 
 Model checkpoints remain canonical durability evidence, including checkpoints that
 precede a later terminal failure. Public Session reads therefore remain lossless.
@@ -176,14 +192,14 @@ profile keeps both paths honest.
 
 ## Rollout
 
-The implementation and published-availability README are merged. Version 0.1.0 was
-packed, inspected, tested, and published interactively from the exact merged `main`
-revision. npm trusted publishing is connected to repository `deepnoodle-ai/nvoken`,
-workflow `release-npm.yml`, and the `npm publish` action. Later releases update the
-version on `main`, pass the gates, and push the exact `npm-vX.Y.Z` tag.
+Version 0.1.0 was packed, inspected, tested, and published interactively from the
+exact merged `main` revision. The second-pass corrections bump the TypeScript
+package to 0.1.1. After they merge and the exact `main` gates pass, push
+`npm-v0.1.1`; npm trusted publishing is connected to repository
+`deepnoodle-ai/nvoken`, workflow `release-npm.yml`, and the `npm publish` action.
 
 ## Open questions
 
 There are no unresolved design questions. The public package coordinate is
-`@deepnoodle/nvoken`, and later releases use the tag-driven trusted-publishing
-workflow.
+`@deepnoodle/nvoken`; publication of 0.1.1 is deliberately deferred until these
+changes are merged and verified from the exact `main` revision.

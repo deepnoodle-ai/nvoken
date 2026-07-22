@@ -12,25 +12,34 @@ if (provider !== "anthropic" && provider !== "openai") {
   throw new Error("NVOKEN_PROVIDER must be anthropic or openai");
 }
 if (!model) throw new Error("NVOKEN_MODEL is required");
+const selectedProvider = provider;
 
 const client = new Client({ baseUrl, apiKey });
-const sessionKey = process.env.NVOKEN_SESSION_KEY ?? `typescript-quickstart-${randomUUID()}`;
+const explicitSessionKey = process.env.NVOKEN_SESSION_KEY;
+const runKey = process.env.NVOKEN_RUN_KEY ?? (explicitSessionKey ? undefined : randomUUID());
+if (!runKey) {
+  throw new Error("NVOKEN_RUN_KEY is required when NVOKEN_SESSION_KEY resumes an existing Session");
+}
+const sessionKey = explicitSessionKey ?? `typescript-quickstart-${randomUUID()}`;
+const messages = explicitSessionKey
+  ? ["What is my code word? Reply with only the word."]
+  : [
+      "Remember that my code word is cedar.",
+      "What is my code word? Reply with only the word.",
+    ];
 
 try {
   let sessionId: string | undefined;
-  for (const [index, input] of [
-    "Remember that my code word is cedar.",
-    "What is my code word? Reply with only the word.",
-  ].entries()) {
+  for (const [index, input] of messages.entries()) {
     const handle = await client.invoke({
       agentRef: "typescript-quickstart",
       sessionId,
       sessionKey: sessionId ? undefined : sessionKey,
-      idempotencyKey: `${sessionKey}:message-${index + 1}`,
+      idempotencyKey: `${runKey}:message-${index + 1}`,
       input,
       spec: {
         instructions: "Be concise and remember relevant details across this Session.",
-        model: { provider, name: model },
+        model: { provider: selectedProvider, name: model },
         budgets: { maxOutputTokens: 300, maxIterations: 1 },
       },
     });
@@ -57,14 +66,28 @@ function requireCompleted(
 ): void {
   if (invocation.status === "completed") return;
   const publicReason = invocation.error
-    ? `${invocation.error.code}: ${invocation.error.message}`
-    : invocation.status;
+    ? `${invocation.error.code}: ${terminalSentence(invocation.error.message)}`
+    : terminalSentence(invocation.status);
   const details = invocation.error?.details
-    ? ` details=${JSON.stringify(invocation.error.details)}`
+    ? ` Safe details: ${JSON.stringify(invocation.error.details)}.`
+    : "";
+  const modelHelp = invocation.error?.code === "provider_error"
+    ? ` Check available model IDs at ${modelDocumentation(selectedProvider)}.`
     : "";
   throw new Error(
-    `Invocation ${handle.invocationId} ${invocation.status}: ${publicReason}.${details} `
+    `Invocation ${handle.invocationId} ${invocation.status}: ${publicReason}${details}${modelHelp} `
       + `Inspect structured daemon logs for invocation_id=${handle.invocationId}; `
       + "raw provider responses are intentionally private.",
   );
+}
+
+function terminalSentence(value: string): string {
+  const trimmed = value.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function modelDocumentation(value: "anthropic" | "openai"): string {
+  return value === "openai"
+    ? "https://developers.openai.com/api/docs/models"
+    : "https://platform.claude.com/docs/en/about-claude/models/overview";
 }

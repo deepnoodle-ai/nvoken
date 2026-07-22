@@ -39,8 +39,9 @@ precedence is `--base-url`, `NVOKEN_BASE_URL`, the JSON config file, then
 
 Use `--json` before the command for machine-readable output. The CLI covers
 durable invoke, Invocation get/list/wait/cancel, Session get/list/messages/
-transcript/stream, and ToolCall result submission. It imports the Go SDK and
-does not maintain HTTP routes or payload types of its own.
+transcript/stream, model-pricing preflight, and ToolCall result submission. It
+imports the Go SDK and does not maintain HTTP routes or payload types of its
+own.
 
 ## Development
 
@@ -78,6 +79,10 @@ or workflow result as evidence:
 ```bash
 npm view @deepnoodle/nvoken@0.1.0 name version dist-tags repository --json
 ```
+
+Version 0.1.1 is prepared in source with the second-pass onboarding corrections.
+It is not public until those changes merge, the exact `main` revision passes the
+gates, and the `npm-v0.1.1` release workflow succeeds.
 
 npm trusted publishing is configured for GitHub repository `deepnoodle-ai/nvoken`,
 workflow `release-npm.yml`, allowed action `npm publish`, and no environment. Later

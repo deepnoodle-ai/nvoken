@@ -230,7 +230,7 @@ func (e *GenerationExecutor) Execute(
 	} else {
 		if claim.Invocation.MaxEstimatedCostMicros != nil {
 			if pricing, ok := e.generator.(ports.ModelPricingResolver); ok &&
-				!pricing.HasUSDModelPricing(request.Provider, request.Model) {
+				pricing.ResolveModelPricing(request.Provider, request.Model).Status == domain.ModelPricingUnpriced {
 				e.logger.Warn("Model pricing unavailable before generation",
 					"invocation_id", claim.Invocation.ID,
 					"lease_attempt", claim.Attempt,

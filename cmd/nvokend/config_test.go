@@ -60,6 +60,9 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 		cfg.CallbackDNSTimeout != 5*time.Second {
 		t.Fatalf("callback defaults: %#v", cfg)
 	}
+	if cfg.CredentialCipher != nil {
+		t.Fatal("default credential cipher is a non-nil interface containing a nil keyring")
+	}
 }
 
 func TestLoadDaemonConfigTrustsForwardedClientIPWhenEnabled(t *testing.T) {

@@ -1,7 +1,7 @@
 import base64
 import unittest
 
-from configure import render
+from configure import ambient_provider_warnings, render
 
 
 class ConfigureTest(unittest.TestCase):
@@ -35,7 +35,21 @@ class ConfigureTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "export ANTHROPIC_API_KEY"):
             render("ANTHROPIC_API_KEY=\n", "anthropic", {})
 
+    def test_warns_about_non_selected_ambient_provider_without_value(self) -> None:
+        warnings = ambient_provider_warnings(
+            "openai",
+            {"OPENAI_API_KEY": "selected-secret", "ANTHROPIC_API_KEY": "ambient-secret"},
+        )
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("ANTHROPIC_API_KEY is already exported", warnings[0])
+        self.assertNotIn("ambient-secret", warnings[0])
+
+    def test_does_not_warn_for_selected_provider(self) -> None:
+        self.assertEqual(
+            ambient_provider_warnings("openai", {"OPENAI_API_KEY": "selected-secret"}),
+            [],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
-

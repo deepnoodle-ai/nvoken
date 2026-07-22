@@ -19,6 +19,7 @@ __version__ = "0.1.0"
 # Define package exports
 __all__ = [
     "InvocationsApi",
+    "ModelPricingApi",
     "ProviderCredentialsApi",
     "SessionsApi",
     "ApiResponse",
@@ -56,6 +57,7 @@ __all__ = [
     "InvocationProviderCredentialSelectionOneOf1",
     "InvocationStatus",
     "ModelCost",
+    "ModelPricingCapability",
     "ModelProvenance",
     "ModelProvider",
     "ModelSelection",
@@ -87,6 +89,7 @@ __all__ = [
 
 # import apis into sdk package
 from nvoken_generated.api.invocations_api import InvocationsApi as InvocationsApi
+from nvoken_generated.api.model_pricing_api import ModelPricingApi as ModelPricingApi
 from nvoken_generated.api.provider_credentials_api import ProviderCredentialsApi as ProviderCredentialsApi
 from nvoken_generated.api.sessions_api import SessionsApi as SessionsApi
 
@@ -128,6 +131,7 @@ from nvoken_generated.models.invocation_provider_credential_selection_one_of imp
 from nvoken_generated.models.invocation_provider_credential_selection_one_of1 import InvocationProviderCredentialSelectionOneOf1 as InvocationProviderCredentialSelectionOneOf1
 from nvoken_generated.models.invocation_status import InvocationStatus as InvocationStatus
 from nvoken_generated.models.model_cost import ModelCost as ModelCost
+from nvoken_generated.models.model_pricing_capability import ModelPricingCapability as ModelPricingCapability
 from nvoken_generated.models.model_provenance import ModelProvenance as ModelProvenance
 from nvoken_generated.models.model_provider import ModelProvider as ModelProvider
 from nvoken_generated.models.model_selection import ModelSelection as ModelSelection
