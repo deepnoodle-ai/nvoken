@@ -6,7 +6,7 @@ This directory is organized by document type:
 - [design/](design/) — the governing design packet: claims register, vision, architecture, API contract, decision log
 - [prds/](prds/) — product requirement documents
 - [../openapi/runtime.yaml](../openapi/runtime.yaml) and [../openapi/identity.yaml](../openapi/identity.yaml) — focused Runtime and identity contracts
-- [guides/](guides/) — developer guides, including [database migrations](guides/database-migrations.md), [data retention and storage growth](guides/data-retention.md), [Runtime admission](guides/runtime-admission.md), [SDKs and the client CLI](guides/sdks-and-cli.md), [credentials and CLI authentication](guides/credentials-and-cli-auth.md), [callback receivers](guides/callback-receivers.md), and the [Google Cloud Run paved deployment](../deploy/google-cloud/README.md)
+- [guides/](guides/) — developer guides, including [database migrations](guides/database-migrations.md), [operational signals and diagnostics](guides/operational-signals.md), [data retention and storage growth](guides/data-retention.md), [Runtime admission](guides/runtime-admission.md), [SDKs and the client CLI](guides/sdks-and-cli.md), [credentials and CLI authentication](guides/credentials-and-cli-auth.md), [callback receivers](guides/callback-receivers.md), and the [Google Cloud Run paved deployment](../deploy/google-cloud/README.md)
 - [research/](research/) — market, competitive, and technical research
 - [reviews/](reviews/) — code reviews
 - [testing/](testing/) — the authoritative

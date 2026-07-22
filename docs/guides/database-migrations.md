@@ -23,20 +23,33 @@ The serve path checks that the schema is present, clean, and at the exact
 version expected by the binary; it exits rather than modifying an empty, dirty,
 older, or newer database.
 
+Use `nvokend diagnose` to report that same read-only compatibility verdict as a
+bounded `database_schema` result before shifting traffic. See
+[Operational signals and diagnostics](operational-signals.md) for the command
+and result classes.
+
 The [Google Cloud paved deployment](../../deploy/google-cloud/README.md) runs the
 same immutable image as a single-task migration Job. Its release script updates
 and executes that Job to success before the full Terraform apply can move the
 service to the new image. A failed migration leaves serving traffic on the
 prior revision.
 
-For adapter integration tests, point `NVOKEN_TEST_DATABASE_URL` at a disposable
-Postgres database and run:
+For adapter integration tests, run:
 
 ```bash
 make test-postgres
 ```
 
-The tests create and remove isolated schemas. Authoritative runtime records use
+When `NVOKEN_TEST_DATABASE_URL` is unset, the target starts PostgreSQL 17 in a
+disposable Docker container on a random loopback port, waits for readiness,
+runs the full Go suite, and removes the container. Set
+`NVOKEN_TEST_POSTGRES_IMAGE` to exercise another Postgres image. If Docker is
+unavailable, set `NVOKEN_TEST_DATABASE_URL` to an existing disposable database
+whose user may create and drop schemas. The target uses that database without
+starting a container.
+
+The tests create and remove isolated schemas. Do not point the variable at a
+production database. Authoritative runtime records use
 restrictive foreign keys and have no deletion or pruning surface in this
 implementation. Only terminal execution-dispatch and callback-delivery
 diagnostics have bounded prune operations; see

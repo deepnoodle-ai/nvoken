@@ -543,7 +543,7 @@ func TestGenerationExecutorSettlesCredentialUnavailableDistinctly(t *testing.T) 
 	if result.Provenance != nil || result.Usage != nil {
 		t.Fatalf("pre-provider credential failure leaked evidence = %#v", result)
 	}
-	if !strings.Contains(logs.String(), `"class":"credential_unavailable"`) {
+	if !strings.Contains(logs.String(), `"outcome_class":"configuration"`) {
 		t.Fatalf("credential failure class missing from logs: %s", logs.String())
 	}
 }
@@ -597,13 +597,23 @@ func TestGenerationExecutorRejectsInvalidDurableInputsWithoutModelCall(t *testin
 			store := generationStoreFixture(claim)
 			test.mutate(store, claim)
 			generator := &fakeModelGenerator{response: successfulGenerationResponse()}
-			result, err := NewGenerationExecutor(store, generator, nil).Execute(context.Background(), claim)
+			var logs bytes.Buffer
+			result, err := NewGenerationExecutor(
+				store,
+				generator,
+				slog.New(slog.NewJSONHandler(&logs, nil)),
+			).Execute(context.Background(), claim)
 			if err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 			assertFailureCode(t, result, "internal")
 			if len(generator.requests) != 0 {
 				t.Fatalf("model calls = %d, want 0", len(generator.requests))
+			}
+			if !strings.Contains(logs.String(), `"event":"invocation_execution_failed"`) ||
+				strings.Contains(logs.String(), `"event":"provider_generation"`) ||
+				strings.Contains(logs.String(), `"id":"secret"`) {
+				t.Fatalf("invalid durable input log = %s", logs.String())
 			}
 		})
 	}
@@ -864,7 +874,7 @@ func TestGenerationExecutorRecordsProviderCancellation(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), `"event":"provider_generation"`) ||
 		!strings.Contains(logs.String(), `"outcome":"canceled"`) ||
-		!strings.Contains(logs.String(), `"class":"provider_canceled"`) ||
+		!strings.Contains(logs.String(), `"outcome_class":"canceled"`) ||
 		strings.Contains(logs.String(), `"outcome":"failed"`) {
 		t.Fatalf("logs omit bounded provider cancellation: %s", logs.String())
 	}

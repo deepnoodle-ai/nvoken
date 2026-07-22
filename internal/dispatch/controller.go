@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
@@ -93,7 +94,9 @@ func (c *Controller) publish(ctx context.Context) {
 	for range c.config.BatchLimit {
 		claim, ok, err := c.service.ClaimNext(ctx, c.owner)
 		if err != nil {
-			c.logger.Error("claim execution dispatch", "error", err)
+			c.logger.Error("claim execution dispatch",
+				"event", observability.EventDispatchClaimFailed,
+				"error_class", observability.ErrorClass(err))
 			return
 		}
 		if !ok {
@@ -103,8 +106,9 @@ func (c *Controller) publish(ctx context.Context) {
 			// The service has already made a fenced durable retry decision when
 			// possible. Keep the component alive for unrelated dispatches.
 			c.logger.Warn("publish execution dispatch",
+				"event", observability.EventDispatchPublishFailed,
 				"dispatch_id", claim.Dispatch.ID, "dispatch_kind", claim.Dispatch.Kind,
-				"error", err)
+				"error_class", observability.ErrorClass(err))
 		}
 	}
 }
@@ -117,7 +121,9 @@ func (c *Controller) repair(ctx context.Context) {
 	if err != nil {
 		// Repair covers mode enablement and must not block publication of
 		// already durable dispatches.
-		c.logger.Error("repair queued Invocation dispatches", "error", err)
+		c.logger.Error("repair queued Invocation dispatches",
+			"event", observability.EventDispatchRepairFailed,
+			"error_class", observability.ErrorClass(err))
 		return
 	}
 	if repaired > 0 {
@@ -127,15 +133,22 @@ func (c *Controller) repair(ctx context.Context) {
 
 func (c *Controller) reconcile(ctx context.Context) {
 	if err := c.service.LogAged(ctx); err != nil {
-		c.logger.Error("inspect aged execution dispatches", "error", err)
+		c.logger.Error("inspect aged execution dispatches",
+			"event", observability.EventDispatchReconcileFailed,
+			"operation", "inspect_aged",
+			"error_class", observability.ErrorClass(err))
 	}
 	result, err := c.service.Reconcile(ctx, c.tasks)
 	if err != nil {
-		c.logger.Error("reconcile execution dispatches", "error", err)
+		c.logger.Error("reconcile execution dispatches",
+			"event", observability.EventDispatchReconcileFailed,
+			"operation", "reconcile",
+			"error_class", observability.ErrorClass(err))
 		return
 	}
 	if result.Settled+result.Succeeded+result.Retained > 0 {
 		c.logger.Info("reconciled execution dispatches",
+			"event", observability.EventDispatchReconciled,
 			"existing_tasks", result.Existing, "settled_dispatches", result.Settled,
 			"retained_uncertain_dispatches", result.Retained,
 			"successor_dispatches", result.Succeeded)
@@ -145,10 +158,14 @@ func (c *Controller) reconcile(ctx context.Context) {
 func (c *Controller) prune(ctx context.Context) {
 	count, err := c.service.Prune(ctx)
 	if err != nil {
-		c.logger.Error("prune execution dispatches", "error", err)
+		c.logger.Error("prune execution dispatches",
+			"event", observability.EventDispatchPruneFailed,
+			"error_class", observability.ErrorClass(err))
 		return
 	}
 	if count > 0 {
-		c.logger.Info("pruned execution dispatches", "count", count)
+		c.logger.Info("pruned execution dispatches",
+			"event", observability.EventDispatchPruned,
+			"count", count)
 	}
 }

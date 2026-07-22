@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
@@ -50,15 +52,22 @@ func ValidateConfig(config Config) error {
 
 type Controller struct {
 	owner     string
-	service   *services.CallbackDeliveryService
+	service   deliveryService
 	transport ports.CallbackTransport
 	logger    *slog.Logger
 	config    Config
 }
 
+type deliveryService interface {
+	ClaimNext(context.Context, string) (domain.CallbackDeliveryClaim, bool, error)
+	ProcessClaim(context.Context, ports.CallbackTransport, domain.CallbackDeliveryClaim) error
+	RecoverExpired(context.Context) (int64, error)
+	Prune(context.Context) (int64, error)
+}
+
 func NewController(
 	owner string,
-	service *services.CallbackDeliveryService,
+	service deliveryService,
 	transport ports.CallbackTransport,
 	logger *slog.Logger,
 	config Config,
@@ -139,7 +148,9 @@ func (c *Controller) runWorker(
 		for claimCtx.Err() == nil {
 			claim, found, err := c.service.ClaimNext(claimCtx, owner)
 			if err != nil {
-				c.logger.Warn("Callback delivery claim failed", "event", "callback_claim_failed")
+				c.logger.Warn("Callback delivery claim failed",
+					"event", observability.EventCallbackClaimFailed,
+					"error_class", observability.ErrorClass(err))
 				break
 			}
 			if !found {
@@ -149,7 +160,9 @@ func (c *Controller) runWorker(
 				c.logger.Warn(
 					"Callback delivery processing failed",
 					"event",
-					"callback_process_failed",
+					observability.EventCallbackProcessFailed,
+					"error_class",
+					observability.ErrorClass(err),
 					"delivery_id",
 					claim.Delivery.ID,
 					"tool_call_id",
@@ -179,12 +192,14 @@ func (c *Controller) runMaintenance(ctx context.Context) {
 		case <-recovery.C:
 			count, err := c.service.RecoverExpired(ctx)
 			if err != nil {
-				c.logger.Warn("Callback delivery recovery failed", "event", "callback_recovery_failed")
+				c.logger.Warn("Callback delivery recovery failed",
+					"event", observability.EventCallbackRecoveryFailed,
+					"error_class", observability.ErrorClass(err))
 			} else if count != 0 {
 				c.logger.Warn(
 					"Expired callback delivery leases recovered",
 					"event",
-					"callback_lease_recovered",
+					observability.EventCallbackLeaseRecovered,
 					"count",
 					count,
 				)
@@ -192,12 +207,14 @@ func (c *Controller) runMaintenance(ctx context.Context) {
 		case <-retention.C:
 			count, err := c.service.Prune(ctx)
 			if err != nil {
-				c.logger.Warn("Callback delivery prune failed", "event", "callback_prune_failed")
+				c.logger.Warn("Callback delivery prune failed",
+					"event", observability.EventCallbackPruneFailed,
+					"error_class", observability.ErrorClass(err))
 			} else if count != 0 {
 				c.logger.Info(
 					"Terminal callback deliveries pruned",
 					"event",
-					"callback_pruned",
+					observability.EventCallbackPruned,
 					"count",
 					count,
 				)

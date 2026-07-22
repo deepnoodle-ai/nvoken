@@ -23,6 +23,9 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 	if cfg.ShutdownTimeout != 40*time.Second {
 		t.Errorf("ShutdownTimeout: got %s, want 40s", cfg.ShutdownTimeout)
 	}
+	if cfg.DiagnosticTimeout != 15*time.Second {
+		t.Errorf("DiagnosticTimeout: got %s, want 15s", cfg.DiagnosticTimeout)
+	}
 	if cfg.TrustForwardedClientIP {
 		t.Error("TrustForwardedClientIP: got true, want false")
 	}
