@@ -19,6 +19,7 @@ pub struct InvocationBudgets {
     pub active_execution_timeout_seconds: u32,
     #[serde(rename = "max_output_tokens", skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
+    /// Resolved USD list-price guardrail. It is present only when the host requested a cost limit; unknown price metadata fails closed.
     #[serde(
         rename = "max_estimated_cost_usd",
         skip_serializing_if = "Option::is_none"

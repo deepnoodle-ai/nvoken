@@ -270,6 +270,12 @@ checkpoint counters, while append-only checkpoints reference the transcript
 watermark and corresponding receipt or ToolCall. They never contain transcript
 content, a provider envelope, or restorable process state.
 
+Canonical transcript reads are lossless, including checkpoints retained before
+a later terminal failure. Provider-context reconstruction is intentionally
+narrower: assistant and tool messages owned by a failed or cancelled Invocation
+are excluded, while its user input remains eligible. This preserves paid-call
+evidence without allowing rejected output to steer a later Invocation.
+
 Tool request and result payloads remain exclusively in `SessionMessage`.
 ToolCall rows retain immutable scope, provider correlation, mode, request hash,
 deadline, attempt count, status, and message references. Model usage receipts

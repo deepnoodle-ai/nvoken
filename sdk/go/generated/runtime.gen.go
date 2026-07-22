@@ -613,7 +613,8 @@ type InlineExecutionSpec struct {
 	// Budgets Optional requested limits. Installation defaults supply wall-clock,
 	// active-execution, and iteration limits. Output-token and estimated-cost
 	// limits are unlimited when omitted. Installation maxima may be lower
-	// than the schema's numeric range.
+	// than the schema's numeric range. A requested estimated-cost limit
+	// requires known USD pricing metadata and fails closed when unavailable.
 	Budgets      *InvocationBudgetRequest `json:"budgets,omitempty"`
 	Instructions string                   `json:"instructions"`
 	Model        ModelSelection           `json:"model"`
@@ -690,22 +691,32 @@ type InvocationAcknowledgement struct {
 // InvocationBudgetRequest Optional requested limits. Installation defaults supply wall-clock,
 // active-execution, and iteration limits. Output-token and estimated-cost
 // limits are unlimited when omitted. Installation maxima may be lower
-// than the schema's numeric range.
+// than the schema's numeric range. A requested estimated-cost limit
+// requires known USD pricing metadata and fails closed when unavailable.
 type InvocationBudgetRequest struct {
-	ActiveExecutionTimeoutSeconds *int     `json:"active_execution_timeout_seconds,omitempty"`
-	MaxEstimatedCostUsd           *float32 `json:"max_estimated_cost_usd,omitempty"`
-	MaxIterations                 *int     `json:"max_iterations,omitempty"`
-	MaxOutputTokens               *int     `json:"max_output_tokens,omitempty"`
-	WallClockTimeoutSeconds       *int     `json:"wall_clock_timeout_seconds,omitempty"`
+	ActiveExecutionTimeoutSeconds *int `json:"active_execution_timeout_seconds,omitempty"`
+
+	// MaxEstimatedCostUsd Dive list-price guardrail, not preauthorization or a billing
+	// ledger. Requires known USD pricing for the selected model and
+	// otherwise fails closed with `budget_exceeded` and
+	// `details.kind = estimated_cost_unavailable`. When pricing absence
+	// is knowable before execution, nvoken rejects before a provider call.
+	MaxEstimatedCostUsd     *float32 `json:"max_estimated_cost_usd,omitempty"`
+	MaxIterations           *int     `json:"max_iterations,omitempty"`
+	MaxOutputTokens         *int     `json:"max_output_tokens,omitempty"`
+	WallClockTimeoutSeconds *int     `json:"wall_clock_timeout_seconds,omitempty"`
 }
 
 // InvocationBudgets defines model for InvocationBudgets.
 type InvocationBudgets struct {
-	ActiveExecutionTimeoutSeconds int      `json:"active_execution_timeout_seconds"`
-	MaxEstimatedCostUsd           *float32 `json:"max_estimated_cost_usd,omitempty"`
-	MaxIterations                 int      `json:"max_iterations"`
-	MaxOutputTokens               *int     `json:"max_output_tokens,omitempty"`
-	WallClockTimeoutSeconds       int      `json:"wall_clock_timeout_seconds"`
+	ActiveExecutionTimeoutSeconds int `json:"active_execution_timeout_seconds"`
+
+	// MaxEstimatedCostUsd Resolved USD list-price guardrail. It is present only when the host
+	// requested a cost limit; unknown price metadata fails closed.
+	MaxEstimatedCostUsd     *float32 `json:"max_estimated_cost_usd,omitempty"`
+	MaxIterations           int      `json:"max_iterations"`
+	MaxOutputTokens         *int     `json:"max_output_tokens,omitempty"`
+	WallClockTimeoutSeconds int      `json:"wall_clock_timeout_seconds"`
 }
 
 // InvocationChange defines model for InvocationChange.

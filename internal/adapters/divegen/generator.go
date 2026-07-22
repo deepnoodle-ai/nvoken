@@ -21,6 +21,7 @@ import (
 
 	"github.com/deepnoodle-ai/dive"
 	"github.com/deepnoodle-ai/dive/llm"
+	diveproviders "github.com/deepnoodle-ai/dive/providers"
 	"github.com/deepnoodle-ai/dive/providers/anthropic"
 	"github.com/deepnoodle-ai/dive/providers/openai"
 
@@ -107,6 +108,14 @@ func New(config Config, options ...Option) *Generator {
 		}
 	}
 	return generator
+}
+
+func (*Generator) HasUSDModelPricing(provider, model string) bool {
+	if provider != "anthropic" && provider != "openai" {
+		return false
+	}
+	pricing, ok := diveproviders.PricingFor(model, false)
+	return ok && strings.EqualFold(pricing.Currency, "USD")
 }
 
 func newModel(provider, model, apiKey string) (llm.LLM, error) {

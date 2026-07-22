@@ -57,6 +57,8 @@ test("shared fault server semantics", async (context) => {
   assert.equal(secondPage.hasMore, false);
   const messages = await client.listMessages(sessionId);
   assert.equal(messages.nextCursor, "messages-page-2");
+  assert.deepEqual((await handle.listMessages()).map((message) => message.role), ["user", "assistant"]);
+  assert.equal(await handle.text(), "world");
 
   const result = await handle.submitToolResults([{ toolCallId, content: { ok: true } }]);
   assert.equal(result.results[0]?.deduplicated, true);

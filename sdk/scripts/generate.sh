@@ -34,7 +34,7 @@ java -jar "$JAR" generate \
   --generator-name typescript-fetch \
   --input-spec openapi/runtime.yaml \
   --output "$WORK/typescript" \
-  --additional-properties 'npmName=@deepnoodle-ai/nvoken,npmVersion=0.1.0,supportsES6=true,useSingleRequestParameter=true,importFileExtension=.js,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false' \
+  --additional-properties 'npmName=@deepnoodle/nvoken,npmVersion=0.1.0,supportsES6=true,useSingleRequestParameter=true,importFileExtension=.js,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false' \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 java -jar "$JAR" generate \

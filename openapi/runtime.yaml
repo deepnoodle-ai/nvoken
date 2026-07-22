@@ -1232,6 +1232,12 @@ components:
           type: number
           exclusiveMinimum: 0
           multipleOf: 0.000001
+          description: |
+            Dive list-price guardrail, not preauthorization or a billing
+            ledger. Requires known USD pricing for the selected model and
+            otherwise fails closed with `budget_exceeded` and
+            `details.kind = estimated_cost_unavailable`. When pricing absence
+            is knowable before execution, nvoken rejects before a provider call.
         max_iterations:
           type: integer
           minimum: 1
@@ -1239,7 +1245,8 @@ components:
         Optional requested limits. Installation defaults supply wall-clock,
         active-execution, and iteration limits. Output-token and estimated-cost
         limits are unlimited when omitted. Installation maxima may be lower
-        than the schema's numeric range.
+        than the schema's numeric range. A requested estimated-cost limit
+        requires known USD pricing metadata and fails closed when unavailable.
     ModelSelection:
       type: object
       additionalProperties: false
@@ -1555,6 +1562,9 @@ components:
           type: number
           exclusiveMinimum: 0
           multipleOf: 0.000001
+          description: |
+            Resolved USD list-price guardrail. It is present only when the host
+            requested a cost limit; unknown price metadata fails closed.
         max_iterations:
           type: integer
           minimum: 1

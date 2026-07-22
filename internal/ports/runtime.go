@@ -149,6 +149,13 @@ type SessionMessageRepository interface {
 	ListSessionMessages(context.Context, string) ([]domain.SessionMessage, error)
 }
 
+// GenerationContextRepository returns the canonical message subset eligible
+// for a provider request. Public transcript reads use SessionMessageRepository
+// and remain lossless.
+type GenerationContextRepository interface {
+	ListSessionMessagesForGeneration(context.Context, string) ([]domain.SessionMessage, error)
+}
+
 type InvocationRepository interface {
 	CreateInvocation(context.Context, domain.Invocation) error
 	GetInvocation(context.Context, string) (domain.Invocation, error)
@@ -397,4 +404,11 @@ type InvocationExecutor interface {
 // only normalized durable inputs and return no raw provider envelope.
 type ModelGenerator interface {
 	Generate(context.Context, domain.GenerationRequest) (domain.GenerationResponse, error)
+}
+
+// ModelPricingResolver reports whether the adapter can produce normalized USD
+// cost evidence before a provider call. A false result is authoritative for
+// capped work; adapters that cannot decide should not implement this interface.
+type ModelPricingResolver interface {
+	HasUSDModelPricing(provider, model string) bool
 }

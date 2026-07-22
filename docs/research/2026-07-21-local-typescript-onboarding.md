@@ -2,7 +2,13 @@
 
 - Date: 2026-07-21
 - Repository revision: `1393b5e62092b8d239aaf6c7d2c0c6abd1c9c9d9` (`main`)
-- SDK version: `@deepnoodle-ai/nvoken` `0.1.0`
+- SDK version: `@deepnoodle/nvoken` `0.1.0`
+
+> **Correction (2026-07-22):** The checked package metadata used the nonexistent
+> `@deepnoodle-ai` npm scope. The established Deep Noodle organization is
+> `@deepnoodle` (for example, `@deepnoodle/mobius`). The corrected
+> `@deepnoodle/nvoken` coordinate was also unpublished when rechecked; fixing
+> the scope is part of DX-01 through DX-04.
 
 ## Bottom line
 
@@ -67,7 +73,7 @@ in-process application memory.
 | --- | --- | --- |
 | Read the root README | Product boundary was clear | There is no local quickstart or direct path from clone to first response. The two deployment links are production profiles. |
 | Open the TypeScript SDK README | Found a three-line example | It assumes an already-running daemon and an API key, does not link to how either is obtained, and does not show the local-checkout install path. |
-| Run `npm view @deepnoodle-ai/nvoken version` | Failed with npm `E404 Not Found` | The SDK README's `npm install @deepnoodle-ai/nvoken` command cannot currently work. |
+| Run `npm view @deepnoodle/nvoken version` | Failed with npm `E404 Not Found` | The corrected SDK package was not yet published. |
 | Follow Runtime admission and credential guides | Found the required daemon inputs | The usable local recipe is spread across the Runtime guide, credential guide, and single-daemon production profile. |
 | Supply Postgres 17 and run migrations | Succeeded | The repository has no disposable local Postgres or Compose path, so the user must invent one. |
 | Run `nvokend serve` in combined/embedded mode | Succeeded | Startup logs clearly reported schema compatibility, enabled providers, execution mode, and listening address. This was excellent feedback. |
@@ -83,7 +89,7 @@ in-process application memory.
 `sdk/typescript/README.md` starts with:
 
 ```bash
-npm install @deepnoodle-ai/nvoken
+npm install @deepnoodle/nvoken
 ```
 
 On 2026-07-21, the npm registry returned `E404` for that exact package. A user
@@ -223,7 +229,7 @@ demonstrated by the example added during this exercise.
 ### P0: make distribution truthful
 
 - **DX-01 — Publish or clearly label the package as unreleased.** Publish
-  `@deepnoodle-ai/nvoken@0.1.0` to npm, or replace the registry installation
+  `@deepnoodle/nvoken@0.1.0` to npm, or replace the registry installation
   command with a prominent unreleased notice. Do not leave an `npm install`
   command that returns `E404`.
 - **DX-02 — Document local-checkout installation.** Until publication, show
@@ -390,3 +396,21 @@ A refined onboarding path passes only when all of the following are true:
   explicit and regression-tested.
 - Production hosts are told to persist and reuse message-derived idempotency
   keys after ambiguous admission responses.
+
+## Resolution status (2026-07-22)
+
+The implementation now resolves the full adjustment backlog in source and CI:
+
+| Items | Resolution |
+| --- | --- |
+| DX-01–DX-04 | Corrected the package to `@deepnoodle/nvoken`, marked it unreleased, completed public package metadata and a tag-driven release workflow, and added packed-artifact plus post-publish registry verification. The one remaining external step is the first publish from merged `main`. |
+| DX-05–DX-10 | Added a linked laptop guide, localhost-only PostgreSQL 17 Compose project, secret-free template, mode-0600 configurator, migration/start/health flow, one-provider setup, and explicit production boundary. |
+| DX-11–DX-18 | Replaced the quickstart with configurable two-turn output and actionable nonzero failures; the chat example now uses the facade helper and documents Session resume, durable idempotency, safe budgets, prerequisites, and cleanup. |
+| DX-19–DX-23 | Documented fail-closed estimated-cost semantics, added the public `estimated_cost_unavailable` detail, rejects known-unpriced capped work before the provider call, and keeps failed output canonical but out of later model context with service and Postgres regressions. |
+| DX-24–DX-28 | Added `Handle.listMessages()`, `Handle.text()`, and `isTextContentBlock`; all read canonical history, and the README distinguishes durable wait/retry behavior and Node 20 runtime support from the Node 24 development baseline. |
+| DX-29–DX-33 | Added a CI newcomer gate that migrates/starts the daemon, verifies startup identity, packs and inspects the SDK, installs it into an empty strict TypeScript project, runs success/resume/failure UX against a deterministic double, tests the local file-linked example, and checks the documented artifacts and cleanup command. |
+
+The gate passes locally against the checked PostgreSQL 17 Compose profile. npm
+authentication is also ready: `curtis-deepnoodle` is an owner of the existing
+`deepnoodle` organization. Publication remains intentionally sequenced after merge
+so the registry artifact is built from the exact reviewed `main` revision.

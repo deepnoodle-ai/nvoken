@@ -5,7 +5,9 @@ import type {
   InvocationStatus,
   ModelProvider,
   Session,
+  SessionContentBlock,
   SessionList,
+  SessionMessage,
   SessionMessageList,
   SubmitClientToolResultsResponse,
 } from "./generated/models/index.js";
@@ -44,6 +46,15 @@ export interface Model {
   name: string;
 }
 
+export interface TextContentBlock extends SessionContentBlock {
+  type: "text";
+  text: string;
+}
+
+export function isTextContentBlock(block: SessionContentBlock): block is TextContentBlock {
+  return block.type === "text" && typeof block.text === "string";
+}
+
 export interface Tool {
   mode: "client" | "callback";
   name: string;
@@ -59,6 +70,7 @@ export interface ExecutionSpec {
     wallClockTimeoutSeconds?: number;
     activeExecutionTimeoutSeconds?: number;
     maxOutputTokens?: number;
+    /** Requires known USD model pricing and otherwise fails closed before generation. */
     maxEstimatedCostUsd?: number;
     maxIterations?: number;
   };
@@ -304,6 +316,33 @@ export class Handle {
       await sleep(delay, options.signal);
       delay = Math.min(delay * 2, maximum);
     }
+  }
+
+  async listMessages(signal?: AbortSignal): Promise<SessionMessage[]> {
+    const messages: SessionMessage[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await this.client.listMessages(this.sessionId, { cursor, limit: 100 }, signal);
+      messages.push(...page.items.filter((message) => message.invocationId === this.invocationId));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    return messages;
+  }
+
+  async text(signal?: AbortSignal): Promise<string> {
+    const text = (await this.listMessages(signal))
+      .filter((message) => message.role === "assistant")
+      .flatMap((message) => message.content)
+      .filter(isTextContentBlock)
+      .map((block) => block.text)
+      .join("");
+    if (!text) {
+      throw new NvokenError(
+        "unexpected_response",
+        `Invocation ${this.invocationId} has no canonical assistant text`,
+      );
+    }
+    return text;
   }
 
   async submitToolResults(results: ToolResult[], signal?: AbortSignal): Promise<SubmitClientToolResultsResponse> {

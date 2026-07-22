@@ -155,6 +155,19 @@ func TestGeneratorPreservesCredentialUnavailableForDurableSettlement(t *testing.
 	}
 }
 
+func TestGeneratorReportsRegisteredUSDModelPricing(t *testing.T) {
+	generator := New(Config{})
+	if !generator.HasUSDModelPricing("openai", "gpt-5.4-mini") {
+		t.Fatal("known OpenAI pricing was not reported")
+	}
+	if generator.HasUSDModelPricing("openai", "unregistered-model") {
+		t.Fatal("unregistered model was reported as priced")
+	}
+	if generator.HasUSDModelPricing("unsupported", "gpt-5.4-mini") {
+		t.Fatal("unsupported provider was reported as priced")
+	}
+}
+
 func TestGeneratorPreservesCredentialInfrastructureFailures(t *testing.T) {
 	for name, resolverErr := range map[string]error{
 		"retryable": ports.ErrRetryable,

@@ -156,7 +156,7 @@ invalidation; replace it with a short reason to invalidate a record immediately.
 | --- | --- | --- | --- | --- |
 | Process/dependency failure | missing | — | `internal/engine/` `internal/services/execution.go` `internal/adapters/postgres/execution_integration_test.go` `deploy/single-daemon/` | none |
 | Upgrade/rollback | missing | — | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `docs/guides/database-migrations.md` `deploy/single-daemon/` | none |
-| Backup/restore | [2026-07-22 record](readiness/evidence/single-daemon/2026-07-22-backup-restore.md) | `7a39ec91f411a9f48dc711008b311584a9bcfda8` | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `docs/guides/database-migrations.md` | none |
+| Backup/restore | [2026-07-22 record](readiness/evidence/single-daemon/2026-07-22-backup-restore.md) | `2e248b70deb9f0b394c7f12f0babff3645f23c55` | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `docs/guides/database-migrations.md` | none |
 | Diagnosis | missing | — | `internal/observability/` `internal/daemon/diagnose.go` `docs/guides/operational-signals.md` `deploy/single-daemon/` | none |
 | Capacity | missing | — | `internal/engine/` `cmd/nvokend/config.go` `deploy/single-daemon/` | none |
 
@@ -182,7 +182,7 @@ invalidation; replace it with a short reason to invalidate a record immediately.
 | Normal execution | missing | — | `internal/adapters/httpapi/` `internal/adapters/cloudtasks/` `internal/adapters/liveevents/` `deploy/google-cloud/qualify.py` | none |
 | Process/dependency failure | missing | — | `internal/engine/` `internal/dispatch/` `internal/adapters/liveevents/` `deploy/google-cloud/qualify.py` | none |
 | Upgrade/rollback | missing | — | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `deploy/google-cloud/` | none |
-| Backup/restore | [2026-07-22 record](readiness/evidence/google-cloud/2026-07-22-backup-restore.md) | `7a39ec91f411a9f48dc711008b311584a9bcfda8` | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `docs/guides/database-migrations.md` | none |
+| Backup/restore | [2026-07-22 record](readiness/evidence/google-cloud/2026-07-22-backup-restore.md) | `2e248b70deb9f0b394c7f12f0babff3645f23c55` | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `docs/guides/database-migrations.md` | none |
 | Diagnosis | missing | — | `internal/observability/` `internal/daemon/diagnose.go` `deploy/google-cloud/runbooks.md` | none |
 | Capacity | missing | — | `internal/engine/` `internal/adapters/cloudtasks/` `cmd/nvokend/config.go` `deploy/google-cloud/variables.tf` `deploy/google-cloud/qualify.py` | none |
 | Secret handling | missing | — | `cmd/nvokend/config.go` `internal/adapters/secretcrypto/` `deploy/google-cloud/main.tf` `deploy/google-cloud/variables.tf` `deploy/google-cloud/qualify.py` | none |

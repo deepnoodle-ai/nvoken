@@ -8,7 +8,7 @@
     "start": "node dist/chat.js"
   },
   "dependencies": {
-    "@deepnoodle-ai/nvoken": "file:../../sdk/typescript"
+    "@deepnoodle/nvoken": "file:../../sdk/typescript"
   },
   "devDependencies": {
     "@types/node": "24.0.15",

@@ -130,8 +130,13 @@ once. PostgreSQL LISTEN/NOTIFY lowers cross-instance cancellation latency but
 grants no authority; lease renewal and settlement fences remain the loss-safe
 fallback. Failed budget or deadline outcomes may retain paired normalized usage
 and provenance when a provider result produced them, while cancellation retains
-neither. New requests use fingerprint v2 with requested budgets as material
-input; retained v1 budgetless work remains replay-compatible. This adopts
+neither. A requested estimated-cost limit fails before a provider call when the
+adapter knows USD pricing is unavailable, and exposes
+`estimated_cost_unavailable` as safe public detail. Canonical failed checkpoints
+remain readable evidence, but failed/cancelled assistant and tool messages are
+excluded from future provider context. New requests use fingerprint v2 with
+requested budgets as material input; retained v1 budgetless work remains
+replay-compatible. This adopts
 Mobius Cloud's cancellation and active-segment invariants without importing its
 turn/run ownership or wait/job tables.
 
