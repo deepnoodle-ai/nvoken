@@ -99,6 +99,48 @@ from optional reusable BYOK and callback setup. Local automation is explicitly
 not a production configuration generator: database, TLS, secrets, supervision,
 backup, and availability remain operator decisions.
 
+### 8. First-run failures discarded their useful explanation
+
+The quickstart returned specific setup errors, but the process entry point
+replaced them with a structured `internal` classification. Missing keys,
+Docker failures, and port conflicts therefore looked alike to a newcomer.
+
+**Adjustment:** quickstart failures now print the returned error to stderr as a
+short human diagnostic. Ordinary `serve` continues to use safe structured
+operator logging. Cancellation at any quickstart stage is a clean stop.
+
+### 9. Restart reuse could hide provider-key drift
+
+The marked `.env` intentionally persists the provider key, but a newly exported
+key was ignored on restart. A user could believe a rotated key was active while
+the daemon still used the saved value.
+
+**Adjustment:** reuse now stops before Docker changes if the selected provider
+key is present in the shell and differs from the saved key. The error explains
+how to reset the disposable environment to adopt the new key or unset the shell
+variable to deliberately reuse the saved key. Reuse also fails closed if the
+SDK-facing `NVOKEN_API_KEY` no longer matches the daemon's `RUNTIME_API_KEY`.
+
+### 10. Fixed local ports needed an explicit contract
+
+The disposable topology uses `8080` for nvoken and `55432` for PostgreSQL, but
+the guide did not state that both must be available.
+
+**Adjustment:** the Run prerequisites now name both ports. Common daemon and
+Docker bind conflicts are translated into a direct diagnostic that names the
+busy port and tells the user to retry after freeing it.
+
+### 11. Manual release reruns needed an operator boundary
+
+`workflow_dispatch` can refresh assets on an existing release with
+`--clobber`. This is useful when publication partially succeeds, but its trust
+model was implicit.
+
+**Adjustment:** the workflow now records that dispatch is a trusted-operator
+retry and that the checked-out immutable tag—not the caller's branch—is the
+source of rebuilt assets. Publication still requires independent verification
+of GitHub, Homebrew, and npm after merge.
+
 ## Safety decisions
 
 - The quickstart refuses to reuse an unmarked `.env`, a non-regular file, or a

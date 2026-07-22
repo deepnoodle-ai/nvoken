@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/deepnoodle-ai/nvoken/internal/daemon"
 	"github.com/deepnoodle-ai/nvoken/internal/localrun"
@@ -72,7 +73,17 @@ func runQuickstart(ctx context.Context, arguments []string, output io.Writer) er
 	configuration.BuildVersion = buildVersion
 	_, _ = fmt.Fprintln(output, "Starting nvoken at http://localhost:8080. Press Ctrl-C to stop it.")
 	writeQuickstartNextStep(output, buildVersion)
-	return daemon.Run(ctx, configuration)
+	return explainQuickstartDaemonError(daemon.Run(ctx, configuration))
+}
+
+func explainQuickstartDaemonError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "address already in use") {
+		return errors.New("localhost port 8080 is already in use; stop the process using it and run nvokend quickstart again")
+	}
+	return err
 }
 
 func writeQuickstartNextStep(output io.Writer, version string) {

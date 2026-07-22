@@ -14,6 +14,7 @@ You need:
 - Node.js 20 or newer with npm
 - one active Anthropic or OpenAI API key in your shell
 - an exact model ID that key can access
+- localhost ports `8080` and `55432` available
 
 Find a model ID in the official [OpenAI model catalog](https://developers.openai.com/api/docs/models)
 or [Anthropic model overview](https://platform.claude.com/docs/en/about-claude/models/overview).
@@ -73,8 +74,14 @@ nvokend quickstart cleanup
 Cleanup removes only the container labeled as owned by this quickstart. The
 `.env` remains and contains your provider key plus generated local credentials;
 delete that file when you no longer want to reuse them. To switch provider or
-model, stop nvoken, run cleanup, delete `.env`, and then start the quickstart
-again with the new selection.
+model—or to adopt a rotated provider key—stop nvoken, run cleanup, delete
+`.env`, and then start the quickstart again with the new selection. If you
+intentionally want to reuse the saved key, unset a different provider key from
+your shell before restarting.
+
+If startup finds either local port already in use, it names the port and stops
+without replacing your `.env`. Stop the process or container using that port,
+then run the same quickstart command again.
 
 ## Build your app next
 

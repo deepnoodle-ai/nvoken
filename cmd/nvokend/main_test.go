@@ -2,7 +2,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -65,6 +68,36 @@ func TestHelpDoesNotLoadConfiguration(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "quickstart") || !strings.Contains(output.String(), "serve") {
 		t.Fatalf("help output = %q", output.String())
+	}
+}
+
+func TestReportRunErrorPrintsActionableQuickstartFailure(t *testing.T) {
+	var structured bytes.Buffer
+	var terminal bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&structured, nil))
+	err := errors.New("export OPENAI_API_KEY before running nvokend quickstart")
+
+	if code := reportRunError(logger, []string{"quickstart"}, err, &terminal); code != 1 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if terminal.String() != "nvokend quickstart: export OPENAI_API_KEY before running nvokend quickstart\n" {
+		t.Fatalf("terminal error = %q", terminal.String())
+	}
+	if structured.Len() != 0 {
+		t.Fatalf("quickstart emitted operator log = %q", structured.String())
+	}
+}
+
+func TestReportRunErrorTreatsQuickstartCancellationAsCleanStop(t *testing.T) {
+	var structured bytes.Buffer
+	var terminal bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&structured, nil))
+
+	if code := reportRunError(logger, []string{"quickstart"}, fmt.Errorf("stop quickstart: %w", context.Canceled), &terminal); code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if terminal.Len() != 0 || structured.Len() != 0 {
+		t.Fatalf("cancellation output: terminal=%q structured=%q", terminal.String(), structured.String())
 	}
 }
 

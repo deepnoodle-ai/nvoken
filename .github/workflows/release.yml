@@ -73,6 +73,8 @@ jobs:
           TAG: ${{ steps.release.outputs.tag }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
+          # workflow_dispatch is a trusted-operator retry. The checked-out tag,
+          # not the caller's branch, remains the source of every refreshed asset.
           if gh release view "${TAG}" >/dev/null 2>&1; then
             gh release upload "${TAG}" dist/* --clobber
             exit 0

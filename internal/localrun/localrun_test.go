@@ -131,14 +131,85 @@ func TestPrepareReusesMatchingEnvironmentWithoutFlags(t *testing.T) {
 		{Output: "healthy"},
 	}}
 	result, err := Prepare(context.Background(), Options{
-		OutputPath: path,
-		Docker:     docker.Run,
+		OutputPath:  path,
+		Environment: map[string]string{},
+		Docker:      docker.Run,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.Provider != "openai" || result.Environment["NVOKEN_MODEL"] != "gpt-test" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestPrepareRefusesChangedProviderKeyBeforeDocker(t *testing.T) {
+	values, err := generatedEnvironment(
+		"openai",
+		"gpt-test",
+		"saved-provider-secret",
+		bytes.NewReader(bytes.Repeat([]byte{0x42}, 96)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte(renderEnvironment(values)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	docker := &fakeDocker{}
+	_, err = Prepare(context.Background(), Options{
+		Provider:    "openai",
+		Model:       "gpt-test",
+		OutputPath:  path,
+		Environment: map[string]string{"OPENAI_API_KEY": "rotated-provider-secret"},
+		Docker:      docker.Run,
+	})
+	if err == nil || !strings.Contains(err.Error(), "different OPENAI_API_KEY") || !strings.Contains(err.Error(), "remove the file") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(docker.Calls) != 0 {
+		t.Fatalf("Docker was called before provider-key validation: %#v", docker.Calls)
+	}
+}
+
+func TestParseExistingRejectsDesynchronizedRuntimeKey(t *testing.T) {
+	values, err := generatedEnvironment(
+		"openai",
+		"gpt-test",
+		"provider-secret",
+		bytes.NewReader(bytes.Repeat([]byte{0x42}, 96)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values["NVOKEN_API_KEY"] = "different-runtime-secret"
+	_, _, err = parseExisting([]byte(renderEnvironment(values)))
+	if err == nil || !strings.Contains(err.Error(), "NVOKEN_API_KEY must match RUNTIME_API_KEY") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestPrepareExplainsPostgresPortConflict(t *testing.T) {
+	docker := &fakeDocker{Responses: []dockerResponse{
+		{Output: "27.0.0"},
+		{Err: errors.New("Error: No such object: " + containerName)},
+		{Err: errors.New("Bind for 127.0.0.1:55432 failed: port is already allocated")},
+	}}
+	path := filepath.Join(t.TempDir(), ".env")
+	_, err := Prepare(context.Background(), Options{
+		Provider:    "openai",
+		Model:       "gpt-test",
+		OutputPath:  path,
+		Environment: map[string]string{"OPENAI_API_KEY": "provider-secret"},
+		Docker:      docker.Run,
+		Random:      bytes.NewReader(bytes.Repeat([]byte{0x42}, 96)),
+	})
+	if err == nil || err.Error() != "localhost port 55432 is already in use; stop the process or container using it and run nvokend quickstart again" {
+		t.Fatalf("error = %v", err)
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("environment file exists after port conflict: %v", statErr)
 	}
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -23,11 +24,24 @@ func main() {
 	slog.SetDefault(logger)
 
 	if err := run(os.Args[1:]); err != nil {
-		logger.Error("fatal error",
-			"event", observability.EventProcessFailed,
-			"error_class", observability.ErrorClass(err))
-		os.Exit(1)
+		if exitCode := reportRunError(logger, os.Args[1:], err, os.Stderr); exitCode != 0 {
+			os.Exit(exitCode)
+		}
 	}
+}
+
+func reportRunError(logger *slog.Logger, args []string, err error, errorOutput io.Writer) int {
+	if len(args) > 0 && args[0] == "quickstart" {
+		if errors.Is(err, context.Canceled) {
+			return 0
+		}
+		_, _ = fmt.Fprintln(errorOutput, "nvokend quickstart:", err)
+		return 1
+	}
+	logger.Error("fatal error",
+		"event", observability.EventProcessFailed,
+		"error_class", observability.ErrorClass(err))
+	return 1
 }
 
 func run(args []string) error {

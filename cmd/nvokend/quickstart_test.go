@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -25,6 +26,13 @@ func TestReleasedQuickstartPrintsMatchingPackage(t *testing.T) {
 	writeQuickstartNextStep(&output, "0.1.1")
 	if !strings.Contains(output.String(), `--package "@deepnoodle/nvoken@0.1.1" nvoken-quickstart`) {
 		t.Fatalf("next step = %q", output.String())
+	}
+}
+
+func TestExplainQuickstartDaemonErrorNamesBusyPort(t *testing.T) {
+	err := explainQuickstartDaemonError(errors.New("listen tcp :8080: bind: address already in use"))
+	if err == nil || err.Error() != "localhost port 8080 is already in use; stop the process using it and run nvokend quickstart again" {
+		t.Fatalf("error = %v", err)
 	}
 }
 

@@ -79,6 +79,10 @@ func Prepare(ctx context.Context, options Options) (Result, error) {
 		if options.Model == "" {
 			options.Model = existingModel
 		}
+		providerVariable := providerVariables[provider]
+		if currentKey := options.Environment[providerVariable]; currentKey != "" && currentKey != values[providerVariable] {
+			return Result{}, fmt.Errorf("existing %s contains a different %s; run quickstart cleanup and remove the file to use the exported key, or unset %s to reuse the saved key", path, providerVariable, providerVariable)
+		}
 		if err := ensurePostgres(ctx, options.Docker); err != nil {
 			return Result{}, err
 		}
@@ -325,7 +329,18 @@ func parseExisting(content []byte) (string, map[string]string, error) {
 		values["NVOKEN_MODEL"] == "" {
 		return "", nil, errors.New("quickstart .env is incomplete; remove it and run the command again")
 	}
+	if values["NVOKEN_API_KEY"] == "" || values["NVOKEN_API_KEY"] != values["RUNTIME_API_KEY"] {
+		return "", nil, errors.New("quickstart .env is inconsistent; NVOKEN_API_KEY must match RUNTIME_API_KEY; remove it and run the command again")
+	}
 	return provider, values, nil
+}
+
+func postgresStartError(action string, err error) error {
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "port is already allocated") || strings.Contains(message, "address already in use") {
+		return errors.New("localhost port 55432 is already in use; stop the process or container using it and run nvokend quickstart again")
+	}
+	return fmt.Errorf("%s disposable PostgreSQL 17: %w", action, err)
 }
 
 func ensurePostgres(ctx context.Context, docker DockerRunner) error {
@@ -369,7 +384,7 @@ func ensurePostgres(ctx context.Context, docker DockerRunner) error {
 			"30",
 			containerImage,
 		); err != nil {
-			return fmt.Errorf("start disposable PostgreSQL 17: %w", err)
+			return postgresStartError("start", err)
 		}
 	} else {
 		label, status, ok := strings.Cut(strings.TrimSpace(state), "|")
@@ -380,7 +395,7 @@ func ensurePostgres(ctx context.Context, docker DockerRunner) error {
 		case "running":
 		case "created", "exited":
 			if _, err := docker(ctx, "start", containerName); err != nil {
-				return fmt.Errorf("restart disposable PostgreSQL 17: %w", err)
+				return postgresStartError("restart", err)
 			}
 		default:
 			return fmt.Errorf("container %s has unsupported state %s", containerName, status)
