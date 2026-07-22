@@ -13,6 +13,7 @@ const (
 	EventProcessStartFailed = "process_start_failed"
 	EventProcessFailed      = "process_failed"
 	EventDiagnosticCheck    = "diagnostic_check"
+	EventUpgradePreflight   = "upgrade_preflight"
 
 	EventHTTPRequest         = "http_request_completed"
 	EventHTTPRequestFailed   = "http_request_failed"

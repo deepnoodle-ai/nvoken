@@ -166,14 +166,33 @@ performs the release in this order:
 
 1. bootstrap the Artifact Registry repository;
 2. build and push the image with Cloud Build;
-3. update only the migration Job and its prerequisites;
-4. execute `nvokend migrate` and wait for success; then
-5. plan and apply the service revision.
+3. read the currently serving image and its revision schema label;
+4. update only the migration Job and its prerequisites;
+5. execute the target image's read-only compatibility preflight and serialized
+   `nvokend migrate`; then
+6. plan and apply the service and executor revisions.
 
-A migration failure exits before step 5, leaving serving traffic on the prior
-image. The job has one task, no retries, a bounded migration timeout, and the
-database advisory lock already enforced by `nvokend migrate`. Ordinary service
-startup checks the exact schema and never runs DDL.
+A preflight or migration failure exits before step 6, leaving serving traffic
+on the prior image. The job has one task, no retries, a bounded migration
+timeout, and the database advisory lock already enforced by `nvokend migrate`.
+Every successful revision labels its embedded schema version. Startup accepts
+an exact schema or a declared compatible newer schema and never runs DDL.
+
+The first release that applies compatibility migration 14 starts the support
+window but cannot make the older, exact-match binary rollback-safe. Its current
+revision has no schema label, so run that transition once with the schema from
+the current revision's `process_started` event:
+
+```bash
+export NVOKEN_CURRENT_SCHEMA_VERSION='13'
+export NVOKEN_MIGRATION_MODE='transition'
+deploy/google-cloud/release.sh
+```
+
+Unset both values afterward. Later ordinary releases discover the serving
+image and schema label automatically. If an existing service is unexpectedly
+unlabeled, the script stops before updating the migration Job and asks for the
+current schema explicitly.
 
 Cloud Build reads uploaded source only from its dedicated bucket, whose objects
 expire after seven days; it has no project-wide Storage Viewer role. The
@@ -359,6 +378,15 @@ queued Invocation admitted by an older embedded revision, so rollout overlap
 cannot strand accepted work. Active uniqueness makes the repair idempotent.
 Terminal dispatch diagnostics are pruned in bounded batches after seven days;
 authoritative Invocation and transcript rows are retained.
+
+For application rollback after a successful ordinary migration, move traffic
+back to the immediately previous runtime and executor revisions without running
+a database migration. Their startup logs must report
+`schema_compatibility=compatible_newer`. Preserve queued tasks, dispatch rows,
+callback deliveries, and running leases; Postgres claim and settlement fences
+converge overlap between revisions. If the previous revision fails its schema
+check, stop: the release pair was not inside the declared window and deleting
+delivery evidence cannot make it safe.
 
 ## Retention and storage growth
 

@@ -56,3 +56,12 @@ credentials plus one provider-scoped binding per Invocation. Existing retained
 Invocations receive deterministic `installation_byok` bindings. A terminal-state
 trigger clears caller-ephemeral ciphertext in the same settlement transaction;
 retained bindings keep only safe provenance metadata.
+
+Migration `000014` is the one-release compatibility transition. Starting with
+this migration, every new migration must add one entry to
+`compatibility.json` and update the singleton
+`nvoken_schema_compatibility` row to the same schema and minimum binary schema
+versions in its transaction. Use `classification: ordinary` only when the
+immediately previous production binary remains safe. A breaking change needs a
+prior expand release and a later contract migration; it cannot raise the
+minimum binary version in an ordinary release.

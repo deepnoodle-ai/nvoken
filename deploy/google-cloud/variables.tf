@@ -50,6 +50,44 @@ variable "image_tag" {
   }
 }
 
+variable "schema_version" {
+  description = "Highest migration schema version embedded in the release image."
+  type        = number
+
+  validation {
+    condition     = var.schema_version >= 1 && var.schema_version == floor(var.schema_version)
+    error_message = "schema_version must be a positive whole number."
+  }
+}
+
+variable "previous_build_version" {
+  description = "Currently serving immutable image reference, or none for an empty installation."
+  type        = string
+  default     = "none"
+}
+
+variable "previous_schema_version" {
+  description = "Schema contract embedded in the currently serving image, or zero for an empty installation."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.previous_schema_version >= 0 && var.previous_schema_version == floor(var.previous_schema_version)
+    error_message = "previous_schema_version must be a nonnegative whole number."
+  }
+}
+
+variable "migration_mode" {
+  description = "Ordinary compatible migration or the one-time compatibility transition."
+  type        = string
+  default     = "ordinary"
+
+  validation {
+    condition     = contains(["ordinary", "transition"], var.migration_mode)
+    error_message = "migration_mode must be ordinary or transition."
+  }
+}
+
 variable "public_base_url" {
   description = "Canonical HTTPS origin used in browser device-approval URLs. Null uses Cloud Run's deterministic run.app URL."
   type        = string

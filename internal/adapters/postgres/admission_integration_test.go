@@ -636,7 +636,7 @@ func TestCheckSchemaNeverMigratesServeDatabase(t *testing.T) {
 		t.Fatalf("mark newer: %v", err)
 	}
 	newerStatus, err := InspectSchema(context.Background(), newerPool)
-	if err != nil || newerStatus.State != SchemaAhead {
+	if err != nil || newerStatus.State != SchemaUnknown {
 		t.Fatalf("newer schema status = %#v, error = %v", newerStatus, err)
 	}
 	if err := CheckSchema(context.Background(), newerPool); err == nil {

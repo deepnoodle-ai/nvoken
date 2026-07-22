@@ -1,4 +1,4 @@
-.PHONY: fmt build generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres vet openapi-check scripts-check sdk-generate sdk-generate-check sdk-check check check-deploy run migrate
+.PHONY: fmt build generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres vet openapi-check scripts-check sdk-generate sdk-generate-check sdk-check check check-deploy run upgrade-preflight migrate
 
 REDOCLY_VERSION := 1.34.11
 SQLC_VERSION := v1.31.1
@@ -64,6 +64,9 @@ check-deploy:
 
 run:
 	go run ./cmd/nvokend
+
+upgrade-preflight:
+	go run ./cmd/nvokend upgrade-preflight
 
 migrate:
 	go run ./cmd/nvokend migrate

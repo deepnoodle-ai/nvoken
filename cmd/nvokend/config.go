@@ -12,6 +12,7 @@ import (
 
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/cloudtasks"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpapi"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/postgres"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/secretcrypto"
 	callbackruntime "github.com/deepnoodle-ai/nvoken/internal/callback"
 	"github.com/deepnoodle-ai/nvoken/internal/daemon"
@@ -112,8 +113,11 @@ type config struct {
 }
 
 type migrationConfig struct {
-	DatabaseURL string        `env:"DATABASE_URL"`
-	Timeout     time.Duration `env:"MIGRATION_TIMEOUT" envDefault:"5m"`
+	DatabaseURL                string        `env:"DATABASE_URL"`
+	Timeout                    time.Duration `env:"MIGRATION_TIMEOUT" envDefault:"5m"`
+	CurrentBuildVersion        string        `env:"NVOKEN_CURRENT_BUILD_VERSION"`
+	CurrentBinarySchemaVersion uint          `env:"NVOKEN_CURRENT_SCHEMA_VERSION"`
+	Mode                       string        `env:"NVOKEN_MIGRATION_MODE" envDefault:"ordinary"`
 }
 
 type dispatchSmokeConfig struct {
@@ -411,9 +415,16 @@ func loadMigrationConfig() (daemon.MigrationConfig, error) {
 	if cfg.DatabaseURL == "" {
 		return daemon.MigrationConfig{}, fmt.Errorf("migrate: DATABASE_URL is required")
 	}
+	mode := postgres.UpgradeMode(cfg.Mode)
+	if mode != postgres.UpgradeOrdinary && mode != postgres.UpgradeTransition {
+		return daemon.MigrationConfig{}, fmt.Errorf("migrate: NVOKEN_MIGRATION_MODE must be ordinary or transition")
+	}
 	return daemon.MigrationConfig{
-		DatabaseURL: cfg.DatabaseURL,
-		Timeout:     cfg.Timeout,
+		DatabaseURL:                cfg.DatabaseURL,
+		Timeout:                    cfg.Timeout,
+		CurrentBuildVersion:        cfg.CurrentBuildVersion,
+		CurrentBinarySchemaVersion: cfg.CurrentBinarySchemaVersion,
+		Mode:                       mode,
 	}, nil
 }
 

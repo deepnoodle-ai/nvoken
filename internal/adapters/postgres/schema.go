@@ -15,36 +15,47 @@ import (
 type SchemaState string
 
 const (
-	SchemaCompatible SchemaState = "compatible"
-	SchemaEmpty      SchemaState = "empty"
-	SchemaDirty      SchemaState = "dirty"
-	SchemaBehind     SchemaState = "behind"
-	SchemaAhead      SchemaState = "ahead"
-	SchemaInvalid    SchemaState = "invalid"
+	SchemaCompatible      SchemaState = "compatible"
+	SchemaCompatibleNewer SchemaState = "compatible_newer"
+	SchemaEmpty           SchemaState = "empty"
+	SchemaDirty           SchemaState = "dirty"
+	SchemaBehind          SchemaState = "behind"
+	SchemaAhead           SchemaState = "ahead"
+	SchemaUnknown         SchemaState = "unknown"
+	SchemaInvalid         SchemaState = "invalid"
 )
 
 type SchemaStatus struct {
-	State    SchemaState
-	Current  uint
-	Expected uint
-	Dirty    bool
-	Rows     int
+	State                      SchemaState
+	Current                    uint
+	Expected                   uint
+	MinimumBinarySchemaVersion uint
+	CompatibilitySchemaVersion uint
+	Dirty                      bool
+	Rows                       int
+	CompatibilityRows          int
 }
 
-func (s SchemaStatus) Compatible() bool { return s.State == SchemaCompatible }
+func (s SchemaStatus) Compatible() bool {
+	return s.State == SchemaCompatible || s.State == SchemaCompatibleNewer
+}
 
 // CompatibilityError explains why the schema cannot be served without
 // changing the bounded state reported by InspectSchema.
 func (s SchemaStatus) CompatibilityError() error {
 	switch s.State {
-	case SchemaCompatible:
+	case SchemaCompatible, SchemaCompatibleNewer:
 		return nil
 	case SchemaEmpty, SchemaInvalid:
 		return fmt.Errorf("database schema state has %d rows, want 1", s.Rows)
 	case SchemaDirty:
 		return fmt.Errorf("database schema version %06d is dirty", s.Current)
-	case SchemaBehind, SchemaAhead:
+	case SchemaBehind:
 		return fmt.Errorf("database schema version %06d is incompatible with expected %06d", s.Current, s.Expected)
+	case SchemaAhead:
+		return fmt.Errorf("database schema version %06d requires binary schema version %06d or newer; this binary is %06d", s.Current, s.MinimumBinarySchemaVersion, s.Expected)
+	case SchemaUnknown:
+		return fmt.Errorf("database schema version %06d has no valid compatibility declaration", s.Current)
 	default:
 		return fmt.Errorf("database schema state %q is invalid", s.State)
 	}
@@ -67,11 +78,22 @@ func InspectSchema(ctx context.Context, pool *pgxpool.Pool) (SchemaStatus, error
 	if err != nil {
 		return SchemaStatus{}, err
 	}
+	return InspectSchemaForVersion(ctx, pool, expected)
+}
+
+// InspectSchemaForVersion evaluates the database against a pinned binary
+// schema contract. Upgrade tests use it instead of fetching a historical
+// binary; production startup calls InspectSchema with the embedded version.
+func InspectSchemaForVersion(ctx context.Context, pool *pgxpool.Pool, expected uint) (SchemaStatus, error) {
+	_, transition, err := EmbeddedMigrationCompatibility()
+	if err != nil {
+		return SchemaStatus{}, err
+	}
 	rows, err := pool.Query(ctx, "SELECT version, dirty FROM "+migrationTable+" LIMIT 2")
 	if err != nil {
 		var pgError *pgconn.PgError
 		if errors.As(err, &pgError) && pgError.Code == "42P01" {
-			return evaluateSchemaStatus(expected, 0, false, 0), nil
+			return evaluateSchemaStatus(expected, 0, false, 0, transition, 0, 0, 0), nil
 		}
 		return SchemaStatus{}, fmt.Errorf("read database schema state: %w", err)
 	}
@@ -89,15 +111,62 @@ func InspectSchema(ctx context.Context, pool *pgxpool.Pool) (SchemaStatus, error
 	if err := rows.Err(); err != nil {
 		return SchemaStatus{}, fmt.Errorf("read database schema state: %w", err)
 	}
-	return evaluateSchemaStatus(expected, version, dirty, count), nil
+	if count != 1 || dirty || version < transition {
+		return evaluateSchemaStatus(expected, version, dirty, count, transition, 0, 0, 0), nil
+	}
+
+	compatibilityRows, err := pool.Query(ctx, "SELECT schema_version, minimum_binary_schema_version FROM "+compatibilityTable+" LIMIT 2")
+	if err != nil {
+		var pgError *pgconn.PgError
+		if errors.As(err, &pgError) && pgError.Code == "42P01" {
+			return evaluateSchemaStatus(expected, version, dirty, count, transition, 0, 0, 0), nil
+		}
+		return SchemaStatus{}, fmt.Errorf("read database schema compatibility: %w", err)
+	}
+	defer compatibilityRows.Close()
+
+	var compatibilityVersion uint
+	var minimumVersion uint
+	compatibilityCount := 0
+	for compatibilityRows.Next() {
+		compatibilityCount++
+		if err := compatibilityRows.Scan(&compatibilityVersion, &minimumVersion); err != nil {
+			return SchemaStatus{}, fmt.Errorf("scan database schema compatibility: %w", err)
+		}
+	}
+	if err := compatibilityRows.Err(); err != nil {
+		return SchemaStatus{}, fmt.Errorf("read database schema compatibility: %w", err)
+	}
+	return evaluateSchemaStatus(
+		expected,
+		version,
+		dirty,
+		count,
+		transition,
+		compatibilityVersion,
+		minimumVersion,
+		compatibilityCount,
+	), nil
 }
 
-func evaluateSchemaStatus(expected, current uint, dirty bool, rows int) SchemaStatus {
+func evaluateSchemaStatus(
+	expected uint,
+	current uint,
+	dirty bool,
+	rows int,
+	transition uint,
+	compatibilityVersion uint,
+	minimumVersion uint,
+	compatibilityRows int,
+) SchemaStatus {
 	status := SchemaStatus{
-		Current:  current,
-		Expected: expected,
-		Dirty:    dirty,
-		Rows:     rows,
+		Current:                    current,
+		Expected:                   expected,
+		MinimumBinarySchemaVersion: minimumVersion,
+		CompatibilitySchemaVersion: compatibilityVersion,
+		Dirty:                      dirty,
+		Rows:                       rows,
+		CompatibilityRows:          compatibilityRows,
 	}
 	switch {
 	case rows == 0:
@@ -106,12 +175,22 @@ func evaluateSchemaStatus(expected, current uint, dirty bool, rows int) SchemaSt
 		status.State = SchemaInvalid
 	case dirty:
 		status.State = SchemaDirty
+	case current < transition && current < expected:
+		status.State = SchemaBehind
+	case current < transition && current > expected:
+		status.State = SchemaAhead
+	case current < transition:
+		status.State = SchemaCompatible
+	case compatibilityRows != 1 || compatibilityVersion != current || minimumVersion == 0 || minimumVersion > current:
+		status.State = SchemaUnknown
 	case current < expected:
 		status.State = SchemaBehind
-	case current > expected:
+	case current == expected:
+		status.State = SchemaCompatible
+	case minimumVersion > expected:
 		status.State = SchemaAhead
 	default:
-		status.State = SchemaCompatible
+		status.State = SchemaCompatibleNewer
 	}
 	return status
 }

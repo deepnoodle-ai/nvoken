@@ -311,6 +311,8 @@ func TestLoadDaemonConfigRejectsInvalidInvocationExecutionMode(t *testing.T) {
 func TestLoadMigrationConfig(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://nvoken:secret@localhost/nvoken")
 	t.Setenv("MIGRATION_TIMEOUT", "45s")
+	t.Setenv("NVOKEN_CURRENT_BUILD_VERSION", "build-n")
+	t.Setenv("NVOKEN_CURRENT_SCHEMA_VERSION", "14")
 
 	cfg, err := loadMigrationConfig()
 	if err != nil {
@@ -319,8 +321,19 @@ func TestLoadMigrationConfig(t *testing.T) {
 	if cfg.DatabaseURL != "postgres://nvoken:secret@localhost/nvoken" {
 		t.Errorf("DatabaseURL = %q", cfg.DatabaseURL)
 	}
-	if cfg.Timeout != 45*time.Second {
-		t.Errorf("Timeout = %s, want 45s", cfg.Timeout)
+	if cfg.Timeout != 45*time.Second || cfg.CurrentBuildVersion != "build-n" ||
+		cfg.CurrentBinarySchemaVersion != 14 || cfg.Mode != "ordinary" {
+		t.Errorf("migration config = %#v", cfg)
+	}
+}
+
+func TestLoadMigrationConfigRejectsInvalidMode(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://nvoken:secret@localhost/nvoken")
+	t.Setenv("NVOKEN_MIGRATION_MODE", "breaking")
+
+	_, err := loadMigrationConfig()
+	if err == nil || !strings.Contains(err.Error(), "ordinary or transition") {
+		t.Fatalf("loadMigrationConfig error = %v", err)
 	}
 }
 

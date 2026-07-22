@@ -52,6 +52,7 @@ run "paved_defaults" {
     project_id                                    = "example-project"
     environment                                   = "test"
     image_tag                                     = "0123456789abcdef"
+    schema_version                                = 14
     anthropic_api_key_secret_id                   = "nvoken-test-anthropic"
     callback_signing_key_secret_id                = "nvoken-test-callback-signing"
     provider_credential_encryption_keys_secret_id = "nvoken-test-provider-credential-keys"
@@ -208,6 +209,17 @@ run "paved_defaults" {
   assert {
     condition     = google_cloud_run_v2_job.migrate.template[0].template[0].containers[0].args == tolist(["migrate"])
     error_message = "The migration job must use the same image's migrate command."
+  }
+
+  assert {
+    condition = (
+      one([for item in google_cloud_run_v2_job.migrate.template[0].template[0].containers[0].env : item.value if item.name == "NVOKEN_CURRENT_BUILD_VERSION"]) == "none" &&
+      one([for item in google_cloud_run_v2_job.migrate.template[0].template[0].containers[0].env : item.value if item.name == "NVOKEN_CURRENT_SCHEMA_VERSION"]) == "0" &&
+      one([for item in google_cloud_run_v2_job.migrate.template[0].template[0].containers[0].env : item.value if item.name == "NVOKEN_MIGRATION_MODE"]) == "ordinary" &&
+      google_cloud_run_v2_service.runtime.template[0].labels.nvoken_schema_version == "14" &&
+      google_cloud_run_v2_service.executor.template[0].labels.nvoken_schema_version == "14"
+    )
+    error_message = "Migration preflight and both serving roles must carry the release schema identity."
   }
 
   assert {
@@ -389,6 +401,7 @@ run "credential_cutover_removes_legacy_env" {
     project_id                   = "example-project"
     environment                  = "test"
     image_tag                    = "0123456789abcdef"
+    schema_version               = 14
     retain_legacy_runtime_key    = false
     anthropic_api_key_secret_id  = "nvoken-test-anthropic"
     database_deletion_protection = false
@@ -412,6 +425,7 @@ run "embedded_mode_moves_provider_secrets" {
     project_id                   = "example-project"
     environment                  = "test"
     image_tag                    = "0123456789abcdef"
+    schema_version               = 14
     anthropic_api_key_secret_id  = "nvoken-test-anthropic"
     invocation_execution_mode    = "embedded"
     database_deletion_protection = false
@@ -445,6 +459,7 @@ run "notification_channels_are_wired" {
     project_id                       = "example-project"
     environment                      = "test"
     image_tag                        = "0123456789abcdef"
+    schema_version                   = 14
     anthropic_api_key_secret_id      = "nvoken-test-anthropic"
     database_deletion_protection     = false
     service_deletion_protection      = false
@@ -474,6 +489,7 @@ run "dashboard_can_be_disabled" {
     project_id                   = "example-project"
     environment                  = "test"
     image_tag                    = "0123456789abcdef"
+    schema_version               = 14
     anthropic_api_key_secret_id  = "nvoken-test-anthropic"
     database_deletion_protection = false
     service_deletion_protection  = false
@@ -494,6 +510,7 @@ run "long_names_produce_valid_service_accounts" {
     name                         = "nvoken-application-x"
     environment                  = "production"
     image_tag                    = "8899aabbccddeeff"
+    schema_version               = 14
     openai_api_key_secret_id     = "nvoken-production-openai"
     database_deletion_protection = false
   }
@@ -517,6 +534,7 @@ run "both_providers_are_allowed" {
     project_id                   = "example-project"
     environment                  = "test"
     image_tag                    = "fedcba9876543210"
+    schema_version               = 14
     anthropic_api_key_secret_id  = "nvoken-test-anthropic"
     openai_api_key_secret_id     = "nvoken-test-openai"
     database_deletion_protection = false
@@ -538,6 +556,7 @@ run "segment_ceiling_outside_attempt_is_rejected" {
     project_id                       = "example-project"
     environment                      = "test"
     image_tag                        = "abcdef0123456789"
+    schema_version                   = 14
     anthropic_api_key_secret_id      = "nvoken-test-anthropic"
     executor_attempt_timeout_seconds = 800
     database_deletion_protection     = false
@@ -553,6 +572,7 @@ run "missing_provider_is_rejected" {
     project_id                   = "example-project"
     environment                  = "test"
     image_tag                    = "0011223344556677"
+    schema_version               = 14
     database_deletion_protection = false
   }
 

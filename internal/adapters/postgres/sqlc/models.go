@@ -250,6 +250,12 @@ type ModelUsageReceipt struct {
 	CreatedAt         time.Time
 }
 
+type NvokenSchemaCompatibility struct {
+	Singleton                  bool
+	SchemaVersion              int64
+	MinimumBinarySchemaVersion int64
+}
+
 type OperatorSubject struct {
 	ID        string
 	AccountID string

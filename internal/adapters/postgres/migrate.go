@@ -23,7 +23,7 @@ import (
 
 const migrationTable = "nvoken_schema_migrations"
 
-//go:embed migrations/*.up.sql
+//go:embed migrations/*.up.sql migrations/compatibility.json
 var migrationFiles embed.FS
 
 type Migrator struct {

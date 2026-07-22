@@ -261,7 +261,7 @@ func Run(ctx context.Context, cfg Config) error {
 		if err != nil {
 			return fmt.Errorf("configure private executor: %w", err)
 		}
-		logProcessStarted(cfg)
+		logProcessStarted(cfg, schemaStatus)
 		joined, err := runComponents(ctx, cfg.ShutdownTimeout, srv, attempts)
 		if !joined {
 			closePool = false
@@ -413,7 +413,7 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 		components = append(components, controller)
 	}
-	logProcessStarted(cfg)
+	logProcessStarted(cfg, schemaStatus)
 	joined, err := runComponents(ctx, cfg.ShutdownTimeout, components...)
 	if !joined {
 		// An uncooperative component can still hold a pool connection. Do not
@@ -426,15 +426,10 @@ func Run(ctx context.Context, cfg Config) error {
 	return err
 }
 
-func logProcessStarted(cfg Config) {
+func logProcessStarted(cfg Config, schemaStatus postgres.SchemaStatus) {
 	version := cfg.BuildVersion
 	if version == "" {
 		version = "devel"
-	}
-	schemaVersion, err := postgres.ExpectedSchemaVersion()
-	if err != nil {
-		logProcessStartFailure("embedded_schema", "invalid_build")
-		return
 	}
 	liveEventMode := "in_process"
 	if cfg.RedisURL != "" {
@@ -444,7 +439,10 @@ func logProcessStarted(cfg Config) {
 	slog.Info("nvokend process started",
 		"event", observability.EventProcessStarted,
 		"build_version", version,
-		"schema_version", schemaVersion,
+		"schema_version", schemaStatus.Expected,
+		"database_schema_version", schemaStatus.Current,
+		"minimum_binary_schema_version", schemaStatus.MinimumBinarySchemaVersion,
+		"schema_compatibility", schemaStatus.State,
 		"process_role", cfg.ProcessRole,
 		"execution_mode", cfg.InvocationExecutionMode,
 		"anthropic_enabled", cfg.AnthropicAPIKey != "" || cfg.PlatformAnthropicAPIKey != "" || reusableCredentials,
@@ -468,6 +466,8 @@ func logSchemaProcessStartFailure(status postgres.SchemaStatus) {
 		"error_class", status.State,
 		"schema_version", status.Current,
 		"expected_schema_version", status.Expected,
+		"minimum_binary_schema_version", status.MinimumBinarySchemaVersion,
+		"compatibility_schema_version", status.CompatibilitySchemaVersion,
 		"dirty", status.Dirty)
 }
 
