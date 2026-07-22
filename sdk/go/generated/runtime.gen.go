@@ -215,6 +215,27 @@ func (e InvocationStatus) Valid() bool {
 	}
 }
 
+// Defines values for ModelPricingCapabilityStatus.
+const (
+	Priced   ModelPricingCapabilityStatus = "priced"
+	Unknown  ModelPricingCapabilityStatus = "unknown"
+	Unpriced ModelPricingCapabilityStatus = "unpriced"
+)
+
+// Valid indicates whether the value is a known member of the ModelPricingCapabilityStatus enum.
+func (e ModelPricingCapabilityStatus) Valid() bool {
+	switch e {
+	case Priced:
+		return true
+	case Unknown:
+		return true
+	case Unpriced:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ModelProvenanceCredentialSource.
 const (
 	ModelProvenanceCredentialSourceAccountByok      ModelProvenanceCredentialSource = "account_byok"
@@ -813,6 +834,21 @@ type ModelCost struct {
 	Total      float32 `json:"total"`
 }
 
+// ModelPricingCapability defines model for ModelPricingCapability.
+type ModelPricingCapability struct {
+	Model    string        `json:"model"`
+	Provider ModelProvider `json:"provider"`
+
+	// RegistryVersion Opaque version of the embedded local pricing snapshot. A changed
+	// version can change capability without changing provider-account
+	// availability.
+	RegistryVersion string                       `json:"registry_version"`
+	Status          ModelPricingCapabilityStatus `json:"status"`
+}
+
+// ModelPricingCapabilityStatus defines model for ModelPricingCapability.Status.
+type ModelPricingCapabilityStatus string
+
 // ModelProvenance Reusable BYOK sources include safe credential and version IDs. Caller,
 // platform, and installation sources omit them. No secret material is
 // included.
@@ -1154,6 +1190,12 @@ type ListInvocationsParams struct {
 
 	// Limit Maximum items in this page. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetModelPricingCapabilityParams defines parameters for GetModelPricingCapability.
+type GetModelPricingCapabilityParams struct {
+	Provider ModelProvider `form:"provider" json:"provider"`
+	Model    string        `form:"model" json:"model"`
 }
 
 // ListProviderCredentialsParams defines parameters for ListProviderCredentials.
@@ -1803,6 +1845,24 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
 	SubmitClientToolResults(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetModelPricingCapability Inspect local USD pricing capability for an exact model
+	//
+	// Reports whether this nvoken installation's embedded pricing registry
+	// has standard USD pricing for the exact provider and model ID. This is
+	// a local guardrail capability check only: it does not call the provider,
+	// verify provider-account access, or guarantee that a provider response
+	// will identify the same served model and include usable token evidence.
+	//
+	// `priced` means the exact requested model has a standard USD entry.
+	// `unpriced` means the local registry can determine that it has no
+	// standard USD entry, so a cost-capped Invocation will fail before a
+	// provider call. `unknown` means the active adapter cannot decide before
+	// execution; capped work can fail closed after normalized response
+	// evidence is available.
+	//
+	// Corresponds with GET /v1/model-pricing-capabilities (the `GetModelPricingCapability` operationId).
+	GetModelPricingCapability(ctx context.Context, params *GetModelPricingCapabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListProviderCredentials List reusable provider credential metadata
 	//
 	// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
@@ -2129,6 +2189,34 @@ func (c *Client) SubmitClientToolResultsWithBody(ctx context.Context, invocation
 // Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
 func (c *Client) SubmitClientToolResults(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSubmitClientToolResultsRequest(c.Server, invocationID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetModelPricingCapability Inspect local USD pricing capability for an exact model
+//
+// Reports whether this nvoken installation's embedded pricing registry
+// has standard USD pricing for the exact provider and model ID. This is
+// a local guardrail capability check only: it does not call the provider,
+// verify provider-account access, or guarantee that a provider response
+// will identify the same served model and include usable token evidence.
+//
+// `priced` means the exact requested model has a standard USD entry.
+// `unpriced` means the local registry can determine that it has no
+// standard USD entry, so a cost-capped Invocation will fail before a
+// provider call. `unknown` means the active adapter cannot decide before
+// execution; capped work can fail closed after normalized response
+// evidence is available.
+//
+// Corresponds with GET /v1/model-pricing-capabilities (the `GetModelPricingCapability` operationId).
+func (c *Client) GetModelPricingCapability(ctx context.Context, params *GetModelPricingCapabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetModelPricingCapabilityRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2665,6 +2753,64 @@ func NewSubmitClientToolResultsRequestWithBody(server string, invocationID Invoc
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetModelPricingCapabilityRequest constructs an http.Request for the GetModelPricingCapability method
+func NewGetModelPricingCapabilityRequest(server string, params *GetModelPricingCapabilityParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/model-pricing-capabilities")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider", params.Provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "model", params.Model, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -3494,6 +3640,26 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
 	SubmitClientToolResultsWithResponse(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitClientToolResultsHTTPResponse, error)
 
+	// GetModelPricingCapabilityWithResponse Inspect local USD pricing capability for an exact model
+	//
+	// Reports whether this nvoken installation's embedded pricing registry
+	// has standard USD pricing for the exact provider and model ID. This is
+	// a local guardrail capability check only: it does not call the provider,
+	// verify provider-account access, or guarantee that a provider response
+	// will identify the same served model and include usable token evidence.
+	//
+	// `priced` means the exact requested model has a standard USD entry.
+	// `unpriced` means the local registry can determine that it has no
+	// standard USD entry, so a cost-capped Invocation will fail before a
+	// provider call. `unknown` means the active adapter cannot decide before
+	// execution; capped work can fail closed after normalized response
+	// evidence is available.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/model-pricing-capabilities (the `GetModelPricingCapability` operationId).
+	GetModelPricingCapabilityWithResponse(ctx context.Context, params *GetModelPricingCapabilityParams, reqEditors ...RequestEditorFn) (*GetModelPricingCapabilityHTTPResponse, error)
+
 	// ListProviderCredentialsWithResponse List reusable provider credential metadata
 	//
 	// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
@@ -4098,6 +4264,89 @@ func (r SubmitClientToolResultsHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SubmitClientToolResultsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetModelPricingCapabilityHTTPResponse429Headers the declared response headers of an HTTP 429 response for GetModelPricingCapability
+type GetModelPricingCapabilityHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type GetModelPricingCapabilityHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ModelPricingCapability
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetModelPricingCapabilityHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetModelPricingCapabilityHTTPResponse) GetJSON200() *ModelPricingCapability {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetModelPricingCapabilityHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetModelPricingCapabilityHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetModelPricingCapabilityHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetModelPricingCapabilityHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetModelPricingCapabilityHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetModelPricingCapabilityHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetModelPricingCapabilityHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetModelPricingCapabilityHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetModelPricingCapabilityHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5167,6 +5416,32 @@ func (c *ClientWithResponses) SubmitClientToolResultsWithResponse(ctx context.Co
 	return ParseSubmitClientToolResultsHTTPResponse(rsp)
 }
 
+// GetModelPricingCapabilityWithResponse Inspect local USD pricing capability for an exact model
+//
+// Reports whether this nvoken installation's embedded pricing registry
+// has standard USD pricing for the exact provider and model ID. This is
+// a local guardrail capability check only: it does not call the provider,
+// verify provider-account access, or guarantee that a provider response
+// will identify the same served model and include usable token evidence.
+//
+// `priced` means the exact requested model has a standard USD entry.
+// `unpriced` means the local registry can determine that it has no
+// standard USD entry, so a cost-capped Invocation will fail before a
+// provider call. `unknown` means the active adapter cannot decide before
+// execution; capped work can fail closed after normalized response
+// evidence is available.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/model-pricing-capabilities (the `GetModelPricingCapability` operationId).
+func (c *ClientWithResponses) GetModelPricingCapabilityWithResponse(ctx context.Context, params *GetModelPricingCapabilityParams, reqEditors ...RequestEditorFn) (*GetModelPricingCapabilityHTTPResponse, error) {
+	rsp, err := c.GetModelPricingCapability(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetModelPricingCapabilityHTTPResponse(rsp)
+}
+
 // ListProviderCredentialsWithResponse List reusable provider credential metadata
 //
 // Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
@@ -5786,6 +6061,80 @@ func ParseSubmitClientToolResultsHTTPResponse(rsp *http.Response) (*SubmitClient
 		}
 		response.JSON503 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetModelPricingCapabilityHTTPResponse parses an HTTP response from a GetModelPricingCapabilityWithResponse call
+func ParseGetModelPricingCapabilityHTTPResponse(rsp *http.Response) (*GetModelPricingCapabilityHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetModelPricingCapabilityHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ModelPricingCapability
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetModelPricingCapabilityHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil

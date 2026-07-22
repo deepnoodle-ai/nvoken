@@ -19,6 +19,7 @@ import (
 	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
+	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
@@ -341,6 +342,10 @@ func loadDaemonConfig() (daemon.Config, error) {
 	if requiresCredentialCipher && credentialCipher == nil {
 		return daemon.Config{}, fmt.Errorf("serve: the credential deployment mode or default source requires provider credential encryption keys")
 	}
+	var credentialCipherPort ports.CredentialCipher
+	if credentialCipher != nil {
+		credentialCipherPort = credentialCipher
+	}
 	generatesInvocations := (role == daemon.ProcessRoleCombined && executionMode == services.InvocationExecutionEmbedded) ||
 		(role == daemon.ProcessRoleExecutor && executionMode == services.InvocationExecutionCloudTasks)
 	if generatesInvocations && credentialPolicy.DefaultSource == domain.ProviderCredentialSourceInstallationBYOK &&
@@ -376,7 +381,7 @@ func loadDaemonConfig() (daemon.Config, error) {
 		AnthropicAPIKey:         cfg.AnthropicAPIKey,
 		OpenAIAPIKey:            cfg.OpenAIAPIKey,
 		CredentialPolicy:        credentialPolicy,
-		CredentialCipher:        credentialCipher,
+		CredentialCipher:        credentialCipherPort,
 		CredentialCleanupGrace:  cfg.CredentialCleanupGrace,
 		PlatformAnthropicAPIKey: cfg.PlatformAnthropicAPIKey,
 		PlatformOpenAIAPIKey:    cfg.PlatformOpenAIAPIKey,

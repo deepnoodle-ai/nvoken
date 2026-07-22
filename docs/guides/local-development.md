@@ -8,9 +8,9 @@ Use the [single-daemon profile](../../deploy/single-daemon/README.md) or
 [Google Cloud deployment](../../deploy/google-cloud/README.md) for those
 operating requirements.
 
-You need Go 1.26.2 or newer, Node.js 20 or newer, npm, Docker with Compose, and
-one currently valid Anthropic or OpenAI API key. Model availability depends on
-your provider account and changes over time.
+You need Go 1.26.2 or newer, Node.js 20 or newer, npm, Python 3.9 or newer,
+Docker with Compose, and one currently valid Anthropic or OpenAI API key. Model
+availability depends on your provider account and changes over time.
 
 ## 1. Start disposable PostgreSQL 17
 
@@ -48,6 +48,18 @@ The script refuses to replace an existing `.env`. Move that file first if it
 belongs to another installation; use `--force` only when you intentionally want
 to replace this disposable local configuration.
 
+Exported shell values intentionally take precedence over `.env`. After the
+configurator has copied the selected key, clear both provider variables before
+migration and startup so the generated file is authoritative—even if a shell
+profile or another project exported the non-selected provider:
+
+```bash
+unset ANTHROPIC_API_KEY OPENAI_API_KEY
+```
+
+The configurator prints a value-free warning when it detects a non-selected
+ambient provider key, but it never prints either credential.
+
 ## 3. Migrate and serve
 
 The daemon loads `.env` without overriding values already exported by your
@@ -63,7 +75,7 @@ Startup should emit `process_started` with a compatible schema, process role
 terminal, verify the public process health endpoint:
 
 ```bash
-curl --fail http://localhost:8080/health
+curl --silent --show-error --fail http://localhost:8080/health
 ```
 
 `ok` means the HTTP process is serving. The startup schema check is the
@@ -84,6 +96,14 @@ npm run build --prefix examples/typescript-chat
 
 Load the generated Runtime bearer without printing it, select a provider and a
 model available to that provider account, and start the chat:
+
+- OpenAI: choose an exact model ID from the
+  [official model catalog](https://developers.openai.com/api/docs/models).
+- Anthropic: choose an exact model ID from the
+  [official model overview](https://platform.claude.com/docs/en/about-claude/models/overview).
+
+The provider account's actual access is authoritative; the catalogs and
+nvoken's pricing preflight do not grant access.
 
 ```bash
 set -a

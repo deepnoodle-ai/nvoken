@@ -23,21 +23,22 @@ const (
 )
 
 var operationCommands = map[string]string{
-	"cancelInvocation":         "invocation cancel",
-	"createInvocation":         "invoke",
-	"createProviderCredential": "provider-credential create",
-	"getInvocation":            "invocation get",
-	"getProviderCredential":    "provider-credential get",
-	"getSession":               "session get",
-	"getSessionTranscript":     "session transcript",
-	"listInvocations":          "invocation list",
-	"listProviderCredentials":  "provider-credential list",
-	"listSessionMessages":      "session messages",
-	"listSessions":             "session list",
-	"revokeProviderCredential": "provider-credential revoke",
-	"rotateProviderCredential": "provider-credential rotate",
-	"streamSessionTranscript":  "session stream",
-	"submitClientToolResults":  "tool-result submit",
+	"cancelInvocation":          "invocation cancel",
+	"createInvocation":          "invoke",
+	"createProviderCredential":  "provider-credential create",
+	"getInvocation":             "invocation get",
+	"getModelPricingCapability": "model pricing",
+	"getProviderCredential":     "provider-credential get",
+	"getSession":                "session get",
+	"getSessionTranscript":      "session transcript",
+	"listInvocations":           "invocation list",
+	"listProviderCredentials":   "provider-credential list",
+	"listSessionMessages":       "session messages",
+	"listSessions":              "session list",
+	"revokeProviderCredential":  "provider-credential revoke",
+	"rotateProviderCredential":  "provider-credential rotate",
+	"streamSessionTranscript":   "session stream",
+	"submitClientToolResults":   "tool-result submit",
 }
 
 type runtimeConfig struct {
@@ -76,6 +77,14 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runInvocationList)
 
+	models := app.Group("model").Description("Inspect model capabilities")
+	models.Command("pricing").
+		Flags(
+			cli.String("provider").Required().Enum("anthropic", "openai").Help("Model provider"),
+			cli.String("model", "m").Required().Help("Exact model ID"),
+		).
+		Run(runModelPricing)
+
 	sessions := app.Group("session").Description("Read Session state and transcript")
 	sessions.Command("get").Args("session-id").Run(runSessionGet)
 	sessions.Command("list").
@@ -110,6 +119,32 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.Bool("error").Help("Mark the result as an error"),
 		).
 		Run(runToolResultSubmit)
+}
+
+func runModelPricing(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	capability, err := client.PricingCapability(
+		command.Context(),
+		nvoken.ModelProvider(command.String("provider")),
+		command.String("model"),
+	)
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, capability, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(
+			writer,
+			"%s\t%s\t%s\t%s\n",
+			capability.Provider,
+			capability.Model,
+			capability.Status,
+			capability.RegistryVersion,
+		)
+		return err
+	})
 }
 
 func runInvoke(command *cli.Context) error {

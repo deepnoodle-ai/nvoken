@@ -65,9 +65,12 @@ for await (const line of input) {
     const invocation = await handle.wait();
     if (invocation.status !== "completed") {
       const reason = invocation.error
-        ? `${invocation.error.code}: ${invocation.error.message}`
+        ? `${invocation.error.code}: ${terminalSentence(invocation.error.message)}`
         : invocation.status;
-      throw new Error(`Invocation ${invocation.id} did not complete (${reason})`);
+      const modelHelp = invocation.error?.code === "provider_error"
+        ? ` Check available model IDs at ${modelDocumentation(provider)}.`
+        : "";
+      throw new Error(`Invocation ${invocation.id} did not complete: ${reason}${modelHelp}`);
     }
 
     const answer = await handle.text();
@@ -88,3 +91,14 @@ for await (const line of input) {
 
 input.close();
 if (hadError) process.exitCode = 1;
+
+function modelDocumentation(value: "anthropic" | "openai"): string {
+  return value === "openai"
+    ? "https://developers.openai.com/api/docs/models"
+    : "https://platform.claude.com/docs/en/about-claude/models/overview";
+}
+
+function terminalSentence(value: string): string {
+  const trimmed = value.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}

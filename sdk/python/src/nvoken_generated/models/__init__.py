@@ -39,6 +39,7 @@ from nvoken_generated.models.invocation_provider_credential_selection_one_of imp
 from nvoken_generated.models.invocation_provider_credential_selection_one_of1 import InvocationProviderCredentialSelectionOneOf1
 from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.model_cost import ModelCost
+from nvoken_generated.models.model_pricing_capability import ModelPricingCapability
 from nvoken_generated.models.model_provenance import ModelProvenance
 from nvoken_generated.models.model_provider import ModelProvider
 from nvoken_generated.models.model_selection import ModelSelection

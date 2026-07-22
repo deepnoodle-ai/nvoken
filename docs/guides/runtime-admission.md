@@ -166,6 +166,30 @@ adapter can determine the gap only from returned usage, the same public reason
 is used after the call. Omit the field when trying a newly available model whose
 price metadata has not yet shipped.
 
+Before admitting capped work, an authenticated host can inspect the exact
+provider/model capability without making a provider call:
+
+```bash
+curl --silent --show-error --fail --get \
+  http://localhost:8080/v1/model-pricing-capabilities \
+  -H "Authorization: Bearer $NVOKEN_API_KEY" \
+  --data-urlencode provider=openai \
+  --data-urlencode "model=$NVOKEN_MODEL"
+```
+
+`priced` means the local registry has standard USD pricing for the exact model;
+`unpriced` means it knows that entry is absent; and `unknown` means the adapter
+cannot decide before execution. The response also includes the local
+`registry_version`. This preflight reports enforcement capability only. It does
+not call the provider, verify account access, or guarantee which model and usage
+evidence the provider will ultimately serve.
+
+The same check is available through the Go facade and CLI:
+
+```bash
+nvoken model pricing --provider openai --model "$NVOKEN_MODEL"
+```
+
 A request may add `spec.output.schema` for one validated object result. nvoken
 admits a bounded JSON Schema subset, presents it as the reserved
 `nvoken_submit_output` builtin, and persists its request/result through the

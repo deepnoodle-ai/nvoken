@@ -27,6 +27,8 @@ security:
 tags:
   - name: Invocations
     description: Durable agent-turn admission and state.
+  - name: Model pricing
+    description: Local USD pricing-registry capability for exact model IDs.
   - name: Sessions
     description: Durable conversation identity and state.
   - name: Provider credentials
@@ -569,6 +571,61 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/model-pricing-capabilities:
+    get:
+      tags: [Model pricing]
+      operationId: getModelPricingCapability
+      summary: Inspect local USD pricing capability for an exact model
+      description: |
+        Reports whether this nvoken installation's embedded pricing registry
+        has standard USD pricing for the exact provider and model ID. This is
+        a local guardrail capability check only: it does not call the provider,
+        verify provider-account access, or guarantee that a provider response
+        will identify the same served model and include usable token evidence.
+
+        `priced` means the exact requested model has a standard USD entry.
+        `unpriced` means the local registry can determine that it has no
+        standard USD entry, so a cost-capped Invocation will fail before a
+        provider call. `unknown` means the active adapter cannot decide before
+        execution; capped work can fail closed after normalized response
+        evidence is available.
+      parameters:
+        - name: provider
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/ModelProvider"
+        - name: model
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+      responses:
+        "200":
+          description: The exact model's local pricing capability.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelPricingCapability"
+              examples:
+                priced:
+                  value:
+                    provider: openai
+                    model: gpt-5.4-mini
+                    status: priced
+                    registry_version: v1.16.0
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
   /v1/sessions:
     get:
       tags: [Sessions]
@@ -879,6 +936,27 @@ components:
     ModelProvider:
       type: string
       enum: [anthropic, openai]
+    ModelPricingCapability:
+      type: object
+      additionalProperties: false
+      required: [provider, model, status, registry_version]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ModelProvider"
+        model:
+          type: string
+          minLength: 1
+          maxLength: 255
+        status:
+          type: string
+          enum: [priced, unpriced, unknown]
+        registry_version:
+          type: string
+          minLength: 1
+          description: |
+            Opaque version of the embedded local pricing snapshot. A changed
+            version can change capability without changing provider-account
+            availability.
     ProviderCredentialScope:
       type: string
       enum: [account, tenant]

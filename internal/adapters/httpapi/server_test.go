@@ -55,6 +55,18 @@ type fakeProviderCredentials struct {
 	createCalls int
 }
 
+type fakeModelPricing struct {
+	capability domain.ModelPricingCapability
+	provider   string
+	model      string
+}
+
+func (f *fakeModelPricing) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
+	f.provider = provider
+	f.model = model
+	return f.capability
+}
+
 func (f *fakeProviderCredentials) Create(
 	_ context.Context,
 	_ domain.RuntimeAuthContext,
@@ -156,6 +168,68 @@ func TestHealthIsPublic(t *testing.T) {
 		!strings.Contains(logs.String(), "outcome=success") ||
 		!strings.Contains(logs.String(), "route=/health") {
 		t.Fatalf("health request log = %s", logs.String())
+	}
+}
+
+func TestGetModelPricingCapability(t *testing.T) {
+	pricing := &fakeModelPricing{capability: domain.ModelPricingCapability{
+		Provider:        domain.ModelProviderAnthropic,
+		Model:           "adapter-metadata-is-not-authoritative",
+		Status:          domain.ModelPricingPriced,
+		RegistryVersion: "v1.16.0",
+	}}
+	authenticator := &fakeAuthenticator{auth: domain.RuntimeAuthContext{AccountID: testAccountID}}
+	handler := newHandler(handlerConfig{
+		authenticator: authenticator,
+		modelPricing:  pricing,
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, authenticatedRequest(
+		http.MethodGet,
+		"/v1/model-pricing-capabilities?provider=openai&model=gpt-test",
+		nil,
+	))
+	if recorder.Code != http.StatusOK || pricing.provider != "openai" || pricing.model != "gpt-test" {
+		t.Fatalf("pricing capability = %d %s, provider = %q, model = %q", recorder.Code, recorder.Body.String(), pricing.provider, pricing.model)
+	}
+	for _, expected := range []string{`"provider":"openai"`, `"model":"gpt-test"`, `"status":"priced"`, `"registry_version":"v1.16.0"`} {
+		if !strings.Contains(recorder.Body.String(), expected) {
+			t.Fatalf("pricing capability missing %s: %s", expected, recorder.Body.String())
+		}
+	}
+}
+
+func TestGetModelPricingCapabilityValidatesAuthenticationAndQuery(t *testing.T) {
+	pricing := &fakeModelPricing{}
+	for _, test := range []struct {
+		name   string
+		target string
+		auth   bool
+		status int
+	}{
+		{name: "authentication", target: "/v1/model-pricing-capabilities?provider=openai&model=gpt-test", status: http.StatusUnauthorized},
+		{name: "provider", target: "/v1/model-pricing-capabilities?provider=other&model=gpt-test", auth: true, status: http.StatusBadRequest},
+		{name: "missing model", target: "/v1/model-pricing-capabilities?provider=openai", auth: true, status: http.StatusBadRequest},
+		{name: "unknown query", target: "/v1/model-pricing-capabilities?provider=openai&model=gpt-test&extra=true", auth: true, status: http.StatusBadRequest},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			authenticator := &fakeAuthenticator{auth: domain.RuntimeAuthContext{AccountID: testAccountID}}
+			handler := newHandler(handlerConfig{
+				authenticator: authenticator,
+				modelPricing:  pricing,
+				logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+			})
+			request := httptest.NewRequest(http.MethodGet, test.target, nil)
+			if test.auth {
+				request.Header.Set("Authorization", "Bearer test-token")
+			}
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != test.status {
+				t.Fatalf("GET %s = %d %s", test.target, recorder.Code, recorder.Body.String())
+			}
+		})
 	}
 }
 

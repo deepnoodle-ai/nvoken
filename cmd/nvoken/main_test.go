@@ -48,6 +48,21 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		t.Fatalf("unexpected JSON handle: %#v", handle)
 	}
 
+	output, err = executeCLI(
+		t,
+		baseURL,
+		false,
+		"model",
+		"pricing",
+		"--provider",
+		"openai",
+		"--model",
+		"gpt-test",
+	)
+	if err != nil || output != "openai\tgpt-test\tpriced\tconformance-v1\n" {
+		t.Fatalf("model pricing output=%q err=%v", output, err)
+	}
+
 	output, err = executeCLI(t, baseURL, false, "invocation", "get", testInvocationID)
 	if err != nil || !strings.Contains(output, testInvocationID+"\tcompleted\t"+testSessionID) {
 		t.Fatalf("text invocation output=%q err=%v", output, err)

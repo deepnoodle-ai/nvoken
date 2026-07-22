@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/observability"
@@ -72,6 +73,7 @@ type Config struct {
 	Addr                   string
 	Authenticator          ports.RuntimeAuthenticator
 	Runtime                RuntimeService
+	ModelPricing           ports.ModelPricingResolver
 	Identity               IdentityService
 	ProviderCredentials    ProviderCredentialService
 	Logger                 *slog.Logger
@@ -104,6 +106,7 @@ func NewServer(cfg Config) *Server {
 	handler := newHandler(handlerConfig{
 		authenticator:          cfg.Authenticator,
 		runtime:                cfg.Runtime,
+		modelPricing:           cfg.ModelPricing,
 		identity:               cfg.Identity,
 		providerCredentials:    cfg.ProviderCredentials,
 		logger:                 logger,
@@ -136,6 +139,7 @@ func NewServer(cfg Config) *Server {
 type handlerConfig struct {
 	authenticator          ports.RuntimeAuthenticator
 	runtime                RuntimeService
+	modelPricing           ports.ModelPricingResolver
 	identity               IdentityService
 	providerCredentials    ProviderCredentialService
 	logger                 *slog.Logger
@@ -148,6 +152,7 @@ type handlerConfig struct {
 type handler struct {
 	authenticator          ports.RuntimeAuthenticator
 	runtime                RuntimeService
+	modelPricing           ports.ModelPricingResolver
 	identity               IdentityService
 	providerCredentials    ProviderCredentialService
 	logger                 *slog.Logger
@@ -164,6 +169,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 	h := &handler{
 		authenticator:          cfg.authenticator,
 		runtime:                cfg.runtime,
+		modelPricing:           cfg.modelPricing,
 		identity:               cfg.identity,
 		providerCredentials:    cfg.providerCredentials,
 		logger:                 cfg.logger,
@@ -197,6 +203,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/cancel", h.requireMethod(http.MethodPost, h.cancelInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/tool-results", h.requireMethod(http.MethodPost, h.submitClientToolResults))
+	mux.HandleFunc("/v1/model-pricing-capabilities", h.requireMethod(http.MethodGet, h.getModelPricingCapability))
 	mux.HandleFunc("/v1/sessions", h.requireMethod(http.MethodGet, h.listSessions))
 	mux.HandleFunc("/v1/sessions/{session_id}/messages", h.requireMethod(http.MethodGet, h.listSessionMessages))
 	mux.HandleFunc("/v1/sessions/{session_id}/transcript", h.requireMethod(http.MethodGet, h.getSessionTranscript))
@@ -248,6 +255,40 @@ func (h *handler) health(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+func (h *handler) getModelPricingCapability(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if _, err := h.authenticate(r); err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	query, err := strictQuery(r, "provider", "model")
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	provider := domain.ModelProvider(query.Get("provider"))
+	if provider != domain.ModelProviderAnthropic && provider != domain.ModelProviderOpenAI {
+		h.writeError(w, requestID, invalidQuery(errors.New("provider must be anthropic or openai")))
+		return
+	}
+	model := query.Get("model")
+	if model == "" || !utf8.ValidString(model) || utf8.RuneCountInString(model) > 255 {
+		h.writeError(w, requestID, invalidQuery(errors.New("model must contain 1 to 255 Unicode characters")))
+		return
+	}
+	if h.modelPricing == nil {
+		h.writeError(w, requestID, &services.PublicError{
+			Code: services.CodeUnavailable, Message: "The service is temporarily unavailable.",
+		})
+		return
+	}
+	capability := h.modelPricing.ResolveModelPricing(string(provider), model)
+	writeJSON(w, http.StatusOK, modelPricingCapabilityResponse{
+		Provider: provider, Model: model, Status: capability.Status,
+		RegistryVersion: capability.RegistryVersion,
+	})
 }
 
 func (h *handler) providerCredentialsCollection(w http.ResponseWriter, r *http.Request) {
@@ -787,6 +828,13 @@ type invocationAcknowledgementResponse struct {
 	InvocationID string                  `json:"invocation_id"`
 	Status       domain.InvocationStatus `json:"status"`
 	Deduplicated bool                    `json:"deduplicated"`
+}
+
+type modelPricingCapabilityResponse struct {
+	Provider        domain.ModelProvider      `json:"provider"`
+	Model           string                    `json:"model"`
+	Status          domain.ModelPricingStatus `json:"status"`
+	RegistryVersion string                    `json:"registry_version"`
 }
 
 type invocationResponse struct {

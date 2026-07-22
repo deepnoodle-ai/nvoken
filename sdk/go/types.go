@@ -15,6 +15,7 @@ type SessionMessage = generated.SessionMessage
 type PendingClientToolCall = generated.PendingClientToolCall
 type ToolResultResponse = generated.SubmitClientToolResultsResponse
 type ModelProvider = generated.ModelProvider
+type ModelPricingCapability = generated.ModelPricingCapability
 type ProviderCredential = generated.ProviderCredential
 type ProviderCredentialList = generated.ProviderCredentialList
 type ProviderCredentialScope = generated.ProviderCredentialScope
