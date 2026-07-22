@@ -228,7 +228,7 @@ exist, the corresponding rows remain `pending`.
 | Cloud Run deletion protection | `service_deletion_protection = true` | Required safety setting |
 | Alert delivery | At least one channel in `monitoring_notification_channels`, tested end to end | Required safety setting |
 | Capacity reconciliation | Review the `configured_capacity_totals` output against Cloud SQL connections, queue concurrency, quotas, and provider limits | Required safety setting |
-| Backup and recovery | Exercise the PRD 020 Cloud SQL backup/PITR restore into isolation and record the verified recovery point | Required safety proof |
+| Backup and recovery | Exercise the [PRD 020 Cloud SQL backup/PITR procedure](../../docs/guides/backup-and-restore.md#google-cloud-sql-backup-or-pitr-restore) into isolation and record the verified recovery point | Required safety proof |
 | Service, executor, queue, database, and Redis sizing | Choose from observed workload and qualification evidence | Workload-dependent advice |
 | Alert thresholds and windows | Tune only from incident/volume evidence; preserve a sustained window for noisy provider and callback failures | Workload-dependent advice |
 

@@ -56,6 +56,12 @@ Every result uses `event=diagnostic_check`:
 | `live_event_redis` | The configured Redis endpoint answers `PING`, or the optional dependency reports `skipped` / `not_configured`. | `timeout`, `transport`, or `internal`: check Memorystore/Redis reachability and TLS configuration. Durable reads remain authoritative. |
 | `cloud_tasks_queue` | The configured queue is readable through Cloud Tasks without creating a task, or the optional dependency reports `skipped` / `not_configured`. | `timeout`, `transport`, or `internal`: check queue existence, API availability, and control-service IAM. Do not delete uncertain tasks. |
 
+`nvokend verify-restore` emits `event=restore_verification` for its read-only
+schema, catalog, invariant, and representative-read checks. Use `component`,
+`outcome`, `error_class`, and the optional bounded `records_examined`; see the
+[backup and restore guide](backup-and-restore.md). It never logs record content
+or starts execution components.
+
 `outcome=skipped` with `error_class=dependency_failed` means an earlier check,
 such as database connectivity, made the dependent verdict impossible.
 
@@ -83,6 +89,7 @@ such as database connectivity, made the dependent verdict impossible.
 | `live_event_publish_failed` / `live_event_subscribe_failed` / `live_event_decode_failed` | Ephemeral Redis fan-out degraded. | Check `error_class`, Redis diagnosis, and reconnect clients from a durable cursor; do not infer lost durable output. |
 | `live_event_stream_resync` / `live_event_stream_closed` | An SSE client must resync or the bounded stream ended. | Use `reason`, fetch the transcript snapshot with the resume cursor, then reconnect. |
 | `client_tool_result_partial` / `client_tool_resume_queued` / `client_tool_result_deduplicated` | Host-submitted client tool results were accepted, resumed work, or converged as duplicates. | Correlate `invocation_id`; read pending ToolCalls and authoritative Invocation status. |
+| `restore_verification` | One isolated restore check passed or failed without reading content into logs. | Use `component` and `error_class`; keep the target isolated and follow the backup/restore diagnosis before any daemon start. |
 
 Google Cloud log queries, alert policies, and alert-specific actions remain in
 the [Google Cloud runbooks](../../deploy/google-cloud/runbooks.md). The event
