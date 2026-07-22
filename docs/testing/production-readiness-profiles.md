@@ -58,6 +58,54 @@ observation or qualify the Google profile.
   requires updating this matrix in the same change; linked guides and product
   docs do not own separate readiness status.
 
+## Checked repository facts
+
+The readiness gate checks only this bounded set of implementation facts. The
+expected value in this table is the versioned matrix claim; the named source is
+the implementation authority. Design-scope aspirations elsewhere are not
+implementation claims and are deliberately outside this comparison.
+
+| Fact | Expected value | Authoritative source | Compared repository claims |
+| --- | --- | --- | --- |
+| `profile_names` | `single_daemon`, `google_cloud` | This matrix's profile and current-status tables | Exact profile rows in this matrix |
+| `provider_registry` | `anthropic`, `openai` | [`newModel`](../../internal/adapters/divegen/generator.go) | Runtime OpenAPI provider enum and the root README provider line |
+| `openapi_tool_modes` | `client`, `callback` | [`ToolSpec`](../../openapi/runtime.yaml) | Runtime admission guide examples and this recorded value |
+| `openapi_version` | `0.1.0` | [`openapi/runtime.yaml`](../../openapi/runtime.yaml) | This recorded value |
+| `migration_head` | `000013` | [Embedded forward migrations](../../internal/adapters/postgres/migrations/) | Migration inventory and this recorded value |
+| `readiness_links` | `README.md`, `docs/design/architecture.md`, `docs/guides/runtime-admission.md`, `deploy/google-cloud/README.md` | This matrix | The four primary documents that must link back here |
+
+## Running the conformance gate
+
+Run one profile from a clean checkout. Supply only a disposable Postgres URL;
+the explicit confirmation prevents an ambient `DATABASE_URL` from being used
+by the mutating integration suite:
+
+```bash
+READINESS_DATABASE_URL='postgres://nvoken:…@127.0.0.1:5432/nvoken_test' \
+READINESS_DATABASE_DISPOSABLE=1 \
+make readiness PROFILE=single_daemon
+```
+
+Use `PROFILE=google_cloud` for the paved profile. It adds the offline Terraform
+and deployment checks without requiring Google credentials. With no confirmed
+disposable database, Postgres and the one-shot diagnostic are reported as
+skipped rather than touching an ambient database.
+
+`OUTPUT=/outside/the/repository/readiness.json` writes the same revision,
+profile, checks, evidence references, and result as secret-free JSON. Ordinary
+local results do not belong in Git. The command exits nonzero for a failed
+automated check, a checked documentation contradiction, or a recorded `ready`
+claim stronger than the computed evidence. Missing manual evidence keeps the
+result `pending` but does not by itself make an honest `pending` claim fail.
+
+Live checks are disabled by default. `LIVE=1` is the explicit opt-in that may
+send model requests or mutate the selected test environment. For
+`single_daemon` it runs PRD 022's profile smoke against an already-running
+installation once that entry point is present. For `google_cloud` it delegates
+to PRD 024's single `deploy/google-cloud/qualify.py` entry point; pass its flags
+with `QUALIFY_ARGS='--environment staging …'`. The gate never provisions,
+deploys, restores, or reads credentials itself.
+
 ## Shared correctness floor
 
 Profile exercises must preserve these invariants. The linked repository tests
@@ -93,6 +141,22 @@ links the procedure or PRD that must create its first qualifying evidence.
 | Retention | Retain-by-default is an explicit storage/privacy limitation; authoritative rows remain readable while only terminal transport diagnostics prune in bounded batches, and content-free queries report database and largest-table growth. | nvoken: retain-by-default schema and bounded diagnostic pruning. Operator: storage monitoring, capacity, backups, and future deletion policy. | automated | proven | current | [Retention policy and queries](../guides/data-retention.md), [dispatch proof](../../internal/adapters/postgres/invocation_dispatch_integration_test.go), [callback proof](../../internal/adapters/postgres/toolcalls_integration_test.go) |
 | Secret handling | Start from a secret-free checked example with externally supplied Runtime, provider, database, and optional callback credentials; verify invalid configuration fails safely and logs/evidence expose no secret or payload. | nvoken: bounded config validation and redaction. Operator: generation, storage, rotation, and ingress protection for secrets. | automated | pending | missing | [Canonical secret-free environment](../../deploy/single-daemon/nvoken.env.example), [checked configuration](../../cmd/nvokend/single_daemon_profile_test.go), [PRD 018 A1-A3](../prds/018-prd-operational-signals-and-diagnostics.md#acceptance), [PRD 022 A1](../prds/022-prd-single-daemon-production-profile.md#acceptance) |
 
+#### Manual evidence freshness
+
+The gate resolves each latest record relative to this file. A row is current
+only when the record and tested revision exist, the revision is an ancestor of
+the checkout, none of the sensitive paths changed afterward, and the row has
+not been explicitly invalidated. `none` means there is no explicit
+invalidation; replace it with a short reason to invalidate a record immediately.
+
+| Dimension | Latest evidence | Tested revision | Evidence-sensitive paths | Explicit invalidation |
+| --- | --- | --- | --- | --- |
+| Process/dependency failure | missing | — | `internal/engine/` `internal/services/execution.go` `internal/adapters/postgres/execution_integration_test.go` `deploy/single-daemon/` | none |
+| Upgrade/rollback | missing | — | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `docs/guides/database-migrations.md` `deploy/single-daemon/` | none |
+| Backup/restore | missing | — | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `docs/guides/database-migrations.md` | none |
+| Diagnosis | missing | — | `internal/observability/` `internal/daemon/diagnose.go` `docs/guides/operational-signals.md` `deploy/single-daemon/` | none |
+| Capacity | missing | — | `internal/engine/` `cmd/nvokend/config.go` `deploy/single-daemon/` | none |
+
 ### `google_cloud`
 
 | Dimension | Observable proof | Owner boundary | Mode | State | Freshness | Evidence or procedure |
@@ -106,6 +170,19 @@ links the procedure or PRD that must create its first qualifying evidence.
 | Capacity | Record combined/executor/database/queue limits, run a bounded one-at-a-time backlog, and account for every accepted Invocation as terminal or durably queued without converting observations into an autoscaling guarantee. | nvoken: validated capacity relationships and durable queueing. Operator: selected limits, Cloud SQL sizing, workload envelope. | manual | pending | missing | [Google qualification scenario 4](google-cloud-qualification.md#4-small-backlog-observation) |
 | Retention | Retain-by-default is an explicit storage/privacy limitation; authoritative rows remain readable, terminal diagnostics prune in bounded batches, and the paved guide identifies Cloud SQL total-growth signals without transcript content. | nvoken: retain-by-default schema and diagnostic pruning. Operator: Cloud SQL storage/backup capacity and future deletion policy. | automated | proven | current | [Retention policy and deferred contracts](../guides/data-retention.md), [Cloud SQL signal](../../deploy/google-cloud/README.md#retention-and-storage-growth), [dispatch proof](../../internal/adapters/postgres/invocation_dispatch_integration_test.go), [callback proof](../../internal/adapters/postgres/toolcalls_integration_test.go) |
 | Secret handling | Static Terraform checks prove scoped Secret Manager grants and no secret-bearing variables; a live run proves the intended Runtime/executor/callback identities can use only their configured secrets while records and logs remain secret-free. | nvoken: least-privilege wiring, config validation, redaction. Operator: secret creation, rotation, IAM/release access, protected Terraform state. | manual | pending | missing | [Paved prerequisites](../../deploy/google-cloud/README.md#prerequisites), [PRD 024 A1 and A5](../prds/024-prd-google-cloud-qualification.md#acceptance) |
+
+#### Manual evidence freshness
+
+| Dimension | Latest evidence | Tested revision | Evidence-sensitive paths | Explicit invalidation |
+| --- | --- | --- | --- | --- |
+| Installation | missing | — | `deploy/google-cloud/` `cmd/nvokend/config.go` | none |
+| Normal execution | missing | — | `internal/adapters/httpapi/` `internal/adapters/cloudtasks/` `internal/adapters/liveevents/` `deploy/google-cloud/qualify.py` | none |
+| Process/dependency failure | missing | — | `internal/engine/` `internal/dispatch/` `internal/adapters/liveevents/` `deploy/google-cloud/qualify.py` | none |
+| Upgrade/rollback | missing | — | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `deploy/google-cloud/` | none |
+| Backup/restore | missing | — | `internal/adapters/postgres/migrations/` `internal/adapters/postgres/schema.go` `docs/guides/database-migrations.md` | none |
+| Diagnosis | missing | — | `internal/observability/` `internal/daemon/diagnose.go` `deploy/google-cloud/runbooks.md` | none |
+| Capacity | missing | — | `internal/engine/` `internal/adapters/cloudtasks/` `cmd/nvokend/config.go` `deploy/google-cloud/variables.tf` `deploy/google-cloud/qualify.py` | none |
+| Secret handling | missing | — | `cmd/nvokend/config.go` `internal/adapters/secretcrypto/` `deploy/google-cloud/main.tf` `deploy/google-cloud/variables.tf` `deploy/google-cloud/qualify.py` | none |
 
 ## Claim and document ownership
 

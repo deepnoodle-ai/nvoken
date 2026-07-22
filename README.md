@@ -6,7 +6,7 @@
 
 **Give your multi-tenant app a great agentic experience without building the harness from scratch.**
 
-<sub>Works with&nbsp;**Anthropic · OpenAI · Google · Grok · Mistral · OpenRouter · Ollama**</sub>
+<sub>Works with&nbsp;**Anthropic · OpenAI**</sub>
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-2563eb)](LICENSE)
 [![status](https://img.shields.io/badge/status-early%20development-b7791f)](#how-to-help)

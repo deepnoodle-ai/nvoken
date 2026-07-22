@@ -1,4 +1,4 @@
-.PHONY: fmt build generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres vet openapi-check scripts-check sdk-generate sdk-generate-check sdk-check check check-deploy run upgrade-preflight migrate
+.PHONY: fmt build generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres vet openapi-check scripts-check sdk-generate sdk-generate-check sdk-check check check-deploy readiness run upgrade-preflight migrate
 
 REDOCLY_VERSION := 1.34.11
 SQLC_VERSION := v1.31.1
@@ -44,6 +44,7 @@ scripts-check:
 	python3 -c 'import ast, pathlib; [ast.parse(pathlib.Path(path).read_text(), filename=path) for path in ("deploy/single-daemon/smoke.py", "deploy/single-daemon/smoke_test.py", "deploy/single-daemon/load.py")]'
 	python3 deploy/single-daemon/smoke.py --help >/dev/null
 	PYTHONDONTWRITEBYTECODE=1 python3 deploy/single-daemon/smoke_test.py >/dev/null
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p '*_test.py'
 
 sdk-generate:
 	sdk/scripts/generate.sh
@@ -61,6 +62,13 @@ check-deploy:
 	terraform -chdir=deploy/google-cloud test
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s deploy/google-cloud -p 'test_*.py'
 	bash -n deploy/google-cloud/bootstrap-state.sh deploy/google-cloud/release.sh
+
+readiness:
+	@if [ -z "$(PROFILE)" ]; then echo "set PROFILE=single_daemon or PROFILE=google_cloud" >&2; exit 2; fi
+	@python3 scripts/readiness.py --profile "$(PROFILE)" \
+		$(if $(OUTPUT),--output "$(OUTPUT)") \
+		$(if $(filter 1 true yes,$(LIVE)),--live) \
+		$(if $(QUALIFY_ARGS),-- $(QUALIFY_ARGS))
 
 run:
 	go run ./cmd/nvokend
