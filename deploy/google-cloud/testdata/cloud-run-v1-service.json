@@ -1,0 +1,25 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/ingress": "internal"
+    },
+    "name": "nvoken-stage-executor"
+  },
+  "spec": {
+    "template": {
+      "spec": {
+        "containers": [
+          {
+            "image": "us-central1-docker.pkg.dev/nvoken-stage/nvoken/nvokend:abc123"
+          }
+        ]
+      }
+    }
+  },
+  "status": {
+    "latestReadyRevisionName": "nvoken-stage-executor-00041-old",
+    "url": "https://executor.example.test"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "ingress": "INGRESS_TRAFFIC_INTERNAL_ONLY",
+  "latestReadyRevision": "projects/nvoken-stage/locations/us-central1/services/nvoken-stage-executor/revisions/nvoken-stage-executor-00042-new",
+  "name": "projects/nvoken-stage/locations/us-central1/services/nvoken-stage-executor",
+  "template": {
+    "containers": [
+      {
+        "image": "us-central1-docker.pkg.dev/nvoken-stage/nvoken/nvokend:abc123"
+      }
+    ]
+  },
+  "uri": "https://executor.example.test"
+}
