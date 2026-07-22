@@ -152,6 +152,7 @@ def pack_sdk(work: Path) -> Path:
     with tarfile.open(artifact, "r:gz") as archive:
         names = set(archive.getnames())
     required = {
+        "package/LICENSE",
         "package/package.json",
         "package/README.md",
         "package/dist/index.js",
