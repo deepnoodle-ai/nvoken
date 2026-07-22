@@ -35,4 +35,5 @@ jobs:
         with:
           components: rustfmt
       - run: make check
+      - run: make test-postgres
       - run: make sdk-check
