@@ -157,17 +157,56 @@ func TestGeneratorPreservesCredentialUnavailableForDurableSettlement(t *testing.
 
 func TestGeneratorReportsRegisteredUSDModelPricing(t *testing.T) {
 	generator := New(Config{})
-	priced := generator.ResolveModelPricing("openai", "gpt-5.4-mini")
-	if priced.Status != domain.ModelPricingPriced || priced.RegistryVersion == "" {
-		t.Fatalf("known OpenAI pricing = %#v", priced)
+	tests := []struct {
+		name     string
+		provider string
+		model    string
+		status   domain.ModelPricingStatus
+	}{
+		{
+			name:     "known OpenAI model",
+			provider: "openai",
+			model:    "gpt-5.4-mini",
+			status:   domain.ModelPricingPriced,
+		},
+		{
+			name:     "known Anthropic model",
+			provider: "anthropic",
+			model:    "claude-sonnet-4-6",
+			status:   domain.ModelPricingPriced,
+		},
+		{
+			name:     "Anthropic model under OpenAI",
+			provider: "openai",
+			model:    "claude-sonnet-4-6",
+			status:   domain.ModelPricingUnpriced,
+		},
+		{
+			name:     "OpenAI model under Anthropic",
+			provider: "anthropic",
+			model:    "gpt-5.4-mini",
+			status:   domain.ModelPricingUnpriced,
+		},
+		{
+			name:     "unregistered model",
+			provider: "openai",
+			model:    "unregistered-model",
+			status:   domain.ModelPricingUnpriced,
+		},
+		{
+			name:     "unsupported provider",
+			provider: "unsupported",
+			model:    "gpt-5.4-mini",
+			status:   domain.ModelPricingUnknown,
+		},
 	}
-	unpriced := generator.ResolveModelPricing("openai", "unregistered-model")
-	if unpriced.Status != domain.ModelPricingUnpriced {
-		t.Fatalf("unregistered model pricing = %#v", unpriced)
-	}
-	unknown := generator.ResolveModelPricing("unsupported", "gpt-5.4-mini")
-	if unknown.Status != domain.ModelPricingUnknown {
-		t.Fatalf("unsupported provider pricing = %#v", unknown)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			capability := generator.ResolveModelPricing(test.provider, test.model)
+			if capability.Status != test.status || capability.RegistryVersion == "" {
+				t.Fatalf("pricing capability = %#v, want status %q", capability, test.status)
+			}
+		})
 	}
 }
 

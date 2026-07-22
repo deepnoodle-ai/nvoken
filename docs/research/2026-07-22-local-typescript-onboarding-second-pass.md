@@ -305,5 +305,21 @@ release gates.
 
 The CI workflow additionally runs the full packed-package onboarding gate under
 Node 20, while the standard repository job retains the Node 24 development
-baseline. Publication of 0.1.1 is the only remaining external release action, not
-an unresolved repository finding.
+baseline.
+
+## Third-pass correction (2026-07-22)
+
+A live third pass found that the initial pricing preflight validated the provider
+but queried Dive's global model-name pricing registry. It therefore reported
+cross-provider pairs such as `openai` plus a Claude model as `priced`. The corrected
+adapter queries the selected provider's standard USD pricing table, with regressions
+for both valid pairs and both cross-provider directions. The capability also reports
+the version of the provider-specific pricing module, which matters because the
+OpenAI registry can advance independently from the core Dive module.
+
+The same pass found that the new packed README snippet and source quickstart still
+printed internal Node.js stacks for validation or authentication failures. Both
+entrypoints now use one-line public error rendering, and the packed-artifact gate
+exercises invalid credentials and invalid models in addition to success. Version
+0.1.1 remains deliberately unpublished until these corrections merge and pass from
+the exact `main` revision.

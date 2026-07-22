@@ -22,7 +22,6 @@ import (
 
 	"github.com/deepnoodle-ai/dive"
 	"github.com/deepnoodle-ai/dive/llm"
-	diveproviders "github.com/deepnoodle-ai/dive/providers"
 	"github.com/deepnoodle-ai/dive/providers/anthropic"
 	"github.com/deepnoodle-ai/dive/providers/openai"
 
@@ -116,13 +115,18 @@ func (*Generator) ResolveModelPricing(provider, model string) domain.ModelPricin
 		Provider:        domain.ModelProvider(provider),
 		Model:           model,
 		Status:          domain.ModelPricingUnknown,
-		RegistryVersion: diveRegistryVersion(),
+		RegistryVersion: diveRegistryVersion(provider),
 	}
-	if provider != string(domain.ModelProviderAnthropic) &&
-		provider != string(domain.ModelProviderOpenAI) {
+	var pricing llm.PricingInfo
+	var ok bool
+	switch provider {
+	case string(domain.ModelProviderAnthropic):
+		pricing, ok = anthropic.TextModelPricing[model]
+	case string(domain.ModelProviderOpenAI):
+		pricing, ok = openai.TextModelPricing[model]
+	default:
 		return capability
 	}
-	pricing, ok := diveproviders.PricingFor(model, false)
 	if !ok || !strings.EqualFold(pricing.Currency, "USD") {
 		capability.Status = domain.ModelPricingUnpriced
 		return capability
@@ -131,13 +135,22 @@ func (*Generator) ResolveModelPricing(provider, model string) domain.ModelPricin
 	return capability
 }
 
-func diveRegistryVersion() string {
+func diveRegistryVersion(provider string) string {
+	var dependencyPath string
+	switch provider {
+	case string(domain.ModelProviderAnthropic):
+		dependencyPath = "github.com/deepnoodle-ai/dive"
+	case string(domain.ModelProviderOpenAI):
+		dependencyPath = "github.com/deepnoodle-ai/dive/providers/openai"
+	default:
+		return "unknown"
+	}
 	build, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "unknown"
 	}
 	for _, dependency := range build.Deps {
-		if dependency.Path != "github.com/deepnoodle-ai/dive" {
+		if dependency.Path != dependencyPath {
 			continue
 		}
 		if dependency.Replace != nil {

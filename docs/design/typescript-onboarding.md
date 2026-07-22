@@ -1,6 +1,6 @@
 # Local TypeScript onboarding
 
-**Status:** Second-pass fixes implemented; `@deepnoodle/nvoken` 0.1.1 pending merge and release
+**Status:** Third-pass corrections implemented; `@deepnoodle/nvoken` 0.1.1 pending corrected release
 **Author:** OpenAI Codex  
 **Date:** 2026-07-22  
 **Workflow:** Spec and build in parallel; the field report supplies the acceptance criteria.
@@ -20,6 +20,12 @@ separates Session identity from durable message identity, makes selected-provide
 startup deterministic, adds an authenticated pricing-capability preflight, and
 expands minimum-runtime and newcomer regressions. Those source changes target
 0.1.1; registry publication remains an explicit post-merge release step.
+
+A third-pass review caught that the initial pricing preflight looked up a globally
+registered model name after validating—but not applying—the provider. The corrected
+adapter resolves the provider-specific pricing table, and both public and
+source-checkout quickstarts now render validation and transport failures without an
+internal Node.js stack.
 
 ## Goals
 
@@ -193,13 +199,13 @@ profile keeps both paths honest.
 ## Rollout
 
 Version 0.1.0 was packed, inspected, tested, and published interactively from the
-exact merged `main` revision. The second-pass corrections bump the TypeScript
-package to 0.1.1. After they merge and the exact `main` gates pass, push
-`npm-v0.1.1`; npm trusted publishing is connected to repository
+exact merged `main` revision. The second- and third-pass corrections bump the
+TypeScript package to 0.1.1. After the corrected changes merge and the exact `main`
+gates pass, push `npm-v0.1.1`; npm trusted publishing is connected to repository
 `deepnoodle-ai/nvoken`, workflow `release-npm.yml`, and the `npm publish` action.
 
 ## Open questions
 
 There are no unresolved design questions. The public package coordinate is
-`@deepnoodle/nvoken`; publication of 0.1.1 is deliberately deferred until these
-changes are merged and verified from the exact `main` revision.
+`@deepnoodle/nvoken`; publication of 0.1.1 is deliberately deferred until the
+provider-scoped corrections are merged and verified from the exact `main` revision.

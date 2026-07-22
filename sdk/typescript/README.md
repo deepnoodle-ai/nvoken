@@ -24,43 +24,77 @@ then save this complete example as `quickstart.mjs` next to the consumer's
 <!-- public-quickstart:start -->
 ```js
 import { randomUUID } from "node:crypto";
-import { Client } from "@deepnoodle/nvoken";
+import { Client, NvokenError } from "@deepnoodle/nvoken";
 
-const apiKey = process.env.NVOKEN_API_KEY;
-const provider = process.env.NVOKEN_PROVIDER;
-const model = process.env.NVOKEN_MODEL;
-if (!apiKey) throw new Error("NVOKEN_API_KEY is required");
-if (provider !== "anthropic" && provider !== "openai") {
-  throw new Error("NVOKEN_PROVIDER must be anthropic or openai");
+try {
+  await main();
+} catch (error) {
+  if (error instanceof NvokenError) {
+    const code = error.code ? ` code=${error.code}` : "";
+    const request = error.requestId ? ` request_id=${error.requestId}` : "";
+    console.error(`nvoken error [${error.category}]${code}${request}: ${error.message}`);
+  } else {
+    console.error(error instanceof Error ? error.message : error);
+  }
+  process.exitCode = 1;
 }
-if (!model) throw new Error("NVOKEN_MODEL is required");
 
-const client = new Client({
-  baseUrl: process.env.NVOKEN_BASE_URL ?? "http://localhost:8080",
-  apiKey,
-});
-const pricing = await client.pricingCapability({ provider, name: model });
-console.log(`pricing=${pricing.status} registry=${pricing.registryVersion}`);
+async function main() {
+  const apiKey = process.env.NVOKEN_API_KEY;
+  const provider = process.env.NVOKEN_PROVIDER;
+  const model = process.env.NVOKEN_MODEL;
+  if (!apiKey) throw new Error("NVOKEN_API_KEY is required");
+  if (provider !== "anthropic" && provider !== "openai") {
+    throw new Error("NVOKEN_PROVIDER must be anthropic or openai");
+  }
+  if (!model) throw new Error("NVOKEN_MODEL is required");
 
-const handle = await client.invoke({
-  agentRef: "typescript-package-quickstart",
-  sessionKey: `typescript-package-${randomUUID()}`,
-  idempotencyKey: `typescript-package-message-${randomUUID()}`,
-  input: "Reply with a short hello.",
-  spec: {
-    instructions: "Be concise.",
-    model: { provider, name: model },
-    budgets: { maxOutputTokens: 100, maxIterations: 1 },
-  },
-});
-const invocation = await handle.wait();
-if (invocation.status !== "completed") {
-  const reason = invocation.error
-    ? `${invocation.error.code}: ${invocation.error.message}`
-    : invocation.status;
-  throw new Error(`Invocation ${handle.invocationId} ${invocation.status}: ${reason}`);
+  const client = new Client({
+    baseUrl: process.env.NVOKEN_BASE_URL ?? "http://localhost:8080",
+    apiKey,
+  });
+  const pricing = await client.pricingCapability({ provider, name: model });
+  console.log(`pricing=${pricing.status} registry=${pricing.registryVersion}`);
+
+  const handle = await client.invoke({
+    agentRef: "typescript-package-quickstart",
+    sessionKey: `typescript-package-${randomUUID()}`,
+    idempotencyKey: `typescript-package-message-${randomUUID()}`,
+    input: "Reply with a short hello.",
+    spec: {
+      instructions: "Be concise.",
+      model: { provider, name: model },
+      budgets: { maxOutputTokens: 100, maxIterations: 1 },
+    },
+  });
+  const invocation = await handle.wait();
+  if (invocation.status !== "completed") {
+    const reason = invocation.error
+      ? `${invocation.error.code}: ${terminalSentence(invocation.error.message)}`
+      : terminalSentence(invocation.status);
+    const details = invocation.error?.details
+      ? ` Safe details: ${JSON.stringify(invocation.error.details)}.`
+      : "";
+    const modelHelp = invocation.error?.code === "provider_error"
+      ? ` Check available model IDs at ${modelDocumentation(provider)}.`
+      : "";
+    throw new Error(
+      `Invocation ${handle.invocationId} ${invocation.status}: ${reason}${details}${modelHelp}`,
+    );
+  }
+  console.log(`agent> ${await handle.text()}`);
 }
-console.log(`agent> ${await handle.text()}`);
+
+function terminalSentence(value) {
+  const trimmed = value.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function modelDocumentation(provider) {
+  return provider === "openai"
+    ? "https://developers.openai.com/api/docs/models"
+    : "https://platform.claude.com/docs/en/about-claude/models/overview";
+}
 ```
 <!-- public-quickstart:end -->
 
