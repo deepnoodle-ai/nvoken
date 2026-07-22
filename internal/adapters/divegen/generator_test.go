@@ -988,6 +988,7 @@ func TestClassifiedProviderCallErrorPreservesOnlyBoundedClass(t *testing.T) {
 		{name: "throttled", err: providerStatusError{status: 429}, want: ports.ProviderFailureThrottled},
 		{name: "rejected", err: providerStatusError{status: 400}, want: ports.ProviderFailureUpstreamRejected},
 		{name: "outage", err: providerStatusError{status: 503}, want: ports.ProviderFailureUpstreamUnavailable},
+		{name: "canceled", err: context.Canceled, want: ports.ProviderFailureCanceled},
 		{name: "timeout", err: context.DeadlineExceeded, want: ports.ProviderFailureTimeoutOrTransport},
 	} {
 		t.Run(test.name, func(t *testing.T) {

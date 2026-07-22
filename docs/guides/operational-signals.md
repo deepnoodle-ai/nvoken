@@ -52,8 +52,8 @@ Every result uses `event=diagnostic_check`:
 | `configuration` | The exact serve configuration is valid for the selected role and execution mode. | `invalid_configuration`: compare required environment variables with the deployment guide; do not print their values. |
 | `database_connectivity` | A bounded Postgres connection and ping succeed. | `timeout`, `transport`, or `internal`: check network reachability, credentials, and Postgres availability. |
 | `database_schema` | One clean migration row exactly matches the binary's embedded schema version. | `empty`, `dirty`, `behind`, `ahead`, or `invalid`: stop serving changes and follow the migration guide. Until PRD 019 defines a compatibility window, every ahead schema is unsafe. |
-| `live_event_redis` | The configured Redis endpoint answers `PING`. | `timeout`, `transport`, or `internal`: check Memorystore/Redis reachability and TLS configuration. Durable reads remain authoritative. |
-| `cloud_tasks_queue` | The configured queue is readable through Cloud Tasks without creating a task. | `timeout`, `transport`, or `internal`: check queue existence, API availability, and control-service IAM. Do not delete uncertain tasks. |
+| `live_event_redis` | The configured Redis endpoint answers `PING`, or the optional dependency reports `skipped` / `not_configured`. | `timeout`, `transport`, or `internal`: check Memorystore/Redis reachability and TLS configuration. Durable reads remain authoritative. |
+| `cloud_tasks_queue` | The configured queue is readable through Cloud Tasks without creating a task, or the optional dependency reports `skipped` / `not_configured`. | `timeout`, `transport`, or `internal`: check queue existence, API availability, and control-service IAM. Do not delete uncertain tasks. |
 
 `outcome=skipped` with `error_class=dependency_failed` means an earlier check,
 such as database connectivity, made the dependent verdict impossible.
@@ -85,3 +85,7 @@ such as database connectivity, made the dependent verdict impossible.
 Google Cloud log queries, alert policies, and alert-specific actions remain in
 the [Google Cloud runbooks](../../deploy/google-cloud/runbooks.md). The event
 meaning and recovery invariants above are portable and govern both profiles.
+
+`dispatch_publish_failure` deliberately preserves the original metric and alert
+key even though newer failure event constants use a `*_failed` suffix. Renaming
+it would break the existing Google Cloud monitoring contract.

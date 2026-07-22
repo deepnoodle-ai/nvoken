@@ -216,6 +216,39 @@ func TestProcessStartupIdentityDefaultsLocalBuildVersion(t *testing.T) {
 	}
 }
 
+func TestSchemaStartupFailurePreservesBoundedVerdict(t *testing.T) {
+	for _, state := range []postgres.SchemaState{
+		postgres.SchemaEmpty,
+		postgres.SchemaDirty,
+		postgres.SchemaBehind,
+		postgres.SchemaAhead,
+		postgres.SchemaInvalid,
+	} {
+		t.Run(string(state), func(t *testing.T) {
+			var output bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+			logSchemaProcessStartFailure(postgres.SchemaStatus{
+				State:    state,
+				Current:  12,
+				Expected: 13,
+				Dirty:    state == postgres.SchemaDirty,
+			})
+			slog.SetDefault(previous)
+
+			var entry map[string]any
+			if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
+				t.Fatalf("decode startup failure log: %v", err)
+			}
+			if entry["event"] != "process_start_failed" || entry["check"] != "database_schema" ||
+				entry["error_class"] != string(state) || entry["schema_version"] != float64(12) ||
+				entry["expected_schema_version"] != float64(13) {
+				t.Fatalf("schema startup failure = %#v", entry)
+			}
+		})
+	}
+}
+
 func TestDiagnoseReportsUnreachableDatabaseWithoutLeakingConfiguration(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))
@@ -232,6 +265,8 @@ func TestDiagnoseReportsUnreachableDatabaseWithoutLeakingConfiguration(t *testin
 		`"component":"configuration","outcome":"success"`,
 		`"component":"database_connectivity","outcome":"failed"`,
 		`"component":"database_schema","outcome":"skipped"`,
+		`"component":"live_event_redis","outcome":"skipped","error_class":"not_configured"`,
+		`"component":"cloud_tasks_queue","outcome":"skipped","error_class":"not_configured"`,
 	} {
 		if !strings.Contains(logs, required) {
 			t.Fatalf("diagnostic logs omit %s: %s", required, logs)

@@ -38,6 +38,7 @@ type ProviderFailureClass string
 
 const (
 	ProviderFailureConfiguration       ProviderFailureClass = "configuration"
+	ProviderFailureCanceled            ProviderFailureClass = "canceled"
 	ProviderFailureThrottled           ProviderFailureClass = "throttled"
 	ProviderFailureUpstreamRejected    ProviderFailureClass = "upstream_rejected"
 	ProviderFailureUpstreamUnavailable ProviderFailureClass = "upstream_unavailable"

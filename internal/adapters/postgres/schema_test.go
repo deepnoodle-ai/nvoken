@@ -20,7 +20,9 @@ func TestEvaluateSchemaStatus(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got := evaluateSchemaStatus(13, test.current, test.dirty, test.rows)
-			if got.State != test.want || got.Compatible() != test.compatible || got.Expected != 13 || got.Rows != test.rows {
+			compatibilityErr := got.CompatibilityError()
+			if got.State != test.want || got.Compatible() != test.compatible ||
+				(compatibilityErr == nil) != test.compatible || got.Expected != 13 || got.Rows != test.rows {
 				t.Fatalf("schema status = %#v", got)
 			}
 		})

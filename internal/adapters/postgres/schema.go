@@ -33,6 +33,23 @@ type SchemaStatus struct {
 
 func (s SchemaStatus) Compatible() bool { return s.State == SchemaCompatible }
 
+// CompatibilityError explains why the schema cannot be served without
+// changing the bounded state reported by InspectSchema.
+func (s SchemaStatus) CompatibilityError() error {
+	switch s.State {
+	case SchemaCompatible:
+		return nil
+	case SchemaEmpty, SchemaInvalid:
+		return fmt.Errorf("database schema state has %d rows, want 1", s.Rows)
+	case SchemaDirty:
+		return fmt.Errorf("database schema version %06d is dirty", s.Current)
+	case SchemaBehind, SchemaAhead:
+		return fmt.Errorf("database schema version %06d is incompatible with expected %06d", s.Current, s.Expected)
+	default:
+		return fmt.Errorf("database schema state %q is invalid", s.State)
+	}
+}
+
 // CheckSchema verifies the serve path can safely use the database. It performs
 // no DDL and deliberately cannot repair an empty, dirty, old, or future schema.
 func CheckSchema(ctx context.Context, pool *pgxpool.Pool) error {
@@ -40,18 +57,7 @@ func CheckSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	if err != nil {
 		return err
 	}
-	switch status.State {
-	case SchemaCompatible:
-		return nil
-	case SchemaEmpty, SchemaInvalid:
-		return fmt.Errorf("database schema state has %d rows, want 1", status.Rows)
-	case SchemaDirty:
-		return fmt.Errorf("database schema version %06d is dirty", status.Current)
-	case SchemaBehind, SchemaAhead:
-		return fmt.Errorf("database schema version %06d is incompatible with expected %06d", status.Current, status.Expected)
-	default:
-		return fmt.Errorf("database schema state %q is invalid", status.State)
-	}
+	return status.CompatibilityError()
 }
 
 // InspectSchema reports the same read-only compatibility verdict used by the

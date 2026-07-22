@@ -31,23 +31,19 @@ func diagnose(parent context.Context, cfg Config, logger *slog.Logger) error {
 	defer cancel()
 
 	failed := false
-	logDiagnosticResult(logger, "configuration", observability.OutcomeSuccess, "none")
+	logDiagnosticResult(ctx, logger, "configuration", observability.OutcomeSuccess, "none")
 
 	pool, err := postgres.OpenPoolWithConfig(ctx, cfg.DatabaseURL, postgres.PoolConfig{MaxConns: cfg.DatabaseMaxConns})
 	if err != nil {
 		failed = true
-		logDiagnosticResult(logger, "database_connectivity", observability.OutcomeFailed, observability.ErrorClass(err))
-		logger.Warn("diagnostic check skipped",
-			"event", observability.EventDiagnosticCheck,
-			"component", "database_schema",
-			"outcome", observability.OutcomeSkipped,
-			"error_class", "dependency_failed")
+		logDiagnosticResult(ctx, logger, "database_connectivity", observability.OutcomeFailed, observability.ErrorClass(err))
+		logDiagnosticResult(ctx, logger, "database_schema", observability.OutcomeSkipped, "dependency_failed")
 	} else {
-		logDiagnosticResult(logger, "database_connectivity", observability.OutcomeSuccess, "none")
+		logDiagnosticResult(ctx, logger, "database_connectivity", observability.OutcomeSuccess, "none")
 		status, schemaErr := postgres.InspectSchema(ctx, pool)
 		if schemaErr != nil {
 			failed = true
-			logDiagnosticResult(logger, "database_schema", observability.OutcomeFailed, observability.ErrorClass(schemaErr))
+			logDiagnosticResult(ctx, logger, "database_schema", observability.OutcomeFailed, observability.ErrorClass(schemaErr))
 		} else {
 			outcome := observability.OutcomeSuccess
 			if !status.Compatible() {
@@ -69,10 +65,12 @@ func diagnose(parent context.Context, cfg Config, logger *slog.Logger) error {
 	if cfg.RedisURL != "" {
 		if err := liveevents.CheckRedis(ctx, cfg.RedisURL, cfg.RedisPassword, cfg.RedisCACertificate); err != nil {
 			failed = true
-			logDiagnosticResult(logger, "live_event_redis", observability.OutcomeFailed, observability.ErrorClass(err))
+			logDiagnosticResult(ctx, logger, "live_event_redis", observability.OutcomeFailed, observability.ErrorClass(err))
 		} else {
-			logDiagnosticResult(logger, "live_event_redis", observability.OutcomeSuccess, "none")
+			logDiagnosticResult(ctx, logger, "live_event_redis", observability.OutcomeSuccess, "none")
 		}
+	} else {
+		logDiagnosticResult(ctx, logger, "live_event_redis", observability.OutcomeSkipped, "not_configured")
 	}
 
 	if cfg.CloudTasks.Queue != "" {
@@ -83,10 +81,12 @@ func diagnose(parent context.Context, cfg Config, logger *slog.Logger) error {
 		}
 		if err != nil {
 			failed = true
-			logDiagnosticResult(logger, "cloud_tasks_queue", observability.OutcomeFailed, observability.ErrorClass(err))
+			logDiagnosticResult(ctx, logger, "cloud_tasks_queue", observability.OutcomeFailed, observability.ErrorClass(err))
 		} else {
-			logDiagnosticResult(logger, "cloud_tasks_queue", observability.OutcomeSuccess, "none")
+			logDiagnosticResult(ctx, logger, "cloud_tasks_queue", observability.OutcomeSuccess, "none")
 		}
+	} else {
+		logDiagnosticResult(ctx, logger, "cloud_tasks_queue", observability.OutcomeSkipped, "not_configured")
 	}
 
 	if failed {
@@ -95,8 +95,8 @@ func diagnose(parent context.Context, cfg Config, logger *slog.Logger) error {
 	return nil
 }
 
-func logDiagnosticResult(logger *slog.Logger, component, outcome, errorClass string) {
-	logger.LogAttrs(context.Background(), diagnosticLevel(outcome), "diagnostic check",
+func logDiagnosticResult(ctx context.Context, logger *slog.Logger, component, outcome, errorClass string) {
+	logger.LogAttrs(ctx, diagnosticLevel(outcome), "diagnostic check",
 		slog.String("event", observability.EventDiagnosticCheck),
 		slog.String("component", component),
 		slog.String("outcome", outcome),
@@ -104,7 +104,7 @@ func logDiagnosticResult(logger *slog.Logger, component, outcome, errorClass str
 }
 
 func diagnosticLevel(outcome string) slog.Level {
-	if outcome == observability.OutcomeSuccess {
+	if outcome == observability.OutcomeSuccess || outcome == observability.OutcomeSkipped {
 		return slog.LevelInfo
 	}
 	return slog.LevelWarn

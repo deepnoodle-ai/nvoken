@@ -163,8 +163,13 @@ func Run(ctx context.Context, cfg Config) error {
 			pool.Close()
 		}
 	}()
-	if err := postgres.CheckSchema(ctx, pool); err != nil {
-		logProcessStartFailure("database_schema", "incompatible")
+	schemaStatus, err := postgres.InspectSchema(ctx, pool)
+	if err != nil {
+		logProcessStartFailure("database_schema", observability.ErrorClass(err))
+		return fmt.Errorf("inspect runtime database schema: %w", err)
+	}
+	if err := schemaStatus.CompatibilityError(); err != nil {
+		logSchemaProcessStartFailure(schemaStatus)
 		return fmt.Errorf("check runtime database schema: %w", err)
 	}
 
@@ -454,6 +459,16 @@ func logProcessStartFailure(check, errorClass string) {
 		"event", observability.EventProcessStartFailed,
 		"check", check,
 		"error_class", errorClass)
+}
+
+func logSchemaProcessStartFailure(status postgres.SchemaStatus) {
+	slog.Error("process startup check failed",
+		"event", observability.EventProcessStartFailed,
+		"check", "database_schema",
+		"error_class", status.State,
+		"schema_version", status.Current,
+		"expected_schema_version", status.Expected,
+		"dirty", status.Dirty)
 }
 
 type inProcessLiveBus struct {

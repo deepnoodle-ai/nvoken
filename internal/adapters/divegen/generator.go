@@ -127,7 +127,9 @@ func classifiedProviderCallError(err error) error {
 	switch {
 	case errors.Is(err, ports.ErrProviderUnsupported), errors.Is(err, ports.ErrProviderKeyMissing), errors.Is(err, ports.ErrCredentialUnavailable):
 		class = ports.ProviderFailureConfiguration
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+	case errors.Is(err, context.Canceled):
+		class = ports.ProviderFailureCanceled
+	case errors.Is(err, context.DeadlineExceeded):
 		class = ports.ProviderFailureTimeoutOrTransport
 	case errors.As(err, &statusError):
 		statusCode := statusError.StatusCode()

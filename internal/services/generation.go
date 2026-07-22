@@ -923,7 +923,7 @@ func generationErrorClass(err error) string {
 	}
 	switch {
 	case errors.Is(err, context.Canceled):
-		return "canceled"
+		return string(ports.ProviderFailureCanceled)
 	case errors.Is(err, context.DeadlineExceeded):
 		return string(ports.ProviderFailureTimeoutOrTransport)
 	case errors.Is(err, ports.ErrCredentialUnavailable):
