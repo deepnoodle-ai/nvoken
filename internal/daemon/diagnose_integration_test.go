@@ -57,7 +57,28 @@ func TestDiagnoseReportsEverySchemaVerdictWithoutMutation(t *testing.T) {
 			name:    "behind",
 			migrate: true,
 			mutate: func(ctx context.Context, pool *pgxpool.Pool) error {
-				_, err := pool.Exec(ctx, "UPDATE nvoken_schema_migrations SET version = $1", expected-1)
+				// Mirror the exact rows the previous release's final
+				// migration leaves behind, compatibility row included.
+				declarations, _, err := postgres.EmbeddedMigrationCompatibility()
+				if err != nil {
+					return err
+				}
+				previous := postgres.MigrationCompatibility{}
+				for _, declaration := range declarations {
+					if declaration.SchemaVersion == expected-1 {
+						previous = declaration
+					}
+				}
+				if previous.SchemaVersion == 0 {
+					return fmt.Errorf("no compatibility declaration for schema %06d", expected-1)
+				}
+				if _, err := pool.Exec(ctx, "UPDATE nvoken_schema_migrations SET version = $1", previous.SchemaVersion); err != nil {
+					return err
+				}
+				_, err = pool.Exec(ctx, `
+					UPDATE nvoken_schema_compatibility
+					SET schema_version = $1, minimum_binary_schema_version = $2
+				`, previous.SchemaVersion, previous.MinimumBinarySchemaVersion)
 				return err
 			},
 			wantState: postgres.SchemaBehind,

@@ -108,6 +108,13 @@ func (s *fakeGenerationStore) ListSessionMessages(context.Context, string) ([]do
 	return append([]domain.SessionMessage(nil), s.messages...), nil
 }
 
+func (s *fakeGenerationStore) ListSessionMessagesByInvocation(context.Context, string) ([]domain.SessionMessage, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return append([]domain.SessionMessage(nil), s.messages...), nil
+}
+
 func (*fakeGenerationStore) AppendSessionMessage(context.Context, domain.SessionMessage) error {
 	return errors.New("not used")
 }

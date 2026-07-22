@@ -85,6 +85,31 @@ func TestConformance(t *testing.T) {
 		t.Fatalf("message cursor page: %#v err=%v", messagePage, err)
 	}
 
+	composed, err := handle.Result(context.Background())
+	if err != nil || composed.Invocation.ID != conformanceInvocationID || composed.Invocation.Status != InvocationCompleted {
+		t.Fatalf("composed result: %#v err=%v", composed, err)
+	}
+	if len(composed.Messages) != 2 || composed.OutputText == nil || *composed.OutputText != "world" {
+		t.Fatalf("composed result payload: %#v", composed)
+	}
+	if composed.Messages[0].Role != "user" || composed.Messages[1].Role != "assistant" {
+		t.Fatalf("composed result roles: %#v", composed.Messages)
+	}
+	if composed.Invocation.StructuredOutput == nil || (*composed.Invocation.StructuredOutput)["answer"] != "world" {
+		t.Fatalf("composed structured output: %#v", composed.Invocation.StructuredOutput)
+	}
+	if composed.Invocation.StructuredOutputProvenance == nil || composed.Invocation.StructuredOutputProvenance.Source != "tool_call" {
+		t.Fatalf("composed structured output provenance: %#v", composed.Invocation.StructuredOutputProvenance)
+	}
+	text, err := handle.Text(context.Background())
+	if err != nil || text != *composed.OutputText {
+		t.Fatalf("handle text = %q, want the wire output_text; err=%v", text, err)
+	}
+	handleMessages, err := handle.ListMessages(context.Background())
+	if err != nil || len(handleMessages) != 2 {
+		t.Fatalf("handle messages: %#v err=%v", handleMessages, err)
+	}
+
 	result, err := handle.SubmitToolResults(context.Background(), []ToolResult{{
 		ToolCallID: conformanceToolCallID,
 		Content:    map[string]any{"ok": true},

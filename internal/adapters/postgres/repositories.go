@@ -837,6 +837,18 @@ func (s *Store) ListSessionMessages(ctx context.Context, sessionID string) ([]do
 	return messages, nil
 }
 
+func (s *Store) ListSessionMessagesByInvocation(ctx context.Context, invocationID string) ([]domain.SessionMessage, error) {
+	rows, err := s.q(ctx).ListSessionMessagesByInvocation(ctx, invocationID)
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]domain.SessionMessage, len(rows))
+	for i, row := range rows {
+		messages[i] = sessionMessageFromRow(row)
+	}
+	return messages, nil
+}
+
 func (s *Store) ListSessionMessagesForGeneration(ctx context.Context, sessionID string) ([]domain.SessionMessage, error) {
 	rows, err := s.q(ctx).ListSessionMessagesForGeneration(ctx, sessionID)
 	if err != nil {

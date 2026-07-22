@@ -410,6 +410,15 @@ impl Client {
             .map_err(|error| self.normalize_generated_error(error))
     }
 
+    pub async fn get_result(
+        &self,
+        invocation_id: &str,
+    ) -> Result<models::InvocationResult, NvokenError> {
+        apis::invocations_api::get_invocation_result(&self.configuration, invocation_id)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
     pub async fn cancel(&self, invocation_id: &str) -> Result<models::Invocation, NvokenError> {
         apis::invocations_api::cancel_invocation(&self.configuration, invocation_id)
             .await
@@ -550,6 +559,37 @@ impl Handle {
                 .await
                 .map_err(|_| NvokenError::timeout("local wait timed out"))?,
             None => future.await,
+        }
+    }
+
+    /// Reads the composed InvocationResult at any status: the authoritative
+    /// Invocation, this Invocation's canonical messages, and the output_text
+    /// projection.
+    pub async fn result(&mut self) -> Result<models::InvocationResult, NvokenError> {
+        let result = self.client.get_result(&self.invocation_id).await?;
+        self.status = result.invocation.status;
+        Ok(result)
+    }
+
+    /// Returns this Invocation's canonical messages from the composed result
+    /// read.
+    pub async fn list_messages(&mut self) -> Result<Vec<models::SessionMessage>, NvokenError> {
+        Ok(self.result().await?.messages)
+    }
+
+    /// Returns the completed turn's canonical assistant text. Fails with
+    /// an `unexpected_response` error when the wire `output_text` is null
+    /// or the empty string: the wire keeps those distinct, but this helper
+    /// deliberately treats both as "no useful answer". Read `result()`
+    /// directly to observe the distinction.
+    pub async fn text(&mut self) -> Result<String, NvokenError> {
+        let result = self.result().await?;
+        match result.output_text {
+            Some(text) if !text.is_empty() => Ok(text),
+            _ => Err(NvokenError::unexpected(format!(
+                "Invocation {} has no canonical assistant text",
+                self.invocation_id
+            ))),
         }
     }
 

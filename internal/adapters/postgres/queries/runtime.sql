@@ -573,6 +573,13 @@ FROM session_messages
 WHERE session_id = $1
 ORDER BY sequence;
 
+-- name: ListSessionMessagesByInvocation :many
+SELECT id, session_id, account_id, tenant_partition_id, agent_id,
+       invocation_id, sequence, role, content, created_at
+FROM session_messages
+WHERE invocation_id = $1
+ORDER BY sequence;
+
 -- name: ListSessionMessagesForGeneration :many
 SELECT message.id, message.session_id, message.account_id,
        message.tenant_partition_id, message.agent_id, message.invocation_id,

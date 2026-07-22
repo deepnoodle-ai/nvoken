@@ -137,7 +137,8 @@ Runtime surface:
 | ------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `POST` | `/v1/invocations`                 | Atomically admit one background Invocation and return its stable Agent, Session, and Invocation identity.          |
 | `GET`  | `/v1/invocations`                 | List authoritative Invocations with exact tenant, Session, Agent, and status filters.                              |
-| `GET`  | `/v1/invocations/{invocation_id}` | Read authoritative identity, lifecycle, terminal error, aggregate usage, model provenance, and validated output. |
+| `GET`  | `/v1/invocations/{invocation_id}` | Read authoritative identity, lifecycle, terminal error, aggregate usage, model provenance, and structured output. |
+| `GET`  | `/v1/invocations/{invocation_id}/result` | Read the composed result at any status: the authoritative Invocation, its canonical messages, and `output_text`. |
 | `POST` | `/v1/invocations/{invocation_id}/cancel` | Idempotently make nonterminal work cancelled and return the authoritative terminal row.                    |
 | `POST` | `/v1/invocations/{invocation_id}/tool-results` | Atomically accept a bounded batch of pending client ToolCall results and queue the Invocation when complete. |
 
@@ -463,14 +464,32 @@ POST /v1/invocations
   agent_id, session_id, invocation_id, status, deduplicated
 ```
 
+The answer is one read away. `GET /v1/invocations/{invocation_id}/result`
+returns the composed `InvocationResult` at any status: the authoritative
+Invocation, this Invocation's canonical messages composed at read time, and
+`output_text`, the assistant text blocks concatenated in transcript order.
+`output_text` is non-null only for a completed turn with assistant text; a
+schema-bearing turn reads `invocation.structured_output` instead. The
+Invocation and its messages come from one repeatable-read snapshot, so a
+terminal status never appears with a missing message tail.
+
+```text
+POST /v1/invocations            -> 202 invocation_id
+GET  /v1/invocations/{invocation_id}/result   (after wait)
+  -> { invocation, messages, output_text }
+print output_text
+```
+
 Recovery requires only durable IDs:
 
 ```text
 GET /v1/invocations/{invocation_id}
+GET /v1/invocations/{invocation_id}/result
 GET /v1/sessions/{session_id}
 ```
 
-No provisioning call precedes the first Invocation.
+The plain Invocation get stays the cheap status probe; the result read is the
+answer read. No provisioning call precedes the first Invocation.
 
 ## 12. Launch contract examples
 
@@ -554,3 +573,8 @@ request, the Invocation and lifecycle revision may carry that validated object
 plus its ToolCall/schema provenance for direct host consumption. The request
 and result messages remain the canonical replay record; no other assistant or
 tool content is copied into lifecycle state.
+
+The single-representation law governs storage, not reads. The composed result
+read and its `output_text` projection are computed from canonical rows at read
+time and persist nothing, so they add no second stored copy. Terminal
+structured output remains the only stored content projection.

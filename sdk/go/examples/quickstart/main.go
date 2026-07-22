@@ -33,5 +33,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	result, err := handle.Result(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("%s %s\n", invocation.ID, invocation.Status)
+	if result.OutputText != nil {
+		fmt.Printf("agent> %s\n", *result.OutputText)
+	}
 }

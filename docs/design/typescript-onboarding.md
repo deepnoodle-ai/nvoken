@@ -93,14 +93,17 @@ The facade adds:
 ```ts
 interface TextContentBlock { type: "text"; text: string }
 isTextContentBlock(block): block is TextContentBlock
+handle.result(): Promise<InvocationResult>
 handle.listMessages(): Promise<SessionMessage[]>
 handle.text(): Promise<string>
 ```
 
-Both handle methods page canonical Session messages and filter by the exact
-Invocation ID. `text()` joins assistant text blocks and reports an actionable client
-error when a completed Invocation has no assistant text. It does not cache or copy a
-result.
+All three handle methods are served by the one composed result read,
+`GET /v1/invocations/{invocation_id}/result`, which returns the authoritative
+Invocation, this Invocation's canonical messages, and the wire `output_text`
+projection. `text()` returns `output_text` and reports an actionable client
+error when the Invocation has no canonical assistant text. Nothing is cached
+or copied; the projection is computed from canonical rows at read time.
 
 The quickstart requires `NVOKEN_API_KEY`, `NVOKEN_PROVIDER`, and `NVOKEN_MODEL`, uses
 bounded output/iteration limits without an estimated-cost cap, performs two turns,

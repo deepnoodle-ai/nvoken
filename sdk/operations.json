@@ -22,6 +22,11 @@
       "path": "/v1/invocations/{invocation_id}"
     },
     {
+      "operation_id": "getInvocationResult",
+      "method": "GET",
+      "path": "/v1/invocations/{invocation_id}/result"
+    },
+    {
       "operation_id": "getModelPricingCapability",
       "method": "GET",
       "path": "/v1/model-pricing-capabilities"

@@ -107,7 +107,10 @@ POST /v1/invocations
 
 The first contract is background execution: acknowledgement follows durable
 admission, execution does not belong to the request handler, and clients recover
-authoritative state by durable ID or a scope-bound cursor. A Session SSE stream
+authoritative state by durable ID or a scope-bound cursor. The answer is one
+read away: `GET /v1/invocations/{invocation_id}/result` returns the
+authoritative Invocation, the turn's canonical messages, and the assistant text
+as one `output_text` string. A Session SSE stream
 replays that same cursor model and adds id-less token previews; disconnecting it
 never affects execution. Hosts can bound or idempotently cancel accepted work;
 Postgres decides the terminal winner. If an execution owner is lost, the same

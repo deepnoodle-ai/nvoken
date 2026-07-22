@@ -312,3 +312,36 @@ serve; dirty, behind, unknown, and declared-unsafe schemas fail closed. The
 guarantee starts after the transition release and covers only the immediately
 previous production binary. There are no down migrations or arbitrary
 historical downgrade claims.
+
+32. Read-time composition clarifies the single-representation law
+(2026-07-22): decisions 14 and 26 govern storage, not reads. Composing a
+projection over canonical `SessionMessage` rows at read time stores nothing
+and is therefore permitted; equality-proven terminal structured output remains
+the only stored content projection. The composed result read,
+`GET /v1/invocations/{invocation_id}/result`, returns one slim
+`InvocationResult` at any status: the authoritative Invocation, every
+canonical message this Invocation owns in ascending sequence, and
+`output_text`, the assistant text blocks concatenated in transcript order
+without separators. `output_text` is non-null only for a completed Invocation
+with at least one assistant text block; failed and cancelled turns keep their
+messages readable as evidence while `output_text` stays null, so evidence
+never masquerades as successful output. The Invocation row and its messages
+are read in one repeatable-read snapshot, so the payload cannot pair a
+terminal status with a missing message tail. This object is the one result
+model; later delivery modes (server-side wait, streaming terminal frames)
+carry it rather than defining siblings.
+
+33. Pre-freeze rename of the structured-output read fields (2026-07-22):
+`Invocation.output` and `Invocation.output_provenance` are renamed
+`structured_output` and `structured_output_provenance`, and the same two
+fields on `InvocationChange`, across every representation that embeds them:
+reads, lists, conflict details, the fixed-cut transcript snapshot, and SSE
+frames. Reserving the word "output" for structured JSON alone implied that
+text turns produced nothing, the exact asymmetry the result model removes.
+This is a deliberate breaking wire revision landed before freeze while the
+adopter count is low; no compatibility alias is served, and stale generated
+clients fail the SDK drift checks. The request-side `spec.output` declaration
+is untouched because it participates in fingerprint canonicalization; its
+naming belongs to the pre-freeze naming sweep with a fingerprint version.
+Internal database columns and Go identifiers may keep their names; this is a
+wire-contract rename.

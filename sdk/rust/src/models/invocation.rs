@@ -32,10 +32,13 @@ pub struct Invocation {
     #[serde(rename = "provenance", deserialize_with = "Option::deserialize")]
     pub provenance: Option<Box<models::ModelProvenance>>,
     /// Server-validated terminal object for a schema-bearing Invocation. Null until successful terminal settlement and always null when no output contract was admitted.
-    #[serde(rename = "output", deserialize_with = "Option::deserialize")]
-    pub output: Option<std::collections::HashMap<String, serde_json::Value>>,
-    #[serde(rename = "output_provenance", deserialize_with = "Option::deserialize")]
-    pub output_provenance: Option<Box<models::StructuredOutputProvenance>>,
+    #[serde(rename = "structured_output", deserialize_with = "Option::deserialize")]
+    pub structured_output: Option<std::collections::HashMap<String, serde_json::Value>>,
+    #[serde(
+        rename = "structured_output_provenance",
+        deserialize_with = "Option::deserialize"
+    )]
+    pub structured_output_provenance: Option<Box<models::StructuredOutputProvenance>>,
     #[serde(rename = "budgets")]
     pub budgets: Box<models::InvocationBudgets>,
     #[serde(rename = "active_execution_ms")]
@@ -62,8 +65,8 @@ impl Invocation {
         error: Option<models::InvocationFailure>,
         usage: Option<models::ModelUsage>,
         provenance: Option<models::ModelProvenance>,
-        output: Option<std::collections::HashMap<String, serde_json::Value>>,
-        output_provenance: Option<models::StructuredOutputProvenance>,
+        structured_output: Option<std::collections::HashMap<String, serde_json::Value>>,
+        structured_output_provenance: Option<models::StructuredOutputProvenance>,
         budgets: models::InvocationBudgets,
         active_execution_ms: u32,
         wall_clock_deadline_at: chrono::DateTime<chrono::FixedOffset>,
@@ -91,8 +94,8 @@ impl Invocation {
             } else {
                 None
             },
-            output,
-            output_provenance: if let Some(x) = output_provenance {
+            structured_output,
+            structured_output_provenance: if let Some(x) = structured_output_provenance {
                 Some(Box::new(x))
             } else {
                 None

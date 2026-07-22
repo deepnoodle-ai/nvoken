@@ -41,6 +41,7 @@ type fakeRuntime struct {
 	ack              services.InvocationAcknowledgement
 	toolResults      services.SubmitClientToolResultsResult
 	invocation       services.InvocationRead
+	invocationResult services.InvocationResultRead
 	session          services.SessionRead
 	invocations      services.InvocationList
 	sessions         services.SessionList
@@ -112,6 +113,10 @@ func (f *fakeRuntime) Admit(_ context.Context, _ domain.RuntimeAuthContext, inpu
 
 func (f *fakeRuntime) GetInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error) {
 	return f.invocation, f.err
+}
+
+func (f *fakeRuntime) GetInvocationResult(context.Context, domain.RuntimeAuthContext, string) (services.InvocationResultRead, error) {
+	return f.invocationResult, f.err
 }
 
 func (f *fakeRuntime) CancelInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error) {
@@ -591,11 +596,146 @@ func TestInvocationReadAndTranscriptProjectStructuredOutput(t *testing.T) {
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("GET %s = %d: %s", target, recorder.Code, recorder.Body.String())
 		}
-		if !strings.Contains(recorder.Body.String(), `"output":{"answer":"yes"}`) ||
+		if !strings.Contains(recorder.Body.String(), `"structured_output":{"answer":"yes"}`) ||
 			!strings.Contains(recorder.Body.String(), `"source":"tool_call"`) {
 			t.Fatalf("GET %s omitted structured output: %s", target, recorder.Body.String())
 		}
+		for _, object := range renamedOutputObjects(t, target, recorder.Body.Bytes()) {
+			for _, stale := range []string{"output", "output_provenance"} {
+				if _, ok := object[stale]; ok {
+					t.Fatalf("GET %s still serves %q: %s", target, stale, recorder.Body.String())
+				}
+			}
+			for _, renamed := range []string{"structured_output", "structured_output_provenance"} {
+				if _, ok := object[renamed]; !ok {
+					t.Fatalf("GET %s omitted %q: %s", target, renamed, recorder.Body.String())
+				}
+			}
+		}
 	}
+}
+
+// renamedOutputObjects returns every JSON object in the response that
+// carries the renamed structured-output fields, keyed for exact-name
+// assertions that cannot collide with the legitimate usage "output" key.
+func renamedOutputObjects(t *testing.T, target string, body []byte) []map[string]json.RawMessage {
+	t.Helper()
+	if strings.Contains(target, "/transcript") {
+		var payload struct {
+			InvocationChanges []map[string]json.RawMessage `json:"invocation_changes"`
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("decode transcript payload: %v", err)
+		}
+		return payload.InvocationChanges
+	}
+	var invocation map[string]json.RawMessage
+	if err := json.Unmarshal(body, &invocation); err != nil {
+		t.Fatalf("decode Invocation payload: %v", err)
+	}
+	return []map[string]json.RawMessage{invocation}
+}
+
+func TestInvocationResultUsesContractShape(t *testing.T) {
+	now := time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC)
+	text := "Hello!"
+	runtime := &fakeRuntime{
+		invocationResult: services.InvocationResultRead{
+			Invocation: services.InvocationRead{
+				ID:          testInvocationID,
+				AgentID:     testAgentID,
+				SessionID:   testSessionID,
+				Status:      domain.InvocationCompleted,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+				CompletedAt: &now,
+			},
+			Messages: []domain.SessionMessage{
+				{
+					ID:           "smsg_019b0a12-0000-7000-8000-000000000005",
+					SessionID:    testSessionID,
+					AgentID:      testAgentID,
+					InvocationID: testInvocationID,
+					Sequence:     1,
+					Role:         domain.MessageRoleUser,
+					Content:      json.RawMessage(`[{"type":"text","text":"Say hello."}]`),
+					CreatedAt:    now,
+				},
+				{
+					ID:           "smsg_019b0a12-0000-7000-8000-000000000006",
+					SessionID:    testSessionID,
+					AgentID:      testAgentID,
+					InvocationID: testInvocationID,
+					Sequence:     2,
+					Role:         domain.MessageRoleAssistant,
+					Content:      json.RawMessage(`[{"type":"text","text":"Hello!"}]`),
+					CreatedAt:    now,
+				},
+			},
+			OutputText: &text,
+		},
+	}
+	recorder := httptest.NewRecorder()
+	target := "/v1/invocations/" + testInvocationID + "/result"
+	testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, authenticatedRequest(http.MethodGet, target, nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET %s = %d: %s", target, recorder.Code, recorder.Body.String())
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode result payload: %v", err)
+	}
+	if len(payload) != 3 {
+		t.Fatalf("result payload has %d top-level fields, want exactly invocation, messages, output_text: %s", len(payload), recorder.Body.String())
+	}
+	for _, field := range []string{"invocation", "messages", "output_text"} {
+		if _, ok := payload[field]; !ok {
+			t.Fatalf("result payload lacks %q: %s", field, recorder.Body.String())
+		}
+	}
+	if !strings.Contains(recorder.Body.String(), `"structured_output":null`) ||
+		!strings.Contains(recorder.Body.String(), `"output_text":"Hello!"`) ||
+		!strings.Contains(recorder.Body.String(), `"sequence":1`) ||
+		!strings.Contains(recorder.Body.String(), `"sequence":2`) {
+		t.Fatalf("result payload is missing contract fragments: %s", recorder.Body.String())
+	}
+}
+
+func TestInvocationResultSerializesEmptyMessagesAndNullText(t *testing.T) {
+	now := time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC)
+	runtime := &fakeRuntime{
+		invocationResult: services.InvocationResultRead{
+			Invocation: services.InvocationRead{
+				ID:        testInvocationID,
+				AgentID:   testAgentID,
+				SessionID: testSessionID,
+				Status:    domain.InvocationQueued,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		},
+	}
+	recorder := httptest.NewRecorder()
+	target := "/v1/invocations/" + testInvocationID + "/result"
+	testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, authenticatedRequest(http.MethodGet, target, nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET %s = %d: %s", target, recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"messages":[]`) ||
+		!strings.Contains(recorder.Body.String(), `"output_text":null`) {
+		t.Fatalf("queued result must serialize empty messages and null text: %s", recorder.Body.String())
+	}
+}
+
+func TestInvocationResultMapsServiceErrors(t *testing.T) {
+	runtime := &fakeRuntime{err: &services.PublicError{Code: services.CodeNotFound, Message: "The requested resource was not found."}}
+	recorder := httptest.NewRecorder()
+	target := "/v1/invocations/" + testInvocationID + "/result"
+	testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, authenticatedRequest(http.MethodGet, target, nil))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("GET %s = %d, want 404: %s", target, recorder.Code, recorder.Body.String())
+	}
+	assertErrorEnvelope(t, recorder.Body.Bytes(), "not_found")
 }
 
 func TestInvocationRequestRejectsInvalidJSONBeforeService(t *testing.T) {

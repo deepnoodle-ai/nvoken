@@ -94,9 +94,7 @@ func TestVerifyRestoreRejectsUnsafeFixtures(t *testing.T) {
 		{
 			name: "incompatible schema",
 			prepare: func(t *testing.T, pool *pgxpool.Pool) {
-				if _, err := pool.Exec(context.Background(), "UPDATE nvoken_schema_migrations SET version = version - 1"); err != nil {
-					t.Fatal(err)
-				}
+				rewindToPreviousSchema(t, pool)
 			},
 			wantComponent: "database_schema",
 			wantClass:     "behind",
