@@ -38,7 +38,13 @@ if [[ -z "${TF_VAR_anthropic_api_key_secret_id:-}" && -z "${TF_VAR_openai_api_ke
   exit 1
 fi
 
-for nvoken_secret_id in "${TF_VAR_anthropic_api_key_secret_id:-}" "${TF_VAR_openai_api_key_secret_id:-}"; do
+if [[ -n "${TF_VAR_provider_credential_encryption_keys_secret_id:-}" && -z "${TF_VAR_provider_credential_active_key_id:-}" ]] ||
+   [[ -z "${TF_VAR_provider_credential_encryption_keys_secret_id:-}" && -n "${TF_VAR_provider_credential_active_key_id:-}" ]]; then
+  echo "set TF_VAR_provider_credential_encryption_keys_secret_id and TF_VAR_provider_credential_active_key_id together" >&2
+  exit 1
+fi
+
+for nvoken_secret_id in "${TF_VAR_anthropic_api_key_secret_id:-}" "${TF_VAR_openai_api_key_secret_id:-}" "${TF_VAR_provider_credential_encryption_keys_secret_id:-}"; do
   if [[ -n "${nvoken_secret_id}" ]]; then
     gcloud secrets versions describe latest \
       --secret="${nvoken_secret_id}" \

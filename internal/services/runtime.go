@@ -86,13 +86,41 @@ type StructuredOutputSpec struct {
 }
 
 type CreateInvocationInput struct {
-	AgentRef       string              `json:"agent_ref"`
-	TenantRef      *string             `json:"tenant_ref,omitempty"`
-	SessionID      *string             `json:"session_id,omitempty"`
-	SessionKey     *string             `json:"session_key,omitempty"`
-	IdempotencyKey string              `json:"idempotency_key"`
-	Input          InvocationInput     `json:"input"`
-	Spec           InlineExecutionSpec `json:"spec"`
+	AgentRef            string                        `json:"agent_ref"`
+	TenantRef           *string                       `json:"tenant_ref,omitempty"`
+	SessionID           *string                       `json:"session_id,omitempty"`
+	SessionKey          *string                       `json:"session_key,omitempty"`
+	IdempotencyKey      string                        `json:"idempotency_key"`
+	Input               InvocationInput               `json:"input"`
+	Spec                InlineExecutionSpec           `json:"spec"`
+	ProviderCredentials []ProviderCredentialSelection `json:"provider_credentials,omitempty"`
+}
+
+type ProviderCredentialSelection struct {
+	Provider      string                          `json:"provider"`
+	Source        domain.ProviderCredentialSource `json:"source"`
+	Credential    *ProviderStaticCredentialInput  `json:"credential,omitempty"`
+	credentialSet bool
+}
+
+func (s *ProviderCredentialSelection) UnmarshalJSON(payload []byte) error {
+	type wire ProviderCredentialSelection
+	var decoded wire
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		return err
+	}
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &members); err != nil {
+		return err
+	}
+	*s = ProviderCredentialSelection(decoded)
+	_, s.credentialSet = members["credential"]
+	return nil
 }
 
 type InvocationAcknowledgement struct {
@@ -146,6 +174,7 @@ type admissionStore interface {
 	ports.RecoveryRepository
 	ports.ExecutionDispatchRepository
 	ports.ToolCallRepository
+	ports.ProviderCredentialRepository
 }
 
 type InvocationExecutionMode string
@@ -156,17 +185,20 @@ const (
 )
 
 type RuntimeService struct {
-	store         admissionStore
-	txm           ports.TransactionManager
-	clock         ports.Clock
-	ids           ports.IDGenerator
-	signaller     ports.WorkSignaller
-	cancellations ports.CancellationSignaller
-	budgetPolicy  BudgetPolicy
-	logger        *slog.Logger
-	executionMode InvocationExecutionMode
-	dispatchQueue string
-	callbackTools bool
+	store                  admissionStore
+	txm                    ports.TransactionManager
+	clock                  ports.Clock
+	ids                    ports.IDGenerator
+	signaller              ports.WorkSignaller
+	cancellations          ports.CancellationSignaller
+	budgetPolicy           BudgetPolicy
+	logger                 *slog.Logger
+	executionMode          InvocationExecutionMode
+	dispatchQueue          string
+	callbackTools          bool
+	credentialPolicy       ProviderCredentialPolicy
+	credentialCipher       ports.CredentialCipher
+	credentialCleanupGrace time.Duration
 }
 
 type RuntimeOption func(*RuntimeService)
@@ -202,6 +234,30 @@ func WithCallbackTools(enabled bool) RuntimeOption {
 	return func(service *RuntimeService) { service.callbackTools = enabled }
 }
 
+type CredentialDeploymentMode string
+
+const (
+	CredentialDeploymentSelfHosted CredentialDeploymentMode = "self_hosted"
+	CredentialDeploymentCloud      CredentialDeploymentMode = "cloud"
+)
+
+type ProviderCredentialPolicy struct {
+	DeploymentMode CredentialDeploymentMode
+	DefaultSource  domain.ProviderCredentialSource
+}
+
+func WithProviderCredentialPolicy(
+	policy ProviderCredentialPolicy,
+	cipher ports.CredentialCipher,
+	cleanupGrace time.Duration,
+) RuntimeOption {
+	return func(service *RuntimeService) {
+		service.credentialPolicy = policy
+		service.credentialCipher = cipher
+		service.credentialCleanupGrace = cleanupGrace
+	}
+}
+
 func NewRuntimeService(
 	store admissionStore,
 	txm ports.TransactionManager,
@@ -213,6 +269,11 @@ func NewRuntimeService(
 		store: store, txm: txm, clock: clock, ids: ids,
 		budgetPolicy: DefaultBudgetPolicy(), logger: slog.Default(),
 		executionMode: InvocationExecutionEmbedded,
+		credentialPolicy: ProviderCredentialPolicy{
+			DeploymentMode: CredentialDeploymentSelfHosted,
+			DefaultSource:  domain.ProviderCredentialSourceInstallationBYOK,
+		},
+		credentialCleanupGrace: 5 * time.Minute,
 	}
 	for _, option := range options {
 		if option != nil {
@@ -276,6 +337,43 @@ func ValidateCreateInvocation(input CreateInvocationInput) error {
 	if err := validateClientTools(input.Spec.Tools); err != nil {
 		return err
 	}
+	provider, ok := CanonicalModelProvider(input.Spec.Model.Provider)
+	if !ok {
+		return invalidRequest("spec.model.provider is not supported.")
+	}
+	seenProviders := make(map[string]struct{}, len(input.ProviderCredentials))
+	if input.ProviderCredentials != nil && len(input.ProviderCredentials) != 1 {
+		return invalidRequest("provider_credentials must contain exactly one selection when supplied.")
+	}
+	for index, selection := range input.ProviderCredentials {
+		canonical, ok := CanonicalModelProvider(selection.Provider)
+		if !ok {
+			return invalidRequest(fmt.Sprintf("provider_credentials[%d].provider is not supported.", index))
+		}
+		if _, duplicate := seenProviders[canonical]; duplicate {
+			return invalidRequest("provider_credentials contains duplicate provider aliases.")
+		}
+		seenProviders[canonical] = struct{}{}
+		if canonical != provider {
+			return invalidRequest(fmt.Sprintf("provider_credentials[%d] is not used by spec.model.provider.", index))
+		}
+		if selection.Source != domain.ProviderCredentialSourceCallerEphemeral &&
+			selection.Source != domain.ProviderCredentialSourceAccountBYOK &&
+			selection.Source != domain.ProviderCredentialSourceTenantBYOK &&
+			selection.Source != domain.ProviderCredentialSourcePlatform {
+			return invalidRequest(fmt.Sprintf("provider_credentials[%d].source is invalid.", index))
+		}
+		if selection.Source == domain.ProviderCredentialSourceCallerEphemeral {
+			if selection.Credential == nil {
+				return invalidRequest(fmt.Sprintf("provider_credentials[%d].credential is required for caller_ephemeral.", index))
+			}
+			if err := validateProviderAPIKey(selection.Credential.APIKey); err != nil {
+				return err
+			}
+		} else if selection.Credential != nil || selection.credentialSet {
+			return invalidRequest(fmt.Sprintf("provider_credentials[%d].credential is valid only for caller_ephemeral.", index))
+		}
+	}
 	return nil
 }
 
@@ -296,7 +394,12 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 	if err := authorize(auth, domain.OperationCreateInvocation); err != nil {
 		return InvocationAcknowledgement{}, err
 	}
+	rawInput := input
 	if err := ValidateCreateInvocation(input); err != nil {
+		return InvocationAcknowledgement{}, err
+	}
+	input = canonicalCreateInvocation(input)
+	if err := s.validateCredentialSelection(input); err != nil {
 		return InvocationAcknowledgement{}, err
 	}
 	if hasCallbackTools(input.Spec.Tools) && !s.callbackTools {
@@ -323,7 +426,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 		}
 	}
-	fingerprint, err := InvocationFingerprintV5(input)
+	fingerprint, err := InvocationFingerprintV6(input)
 	if err != nil {
 		return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 	}
@@ -354,7 +457,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			if err := s.store.LockInvocationAdmissionKey(txCtx, invocationAdmissionLockKey(account.ID, partition.ID, agent.ID, input.IdempotencyKey)); err != nil {
 				return err
 			}
-			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, input, fingerprint); err != nil {
+			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, rawInput, input, fingerprint); err != nil {
 				return err
 			} else if found {
 				acknowledgement = acknowledgementFor(existing, true)
@@ -372,7 +475,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			if session.AccountID != account.ID || session.TenantPartitionID != partition.ID || session.AgentID != agent.ID {
 				return notFound()
 			}
-			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, input, fingerprint); err != nil {
+			if existing, found, err := s.findIdempotent(txCtx, account.ID, partition.ID, agent.ID, input.IdempotencyKey, rawInput, input, fingerprint); err != nil {
 				return err
 			} else if found {
 				acknowledgement = acknowledgementFor(existing, true)
@@ -424,7 +527,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 				SpecSnapshotID:         snapshot.ID,
 				IdempotencyKey:         input.IdempotencyKey,
 				RequestFingerprint:     fingerprint[:],
-				FingerprintVersion:     5,
+				FingerprintVersion:     6,
 				Status:                 domain.InvocationQueued,
 				CurrentStateRevision:   revision,
 				WallClockTimeoutMS:     resolvedBudgets.WallClockTimeout.Milliseconds(),
@@ -465,6 +568,20 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 				return err
 			}
 			if err := s.store.CreateInvocation(txCtx, invocation); err != nil {
+				return err
+			}
+			binding, err := s.invocationProviderCredentialBinding(
+				txCtx,
+				invocation,
+				partition,
+				input,
+				ids.binding,
+				now,
+			)
+			if err != nil {
+				return err
+			}
+			if err := s.store.CreateInvocationProviderCredential(txCtx, binding); err != nil {
 				return err
 			}
 			if err := s.store.AppendSessionMessage(txCtx, message); err != nil {
@@ -708,6 +825,9 @@ func (s *RuntimeService) ready() error {
 	if s.executionMode == InvocationExecutionCloudTasks && strings.TrimSpace(s.dispatchQueue) == "" {
 		return &PublicError{Code: CodeUnavailable, Message: "The service is temporarily unavailable."}
 	}
+	if err := validateProviderCredentialPolicy(s.credentialPolicy); err != nil {
+		return &PublicError{Code: CodeUnavailable, Message: "The service is temporarily unavailable.", Cause: err}
+	}
 	return nil
 }
 
@@ -733,6 +853,7 @@ func invocationAdmissionLockKey(accountID, partitionID, agentID, idempotencyKey 
 func (s *RuntimeService) findIdempotent(
 	ctx context.Context,
 	accountID, partitionID, agentID, key string,
+	legacyInput CreateInvocationInput,
 	input CreateInvocationInput,
 	fingerprint [sha256.Size]byte,
 ) (domain.Invocation, bool, error) {
@@ -746,48 +867,62 @@ func (s *RuntimeService) findIdempotent(
 	expected := fingerprint[:]
 	switch existing.FingerprintVersion {
 	case 1:
-		if input.Spec.Budgets != nil || input.Spec.Output != nil || len(input.Spec.Tools) != 0 {
+		if legacyInput.Spec.Budgets != nil || legacyInput.Spec.Output != nil || len(legacyInput.Spec.Tools) != 0 || legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
 		}
-		legacy, legacyErr := InvocationFingerprintV1(input)
+		legacy, legacyErr := InvocationFingerprintV1(legacyInput)
 		if legacyErr != nil {
 			return domain.Invocation{}, false, legacyErr
 		}
 		expected = legacy[:]
 	case 2:
-		if input.Spec.Output != nil || len(input.Spec.Tools) != 0 {
+		if legacyInput.Spec.Output != nil || len(legacyInput.Spec.Tools) != 0 || legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
 		}
-		legacy, legacyErr := InvocationFingerprintV2(input)
+		legacy, legacyErr := InvocationFingerprintV2(legacyInput)
 		if legacyErr != nil {
 			return domain.Invocation{}, false, legacyErr
 		}
 		expected = legacy[:]
 	case 3:
-		if len(input.Spec.Tools) != 0 {
+		if len(legacyInput.Spec.Tools) != 0 || legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{
 				Code:    CodeIdempotencyConflict,
 				Message: "The idempotency key was already used with a different request.",
 			}
 		}
-		legacy, legacyErr := InvocationFingerprintV3(input)
+		legacy, legacyErr := InvocationFingerprintV3(legacyInput)
 		if legacyErr != nil {
 			return domain.Invocation{}, false, legacyErr
 		}
 		expected = legacy[:]
 	case 4:
-		if hasCallbackTools(input.Spec.Tools) {
+		if hasCallbackTools(legacyInput.Spec.Tools) || legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{
 				Code:    CodeIdempotencyConflict,
 				Message: "The idempotency key was already used with a different request.",
 			}
 		}
-		legacy, legacyErr := InvocationFingerprintV4(input)
+		legacy, legacyErr := InvocationFingerprintV4(legacyInput)
 		if legacyErr != nil {
 			return domain.Invocation{}, false, legacyErr
 		}
 		expected = legacy[:]
 	case 5:
+		if legacyInput.ProviderCredentials != nil {
+			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
+		}
+		legacy, legacyErr := InvocationFingerprintV5(legacyInput)
+		if legacyErr != nil {
+			return domain.Invocation{}, false, legacyErr
+		}
+		expected = legacy[:]
+	case 6:
+		provider := input.Spec.Model.Provider
+		binding, bindingErr := s.store.GetInvocationProviderCredential(ctx, existing.ID, provider)
+		if bindingErr != nil || binding.InvocationID != existing.ID || binding.Provider != provider {
+			return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
+		}
 	default:
 		return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
 	}
@@ -800,7 +935,7 @@ func (s *RuntimeService) findIdempotent(
 	return existing, true, nil
 }
 
-type admissionIDs struct{ snapshot, invocation, message, state, dispatch string }
+type admissionIDs struct{ snapshot, invocation, message, state, dispatch, binding string }
 
 func (s *RuntimeService) newAdmissionIDs(includeDispatch bool) (admissionIDs, error) {
 	var ids admissionIDs
@@ -815,6 +950,9 @@ func (s *RuntimeService) newAdmissionIDs(includeDispatch bool) (admissionIDs, er
 		return ids, err
 	}
 	if ids.state, err = s.ids.NewID(domain.PrefixInvocationState); err != nil {
+		return ids, err
+	}
+	if ids.binding, err = s.ids.NewID(domain.PrefixInvocationProviderCredential); err != nil {
 		return ids, err
 	}
 	if includeDispatch {

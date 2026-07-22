@@ -209,6 +209,9 @@ func (e *GenerationExecutor) Execute(
 			ServedModel:          recovery.Provenance.ServedModel,
 			MessagesCheckpointed: true,
 			ExternalToolsPending: true,
+			CredentialSource:     domain.ProviderCredentialSource(recovery.Provenance.CredentialSource),
+			ProviderCredentialID: recovery.Provenance.ProviderCredentialID,
+			CredentialVersionID:  recovery.Provenance.CredentialVersionID,
 		}
 	} else if recovery.Final {
 		response = domain.GenerationResponse{
@@ -217,6 +220,9 @@ func (e *GenerationExecutor) Execute(
 			MessagesCheckpointed:    true,
 			StructuredOutput:        recovery.Resume.StructuredOutput,
 			StructuredOutputFailure: recovery.Resume.StructuredOutputFailure,
+			CredentialSource:        domain.ProviderCredentialSource(recovery.Provenance.CredentialSource),
+			ProviderCredentialID:    recovery.Provenance.ProviderCredentialID,
+			CredentialVersionID:     recovery.Provenance.CredentialVersionID,
 		}
 	} else {
 		if request.Resume != nil {
@@ -239,7 +245,9 @@ func (e *GenerationExecutor) Execute(
 		}
 		if providerCalled &&
 			!errors.Is(err, ports.ErrGenerationInputInvalid) &&
-			!errors.Is(err, ports.ErrGenerationRecoveryInvalid) {
+			!errors.Is(err, ports.ErrGenerationRecoveryInvalid) &&
+			!errors.Is(err, ports.ErrCredentialUnavailable) &&
+			!errors.Is(err, ports.ErrRetryable) {
 			e.logProviderFailure(
 				claim,
 				class,
@@ -254,6 +262,18 @@ func (e *GenerationExecutor) Execute(
 		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return domain.InvocationExecutionResult{}, err
+		}
+		if errors.Is(err, ports.ErrRetryable) {
+			return domain.InvocationExecutionResult{}, err
+		}
+		if errors.Is(err, ports.ErrCredentialUnavailable) {
+			e.logFailure(claim, class, request.Provider, request.Model)
+			if !response.CredentialSource.Valid() && recovery.Provenance.CredentialSource != "" {
+				response.CredentialSource = domain.ProviderCredentialSource(recovery.Provenance.CredentialSource)
+				response.ProviderCredentialID = recovery.Provenance.ProviderCredentialID
+				response.CredentialVersionID = recovery.Provenance.CredentialVersionID
+			}
+			return credentialUnavailableGenerationFailure(request, response), nil
 		}
 		if errors.Is(err, ports.ErrGenerationInputInvalid) ||
 			errors.Is(err, ports.ErrGenerationRecoveryInvalid) {
@@ -280,12 +300,7 @@ func (e *GenerationExecutor) Execute(
 		)
 		providerCalled = false
 	}
-	provenance := &domain.ModelProvenance{
-		Provider:         request.Provider,
-		RequestedModel:   request.Model,
-		ServedModel:      servedModel,
-		CredentialSource: credentialSourceInstallationBYOK,
-	}
+	provenance := generationProvenance(request, response, servedModel)
 	if response.ExternalToolsPending {
 		result := domain.InvocationExecutionResult{
 			Status:               domain.InvocationWaiting,
@@ -872,8 +887,16 @@ func validateModelProvenance(provenance domain.ModelProvenance) error {
 			return fmt.Errorf("model provenance %s is invalid", name)
 		}
 	}
-	if provenance.CredentialSource != credentialSourceInstallationBYOK {
+	source := domain.ProviderCredentialSource(provenance.CredentialSource)
+	if !source.Valid() {
 		return fmt.Errorf("model provenance credential source is invalid")
+	}
+	if source == domain.ProviderCredentialSourceAccountBYOK || source == domain.ProviderCredentialSourceTenantBYOK {
+		if strings.TrimSpace(provenance.ProviderCredentialID) == "" || strings.TrimSpace(provenance.CredentialVersionID) == "" {
+			return fmt.Errorf("model provenance reusable credential identity is invalid")
+		}
+	} else if provenance.ProviderCredentialID != "" || provenance.CredentialVersionID != "" {
+		return fmt.Errorf("model provenance credential identity is not allowed")
 	}
 	return nil
 }
@@ -884,6 +907,10 @@ func generationErrorClass(err error) string {
 		return "provider_canceled"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "provider_deadline_exceeded"
+	case errors.Is(err, ports.ErrCredentialUnavailable):
+		return "credential_unavailable"
+	case errors.Is(err, ports.ErrRetryable):
+		return "retryable_infrastructure_failure"
 	case errors.Is(err, ports.ErrProviderUnsupported):
 		return "provider_unsupported"
 	case errors.Is(err, ports.ErrProviderKeyMissing):
@@ -911,4 +938,46 @@ func providerGenerationFailure() domain.InvocationExecutionResult {
 		Status: domain.InvocationFailed,
 		Error:  invocationFailure("provider_error", "The model provider could not complete the execution."),
 	}
+}
+
+func generationProvenance(
+	request domain.GenerationRequest,
+	response domain.GenerationResponse,
+	servedModel string,
+) *domain.ModelProvenance {
+	source := response.CredentialSource
+	if source == "" {
+		source = domain.ProviderCredentialSourceInstallationBYOK
+	}
+	return &domain.ModelProvenance{
+		Provider:             request.Provider,
+		RequestedModel:       request.Model,
+		ServedModel:          servedModel,
+		CredentialSource:     string(source),
+		ProviderCredentialID: response.ProviderCredentialID,
+		CredentialVersionID:  response.CredentialVersionID,
+	}
+}
+
+func credentialUnavailableGenerationFailure(
+	request domain.GenerationRequest,
+	response domain.GenerationResponse,
+) domain.InvocationExecutionResult {
+	result := domain.InvocationExecutionResult{
+		Status:               domain.InvocationFailed,
+		MessagesCheckpointed: response.MessagesCheckpointed,
+		Error:                invocationFailure("credential_unavailable", "The selected model credential is unavailable."),
+	}
+	if response.MessagesCheckpointed || response.Usage.Iterations > 0 || response.CredentialSource.Valid() {
+		usage := response.Usage
+		result.Usage = &usage
+	}
+	if response.CredentialSource.Valid() {
+		servedModel := response.ServedModel
+		if servedModel == "" {
+			servedModel = request.Model
+		}
+		result.Provenance = generationProvenance(request, response, servedModel)
+	}
+	return result
 }

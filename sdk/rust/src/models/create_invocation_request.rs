@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline client tools, callback tools, and structured output are included. Spec references and administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -32,6 +32,12 @@ pub struct CreateInvocationRequest {
     pub input: Box<models::InvocationInput>,
     #[serde(rename = "spec")]
     pub spec: Box<models::InlineExecutionSpec>,
+    /// Explicit nonsecret source selection for the spec model provider. Omission selects the deployment's configured default. The selection is stored outside the execution spec; only caller_ephemeral accepts secret material. Equal idempotent replay never replaces the original encrypted credential.
+    #[serde(
+        rename = "provider_credentials",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub provider_credentials: Option<Vec<models::InvocationProviderCredentialSelection>>,
 }
 
 impl CreateInvocationRequest {
@@ -49,6 +55,7 @@ impl CreateInvocationRequest {
             idempotency_key,
             input: Box::new(input),
             spec: Box::new(spec),
+            provider_credentials: None,
         }
     }
 }

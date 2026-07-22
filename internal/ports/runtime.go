@@ -10,25 +10,28 @@ import (
 )
 
 var (
-	ErrNotFound                  = errors.New("not found")
-	ErrUnauthenticated           = errors.New("unauthenticated")
-	ErrRetryable                 = errors.New("retryable database conflict")
-	ErrConcurrentAdmission       = errors.New("concurrent admission conflict")
-	ErrLeaseLost                 = errors.New("invocation lease lost")
-	ErrProviderUnsupported       = errors.New("model provider unsupported")
-	ErrProviderKeyMissing        = errors.New("model provider credential missing")
-	ErrGenerationFailed          = errors.New("model generation failed")
-	ErrGenerationInputInvalid    = errors.New("durable model generation input invalid")
-	ErrGenerationRecoveryInvalid = errors.New("durable generation recovery invalid")
-	ErrModelResponseInvalid      = errors.New("model response invalid")
-	ErrExecutionResultInvalid    = errors.New("invocation execution result invalid")
-	ErrDispatchLeaseLost         = errors.New("execution dispatch publication lease lost")
-	ErrTaskAlreadyExists         = errors.New("task already exists")
-	ErrDispatchAttemptActive     = errors.New("execution dispatch attempt already active")
-	ErrDispatchAttemptPending    = errors.New("execution dispatch attempt decision pending")
-	ErrToolCallConflict          = errors.New("tool call identity or outcome conflict")
-	ErrToolCallNotRunnable       = errors.New("tool call is not runnable")
-	ErrCallbackDeliveryLeaseLost = errors.New("callback delivery lease lost")
+	ErrNotFound                   = errors.New("not found")
+	ErrUnauthenticated            = errors.New("unauthenticated")
+	ErrRetryable                  = errors.New("retryable infrastructure failure")
+	ErrConcurrentAdmission        = errors.New("concurrent admission conflict")
+	ErrLeaseLost                  = errors.New("invocation lease lost")
+	ErrProviderUnsupported        = errors.New("model provider unsupported")
+	ErrProviderKeyMissing         = errors.New("model provider credential missing")
+	ErrCredentialUnavailable      = errors.New("model provider credential unavailable")
+	ErrPlatformFundingDenied      = errors.New("platform funding denied")
+	ErrProviderCredentialConflict = errors.New("model provider credential conflict")
+	ErrGenerationFailed           = errors.New("model generation failed")
+	ErrGenerationInputInvalid     = errors.New("durable model generation input invalid")
+	ErrGenerationRecoveryInvalid  = errors.New("durable generation recovery invalid")
+	ErrModelResponseInvalid       = errors.New("model response invalid")
+	ErrExecutionResultInvalid     = errors.New("invocation execution result invalid")
+	ErrDispatchLeaseLost          = errors.New("execution dispatch publication lease lost")
+	ErrTaskAlreadyExists          = errors.New("task already exists")
+	ErrDispatchAttemptActive      = errors.New("execution dispatch attempt already active")
+	ErrDispatchAttemptPending     = errors.New("execution dispatch attempt decision pending")
+	ErrToolCallConflict           = errors.New("tool call identity or outcome conflict")
+	ErrToolCallNotRunnable        = errors.New("tool call is not runnable")
+	ErrCallbackDeliveryLeaseLost  = errors.New("callback delivery lease lost")
 )
 
 // Clock makes persisted timestamps deterministic in services and tests.
@@ -142,6 +145,45 @@ type InvocationRepository interface {
 	CancelInvocation(context.Context, string, int64, time.Time) (domain.Invocation, error)
 	ReapInvocationDeadline(context.Context, string, int64, []byte, time.Time) (domain.Invocation, error)
 	FindQueuedInvocationWithoutActiveDispatchForUpdate(context.Context, time.Time) (domain.Invocation, error)
+}
+
+type ProviderCredentialListQuery struct {
+	AccountID         string
+	TenantPartitionID *string
+	Provider          *string
+	Scope             *domain.ProviderCredentialScope
+	Status            *domain.ProviderCredentialStatus
+	Limit             int
+}
+
+type ProviderCredentialRepository interface {
+	CreateProviderCredential(context.Context, domain.ProviderCredential) error
+	CreateProviderCredentialVersion(context.Context, domain.ProviderCredentialVersion) error
+	GetProviderCredential(context.Context, string) (domain.ProviderCredential, error)
+	GetProviderCredentialForUpdate(context.Context, string) (domain.ProviderCredential, error)
+	GetProviderCredentialVersion(context.Context, string) (domain.ProviderCredentialVersion, error)
+	GetProviderCredentialByCreateIdempotencyKey(context.Context, string, string) (domain.ProviderCredential, error)
+	GetProviderCredentialVersionByRotationIdempotencyKey(context.Context, string, string) (domain.ProviderCredentialVersion, error)
+	GetActiveProviderCredential(context.Context, string, *string, string) (domain.ProviderCredential, error)
+	ListProviderCredentials(context.Context, ProviderCredentialListQuery) ([]domain.ProviderCredential, error)
+	ActivateProviderCredentialVersion(context.Context, string, string, int, *time.Time, time.Time) (domain.ProviderCredential, error)
+	RevokeProviderCredential(context.Context, string, time.Time) (domain.ProviderCredential, error)
+	CreateInvocationProviderCredential(context.Context, domain.InvocationProviderCredential) error
+	GetInvocationProviderCredential(context.Context, string, string) (domain.InvocationProviderCredential, error)
+	ClearExpiredProviderCredentialMaterial(context.Context, time.Time, int) (int64, error)
+}
+
+type CredentialCipher interface {
+	Encrypt([]byte, []byte) (domain.EncryptedCredential, error)
+	Decrypt(domain.EncryptedCredential, []byte) ([]byte, error)
+}
+
+type ProviderCredentialResolver interface {
+	ResolveProviderCredential(context.Context, string, string) (domain.ResolvedProviderCredential, error)
+}
+
+type PlatformFundingGate interface {
+	AuthorizePlatformModelCall(context.Context, string, string, string, string) error
 }
 
 // RuntimeAuthenticator turns a presented bearer secret into the durable scope

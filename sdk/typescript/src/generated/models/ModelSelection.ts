@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline client tools, callback tools, and structured output are included. Spec references and administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { ModelProvider } from './ModelProvider.js';
+import {
+    ModelProviderFromJSON,
+    ModelProviderFromJSONTyped,
+    ModelProviderToJSON,
+    ModelProviderToJSONTyped,
+} from './ModelProvider.js';
+
 /**
  *
  * @export
@@ -21,10 +29,10 @@ import { mapValues } from '../runtime.js';
 export interface ModelSelection {
     /**
      *
-     * @type {string}
+     * @type {ModelProvider}
      * @memberof ModelSelection
      */
-    provider: string;
+    provider: ModelProvider;
     /**
      *
      * @type {string}
@@ -32,6 +40,8 @@ export interface ModelSelection {
      */
     name: string;
 }
+
+
 
 /**
  * Check if a given object implements the ModelSelection interface.
@@ -52,7 +62,7 @@ export function ModelSelectionFromJSONTyped(json: any, ignoreDiscriminator: bool
     }
     return {
 
-        'provider': json['provider'],
+        'provider': ModelProviderFromJSON(json['provider']),
         'name': json['name'],
     };
 }
@@ -68,7 +78,7 @@ export function ModelSelectionToJSONTyped(value?: ModelSelection | null, ignoreD
 
     return {
 
-        'provider': value['provider'],
+        'provider': ModelProviderToJSON(value['provider']),
         'name': value['name'],
     };
 }

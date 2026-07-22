@@ -7,26 +7,29 @@ import "strings"
 type StableIDPrefix string
 
 const (
-	PrefixAccount               StableIDPrefix = "acct"
-	PrefixTenantPartition       StableIDPrefix = "tprt"
-	PrefixAgent                 StableIDPrefix = "agnt"
-	PrefixSession               StableIDPrefix = "sesn"
-	PrefixExecutionSpecSnapshot StableIDPrefix = "spec"
-	PrefixSessionMessage        StableIDPrefix = "smsg"
-	PrefixInvocation            StableIDPrefix = "invk"
-	PrefixInvocationState       StableIDPrefix = "ivst"
-	PrefixToolCall              StableIDPrefix = "tcal"
-	PrefixToolCallAttempt       StableIDPrefix = "tcat"
-	PrefixModelUsageReceipt     StableIDPrefix = "usgr"
-	PrefixInvocationCheckpoint  StableIDPrefix = "icpt"
-	PrefixSyntheticDispatchWork StableIDPrefix = "synw"
-	PrefixExecutionDispatch     StableIDPrefix = "dsp"
-	PrefixCallbackDelivery      StableIDPrefix = "cbdy"
-	PrefixOperatorSubject       StableIDPrefix = "osub"
-	PrefixMembership            StableIDPrefix = "mbrs"
-	PrefixCredential            StableIDPrefix = "cred"
-	PrefixDeviceAuthorization   StableIDPrefix = "dvaa"
-	PrefixBrowserSession        StableIDPrefix = "brws"
+	PrefixAccount                      StableIDPrefix = "acct"
+	PrefixTenantPartition              StableIDPrefix = "tprt"
+	PrefixAgent                        StableIDPrefix = "agnt"
+	PrefixSession                      StableIDPrefix = "sesn"
+	PrefixExecutionSpecSnapshot        StableIDPrefix = "spec"
+	PrefixSessionMessage               StableIDPrefix = "smsg"
+	PrefixInvocation                   StableIDPrefix = "invk"
+	PrefixInvocationState              StableIDPrefix = "ivst"
+	PrefixToolCall                     StableIDPrefix = "tcal"
+	PrefixToolCallAttempt              StableIDPrefix = "tcat"
+	PrefixModelUsageReceipt            StableIDPrefix = "usgr"
+	PrefixInvocationCheckpoint         StableIDPrefix = "icpt"
+	PrefixSyntheticDispatchWork        StableIDPrefix = "synw"
+	PrefixExecutionDispatch            StableIDPrefix = "dsp"
+	PrefixCallbackDelivery             StableIDPrefix = "cbdy"
+	PrefixOperatorSubject              StableIDPrefix = "osub"
+	PrefixMembership                   StableIDPrefix = "mbrs"
+	PrefixCredential                   StableIDPrefix = "cred"
+	PrefixDeviceAuthorization          StableIDPrefix = "dvaa"
+	PrefixBrowserSession               StableIDPrefix = "brws"
+	PrefixProviderCredential           StableIDPrefix = "pcrd"
+	PrefixProviderCredentialVersion    StableIDPrefix = "pcvr"
+	PrefixInvocationProviderCredential StableIDPrefix = "ipcb"
 )
 
 func (p StableIDPrefix) Valid() bool {
@@ -37,7 +40,9 @@ func (p StableIDPrefix) Valid() bool {
 		PrefixModelUsageReceipt, PrefixInvocationCheckpoint,
 		PrefixSyntheticDispatchWork, PrefixExecutionDispatch,
 		PrefixCallbackDelivery, PrefixOperatorSubject, PrefixMembership,
-		PrefixCredential, PrefixDeviceAuthorization, PrefixBrowserSession:
+		PrefixCredential, PrefixDeviceAuthorization, PrefixBrowserSession,
+		PrefixProviderCredential, PrefixProviderCredentialVersion,
+		PrefixInvocationProviderCredential:
 		return true
 	default:
 		return false

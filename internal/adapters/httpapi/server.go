@@ -59,11 +59,20 @@ type cancellationRuntimeService interface {
 	CancelInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error)
 }
 
+type ProviderCredentialService interface {
+	Create(context.Context, domain.RuntimeAuthContext, services.CreateProviderCredentialInput) (services.ProviderCredentialRead, error)
+	List(context.Context, domain.RuntimeAuthContext, services.ProviderCredentialListInput) (services.ProviderCredentialList, error)
+	Get(context.Context, domain.RuntimeAuthContext, string) (services.ProviderCredentialRead, error)
+	Rotate(context.Context, domain.RuntimeAuthContext, string, services.RotateProviderCredentialInput) (services.ProviderCredentialRead, error)
+	Revoke(context.Context, domain.RuntimeAuthContext, string) (services.ProviderCredentialRead, error)
+}
+
 type Config struct {
 	Addr                   string
 	Authenticator          ports.RuntimeAuthenticator
 	Runtime                RuntimeService
 	Identity               IdentityService
+	ProviderCredentials    ProviderCredentialService
 	Logger                 *slog.Logger
 	ShutdownTimeout        time.Duration
 	LiveEvents             ports.LiveEventBus
@@ -95,6 +104,7 @@ func NewServer(cfg Config) *Server {
 		authenticator:          cfg.Authenticator,
 		runtime:                cfg.Runtime,
 		identity:               cfg.Identity,
+		providerCredentials:    cfg.ProviderCredentials,
 		logger:                 logger,
 		liveEvents:             cfg.LiveEvents,
 		stream:                 stream,
@@ -126,6 +136,7 @@ type handlerConfig struct {
 	authenticator          ports.RuntimeAuthenticator
 	runtime                RuntimeService
 	identity               IdentityService
+	providerCredentials    ProviderCredentialService
 	logger                 *slog.Logger
 	liveEvents             ports.LiveEventBus
 	stream                 StreamConfig
@@ -137,6 +148,7 @@ type handler struct {
 	authenticator          ports.RuntimeAuthenticator
 	runtime                RuntimeService
 	identity               IdentityService
+	providerCredentials    ProviderCredentialService
 	logger                 *slog.Logger
 	liveEvents             ports.LiveEventBus
 	stream                 StreamConfig
@@ -152,6 +164,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 		authenticator:          cfg.authenticator,
 		runtime:                cfg.runtime,
 		identity:               cfg.identity,
+		providerCredentials:    cfg.providerCredentials,
 		logger:                 cfg.logger,
 		liveEvents:             cfg.liveEvents,
 		stream:                 normalizedStreamConfig(cfg.stream),
@@ -188,6 +201,9 @@ func newHandler(cfg handlerConfig) http.Handler {
 	mux.HandleFunc("/v1/sessions/{session_id}/transcript", h.requireMethod(http.MethodGet, h.getSessionTranscript))
 	mux.HandleFunc("/v1/sessions/{session_id}/transcript/stream", h.requireMethod(http.MethodGet, h.streamSessionTranscript))
 	mux.HandleFunc("/v1/sessions/{session_id}", h.requireMethod(http.MethodGet, h.getSession))
+	mux.HandleFunc("/v1/provider-credentials", h.providerCredentialsCollection)
+	mux.HandleFunc("/v1/provider-credentials/{provider_credential_id}/rotate", h.requireMethod(http.MethodPost, h.rotateProviderCredential))
+	mux.HandleFunc("/v1/provider-credentials/{provider_credential_id}", h.providerCredentialResource)
 	mux.HandleFunc("/", h.notFound)
 	return h.logRequests(mux)
 }
@@ -231,6 +247,178 @@ func (h *handler) health(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+func (h *handler) providerCredentialsCollection(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.listProviderCredentials(w, r)
+	case http.MethodPost:
+		h.createProviderCredential(w, r)
+	default:
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
+			Code: "invalid_request", Message: "The request method is not allowed.",
+			RequestID: requestIDFromContext(r.Context()),
+		})
+	}
+}
+
+func (h *handler) providerCredentialResource(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.getProviderCredential(w, r)
+	case http.MethodDelete:
+		h.revokeProviderCredential(w, r)
+	default:
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodDelete)
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
+			Code: "invalid_request", Message: "The request method is not allowed.",
+			RequestID: requestIDFromContext(r.Context()),
+		})
+	}
+}
+
+func (h *handler) createProviderCredential(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	if h.providerCredentials == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	var input services.CreateProviderCredentialInput
+	if err := decodeBoundedStrictJSON(w, r, &input, services.MaxProviderCredentialBodyBytes); err != nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeInvalidRequest, Message: err.Error()})
+		return
+	}
+	credential, err := h.providerCredentials.Create(r.Context(), auth, input)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, credential)
+}
+
+func (h *handler) listProviderCredentials(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	query, err := strictQuery(r, "provider", "scope", "status", "tenant_ref", "limit")
+	if err != nil {
+		h.writeError(w, requestID, invalidQuery(err))
+		return
+	}
+	input := services.ProviderCredentialListInput{
+		Provider:  optionalQueryString(query, "provider"),
+		TenantRef: optionalQueryString(query, "tenant_ref"),
+	}
+	if value := optionalQueryString(query, "scope"); value != nil {
+		scope := domain.ProviderCredentialScope(*value)
+		if scope != domain.ProviderCredentialScopeAccount && scope != domain.ProviderCredentialScopeTenant {
+			h.writeError(w, requestID, invalidQuery(errors.New("scope must be account or tenant")))
+			return
+		}
+		input.Scope = &scope
+	}
+	if value := optionalQueryString(query, "status"); value != nil {
+		status := domain.ProviderCredentialStatus(*value)
+		if status != domain.ProviderCredentialActive && status != domain.ProviderCredentialRevoked {
+			h.writeError(w, requestID, invalidQuery(errors.New("status must be active or revoked")))
+			return
+		}
+		input.Status = &status
+	}
+	if value := optionalQueryString(query, "limit"); value != nil {
+		input.Limit, err = strconv.Atoi(*value)
+		if err != nil {
+			h.writeError(w, requestID, invalidQuery(errors.New("limit must be an integer")))
+			return
+		}
+	}
+	if h.providerCredentials == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	credentials, err := h.providerCredentials.List(r.Context(), auth, input)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, credentials)
+}
+
+func (h *handler) getProviderCredential(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	if h.providerCredentials == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	credential, err := h.providerCredentials.Get(r.Context(), auth, r.PathValue("provider_credential_id"))
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, credential)
+}
+
+func (h *handler) rotateProviderCredential(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	if h.providerCredentials == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	var input services.RotateProviderCredentialInput
+	if err := decodeBoundedStrictJSON(w, r, &input, services.MaxProviderCredentialBodyBytes); err != nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeInvalidRequest, Message: err.Error()})
+		return
+	}
+	credential, err := h.providerCredentials.Rotate(r.Context(), auth, r.PathValue("provider_credential_id"), input)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, credential)
+}
+
+func (h *handler) revokeProviderCredential(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	var body [1]byte
+	if count, readErr := r.Body.Read(body[:]); count != 0 || (readErr != nil && !errors.Is(readErr, io.EOF)) {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeInvalidRequest, Message: "The revocation request body must be empty."})
+		return
+	}
+	if h.providerCredentials == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	credential, err := h.providerCredentials.Revoke(r.Context(), auth, r.PathValue("provider_credential_id"))
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, credential)
 }
 
 func (h *handler) createInvocation(w http.ResponseWriter, r *http.Request) {
@@ -565,7 +753,8 @@ func (h *handler) writeError(w http.ResponseWriter, requestID string, err error)
 			services.CodeSessionInvocationActive,
 			services.CodeInvocationNotWaiting,
 			services.CodeToolResultConflict,
-			services.CodeToolResultExpired:
+			services.CodeToolResultExpired,
+			services.CodeProviderCredentialConflict:
 			status = http.StatusConflict
 		case services.CodeUnavailable:
 			status = http.StatusServiceUnavailable

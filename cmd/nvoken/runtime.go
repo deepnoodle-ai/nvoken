@@ -23,16 +23,21 @@ const (
 )
 
 var operationCommands = map[string]string{
-	"cancelInvocation":        "invocation cancel",
-	"createInvocation":        "invoke",
-	"getInvocation":           "invocation get",
-	"getSession":              "session get",
-	"getSessionTranscript":    "session transcript",
-	"listInvocations":         "invocation list",
-	"listSessionMessages":     "session messages",
-	"listSessions":            "session list",
-	"streamSessionTranscript": "session stream",
-	"submitClientToolResults": "tool-result submit",
+	"cancelInvocation":         "invocation cancel",
+	"createInvocation":         "invoke",
+	"createProviderCredential": "provider-credential create",
+	"getInvocation":            "invocation get",
+	"getProviderCredential":    "provider-credential get",
+	"getSession":               "session get",
+	"getSessionTranscript":     "session transcript",
+	"listInvocations":          "invocation list",
+	"listProviderCredentials":  "provider-credential list",
+	"listSessionMessages":      "session messages",
+	"listSessions":             "session list",
+	"revokeProviderCredential": "provider-credential revoke",
+	"rotateProviderCredential": "provider-credential rotate",
+	"streamSessionTranscript":  "session stream",
+	"submitClientToolResults":  "tool-result submit",
 }
 
 type runtimeConfig struct {

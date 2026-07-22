@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"reflect"
 	"strings"
@@ -523,6 +524,47 @@ func TestGenerationExecutorStreamingFailureUsesExistingProviderFailure(t *testin
 	assertFailureCode(t, result, "provider_error")
 	if strings.Contains(logs.String(), "provider stream failed") || strings.Contains(logs.String(), "partial secret") {
 		t.Fatalf("logs contain live/provider content: %s", logs.String())
+	}
+}
+
+func TestGenerationExecutorSettlesCredentialUnavailableDistinctly(t *testing.T) {
+	claim := generationClaim()
+	generator := &fakeModelGenerator{err: ports.ErrCredentialUnavailable}
+	var logs bytes.Buffer
+	result, err := NewGenerationExecutor(
+		generationStoreFixture(claim),
+		generator,
+		slog.New(slog.NewJSONHandler(&logs, nil)),
+	).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	assertFailureCode(t, result, "credential_unavailable")
+	if result.Provenance != nil || result.Usage != nil {
+		t.Fatalf("pre-provider credential failure leaked evidence = %#v", result)
+	}
+	if !strings.Contains(logs.String(), `"class":"credential_unavailable"`) {
+		t.Fatalf("credential failure class missing from logs: %s", logs.String())
+	}
+}
+
+func TestGenerationExecutorReturnsRetryableInfrastructureFailureWithoutSettlement(t *testing.T) {
+	claim := generationClaim()
+	generator := &fakeModelGenerator{err: fmt.Errorf("%w: credential store timeout", ports.ErrRetryable)}
+	var logs bytes.Buffer
+	result, err := NewGenerationExecutor(
+		generationStoreFixture(claim),
+		generator,
+		slog.New(slog.NewJSONHandler(&logs, nil)),
+	).Execute(context.Background(), claim)
+	if !errors.Is(err, ports.ErrRetryable) {
+		t.Fatalf("Execute error = %v", err)
+	}
+	if result.Status != "" || len(result.Error) != 0 {
+		t.Fatalf("retryable failure returned terminal result = %#v", result)
+	}
+	if strings.Contains(logs.String(), `"event":"provider_generation"`) {
+		t.Fatalf("pre-provider credential failure logged as a provider call: %s", logs.String())
 	}
 }
 

@@ -641,6 +641,11 @@ func (s *InvocationExecutionService) ReapExpired(ctx context.Context, limit int)
 		return nil, fmt.Errorf("reaper batch limit must be positive")
 	}
 	now := s.clock.Now().UTC()
+	if credentialStore, ok := s.store.(ports.ProviderCredentialRepository); ok {
+		if _, err := credentialStore.ClearExpiredProviderCredentialMaterial(ctx, now, limit); err != nil {
+			return nil, fmt.Errorf("clear expired Invocation provider credentials: %w", err)
+		}
+	}
 	deadlineCandidates, err := s.store.ListExpiredInvocationDeadlines(ctx, now, limit)
 	if err != nil {
 		return nil, err

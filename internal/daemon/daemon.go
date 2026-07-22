@@ -15,6 +15,7 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/cloudtasks"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/divegen"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/executorhttp"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/funding"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpapi"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpguard"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
@@ -23,6 +24,7 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/worksignal"
 	callbackruntime "github.com/deepnoodle-ai/nvoken/internal/callback"
 	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
+	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
@@ -48,6 +50,12 @@ type Config struct {
 	TrustForwardedClientIP  bool
 	AnthropicAPIKey         string
 	OpenAIAPIKey            string
+	CredentialPolicy        services.ProviderCredentialPolicy
+	CredentialCipher        ports.CredentialCipher
+	CredentialCleanupGrace  time.Duration
+	PlatformAnthropicAPIKey string
+	PlatformOpenAIAPIKey    string
+	PlatformFundingEnabled  bool
 	ShutdownTimeout         time.Duration
 	ProcessRole             ProcessRole
 	InvocationExecutionMode services.InvocationExecutionMode
@@ -125,6 +133,15 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.InvocationExecutionMode == "" {
 		cfg.InvocationExecutionMode = services.InvocationExecutionEmbedded
 	}
+	if cfg.CredentialPolicy.DeploymentMode == "" {
+		cfg.CredentialPolicy = services.ProviderCredentialPolicy{
+			DeploymentMode: services.CredentialDeploymentSelfHosted,
+			DefaultSource:  domain.ProviderCredentialSourceInstallationBYOK,
+		}
+	}
+	if cfg.CredentialCleanupGrace == 0 {
+		cfg.CredentialCleanupGrace = 5 * time.Minute
+	}
 	if cfg.InvocationExecutionMode != services.InvocationExecutionEmbedded && cfg.InvocationExecutionMode != services.InvocationExecutionCloudTasks {
 		return fmt.Errorf("unsupported Invocation execution mode %q", cfg.InvocationExecutionMode)
 	}
@@ -151,6 +168,23 @@ func Run(ctx context.Context, cfg Config) error {
 	store := postgres.NewStore(pool)
 	txm := postgres.NewTransactionManager(pool)
 	toolCoordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+	credentialResolver := services.NewProviderCredentialResolver(
+		store,
+		cfg.CredentialCipher,
+		clock,
+		services.CredentialResolverConfig{
+			DeploymentMode: cfg.CredentialPolicy.DeploymentMode,
+			InstallationAPIKeys: map[string]string{
+				string(domain.ModelProviderAnthropic): cfg.AnthropicAPIKey,
+				string(domain.ModelProviderOpenAI):    cfg.OpenAIAPIKey,
+			},
+			PlatformAPIKeys: map[string]string{
+				string(domain.ModelProviderAnthropic): cfg.PlatformAnthropicAPIKey,
+				string(domain.ModelProviderOpenAI):    cfg.PlatformOpenAIAPIKey,
+			},
+		},
+		funding.StaticGate{Allowed: cfg.PlatformFundingEnabled},
+	)
 	var liveBus interface {
 		ports.LiveEventBus
 		Close() error
@@ -182,6 +216,7 @@ func Run(ctx context.Context, cfg Config) error {
 		},
 			divegen.WithToolCoordinator(toolCoordinator),
 			divegen.WithLogger(slog.Default()),
+			divegen.WithCredentialResolver(credentialResolver),
 		)
 		invocationExecutor := services.NewGenerationExecutor(
 			store,
@@ -245,7 +280,9 @@ func Run(ctx context.Context, cfg Config) error {
 		services.WithWorkSignaller(signaller), services.WithCancellationSignaller(cancellations),
 		services.WithBudgetPolicy(cfg.Budgets), services.WithRuntimeLogger(slog.Default()),
 		services.WithInvocationExecutionMode(cfg.InvocationExecutionMode, cfg.Dispatch.Queue),
-		services.WithCallbackTools(cfg.CallbackSigningKey != ""))
+		services.WithCallbackTools(cfg.CallbackSigningKey != ""),
+		services.WithProviderCredentialPolicy(cfg.CredentialPolicy, cfg.CredentialCipher, cfg.CredentialCleanupGrace))
+	providerCredentials := services.NewProviderCredentialService(store, txm, clock, ids, cfg.CredentialCipher)
 	ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
 		services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
 	srv := httpapi.NewServer(httpapi.Config{
@@ -253,6 +290,7 @@ func Run(ctx context.Context, cfg Config) error {
 		Authenticator:          authenticator,
 		Runtime:                runtime,
 		Identity:               authenticator,
+		ProviderCredentials:    providerCredentials,
 		LiveEvents:             liveBus,
 		Stream:                 cfg.Stream,
 		TrustForwardedClientIP: cfg.TrustForwardedClientIP,
@@ -268,6 +306,7 @@ func Run(ctx context.Context, cfg Config) error {
 		},
 			divegen.WithToolCoordinator(toolCoordinator),
 			divegen.WithLogger(slog.Default()),
+			divegen.WithCredentialResolver(credentialResolver),
 		)
 		executor := services.NewGenerationExecutor(
 			store,

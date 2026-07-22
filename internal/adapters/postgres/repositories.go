@@ -35,6 +35,7 @@ var (
 	_ ports.CallbackDeliveryRepository      = (*Store)(nil)
 	_ ports.RecoveryRepository              = (*Store)(nil)
 	_ ports.ExecutionDispatchRepository     = (*Store)(nil)
+	_ ports.ProviderCredentialRepository    = (*Store)(nil)
 	_ ports.TransactionManager              = (*TransactionManager)(nil)
 )
 

@@ -316,6 +316,14 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 			"lease_attempt",
 			claim.Attempt,
 		)
+	} else if errors.Is(err, ports.ErrRetryable) && executorCtx.Err() == nil {
+		r.logger.Warn(
+			"Invocation executor requested retry; awaiting lease recovery",
+			"invocation_id",
+			claim.Invocation.ID,
+			"lease_attempt",
+			claim.Attempt,
+		)
 	} else if err != nil && executorCtx.Err() == nil {
 		r.logger.Warn("Invocation executor failed",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,

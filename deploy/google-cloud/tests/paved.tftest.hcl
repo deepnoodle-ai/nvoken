@@ -49,18 +49,33 @@ run "paved_defaults" {
   command = plan
 
   variables {
-    project_id                     = "example-project"
-    environment                    = "test"
-    image_tag                      = "0123456789abcdef"
-    anthropic_api_key_secret_id    = "nvoken-test-anthropic"
-    callback_signing_key_secret_id = "nvoken-test-callback-signing"
-    database_deletion_protection   = false
-    service_deletion_protection    = false
+    project_id                                    = "example-project"
+    environment                                   = "test"
+    image_tag                                     = "0123456789abcdef"
+    anthropic_api_key_secret_id                   = "nvoken-test-anthropic"
+    callback_signing_key_secret_id                = "nvoken-test-callback-signing"
+    provider_credential_encryption_keys_secret_id = "nvoken-test-provider-credential-keys"
+    provider_credential_active_key_id             = "v1"
+    database_deletion_protection                  = false
+    service_deletion_protection                   = false
   }
 
   assert {
     condition     = google_sql_database_instance.runtime.settings[0].ip_configuration[0].ipv4_enabled == false
     error_message = "Cloud SQL must not have a public IPv4 address."
+  }
+
+  assert {
+    condition = (
+      length([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item if item.name == "PROVIDER_CREDENTIAL_ENCRYPTION_KEYS" && item.value_source[0].secret_key_ref[0].secret == var.provider_credential_encryption_keys_secret_id]) == 1 &&
+      length([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item if item.name == "PROVIDER_CREDENTIAL_ENCRYPTION_KEYS" && item.value_source[0].secret_key_ref[0].secret == var.provider_credential_encryption_keys_secret_id]) == 1 &&
+      one([for item in google_cloud_run_v2_service.runtime.template[0].containers[0].env : item.value if item.name == "PROVIDER_CREDENTIAL_ACTIVE_KEY_ID"]) == "v1" &&
+      one([for item in google_cloud_run_v2_service.executor.template[0].containers[0].env : item.value if item.name == "PROVIDER_CREDENTIAL_ACTIVE_KEY_ID"]) == "v1" &&
+      length(google_secret_manager_secret_iam_member.credential_encryption_runtime) == 1 &&
+      length(google_secret_manager_secret_iam_member.credential_encryption_executor) == 1 &&
+      !contains([for item in google_cloud_run_v2_job.migrate.template[0].template[0].containers[0].env : item.name], "PROVIDER_CREDENTIAL_ENCRYPTION_KEYS")
+    )
+    error_message = "Credential encryption keys must reach admission and execution roles, never the migration role, with an explicit active key."
   }
 
   assert {
