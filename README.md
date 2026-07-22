@@ -49,6 +49,9 @@ they are **stateless**. nvoken aims to retain that approach as much as possible.
 > A reproducible [Google Cloud Run paved deployment](deploy/google-cloud/README.md)
 > packages this slice with private Cloud SQL, Secret Manager, and an explicit
 > migration job.
+> A separate [single-daemon profile](deploy/single-daemon/README.md) packages one
+> combined process with operator-provided Postgres, explicit availability
+> limits, smoke/load tooling, and incident guidance.
 > Current production-readiness claims and missing evidence are tracked only in
 > the [readiness profiles and evidence matrix](docs/testing/production-readiness-profiles.md).
 > If the contract looks wrong for your app, please

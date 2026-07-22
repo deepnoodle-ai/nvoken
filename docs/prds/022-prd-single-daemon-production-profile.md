@@ -1,6 +1,6 @@
 # Package the single-daemon production profile
 
-**Status:** Draft
+**Status:** Implemented; profile evidence and readiness matrix pending
 **Sequence:** 022
 **Depends on:** `017-prd-production-readiness-profiles.md`,
 `018-prd-operational-signals-and-diagnostics.md`,
@@ -38,6 +38,8 @@ reference; smoke and failure scripts; concise runbooks; measured reference load.
 **Out:** high availability; multiple daemon replicas; Redis; Cloud Tasks;
 Kubernetes/Helm; OS-specific service units; managed TLS/ingress; automated
 backup scheduling; autoscaling; UI or console.
+
+**Package:** [`deploy/single-daemon/`](../../deploy/single-daemon/README.md)
 
 ## Requirements
 

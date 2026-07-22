@@ -39,6 +39,12 @@ Hexagonal architecture for the Go backend:
 - In multiline keyed struct literals, put exactly one field assignment on each
   line.
 
+## Scripts
+
+- Do not write large Bash scripts. Use Python for non-trivial orchestration,
+  qualification, smoke, load, and operational tooling; keep shell usage to
+  small, direct lifecycle commands or thin wrappers.
+
 ## Pre-commit checks
 
 Run the gate before commit:

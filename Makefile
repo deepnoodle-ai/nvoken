@@ -41,6 +41,9 @@ openapi-check:
 
 scripts-check:
 	bash -n scripts/test-postgres.sh
+	python3 -c 'import ast, pathlib; [ast.parse(pathlib.Path(path).read_text(), filename=path) for path in ("deploy/single-daemon/smoke.py", "deploy/single-daemon/smoke_test.py", "deploy/single-daemon/load.py")]'
+	python3 deploy/single-daemon/smoke.py --help >/dev/null
+	PYTHONDONTWRITEBYTECODE=1 python3 deploy/single-daemon/smoke_test.py >/dev/null
 
 sdk-generate:
 	sdk/scripts/generate.sh
