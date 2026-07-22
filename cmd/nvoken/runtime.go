@@ -17,10 +17,9 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/authstore"
 )
 
-const (
-	version      = "0.1.0"
-	localBaseURL = defaultBaseURL
-)
+const localBaseURL = defaultBaseURL
+
+var version = "devel"
 
 var operationCommands = map[string]string{
 	"cancelInvocation":          "invocation cancel",

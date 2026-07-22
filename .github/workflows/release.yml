@@ -1,0 +1,125 @@
+name: release
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to release, for example v0.1.1
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Determine release
+        id: release
+        env:
+          DISPATCH_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            tag="${DISPATCH_TAG}"
+          fi
+          version="${tag#v}"
+          prerelease=false
+          if [[ "${version}" == *-* ]]; then
+            prerelease=true
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ steps.release.outputs.tag }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Verify tag matches repository version
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          package_version="$(python3 -c 'import json; print(json.load(open("sdk/typescript/package.json"))["version"])')"
+          example_version="$(python3 -c 'import json; print(json.load(open("examples/typescript-chat/package.json"))["dependencies"]["@deepnoodle/nvoken"])')"
+          if [ "${TAG}" != "v${VERSION}" ] || [ "${VERSION}" != "${package_version}" ] || [ "${VERSION}" != "${example_version}" ]; then
+            echo "tag ${TAG}, release version ${VERSION}, package version ${package_version}, and example dependency ${example_version} must match" >&2
+            exit 1
+          fi
+
+      - name: Test Go commands
+        run: go test ./...
+
+      - name: Build release assets
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: make release VERSION="${VERSION}"
+
+      - name: Create or refresh GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" dist/* --clobber
+            exit 0
+          fi
+          args=()
+          if [ "${PRERELEASE}" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${TAG}" \
+            --title "nvoken v${VERSION}" \
+            --generate-notes \
+            "${args[@]}" \
+            dist/*
+
+      - name: Update Homebrew tap
+        if: steps.release.outputs.prerelease != 'true'
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if [ -z "${TAP_GITHUB_TOKEN}" ]; then
+            echo "TAP_GITHUB_TOKEN is required to publish Formula/nvoken.rb" >&2
+            exit 1
+          fi
+
+          sha_darwin_arm64="$(sha256sum "dist/nvoken_${VERSION}_darwin_arm64.tar.gz" | awk '{print $1}')"
+          sha_darwin_amd64="$(sha256sum "dist/nvoken_${VERSION}_darwin_amd64.tar.gz" | awk '{print $1}')"
+          sha_linux_arm64="$(sha256sum "dist/nvoken_${VERSION}_linux_arm64.tar.gz" | awk '{print $1}')"
+          sha_linux_amd64="$(sha256sum "dist/nvoken_${VERSION}_linux_amd64.tar.gz" | awk '{print $1}')"
+
+          sed -e "s/{{VERSION}}/${VERSION}/g" \
+              -e "s/{{SHA_DARWIN_ARM64}}/${sha_darwin_arm64}/g" \
+              -e "s/{{SHA_DARWIN_AMD64}}/${sha_darwin_amd64}/g" \
+              -e "s/{{SHA_LINUX_ARM64}}/${sha_linux_arm64}/g" \
+              -e "s/{{SHA_LINUX_AMD64}}/${sha_linux_amd64}/g" \
+              scripts/nvoken.rb.tmpl > "${RUNNER_TEMP}/nvoken.rb"
+
+          tap_dir="${RUNNER_TEMP}/homebrew-tap"
+          git clone "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/deepnoodle-ai/homebrew-tap.git" "${tap_dir}"
+          mkdir -p "${tap_dir}/Formula"
+          cp "${RUNNER_TEMP}/nvoken.rb" "${tap_dir}/Formula/nvoken.rb"
+          git -C "${tap_dir}" config user.name "github-actions[bot]"
+          git -C "${tap_dir}" config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C "${tap_dir}" add Formula/nvoken.rb
+          if git -C "${tap_dir}" diff --cached --quiet; then
+            echo "Homebrew formula already matches ${VERSION}"
+            exit 0
+          fi
+          git -C "${tap_dir}" commit -m "Update nvoken to ${VERSION}"
+          git -C "${tap_dir}" push

@@ -34,6 +34,40 @@ func TestCloudLoggingJSONShape(t *testing.T) {
 	}
 }
 
+func TestVersionDoesNotLoadConfiguration(t *testing.T) {
+	t.Setenv("RUNTIME_API_KEY", "invalid")
+	previous := buildVersion
+	buildVersion = "0.1.1-test"
+	t.Cleanup(func() { buildVersion = previous })
+
+	var output bytes.Buffer
+	if err := runWithOutput([]string{"--version"}, &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != "0.1.1-test\n" {
+		t.Fatalf("version output = %q", output.String())
+	}
+
+	output.Reset()
+	if err := runWithOutput([]string{"version"}, &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != "0.1.1-test\n" {
+		t.Fatalf("version command output = %q", output.String())
+	}
+}
+
+func TestHelpDoesNotLoadConfiguration(t *testing.T) {
+	t.Setenv("RUNTIME_API_KEY", "invalid")
+	var output bytes.Buffer
+	if err := runWithOutput([]string{"--help"}, &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "quickstart") || !strings.Contains(output.String(), "serve") {
+		t.Fatalf("help output = %q", output.String())
+	}
+}
+
 func TestRunLogsOneSafeConfigurationFailure(t *testing.T) {
 	setServeConfig(t)
 	t.Setenv("RUNTIME_API_KEY", "short-secret")

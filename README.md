@@ -11,7 +11,7 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0-2563eb)](LICENSE)
 [![status](https://img.shields.io/badge/status-early%20development-b7791f)](#how-to-help)
 
-[Local Quickstart](docs/guides/local-development.md) · [State Ownership](#your-app-owns-the-state) · [Contract](#the-contract) · [How it Compares](#how-it-compares) · [Docs](docs/README.md) · [Help Shape It](#how-to-help)
+[Run Locally](docs/guides/run-locally.md) · [Develop](docs/guides/developing-nvoken.md) · [Deploy](deploy/single-daemon/README.md) · [State Ownership](#your-app-owns-the-state) · [Contract](#the-contract) · [Docs](docs/README.md)
 
 </div>
 
@@ -33,6 +33,28 @@ reasons the LLM generation APIs are so successful and easy to use is that
 they are **stateless**. nvoken aims to retain that approach as much as possible.
 
 **Your app remains the source of truth, not a heavy agent runtime.**
+
+## Run nvoken locally
+
+The first-time path uses the official Homebrew release and public TypeScript
+package—no clone, Go build, Python configurator, or manual migration. It assumes
+Docker and Node.js 20+ are installed and one provider API key is active in your
+shell.
+
+```bash
+brew install deepnoodle-ai/tap/nvoken
+mkdir -p nvoken-quickstart && cd nvoken-quickstart
+export OPENAI_API_KEY='<your-provider-key>'
+nvokend quickstart --provider openai --model '<model-you-can-access>'
+```
+
+Then the official npm quickstart proves two turns share one durable Session.
+Follow [Run nvoken locally](docs/guides/run-locally.md) for that command and
+cleanup.
+If you intend to change this repository, use [Develop nvoken](docs/guides/developing-nvoken.md)
+instead. Production operators should choose the [single-daemon](deploy/single-daemon/README.md)
+or [Google Cloud](deploy/google-cloud/README.md) deployment profile only after
+the local evaluation path.
 
 ## The contract
 
@@ -150,10 +172,9 @@ Multi-provider support comes from
 single vendor. More in [docs/product/why.md](docs/product/why.md) and
 [docs/product/harness.md](docs/product/harness.md).
 
-To run one durable TypeScript chat on a laptop, follow the
-[clone-to-first-response quickstart](docs/guides/local-development.md). It keeps
-the disposable development topology separate from the production deployment
-profiles.
+The [local Run guide](docs/guides/run-locally.md),
+[source-development guide](docs/guides/developing-nvoken.md), and production
+deployment profiles deliberately remain separate journeys.
 
 A managed version of nvoken is being considered. An earlier version of nvoken powers
 [MobiusOps.ai](https://mobiusops.ai).

@@ -1,5 +1,9 @@
 # Backup, restore, and recovery drills
 
+> **For deployment operators.** The local quickstart database is disposable
+> and needs no recovery plan. Use this guide only for an installation whose
+> Sessions and Invocations must survive data loss.
+
 nvoken's durable authority is Postgres. A restore is acceptable only after it
 is isolated, checked by the matching nvoken binary, and shown to preserve the
 runtime records needed for recovery.

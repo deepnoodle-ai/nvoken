@@ -1,5 +1,9 @@
 # Operational signals and diagnostics
 
+> **For deployment operators.** Start here when a production daemon will not
+> start or an admitted Invocation is not progressing. Local quickstart normally
+> suppresses informational logs and leaves warnings and errors visible.
+
 nvoken emits the same bounded JSON event vocabulary in the single-daemon and
 Google Cloud profiles. Use `event` as the primary selector, then correlate with
 `request_id`, `invocation_id`, `dispatch_id`, `delivery_id`, `tool_call_id`, or

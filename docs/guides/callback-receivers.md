@@ -1,5 +1,9 @@
 # Callback receiver contract
 
+> **For host applications implementing callback tools.** You can use ordinary
+> model turns and client tools without this guide. Read it before allowing
+> nvoken to invoke a public endpoint that may apply an external effect.
+
 A callback tool lets nvoken deliver one durable ToolCall to a host-owned public
 HTTPS endpoint. Delivery is at least once: if the host applies an effect and
 the response is lost, nvoken may send the same call again. Store the first

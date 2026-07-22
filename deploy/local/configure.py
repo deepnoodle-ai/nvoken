@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the ignored, mode-0600 environment file for local development."""
+"""Create a mode-0600 environment file for lower-level local tests."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ PROVIDER_VARIABLES = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate local nvoken secrets and write the ignored root .env file.",
+        description="Generate nvoken secrets for lower-level local tests and debugging.",
     )
     parser.add_argument("--provider", choices=sorted(PROVIDER_VARIABLES), required=True)
     parser.add_argument("--output", type=Path, default=ROOT / ".env", help=argparse.SUPPRESS)

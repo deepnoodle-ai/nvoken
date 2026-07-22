@@ -1,5 +1,9 @@
 # Google Cloud Run paved deployment
 
+> **Production deployment guide.** If you are evaluating nvoken or building
+> your first integration, start with [Run nvoken locally](../../docs/guides/run-locally.md).
+> If you intend to change the repository, use [Develop nvoken](../../docs/guides/developing-nvoken.md).
+
 This Terraform root deploys nvoken's recommended Google Cloud topology: one
 public combined Cloud Run service for the Runtime API and durable control-plane
 loops, plus a private request-bound executor reached through Cloud Tasks. Every
@@ -10,6 +14,18 @@ This guide defines the topology and procedures; it does not independently make
 a production-readiness claim. The `google_cloud` profile boundary, current
 status, and required evidence live in the
 [production-readiness profiles and evidence matrix](../../docs/testing/production-readiness-profiles.md).
+
+## Before you start
+
+This is a production infrastructure guide, not the first nvoken tutorial. It
+assumes you have already completed the local Run guide and that you can create
+billable Google Cloud resources, administer IAM and Terraform state, and own
+backup/restore and incident response for the resulting installation.
+
+For a first disposable deployment, read **What it creates**, complete the core
+**Prerequisites**, then run **Release**. Reusable BYOK, callbacks, production
+hardening, qualification, upgrades, and teardown are separate follow-on
+sections so they do not block the first successful deployment.
 
 Set `invocation_execution_mode = "embedded"` to roll back to the combined
 service's Postgres polling runner. Public API semantics do not change. Neither
@@ -115,6 +131,8 @@ End's `X-Forwarded-For` client address for its bounded in-process device-flow
 limits; self-managed deployments should enable that setting only behind a
 trusted proxy.
 
+### Optional: reusable or caller-ephemeral BYOK
+
 To enable reusable or caller-ephemeral BYOK, create a separate Secret Manager version
 containing a JSON object of base64-encoded 32-byte encryption keys, then set its
 secret ID and the active nonsecret key ID together:
@@ -142,6 +160,8 @@ keyring configuration fails service startup rather than persisting plaintext or
 falling back to another credential source. Keep retired keys in the JSON object
 while retained ciphertext may still reference them, and deploy a new revision
 after changing a Secret Manager `latest` version.
+
+### Optional: callback tools
 
 To enable callback tools, create a separate random secret of at least 32 bytes
 and set `TF_VAR_callback_signing_key_secret_id`. Set the nonsecret
