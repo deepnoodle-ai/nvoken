@@ -194,6 +194,11 @@ sweep); queueing and busy-session changes.
 - **Null versus empty string.** A completed turn with no assistant text
   returns null, not `""`. Chosen so "no text existed" and "empty text" are
   not conflated and so SDK helpers can keep failing loudly on missing text.
+  The wire alone carries that distinction: every SDK `text()` helper
+  deliberately treats the empty string like missing text and fails with
+  `unexpected_response`, and a host that needs the distinction reads
+  `output_text` from the result. This helper behavior is contract, not
+  accident; do not "fix" the helpers to return `""`.
 - **Separator-free concatenation.** Joining text blocks with no separator
   can glue paragraphs across assistant messages. It matches the shipped SDK
   rule; hosts needing structure read `messages`. A joining rule change later

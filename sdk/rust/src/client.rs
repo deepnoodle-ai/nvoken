@@ -577,7 +577,11 @@ impl Handle {
         Ok(self.result().await?.messages)
     }
 
-    /// Returns the completed turn's canonical assistant text.
+    /// Returns the completed turn's canonical assistant text. Fails with
+    /// an `unexpected_response` error when the wire `output_text` is null
+    /// or the empty string: the wire keeps those distinct, but this helper
+    /// deliberately treats both as "no useful answer". Read `result()`
+    /// directly to observe the distinction.
     pub async fn text(&mut self) -> Result<String, NvokenError> {
         let result = self.result().await?;
         match result.output_text {

@@ -386,6 +386,13 @@ class Handle:
         return (await self.result()).messages
 
     async def text(self) -> str:
+        """Return the completed turn's canonical assistant text.
+
+        Raises ``unexpected_response`` when the wire ``output_text`` is null
+        or the empty string: the wire keeps those distinct, but this helper
+        deliberately treats both as "no useful answer". Read ``result()``
+        directly to observe the distinction.
+        """
         result = await self.result()
         if not result.output_text:
             raise NvokenError(

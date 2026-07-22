@@ -195,9 +195,11 @@ const messages = await handle.listMessages();
 const text = await handle.text();       // the wire output_text projection
 ```
 
-`text()` throws an actionable error when `output_text` is null: the projection
-is non-null only for a completed Invocation with assistant text, so failed and
-cancelled turns never masquerade as answers. For custom content handling, read
+`text()` throws an actionable error when `output_text` is null or empty: the
+projection is non-null only for a completed Invocation with assistant text, so
+failed and cancelled turns never masquerade as answers. The wire keeps null
+and `""` distinct; the helper deliberately treats both as "no useful answer",
+and hosts that need the distinction read `result().outputText`. For custom content handling, read
 `result().messages` and use the exported `isTextContentBlock` type guard. The
 projection is composed from canonical Session history at read time; nothing is
 stored twice.

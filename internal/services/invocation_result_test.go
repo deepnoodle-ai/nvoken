@@ -257,6 +257,20 @@ func (s *snapshotAssertingStore) ListSessionMessagesByInvocation(ctx context.Con
 	return s.invocationResultTestStore.ListSessionMessagesByInvocation(ctx, id)
 }
 
+func (s *snapshotAssertingStore) ListToolCallsByInvocation(ctx context.Context, id string) ([]domain.ToolCall, error) {
+	if !s.tx.active {
+		s.t.Fatal("ListToolCallsByInvocation ran outside the read snapshot")
+	}
+	return s.invocationResultTestStore.ListToolCallsByInvocation(ctx, id)
+}
+
+func (s *snapshotAssertingStore) ListSessionMessages(ctx context.Context, id string) ([]domain.SessionMessage, error) {
+	if !s.tx.active {
+		s.t.Fatal("ListSessionMessages ran outside the read snapshot")
+	}
+	return s.invocationResultTestStore.ListSessionMessages(ctx, id)
+}
+
 func TestGetInvocationResultReadsInsideOneSnapshot(t *testing.T) {
 	tx := &snapshotRecordingTx{}
 	store := &snapshotAssertingStore{
@@ -281,6 +295,51 @@ func TestGetInvocationResultReadsInsideOneSnapshot(t *testing.T) {
 	}
 	if result.OutputText == nil || *result.OutputText != "Hello" {
 		t.Fatalf("output text = %v", result.OutputText)
+	}
+}
+
+// TestGetInvocationResultWaitingReadsInsideOneSnapshot covers the one
+// status whose composition performs extra reads: recovering pending
+// client tool calls and their stored inputs must also stay inside the
+// single snapshot.
+func TestGetInvocationResultWaitingReadsInsideOneSnapshot(t *testing.T) {
+	toolRequest := resultTestMessage(2, domain.MessageRoleAssistant, `[{"type":"tool_use","id":"tcal_wait","name":"lookup","input":{"order_id":"o-1"}}]`)
+	tx := &snapshotRecordingTx{}
+	store := &snapshotAssertingStore{
+		invocationResultTestStore: invocationResultTestStore{
+			invocation: resultTestInvocation(domain.InvocationWaiting),
+			partition:  domain.TenantPartition{ID: resultPartitionID, AccountID: resultAccountID},
+			messages: []domain.SessionMessage{
+				resultTestMessage(1, domain.MessageRoleUser, `[{"type":"text","text":"look it up"}]`),
+				toolRequest,
+			},
+			toolCalls: []domain.ToolCall{
+				{
+					ID:               "tcal_wait",
+					InvocationID:     resultInvocationID,
+					SessionID:        resultSessionID,
+					Name:             "lookup",
+					Mode:             domain.ToolCallModeClient,
+					RequestMessageID: toolRequest.ID,
+					Status:           domain.ToolCallPending,
+					DeadlineAt:       time.Date(2026, time.July, 21, 13, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+		t:  t,
+		tx: tx,
+	}
+	service := NewRuntimeService(store, tx, recoveryTestClock{}, recoveryTestIDs{})
+
+	result, err := service.GetInvocationResult(context.Background(), resultAuth(), resultInvocationID)
+	if err != nil {
+		t.Fatalf("GetInvocationResult: %v", err)
+	}
+	if tx.entered != 1 {
+		t.Fatalf("read snapshot entered %d times, want exactly one snapshot per read", tx.entered)
+	}
+	if len(result.Invocation.PendingToolCalls) != 1 || result.OutputText != nil {
+		t.Fatalf("waiting result = %#v", result)
 	}
 }
 

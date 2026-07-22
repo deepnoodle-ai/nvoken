@@ -355,6 +355,13 @@ export class Handle {
     return (await this.result(signal)).messages;
   }
 
+  /**
+   * Returns the completed turn's canonical assistant text. Throws
+   * `unexpected_response` when the wire `output_text` is null or the empty
+   * string: the wire keeps those distinct, but this helper deliberately
+   * treats both as "no useful answer". Read `result()` directly to observe
+   * the distinction.
+   */
   async text(signal?: AbortSignal): Promise<string> {
     const { outputText } = await this.result(signal);
     if (!outputText) {

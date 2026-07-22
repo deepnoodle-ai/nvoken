@@ -510,7 +510,11 @@ func (h *Handle) ListMessages(ctx context.Context) ([]SessionMessage, error) {
 	return result.Messages, nil
 }
 
-// Text returns the completed turn's canonical assistant text.
+// Text returns the completed turn's canonical assistant text. It fails
+// with ErrorUnexpectedResponse when the wire output_text is null or the
+// empty string: the wire keeps those distinct, but this helper
+// deliberately treats both as "no useful answer". Read Result directly
+// to observe the distinction.
 func (h *Handle) Text(ctx context.Context) (string, error) {
 	result, err := h.Result(ctx)
 	if err != nil {
