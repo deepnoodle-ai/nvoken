@@ -71,7 +71,7 @@ implementation claims and are deliberately outside this comparison.
 | `provider_registry` | `anthropic`, `openai` | [`newModel`](../../internal/adapters/divegen/generator.go) | Runtime OpenAPI provider enum and the root README provider line |
 | `openapi_tool_modes` | `client`, `callback` | [`ToolSpec`](../../openapi/runtime.yaml) | Runtime admission guide examples and this recorded value |
 | `openapi_version` | `0.1.0` | [`openapi/runtime.yaml`](../../openapi/runtime.yaml) | This recorded value |
-| `migration_head` | `000013` | [Embedded forward migrations](../../internal/adapters/postgres/migrations/) | Migration inventory and this recorded value |
+| `migration_head` | `000014` | [Embedded forward migrations](../../internal/adapters/postgres/migrations/) | Migration inventory and this recorded value |
 | `readiness_links` | `README.md`, `docs/design/architecture.md`, `docs/guides/runtime-admission.md`, `deploy/google-cloud/README.md` | This matrix | The four primary documents that must link back here |
 
 ## Running the conformance gate
@@ -101,10 +101,13 @@ result `pending` but does not by itself make an honest `pending` claim fail.
 Live checks are disabled by default. `LIVE=1` is the explicit opt-in that may
 send model requests or mutate the selected test environment. For
 `single_daemon` it runs PRD 022's profile smoke against an already-running
-installation once that entry point is present. For `google_cloud` it delegates
-to PRD 024's single `deploy/google-cloud/qualify.py` entry point; pass its flags
-with `QUALIFY_ARGS='--environment staging …'`. The gate never provisions,
-deploys, restores, or reads credentials itself.
+installation through `deploy/single-daemon/smoke.py run`. For `google_cloud` it
+delegates to PRD 024's single `deploy/google-cloud/qualify.py` entry point; pass
+its flags with `QUALIFY_ARGS='--environment staging …'`. Explicit live runs
+fail closed when the selected hook is missing or fails, and identify the matrix
+rows exercised by the selected scenarios. A default `skip` is non-disconfirming
+for existing checked proof. The gate never provisions, deploys, restores, or
+reads credentials itself.
 
 ## Shared correctness floor
 

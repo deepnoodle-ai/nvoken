@@ -20,7 +20,7 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "docs/testing/production-readiness-profiles.md"
 PROFILES = ("single_daemon", "google_cloud")
-DIMENSIONS = {
+DIMENSION_ORDER = (
     "Installation",
     "Normal execution",
     "Process/dependency failure",
@@ -30,6 +30,17 @@ DIMENSIONS = {
     "Capacity",
     "Retention",
     "Secret handling",
+)
+DIMENSIONS = set(DIMENSION_ORDER)
+GOOGLE_SCENARIO_ROWS = {
+    "baseline": ("Installation", "Normal execution", "Secret handling"),
+    "queue-control": ("Process/dependency failure",),
+    "delivery-control": ("Process/dependency failure",),
+    "backlog": ("Capacity",),
+    "revision-replacement": ("Process/dependency failure",),
+    "redis": ("Process/dependency failure",),
+    "callback": ("Normal execution",),
+    "alert": ("Diagnosis",),
 }
 MISSING = {"", "-", "--", "---", "none", "missing", "n/a", "not recorded", "—"}
 
@@ -159,6 +170,57 @@ def markdown_link(value: str) -> str | None:
 
 def is_missing(value: str) -> bool:
     return value.strip().lower() in MISSING
+
+
+def environment_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        if not separator or not key or key.strip() != key or key in values:
+            raise ValueError(f"invalid environment example line: {raw_line!r}")
+        values[key] = value
+    return values
+
+
+def diagnostic_environment(database_url: str) -> dict[str, str]:
+    environment = os.environ.copy()
+    config_source = (ROOT / "cmd/nvokend/config.go").read_text()
+    config_keys = set(re.findall(r'env:"([A-Z0-9_]+)"', config_source))
+    # Mask ambient values and .env entries, then use the checked profile example
+    # as the source of safe defaults. The Go profile test keeps this example in
+    # sync when a new supported setting is added.
+    for key in config_keys:
+        environment[key] = ""
+    environment.update(environment_file(ROOT / "deploy/single-daemon/nvoken.env.example"))
+    environment.update({
+        "DATABASE_URL": database_url,
+        "BOOTSTRAP_OWNER_SECRET": "readiness-diagnostic-placeholder-0000",
+        "CREDENTIAL_DELIVERY_KEY": base64.urlsafe_b64encode(bytes(32)).decode().rstrip("="),
+        "ANTHROPIC_API_KEY": "readiness-diagnostic-placeholder",
+    })
+    return environment
+
+
+def google_live_rows(live_args: list[str]) -> tuple[str, ...]:
+    scenarios: list[str] = []
+    for index, argument in enumerate(live_args):
+        if argument == "--scenario" and index + 1 < len(live_args):
+            scenarios.append(live_args[index + 1])
+        elif argument.startswith("--scenario="):
+            scenarios.append(argument.split("=", 1)[1])
+
+    selected = scenarios or list(GOOGLE_SCENARIO_ROWS)
+    if "all" in selected or any(item not in GOOGLE_SCENARIO_ROWS for item in selected):
+        selected = list(GOOGLE_SCENARIO_ROWS)
+    related = {
+        dimension
+        for scenario in selected
+        for dimension in GOOGLE_SCENARIO_ROWS[scenario]
+    }
+    return tuple(dimension for dimension in DIMENSION_ORDER if dimension in related)
 
 
 def validate_evidence_record(
@@ -409,6 +471,21 @@ def command_check(
     return CheckResult(name, "fail", f"exited with status {result.returncode}", tuple(rows))
 
 
+def google_qualification_check(command: list[str], rows: tuple[str, ...]) -> CheckResult:
+    result = run(command)
+    if result.returncode == 0:
+        return CheckResult("live_smoke", "pass", "completed", rows)
+
+    detail = f"exited with status {result.returncode}"
+    scenarios = re.findall(r"^Running scenario: ([a-z-]+)$", result.stdout, re.MULTILINE)
+    cleanup_failed = "one or more cleanup actions failed" in result.stdout
+    if scenarios and not cleanup_failed:
+        scenario = scenarios[-1]
+        rows = GOOGLE_SCENARIO_ROWS.get(scenario, rows)
+        detail = f"scenario {scenario} {detail}"
+    return CheckResult("live_smoke", "fail", detail, rows)
+
+
 def run_checks(profile: str, live: bool, live_args: list[str]) -> list[CheckResult]:
     checks: list[CheckResult] = []
     status = git("status", "--porcelain")
@@ -440,27 +517,11 @@ def run_checks(profile: str, live: bool, live_args: list[str]) -> list[CheckResu
             env=database_env,
         ))
         if profile == "single_daemon":
-            diagnostic_env = os.environ.copy()
-            config_source = (ROOT / "cmd/nvokend/config.go").read_text()
-            config_values = re.findall(
-                r'env:"([A-Z0-9_]+)"(?: envDefault:"([^"]*)")?',
-                config_source,
-            )
-            for variable, default in config_values:
-                diagnostic_env[variable] = default
-            diagnostic_env.update({
-                "DATABASE_URL": database_url,
-                "NVOKEN_PROCESS_ROLE": "combined",
-                "INVOCATION_EXECUTION_MODE": "embedded",
-                "BOOTSTRAP_OWNER_SECRET": "readiness-diagnostic-placeholder-0000",
-                "CREDENTIAL_DELIVERY_KEY": base64.urlsafe_b64encode(bytes(32)).decode().rstrip("="),
-                "ANTHROPIC_API_KEY": "readiness-diagnostic-placeholder",
-            })
             checks.append(command_check(
                 "diagnostic",
                 ["go", "run", "./cmd/nvokend", "diagnose"],
                 rows=("Installation", "Secret handling"),
-                env=diagnostic_env,
+                env=diagnostic_environment(database_url),
             ))
     else:
         detail = "set READINESS_DATABASE_URL and READINESS_DATABASE_DISPOSABLE=1"
@@ -481,16 +542,20 @@ def run_checks(profile: str, live: bool, live_args: list[str]) -> list[CheckResu
         ))
 
     if not live:
-        rows = ("Normal execution",) if profile == "single_daemon" else ()
+        rows = (
+            ("Normal execution",)
+            if profile == "single_daemon"
+            else google_live_rows(live_args)
+        )
         checks.append(CheckResult(
             "live_smoke", "skip", "live checks were not explicitly enabled", rows
         ))
     elif profile == "single_daemon":
-        smoke = ROOT / "deploy/single-daemon/smoke.sh"
+        smoke = ROOT / "deploy/single-daemon/smoke.py"
         if smoke.is_file():
             checks.append(command_check(
                 "live_smoke",
-                ["bash", str(smoke), "run"],
+                [sys.executable, str(smoke), "run"],
                 rows=("Normal execution",),
             ))
         else:
@@ -502,12 +567,19 @@ def run_checks(profile: str, live: bool, live_args: list[str]) -> list[CheckResu
             ))
     else:
         qualify = ROOT / "deploy/google-cloud/qualify.py"
+        rows = google_live_rows(live_args)
         if qualify.is_file():
-            checks.append(command_check(
-                "live_smoke", [sys.executable, str(qualify), *live_args]
+            checks.append(google_qualification_check(
+                [sys.executable, str(qualify), *live_args],
+                rows,
             ))
         else:
-            checks.append(CheckResult("live_smoke", "fail", "Google qualification entry point is missing"))
+            checks.append(CheckResult(
+                "live_smoke",
+                "fail",
+                "Google qualification entry point is missing",
+                rows,
+            ))
     return checks
 
 
@@ -523,9 +595,9 @@ def build_rows(
         if row["Mode"].lower() == "manual" and dimension in manual:
             status = manual[dimension].status
             freshness = manual[dimension].freshness
-        elif status == "proven" and freshness == "current":
+        if status == "proven" and freshness == "current":
             related = [check for check in checks if dimension in check.rows]
-            if any(check.status != "pass" for check in related):
+            if any(check.status == "fail" for check in related):
                 status, freshness = "pending", "missing"
         results.append({
             "dimension": dimension,
@@ -554,7 +626,8 @@ def print_summary(summary: dict[str, object]) -> None:
     print(f"recorded claim: {summary['recorded_claim']}")
     print("checks:")
     for check in summary["checks"]:
-        print(f"  {check['status'].upper():4} {check['name']}: {check['detail']}")
+        rows = f" [rows: {', '.join(check['rows'])}]" if check["rows"] else ""
+        print(f"  {check['status'].upper():4} {check['name']}: {check['detail']}{rows}")
     print("rows:")
     for row in summary["rows"]:
         print(f"  {row['status'].upper():7} {row['dimension']} ({row['freshness']})")

@@ -5,6 +5,10 @@
 **Depends on:** `022-prd-single-daemon-production-profile.md` and
 `024-prd-google-cloud-qualification.md`
 
+This status covers the conformance gate itself. It does not claim either
+deployment profile is ready: live qualification and the manual proof still
+missing from the readiness matrix remain explicit follow-up work.
+
 ## ELI5
 
 Production readiness should not be a claim we prove once and forget. One small

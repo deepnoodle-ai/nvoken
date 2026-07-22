@@ -46,6 +46,14 @@ SCENARIOS = (
 )
 DEFAULT_EVIDENCE_DIR = REPO_ROOT / "docs/testing/readiness/evidence"
 MUTATING_SCENARIOS = frozenset(SCENARIOS[1:])
+READINESS_DIMENSIONS = (
+    "Installation",
+    "Normal execution",
+    "Process/dependency failure",
+    "Diagnosis",
+    "Capacity",
+    "Secret handling",
+)
 
 
 class QualificationError(RuntimeError):
@@ -1583,6 +1591,19 @@ class Qualification:
         )
         lines = [
             "# Google Cloud qualification evidence",
+            "",
+            "## Record",
+            "",
+            "| Field | Value |",
+            "| --- | --- |",
+            "| Profile | `google_cloud` |",
+            f"| Tested revision | `{md(self.git_revision)}` |",
+            "| Dimensions | "
+            + ", ".join(f"`{dimension}`" for dimension in READINESS_DIMENSIONS)
+            + " |",
+            f"| Result | `{'pass' if all_pass else 'incomplete'}` |",
+            "",
+            "## Qualification",
             "",
             f"**Result:** {'Pass' if all_pass else 'Incomplete or failed'}",
             "",

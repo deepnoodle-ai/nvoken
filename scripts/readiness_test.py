@@ -210,6 +210,85 @@ class SummaryTest(unittest.TestCase):
             "freshness": "missing",
         }])
 
+    def test_skipped_supporting_check_does_not_demote_proven_row(self):
+        rows = {
+            "Retention": {
+                "Mode": "automated",
+                "State": "proven",
+                "Freshness": "current",
+            }
+        }
+        checks = [readiness.CheckResult(
+            "postgres", "skip", "disposable database not configured", ("Retention",)
+        )]
+
+        result = readiness.build_rows(rows, {}, checks)
+
+        self.assertEqual(result[0]["status"], "proven")
+        self.assertEqual(result[0]["freshness"], "current")
+
+    def test_failed_live_check_demotes_current_manual_evidence(self):
+        rows = {
+            "Normal execution": {
+                "Mode": "manual",
+                "State": "proven",
+                "Freshness": "current",
+            }
+        }
+        manual = {
+            "Normal execution": readiness.EvidenceResult(
+                "Normal execution", "proven", "current", "record.md",
+                "a" * 40, [], False, [],
+            )
+        }
+        checks = [readiness.CheckResult(
+            "live_smoke", "fail", "exited with status 1", ("Normal execution",)
+        )]
+
+        result = readiness.build_rows(rows, manual, checks)
+
+        self.assertEqual(result[0]["status"], "pending")
+        self.assertEqual(result[0]["freshness"], "missing")
+
+    def test_google_live_rows_follow_selected_scenarios(self):
+        self.assertEqual(
+            readiness.google_live_rows(["--scenario", "backlog"]),
+            ("Capacity",),
+        )
+        self.assertEqual(
+            readiness.google_live_rows([
+                "--scenario=baseline", "--scenario", "alert",
+            ]),
+            ("Installation", "Normal execution", "Diagnosis", "Secret handling"),
+        )
+        self.assertIn("Process/dependency failure", readiness.google_live_rows([]))
+
+    def test_google_failure_names_the_scenario_rows(self):
+        completed = mock.Mock(
+            returncode=1,
+            stdout="Running scenario: baseline\nRunning scenario: backlog\n",
+        )
+        with mock.patch.object(readiness, "run", return_value=completed):
+            result = readiness.google_qualification_check(
+                ["python3", "qualify.py"],
+                readiness.google_live_rows([]),
+            )
+
+        self.assertEqual(result.status, "fail")
+        self.assertEqual(result.rows, ("Capacity",))
+        self.assertIn("scenario backlog", result.detail)
+
+    def test_diagnostic_environment_uses_checked_profile_defaults(self):
+        with mock.patch.dict(os.environ, {
+            "NVOKEN_PROCESS_ROLE": "executor",
+            "REDIS_URL": "redis://ambient",
+        }):
+            environment = readiness.diagnostic_environment("postgres://disposable")
+
+        self.assertEqual(environment["NVOKEN_PROCESS_ROLE"], "combined")
+        self.assertEqual(environment["DATABASE_URL"], "postgres://disposable")
+        self.assertEqual(environment["REDIS_URL"], "")
+
 
 if __name__ == "__main__":
     unittest.main()
