@@ -9,12 +9,19 @@ Create `YYYY-MM-DD-<exercise>.md` with this shape:
 ```markdown
 # single_daemon <exercise>
 
-- Profile: single_daemon
-- Result: pass | fail | partial
+## Record
+
+| Field | Value |
+| --- | --- |
+| Profile | `single_daemon` |
+| Tested revision | `<full 40-character Git revision>` |
+| Dimensions | `<exact readiness matrix row name>` |
+| Result | `<pass, fail, or partial>` |
+
 - Operator: <name or team>
 - Started: <UTC timestamp>
 - Finished: <UTC timestamp>
-- Tested Git revision or immutable image: <exact identity>
+- Immutable image: <exact identity or N/A>
 - Binary schema expectation: <version>
 - PostgreSQL: 17.<minor>, <nonsecret topology and storage>
 - Host: <OS, CPU, memory>
