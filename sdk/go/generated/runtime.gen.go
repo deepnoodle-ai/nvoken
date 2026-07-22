@@ -661,12 +661,6 @@ type Invocation struct {
 	// ID UUIDv7 with the public `invk_` prefix.
 	ID InvocationID `json:"id"`
 
-	// Output Server-validated terminal object for a schema-bearing Invocation.
-	// Null until successful terminal settlement and always null when no
-	// output contract was admitted.
-	Output           *map[string]interface{}     `json:"output"`
-	OutputProvenance *StructuredOutputProvenance `json:"output_provenance"`
-
 	// PendingToolCalls Present for a waiting Invocation with unresolved client calls.
 	PendingToolCalls *[]PendingClientToolCall `json:"pending_tool_calls,omitempty"`
 	Provenance       *ModelProvenance         `json:"provenance"`
@@ -680,8 +674,14 @@ type Invocation struct {
 	// lease. Final result acceptance moves it back to `queued`. Checkpoint
 	// recovery may also move `running` back to `queued`; lifecycle revision
 	// orders every transition.
-	Status    InvocationStatus `json:"status"`
-	UpdatedAt time.Time        `json:"updated_at"`
+	Status InvocationStatus `json:"status"`
+
+	// StructuredOutput Server-validated terminal object for a schema-bearing Invocation.
+	// Null until successful terminal settlement and always null when no
+	// output contract was admitted.
+	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
+	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance"`
+	UpdatedAt                  time.Time                   `json:"updated_at"`
 
 	// Usage One normalized terminal aggregate, not a billing ledger.
 	Usage               *ModelUsage `json:"usage"`
@@ -745,12 +745,10 @@ type InvocationChange struct {
 	Error *InvocationFailure `json:"error"`
 
 	// InvocationID UUIDv7 with the public `invk_` prefix.
-	InvocationID     InvocationID                `json:"invocation_id"`
-	OccurredAt       time.Time                   `json:"occurred_at"`
-	Output           *map[string]interface{}     `json:"output"`
-	OutputProvenance *StructuredOutputProvenance `json:"output_provenance"`
-	Provenance       *ModelProvenance            `json:"provenance"`
-	Revision         int64                       `json:"revision"`
+	InvocationID InvocationID     `json:"invocation_id"`
+	OccurredAt   time.Time        `json:"occurred_at"`
+	Provenance   *ModelProvenance `json:"provenance"`
+	Revision     int64            `json:"revision"`
 
 	// Status `completed`, `failed`, and `cancelled` are terminal and immutable.
 	// Deadline or budget exhaustion settles as `failed`. `waiting` means the
@@ -758,9 +756,11 @@ type InvocationChange struct {
 	// lease. Final result acceptance moves it back to `queued`. Checkpoint
 	// recovery may also move `running` back to `queued`; lifecycle revision
 	// orders every transition.
-	Status                 InvocationStatus `json:"status"`
-	ThroughMessageSequence *int64           `json:"through_message_sequence"`
-	Usage                  *ModelUsage      `json:"usage"`
+	Status                     InvocationStatus            `json:"status"`
+	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
+	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance"`
+	ThroughMessageSequence     *int64                      `json:"through_message_sequence"`
+	Usage                      *ModelUsage                 `json:"usage"`
 }
 
 // InvocationFailure Failed Invocations may carry paired usage and provenance when a model
@@ -814,6 +814,24 @@ type InvocationProviderCredentialSelection1 struct {
 
 // InvocationProviderCredentialSelection1Source defines model for InvocationProviderCredentialSelection.1.Source.
 type InvocationProviderCredentialSelection1Source string
+
+// InvocationResult defines model for InvocationResult.
+type InvocationResult struct {
+	Invocation Invocation `json:"invocation"`
+
+	// Messages Every canonical SessionMessage owned by this Invocation, all
+	// roles, ascending sequence, composed at read time from the
+	// canonical transcript. Nothing is stored twice.
+	Messages []SessionMessage `json:"messages"`
+
+	// OutputText The text content blocks of this Invocation's assistant-role
+	// messages concatenated in transcript order without separators.
+	// Non-null only when the Invocation is completed and at least one
+	// assistant text block exists. Failed and cancelled Invocations
+	// keep their messages readable as evidence while output_text stays
+	// null.
+	OutputText *string `json:"output_text"`
+}
 
 // InvocationStatus `completed`, `failed`, and `cancelled` are terminal and immutable.
 // Deadline or budget exhaustion settles as `failed`. `waiting` means the
@@ -1807,6 +1825,19 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/cancel (the `CancelInvocation` operationId).
 	CancelInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetInvocationResult Read the composed Invocation result
+	//
+	// Returns one InvocationResult at any status: the authoritative
+	// Invocation, this Invocation's canonical messages composed at read
+	// time, and the output_text convenience projection. The Invocation and
+	// its messages are read in one repeatable-read snapshot, so the payload
+	// never shows a terminal status with a missing message tail.
+	// Authentication, tenant scoping, and the nondisclosing not_found rule
+	// match the plain Invocation read exactly.
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
+	GetInvocationResult(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// SubmitClientToolResultsWithBody Submit durable results for pending client ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
@@ -2131,6 +2162,29 @@ func (c *Client) GetInvocation(ctx context.Context, invocationID InvocationID, r
 // Corresponds with POST /v1/invocations/{invocation_id}/cancel (the `CancelInvocation` operationId).
 func (c *Client) CancelInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCancelInvocationRequest(c.Server, invocationID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetInvocationResult Read the composed Invocation result
+//
+// Returns one InvocationResult at any status: the authoritative
+// Invocation, this Invocation's canonical messages composed at read
+// time, and the output_text convenience projection. The Invocation and
+// its messages are read in one repeatable-read snapshot, so the payload
+// never shows a terminal status with a missing message tail.
+// Authentication, tenant scoping, and the nondisclosing not_found rule
+// match the plain Invocation read exactly.
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
+func (c *Client) GetInvocationResult(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInvocationResultRequest(c.Server, invocationID)
 	if err != nil {
 		return nil, err
 	}
@@ -2703,6 +2757,40 @@ func NewCancelInvocationRequest(server string, invocationID InvocationID) (*http
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetInvocationResultRequest constructs an http.Request for the GetInvocationResult method
+func NewGetInvocationResultRequest(server string, invocationID InvocationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/invocations/%s/result", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -3602,6 +3690,21 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/cancel (the `CancelInvocation` operationId).
 	CancelInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*CancelInvocationHTTPResponse, error)
 
+	// GetInvocationResultWithResponse Read the composed Invocation result
+	//
+	// Returns one InvocationResult at any status: the authoritative
+	// Invocation, this Invocation's canonical messages composed at read
+	// time, and the output_text convenience projection. The Invocation and
+	// its messages are read in one repeatable-read snapshot, so the payload
+	// never shows a terminal status with a missing message tail.
+	// Authentication, tenant scoping, and the nondisclosing not_found rule
+	// match the plain Invocation read exactly.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
+	GetInvocationResultWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationResultHTTPResponse, error)
+
 	// SubmitClientToolResultsWithBodyWithResponse Submit durable results for pending client ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
@@ -4174,6 +4277,103 @@ func (r CancelInvocationHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CancelInvocationHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetInvocationResultHTTPResponse429Headers the declared response headers of an HTTP 429 response for GetInvocationResult
+type GetInvocationResultHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type GetInvocationResultHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *InvocationResult
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetInvocationResultHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetInvocationResultHTTPResponse) GetJSON200() *InvocationResult {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetInvocationResultHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetInvocationResultHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetInvocationResultHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetInvocationResultHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetInvocationResultHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetInvocationResultHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetInvocationResultHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInvocationResultHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInvocationResultHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInvocationResultHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInvocationResultHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5366,6 +5566,27 @@ func (c *ClientWithResponses) CancelInvocationWithResponse(ctx context.Context, 
 	return ParseCancelInvocationHTTPResponse(rsp)
 }
 
+// GetInvocationResultWithResponse Read the composed Invocation result
+//
+// Returns one InvocationResult at any status: the authoritative
+// Invocation, this Invocation's canonical messages composed at read
+// time, and the output_text convenience projection. The Invocation and
+// its messages are read in one repeatable-read snapshot, so the payload
+// never shows a terminal status with a missing message tail.
+// Authentication, tenant scoping, and the nondisclosing not_found rule
+// match the plain Invocation read exactly.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
+func (c *ClientWithResponses) GetInvocationResultWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationResultHTTPResponse, error) {
+	rsp, err := c.GetInvocationResult(ctx, invocationID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInvocationResultHTTPResponse(rsp)
+}
+
 // SubmitClientToolResultsWithBodyWithResponse Submit durable results for pending client ToolCalls
 //
 // Atomically accepts one bounded batch for a waiting Invocation. The
@@ -5986,6 +6207,94 @@ func ParseCancelInvocationHTTPResponse(rsp *http.Response) (*CancelInvocationHTT
 		}
 		response.JSON503 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetInvocationResultHTTPResponse parses an HTTP response from a GetInvocationResultWithResponse call
+func ParseGetInvocationResultHTTPResponse(rsp *http.Response) (*GetInvocationResultHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInvocationResultHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest InvocationResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetInvocationResultHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil

@@ -24,6 +24,7 @@ export * from './InvocationList.js';
 export * from './InvocationProviderCredentialSelection.js';
 export * from './InvocationProviderCredentialSelectionOneOf.js';
 export * from './InvocationProviderCredentialSelectionOneOf1.js';
+export * from './InvocationResult.js';
 export * from './InvocationStatus.js';
 export * from './ModelCost.js';
 export * from './ModelPricingCapability.js';

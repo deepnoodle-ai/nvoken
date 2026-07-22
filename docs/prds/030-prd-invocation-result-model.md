@@ -1,6 +1,6 @@
 # One Invocation result model and the composed result read
 
-**Status:** Draft
+**Status:** Implemented
 **Sequence:** 030
 **Depends on:** `007-prd-recovery-and-transcript-reads.md`,
 `013-prd-structured-output.md`,
@@ -153,7 +153,7 @@ sweep); queueing and busy-session changes.
 
 ## Acceptance
 
-- [ ] **A1 (R1, R2):** Contract tests read the result at `queued`,
+- [x] **A1 (R1, R2):** Contract tests read the result at `queued`,
   `running`, `waiting`, `completed`, `failed`, and `cancelled`, and prove
   the three-field shape, strict unknown-field rejection, all-roles message
   composition in ascending sequence, and tenancy plus nondisclosing
@@ -162,24 +162,24 @@ sweep); queueing and busy-session changes.
   either the pre-terminal state or the terminal state with its complete
   message tail, never a mix.
 
-- [ ] **A2 (R3):** Projection fixtures prove concatenation order across
+- [x] **A2 (R3):** Projection fixtures prove concatenation order across
   multiple assistant messages and interleaved tool-use blocks, null for
   every non-`completed` status, null for a completed turn with no assistant
   text while `structured_output` is populated, and readable evidence
   messages with null `output_text` for failed and cancelled turns.
 
-- [ ] **A3 (R4):** No surface serves `output` or `output_provenance` on
+- [x] **A3 (R4):** No surface serves `output` or `output_provenance` on
   `Invocation` or `InvocationChange`: get and list reads, conflict details,
   the fixed-cut snapshot, and SSE frames all emit the renamed fields, proven
   by grep-level OpenAPI assertions and end-to-end reads. The decision log
   records the breaking revision.
 
-- [ ] **A4 (R5):** Conformance fixtures pass in all four SDKs; the
+- [x] **A4 (R5):** Conformance fixtures pass in all four SDKs; the
   TypeScript `text()` result equals the wire `output_text` for the same
   fixture; drift checks fail against a stale client; the CLI prints a
   result; the quickstarts run against the result read.
 
-- [ ] **A5 (R1–R6):** `make check` and the full Postgres suite pass, and
+- [x] **A5 (R1–R6):** `make check` and the full Postgres suite pass, and
   the api, architecture, claims, decisions, README, and guide updates land
   together with the contract change.
 

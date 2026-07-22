@@ -5275,6 +5275,52 @@ func (q *Queries) ListSessionMessages(ctx context.Context, sessionID string) ([]
 	return items, nil
 }
 
+const listSessionMessagesByInvocation = `-- name: ListSessionMessagesByInvocation :many
+SELECT id, session_id, account_id, tenant_partition_id, agent_id,
+       invocation_id, sequence, role, content, created_at
+FROM session_messages
+WHERE invocation_id = $1
+ORDER BY sequence
+`
+
+// ListSessionMessagesByInvocation
+//
+//	SELECT id, session_id, account_id, tenant_partition_id, agent_id,
+//	       invocation_id, sequence, role, content, created_at
+//	FROM session_messages
+//	WHERE invocation_id = $1
+//	ORDER BY sequence
+func (q *Queries) ListSessionMessagesByInvocation(ctx context.Context, invocationID string) ([]SessionMessage, error) {
+	rows, err := q.db.Query(ctx, listSessionMessagesByInvocation, invocationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SessionMessage{}
+	for rows.Next() {
+		var i SessionMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.AgentID,
+			&i.InvocationID,
+			&i.Sequence,
+			&i.Role,
+			&i.Content,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSessionMessagesForGeneration = `-- name: ListSessionMessagesForGeneration :many
 SELECT message.id, message.session_id, message.account_id,
        message.tenant_partition_id, message.agent_id, message.invocation_id,

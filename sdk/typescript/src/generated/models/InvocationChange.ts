@@ -102,13 +102,13 @@ export interface InvocationChange {
      * @type {{ [key: string]: any; }}
      * @memberof InvocationChange
      */
-    output: { [key: string]: any; } | null;
+    structuredOutput: { [key: string]: any; } | null;
     /**
      *
      * @type {StructuredOutputProvenance}
      * @memberof InvocationChange
      */
-    outputProvenance: StructuredOutputProvenance | null;
+    structuredOutputProvenance: StructuredOutputProvenance | null;
     /**
      *
      * @type {Date}
@@ -130,8 +130,8 @@ export function instanceOfInvocationChange(value: object): value is InvocationCh
     if (!('error' in value) || value['error'] === undefined) return false;
     if (!('usage' in value) || value['usage'] === undefined) return false;
     if (!('provenance' in value) || value['provenance'] === undefined) return false;
-    if (!('output' in value) || value['output'] === undefined) return false;
-    if (!('outputProvenance' in value) || value['outputProvenance'] === undefined) return false;
+    if (!('structuredOutput' in value) || value['structuredOutput'] === undefined) return false;
+    if (!('structuredOutputProvenance' in value) || value['structuredOutputProvenance'] === undefined) return false;
     if (!('occurredAt' in value) || value['occurredAt'] === undefined) return false;
     return true;
 }
@@ -153,8 +153,8 @@ export function InvocationChangeFromJSONTyped(json: any, ignoreDiscriminator: bo
         'error': InvocationFailureFromJSON(json['error']),
         'usage': ModelUsageFromJSON(json['usage']),
         'provenance': ModelProvenanceFromJSON(json['provenance']),
-        'output': json['output'],
-        'outputProvenance': StructuredOutputProvenanceFromJSON(json['output_provenance']),
+        'structuredOutput': json['structured_output'],
+        'structuredOutputProvenance': StructuredOutputProvenanceFromJSON(json['structured_output_provenance']),
         'occurredAt': (new Date(json['occurred_at'])),
     };
 }
@@ -177,8 +177,8 @@ export function InvocationChangeToJSONTyped(value?: InvocationChange | null, ign
         'error': InvocationFailureToJSON(value['error']),
         'usage': ModelUsageToJSON(value['usage']),
         'provenance': ModelProvenanceToJSON(value['provenance']),
-        'output': value['output'],
-        'output_provenance': StructuredOutputProvenanceToJSON(value['outputProvenance']),
+        'structured_output': value['structuredOutput'],
+        'structured_output_provenance': StructuredOutputProvenanceToJSON(value['structuredOutputProvenance']),
         'occurred_at': value['occurredAt'].toISOString(),
     };
 }

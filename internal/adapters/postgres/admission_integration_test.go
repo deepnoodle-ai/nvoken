@@ -616,13 +616,7 @@ func TestCheckSchemaNeverMigratesServeDatabase(t *testing.T) {
 	}
 
 	olderPool, _ := testDatabase(t, true)
-	expected, err := ExpectedSchemaVersion()
-	if err != nil {
-		t.Fatalf("expected schema version: %v", err)
-	}
-	if _, err := olderPool.Exec(context.Background(), "UPDATE nvoken_schema_migrations SET version = $1", expected-1); err != nil {
-		t.Fatalf("mark older: %v", err)
-	}
+	rewindToPreviousSchema(t, olderPool)
 	olderStatus, err := InspectSchema(context.Background(), olderPool)
 	if err != nil || olderStatus.State != SchemaBehind {
 		t.Fatalf("older schema status = %#v, error = %v", olderStatus, err)

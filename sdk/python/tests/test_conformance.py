@@ -74,6 +74,16 @@ async def test_shared_fault_server_semantics() -> None:
         messages = await client.list_messages(SESSION_ID)
         assert messages.next_cursor == "messages-page-2"
 
+        composed = await handle.result()
+        assert composed.invocation.id == INVOCATION_ID
+        assert composed.invocation.status == "completed"
+        assert composed.invocation.structured_output == {"answer": "world"}
+        assert composed.invocation.structured_output_provenance.source == "tool_call"
+        assert [message.role for message in composed.messages] == ["user", "assistant"]
+        assert composed.output_text == "world"
+        assert await handle.text() == composed.output_text
+        assert len(await handle.list_messages()) == 2
+
         accepted = await handle.submit_tool_results([
             ToolResult(tool_call_id=TOOL_CALL_ID, content={"ok": True}),
         ])

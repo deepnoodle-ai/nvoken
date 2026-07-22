@@ -57,6 +57,11 @@ Invocations receive deterministic `installation_byok` bindings. A terminal-state
 trigger clears caller-ephemeral ciphertext in the same settlement transaction;
 retained bindings keep only safe provenance metadata.
 
+Migration `000015` adds a plain `session_messages (invocation_id, sequence)`
+index so the composed Invocation result read can fetch one turn's canonical
+messages without scanning the Session. It is an ordinary migration; the
+schema-14 binary remains safe against it.
+
 Migration `000014` is the one-release compatibility transition. Starting with
 this migration, every new migration must add one entry to
 `compatibility.json` and update the singleton

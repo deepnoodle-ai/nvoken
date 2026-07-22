@@ -2,6 +2,7 @@ import { InvocationsApi, ModelPricingApi, SessionsApi } from "./generated/apis/i
 import type {
   Invocation,
   InvocationList,
+  InvocationResult,
   InvocationStatus,
   ModelPricingCapability,
   ModelProvider,
@@ -204,6 +205,13 @@ export class Client {
     );
   }
 
+  getResult(invocationId: string, signal?: AbortSignal): Promise<InvocationResult> {
+    return this.replaySafe(
+      () => this.invocations.getInvocationResult({ invocationId }, { signal }),
+      signal,
+    );
+  }
+
   cancel(invocationId: string, signal?: AbortSignal): Promise<Invocation> {
     return this.replaySafe(
       () => this.invocations.cancelInvocation({ invocationId }, { signal }),
@@ -337,31 +345,25 @@ export class Handle {
     }
   }
 
+  async result(signal?: AbortSignal): Promise<InvocationResult> {
+    const result = await this.client.getResult(this.invocationId, signal);
+    this.status = result.invocation.status;
+    return result;
+  }
+
   async listMessages(signal?: AbortSignal): Promise<SessionMessage[]> {
-    const messages: SessionMessage[] = [];
-    let cursor: string | undefined;
-    do {
-      const page = await this.client.listMessages(this.sessionId, { cursor, limit: 100 }, signal);
-      messages.push(...page.items.filter((message) => message.invocationId === this.invocationId));
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor);
-    return messages;
+    return (await this.result(signal)).messages;
   }
 
   async text(signal?: AbortSignal): Promise<string> {
-    const text = (await this.listMessages(signal))
-      .filter((message) => message.role === "assistant")
-      .flatMap((message) => message.content)
-      .filter(isTextContentBlock)
-      .map((block) => block.text)
-      .join("");
-    if (!text) {
+    const { outputText } = await this.result(signal);
+    if (!outputText) {
       throw new NvokenError(
         "unexpected_response",
         `Invocation ${this.invocationId} has no canonical assistant text`,
       );
     }
-    return text;
+    return outputText;
   }
 
   async submitToolResults(results: ToolResult[], signal?: AbortSignal): Promise<SubmitClientToolResultsResponse> {

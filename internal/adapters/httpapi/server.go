@@ -40,6 +40,7 @@ const (
 type RuntimeService interface {
 	Admit(context.Context, domain.RuntimeAuthContext, services.CreateInvocationInput) (services.InvocationAcknowledgement, error)
 	GetInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error)
+	GetInvocationResult(context.Context, domain.RuntimeAuthContext, string) (services.InvocationResultRead, error)
 	ListInvocations(context.Context, domain.RuntimeAuthContext, services.InvocationListInput) (services.InvocationList, error)
 	GetSession(context.Context, domain.RuntimeAuthContext, string) (services.SessionRead, error)
 	ListSessions(context.Context, domain.RuntimeAuthContext, services.SessionListInput) (services.SessionList, error)
@@ -201,6 +202,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 	mux.HandleFunc("/auth/device", h.requireMethod(http.MethodGet, h.deviceApprovalPage))
 	mux.HandleFunc("/v1/invocations", h.invocations)
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
+	mux.HandleFunc("/v1/invocations/{invocation_id}/result", h.requireMethod(http.MethodGet, h.getInvocationResult))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/cancel", h.requireMethod(http.MethodPost, h.cancelInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/tool-results", h.requireMethod(http.MethodPost, h.submitClientToolResults))
 	mux.HandleFunc("/v1/model-pricing-capabilities", h.requireMethod(http.MethodGet, h.getModelPricingCapability))
@@ -508,6 +510,25 @@ func (h *handler) getInvocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, invocationResponseFromService(invocation))
+}
+
+func (h *handler) getInvocationResult(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{Code: services.CodeUnavailable, Message: "The service is temporarily unavailable."})
+		return
+	}
+	result, err := h.runtime.GetInvocationResult(r.Context(), auth, r.PathValue("invocation_id"))
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, invocationResultResponseFromService(result))
 }
 
 func (h *handler) cancelInvocation(w http.ResponseWriter, r *http.Request) {
@@ -845,8 +866,8 @@ type invocationResponse struct {
 	Error               any                             `json:"error"`
 	Usage               any                             `json:"usage"`
 	Provenance          any                             `json:"provenance"`
-	Output              any                             `json:"output"`
-	OutputProvenance    any                             `json:"output_provenance"`
+	Output              any                             `json:"structured_output"`
+	OutputProvenance    any                             `json:"structured_output_provenance"`
 	Budgets             services.InvocationBudgetRead   `json:"budgets"`
 	ActiveExecutionMS   int64                           `json:"active_execution_ms"`
 	WallClockDeadlineAt time.Time                       `json:"wall_clock_deadline_at"`
@@ -860,6 +881,12 @@ type invocationListResponse struct {
 	Items      []invocationResponse `json:"items"`
 	HasMore    bool                 `json:"has_more"`
 	NextCursor *string              `json:"next_cursor"`
+}
+
+type invocationResultResponse struct {
+	Invocation invocationResponse       `json:"invocation"`
+	Messages   []sessionMessageResponse `json:"messages"`
+	OutputText *string                  `json:"output_text"`
 }
 
 type sessionResponse struct {
@@ -926,8 +953,8 @@ type invocationChangeResponse struct {
 	Error                  any                     `json:"error"`
 	Usage                  any                     `json:"usage"`
 	Provenance             any                     `json:"provenance"`
-	Output                 any                     `json:"output"`
-	OutputProvenance       any                     `json:"output_provenance"`
+	Output                 any                     `json:"structured_output"`
+	OutputProvenance       any                     `json:"structured_output_provenance"`
 	OccurredAt             time.Time               `json:"occurred_at"`
 }
 
@@ -957,6 +984,18 @@ func invocationResponseFromService(invocation services.InvocationRead) invocatio
 		UpdatedAt:           invocation.UpdatedAt,
 		CompletedAt:         invocation.CompletedAt,
 		PendingToolCalls:    pendingClientToolCallResponses(invocation.PendingToolCalls),
+	}
+}
+
+func invocationResultResponseFromService(result services.InvocationResultRead) invocationResultResponse {
+	messages := make([]sessionMessageResponse, len(result.Messages))
+	for index, message := range result.Messages {
+		messages[index] = sessionMessageResponseFromDomain(message)
+	}
+	return invocationResultResponse{
+		Invocation: invocationResponseFromService(result.Invocation),
+		Messages:   messages,
+		OutputText: result.OutputText,
 	}
 }
 

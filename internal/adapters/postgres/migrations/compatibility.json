@@ -5,6 +5,11 @@
       "schema_version": 14,
       "minimum_binary_schema_version": 14,
       "classification": "transition"
+    },
+    {
+      "schema_version": 15,
+      "minimum_binary_schema_version": 14,
+      "classification": "ordinary"
     }
   ]
 }

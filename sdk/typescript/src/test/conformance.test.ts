@@ -112,6 +112,14 @@ test("shared fault server semantics", async (context) => {
   assert.deepEqual((await handle.listMessages()).map((message) => message.role), ["user", "assistant"]);
   assert.equal(await handle.text(), "world");
 
+  const composed = await handle.result();
+  assert.equal(composed.invocation.id, invocationId);
+  assert.equal(composed.invocation.status, "completed");
+  assert.deepEqual(composed.invocation.structuredOutput, { answer: "world" });
+  assert.equal(composed.invocation.structuredOutputProvenance?.source, "tool_call");
+  assert.deepEqual(composed.messages.map((message) => message.role), ["user", "assistant"]);
+  assert.equal(composed.outputText, await handle.text());
+
   const result = await handle.submitToolResults([{ toolCallId, content: { ok: true } }]);
   assert.equal(result.results[0]?.deduplicated, true);
   assert.equal((await handle.cancel()).status, "cancelled");

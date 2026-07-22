@@ -24,10 +24,12 @@ from nvoken_generated.models.invocation import Invocation
 from nvoken_generated.models.invocation_budget_request import InvocationBudgetRequest
 from nvoken_generated.models.invocation_input import InvocationInput
 from nvoken_generated.models.invocation_list import InvocationList
+from nvoken_generated.models.invocation_result import InvocationResult
 from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.model_selection import ModelSelection
 from nvoken_generated.models.session import Session
 from nvoken_generated.models.session_list import SessionList
+from nvoken_generated.models.session_message import SessionMessage
 from nvoken_generated.models.session_message_list import SessionMessageList
 from nvoken_generated.models.structured_output_spec import StructuredOutputSpec
 from nvoken_generated.models.submit_client_tool_results_request import SubmitClientToolResultsRequest
@@ -219,6 +221,11 @@ class Client:
     async def get(self, invocation_id: str) -> Invocation:
         return await self._replay_safe(lambda: self.invocations.get_invocation(invocation_id))
 
+    async def get_result(self, invocation_id: str) -> InvocationResult:
+        return await self._replay_safe(
+            lambda: self.invocations.get_invocation_result(invocation_id)
+        )
+
     async def cancel(self, invocation_id: str) -> Invocation:
         return await self._replay_safe(lambda: self.invocations.cancel_invocation(invocation_id))
 
@@ -369,6 +376,23 @@ class Handle:
                 delay = min(delay * 2, maximum_delay)
         except (asyncio.CancelledError, TimeoutError) as error:
             raise NvokenError("timeout", "local wait timed out or was cancelled") from error
+
+    async def result(self) -> InvocationResult:
+        result = await self.client.get_result(self.invocation_id)
+        self.status = result.invocation.status
+        return result
+
+    async def list_messages(self) -> list[SessionMessage]:
+        return (await self.result()).messages
+
+    async def text(self) -> str:
+        result = await self.result()
+        if not result.output_text:
+            raise NvokenError(
+                "unexpected_response",
+                f"Invocation {self.invocation_id} has no canonical assistant text",
+            )
+        return result.output_text
 
     async def submit_tool_results(self, results: list[ToolResult]) -> SubmitClientToolResultsResponse:
         response = await self.client.submit_tool_results(self.invocation_id, results)

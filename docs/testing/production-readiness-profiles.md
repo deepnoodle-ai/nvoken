@@ -71,7 +71,7 @@ implementation claims and are deliberately outside this comparison.
 | `provider_registry` | `anthropic`, `openai` | [`newModel`](../../internal/adapters/divegen/generator.go) | Runtime OpenAPI provider enum and the root README provider line |
 | `openapi_tool_modes` | `client`, `callback` | [`ToolSpec`](../../openapi/runtime.yaml) | Runtime admission guide examples and this recorded value |
 | `openapi_version` | `0.1.0` | [`openapi/runtime.yaml`](../../openapi/runtime.yaml) | This recorded value |
-| `migration_head` | `000014` | [Embedded forward migrations](../../internal/adapters/postgres/migrations/) | Migration inventory and this recorded value |
+| `migration_head` | `000015` | [Embedded forward migrations](../../internal/adapters/postgres/migrations/) | Migration inventory and this recorded value |
 | `readiness_links` | `README.md`, `docs/design/architecture.md`, `docs/guides/runtime-admission.md`, `deploy/google-cloud/README.md` | This matrix | The four primary documents that must link back here |
 
 ## Running the conformance gate

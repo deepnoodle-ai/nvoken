@@ -41,10 +41,10 @@ class InvocationChange(BaseModel):
     error: Optional[InvocationFailure]
     usage: Optional[ModelUsage]
     provenance: Optional[ModelProvenance]
-    output: Optional[Dict[str, Any]]
-    output_provenance: Optional[StructuredOutputProvenance]
+    structured_output: Optional[Dict[str, Any]]
+    structured_output_provenance: Optional[StructuredOutputProvenance]
     occurred_at: datetime
-    __properties: ClassVar[List[str]] = ["invocation_id", "revision", "status", "through_message_sequence", "error", "usage", "provenance", "output", "output_provenance", "occurred_at"]
+    __properties: ClassVar[List[str]] = ["invocation_id", "revision", "status", "through_message_sequence", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "occurred_at"]
 
     @field_validator('invocation_id')
     def invocation_id_validate_regular_expression(cls, value):
@@ -104,9 +104,9 @@ class InvocationChange(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of provenance
         if self.provenance:
             _dict['provenance'] = self.provenance.to_dict()
-        # override the default output from pydantic by calling `to_dict()` of output_provenance
-        if self.output_provenance:
-            _dict['output_provenance'] = self.output_provenance.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of structured_output_provenance
+        if self.structured_output_provenance:
+            _dict['structured_output_provenance'] = self.structured_output_provenance.to_dict()
         # set to None if through_message_sequence (nullable) is None
         # and model_fields_set contains the field
         if self.through_message_sequence is None and "through_message_sequence" in self.model_fields_set:
@@ -127,15 +127,15 @@ class InvocationChange(BaseModel):
         if self.provenance is None and "provenance" in self.model_fields_set:
             _dict['provenance'] = None
 
-        # set to None if output (nullable) is None
+        # set to None if structured_output (nullable) is None
         # and model_fields_set contains the field
-        if self.output is None and "output" in self.model_fields_set:
-            _dict['output'] = None
+        if self.structured_output is None and "structured_output" in self.model_fields_set:
+            _dict['structured_output'] = None
 
-        # set to None if output_provenance (nullable) is None
+        # set to None if structured_output_provenance (nullable) is None
         # and model_fields_set contains the field
-        if self.output_provenance is None and "output_provenance" in self.model_fields_set:
-            _dict['output_provenance'] = None
+        if self.structured_output_provenance is None and "structured_output_provenance" in self.model_fields_set:
+            _dict['structured_output_provenance'] = None
 
         return _dict
 
@@ -156,8 +156,8 @@ class InvocationChange(BaseModel):
             "error": InvocationFailure.from_dict(obj["error"]) if obj.get("error") is not None else None,
             "usage": ModelUsage.from_dict(obj["usage"]) if obj.get("usage") is not None else None,
             "provenance": ModelProvenance.from_dict(obj["provenance"]) if obj.get("provenance") is not None else None,
-            "output": obj.get("output"),
-            "output_provenance": StructuredOutputProvenance.from_dict(obj["output_provenance"]) if obj.get("output_provenance") is not None else None,
+            "structured_output": obj.get("structured_output"),
+            "structured_output_provenance": StructuredOutputProvenance.from_dict(obj["structured_output_provenance"]) if obj.get("structured_output_provenance") is not None else None,
             "occurred_at": obj.get("occurred_at")
         })
         return _obj

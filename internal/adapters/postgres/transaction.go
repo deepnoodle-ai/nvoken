@@ -50,6 +50,43 @@ func (m *TransactionManager) WithTransaction(ctx context.Context, fn func(contex
 	return nil
 }
 
+// WithReadSnapshot serves every repository read in fn from one
+// repeatable-read read-only transaction. Nested calls join the transaction
+// already carried by ctx and inherit its isolation level, so a caller
+// already inside WithTransaction reads at that transaction's isolation,
+// not repeatable read.
+func (m *TransactionManager) WithReadSnapshot(ctx context.Context, fn func(context.Context) error) (err error) {
+	if _, ok := ctx.Value(transactionContextKey{}).(pgx.Tx); ok {
+		return fn(ctx)
+	}
+
+	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadOnly,
+	})
+	if err != nil {
+		return fmt.Errorf("begin read snapshot: %w", err)
+	}
+	txCtx := context.WithValue(ctx, transactionContextKey{}, tx)
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			_ = tx.Rollback(context.Background())
+			panic(recovered)
+		}
+	}()
+
+	if err := fn(txCtx); err != nil {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+			return fmt.Errorf("rollback read snapshot after %w: %v", err, rollbackErr)
+		}
+		return normalizeTransactionError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit read snapshot: %w", normalizeTransactionError(err))
+	}
+	return nil
+}
+
 func normalizeTransactionError(err error) error {
 	var postgresError *pgconn.PgError
 	if !errors.As(err, &postgresError) {

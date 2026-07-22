@@ -55,6 +55,7 @@ __all__ = [
     "InvocationProviderCredentialSelection",
     "InvocationProviderCredentialSelectionOneOf",
     "InvocationProviderCredentialSelectionOneOf1",
+    "InvocationResult",
     "InvocationStatus",
     "ModelCost",
     "ModelPricingCapability",
@@ -129,6 +130,7 @@ from nvoken_generated.models.invocation_list import InvocationList as Invocation
 from nvoken_generated.models.invocation_provider_credential_selection import InvocationProviderCredentialSelection as InvocationProviderCredentialSelection
 from nvoken_generated.models.invocation_provider_credential_selection_one_of import InvocationProviderCredentialSelectionOneOf as InvocationProviderCredentialSelectionOneOf
 from nvoken_generated.models.invocation_provider_credential_selection_one_of1 import InvocationProviderCredentialSelectionOneOf1 as InvocationProviderCredentialSelectionOneOf1
+from nvoken_generated.models.invocation_result import InvocationResult as InvocationResult
 from nvoken_generated.models.invocation_status import InvocationStatus as InvocationStatus
 from nvoken_generated.models.model_cost import ModelCost as ModelCost
 from nvoken_generated.models.model_pricing_capability import ModelPricingCapability as ModelPricingCapability

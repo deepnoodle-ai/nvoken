@@ -73,6 +73,14 @@ type TransactionManager interface {
 	WithTransaction(ctx context.Context, fn func(context.Context) error) error
 }
 
+// ReadSnapshotManager runs every repository read in fn against one
+// repeatable-read snapshot, so a multi-query read cannot mix database states.
+// Implemented by transaction managers that can offer snapshot isolation;
+// callers fall back to sequential reads when the capability is absent.
+type ReadSnapshotManager interface {
+	WithReadSnapshot(ctx context.Context, fn func(context.Context) error) error
+}
+
 type AccountRepository interface {
 	CreateAccount(context.Context, domain.Account) error
 	GetAccount(context.Context, string) (domain.Account, error)
@@ -147,6 +155,7 @@ type ExecutionSpecSnapshotRepository interface {
 type SessionMessageRepository interface {
 	AppendSessionMessage(context.Context, domain.SessionMessage) error
 	ListSessionMessages(context.Context, string) ([]domain.SessionMessage, error)
+	ListSessionMessagesByInvocation(context.Context, string) ([]domain.SessionMessage, error)
 }
 
 // GenerationContextRepository returns the canonical message subset eligible

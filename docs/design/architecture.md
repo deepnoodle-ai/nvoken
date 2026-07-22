@@ -66,7 +66,7 @@ runtime is listed in `api.md` ("Explicitly absent from the Runtime API").
 | ------------------- | --------------------------------------------------------------------------------------------------- |
 | Agent anchors       | Auto-created identity records grouping Sessions and Invocations                                     |
 | Session state       | Canonical transcript, retention, one nonterminal Invocation, host key, tenant partition, indexed metadata |
-| Invocation state    | Admission, status, output, errors, spec snapshot/digest, usage, provenance                          |
+| Invocation state    | Admission, status, structured output, errors, spec snapshot/digest, usage, provenance               |
 | Turn execution      | Model calls, tool selection, checkpointing, continuation, cancellation, settlement                  |
 | Tool exchange       | Durable ToolCalls across builtin, callback, and client modes                                        |
 | Recovery            | Leases, fencing, checkpoints, replay cursors, retry policy, stale-engine rejection                  |
@@ -129,7 +129,10 @@ schema — and terminal error. Input and conversational output content live only
 in the Session transcript. Validated structured output is the sole exception:
 terminal settlement may project the accepted reserved ToolCall request onto the
 Invocation after proving equality and recording its ToolCall/schema provenance.
-The transcript remains canonical for replay. A new turn is a new Invocation.
+The transcript remains canonical for replay. Read-time projections over
+canonical rows are permitted: the composed Invocation result read returns the
+turn's messages and an `output_text` concatenation without persisting either.
+A new turn is a new Invocation.
 
 | State | Terminal | Meaning |
 | --- | :---: | --- |
@@ -357,7 +360,9 @@ definitions; reusable model-provider credential metadata and encrypted
 versions; and per-Invocation provider-credential bindings. Lifecycle revisions
 and change views may reference transcript sequence numbers but never store
 another copy of message or ToolCall-result content, except the equality-proven
-terminal structured-output projection described under Invocation. Tool
+terminal structured-output projection described under Invocation. That
+single-representation rule constrains storage only; read-time projections such
+as the composed result read derive from canonical rows and store nothing. Tool
 lifecycle records have no independent
 pruning path and remain with the owning Invocation/Session trace. No host
 tables, business records, OAuth connections, non-model business credentials,

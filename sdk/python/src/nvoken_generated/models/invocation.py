@@ -43,8 +43,8 @@ class Invocation(BaseModel):
     error: Optional[InvocationFailure]
     usage: Optional[ModelUsage] = Field(description="One normalized terminal aggregate, not a billing ledger.")
     provenance: Optional[ModelProvenance]
-    output: Optional[Dict[str, Any]] = Field(description="Server-validated terminal object for a schema-bearing Invocation. Null until successful terminal settlement and always null when no output contract was admitted. ")
-    output_provenance: Optional[StructuredOutputProvenance]
+    structured_output: Optional[Dict[str, Any]] = Field(description="Server-validated terminal object for a schema-bearing Invocation. Null until successful terminal settlement and always null when no output contract was admitted. ")
+    structured_output_provenance: Optional[StructuredOutputProvenance]
     budgets: InvocationBudgets
     active_execution_ms: Annotated[int, Field(strict=True, ge=0)]
     wall_clock_deadline_at: datetime
@@ -52,7 +52,7 @@ class Invocation(BaseModel):
     updated_at: datetime
     completed_at: Optional[datetime]
     pending_tool_calls: Optional[List[PendingClientToolCall]] = Field(default=None, description="Present for a waiting Invocation with unresolved client calls.")
-    __properties: ClassVar[List[str]] = ["id", "agent_id", "session_id", "status", "error", "usage", "provenance", "output", "output_provenance", "budgets", "active_execution_ms", "wall_clock_deadline_at", "created_at", "updated_at", "completed_at", "pending_tool_calls"]
+    __properties: ClassVar[List[str]] = ["id", "agent_id", "session_id", "status", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "budgets", "active_execution_ms", "wall_clock_deadline_at", "created_at", "updated_at", "completed_at", "pending_tool_calls"]
 
     @field_validator('id')
     def id_validate_regular_expression(cls, value):
@@ -132,9 +132,9 @@ class Invocation(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of provenance
         if self.provenance:
             _dict['provenance'] = self.provenance.to_dict()
-        # override the default output from pydantic by calling `to_dict()` of output_provenance
-        if self.output_provenance:
-            _dict['output_provenance'] = self.output_provenance.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of structured_output_provenance
+        if self.structured_output_provenance:
+            _dict['structured_output_provenance'] = self.structured_output_provenance.to_dict()
         # override the default output from pydantic by calling `to_dict()` of budgets
         if self.budgets:
             _dict['budgets'] = self.budgets.to_dict()
@@ -160,15 +160,15 @@ class Invocation(BaseModel):
         if self.provenance is None and "provenance" in self.model_fields_set:
             _dict['provenance'] = None
 
-        # set to None if output (nullable) is None
+        # set to None if structured_output (nullable) is None
         # and model_fields_set contains the field
-        if self.output is None and "output" in self.model_fields_set:
-            _dict['output'] = None
+        if self.structured_output is None and "structured_output" in self.model_fields_set:
+            _dict['structured_output'] = None
 
-        # set to None if output_provenance (nullable) is None
+        # set to None if structured_output_provenance (nullable) is None
         # and model_fields_set contains the field
-        if self.output_provenance is None and "output_provenance" in self.model_fields_set:
-            _dict['output_provenance'] = None
+        if self.structured_output_provenance is None and "structured_output_provenance" in self.model_fields_set:
+            _dict['structured_output_provenance'] = None
 
         # set to None if completed_at (nullable) is None
         # and model_fields_set contains the field
@@ -194,8 +194,8 @@ class Invocation(BaseModel):
             "error": InvocationFailure.from_dict(obj["error"]) if obj.get("error") is not None else None,
             "usage": ModelUsage.from_dict(obj["usage"]) if obj.get("usage") is not None else None,
             "provenance": ModelProvenance.from_dict(obj["provenance"]) if obj.get("provenance") is not None else None,
-            "output": obj.get("output"),
-            "output_provenance": StructuredOutputProvenance.from_dict(obj["output_provenance"]) if obj.get("output_provenance") is not None else None,
+            "structured_output": obj.get("structured_output"),
+            "structured_output_provenance": StructuredOutputProvenance.from_dict(obj["structured_output_provenance"]) if obj.get("structured_output_provenance") is not None else None,
             "budgets": InvocationBudgets.from_dict(obj["budgets"]) if obj.get("budgets") is not None else None,
             "active_execution_ms": obj.get("active_execution_ms"),
             "wall_clock_deadline_at": obj.get("wall_clock_deadline_at"),
