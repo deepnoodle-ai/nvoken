@@ -1,6 +1,6 @@
 # Prove a minimal backup and restore path
 
-**Status:** Draft
+**Status:** Implemented
 **Sequence:** 020
 **Depends on:** `017-prd-production-readiness-profiles.md`,
 `018-prd-operational-signals-and-diagnostics.md`, and
@@ -74,17 +74,17 @@ queues and delivery state may differ from external systems.
 
 ## Acceptance
 
-- [ ] **A1 (R1, R2, R4):** A disposable single-daemon database containing
+- [x] **A1 (R1, R2, R4):** A disposable single-daemon database containing
   completed, queued, waiting, and checkpointed work is backed up, restored under
   a new database name, and returns the same authoritative records through the
   non-mutating verifier. A separate terminal-only fixture proves compatible
   daemon startup and readback without outbound effects.
-- [ ] **A2 (R1, R3, R4):** A disposable Cloud SQL backup or PITR restore passes
+- [x] **A2 (R1, R3, R4):** A disposable Cloud SQL backup or PITR restore passes
   the same verification while the source deployment remains unchanged.
-- [ ] **A3 (R4):** Corrupt, dirty, incomplete, and incompatible restore fixtures
+- [x] **A3 (R4):** Corrupt, dirty, incomplete, and incompatible restore fixtures
   fail the checked verifier with a specific safe diagnosis, and no daemon is
   started against them.
-- [ ] **A4 (R5):** Both drills produce the documented lightweight record and the
+- [x] **A4 (R5):** Both drills produce the documented lightweight record and the
   readiness matrix can point to it without copying credentials or data.
 
 ## Follow-up

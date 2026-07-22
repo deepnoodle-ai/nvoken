@@ -170,8 +170,24 @@ gcloud sql backups list \
   --format='table(id,status,startTime,endTime,location)'
 ```
 
-Restore the selected backup into the new target. Never use the source instance
-as `--restore-instance`:
+Create the new empty target with the same database version and compatible
+edition, region, tier, storage, and connectivity settings recorded from the
+source. Keep it outside Terraform and production traffic. For example, after
+setting the values from the source inspection:
+
+```bash
+gcloud sql instances create "${NVOKEN_GCP_TARGET}" \
+  --project="${NVOKEN_GCP_PROJECT}" \
+  --database-version="${NVOKEN_GCP_DATABASE_VERSION}" \
+  --edition="${NVOKEN_GCP_EDITION}" \
+  --region="${NVOKEN_GCP_REGION}" \
+  --tier="${NVOKEN_GCP_TIER}" \
+  --no-deletion-protection
+```
+
+Wait until the target is `RUNNABLE`, then restore the selected backup into it.
+The target must exist and have the same database version as the source. Never
+use the source instance as `--restore-instance`:
 
 ```bash
 gcloud sql backups restore "BACKUP_ID" \

@@ -37,3 +37,8 @@ cleaned drill remains useful evidence but cannot mark the readiness row proven.
 
 The operating procedure is
 [Backup, restore, and recovery drills](../../guides/backup-and-restore.md).
+
+## Latest records
+
+- [`single_daemon`](2026-07-22-single_daemon.md)
+- [`google_cloud`](2026-07-22-google_cloud.md)
