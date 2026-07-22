@@ -1,0 +1,36 @@
+class Nvoken < Formula
+  desc "Durable agent runtime and client CLI"
+  homepage "https://github.com/deepnoodle-ai/nvoken"
+  version "{{VERSION}}"
+  license "Apache-2.0"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/deepnoodle-ai/nvoken/releases/download/v{{VERSION}}/nvoken_{{VERSION}}_darwin_arm64.tar.gz"
+      sha256 "{{SHA_DARWIN_ARM64}}"
+    else
+      url "https://github.com/deepnoodle-ai/nvoken/releases/download/v{{VERSION}}/nvoken_{{VERSION}}_darwin_amd64.tar.gz"
+      sha256 "{{SHA_DARWIN_AMD64}}"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/deepnoodle-ai/nvoken/releases/download/v{{VERSION}}/nvoken_{{VERSION}}_linux_arm64.tar.gz"
+      sha256 "{{SHA_LINUX_ARM64}}"
+    else
+      url "https://github.com/deepnoodle-ai/nvoken/releases/download/v{{VERSION}}/nvoken_{{VERSION}}_linux_amd64.tar.gz"
+      sha256 "{{SHA_LINUX_AMD64}}"
+    end
+  end
+
+  def install
+    bin.install "nvoken"
+    bin.install "nvokend"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/nvoken --version 2>&1")
+    assert_equal "#{version}\n", shell_output("#{bin}/nvokend --version 2>&1")
+  end
+end

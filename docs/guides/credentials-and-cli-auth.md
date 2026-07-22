@@ -1,5 +1,10 @@
 # Machine credentials and CLI authentication
 
+> **For application integrators and deployment operators.** The local Run
+> command generates its own protected credentials. Read this guide when your
+> application needs a durable machine credential, a person needs CLI login, or
+> an operator needs to rotate access.
+
 nvoken authenticates every public request through one durable Account-owned
 credential record. Machine credentials carry a fixed `Runtime`, `Viewer`, or
 `Operator` profile. Browser-issued user credentials resolve their owner's
@@ -20,7 +25,10 @@ operations from a machine credential; they never add an operation outside its
 profile. A request outside an Account, tenant, or Session constraint follows
 the Runtime API's nondisclosure behavior.
 
-## Installation secrets
+## Production installation secrets
+
+`nvokend quickstart` generates these values automatically for disposable local
+use. A production operator must generate, store, and recover them independently.
 
 The combined daemon needs three distinct installation inputs during the
 rollback window:

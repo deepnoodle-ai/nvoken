@@ -1,5 +1,8 @@
 # Data retention and storage growth
 
+> **For deployment operators and privacy owners.** This documents current
+> storage behavior; it is not required to complete the local Run guide.
+
 nvoken initially retains authoritative runtime data indefinitely. The governing
 inventory is the design packet's
 [Data and retention](../design/architecture.md#data-and-retention) section; this

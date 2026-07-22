@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -22,16 +24,44 @@ func main() {
 	slog.SetDefault(logger)
 
 	if err := run(os.Args[1:]); err != nil {
-		logger.Error("fatal error",
-			"event", observability.EventProcessFailed,
-			"error_class", observability.ErrorClass(err))
-		os.Exit(1)
+		if exitCode := reportRunError(logger, os.Args[1:], err, os.Stderr); exitCode != 0 {
+			os.Exit(exitCode)
+		}
 	}
 }
 
+func reportRunError(logger *slog.Logger, args []string, err error, errorOutput io.Writer) int {
+	if len(args) > 0 && args[0] == "quickstart" {
+		if errors.Is(err, context.Canceled) {
+			return 0
+		}
+		_, _ = fmt.Fprintln(errorOutput, "nvokend quickstart:", err)
+		return 1
+	}
+	logger.Error("fatal error",
+		"event", observability.EventProcessFailed,
+		"error_class", observability.ErrorClass(err))
+	return 1
+}
+
 func run(args []string) error {
+	return runWithOutput(args, os.Stdout)
+}
+
+func runWithOutput(args []string, output io.Writer) error {
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
+		_, err := fmt.Fprintln(output, "usage: nvokend [serve|quickstart|diagnose|upgrade-preflight|migrate|verify-restore|dispatch-smoke|version]")
+		return err
+	}
+	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
+		_, err := fmt.Fprintln(output, buildVersion)
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if len(args) > 0 && args[0] == "quickstart" {
+		return runQuickstart(ctx, args[1:], output)
+	}
 
 	if len(args) == 0 || (len(args) == 1 && args[0] == "serve") {
 		cfg, err := loadDaemonConfig()
@@ -95,7 +125,7 @@ func run(args []string) error {
 			"dispatch_kind", result.Dispatch.Kind, "dispatch_status", result.Dispatch.Status)
 		return nil
 	}
-	return fmt.Errorf("usage: nvokend [serve|diagnose|upgrade-preflight|migrate|verify-restore|dispatch-smoke]")
+	return fmt.Errorf("usage: nvokend [serve|quickstart|diagnose|upgrade-preflight|migrate|verify-restore|dispatch-smoke|version]")
 }
 
 func cloudLoggingReplaceAttr(groups []string, a slog.Attr) slog.Attr {

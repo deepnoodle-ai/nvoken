@@ -47,6 +47,20 @@ func TestEnvironmentAuthenticationCreatesNoCredentialsFile(t *testing.T) {
 	}
 }
 
+func TestVersionUsesReleaseValue(t *testing.T) {
+	previous := version
+	version = "0.1.1-test"
+	t.Cleanup(func() { version = previous })
+
+	result := newApp().Test(t, cli.TestArgs("--version"))
+	if !result.Success() {
+		t.Fatalf("version: %v\nstdout: %s\nstderr: %s", result.Err, result.Stdout, result.Stderr)
+	}
+	if !strings.Contains(result.Stdout, "0.1.1-test") {
+		t.Fatalf("version output = %q", result.Stdout)
+	}
+}
+
 func TestEndpointAndCredentialPrecedenceAreIndependent(t *testing.T) {
 	var mu sync.Mutex
 	var authorizations []string

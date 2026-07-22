@@ -19,6 +19,9 @@
       "import": "./dist/index.js"
     }
   },
+  "bin": {
+    "nvoken-quickstart": "./dist/examples/quickstart.js"
+  },
   "sideEffects": false,
   "files": [
     "dist/callback.d.ts",
@@ -27,6 +30,7 @@
     "dist/client.js",
     "dist/diagnostics.d.ts",
     "dist/diagnostics.js",
+    "dist/examples/quickstart.js",
     "dist/generated",
     "dist/index.d.ts",
     "dist/index.js",

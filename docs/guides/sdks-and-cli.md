@@ -1,5 +1,9 @@
 # SDKs and client CLI
 
+For the fastest TypeScript proof, use the packaged command in
+[Run nvoken locally](run-locally.md). This page is the package, CLI, generation,
+and release reference for integrators and contributors.
+
 nvoken ships supported workflow facades for Go, TypeScript, Python, and Rust.
 They are generated from `openapi/runtime.yaml`, then wrapped with the durable
 semantics an ordinary host needs: exact-request admission replay, typed errors,
@@ -21,12 +25,16 @@ request after an uncertain admission response.
 ## CLI
 
 The `nvoken` binary is a Runtime client; `nvokend` is the service daemon.
-Build and inspect commands with:
+Install the matching official release of both commands with:
 
 ```bash
-go build ./cmd/nvoken
-./nvoken --help
+brew install deepnoodle-ai/tap/nvoken
+nvoken --version
+nvokend --version
 ```
+
+Contributors can build either command from source through the
+[Develop nvoken guide](developing-nvoken.md).
 
 Before device login exists, commands require `NVOKEN_API_KEY`. Endpoint
 precedence is `--base-url`, `NVOKEN_BASE_URL`, the JSON config file, then
@@ -63,6 +71,28 @@ make sdk-check          # build and test every SDK and the CLI
 make onboarding-check   # prove the packed TypeScript newcomer path (requires disposable Postgres)
 ```
 
+## Binary and Homebrew releases
+
+A `vX.Y.Z` tag on an exact merged commit triggers `.github/workflows/release.yml`.
+The workflow tests the Go commands and publishes checksummed archives containing
+both `nvoken` and `nvokend` for Darwin and Linux on amd64 and arm64, plus a
+Windows amd64 archive. Stable tags update `Formula/nvoken.rb` in
+`deepnoodle-ai/homebrew-tap`; prerelease tags publish GitHub assets without
+changing the stable formula.
+
+Build and inspect the same assets locally with:
+
+```bash
+make release VERSION=X.Y.Z
+cat dist/checksums.txt
+```
+
+The tag version must match `sdk/typescript/package.json`. Cross-repository
+Homebrew publication uses the nvoken repository's `TAP_GITHUB_TOKEN` Actions
+secret and fails visibly when that authority is unavailable. A successful tag
+push is only the trigger: verify the GitHub Release assets, checksums, Homebrew
+formula commit, a clean `brew install`, and both version commands.
+
 ## TypeScript npm releases
 
 `@deepnoodle/nvoken` is a public package in the existing `@deepnoodle` npm
@@ -72,21 +102,20 @@ organization. Install the published package with:
 npm install @deepnoodle/nvoken
 ```
 
-Version 0.1.0 was published interactively from the exact merged `main` artifact after
-`make onboarding-check`. Verify the registry rather than treating a publish command
-or workflow result as evidence:
+An exact `npm-vX.Y.Z` tag triggers `.github/workflows/release-npm.yml`. The tag
+must match `sdk/typescript/package.json`; the workflow builds, tests, packs,
+publishes with npm trusted publishing, and reads the version back from the
+public registry. Verify the registry independently:
 
 ```bash
-npm view @deepnoodle/nvoken@0.1.0 name version dist-tags repository --json
+npm view @deepnoodle/nvoken@X.Y.Z name version dist-tags repository --json
 ```
 
-Version 0.1.1 is prepared in source with the onboarding corrections. It remains
-unpublished until the provider-scoped pricing and quickstart-failure corrections
-merge, the exact corrected `main` revision passes the gates, and the
-`npm-v0.1.1` release workflow succeeds.
+npm trusted publishing is bound to GitHub repository `deepnoodle-ai/nvoken`,
+workflow `release-npm.yml`, and the `npm publish` action. It uses short-lived OIDC
+authentication and publishes with provenance.
 
-npm trusted publishing is configured for GitHub repository `deepnoodle-ai/nvoken`,
-workflow `release-npm.yml`, allowed action `npm publish`, and no environment. Later
-releases must update the package version on `main`, pass the gates, and push the
-exact `npm-vX.Y.Z` tag. The workflow uses short-lived OIDC authentication, publishes
-with provenance, and verifies the public version.
+For one coordinated nvoken release, push `vX.Y.Z` and `npm-vX.Y.Z` from the same
+fully checked merged `main` commit. Monitor and verify the binary/Homebrew and
+npm workflows independently; one green publication surface cannot prove the
+other succeeded.

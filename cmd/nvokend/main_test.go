@@ -2,7 +2,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -31,6 +34,70 @@ func TestCloudLoggingJSONShape(t *testing.T) {
 	}
 	if _, ok := entry["level"]; ok {
 		t.Fatalf("unexpected default level key: %#v", entry)
+	}
+}
+
+func TestVersionDoesNotLoadConfiguration(t *testing.T) {
+	t.Setenv("RUNTIME_API_KEY", "invalid")
+	previous := buildVersion
+	buildVersion = "0.1.1-test"
+	t.Cleanup(func() { buildVersion = previous })
+
+	var output bytes.Buffer
+	if err := runWithOutput([]string{"--version"}, &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != "0.1.1-test\n" {
+		t.Fatalf("version output = %q", output.String())
+	}
+
+	output.Reset()
+	if err := runWithOutput([]string{"version"}, &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != "0.1.1-test\n" {
+		t.Fatalf("version command output = %q", output.String())
+	}
+}
+
+func TestHelpDoesNotLoadConfiguration(t *testing.T) {
+	t.Setenv("RUNTIME_API_KEY", "invalid")
+	var output bytes.Buffer
+	if err := runWithOutput([]string{"--help"}, &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "quickstart") || !strings.Contains(output.String(), "serve") {
+		t.Fatalf("help output = %q", output.String())
+	}
+}
+
+func TestReportRunErrorPrintsActionableQuickstartFailure(t *testing.T) {
+	var structured bytes.Buffer
+	var terminal bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&structured, nil))
+	err := errors.New("export OPENAI_API_KEY before running nvokend quickstart")
+
+	if code := reportRunError(logger, []string{"quickstart"}, err, &terminal); code != 1 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if terminal.String() != "nvokend quickstart: export OPENAI_API_KEY before running nvokend quickstart\n" {
+		t.Fatalf("terminal error = %q", terminal.String())
+	}
+	if structured.Len() != 0 {
+		t.Fatalf("quickstart emitted operator log = %q", structured.String())
+	}
+}
+
+func TestReportRunErrorTreatsQuickstartCancellationAsCleanStop(t *testing.T) {
+	var structured bytes.Buffer
+	var terminal bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&structured, nil))
+
+	if code := reportRunError(logger, []string{"quickstart"}, fmt.Errorf("stop quickstart: %w", context.Canceled), &terminal); code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if terminal.Len() != 0 || structured.Len() != 0 {
+		t.Fatalf("cancellation output: terminal=%q structured=%q", terminal.String(), structured.String())
 	}
 }
 

@@ -5,7 +5,21 @@ replay-safe retries, async pagination, typed errors, resumable SSE, callback
 verification, and canonical assistant-text helpers. Generated operations remain
 available from the `raw` export.
 
-## Install
+## Try the published package
+
+The shortest proof needs no project files. Start the official daemon with the
+[Run nvoken locally guide](https://github.com/deepnoodle-ai/nvoken/blob/main/docs/guides/run-locally.md),
+then run this in the generated quickstart directory:
+
+```bash
+npx --yes --package "@deepnoodle/nvoken@$(nvokend --version)" nvoken-quickstart
+```
+
+The packaged TypeScript app writes and recalls the code word `cedar` across two
+durable Invocations. It reads only the `NVOKEN_*` values from the marked `.env`
+that `nvokend quickstart` created.
+
+## Add nvoken to an app
 
 In an empty consumer directory:
 
@@ -14,12 +28,10 @@ npm init -y
 npm install @deepnoodle/nvoken
 ```
 
-## Public-package quickstart
+## Minimal application
 
-Start a Runtime with the
-[local development quickstart](https://github.com/deepnoodle-ai/nvoken/blob/main/docs/guides/local-development.md),
-then save this complete example as `quickstart.mjs` next to the consumer's
-`package.json`:
+After the Runtime is running, save this complete example as `quickstart.mjs`
+next to the consumer's `package.json`:
 
 <!-- public-quickstart:start -->
 ```js
@@ -100,7 +112,9 @@ records, then reuse a key only when retrying that exact request.
 
 ## Install from a source checkout
 
-The following commands are repository-only. From the nvoken repository root,
+This is the contributor path, not the first-time Run path. Follow
+[Develop nvoken](https://github.com/deepnoodle-ai/nvoken/blob/main/docs/guides/developing-nvoken.md)
+for the complete repository setup. From the nvoken repository root,
 build `dist/` before installing the local package; generated output is not committed:
 
 ```bash
