@@ -112,8 +112,22 @@ npm view @deepnoodle/nvoken@X.Y.Z name version dist-tags repository --json
 ```
 
 npm trusted publishing is bound to GitHub repository `deepnoodle-ai/nvoken`,
-workflow `release-npm.yml`, and the `npm publish` action. It uses short-lived OIDC
-authentication and publishes with provenance.
+workflow `release-npm.yml`, the `npm` GitHub environment, and the `npm publish`
+action. It uses short-lived OIDC authentication and publishes with provenance.
+
+All four of those must line up or the OIDC exchange is rejected. The publish job
+therefore declares `environment: npm`, and that environment exists in the
+repository with a deployment policy admitting the `npm-v*` tag pattern. A
+mismatch is hard to diagnose from the log: npm does not report a trusted
+publishing failure, it silently falls back to anonymous auth, and the registry
+answers `404 Not Found - PUT` (see npm/cli#9088). Read a 404 here as "the OIDC
+identity did not match", not as a missing package. A successful publish prints
+`Signed provenance statement with source and build information from GitHub
+Actions`; treat the absence of that line as an authentication failure even if a
+later step passes.
+
+Node 24 bundles an npm newer than the 11.5.1 trusted-publishing minimum, so the
+workflow does not upgrade the CLI separately.
 
 For one coordinated nvoken release, push `vX.Y.Z` and `npm-vX.Y.Z` from the same
 fully checked merged `main` commit. Monitor and verify the binary/Homebrew and

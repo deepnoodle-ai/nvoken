@@ -5,21 +5,26 @@ on:
     tags:
       - npm-v*
 
-permissions:
-  contents: read
-  id-token: write
-
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # The npm trusted publisher is bound to this environment. Without it the
+    # OIDC subject is the tag ref, the registry rejects the exchange, and npm
+    # falls back to anonymous auth and reports a misleading 404.
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@deepnoodle/nvoken
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+      # Node 24 bundles an npm newer than the 11.5.1 trusted-publishing
+      # minimum, so the CLI needs no separate upgrade step.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - name: Use an npm CLI with trusted publishing support
-        run: npm install --global npm@latest
       - name: Verify release tag matches package version
         working-directory: sdk/typescript
         run: |
