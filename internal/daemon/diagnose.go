@@ -57,6 +57,8 @@ func diagnose(parent context.Context, cfg Config, logger *slog.Logger) error {
 				slog.String("error_class", string(status.State)),
 				slog.Int64("schema_version", int64(status.Current)),
 				slog.Int64("expected_schema_version", int64(status.Expected)),
+				slog.Int64("minimum_binary_schema_version", int64(status.MinimumBinarySchemaVersion)),
+				slog.Int64("compatibility_schema_version", int64(status.CompatibilitySchemaVersion)),
 				slog.Bool("dirty", status.Dirty))
 		}
 		pool.Close()

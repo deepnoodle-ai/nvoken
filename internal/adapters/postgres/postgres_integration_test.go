@@ -111,6 +111,86 @@ func TestMigratorIsIdempotentAndSerialized(t *testing.T) {
 	}
 }
 
+func TestUpgradePreflightAndPinnedSchemaCompatibility(t *testing.T) {
+	pool, databaseURL := testDatabase(t, true)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+		DROP TABLE nvoken_schema_compatibility;
+		UPDATE nvoken_schema_migrations SET version = 13, dirty = false
+	`); err != nil {
+		t.Fatalf("prepare pre-transition schema: %v", err)
+	}
+
+	request := UpgradePreflightRequest{
+		CurrentBuildVersion:        "build-13",
+		CurrentBinarySchemaVersion: 13,
+		TargetBuildVersion:         "build-14",
+		Mode:                       UpgradeOrdinary,
+	}
+	if _, err := PreflightUpgrade(ctx, pool, request); err == nil || !strings.Contains(err.Error(), "one-time compatibility transition") {
+		t.Fatalf("ordinary transition preflight error = %v", err)
+	}
+	before, err := InspectSchemaForVersion(ctx, pool, 13)
+	if err != nil || !before.Compatible() || before.Current != 13 {
+		t.Fatalf("preflight mutated legacy schema = %#v, %v", before, err)
+	}
+
+	request.Mode = UpgradeTransition
+	transition, err := PreflightUpgrade(ctx, pool, request)
+	if err != nil || transition.OrdinaryCompatibilityWindow || transition.CurrentDatabaseSchemaVersion != 13 ||
+		transition.TargetSchemaVersion != 14 {
+		t.Fatalf("transition preflight = %#v, %v", transition, err)
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if err := NewMigrator(databaseURL, 5*time.Second, logger).Apply(ctx); err != nil {
+		t.Fatalf("apply compatibility transition: %v", err)
+	}
+	transitioned, err := InspectSchemaForVersion(ctx, pool, 14)
+	if err != nil || transitioned.State != SchemaCompatible || transitioned.MinimumBinarySchemaVersion != 14 {
+		t.Fatalf("transitioned schema = %#v, %v", transitioned, err)
+	}
+	retry, err := PreflightUpgrade(ctx, pool, request)
+	if err != nil || retry.OrdinaryCompatibilityWindow {
+		t.Fatalf("transition rollout retry = %#v, %v", retry, err)
+	}
+	request.Mode = UpgradeOrdinary
+	if _, err := PreflightUpgrade(ctx, pool, request); err == nil || !strings.Contains(err.Error(), "current binary cannot serve current database") {
+		t.Fatalf("unsafe post-transition ordinary retry error = %v", err)
+	}
+	request.CurrentBuildVersion = "build-14"
+	request.CurrentBinarySchemaVersion = 14
+	if ordinary, err := PreflightUpgrade(ctx, pool, request); err != nil || !ordinary.OrdinaryCompatibilityWindow {
+		t.Fatalf("ordinary exact-schema retry = %#v, %v", ordinary, err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE nvoken_schema_migrations SET version = 15;
+		UPDATE nvoken_schema_compatibility
+		SET schema_version = 15, minimum_binary_schema_version = 14
+	`); err != nil {
+		t.Fatalf("prepare compatible next schema: %v", err)
+	}
+	previous, err := InspectSchemaForVersion(ctx, pool, 14)
+	if err != nil || previous.State != SchemaCompatibleNewer {
+		t.Fatalf("previous binary compatibility = %#v, %v", previous, err)
+	}
+	next, err := InspectSchemaForVersion(ctx, pool, 15)
+	if err != nil || next.State != SchemaCompatible {
+		t.Fatalf("next binary compatibility = %#v, %v", next, err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE nvoken_schema_compatibility
+		SET minimum_binary_schema_version = 15
+	`); err != nil {
+		t.Fatalf("prepare unsafe next schema: %v", err)
+	}
+	unsafe, err := InspectSchemaForVersion(ctx, pool, 14)
+	if err != nil || unsafe.State != SchemaAhead || unsafe.CompatibilityError() == nil {
+		t.Fatalf("unsafe previous binary compatibility = %#v, %v", unsafe, err)
+	}
+}
+
 func TestIdentityCredentialAndDeviceFlowPersistsInPostgres(t *testing.T) {
 	pool, _ := testDatabase(t, true)
 	store := NewStore(pool)
@@ -202,13 +282,18 @@ func TestIdentityCredentialAndDeviceFlowPersistsInPostgres(t *testing.T) {
 func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("dirty version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
+		expected, err := ExpectedSchemaVersion()
+		if err != nil {
+			t.Fatal(err)
+		}
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = 13",
+			"UPDATE nvoken_schema_migrations SET dirty = true WHERE version = $1",
+			expected,
 		); err != nil {
 			t.Fatalf("mark migration dirty: %v", err)
 		}
-		err := NewMigrator(databaseURL, 2*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil))).Apply(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "000013 is dirty") {
+		err = NewMigrator(databaseURL, 2*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil))).Apply(context.Background())
+		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("%06d is dirty", expected)) {
 			t.Fatalf("migrate error = %v", err)
 		}
 	})
@@ -216,7 +301,7 @@ func TestMigratorFailsOnDirtyAndUnknownVersion(t *testing.T) {
 	t.Run("unknown version", func(t *testing.T) {
 		pool, databaseURL := testDatabase(t, true)
 		if _, err := pool.Exec(context.Background(),
-			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false WHERE version = 13",
+			"UPDATE nvoken_schema_migrations SET version = 999, dirty = false",
 		); err != nil {
 			t.Fatalf("set future migration: %v", err)
 		}

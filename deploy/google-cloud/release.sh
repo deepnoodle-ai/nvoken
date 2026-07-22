@@ -7,6 +7,22 @@ nvoken_repo_root="$(cd "${nvoken_deploy_dir}/../.." && pwd)"
 nvoken_release_plan="${nvoken_deploy_dir}/release.tfplan"
 trap 'rm -f "${nvoken_release_plan}"' EXIT
 
+nvoken_target_schema_version=0
+for nvoken_migration in "${nvoken_repo_root}"/internal/adapters/postgres/migrations/*.up.sql; do
+  nvoken_migration_name="${nvoken_migration##*/}"
+  nvoken_migration_prefix="${nvoken_migration_name%%_*}"
+  nvoken_migration_version=$((10#${nvoken_migration_prefix}))
+  if ((nvoken_migration_version > nvoken_target_schema_version)); then
+    nvoken_target_schema_version="${nvoken_migration_version}"
+  fi
+done
+if ((nvoken_target_schema_version == 0)); then
+  echo "no embedded database migrations found" >&2
+  exit 1
+fi
+TF_VAR_schema_version="${nvoken_target_schema_version}"
+export TF_VAR_schema_version
+
 for nvoken_command in gcloud git terraform; do
   if ! command -v "${nvoken_command}" >/dev/null 2>&1; then
     echo "required command not found: ${nvoken_command}" >&2
@@ -84,6 +100,39 @@ gcloud builds submit "${nvoken_repo_root}" \
   --service-account="${nvoken_build_service_account}" \
   --gcs-source-staging-dir="gs://${nvoken_build_source_bucket}/source" \
   --substitutions="_IMAGE=${nvoken_image},_BUILD_VERSION=${TF_VAR_image_tag}"
+
+# Read the currently serving revision before the migration Job is updated. The
+# schema label is written by every post-transition service revision. The first
+# transition from an unlabeled revision requires one explicit operator value.
+nvoken_service_name="${TF_VAR_name:-nvoken}-${nvoken_environment}"
+nvoken_previous_image=""
+if ! nvoken_previous_image="$(gcloud run services describe "${nvoken_service_name}" \
+  --project="${TF_VAR_project_id}" \
+  --region="${TF_VAR_region:-us-central1}" \
+  --format='value(spec.template.spec.containers[0].image)' 2>/dev/null)"; then
+  nvoken_previous_image=""
+fi
+if [[ -n "${nvoken_previous_image}" ]]; then
+  nvoken_previous_schema_version="$(gcloud run services describe "${nvoken_service_name}" \
+    --project="${TF_VAR_project_id}" \
+    --region="${TF_VAR_region:-us-central1}" \
+    --format='value(spec.template.metadata.labels.nvoken_schema_version)' 2>/dev/null || true)"
+  if [[ -z "${nvoken_previous_schema_version}" ]]; then
+    : "${NVOKEN_CURRENT_SCHEMA_VERSION:?set NVOKEN_CURRENT_SCHEMA_VERSION for the one-time unlabeled compatibility transition}"
+    nvoken_previous_schema_version="${NVOKEN_CURRENT_SCHEMA_VERSION}"
+  fi
+  if [[ ! "${nvoken_previous_schema_version}" =~ ^[0-9]+$ ]]; then
+    echo "current schema version must be a nonnegative integer" >&2
+    exit 1
+  fi
+  TF_VAR_previous_build_version="${nvoken_previous_image}"
+  TF_VAR_previous_schema_version="${nvoken_previous_schema_version}"
+else
+  TF_VAR_previous_build_version="none"
+  TF_VAR_previous_schema_version=0
+fi
+TF_VAR_migration_mode="${NVOKEN_MIGRATION_MODE:-ordinary}"
+export TF_VAR_previous_build_version TF_VAR_previous_schema_version TF_VAR_migration_mode
 
 # Update only the release job and its prerequisites. The serving revision still
 # points at the prior image until this exact image has migrated successfully.

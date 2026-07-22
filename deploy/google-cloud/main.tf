@@ -537,6 +537,21 @@ resource "google_cloud_run_v2_job" "migrate" {
           value = "5m"
         }
 
+        env {
+          name  = "NVOKEN_CURRENT_BUILD_VERSION"
+          value = var.previous_build_version
+        }
+
+        env {
+          name  = "NVOKEN_CURRENT_SCHEMA_VERSION"
+          value = tostring(var.previous_schema_version)
+        }
+
+        env {
+          name  = "NVOKEN_MIGRATION_MODE"
+          value = var.migration_mode
+        }
+
         resources {
           limits = {
             cpu    = var.cpu
@@ -597,6 +612,10 @@ resource "google_cloud_run_v2_service" "executor" {
   }
 
   template {
+    labels = {
+      nvoken_schema_version = tostring(var.schema_version)
+    }
+
     service_account                  = google_service_account.executor.email
     timeout                          = "${var.task_dispatch_deadline_seconds}s"
     max_instance_request_concurrency = var.executor_request_concurrency
@@ -874,6 +893,10 @@ resource "google_cloud_run_v2_service" "runtime" {
   }
 
   template {
+    labels = {
+      nvoken_schema_version = tostring(var.schema_version)
+    }
+
     service_account                  = google_service_account.runtime.email
     timeout                          = "${var.runtime_request_timeout_seconds}s"
     max_instance_request_concurrency = var.request_concurrency

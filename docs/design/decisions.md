@@ -291,3 +291,19 @@ settles visibly as credential
 unavailable; nvoken never silently changes source or charges platform credits.
 This is a narrow model-gateway exception to the no-secret-store boundary, not a
 general integration, OAuth, per-tool, or business-credential vault.
+
+31. One-release forward schema compatibility supersedes exact newer-schema
+rejection (2026-07-21): golang-migrate remains the sole forward migration
+engine, but an exact schema match is no longer the only safe startup state.
+Migration 14 introduces a singleton database record containing the resulting
+schema version and the minimum binary schema version allowed to serve it. Each
+later migration declares the same values in an embedded manifest for
+pre-mutation release checks and updates the database record in its SQL
+transaction for startup checks. An ordinary release must keep the currently
+serving binary within that declared minimum; otherwise preflight fails before
+DDL and the change requires an expand release followed by a later contract
+migration. A clean exact schema or explicitly compatible newer schema may
+serve; dirty, behind, unknown, and declared-unsafe schemas fail closed. The
+guarantee starts after the transition release and covers only the immediately
+previous production binary. There are no down migrations or arbitrary
+historical downgrade claims.

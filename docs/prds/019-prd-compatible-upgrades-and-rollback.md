@@ -1,6 +1,6 @@
 # Keep one-release upgrades and rollback safe
 
-**Status:** Draft
+**Status:** Implemented; profile drill evidence pending
 **Sequence:** 019
 **Depends on:** `017-prd-production-readiness-profiles.md` and
 `018-prd-operational-signals-and-diagnostics.md`
@@ -79,14 +79,14 @@ single daemon; generalized feature flags.
 
 ## Acceptance
 
-- [ ] **A1 (R1, R2):** After the transition release, an N+1-compatible database
+- [x] **A1 (R1, R2):** After the transition release, an N+1-compatible database
   accepts pinned-schema N and N+1 test binaries at runtime. An unsafe or unknown
   schema fails startup before serving. The test harness pins the prior schema
   contract without requiring CI to fetch a historical release image.
-- [ ] **A2 (R3, R4):** A fixture migration that would break N cannot pass the
+- [x] **A2 (R3, R4):** A fixture migration that would break N cannot pass the
   ordinary release preflight before database mutation and has a documented
   expand/contract example.
-- [ ] **A3 (R5):** Integration tests seed each nonterminal/terminal work shape
+- [x] **A3 (R5):** Integration tests seed each nonterminal/terminal work shape
   with N, migrate, run N+1, then exercise the N rollback window; authoritative
   state and first-writer/idempotency invariants remain intact.
 - [ ] **A4 (R6):** Disposable single-daemon and Google drills cover successful
