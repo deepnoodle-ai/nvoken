@@ -19,7 +19,10 @@ async def main() -> None:
             ),
         ))
         invocation = await handle.wait()
+        result = await handle.result()
         print(invocation.id, invocation.status)
+        if result.output_text is not None:
+            print(f"agent> {result.output_text}")
 
 
 asyncio.run(main())

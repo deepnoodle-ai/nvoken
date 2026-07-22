@@ -192,8 +192,8 @@ the lower installation maximum); an explicit value below two is rejected. The
 model must submit a valid object and then finish with a normal assistant
 response. Prose or fenced JSON never substitutes for the tool submission.
 Patterns are limited to 1,024 UTF-8 bytes. The accepted ToolCall is internal
-checkpoint evidence; public `output` remains null until fenced terminal
-settlement commits the final object and provenance together.
+checkpoint evidence; public `structured_output` remains null until fenced
+terminal settlement commits the final object and provenance together.
 
 On its first start, nvoken serializes creation of one installation Account, its
 default tenant partition, the local bootstrap Owner membership, and one durable
@@ -338,13 +338,25 @@ curl --fail-with-body \
 
 The Invocation read includes terminal `error`, normalized aggregate `usage`,
 model `provenance`, resolved `budgets`, accrued `active_execution_ms`, and its
-wall-clock deadline. It also always includes nullable `output` and
-`output_provenance`. A successful schema-bearing Invocation returns the
-validated object and its reserved ToolCall ID/schema digest; failed, cancelled,
-or schema-free Invocations return null for both. If no valid submission was
-accepted, the failure code is `structured_output_unsatisfied` with a bounded
-missing, invalid, or oversized reason. Cancel accepted work idempotently with
-an empty body:
+wall-clock deadline. It also always includes nullable `structured_output` and
+`structured_output_provenance`. A successful schema-bearing Invocation returns
+the validated object and its reserved ToolCall ID/schema digest; failed,
+cancelled, or schema-free Invocations return null for both. If no valid
+submission was accepted, the failure code is `structured_output_unsatisfied`
+with a bounded missing, invalid, or oversized reason.
+
+To read the answer itself, use the composed result read. It returns the
+authoritative Invocation, this Invocation's canonical messages, and
+`output_text`, the assistant text concatenated in transcript order.
+`output_text` is non-null only for a completed turn with assistant text:
+
+```bash
+curl --fail-with-body \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  http://localhost:8080/v1/invocations/invk_…/result
+```
+
+Cancel accepted work idempotently with an empty body:
 
 ```bash
 curl --fail-with-body -X POST \

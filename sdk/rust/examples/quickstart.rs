@@ -27,6 +27,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await?;
     let invocation = handle.wait(None).await?;
+    let result = handle.result().await?;
     println!("{} {:?}", invocation.id, invocation.status);
+    if let Some(text) = result.output_text {
+        println!("agent> {text}");
+    }
     Ok(())
 }

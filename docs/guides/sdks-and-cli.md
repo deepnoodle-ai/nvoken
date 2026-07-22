@@ -46,8 +46,10 @@ precedence is `--base-url`, `NVOKEN_BASE_URL`, the JSON config file, then
 ```
 
 Use `--json` before the command for machine-readable output. The CLI covers
-durable invoke, Invocation get/list/wait/cancel, Session get/list/messages/
-transcript/stream, model-pricing preflight, and ToolCall result submission. It
+durable invoke, Invocation get/result/list/wait/cancel, Session get/list/
+messages/transcript/stream, model-pricing preflight, and ToolCall result
+submission. `invocation result` prints the composed result: the Invocation,
+its canonical messages, and the assistant text. It
 imports the Go SDK and does not maintain HTTP routes or payload types of its
 own.
 

@@ -67,6 +67,8 @@ func (s *onboardingState) serve(response http.ResponseWriter, request *http.Requ
 		})
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
 		s.create(response, request)
+	case strings.HasPrefix(request.URL.Path, "/v1/invocations/") && strings.HasSuffix(request.URL.Path, "/result") && request.Method == http.MethodGet:
+		s.getInvocationResult(response, strings.TrimSuffix(strings.TrimPrefix(request.URL.Path, "/v1/invocations/"), "/result"))
 	case strings.HasPrefix(request.URL.Path, "/v1/invocations/") && request.Method == http.MethodGet:
 		s.getInvocation(response, strings.TrimPrefix(request.URL.Path, "/v1/invocations/"))
 	case strings.HasSuffix(request.URL.Path, "/messages") && request.Method == http.MethodGet:
@@ -185,6 +187,52 @@ func (s *onboardingState) getInvocation(response http.ResponseWriter, invocation
 	writeJSON(response, http.StatusOK, invocation)
 }
 
+func (s *onboardingState) getInvocationResult(response http.ResponseWriter, invocationID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	invocation, ok := s.invocations[invocationID]
+	if !ok {
+		writeError(response, http.StatusNotFound, "not_found", "Invocation was not found")
+		return
+	}
+	session, ok := s.sessionsByID[invocation["session_id"].(string)]
+	if !ok {
+		writeError(response, http.StatusNotFound, "not_found", "Session was not found")
+		return
+	}
+	messages := []any{}
+	var text strings.Builder
+	found := false
+	for _, message := range session.messages {
+		if message["invocation_id"] != invocationID {
+			continue
+		}
+		messages = append(messages, message)
+		if message["role"] != "assistant" {
+			continue
+		}
+		for _, block := range message["content"].([]any) {
+			entry, ok := block.(map[string]any)
+			if !ok || entry["type"] != "text" {
+				continue
+			}
+			if value, ok := entry["text"].(string); ok {
+				found = true
+				text.WriteString(value)
+			}
+		}
+	}
+	var outputText any
+	if invocation["status"] == "completed" && found {
+		outputText = text.String()
+	}
+	writeJSON(response, http.StatusOK, map[string]any{
+		"invocation":  invocation,
+		"messages":    messages,
+		"output_text": outputText,
+	})
+}
+
 func (s *onboardingState) listMessages(response http.ResponseWriter, request *http.Request) {
 	sessionID := strings.TrimSuffix(
 		strings.TrimPrefix(request.URL.Path, "/v1/sessions/"),
@@ -257,21 +305,21 @@ func onboardingInvocation(
 	createdAt time.Time,
 ) map[string]any {
 	return map[string]any{
-		"id":                     id,
-		"agent_id":               session.agentID,
-		"session_id":             session.id,
-		"status":                 status,
-		"error":                  failure,
-		"usage":                  nil,
-		"provenance":             nil,
-		"output":                 nil,
-		"output_provenance":      nil,
-		"budgets":                map[string]any{"wall_clock_timeout_seconds": 300, "active_execution_timeout_seconds": 120, "max_output_tokens": 300, "max_iterations": 1},
-		"active_execution_ms":    10,
-		"wall_clock_deadline_at": createdAt.Add(5 * time.Minute).Format(time.RFC3339),
-		"created_at":             createdAt.Format(time.RFC3339),
-		"updated_at":             createdAt.Add(time.Second).Format(time.RFC3339),
-		"completed_at":           createdAt.Add(time.Second).Format(time.RFC3339),
+		"id":                           id,
+		"agent_id":                     session.agentID,
+		"session_id":                   session.id,
+		"status":                       status,
+		"error":                        failure,
+		"usage":                        nil,
+		"provenance":                   nil,
+		"structured_output":            nil,
+		"structured_output_provenance": nil,
+		"budgets":                      map[string]any{"wall_clock_timeout_seconds": 300, "active_execution_timeout_seconds": 120, "max_output_tokens": 300, "max_iterations": 1},
+		"active_execution_ms":          10,
+		"wall_clock_deadline_at":       createdAt.Add(5 * time.Minute).Format(time.RFC3339),
+		"created_at":                   createdAt.Format(time.RFC3339),
+		"updated_at":                   createdAt.Add(time.Second).Format(time.RFC3339),
+		"completed_at":                 createdAt.Add(time.Second).Format(time.RFC3339),
 	}
 }
 

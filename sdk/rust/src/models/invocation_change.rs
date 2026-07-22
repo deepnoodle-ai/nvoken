@@ -31,10 +31,13 @@ pub struct InvocationChange {
     pub usage: Option<Box<models::ModelUsage>>,
     #[serde(rename = "provenance", deserialize_with = "Option::deserialize")]
     pub provenance: Option<Box<models::ModelProvenance>>,
-    #[serde(rename = "output", deserialize_with = "Option::deserialize")]
-    pub output: Option<std::collections::HashMap<String, serde_json::Value>>,
-    #[serde(rename = "output_provenance", deserialize_with = "Option::deserialize")]
-    pub output_provenance: Option<Box<models::StructuredOutputProvenance>>,
+    #[serde(rename = "structured_output", deserialize_with = "Option::deserialize")]
+    pub structured_output: Option<std::collections::HashMap<String, serde_json::Value>>,
+    #[serde(
+        rename = "structured_output_provenance",
+        deserialize_with = "Option::deserialize"
+    )]
+    pub structured_output_provenance: Option<Box<models::StructuredOutputProvenance>>,
     #[serde(rename = "occurred_at")]
     pub occurred_at: chrono::DateTime<chrono::FixedOffset>,
 }
@@ -48,8 +51,8 @@ impl InvocationChange {
         error: Option<models::InvocationFailure>,
         usage: Option<models::ModelUsage>,
         provenance: Option<models::ModelProvenance>,
-        output: Option<std::collections::HashMap<String, serde_json::Value>>,
-        output_provenance: Option<models::StructuredOutputProvenance>,
+        structured_output: Option<std::collections::HashMap<String, serde_json::Value>>,
+        structured_output_provenance: Option<models::StructuredOutputProvenance>,
         occurred_at: chrono::DateTime<chrono::FixedOffset>,
     ) -> InvocationChange {
         InvocationChange {
@@ -72,8 +75,8 @@ impl InvocationChange {
             } else {
                 None
             },
-            output,
-            output_provenance: if let Some(x) = output_provenance {
+            structured_output,
+            structured_output_provenance: if let Some(x) = structured_output_provenance {
                 Some(Box::new(x))
             } else {
                 None

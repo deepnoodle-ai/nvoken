@@ -194,6 +194,16 @@ func (c *Client) Get(ctx context.Context, invocationID string) (*Invocation, err
 	})
 }
 
+func (c *Client) GetResult(ctx context.Context, invocationID string) (*InvocationResult, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationResult], error) {
+		response, err := c.raw.GetInvocationResultWithResponse(ctx, invocationID)
+		if err != nil {
+			return callResult[generated.InvocationResult]{}, err
+		}
+		return callResult[generated.InvocationResult]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+}
+
 func (c *Client) Cancel(ctx context.Context, invocationID string) (*Invocation, error) {
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
 		response, err := c.raw.CancelInvocationWithResponse(ctx, invocationID)
@@ -477,6 +487,46 @@ func (h *Handle) Wait(ctx context.Context, options WaitOptions) (*Invocation, er
 			delay = options.MaximumDelay
 		}
 	}
+}
+
+// Result reads the composed InvocationResult at any status: the
+// authoritative Invocation, this Invocation's canonical messages, and the
+// output_text projection.
+func (h *Handle) Result(ctx context.Context) (*InvocationResult, error) {
+	result, err := h.client.GetResult(ctx, h.InvocationID)
+	if err == nil {
+		h.Status = result.Invocation.Status
+	}
+	return result, err
+}
+
+// ListMessages returns this Invocation's canonical messages from the
+// composed result read.
+func (h *Handle) ListMessages(ctx context.Context) ([]SessionMessage, error) {
+	result, err := h.Result(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return result.Messages, nil
+}
+
+// Text returns the completed turn's canonical assistant text. It fails
+// with ErrorUnexpectedResponse when the wire output_text is null or the
+// empty string: the wire keeps those distinct, but this helper
+// deliberately treats both as "no useful answer". Read Result directly
+// to observe the distinction.
+func (h *Handle) Text(ctx context.Context) (string, error) {
+	result, err := h.Result(ctx)
+	if err != nil {
+		return "", err
+	}
+	if result.OutputText == nil || *result.OutputText == "" {
+		return "", &Error{
+			Category: ErrorUnexpectedResponse,
+			Message:  "Invocation " + h.InvocationID + " has no canonical assistant text",
+		}
+	}
+	return *result.OutputText, nil
 }
 
 func (h *Handle) SubmitToolResults(ctx context.Context, results []ToolResult) (*ToolResultResponse, error) {

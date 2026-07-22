@@ -94,6 +94,32 @@ async fn shared_fault_server_semantics() {
         .unwrap();
     assert_eq!(messages.next_cursor.as_deref(), Some("messages-page-2"));
 
+    let mut result_handle = handle.clone();
+    let composed = result_handle.result().await.unwrap();
+    assert_eq!(composed.invocation.id, INVOCATION_ID);
+    assert_eq!(
+        composed.invocation.status,
+        nvoken::models::InvocationStatus::Completed
+    );
+    assert_eq!(composed.messages.len(), 2);
+    assert_eq!(
+        composed.messages[0].role,
+        nvoken::models::SessionMessageRole::User
+    );
+    assert_eq!(
+        composed.messages[1].role,
+        nvoken::models::SessionMessageRole::Assistant
+    );
+    let structured = composed.invocation.structured_output.as_ref().unwrap();
+    assert_eq!(structured.get("answer"), Some(&json!("world")));
+    assert!(composed.invocation.structured_output_provenance.is_some());
+    assert_eq!(composed.output_text.as_deref(), Some("world"));
+    assert_eq!(
+        result_handle.text().await.unwrap(),
+        composed.output_text.clone().unwrap()
+    );
+    assert_eq!(result_handle.list_messages().await.unwrap().len(), 2);
+
     let mut mutable_handle = handle.clone();
     let result = mutable_handle
         .submit_tool_results(vec![ToolResult {

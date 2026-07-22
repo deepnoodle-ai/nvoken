@@ -26,6 +26,7 @@ var operationCommands = map[string]string{
 	"createInvocation":          "invoke",
 	"createProviderCredential":  "provider-credential create",
 	"getInvocation":             "invocation get",
+	"getInvocationResult":       "invocation result",
 	"getModelPricingCapability": "model pricing",
 	"getProviderCredential":     "provider-credential get",
 	"getSession":                "session get",
@@ -62,6 +63,10 @@ func registerRuntimeCommands(app *cli.App) {
 
 	invocations := app.Group("invocation").Description("Inspect and control Invocations")
 	invocations.Command("get").Args("invocation-id").Run(runInvocationGet)
+	invocations.Command("result").
+		Description("Read the composed result: Invocation, messages, and assistant text").
+		Args("invocation-id").
+		Run(runInvocationResult)
 	invocations.Command("wait").
 		Args("invocation-id").
 		Flags(cli.Int("timeout").Help("Local wait timeout in seconds; zero waits indefinitely")).
@@ -186,6 +191,28 @@ func runInvocationGet(command *cli.Context) error {
 		return err
 	}
 	return writeInvocation(command, invocation)
+}
+
+func runInvocationResult(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	result, err := client.GetResult(command.Context(), command.Arg(0))
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, result, func(writer io.Writer) error {
+		invocation := result.Invocation
+		if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", invocation.ID, invocation.Status, invocation.SessionID); err != nil {
+			return err
+		}
+		if result.OutputText != nil {
+			_, err := fmt.Fprintln(writer, *result.OutputText)
+			return err
+		}
+		return nil
+	})
 }
 
 func runInvocationWait(command *cli.Context) error {

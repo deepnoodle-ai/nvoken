@@ -46,6 +46,8 @@ pub mod invocation_provider_credential_selection_one_of;
 pub use self::invocation_provider_credential_selection_one_of::InvocationProviderCredentialSelectionOneOf;
 pub mod invocation_provider_credential_selection_one_of_1;
 pub use self::invocation_provider_credential_selection_one_of_1::InvocationProviderCredentialSelectionOneOf1;
+pub mod invocation_result;
+pub use self::invocation_result::InvocationResult;
 pub mod invocation_status;
 pub use self::invocation_status::InvocationStatus;
 pub mod model_cost;

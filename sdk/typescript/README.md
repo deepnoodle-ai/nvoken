@@ -180,8 +180,8 @@ is useful to an operator.
 
 ## Canonical assistant text
 
-`Handle` reads the authoritative Session transcript and filters it by the exact
-Invocation:
+`Handle` serves messages and text from the one composed result read,
+`GET /v1/invocations/{invocation_id}/result`:
 
 ```ts
 const handle = await client.invoke(request);
@@ -190,13 +190,19 @@ if (invocation.status !== "completed") {
   throw new Error(`${invocation.error?.code}: ${invocation.error?.message}`);
 }
 
+const result = await handle.result();   // invocation + messages + outputText
 const messages = await handle.listMessages();
-const text = await handle.text();
+const text = await handle.text();       // the wire output_text projection
 ```
 
-For custom content handling, use the exported `isTextContentBlock` type guard.
-The helpers do not copy text onto a second result model; canonical Session
-history remains authoritative.
+`text()` throws an actionable error when `output_text` is null or empty: the
+projection is non-null only for a completed Invocation with assistant text, so
+failed and cancelled turns never masquerade as answers. The wire keeps null
+and `""` distinct; the helper deliberately treats both as "no useful answer",
+and hosts that need the distinction read `result().outputText`. For custom content handling, read
+`result().messages` and use the exported `isTextContentBlock` type guard. The
+projection is composed from canonical Session history at read time; nothing is
+stored twice.
 
 ## Durable wait and retry semantics
 

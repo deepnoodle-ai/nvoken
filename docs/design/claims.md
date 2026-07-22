@@ -181,7 +181,11 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 - Admission idempotency is scoped to Account, effective tenant partition,
   Agent reference, and caller key. An equal replay returns the original work
   before the Session concurrency check; a materially changed replay conflicts.
-- Invocation supports structured output, in which a tool call internally is made against the provided output schema and this JSON is returned to the client.
+- Invocation supports structured output, in which a tool call internally is made against the provided output schema and this JSON is returned to the client as `structured_output`.
+- One composed result read returns the authoritative Invocation, the turn's
+  canonical messages, and the assistant text as `output_text` at any status.
+  It is a read-time projection over canonical rows: nothing is stored twice,
+  and the Invocation and its messages come from one repeatable-read snapshot.
 - A well-defined set of streaming events communicates invocation updates to the client.
 - nvoken cannot reverse an external effect that completed before a network failure; hosts make business effects idempotent by ToolCall ID.
 

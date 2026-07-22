@@ -291,8 +291,8 @@ paths:
                     error: null
                     usage: null
                     provenance: null
-                    output: null
-                    output_provenance: null
+                    structured_output: null
+                    structured_output_provenance: null
                     budgets:
                       wall_clock_timeout_seconds: 1800
                       active_execution_timeout_seconds: 1800
@@ -302,6 +302,86 @@ paths:
                     created_at: "2026-07-20T14:01:02Z"
                     updated_at: "2026-07-20T14:01:09Z"
                     completed_at: "2026-07-20T14:01:09Z"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/invocations/{invocation_id}/result:
+    parameters:
+      - $ref: "#/components/parameters/InvocationID"
+    get:
+      tags: [Invocations]
+      operationId: getInvocationResult
+      summary: Read the composed Invocation result
+      description: |
+        Returns one InvocationResult at any status: the authoritative
+        Invocation, this Invocation's canonical messages composed at read
+        time, and the output_text convenience projection. The Invocation and
+        its messages are read in one repeatable-read snapshot, so the payload
+        never shows a terminal status with a missing message tail.
+        Authentication, tenant scoping, and the nondisclosing not_found rule
+        match the plain Invocation read exactly.
+      responses:
+        "200":
+          description: Composed Invocation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvocationResult"
+              examples:
+                completedTextTurn:
+                  value:
+                    invocation:
+                      id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                      agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                      session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                      status: completed
+                      error: null
+                      usage: null
+                      provenance: null
+                      structured_output: null
+                      structured_output_provenance: null
+                      budgets:
+                        wall_clock_timeout_seconds: 1800
+                        active_execution_timeout_seconds: 1800
+                        max_iterations: 1
+                      active_execution_ms: 7000
+                      wall_clock_deadline_at: "2026-07-20T14:31:02Z"
+                      created_at: "2026-07-20T14:01:02Z"
+                      updated_at: "2026-07-20T14:01:09Z"
+                      completed_at: "2026-07-20T14:01:09Z"
+                    messages:
+                      - id: smsg_019b0a12-9e61-7a44-bed2-0e07c1bdb333
+                        session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                        agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                        invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                        sequence: 1
+                        role: user
+                        content:
+                          - type: text
+                            text: Reply with a short hello.
+                        created_at: "2026-07-20T14:01:02Z"
+                      - id: smsg_019b0a12-af71-7b54-9ed2-0e07c1bdb344
+                        session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                        agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                        invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                        sequence: 2
+                        role: assistant
+                        content:
+                          - type: text
+                            text: Hello!
+                        created_at: "2026-07-20T14:01:09Z"
+                    output_text: Hello!
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1364,7 +1444,7 @@ components:
     Invocation:
       type: object
       additionalProperties: false
-      required: [id, agent_id, session_id, status, error, usage, provenance, output, output_provenance, budgets, active_execution_ms, wall_clock_deadline_at, created_at, updated_at, completed_at]
+      required: [id, agent_id, session_id, status, error, usage, provenance, structured_output, structured_output_provenance, budgets, active_execution_ms, wall_clock_deadline_at, created_at, updated_at, completed_at]
       properties:
         id:
           $ref: "#/components/schemas/InvocationID"
@@ -1387,7 +1467,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ModelProvenance"
             - type: "null"
-        output:
+        structured_output:
           oneOf:
             - type: object
               additionalProperties: true
@@ -1396,7 +1476,7 @@ components:
             Server-validated terminal object for a schema-bearing Invocation.
             Null until successful terminal settlement and always null when no
             output contract was admitted.
-        output_provenance:
+        structured_output_provenance:
           oneOf:
             - $ref: "#/components/schemas/StructuredOutputProvenance"
             - type: "null"
@@ -1439,6 +1519,32 @@ components:
           oneOf:
             - type: string
             - type: "null"
+    InvocationResult:
+      type: object
+      additionalProperties: false
+      required: [invocation, messages, output_text]
+      properties:
+        invocation:
+          $ref: "#/components/schemas/Invocation"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionMessage"
+          description: |
+            Every canonical SessionMessage owned by this Invocation, all
+            roles, ascending sequence, composed at read time from the
+            canonical transcript. Nothing is stored twice.
+        output_text:
+          oneOf:
+            - type: string
+            - type: "null"
+          description: |
+            The text content blocks of this Invocation's assistant-role
+            messages concatenated in transcript order without separators.
+            Non-null only when the Invocation is completed and at least one
+            assistant text block exists. Failed and cancelled Invocations
+            keep their messages readable as evidence while output_text stays
+            null.
     ModelUsage:
       type: object
       additionalProperties: false
@@ -1758,7 +1864,7 @@ components:
     InvocationChange:
       type: object
       additionalProperties: false
-      required: [invocation_id, revision, status, through_message_sequence, error, usage, provenance, output, output_provenance, occurred_at]
+      required: [invocation_id, revision, status, through_message_sequence, error, usage, provenance, structured_output, structured_output_provenance, occurred_at]
       properties:
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
@@ -1786,12 +1892,12 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ModelProvenance"
             - type: "null"
-        output:
+        structured_output:
           oneOf:
             - type: object
               additionalProperties: true
             - type: "null"
-        output_provenance:
+        structured_output_provenance:
           oneOf:
             - $ref: "#/components/schemas/StructuredOutputProvenance"
             - type: "null"

@@ -9,6 +9,7 @@ import (
 )
 
 type Invocation = generated.Invocation
+type InvocationResult = generated.InvocationResult
 type InvocationStatus = generated.InvocationStatus
 type Session = generated.Session
 type SessionMessage = generated.SessionMessage

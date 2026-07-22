@@ -153,6 +153,10 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 		})
 		return
 	}
+	if strings.HasSuffix(remainder, "/result") && request.Method == http.MethodGet {
+		writeJSON(response, http.StatusOK, invocationResult())
+		return
+	}
 	if strings.HasSuffix(remainder, "/cancel") && request.Method == http.MethodPost {
 		s.mu.Lock()
 		s.cancelAttempts++
@@ -286,21 +290,38 @@ func invocationWithID(id string, status string) map[string]any {
 		completedAt = "2026-07-21T12:00:03Z"
 	}
 	return map[string]any{
-		"id":                     id,
-		"agent_id":               agentID,
-		"session_id":             sessionID,
-		"status":                 status,
-		"error":                  nil,
-		"usage":                  nil,
-		"provenance":             nil,
-		"output":                 nil,
-		"output_provenance":      nil,
-		"budgets":                map[string]any{"wall_clock_timeout_seconds": 300, "active_execution_timeout_seconds": 120, "max_iterations": 16},
-		"active_execution_ms":    250,
-		"wall_clock_deadline_at": "2026-07-21T12:05:00Z",
-		"created_at":             "2026-07-21T12:00:00Z",
-		"updated_at":             "2026-07-21T12:00:03Z",
-		"completed_at":           completedAt,
+		"id":                           id,
+		"agent_id":                     agentID,
+		"session_id":                   sessionID,
+		"status":                       status,
+		"error":                        nil,
+		"usage":                        nil,
+		"provenance":                   nil,
+		"structured_output":            nil,
+		"structured_output_provenance": nil,
+		"budgets":                      map[string]any{"wall_clock_timeout_seconds": 300, "active_execution_timeout_seconds": 120, "max_iterations": 16},
+		"active_execution_ms":          250,
+		"wall_clock_deadline_at":       "2026-07-21T12:05:00Z",
+		"created_at":                   "2026-07-21T12:00:00Z",
+		"updated_at":                   "2026-07-21T12:00:03Z",
+		"completed_at":                 completedAt,
+	}
+}
+
+func invocationResult() map[string]any {
+	// The composed Invocation carries a populated structured output so every
+	// client proves the renamed fields against real values, not null.
+	composed := invocation("completed")
+	composed["structured_output"] = map[string]any{"answer": "world"}
+	composed["structured_output_provenance"] = map[string]any{
+		"source":        "tool_call",
+		"tool_call_id":  "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb999",
+		"schema_sha256": "abababababababababababababababababababababababababababababababab",
+	}
+	return map[string]any{
+		"invocation":  composed,
+		"messages":    []any{firstMessage(), secondMessage()},
+		"output_text": "world",
 	}
 }
 
@@ -353,16 +374,16 @@ func secondChange() map[string]any {
 
 func change(revision int, status string, sequence int, occurredAt string) map[string]any {
 	return map[string]any{
-		"invocation_id":            invocationID,
-		"revision":                 revision,
-		"status":                   status,
-		"through_message_sequence": sequence,
-		"error":                    nil,
-		"usage":                    nil,
-		"provenance":               nil,
-		"output":                   nil,
-		"output_provenance":        nil,
-		"occurred_at":              occurredAt,
+		"invocation_id":                invocationID,
+		"revision":                     revision,
+		"status":                       status,
+		"through_message_sequence":     sequence,
+		"error":                        nil,
+		"usage":                        nil,
+		"provenance":                   nil,
+		"structured_output":            nil,
+		"structured_output_provenance": nil,
+		"occurred_at":                  occurredAt,
 	}
 }
 

@@ -39,6 +39,11 @@ import {
     InvocationListToJSON,
 } from '../models/InvocationList.js';
 import {
+    type InvocationResult,
+    InvocationResultFromJSON,
+    InvocationResultToJSON,
+} from '../models/InvocationResult.js';
+import {
     type InvocationStatus,
     InvocationStatusFromJSON,
     InvocationStatusToJSON,
@@ -63,6 +68,10 @@ export interface CreateInvocationOperationRequest {
 }
 
 export interface GetInvocationRequest {
+    invocationId: string;
+}
+
+export interface GetInvocationResultRequest {
     invocationId: string;
 }
 
@@ -250,6 +259,61 @@ export class InvocationsApi extends runtime.BaseAPI {
      */
     async getInvocation(requestParameters: GetInvocationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Invocation> {
         const response = await this.getInvocationRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getInvocationResult without sending the request
+     */
+    async getInvocationResultRequestOpts(requestParameters: GetInvocationResultRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['invocationId'] == null) {
+            throw new runtime.RequiredError(
+                'invocationId',
+                'Required parameter "invocationId" was null or undefined when calling getInvocationResult().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/invocations/{invocation_id}/result`;
+        urlPath = urlPath.replace('{invocation_id}', encodeURIComponent(String(requestParameters['invocationId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns one InvocationResult at any status: the authoritative Invocation, this Invocation\'s canonical messages composed at read time, and the output_text convenience projection. The Invocation and its messages are read in one repeatable-read snapshot, so the payload never shows a terminal status with a missing message tail. Authentication, tenant scoping, and the nondisclosing not_found rule match the plain Invocation read exactly.
+     * Read the composed Invocation result
+     */
+    async getInvocationResultRaw(requestParameters: GetInvocationResultRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<InvocationResult>> {
+        const requestOptions = await this.getInvocationResultRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => InvocationResultFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns one InvocationResult at any status: the authoritative Invocation, this Invocation\'s canonical messages composed at read time, and the output_text convenience projection. The Invocation and its messages are read in one repeatable-read snapshot, so the payload never shows a terminal status with a missing message tail. Authentication, tenant scoping, and the nondisclosing not_found rule match the plain Invocation read exactly.
+     * Read the composed Invocation result
+     */
+    async getInvocationResult(requestParameters: GetInvocationResultRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<InvocationResult> {
+        const response = await this.getInvocationResultRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

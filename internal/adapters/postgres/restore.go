@@ -12,7 +12,7 @@ import (
 // expectations to one embedded schema. A new migration must update the
 // manifest and its invariant queries before a newer binary can verify a
 // restore.
-const restoreManifestSchemaVersion uint = 14
+const restoreManifestSchemaVersion uint = 15
 
 var restoreRequiredTables = []string{
 	"account_memberships",

@@ -119,13 +119,13 @@ export interface Invocation {
      * @type {{ [key: string]: any; }}
      * @memberof Invocation
      */
-    output: { [key: string]: any; } | null;
+    structuredOutput: { [key: string]: any; } | null;
     /**
      *
      * @type {StructuredOutputProvenance}
      * @memberof Invocation
      */
-    outputProvenance: StructuredOutputProvenance | null;
+    structuredOutputProvenance: StructuredOutputProvenance | null;
     /**
      *
      * @type {InvocationBudgets}
@@ -183,8 +183,8 @@ export function instanceOfInvocation(value: object): value is Invocation {
     if (!('error' in value) || value['error'] === undefined) return false;
     if (!('usage' in value) || value['usage'] === undefined) return false;
     if (!('provenance' in value) || value['provenance'] === undefined) return false;
-    if (!('output' in value) || value['output'] === undefined) return false;
-    if (!('outputProvenance' in value) || value['outputProvenance'] === undefined) return false;
+    if (!('structuredOutput' in value) || value['structuredOutput'] === undefined) return false;
+    if (!('structuredOutputProvenance' in value) || value['structuredOutputProvenance'] === undefined) return false;
     if (!('budgets' in value) || value['budgets'] === undefined) return false;
     if (!('activeExecutionMs' in value) || value['activeExecutionMs'] === undefined) return false;
     if (!('wallClockDeadlineAt' in value) || value['wallClockDeadlineAt'] === undefined) return false;
@@ -211,8 +211,8 @@ export function InvocationFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'error': InvocationFailureFromJSON(json['error']),
         'usage': ModelUsageFromJSON(json['usage']),
         'provenance': ModelProvenanceFromJSON(json['provenance']),
-        'output': json['output'],
-        'outputProvenance': StructuredOutputProvenanceFromJSON(json['output_provenance']),
+        'structuredOutput': json['structured_output'],
+        'structuredOutputProvenance': StructuredOutputProvenanceFromJSON(json['structured_output_provenance']),
         'budgets': InvocationBudgetsFromJSON(json['budgets']),
         'activeExecutionMs': json['active_execution_ms'],
         'wallClockDeadlineAt': (new Date(json['wall_clock_deadline_at'])),
@@ -241,8 +241,8 @@ export function InvocationToJSONTyped(value?: Invocation | null, ignoreDiscrimin
         'error': InvocationFailureToJSON(value['error']),
         'usage': ModelUsageToJSON(value['usage']),
         'provenance': ModelProvenanceToJSON(value['provenance']),
-        'output': value['output'],
-        'output_provenance': StructuredOutputProvenanceToJSON(value['outputProvenance']),
+        'structured_output': value['structuredOutput'],
+        'structured_output_provenance': StructuredOutputProvenanceToJSON(value['structuredOutputProvenance']),
         'budgets': InvocationBudgetsToJSON(value['budgets']),
         'active_execution_ms': value['activeExecutionMs'],
         'wall_clock_deadline_at': value['wallClockDeadlineAt'].toISOString(),
