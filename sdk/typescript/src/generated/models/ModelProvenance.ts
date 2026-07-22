@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline client tools, callback tools, and structured output are included. Spec references and administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -14,6 +14,9 @@
 
 import { mapValues } from '../runtime.js';
 /**
+ * Reusable BYOK sources include safe credential and version IDs. Caller,
+ * platform, and installation sources omit them. No secret material is
+ * included.
  *
  * @export
  * @interface ModelProvenance
@@ -39,11 +42,37 @@ export interface ModelProvenance {
     servedModel: string;
     /**
      *
-     * @type {any}
+     * @type {ModelProvenanceCredentialSourceEnum}
      * @memberof ModelProvenance
      */
-    credentialSource: any | null;
+    credentialSource: ModelProvenanceCredentialSourceEnum;
+    /**
+     * UUIDv7 with the public `pcrd_` prefix.
+     * @type {string}
+     * @memberof ModelProvenance
+     */
+    providerCredentialId?: string;
+    /**
+     * UUIDv7 with the public `pcvr_` prefix.
+     * @type {string}
+     * @memberof ModelProvenance
+     */
+    credentialVersionId?: string;
 }
+
+
+/**
+ * @export
+ */
+export const ModelProvenanceCredentialSourceEnum = {
+    CallerEphemeral: 'caller_ephemeral',
+    AccountByok: 'account_byok',
+    TenantByok: 'tenant_byok',
+    Platform: 'platform',
+    InstallationByok: 'installation_byok'
+} as const;
+export type ModelProvenanceCredentialSourceEnum = typeof ModelProvenanceCredentialSourceEnum[keyof typeof ModelProvenanceCredentialSourceEnum];
+
 
 /**
  * Check if a given object implements the ModelProvenance interface.
@@ -70,6 +99,8 @@ export function ModelProvenanceFromJSONTyped(json: any, ignoreDiscriminator: boo
         'requestedModel': json['requested_model'],
         'servedModel': json['served_model'],
         'credentialSource': json['credential_source'],
+        'providerCredentialId': json['provider_credential_id'] == null ? undefined : json['provider_credential_id'],
+        'credentialVersionId': json['credential_version_id'] == null ? undefined : json['credential_version_id'],
     };
 }
 
@@ -88,5 +119,7 @@ export function ModelProvenanceToJSONTyped(value?: ModelProvenance | null, ignor
         'requested_model': value['requestedModel'],
         'served_model': value['servedModel'],
         'credential_source': value['credentialSource'],
+        'provider_credential_id': value['providerCredentialId'],
+        'credential_version_id': value['credentialVersionId'],
     };
 }

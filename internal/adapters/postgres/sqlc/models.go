@@ -202,6 +202,24 @@ type InvocationCheckpoint struct {
 	CreatedAt              time.Time
 }
 
+type InvocationProviderCredential struct {
+	ID                   string
+	InvocationID         string
+	AccountID            string
+	TenantPartitionID    string
+	Provider             string
+	Source               string
+	ProviderCredentialID *string
+	CredentialVersionID  *string
+	Selector             *string
+	EncryptionKeyID      *string
+	Nonce                []byte
+	Ciphertext           []byte
+	ExpiresAt            *time.Time
+	ClearedAt            *time.Time
+	CreatedAt            time.Time
+}
+
 type InvocationState struct {
 	ID                     string
 	InvocationID           string
@@ -238,6 +256,44 @@ type OperatorSubject struct {
 	Issuer    string
 	Subject   string
 	CreatedAt time.Time
+}
+
+type ProviderCredential struct {
+	ID                   string
+	AccountID            string
+	TenantPartitionID    *string
+	Provider             string
+	Scope                string
+	Status               string
+	CurrentVersionID     string
+	CurrentVersion       int32
+	CreateIdempotencyKey string
+	CreateFingerprint    []byte
+	CreatedBy            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	RevokedAt            *time.Time
+}
+
+type ProviderCredentialVersion struct {
+	ID                     string
+	ProviderCredentialID   string
+	AccountID              string
+	TenantPartitionID      *string
+	Provider               string
+	Version                int32
+	Status                 string
+	PreviousVersionID      *string
+	EncryptionKeyID        *string
+	Nonce                  []byte
+	Ciphertext             []byte
+	ExpiresAt              *time.Time
+	OverlapExpiresAt       *time.Time
+	RotationIdempotencyKey *string
+	RotationFingerprint    []byte
+	CreatedBy              string
+	CreatedAt              time.Time
+	DestroyedAt            *time.Time
 }
 
 type Session struct {

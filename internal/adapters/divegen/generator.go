@@ -35,12 +35,13 @@ type Config struct {
 type modelFactory func(provider, model, apiKey string) (llm.LLM, error)
 
 type Generator struct {
-	config          Config
-	factory         modelFactory
-	toolCoordinator ports.ToolCallCoordinator
-	testBuiltin     bool
-	clock           ports.Clock
-	logger          *slog.Logger
+	config             Config
+	factory            modelFactory
+	toolCoordinator    ports.ToolCallCoordinator
+	testBuiltin        bool
+	clock              ports.Clock
+	logger             *slog.Logger
+	credentialResolver ports.ProviderCredentialResolver
 }
 
 type Option func(*Generator)
@@ -78,6 +79,12 @@ func WithLogger(logger *slog.Logger) Option {
 		if logger != nil {
 			generator.logger = logger
 		}
+	}
+}
+
+func WithCredentialResolver(resolver ports.ProviderCredentialResolver) Option {
+	return func(generator *Generator) {
+		generator.credentialResolver = resolver
 	}
 }
 
@@ -132,22 +139,42 @@ func (g *Generator) generate(
 		return domain.GenerationResponse{}, fmt.Errorf("dive generator is not configured")
 	}
 	provider := strings.ToLower(strings.TrimSpace(request.Provider))
-	var apiKey string
-	switch provider {
-	case "anthropic":
-		apiKey = g.config.AnthropicAPIKey
-	case "openai":
-		apiKey = g.config.OpenAIAPIKey
-	default:
+	if provider != "anthropic" && provider != "openai" {
 		return domain.GenerationResponse{}, ports.ErrProviderUnsupported
 	}
-	if apiKey == "" {
-		return domain.GenerationResponse{}, ports.ErrProviderKeyMissing
-	}
-
-	model, err := g.factory(provider, request.Model, apiKey)
-	if err != nil {
-		return domain.GenerationResponse{}, err
+	evidence := &modelEvidence{}
+	var model llm.LLM
+	if g.credentialResolver != nil {
+		if request.Claim == nil {
+			return domain.GenerationResponse{}, fmt.Errorf("credential resolution requires a durable Invocation claim")
+		}
+		model = &resolvingModel{
+			resolver:     g.credentialResolver,
+			factory:      g.factory,
+			invocationID: request.Claim.Invocation.ID,
+			provider:     provider,
+			model:        request.Model,
+			evidence:     evidence,
+		}
+	} else {
+		var apiKey string
+		if provider == "anthropic" {
+			apiKey = g.config.AnthropicAPIKey
+		} else {
+			apiKey = g.config.OpenAIAPIKey
+		}
+		if apiKey == "" {
+			return domain.GenerationResponse{}, ports.ErrProviderKeyMissing
+		}
+		var err error
+		model, err = g.factory(provider, request.Model, apiKey)
+		if err != nil {
+			return domain.GenerationResponse{}, err
+		}
+		evidence.recordCredential(domain.ResolvedProviderCredential{
+			Provider: provider,
+			Source:   domain.ProviderCredentialSourceInstallationBYOK,
+		})
 	}
 	messages := make([]*llm.Message, 0, len(request.Messages))
 	for _, message := range request.Messages {
@@ -157,7 +184,6 @@ func (g *Generator) generate(
 		}
 		messages = append(messages, converted)
 	}
-	evidence := &modelEvidence{}
 	checkpointState := &generationCheckpointState{}
 	if request.Resume != nil {
 		checkpointState.seed(request.Resume.Iteration, request.Resume.Usage)
@@ -288,17 +314,13 @@ func (g *Generator) generate(
 				if err != nil {
 					return err
 				}
+				checkpointProvenance := evidence.provenance(request.Model, servedModel)
 				_, err = g.toolCoordinator.RecordModelCheckpoint(ctx, *request.Claim, domain.ModelCheckpointInput{
-					Iteration: iteration,
-					Message:   message,
-					Usage:     usage,
-					Provenance: domain.ModelProvenance{
-						Provider:         strings.ToLower(strings.TrimSpace(request.Provider)),
-						RequestedModel:   request.Model,
-						ServedModel:      servedModel,
-						CredentialSource: "installation_byok",
-					},
-					ToolCalls: requests,
+					Iteration:  iteration,
+					Message:    message,
+					Usage:      usage,
+					Provenance: checkpointProvenance,
+					ToolCalls:  requests,
 				})
 				if err != nil {
 					return err
@@ -319,20 +341,34 @@ func (g *Generator) generate(
 	}
 	response, err := agent.CreateResponse(ctx, options...)
 	if err != nil {
+		if errors.Is(err, ports.ErrCredentialUnavailable) || errors.Is(err, ports.ErrRetryable) {
+			servedModel := evidence.servedModel()
+			if servedModel == "" {
+				servedModel = request.Model
+			}
+			return responseWithCredentialEvidence(domain.GenerationResponse{
+				Usage:                checkpointState.usageSnapshot(),
+				ServedModel:          servedModel,
+				MessagesCheckpointed: checkpointState.iteration.Load() > 0,
+			}, evidence), err
+		}
 		if errors.Is(err, errCheckpointBudget) {
 			servedModel := evidence.servedModel()
 			if servedModel == "" {
 				servedModel = request.Model
 			}
-			return domain.GenerationResponse{
+			return responseWithCredentialEvidence(domain.GenerationResponse{
 				Usage:                checkpointState.usageSnapshot(),
 				ServedModel:          servedModel,
 				MessagesCheckpointed: true,
 				BudgetExceeded:       checkpointState.budgetValue(),
-			}, nil
+			}, evidence), nil
 		}
 		if ctx.Err() != nil {
 			return domain.GenerationResponse{}, ctx.Err()
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return domain.GenerationResponse{}, err
 		}
 		return domain.GenerationResponse{}, fmt.Errorf("%w: Dive provider call", ports.ErrGenerationFailed)
 	}
@@ -352,12 +388,12 @@ func (g *Generator) generate(
 		if servedModel == "" {
 			servedModel = request.Model
 		}
-		return domain.GenerationResponse{
+		return responseWithCredentialEvidence(domain.GenerationResponse{
 			Usage:                checkpointState.usageSnapshot(),
 			ServedModel:          servedModel,
 			MessagesCheckpointed: true,
 			ExternalToolsPending: true,
-		}, nil
+		}, evidence), nil
 	}
 	if response == nil || response.Status == dive.ResponseStatusSuspended || response.Suspension != nil {
 		return domain.GenerationResponse{}, ports.ErrModelResponseInvalid
@@ -375,23 +411,23 @@ func (g *Generator) generate(
 			if servedModel == "" {
 				servedModel = request.Model
 			}
-			return domain.GenerationResponse{
+			return responseWithCredentialEvidence(domain.GenerationResponse{
 				Usage:                   checkpointState.usageSnapshot(),
 				ServedModel:             servedModel,
 				MessagesCheckpointed:    true,
 				StructuredOutputFailure: "invalid",
-			}, nil
+			}, evidence), nil
 		}
 		servedModel := evidence.servedModel()
 		if servedModel == "" {
 			servedModel = request.Model
 		}
 		usage := checkpointState.usageSnapshot()
-		generated := domain.GenerationResponse{
+		generated := responseWithCredentialEvidence(domain.GenerationResponse{
 			Usage:                usage,
 			ServedModel:          servedModel,
 			MessagesCheckpointed: true,
-		}
+		}, evidence)
 		if outputCapture != nil {
 			generated.StructuredOutput = outputCapture.output()
 			if generated.StructuredOutput == nil {
@@ -413,11 +449,11 @@ func (g *Generator) generate(
 	}
 	usage := normalizeUsage(response.Usage)
 	usage.Iterations = evidence.iterations()
-	return domain.GenerationResponse{
+	return responseWithCredentialEvidence(domain.GenerationResponse{
 		Messages:    output,
 		Usage:       usage,
 		ServedModel: servedModel,
-	}, nil
+	}, evidence), nil
 }
 
 const deterministicEchoToolName = "nvoken_test_echo"
@@ -893,6 +929,58 @@ func replayedToolResultText(result *dive.ToolResult) (string, error) {
 	return content.Text, nil
 }
 
+// resolvingModel resolves the selected credential immediately before every
+// provider call. This makes revocation and expiry effective between agent-loop
+// iterations without changing Dive's model interface.
+type resolvingModel struct {
+	resolver     ports.ProviderCredentialResolver
+	factory      modelFactory
+	invocationID string
+	provider     string
+	model        string
+	evidence     *modelEvidence
+}
+
+func (m *resolvingModel) Name() string {
+	return m.provider + ":" + m.model
+}
+
+func (m *resolvingModel) Generate(ctx context.Context, options ...llm.Option) (*llm.Response, error) {
+	model, err := m.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return model.Generate(ctx, options...)
+}
+
+func (m *resolvingModel) Stream(ctx context.Context, options ...llm.Option) (llm.StreamIterator, error) {
+	model, err := m.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	streaming, ok := model.(llm.StreamingLLM)
+	if !ok {
+		return nil, fmt.Errorf("provider model does not support streaming")
+	}
+	return streaming.Stream(ctx, options...)
+}
+
+func (m *resolvingModel) resolve(ctx context.Context) (llm.LLM, error) {
+	credential, err := m.resolver.ResolveProviderCredential(ctx, m.invocationID, m.provider)
+	if err != nil {
+		return nil, fmt.Errorf("resolve provider credential: %w", err)
+	}
+	if credential.Provider != m.provider || credential.APIKey == "" {
+		return nil, ports.ErrCredentialUnavailable
+	}
+	model, err := m.factory(m.provider, m.model, credential.APIKey)
+	if err != nil {
+		return nil, err
+	}
+	m.evidence.recordCredential(credential)
+	return model, nil
+}
+
 // evidenceModel captures blocking-provider evidence without exposing the raw
 // response outside this adapter.
 type evidenceModel struct {
@@ -901,9 +989,13 @@ type evidenceModel struct {
 }
 
 type modelEvidence struct {
-	mu     sync.Mutex
-	served string
-	calls  int
+	mu                          sync.Mutex
+	served                      string
+	calls                       int
+	provider                    string
+	credentialSource            domain.ProviderCredentialSource
+	providerCredentialID        string
+	providerCredentialVersionID string
 }
 
 func (m *evidenceModel) Generate(ctx context.Context, options ...llm.Option) (*llm.Response, error) {
@@ -963,6 +1055,15 @@ func (m *modelEvidence) recordModel(model string) {
 	m.mu.Unlock()
 }
 
+func (m *modelEvidence) recordCredential(credential domain.ResolvedProviderCredential) {
+	m.mu.Lock()
+	m.provider = credential.Provider
+	m.credentialSource = credential.Source
+	m.providerCredentialID = credential.ProviderCredentialID
+	m.providerCredentialVersionID = credential.CredentialVersionID
+	m.mu.Unlock()
+}
+
 func (m *modelEvidence) iterations() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -973,6 +1074,30 @@ func (m *modelEvidence) servedModel() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.served
+}
+
+func (m *modelEvidence) provenance(requestedModel, servedModel string) domain.ModelProvenance {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return domain.ModelProvenance{
+		Provider:             m.provider,
+		RequestedModel:       requestedModel,
+		ServedModel:          servedModel,
+		CredentialSource:     string(m.credentialSource),
+		ProviderCredentialID: m.providerCredentialID,
+		CredentialVersionID:  m.providerCredentialVersionID,
+	}
+}
+
+func responseWithCredentialEvidence(
+	response domain.GenerationResponse,
+	evidence *modelEvidence,
+) domain.GenerationResponse {
+	provenance := evidence.provenance("", "")
+	response.CredentialSource = domain.ProviderCredentialSource(provenance.CredentialSource)
+	response.ProviderCredentialID = provenance.ProviderCredentialID
+	response.CredentialVersionID = provenance.CredentialVersionID
+	return response
 }
 
 func normalizedDelta(item *dive.ResponseItem) (domain.GenerationDelta, bool) {

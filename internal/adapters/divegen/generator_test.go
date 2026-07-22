@@ -26,6 +26,25 @@ type sequenceLLM struct {
 	calls     int
 }
 
+type sequenceCredentialResolver struct {
+	credentials []domain.ResolvedProviderCredential
+	err         error
+	calls       int
+}
+
+func (r *sequenceCredentialResolver) ResolveProviderCredential(
+	context.Context,
+	string,
+	string,
+) (domain.ResolvedProviderCredential, error) {
+	if r.err != nil {
+		return domain.ResolvedProviderCredential{}, r.err
+	}
+	credential := r.credentials[r.calls]
+	r.calls++
+	return credential, nil
+}
+
 func (*sequenceLLM) Name() string { return "sequence" }
 
 func (m *sequenceLLM) Generate(_ context.Context, options ...llm.Option) (*llm.Response, error) {
@@ -41,6 +60,129 @@ func (m *sequenceLLM) Generate(_ context.Context, options ...llm.Option) (*llm.R
 		*m.events = append(*m.events, "model")
 	}
 	return m.responses[m.calls-1], nil
+}
+
+func TestResolvingModelLoadsCredentialBeforeEveryProviderCall(t *testing.T) {
+	resolver := &sequenceCredentialResolver{credentials: []domain.ResolvedProviderCredential{
+		{
+			Provider:             "openai",
+			Source:               domain.ProviderCredentialSourceAccountBYOK,
+			ProviderCredentialID: "pcrd-first",
+			CredentialVersionID:  "pcvr-first",
+			APIKey:               "first-secret",
+		},
+		{
+			Provider:             "openai",
+			Source:               domain.ProviderCredentialSourceAccountBYOK,
+			ProviderCredentialID: "pcrd-second",
+			CredentialVersionID:  "pcvr-second",
+			APIKey:               "second-secret",
+		},
+	}}
+	model := &sequenceLLM{responses: []*llm.Response{{}, {}}}
+	var keys []string
+	evidence := &modelEvidence{}
+	resolving := &resolvingModel{
+		resolver: resolver,
+		factory: func(_, _, apiKey string) (llm.LLM, error) {
+			keys = append(keys, apiKey)
+			return model, nil
+		},
+		invocationID: "invocation",
+		provider:     "openai",
+		model:        "gpt-test",
+		evidence:     evidence,
+	}
+	if _, err := resolving.Generate(context.Background()); err != nil {
+		t.Fatalf("first Generate: %v", err)
+	}
+	if _, err := resolving.Generate(context.Background()); err != nil {
+		t.Fatalf("second Generate: %v", err)
+	}
+	if !reflect.DeepEqual(keys, []string{"first-secret", "second-secret"}) || resolver.calls != 2 {
+		t.Fatalf("resolved keys = %#v, calls = %d", keys, resolver.calls)
+	}
+	provenance := evidence.provenance("gpt-test", "gpt-served")
+	if provenance.ProviderCredentialID != "pcrd-second" || provenance.CredentialVersionID != "pcvr-second" ||
+		provenance.CredentialSource != "account_byok" {
+		t.Fatalf("latest credential provenance = %#v", provenance)
+	}
+}
+
+func TestResolvingModelDoesNotCallProviderAfterCredentialFailure(t *testing.T) {
+	resolver := &sequenceCredentialResolver{err: ports.ErrCredentialUnavailable}
+	factoryCalls := 0
+	resolving := &resolvingModel{
+		resolver: resolver,
+		factory: func(_, _, _ string) (llm.LLM, error) {
+			factoryCalls++
+			return &sequenceLLM{}, nil
+		},
+		invocationID: "invocation",
+		provider:     "anthropic",
+		model:        "claude-test",
+		evidence:     &modelEvidence{},
+	}
+	if _, err := resolving.Generate(context.Background()); !errors.Is(err, ports.ErrCredentialUnavailable) {
+		t.Fatalf("Generate error = %v", err)
+	}
+	if factoryCalls != 0 {
+		t.Fatalf("model factory calls = %d, want 0", factoryCalls)
+	}
+}
+
+func TestGeneratorPreservesCredentialUnavailableForDurableSettlement(t *testing.T) {
+	resolver := &sequenceCredentialResolver{err: ports.ErrCredentialUnavailable}
+	coordinator := &recordingToolCoordinator{}
+	generator := New(
+		Config{},
+		WithCredentialResolver(resolver),
+		WithToolCoordinator(coordinator),
+	)
+	factoryCalls := 0
+	generator.factory = func(_, _, _ string) (llm.LLM, error) {
+		factoryCalls++
+		return &sequenceLLM{}, nil
+	}
+	request := generationRequest("anthropic")
+	request.Claim = generationClaim()
+	_, err := generator.Generate(context.Background(), request)
+	if !errors.Is(err, ports.ErrCredentialUnavailable) {
+		t.Fatalf("Generate error = %v", err)
+	}
+	if factoryCalls != 0 {
+		t.Fatalf("model factory calls = %d, want 0", factoryCalls)
+	}
+}
+
+func TestGeneratorPreservesCredentialInfrastructureFailures(t *testing.T) {
+	for name, resolverErr := range map[string]error{
+		"retryable": ports.ErrRetryable,
+		"deadline":  context.DeadlineExceeded,
+	} {
+		t.Run(name, func(t *testing.T) {
+			resolver := &sequenceCredentialResolver{err: resolverErr}
+			generator := New(
+				Config{},
+				WithCredentialResolver(resolver),
+				WithToolCoordinator(&recordingToolCoordinator{}),
+			)
+			factoryCalls := 0
+			generator.factory = func(_, _, _ string) (llm.LLM, error) {
+				factoryCalls++
+				return &sequenceLLM{}, nil
+			}
+			request := generationRequest("anthropic")
+			request.Claim = generationClaim()
+			_, err := generator.Generate(context.Background(), request)
+			if !errors.Is(err, resolverErr) {
+				t.Fatalf("Generate error = %v", err)
+			}
+			if factoryCalls != 0 {
+				t.Fatalf("model factory calls = %d, want 0", factoryCalls)
+			}
+		})
+	}
 }
 
 type recordingToolCoordinator struct {

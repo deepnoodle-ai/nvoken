@@ -20,10 +20,11 @@ type fingerprintVector struct {
 		Kind  string `json:"kind"`
 		Value string `json:"value"`
 	} `json:"selector"`
-	Spec      InlineExecutionSpec `json:"spec"`
-	Input     InvocationInput     `json:"input"`
-	Canonical string              `json:"canonical"`
-	SHA256    string              `json:"sha256"`
+	Spec                InlineExecutionSpec           `json:"spec"`
+	Input               InvocationInput               `json:"input"`
+	ProviderCredentials []ProviderCredentialSelection `json:"provider_credentials,omitempty"`
+	Canonical           string                        `json:"canonical"`
+	SHA256              string                        `json:"sha256"`
 }
 
 func TestInvocationFingerprintV1DesignVectors(t *testing.T) {
@@ -46,6 +47,51 @@ func TestInvocationFingerprintV5DesignVectors(t *testing.T) {
 	testFingerprintDesignVectors(t, "admission-fingerprint-v5.json", 5)
 }
 
+func TestInvocationFingerprintV6DesignVectors(t *testing.T) {
+	testFingerprintDesignVectors(t, "admission-fingerprint-v6.json", 6)
+}
+
+func TestInvocationFingerprintV6PreservesLiteralSourceWithoutSecretMaterial(t *testing.T) {
+	input := validServiceInput()
+	omitted, err := InvocationFingerprintV6(input)
+	if err != nil {
+		t.Fatalf("omitted fingerprint: %v", err)
+	}
+	input.ProviderCredentials = []ProviderCredentialSelection{
+		{
+			Provider: "anthropic",
+			Source:   "caller_ephemeral",
+			Credential: &ProviderStaticCredentialInput{
+				APIKey: "first-secret",
+			},
+		},
+	}
+	first, err := InvocationFingerprintV6(input)
+	if err != nil {
+		t.Fatalf("first explicit fingerprint: %v", err)
+	}
+	input.ProviderCredentials[0].Credential.APIKey = "different-secret"
+	second, err := InvocationFingerprintV6(input)
+	if err != nil {
+		t.Fatalf("second explicit fingerprint: %v", err)
+	}
+	if first != second {
+		t.Fatal("caller secret changed fingerprint v6")
+	}
+	if omitted == first {
+		t.Fatal("literal omission matched explicit caller source")
+	}
+	input.ProviderCredentials[0].Source = "account_byok"
+	input.ProviderCredentials[0].Credential = nil
+	account, err := InvocationFingerprintV6(input)
+	if err != nil {
+		t.Fatalf("account fingerprint: %v", err)
+	}
+	if account == first {
+		t.Fatal("changed explicit source did not change fingerprint v6")
+	}
+}
+
 func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
 	t.Helper()
 	_, callerFile, _, _ := runtime.Caller(0)
@@ -60,7 +106,11 @@ func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
 	}
 	for _, vector := range vectors {
 		t.Run(vector.Name, func(t *testing.T) {
-			input := CreateInvocationInput{Spec: vector.Spec, Input: vector.Input}
+			input := CreateInvocationInput{
+				Spec:                vector.Spec,
+				Input:               vector.Input,
+				ProviderCredentials: vector.ProviderCredentials,
+			}
 			switch vector.Selector.Kind {
 			case "none":
 			case "id":
@@ -85,9 +135,12 @@ func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
 			} else if version == 4 {
 				canonical, err = invocationFingerprintBytesV4(input)
 				fingerprint, _ = InvocationFingerprintV4(input)
-			} else {
+			} else if version == 5 {
 				canonical, err = invocationFingerprintBytesV5(input)
 				fingerprint, _ = InvocationFingerprintV5(input)
+			} else {
+				canonical, err = invocationFingerprintBytesV6(input)
+				fingerprint, _ = InvocationFingerprintV6(input)
 			}
 			if err != nil {
 				t.Fatalf("canonicalize: %v", err)
@@ -177,12 +230,11 @@ func TestValidateCreateInvocationLimits(t *testing.T) {
 
 func TestValidateCreateInvocationUnicodeAndBlockBoundaries(t *testing.T) {
 	setters := map[string]func(*CreateInvocationInput, string){
-		"agent_ref":           func(input *CreateInvocationInput, value string) { input.AgentRef = value },
-		"tenant_ref":          func(input *CreateInvocationInput, value string) { input.TenantRef = stringPointer(value) },
-		"session_key":         func(input *CreateInvocationInput, value string) { input.SessionKey = stringPointer(value) },
-		"idempotency_key":     func(input *CreateInvocationInput, value string) { input.IdempotencyKey = value },
-		"spec.model.provider": func(input *CreateInvocationInput, value string) { input.Spec.Model.Provider = value },
-		"spec.model.name":     func(input *CreateInvocationInput, value string) { input.Spec.Model.Name = value },
+		"agent_ref":       func(input *CreateInvocationInput, value string) { input.AgentRef = value },
+		"tenant_ref":      func(input *CreateInvocationInput, value string) { input.TenantRef = stringPointer(value) },
+		"session_key":     func(input *CreateInvocationInput, value string) { input.SessionKey = stringPointer(value) },
+		"idempotency_key": func(input *CreateInvocationInput, value string) { input.IdempotencyKey = value },
+		"spec.model.name": func(input *CreateInvocationInput, value string) { input.Spec.Model.Name = value },
 	}
 	for field, set := range setters {
 		t.Run(field, func(t *testing.T) {

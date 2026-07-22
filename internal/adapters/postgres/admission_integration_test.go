@@ -391,7 +391,7 @@ func TestRuntimeAdmissionConcurrentEqualAndDistinctRequests(t *testing.T) {
 }
 
 func TestRuntimeAdmissionRollsBackEveryWriteStage(t *testing.T) {
-	for _, failAt := range []string{"agent", "partition", "session", "message sequence", "lifecycle revision", "snapshot", "invocation", "message", "state"} {
+	for _, failAt := range []string{"agent", "partition", "session", "message sequence", "lifecycle revision", "snapshot", "invocation", "credential binding", "message", "state"} {
 		t.Run(failAt, func(t *testing.T) {
 			pool, _, store, auth := newRuntimeFixture(t)
 			clock := identity.SystemClock{}
@@ -407,6 +407,7 @@ func TestRuntimeAdmissionRollsBackEveryWriteStage(t *testing.T) {
 			assertTableCount(t, pool, "tenant_partitions", 1)
 			assertTableCount(t, pool, "agents", 0)
 			assertTableCount(t, pool, "sessions", 0)
+			assertTableCount(t, pool, "invocation_provider_credentials", 0)
 			assertAdmissionCounts(t, pool, 0)
 		})
 	}
@@ -428,6 +429,7 @@ func TestRuntimeAdmissionRollsBackCloudDispatchFailure(t *testing.T) {
 	assertTableCount(t, pool, "accounts", 1)
 	assertTableCount(t, pool, "agents", 0)
 	assertTableCount(t, pool, "sessions", 0)
+	assertTableCount(t, pool, "invocation_provider_credentials", 0)
 	assertAdmissionCounts(t, pool, 0)
 	assertTableCount(t, pool, "execution_dispatches", 0)
 }
@@ -705,6 +707,16 @@ func (s *faultingAdmissionStore) CreateInvocation(ctx context.Context, invocatio
 		return errors.New("injected invocation failure")
 	}
 	return s.Store.CreateInvocation(ctx, invocation)
+}
+
+func (s *faultingAdmissionStore) CreateInvocationProviderCredential(
+	ctx context.Context,
+	binding domain.InvocationProviderCredential,
+) error {
+	if s.failAt == "credential binding" {
+		return errors.New("injected credential binding failure")
+	}
+	return s.Store.CreateInvocationProviderCredential(ctx, binding)
 }
 
 func (s *faultingAdmissionStore) AppendSessionMessage(ctx context.Context, message domain.SessionMessage) error {

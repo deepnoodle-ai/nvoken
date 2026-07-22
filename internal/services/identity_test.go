@@ -52,7 +52,10 @@ func TestIdentityCredentialAndDeviceLifecycle(t *testing.T) {
 	}
 	store.setTouchError(errors.New("last-use metadata unavailable"))
 	legacyAuth, err := service.Authenticate(ctx, legacyToken)
-	if err != nil || legacyAuth.EffectiveProfile != domain.CredentialProfileRuntime || legacyAuth.TenantConstraint == nil || *legacyAuth.TenantConstraint != "tenant-a" {
+	if err != nil || legacyAuth.EffectiveProfile != domain.CredentialProfileRuntime || legacyAuth.TenantConstraint == nil || *legacyAuth.TenantConstraint != "tenant-a" ||
+		!legacyAuth.Allows(domain.OperationListProviderCredentials) || !legacyAuth.Allows(domain.OperationCreateProviderCredential) ||
+		!legacyAuth.Allows(domain.OperationGetProviderCredential) || !legacyAuth.Allows(domain.OperationRotateProviderCredential) ||
+		!legacyAuth.Allows(domain.OperationRevokeProviderCredential) {
 		t.Fatalf("legacy auth = %#v, %v", legacyAuth, err)
 	}
 	store.setTouchError(nil)
@@ -115,7 +118,10 @@ func TestIdentityCredentialAndDeviceLifecycle(t *testing.T) {
 		t.Fatalf("replayed device token = %#v, %v", replayedUser, err)
 	}
 	operatorAuth, err := service.Authenticate(ctx, issuedUser.Secret)
-	if err != nil || operatorAuth.EffectiveProfile != domain.CredentialProfileOperator || operatorAuth.Subject == nil || operatorAuth.Subject.ID != owner.ID {
+	if err != nil || operatorAuth.EffectiveProfile != domain.CredentialProfileOperator || operatorAuth.Subject == nil || operatorAuth.Subject.ID != owner.ID ||
+		!operatorAuth.Allows(domain.OperationListProviderCredentials) || !operatorAuth.Allows(domain.OperationCreateProviderCredential) ||
+		!operatorAuth.Allows(domain.OperationGetProviderCredential) || !operatorAuth.Allows(domain.OperationRotateProviderCredential) ||
+		!operatorAuth.Allows(domain.OperationRevokeProviderCredential) {
 		t.Fatalf("user auth = %#v, %v", operatorAuth, err)
 	}
 
@@ -208,7 +214,10 @@ func TestIdentityCredentialAndDeviceLifecycle(t *testing.T) {
 		t.Fatalf("demote bootstrap membership: %v", err)
 	}
 	viewerAuth, err := service.Authenticate(ctx, issuedUser.Secret)
-	if err != nil || viewerAuth.EffectiveProfile != domain.CredentialProfileViewer || viewerAuth.Allows(domain.OperationCreateInvocation) || !viewerAuth.Allows(domain.OperationGetSession) {
+	if err != nil || viewerAuth.EffectiveProfile != domain.CredentialProfileViewer || viewerAuth.Allows(domain.OperationCreateInvocation) || !viewerAuth.Allows(domain.OperationGetSession) ||
+		!viewerAuth.Allows(domain.OperationListProviderCredentials) || !viewerAuth.Allows(domain.OperationGetProviderCredential) ||
+		viewerAuth.Allows(domain.OperationCreateProviderCredential) || viewerAuth.Allows(domain.OperationRotateProviderCredential) ||
+		viewerAuth.Allows(domain.OperationRevokeProviderCredential) {
 		t.Fatalf("demoted user auth = %#v, %v", viewerAuth, err)
 	}
 	if _, err := service.ListCredentials(ctx, viewerAuth); err == nil {

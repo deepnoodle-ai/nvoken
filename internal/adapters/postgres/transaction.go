@@ -63,6 +63,12 @@ func normalizeTransactionError(err error) error {
 			postgresError.ConstraintName == "invocations_idempotency_scope" {
 			return fmt.Errorf("%w: %w", ports.ErrConcurrentAdmission, err)
 		}
+		if postgresError.ConstraintName == "provider_credentials_one_active_account_provider" ||
+			postgresError.ConstraintName == "provider_credentials_one_active_tenant_provider" ||
+			postgresError.ConstraintName == "provider_credentials_create_idempotency" ||
+			postgresError.ConstraintName == "provider_credential_versions_rotation_idempotency" {
+			return fmt.Errorf("%w: %w", ports.ErrProviderCredentialConflict, err)
+		}
 	}
 	return err
 }

@@ -1120,3 +1120,195 @@ WITH candidates AS (
 )
 DELETE FROM callback_deliveries
 WHERE id IN (SELECT id FROM candidates);
+
+-- name: CreateProviderCredential :exec
+INSERT INTO provider_credentials (
+    id, account_id, tenant_partition_id, provider, scope, status,
+    current_version_id, current_version, create_idempotency_key,
+    create_fingerprint, created_by, created_at, updated_at, revoked_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(account_id), sqlc.narg(tenant_partition_id),
+    sqlc.arg(provider), sqlc.arg(scope), sqlc.arg(status),
+    sqlc.arg(current_version_id), sqlc.arg(current_version),
+    sqlc.arg(create_idempotency_key), sqlc.arg(create_fingerprint),
+    sqlc.arg(created_by), sqlc.arg(created_at), sqlc.arg(updated_at),
+    sqlc.narg(revoked_at)
+);
+
+-- name: CreateProviderCredentialVersion :exec
+INSERT INTO provider_credential_versions (
+    id, provider_credential_id, account_id, tenant_partition_id, provider,
+    version, status, previous_version_id, encryption_key_id, nonce,
+    ciphertext, expires_at, overlap_expires_at, rotation_idempotency_key,
+    rotation_fingerprint, created_by, created_at, destroyed_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(provider_credential_id), sqlc.arg(account_id),
+    sqlc.narg(tenant_partition_id), sqlc.arg(provider), sqlc.arg(version),
+    sqlc.arg(status), sqlc.narg(previous_version_id),
+    sqlc.narg(encryption_key_id), sqlc.narg(nonce), sqlc.narg(ciphertext),
+    sqlc.narg(expires_at), sqlc.narg(overlap_expires_at),
+    sqlc.narg(rotation_idempotency_key), sqlc.narg(rotation_fingerprint),
+    sqlc.arg(created_by), sqlc.arg(created_at), sqlc.narg(destroyed_at)
+);
+
+-- name: GetProviderCredential :one
+SELECT * FROM provider_credentials WHERE id = $1;
+
+-- name: GetProviderCredentialForUpdate :one
+SELECT * FROM provider_credentials WHERE id = $1 FOR UPDATE;
+
+-- name: GetProviderCredentialVersion :one
+SELECT * FROM provider_credential_versions WHERE id = $1;
+
+-- name: GetProviderCredentialByCreateIdempotencyKey :one
+SELECT * FROM provider_credentials
+WHERE account_id = sqlc.arg(account_id)
+  AND create_idempotency_key = sqlc.arg(idempotency_key);
+
+-- name: GetProviderCredentialVersionByRotationIdempotencyKey :one
+SELECT * FROM provider_credential_versions
+WHERE account_id = sqlc.arg(account_id)
+  AND rotation_idempotency_key = sqlc.arg(idempotency_key);
+
+-- name: GetActiveProviderCredential :one
+SELECT * FROM provider_credentials
+WHERE account_id = sqlc.arg(account_id)
+  AND tenant_partition_id IS NOT DISTINCT FROM sqlc.narg(tenant_partition_id)::text
+  AND provider = sqlc.arg(provider)
+  AND status = 'active';
+
+-- name: ListProviderCredentials :many
+SELECT * FROM provider_credentials
+WHERE account_id = sqlc.arg(account_id)
+  AND (
+      sqlc.narg(tenant_partition_id)::text IS NULL
+      OR tenant_partition_id = sqlc.narg(tenant_partition_id)::text
+  )
+  AND (sqlc.narg(provider)::text IS NULL OR provider = sqlc.narg(provider)::text)
+  AND (sqlc.narg(scope)::text IS NULL OR scope = sqlc.narg(scope)::text)
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status)::text)
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(batch_limit);
+
+-- name: ActivateProviderCredentialVersion :one
+WITH retired AS (
+    UPDATE provider_credential_versions AS version
+    SET status = CASE
+            WHEN sqlc.narg(overlap_expires_at)::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN 'overlap'
+            ELSE 'revoked'
+        END,
+        overlap_expires_at = CASE
+            WHEN sqlc.narg(overlap_expires_at)::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN sqlc.narg(overlap_expires_at)
+            ELSE NULL
+        END,
+        encryption_key_id = CASE
+            WHEN sqlc.narg(overlap_expires_at)::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN encryption_key_id
+            ELSE NULL
+        END,
+        nonce = CASE
+            WHEN sqlc.narg(overlap_expires_at)::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN nonce
+            ELSE NULL
+        END,
+        ciphertext = CASE
+            WHEN sqlc.narg(overlap_expires_at)::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN ciphertext
+            ELSE NULL
+        END,
+        destroyed_at = CASE
+            WHEN sqlc.narg(overlap_expires_at)::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN NULL
+            ELSE COALESCE(destroyed_at, sqlc.arg(observed_at))
+        END
+    FROM provider_credentials AS credential
+    WHERE credential.id = sqlc.arg(credential_id)
+      AND credential.status = 'active'
+      AND credential.current_version_id = version.id
+    RETURNING version.id
+)
+UPDATE provider_credentials
+SET current_version_id = sqlc.arg(current_version_id),
+    current_version = sqlc.arg(current_version),
+    updated_at = sqlc.arg(observed_at)
+WHERE provider_credentials.id = sqlc.arg(credential_id)
+  AND status = 'active'
+  AND EXISTS (SELECT 1 FROM retired)
+RETURNING *;
+
+-- name: RevokeProviderCredential :one
+WITH revoked_versions AS (
+    UPDATE provider_credential_versions
+    SET status = 'revoked', encryption_key_id = NULL, nonce = NULL,
+        ciphertext = NULL, overlap_expires_at = NULL,
+        destroyed_at = COALESCE(destroyed_at, sqlc.arg(observed_at))
+    WHERE provider_credential_id = sqlc.arg(credential_id)
+      AND status IN ('active', 'overlap')
+    RETURNING id
+)
+UPDATE provider_credentials
+SET status = 'revoked', revoked_at = sqlc.arg(observed_at),
+    updated_at = sqlc.arg(observed_at)
+WHERE provider_credentials.id = sqlc.arg(credential_id) AND status = 'active'
+RETURNING *;
+
+-- name: CreateInvocationProviderCredential :exec
+INSERT INTO invocation_provider_credentials (
+    id, invocation_id, account_id, tenant_partition_id, provider, source,
+    provider_credential_id, credential_version_id, selector,
+    encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(invocation_id), sqlc.arg(account_id),
+    sqlc.arg(tenant_partition_id), sqlc.arg(provider), sqlc.arg(source),
+    sqlc.narg(provider_credential_id), sqlc.narg(credential_version_id),
+    sqlc.narg(selector), sqlc.narg(encryption_key_id), sqlc.narg(nonce),
+    sqlc.narg(ciphertext), sqlc.narg(expires_at), sqlc.narg(cleared_at),
+    sqlc.arg(created_at)
+);
+
+-- name: GetInvocationProviderCredential :one
+SELECT * FROM invocation_provider_credentials
+WHERE invocation_id = sqlc.arg(invocation_id)
+  AND provider = sqlc.arg(provider);
+
+-- name: ClearExpiredInvocationCredentialMaterial :execrows
+WITH candidates AS (
+    SELECT id FROM invocation_provider_credentials
+    WHERE source = 'caller_ephemeral'
+      AND ciphertext IS NOT NULL
+      AND expires_at <= sqlc.arg(observed_at)
+    ORDER BY expires_at, id
+    LIMIT sqlc.arg(batch_limit)
+)
+UPDATE invocation_provider_credentials
+SET encryption_key_id = NULL, nonce = NULL, ciphertext = NULL,
+    cleared_at = sqlc.arg(observed_at)
+WHERE id IN (SELECT id FROM candidates);
+
+-- name: ExpireProviderCredentialVersions :execrows
+WITH candidates AS (
+    SELECT id FROM provider_credential_versions
+    WHERE ciphertext IS NOT NULL
+      AND (
+          (expires_at IS NOT NULL AND expires_at <= sqlc.arg(observed_at))
+          OR (status = 'overlap' AND overlap_expires_at <= sqlc.arg(observed_at))
+      )
+    ORDER BY LEAST(
+        COALESCE(expires_at, 'infinity'::timestamptz),
+        COALESCE(overlap_expires_at, 'infinity'::timestamptz)
+    ), id
+    LIMIT sqlc.arg(batch_limit)
+)
+UPDATE provider_credential_versions
+SET status = 'expired', encryption_key_id = NULL, nonce = NULL,
+    ciphertext = NULL, overlap_expires_at = NULL,
+    destroyed_at = sqlc.arg(observed_at)
+WHERE id IN (SELECT id FROM candidates);

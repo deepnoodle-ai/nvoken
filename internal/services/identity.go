@@ -922,10 +922,15 @@ func (s *IdentityService) resolveCredentialProfile(ctx context.Context, credenti
 func profileOperations(profile domain.CredentialProfile) map[domain.RuntimeOperation]struct{} {
 	runtimeAll := []domain.RuntimeOperation{domain.OperationCreateInvocation, domain.OperationGetInvocation, domain.OperationSubmitToolResults, domain.OperationCancelInvocation, domain.OperationListInvocations, domain.OperationGetSession, domain.OperationListSessions, domain.OperationListMessages, domain.OperationGetTranscript}
 	runtimeRead := []domain.RuntimeOperation{domain.OperationGetInvocation, domain.OperationListInvocations, domain.OperationGetSession, domain.OperationListSessions, domain.OperationListMessages, domain.OperationGetTranscript}
+	providerRead := []domain.RuntimeOperation{domain.OperationListProviderCredentials, domain.OperationGetProviderCredential}
+	providerManage := []domain.RuntimeOperation{domain.OperationCreateProviderCredential, domain.OperationRotateProviderCredential, domain.OperationRevokeProviderCredential}
 	selected := append(runtimeAll, domain.OperationGetAccount)
+	selected = append(selected, providerRead...)
+	selected = append(selected, providerManage...)
 	switch profile {
 	case domain.CredentialProfileViewer:
 		selected = append(runtimeRead, domain.OperationGetAccount)
+		selected = append(selected, providerRead...)
 	case domain.CredentialProfileOperator:
 		selected = append(selected, domain.OperationListCredentials, domain.OperationCreateCredential, domain.OperationGetCredential, domain.OperationRotateCredential, domain.OperationRevokeCredential)
 	}

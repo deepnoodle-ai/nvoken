@@ -37,18 +37,19 @@ func (e ClientToolResultAcceptanceStatus) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeForbidden               ErrorCode = "forbidden"
-	ErrorCodeIdempotencyConflict     ErrorCode = "idempotency_conflict"
-	ErrorCodeInternal                ErrorCode = "internal"
-	ErrorCodeInvalidRequest          ErrorCode = "invalid_request"
-	ErrorCodeInvocationNotWaiting    ErrorCode = "invocation_not_waiting"
-	ErrorCodeNotFound                ErrorCode = "not_found"
-	ErrorCodeRateLimited             ErrorCode = "rate_limited"
-	ErrorCodeSessionInvocationActive ErrorCode = "session_invocation_active"
-	ErrorCodeToolResultConflict      ErrorCode = "tool_result_conflict"
-	ErrorCodeToolResultExpired       ErrorCode = "tool_result_expired"
-	ErrorCodeUnauthenticated         ErrorCode = "unauthenticated"
-	ErrorCodeUnavailable             ErrorCode = "unavailable"
+	ErrorCodeForbidden                  ErrorCode = "forbidden"
+	ErrorCodeIdempotencyConflict        ErrorCode = "idempotency_conflict"
+	ErrorCodeInternal                   ErrorCode = "internal"
+	ErrorCodeInvalidRequest             ErrorCode = "invalid_request"
+	ErrorCodeInvocationNotWaiting       ErrorCode = "invocation_not_waiting"
+	ErrorCodeNotFound                   ErrorCode = "not_found"
+	ErrorCodeProviderCredentialConflict ErrorCode = "provider_credential_conflict"
+	ErrorCodeRateLimited                ErrorCode = "rate_limited"
+	ErrorCodeSessionInvocationActive    ErrorCode = "session_invocation_active"
+	ErrorCodeToolResultConflict         ErrorCode = "tool_result_conflict"
+	ErrorCodeToolResultExpired          ErrorCode = "tool_result_expired"
+	ErrorCodeUnauthenticated            ErrorCode = "unauthenticated"
+	ErrorCodeUnavailable                ErrorCode = "unavailable"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -65,6 +66,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeInvocationNotWaiting:
 		return true
 	case ErrorCodeNotFound:
+		return true
+	case ErrorCodeProviderCredentialConflict:
 		return true
 	case ErrorCodeRateLimited:
 		return true
@@ -131,6 +134,7 @@ func (e GenerationThinkingDeltaType) Valid() bool {
 // Defines values for InvocationFailureCode.
 const (
 	InvocationFailureCodeBudgetExceeded              InvocationFailureCode = "budget_exceeded"
+	InvocationFailureCodeCredentialUnavailable       InvocationFailureCode = "credential_unavailable"
 	InvocationFailureCodeDeadlineExceeded            InvocationFailureCode = "deadline_exceeded"
 	InvocationFailureCodeExecutionLost               InvocationFailureCode = "execution_lost"
 	InvocationFailureCodeInternal                    InvocationFailureCode = "internal"
@@ -143,6 +147,8 @@ func (e InvocationFailureCode) Valid() bool {
 	switch e {
 	case InvocationFailureCodeBudgetExceeded:
 		return true
+	case InvocationFailureCodeCredentialUnavailable:
+		return true
 	case InvocationFailureCodeDeadlineExceeded:
 		return true
 	case InvocationFailureCodeExecutionLost:
@@ -152,6 +158,27 @@ func (e InvocationFailureCode) Valid() bool {
 	case InvocationFailureCodeProviderError:
 		return true
 	case InvocationFailureCodeStructuredOutputUnsatisfied:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvocationProviderCredentialSelection1Source.
+const (
+	InvocationProviderCredentialSelection1SourceAccountByok InvocationProviderCredentialSelection1Source = "account_byok"
+	InvocationProviderCredentialSelection1SourcePlatform    InvocationProviderCredentialSelection1Source = "platform"
+	InvocationProviderCredentialSelection1SourceTenantByok  InvocationProviderCredentialSelection1Source = "tenant_byok"
+)
+
+// Valid indicates whether the value is a known member of the InvocationProviderCredentialSelection1Source enum.
+func (e InvocationProviderCredentialSelection1Source) Valid() bool {
+	switch e {
+	case InvocationProviderCredentialSelection1SourceAccountByok:
+		return true
+	case InvocationProviderCredentialSelection1SourcePlatform:
+		return true
+	case InvocationProviderCredentialSelection1SourceTenantByok:
 		return true
 	default:
 		return false
@@ -182,6 +209,111 @@ func (e InvocationStatus) Valid() bool {
 	case InvocationStatusRunning:
 		return true
 	case InvocationStatusWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelProvenanceCredentialSource.
+const (
+	ModelProvenanceCredentialSourceAccountByok      ModelProvenanceCredentialSource = "account_byok"
+	ModelProvenanceCredentialSourceCallerEphemeral  ModelProvenanceCredentialSource = "caller_ephemeral"
+	ModelProvenanceCredentialSourceInstallationByok ModelProvenanceCredentialSource = "installation_byok"
+	ModelProvenanceCredentialSourcePlatform         ModelProvenanceCredentialSource = "platform"
+	ModelProvenanceCredentialSourceTenantByok       ModelProvenanceCredentialSource = "tenant_byok"
+)
+
+// Valid indicates whether the value is a known member of the ModelProvenanceCredentialSource enum.
+func (e ModelProvenanceCredentialSource) Valid() bool {
+	switch e {
+	case ModelProvenanceCredentialSourceAccountByok:
+		return true
+	case ModelProvenanceCredentialSourceCallerEphemeral:
+		return true
+	case ModelProvenanceCredentialSourceInstallationByok:
+		return true
+	case ModelProvenanceCredentialSourcePlatform:
+		return true
+	case ModelProvenanceCredentialSourceTenantByok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelProvider.
+const (
+	Anthropic ModelProvider = "anthropic"
+	Openai    ModelProvider = "openai"
+)
+
+// Valid indicates whether the value is a known member of the ModelProvider enum.
+func (e ModelProvider) Valid() bool {
+	switch e {
+	case Anthropic:
+		return true
+	case Openai:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderCredentialStatus.
+const (
+	ProviderCredentialStatusActive  ProviderCredentialStatus = "active"
+	ProviderCredentialStatusRevoked ProviderCredentialStatus = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the ProviderCredentialStatus enum.
+func (e ProviderCredentialStatus) Valid() bool {
+	switch e {
+	case ProviderCredentialStatusActive:
+		return true
+	case ProviderCredentialStatusRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderCredentialVersionStatus.
+const (
+	ProviderCredentialVersionStatusActive  ProviderCredentialVersionStatus = "active"
+	ProviderCredentialVersionStatusExpired ProviderCredentialVersionStatus = "expired"
+	ProviderCredentialVersionStatusOverlap ProviderCredentialVersionStatus = "overlap"
+	ProviderCredentialVersionStatusRevoked ProviderCredentialVersionStatus = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the ProviderCredentialVersionStatus enum.
+func (e ProviderCredentialVersionStatus) Valid() bool {
+	switch e {
+	case ProviderCredentialVersionStatusActive:
+		return true
+	case ProviderCredentialVersionStatusExpired:
+		return true
+	case ProviderCredentialVersionStatusOverlap:
+		return true
+	case ProviderCredentialVersionStatusRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderCredentialScope.
+const (
+	Account ProviderCredentialScope = "account"
+	Tenant  ProviderCredentialScope = "tenant"
+)
+
+// Valid indicates whether the value is a known member of the ProviderCredentialScope enum.
+func (e ProviderCredentialScope) Valid() bool {
+	switch e {
+	case Account:
+		return true
+	case Tenant:
 		return true
 	default:
 		return false
@@ -293,6 +425,24 @@ func (e StreamResyncEventReason) Valid() bool {
 	}
 }
 
+// Defines values for ListProviderCredentialsParamsStatus.
+const (
+	ListProviderCredentialsParamsStatusActive  ListProviderCredentialsParamsStatus = "active"
+	ListProviderCredentialsParamsStatusRevoked ListProviderCredentialsParamsStatus = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the ListProviderCredentialsParamsStatus enum.
+func (e ListProviderCredentialsParamsStatus) Valid() bool {
+	switch e {
+	case ListProviderCredentialsParamsStatusActive:
+		return true
+	case ListProviderCredentialsParamsStatusRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // AgentID UUIDv7 with the public `agnt_` prefix.
 type AgentID = string
 
@@ -356,6 +506,13 @@ type CreateInvocationRequest struct {
 	IdempotencyKey string          `json:"idempotency_key"`
 	Input          InvocationInput `json:"input"`
 
+	// ProviderCredentials Explicit nonsecret source selection for the spec model provider.
+	// Omission selects the deployment's configured default. The
+	// selection is stored outside the execution spec; only
+	// caller_ephemeral accepts secret material. Equal idempotent replay
+	// never replaces the original encrypted credential.
+	ProviderCredentials *[]InvocationProviderCredentialSelection `json:"provider_credentials,omitempty"`
+
 	// SessionID Existing Session to continue. Mutually exclusive with session_key.
 	SessionID *SessionID `json:"session_id,omitempty"`
 
@@ -374,6 +531,18 @@ type CreateInvocationRequest struct {
 	// Session, precedence is credential constraint, this explicit value,
 	// then the Account's default partition. For Session-ID resolution, an
 	// Account-wide caller may omit it and use the stored partition.
+	TenantRef *string `json:"tenant_ref,omitempty"`
+}
+
+// CreateProviderCredentialRequest defines model for CreateProviderCredentialRequest.
+type CreateProviderCredentialRequest struct {
+	Credential     ProviderStaticCredential `json:"credential"`
+	ExpiresAt      *time.Time               `json:"expires_at,omitempty"`
+	IdempotencyKey string                   `json:"idempotency_key"`
+	Provider       ModelProvider            `json:"provider"`
+	Scope          ProviderCredentialScope  `json:"scope"`
+
+	// TenantRef Required for tenant scope and forbidden for Account scope.
 	TenantRef *string `json:"tenant_ref,omitempty"`
 }
 
@@ -593,6 +762,27 @@ type InvocationList struct {
 	NextCursor *string      `json:"next_cursor"`
 }
 
+// InvocationProviderCredentialSelection Exactly one selection matching the canonical spec provider.
+type InvocationProviderCredentialSelection struct {
+	union json.RawMessage
+}
+
+// InvocationProviderCredentialSelection0 defines model for InvocationProviderCredentialSelection.0.
+type InvocationProviderCredentialSelection0 struct {
+	Credential ProviderStaticCredential `json:"credential"`
+	Provider   ModelProvider            `json:"provider"`
+	Source     interface{}              `json:"source"`
+}
+
+// InvocationProviderCredentialSelection1 defines model for InvocationProviderCredentialSelection.1.
+type InvocationProviderCredentialSelection1 struct {
+	Provider ModelProvider                                `json:"provider"`
+	Source   InvocationProviderCredentialSelection1Source `json:"source"`
+}
+
+// InvocationProviderCredentialSelection1Source defines model for InvocationProviderCredentialSelection.1.Source.
+type InvocationProviderCredentialSelection1Source string
+
 // InvocationStatus `completed`, `failed`, and `cancelled` are terminal and immutable.
 // Deadline or budget exhaustion settles as `failed`. `waiting` means the
 // Invocation has durable pending client ToolCalls and owns no execution
@@ -612,18 +802,32 @@ type ModelCost struct {
 	Total      float32 `json:"total"`
 }
 
-// ModelProvenance defines model for ModelProvenance.
+// ModelProvenance Reusable BYOK sources include safe credential and version IDs. Caller,
+// platform, and installation sources omit them. No secret material is
+// included.
 type ModelProvenance struct {
-	CredentialSource interface{} `json:"credential_source"`
-	Provider         string      `json:"provider"`
-	RequestedModel   string      `json:"requested_model"`
-	ServedModel      string      `json:"served_model"`
+	CredentialSource ModelProvenanceCredentialSource `json:"credential_source"`
+
+	// CredentialVersionID UUIDv7 with the public `pcvr_` prefix.
+	CredentialVersionID *ProviderCredentialVersionID `json:"credential_version_id,omitempty"`
+	Provider            string                       `json:"provider"`
+
+	// ProviderCredentialID UUIDv7 with the public `pcrd_` prefix.
+	ProviderCredentialID *ProviderCredentialID `json:"provider_credential_id,omitempty"`
+	RequestedModel       string                `json:"requested_model"`
+	ServedModel          string                `json:"served_model"`
 }
+
+// ModelProvenanceCredentialSource defines model for ModelProvenance.CredentialSource.
+type ModelProvenanceCredentialSource string
+
+// ModelProvider defines model for ModelProvider.
+type ModelProvider string
 
 // ModelSelection defines model for ModelSelection.
 type ModelSelection struct {
-	Name     string `json:"name"`
-	Provider string `json:"provider"`
+	Name     string        `json:"name"`
+	Provider ModelProvider `json:"provider"`
 }
 
 // ModelUsage defines model for ModelUsage.
@@ -645,6 +849,67 @@ type PendingClientToolCall struct {
 	ID         ToolCallID  `json:"id"`
 	Input      interface{} `json:"input"`
 	Name       string      `json:"name"`
+}
+
+// ProviderCredential Safe metadata only; secret material is never represented.
+type ProviderCredential struct {
+	CreatedAt time.Time  `json:"created_at"`
+	CreatedBy string     `json:"created_by"`
+	ExpiresAt *time.Time `json:"expires_at"`
+
+	// ID UUIDv7 with the public `pcrd_` prefix.
+	ID                ProviderCredentialID         `json:"id"`
+	OverlapExpiresAt  *time.Time                   `json:"overlap_expires_at"`
+	PreviousVersionID *ProviderCredentialVersionID `json:"previous_version_id"`
+	Provider          ModelProvider                `json:"provider"`
+	RevokedAt         *time.Time                   `json:"revoked_at"`
+	Scope             ProviderCredentialScope      `json:"scope"`
+
+	// Status Active roots remain rotatable and revocable even when their current version has expired.
+	Status    ProviderCredentialStatus `json:"status"`
+	TenantRef *string                  `json:"tenant_ref"`
+	UpdatedAt time.Time                `json:"updated_at"`
+	Version   int                      `json:"version"`
+
+	// VersionID UUIDv7 with the public `pcvr_` prefix.
+	VersionID ProviderCredentialVersionID `json:"version_id"`
+
+	// VersionStatus An expired current version is unusable; rotate the active credential root before any admission or model call can use it.
+	VersionStatus ProviderCredentialVersionStatus `json:"version_status"`
+}
+
+// ProviderCredentialStatus Active roots remain rotatable and revocable even when their current version has expired.
+type ProviderCredentialStatus string
+
+// ProviderCredentialVersionStatus An expired current version is unusable; rotate the active credential root before any admission or model call can use it.
+type ProviderCredentialVersionStatus string
+
+// ProviderCredentialID UUIDv7 with the public `pcrd_` prefix.
+type ProviderCredentialID = string
+
+// ProviderCredentialList defines model for ProviderCredentialList.
+type ProviderCredentialList struct {
+	Items []ProviderCredential `json:"items"`
+}
+
+// ProviderCredentialScope defines model for ProviderCredentialScope.
+type ProviderCredentialScope string
+
+// ProviderCredentialVersionID UUIDv7 with the public `pcvr_` prefix.
+type ProviderCredentialVersionID = string
+
+// ProviderStaticCredential defines model for ProviderStaticCredential.
+type ProviderStaticCredential struct {
+	// APIKey Encrypted before persistence and never returned.
+	APIKey *string `json:"api_key,omitempty"`
+}
+
+// RotateProviderCredentialRequest defines model for RotateProviderCredentialRequest.
+type RotateProviderCredentialRequest struct {
+	Credential     ProviderStaticCredential `json:"credential"`
+	ExpiresAt      *time.Time               `json:"expires_at,omitempty"`
+	IdempotencyKey string                   `json:"idempotency_key"`
+	OverlapSeconds *int                     `json:"overlap_seconds,omitempty"`
 }
 
 // Session defines model for Session.
@@ -880,6 +1145,18 @@ type ListInvocationsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListProviderCredentialsParams defines parameters for ListProviderCredentials.
+type ListProviderCredentialsParams struct {
+	Provider  *ModelProvider                       `form:"provider,omitempty" json:"provider,omitempty"`
+	Scope     *ProviderCredentialScope             `form:"scope,omitempty" json:"scope,omitempty"`
+	Status    *ListProviderCredentialsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	TenantRef *string                              `form:"tenant_ref,omitempty" json:"tenant_ref,omitempty"`
+	Limit     *int                                 `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListProviderCredentialsParamsStatus defines parameters for ListProviderCredentials.
+type ListProviderCredentialsParamsStatus string
+
 // ListSessionsParams defines parameters for ListSessions.
 type ListSessionsParams struct {
 	// TenantRef Exact non-default tenant partition reference.
@@ -932,6 +1209,12 @@ type CreateInvocationJSONRequestBody = CreateInvocationRequest
 
 // SubmitClientToolResultsJSONRequestBody defines body for SubmitClientToolResults for application/json ContentType.
 type SubmitClientToolResultsJSONRequestBody = SubmitClientToolResultsRequest
+
+// CreateProviderCredentialJSONRequestBody defines body for CreateProviderCredential for application/json ContentType.
+type CreateProviderCredentialJSONRequestBody = CreateProviderCredentialRequest
+
+// RotateProviderCredentialJSONRequestBody defines body for RotateProviderCredential for application/json ContentType.
+type RotateProviderCredentialJSONRequestBody = RotateProviderCredentialRequest
 
 // Getter for additional properties for SessionContentBlock. Returns the specified
 // element and whether it was found
@@ -1057,6 +1340,68 @@ func (t GenerationDeltaEvent_Delta) MarshalJSON() ([]byte, error) {
 }
 
 func (t *GenerationDeltaEvent_Delta) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsInvocationProviderCredentialSelection0 returns the union data inside the InvocationProviderCredentialSelection as a InvocationProviderCredentialSelection0
+func (t InvocationProviderCredentialSelection) AsInvocationProviderCredentialSelection0() (InvocationProviderCredentialSelection0, error) {
+	var body InvocationProviderCredentialSelection0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInvocationProviderCredentialSelection0 overwrites any union data inside the InvocationProviderCredentialSelection as the provided InvocationProviderCredentialSelection0
+func (t *InvocationProviderCredentialSelection) FromInvocationProviderCredentialSelection0(v InvocationProviderCredentialSelection0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInvocationProviderCredentialSelection0 performs a merge with any union data inside the InvocationProviderCredentialSelection, using the provided InvocationProviderCredentialSelection0
+func (t *InvocationProviderCredentialSelection) MergeInvocationProviderCredentialSelection0(v InvocationProviderCredentialSelection0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsInvocationProviderCredentialSelection1 returns the union data inside the InvocationProviderCredentialSelection as a InvocationProviderCredentialSelection1
+func (t InvocationProviderCredentialSelection) AsInvocationProviderCredentialSelection1() (InvocationProviderCredentialSelection1, error) {
+	var body InvocationProviderCredentialSelection1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInvocationProviderCredentialSelection1 overwrites any union data inside the InvocationProviderCredentialSelection as the provided InvocationProviderCredentialSelection1
+func (t *InvocationProviderCredentialSelection) FromInvocationProviderCredentialSelection1(v InvocationProviderCredentialSelection1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInvocationProviderCredentialSelection1 performs a merge with any union data inside the InvocationProviderCredentialSelection, using the provided InvocationProviderCredentialSelection1
+func (t *InvocationProviderCredentialSelection) MergeInvocationProviderCredentialSelection1(v InvocationProviderCredentialSelection1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t InvocationProviderCredentialSelection) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *InvocationProviderCredentialSelection) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -1447,6 +1792,65 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
 	SubmitClientToolResults(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListProviderCredentials List reusable provider credential metadata
+	//
+	// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
+	//
+	// Corresponds with GET /v1/provider-credentials (the `ListProviderCredentials` operationId).
+	ListProviderCredentials(ctx context.Context, params *ListProviderCredentialsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateProviderCredentialWithBody Create one reusable provider credential
+	//
+	// Creates encrypted Account or tenant BYOK. Account scope requires an
+	// Operator credential. A tenant-constrained Runtime credential may manage
+	// only its exact tenant partition. The response contains metadata only.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/provider-credentials (the `CreateProviderCredential` operationId).
+	CreateProviderCredentialWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateProviderCredential Create one reusable provider credential
+	//
+	// Creates encrypted Account or tenant BYOK. Account scope requires an
+	// Operator credential. A tenant-constrained Runtime credential may manage
+	// only its exact tenant partition. The response contains metadata only.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/provider-credentials (the `CreateProviderCredential` operationId).
+	CreateProviderCredential(ctx context.Context, body CreateProviderCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeProviderCredential Revoke a provider credential and destroy live encrypted versions
+	//
+	// Corresponds with DELETE /v1/provider-credentials/{provider_credential_id} (the `RevokeProviderCredential` operationId).
+	RevokeProviderCredential(ctx context.Context, providerCredentialID ProviderCredentialID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetProviderCredential Read provider credential metadata
+	//
+	// Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
+	//
+	// Corresponds with GET /v1/provider-credentials/{provider_credential_id} (the `GetProviderCredential` operationId).
+	GetProviderCredential(ctx context.Context, providerCredentialID ProviderCredentialID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotateProviderCredentialWithBody Rotate a provider credential
+	//
+	// Replaces the active version, optionally preserving a bounded overlap.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/provider-credentials/{provider_credential_id}/rotate (the `RotateProviderCredential` operationId).
+	RotateProviderCredentialWithBody(ctx context.Context, providerCredentialID ProviderCredentialID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotateProviderCredential Rotate a provider credential
+	//
+	// Replaces the active version, optionally preserving a bounded overlap.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/provider-credentials/{provider_credential_id}/rotate (the `RotateProviderCredential` operationId).
+	RotateProviderCredential(ctx context.Context, providerCredentialID ProviderCredentialID, body RotateProviderCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListSessions List authoritative Sessions
 	//
 	// Returns newest-first Session identity and current nonterminal
@@ -1714,6 +2118,135 @@ func (c *Client) SubmitClientToolResultsWithBody(ctx context.Context, invocation
 // Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
 func (c *Client) SubmitClientToolResults(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSubmitClientToolResultsRequest(c.Server, invocationID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListProviderCredentials List reusable provider credential metadata
+//
+// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
+//
+// Corresponds with GET /v1/provider-credentials (the `ListProviderCredentials` operationId).
+func (c *Client) ListProviderCredentials(ctx context.Context, params *ListProviderCredentialsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListProviderCredentialsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateProviderCredentialWithBody Create one reusable provider credential
+//
+// Creates encrypted Account or tenant BYOK. Account scope requires an
+// Operator credential. A tenant-constrained Runtime credential may manage
+// only its exact tenant partition. The response contains metadata only.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/provider-credentials (the `CreateProviderCredential` operationId).
+func (c *Client) CreateProviderCredentialWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProviderCredentialRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateProviderCredential Create one reusable provider credential
+//
+// Creates encrypted Account or tenant BYOK. Account scope requires an
+// Operator credential. A tenant-constrained Runtime credential may manage
+// only its exact tenant partition. The response contains metadata only.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/provider-credentials (the `CreateProviderCredential` operationId).
+func (c *Client) CreateProviderCredential(ctx context.Context, body CreateProviderCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProviderCredentialRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeProviderCredential Revoke a provider credential and destroy live encrypted versions
+//
+// Corresponds with DELETE /v1/provider-credentials/{provider_credential_id} (the `RevokeProviderCredential` operationId).
+func (c *Client) RevokeProviderCredential(ctx context.Context, providerCredentialID ProviderCredentialID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeProviderCredentialRequest(c.Server, providerCredentialID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetProviderCredential Read provider credential metadata
+//
+// Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
+//
+// Corresponds with GET /v1/provider-credentials/{provider_credential_id} (the `GetProviderCredential` operationId).
+func (c *Client) GetProviderCredential(ctx context.Context, providerCredentialID ProviderCredentialID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProviderCredentialRequest(c.Server, providerCredentialID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RotateProviderCredentialWithBody Rotate a provider credential
+//
+// Replaces the active version, optionally preserving a bounded overlap.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/provider-credentials/{provider_credential_id}/rotate (the `RotateProviderCredential` operationId).
+func (c *Client) RotateProviderCredentialWithBody(ctx context.Context, providerCredentialID ProviderCredentialID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateProviderCredentialRequestWithBody(c.Server, providerCredentialID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RotateProviderCredential Rotate a provider credential
+//
+// Replaces the active version, optionally preserving a bounded overlap.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/provider-credentials/{provider_credential_id}/rotate (the `RotateProviderCredential` operationId).
+func (c *Client) RotateProviderCredential(ctx context.Context, providerCredentialID ProviderCredentialID, body RotateProviderCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateProviderCredentialRequest(c.Server, providerCredentialID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2106,6 +2639,263 @@ func NewSubmitClientToolResultsRequestWithBody(server string, invocationID Invoc
 	}
 
 	operationPath := fmt.Sprintf("/v1/invocations/%s/tool-results", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListProviderCredentialsRequest constructs an http.Request for the ListProviderCredentials method
+func NewListProviderCredentialsRequest(server string, params *ListProviderCredentialsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/provider-credentials")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Provider != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider", *params.Provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Scope != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "scope", *params.Scope, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TenantRef != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_ref", *params.TenantRef, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateProviderCredentialRequest calls the generic CreateProviderCredential builder with application/json body
+func NewCreateProviderCredentialRequest(server string, body CreateProviderCredentialJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateProviderCredentialRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateProviderCredentialRequestWithBody constructs an http.Request for the CreateProviderCredential method, with any body, and a specified content type
+func NewCreateProviderCredentialRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/provider-credentials")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRevokeProviderCredentialRequest constructs an http.Request for the RevokeProviderCredential method
+func NewRevokeProviderCredentialRequest(server string, providerCredentialID ProviderCredentialID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider_credential_id", providerCredentialID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/provider-credentials/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetProviderCredentialRequest constructs an http.Request for the GetProviderCredential method
+func NewGetProviderCredentialRequest(server string, providerCredentialID ProviderCredentialID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider_credential_id", providerCredentialID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/provider-credentials/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRotateProviderCredentialRequest calls the generic RotateProviderCredential builder with application/json body
+func NewRotateProviderCredentialRequest(server string, providerCredentialID ProviderCredentialID, body RotateProviderCredentialJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRotateProviderCredentialRequestWithBody(server, providerCredentialID, "application/json", bodyReader)
+}
+
+// NewRotateProviderCredentialRequestWithBody constructs an http.Request for the RotateProviderCredential method, with any body, and a specified content type
+func NewRotateProviderCredentialRequestWithBody(server string, providerCredentialID ProviderCredentialID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider_credential_id", providerCredentialID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/provider-credentials/%s/rotate", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2693,6 +3483,71 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
 	SubmitClientToolResultsWithResponse(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitClientToolResultsHTTPResponse, error)
 
+	// ListProviderCredentialsWithResponse List reusable provider credential metadata
+	//
+	// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/provider-credentials (the `ListProviderCredentials` operationId).
+	ListProviderCredentialsWithResponse(ctx context.Context, params *ListProviderCredentialsParams, reqEditors ...RequestEditorFn) (*ListProviderCredentialsHTTPResponse, error)
+
+	// CreateProviderCredentialWithBodyWithResponse Create one reusable provider credential
+	//
+	// Creates encrypted Account or tenant BYOK. Account scope requires an
+	// Operator credential. A tenant-constrained Runtime credential may manage
+	// only its exact tenant partition. The response contains metadata only.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/provider-credentials (the `CreateProviderCredential` operationId).
+	CreateProviderCredentialWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProviderCredentialHTTPResponse, error)
+
+	// CreateProviderCredentialWithResponse Create one reusable provider credential
+	//
+	// Creates encrypted Account or tenant BYOK. Account scope requires an
+	// Operator credential. A tenant-constrained Runtime credential may manage
+	// only its exact tenant partition. The response contains metadata only.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/provider-credentials (the `CreateProviderCredential` operationId).
+	CreateProviderCredentialWithResponse(ctx context.Context, body CreateProviderCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProviderCredentialHTTPResponse, error)
+
+	// RevokeProviderCredentialWithResponse Revoke a provider credential and destroy live encrypted versions
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/provider-credentials/{provider_credential_id} (the `RevokeProviderCredential` operationId).
+	RevokeProviderCredentialWithResponse(ctx context.Context, providerCredentialID ProviderCredentialID, reqEditors ...RequestEditorFn) (*RevokeProviderCredentialHTTPResponse, error)
+
+	// GetProviderCredentialWithResponse Read provider credential metadata
+	//
+	// Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/provider-credentials/{provider_credential_id} (the `GetProviderCredential` operationId).
+	GetProviderCredentialWithResponse(ctx context.Context, providerCredentialID ProviderCredentialID, reqEditors ...RequestEditorFn) (*GetProviderCredentialHTTPResponse, error)
+
+	// RotateProviderCredentialWithBodyWithResponse Rotate a provider credential
+	//
+	// Replaces the active version, optionally preserving a bounded overlap.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/provider-credentials/{provider_credential_id}/rotate (the `RotateProviderCredential` operationId).
+	RotateProviderCredentialWithBodyWithResponse(ctx context.Context, providerCredentialID ProviderCredentialID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateProviderCredentialHTTPResponse, error)
+
+	// RotateProviderCredentialWithResponse Rotate a provider credential
+	//
+	// Replaces the active version, optionally preserving a bounded overlap.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/provider-credentials/{provider_credential_id}/rotate (the `RotateProviderCredential` operationId).
+	RotateProviderCredentialWithResponse(ctx context.Context, providerCredentialID ProviderCredentialID, body RotateProviderCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateProviderCredentialHTTPResponse, error)
+
 	// ListSessionsWithResponse List authoritative Sessions
 	//
 	// Returns newest-first Session identity and current nonterminal
@@ -3232,6 +4087,414 @@ func (r SubmitClientToolResultsHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SubmitClientToolResultsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListProviderCredentialsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProviderCredentialList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListProviderCredentialsHTTPResponse) GetJSON200() *ProviderCredentialList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListProviderCredentialsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListProviderCredentialsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListProviderCredentialsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListProviderCredentialsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListProviderCredentialsHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListProviderCredentialsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListProviderCredentialsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListProviderCredentialsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListProviderCredentialsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateProviderCredentialHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ProviderCredential
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorResponse
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateProviderCredentialHTTPResponse) GetJSON201() *ProviderCredential {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateProviderCredentialHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateProviderCredentialHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateProviderCredentialHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateProviderCredentialHTTPResponse) GetJSON409() *ErrorResponse {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r CreateProviderCredentialHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateProviderCredentialHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateProviderCredentialHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateProviderCredentialHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateProviderCredentialHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateProviderCredentialHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeProviderCredentialHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProviderCredential
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RevokeProviderCredentialHTTPResponse) GetJSON200() *ProviderCredential {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RevokeProviderCredentialHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RevokeProviderCredentialHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RevokeProviderCredentialHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RevokeProviderCredentialHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r RevokeProviderCredentialHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r RevokeProviderCredentialHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeProviderCredentialHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeProviderCredentialHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeProviderCredentialHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeProviderCredentialHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetProviderCredentialHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProviderCredential
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetProviderCredentialHTTPResponse) GetJSON200() *ProviderCredential {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetProviderCredentialHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetProviderCredentialHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetProviderCredentialHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetProviderCredentialHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetProviderCredentialHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetProviderCredentialHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetProviderCredentialHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetProviderCredentialHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetProviderCredentialHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RotateProviderCredentialHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProviderCredential
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorResponse
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RotateProviderCredentialHTTPResponse) GetJSON200() *ProviderCredential {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RotateProviderCredentialHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RotateProviderCredentialHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RotateProviderCredentialHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RotateProviderCredentialHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r RotateProviderCredentialHTTPResponse) GetJSON409() *ErrorResponse {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r RotateProviderCredentialHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r RotateProviderCredentialHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r RotateProviderCredentialHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RotateProviderCredentialHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RotateProviderCredentialHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RotateProviderCredentialHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -3893,6 +5156,113 @@ func (c *ClientWithResponses) SubmitClientToolResultsWithResponse(ctx context.Co
 	return ParseSubmitClientToolResultsHTTPResponse(rsp)
 }
 
+// ListProviderCredentialsWithResponse List reusable provider credential metadata
+//
+// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/provider-credentials (the `ListProviderCredentials` operationId).
+func (c *ClientWithResponses) ListProviderCredentialsWithResponse(ctx context.Context, params *ListProviderCredentialsParams, reqEditors ...RequestEditorFn) (*ListProviderCredentialsHTTPResponse, error) {
+	rsp, err := c.ListProviderCredentials(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListProviderCredentialsHTTPResponse(rsp)
+}
+
+// CreateProviderCredentialWithBodyWithResponse Create one reusable provider credential
+//
+// Creates encrypted Account or tenant BYOK. Account scope requires an
+// Operator credential. A tenant-constrained Runtime credential may manage
+// only its exact tenant partition. The response contains metadata only.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/provider-credentials (the `CreateProviderCredential` operationId).
+func (c *ClientWithResponses) CreateProviderCredentialWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProviderCredentialHTTPResponse, error) {
+	rsp, err := c.CreateProviderCredentialWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProviderCredentialHTTPResponse(rsp)
+}
+
+// CreateProviderCredentialWithResponse Create one reusable provider credential
+//
+// Creates encrypted Account or tenant BYOK. Account scope requires an
+// Operator credential. A tenant-constrained Runtime credential may manage
+// only its exact tenant partition. The response contains metadata only.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/provider-credentials (the `CreateProviderCredential` operationId).
+func (c *ClientWithResponses) CreateProviderCredentialWithResponse(ctx context.Context, body CreateProviderCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProviderCredentialHTTPResponse, error) {
+	rsp, err := c.CreateProviderCredential(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProviderCredentialHTTPResponse(rsp)
+}
+
+// RevokeProviderCredentialWithResponse Revoke a provider credential and destroy live encrypted versions
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/provider-credentials/{provider_credential_id} (the `RevokeProviderCredential` operationId).
+func (c *ClientWithResponses) RevokeProviderCredentialWithResponse(ctx context.Context, providerCredentialID ProviderCredentialID, reqEditors ...RequestEditorFn) (*RevokeProviderCredentialHTTPResponse, error) {
+	rsp, err := c.RevokeProviderCredential(ctx, providerCredentialID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeProviderCredentialHTTPResponse(rsp)
+}
+
+// GetProviderCredentialWithResponse Read provider credential metadata
+//
+// Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/provider-credentials/{provider_credential_id} (the `GetProviderCredential` operationId).
+func (c *ClientWithResponses) GetProviderCredentialWithResponse(ctx context.Context, providerCredentialID ProviderCredentialID, reqEditors ...RequestEditorFn) (*GetProviderCredentialHTTPResponse, error) {
+	rsp, err := c.GetProviderCredential(ctx, providerCredentialID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetProviderCredentialHTTPResponse(rsp)
+}
+
+// RotateProviderCredentialWithBodyWithResponse Rotate a provider credential
+//
+// Replaces the active version, optionally preserving a bounded overlap.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/provider-credentials/{provider_credential_id}/rotate (the `RotateProviderCredential` operationId).
+func (c *ClientWithResponses) RotateProviderCredentialWithBodyWithResponse(ctx context.Context, providerCredentialID ProviderCredentialID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateProviderCredentialHTTPResponse, error) {
+	rsp, err := c.RotateProviderCredentialWithBody(ctx, providerCredentialID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateProviderCredentialHTTPResponse(rsp)
+}
+
+// RotateProviderCredentialWithResponse Rotate a provider credential
+//
+// Replaces the active version, optionally preserving a bounded overlap.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/provider-credentials/{provider_credential_id}/rotate (the `RotateProviderCredential` operationId).
+func (c *ClientWithResponses) RotateProviderCredentialWithResponse(ctx context.Context, providerCredentialID ProviderCredentialID, body RotateProviderCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateProviderCredentialHTTPResponse, error) {
+	rsp, err := c.RotateProviderCredential(ctx, providerCredentialID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateProviderCredentialHTTPResponse(rsp)
+}
+
 // ListSessionsWithResponse List authoritative Sessions
 //
 // Returns newest-first Session identity and current nonterminal
@@ -4355,6 +5725,339 @@ func ParseSubmitClientToolResultsHTTPResponse(rsp *http.Response) (*SubmitClient
 			return nil, err
 		}
 		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListProviderCredentialsHTTPResponse parses an HTTP response from a ListProviderCredentialsWithResponse call
+func ParseListProviderCredentialsHTTPResponse(rsp *http.Response) (*ListProviderCredentialsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListProviderCredentialsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProviderCredentialList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateProviderCredentialHTTPResponse parses an HTTP response from a CreateProviderCredentialWithResponse call
+func ParseCreateProviderCredentialHTTPResponse(rsp *http.Response) (*CreateProviderCredentialHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateProviderCredentialHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ProviderCredential
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeProviderCredentialHTTPResponse parses an HTTP response from a RevokeProviderCredentialWithResponse call
+func ParseRevokeProviderCredentialHTTPResponse(rsp *http.Response) (*RevokeProviderCredentialHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeProviderCredentialHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProviderCredential
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetProviderCredentialHTTPResponse parses an HTTP response from a GetProviderCredentialWithResponse call
+func ParseGetProviderCredentialHTTPResponse(rsp *http.Response) (*GetProviderCredentialHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetProviderCredentialHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProviderCredential
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRotateProviderCredentialHTTPResponse parses an HTTP response from a RotateProviderCredentialWithResponse call
+func ParseRotateProviderCredentialHTTPResponse(rsp *http.Response) (*RotateProviderCredentialHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RotateProviderCredentialHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProviderCredential
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest InvalidRequest

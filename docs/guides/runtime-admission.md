@@ -26,9 +26,108 @@ OPENAI_API_KEY='' \
 go run ./cmd/nvokend serve
 ```
 
-Provider keys are optional at startup, but an Invocation selecting a provider
-without its matching key fails durably with `provider_error`; nvoken never falls
-back to another provider or ambient credentials. Engine capacity and timing are
+The self-hosted default is `installation_byok`, so an omitted credential
+selection uses the matching `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. If that
+selected key is unavailable, the Invocation fails durably with
+`credential_unavailable`; nvoken never falls back to another credential source,
+provider, or ambient SDK credential.
+
+To enable caller-ephemeral, Account BYOK, or tenant BYOK, configure an
+application-layer AES-256-GCM keyring outside Postgres. The value is a JSON
+object mapping nonsecret key IDs to base64-encoded 32-byte keys. Keep old keys
+present for decryption while rotating the active ID:
+
+```bash
+export PROVIDER_CREDENTIAL_ACTIVE_KEY_ID='v1'
+export PROVIDER_CREDENTIAL_ENCRYPTION_KEYS="{\"v1\":\"$(openssl rand -base64 32)\"}"
+```
+
+Provider credential lifecycle authority comes from the durable credential
+profile described in [Credentials and CLI authentication](credentials-and-cli-auth.md).
+An Operator credential can manage Account and tenant credentials. A Runtime
+credential can manage tenant credentials only when its `tenant_ref` constraint
+matches that exact tenant; it cannot manage Account BYOK. A Viewer credential
+can list and read secret-free Account and tenant credential metadata but cannot
+create, rotate, or revoke credentials. The configured `RUNTIME_API_KEY` is
+imported as a Runtime credential; use an Operator user or machine credential for
+Account lifecycle requests.
+Create and rotate endpoints accept a secret but return metadata only:
+
+```bash
+curl --fail-with-body http://localhost:8080/v1/provider-credentials \
+  -H "Authorization: Bearer $NVOKEN_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "provider": "openai",
+    "scope": "account",
+    "credential": {"api_key": "replace-with-an-OpenAI-key"},
+    "idempotency_key": "openai-account-v1"
+  }'
+
+curl --fail-with-body http://localhost:8080/v1/provider-credentials \
+  -H "Authorization: Bearer $NVOKEN_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "provider": "anthropic",
+    "scope": "tenant",
+    "tenant_ref": "customer-482",
+    "credential": {"api_key": "replace-with-an-Anthropic-key"},
+    "idempotency_key": "customer-482-anthropic-v1"
+  }'
+```
+
+List, get, rotate, and revoke use `/v1/provider-credentials`; see the OpenAPI
+contract for filters and rotation overlap. At most one active credential exists
+for each Account-or-tenant/provider tuple. Revocation destroys its live
+ciphertext and blocks the next model call for every bound nonterminal
+Invocation. Rotation binds new Invocations to the new immutable version; an
+explicit overlap can keep already-bound old versions usable for up to one hour.
+If the current version expires, its root remains `active` so an operator can
+rotate or revoke it, but `version_status=expired` means the credential is
+unusable; new admissions and subsequent model calls fail closed until rotation.
+
+`POST /v1/invocations` may include exactly one source selection matching the
+spec provider. Reusable selections contain no secret:
+
+```json
+"provider_credentials": [{
+  "provider": "openai",
+  "source": "account_byok"
+}]
+```
+
+Tenant BYOK uses `tenant_byok`; the effective `tenant_ref` must match. A
+one-Invocation secret uses `caller_ephemeral` and is encrypted in its durable
+binding:
+
+```json
+"provider_credentials": [{
+  "provider": "anthropic",
+  "source": "caller_ephemeral",
+  "credential": {"api_key": "one-invocation-key"}
+}]
+```
+
+Selection is outside the execution spec and transcript. Fingerprint v6 records
+literal omission or the explicit nonsecret source, never the raw secret or the
+resolved reusable version. Therefore an equal retry with a changed supplied
+secret returns the original Invocation and binding rather than replacing it.
+Caller ciphertext remains available through the Invocation wall-clock deadline
+plus `PROVIDER_CREDENTIAL_CLEANUP_GRACE` (default five minutes), including while
+the Invocation is waiting for client tools. Terminal settlement clears live
+ciphertext in the same database transaction, and the reaper clears expired
+material. Retained backups can still contain encrypted bytes until normal
+backup expiration; cleanup does not claim immediate physical erasure there.
+
+`MODEL_CREDENTIAL_DEPLOYMENT_MODE=cloud` disables `installation_byok` and may
+use `platform`; `PLATFORM_FUNDING_ENABLED=true` is the deployment-owned funding
+allow hook and platform provider keys use `PLATFORM_ANTHROPIC_API_KEY` and
+`PLATFORM_OPENAI_API_KEY`. Cloud mode requires the encryption keyring at
+startup. Self-hosted mode rejects `platform`. The installation default is set
+with `INVOCATION_DEFAULT_CREDENTIAL_SOURCE`; `caller_ephemeral` cannot be a
+default because it always needs request material.
+
+Engine capacity and timing are
 bounded by `ENGINE_CONCURRENCY`, `ENGINE_POLL_INTERVAL`,
 `ENGINE_LEASE_DURATION`, `ENGINE_HEARTBEAT_INTERVAL`,
 `ENGINE_REAPER_INTERVAL`, `ENGINE_REAPER_BATCH_LIMIT`, and

@@ -1,0 +1,27 @@
+[
+  {
+    "name": "omitted-provider-credential-selection",
+    "selector": { "kind": "none", "value": "" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "anthropic", "name": "test-model" }
+    },
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":6,\"session_selector\":{\"kind\":\"none\",\"value\":\"\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"name\":\"test-model\"},\"budgets\":null,\"output\":null,\"tools\":[],\"provider_credentials\":null},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "5e46a2f34b27dcf811f94773406c9f96e211fe61f27bdccfb26d0451bef14a84"
+  },
+  {
+    "name": "explicit-account-byok-selection",
+    "selector": { "kind": "key", "value": "ticket-1" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "openai", "name": "gpt-test" }
+    },
+    "provider_credentials": [
+      { "provider": "openai", "source": "account_byok" }
+    ],
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":6,\"session_selector\":{\"kind\":\"key\",\"value\":\"ticket-1\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"openai\",\"name\":\"gpt-test\"},\"budgets\":null,\"output\":null,\"tools\":[],\"provider_credentials\":[{\"provider\":\"openai\",\"source\":\"account_byok\"}]},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "ea688e97b7e63980a1c6569bfe7a11d712d7a6ca6fa07096e9b5bf4887dd3efe"
+  }
+]

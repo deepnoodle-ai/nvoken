@@ -115,6 +115,34 @@ End's `X-Forwarded-For` client address for its bounded in-process device-flow
 limits; self-managed deployments should enable that setting only behind a
 trusted proxy.
 
+To enable reusable or caller-ephemeral BYOK, create a separate Secret Manager version
+containing a JSON object of base64-encoded 32-byte encryption keys, then set its
+secret ID and the active nonsecret key ID together:
+
+```bash
+nvoken_credential_key="$(openssl rand -base64 32)"
+gcloud secrets create nvoken-provider-credential-keys \
+  --project="${TF_VAR_project_id}" \
+  --replication-policy=automatic
+printf '{"v1":"%s"}' "${nvoken_credential_key}" | gcloud secrets versions add \
+  nvoken-provider-credential-keys \
+  --project="${TF_VAR_project_id}" \
+  --data-file=-
+unset nvoken_credential_key
+
+export TF_VAR_provider_credential_encryption_keys_secret_id='nvoken-provider-credential-keys'
+export TF_VAR_provider_credential_active_key_id='v1'
+```
+
+The combined service can always read this keyring for admission and lifecycle
+operations; the private executor can read it only in split `cloud_tasks` mode.
+The migration job cannot read it. An absent keyring safely disables encrypted
+BYOK in this self-hosted-in-your-project profile. Missing, malformed, or partial
+keyring configuration fails service startup rather than persisting plaintext or
+falling back to another credential source. Keep retired keys in the JSON object
+while retained ciphertext may still reference them, and deploy a new revision
+after changing a Secret Manager `latest` version.
+
 To enable callback tools, create a separate random secret of at least 32 bytes
 and set `TF_VAR_callback_signing_key_secret_id`. Set the nonsecret
 `TF_VAR_callback_signing_key_id` and positive

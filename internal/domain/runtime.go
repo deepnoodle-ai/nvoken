@@ -195,6 +195,9 @@ type GenerationResponse struct {
 	StructuredOutput        *StructuredOutput
 	StructuredOutputFailure string
 	ExternalToolsPending    bool
+	CredentialSource        ProviderCredentialSource
+	ProviderCredentialID    string
+	CredentialVersionID     string
 }
 
 type ClientToolDefinition struct {
@@ -259,8 +262,10 @@ type ModelCost struct {
 }
 
 type ModelProvenance struct {
-	Provider         string `json:"provider"`
-	RequestedModel   string `json:"requested_model"`
-	ServedModel      string `json:"served_model"`
-	CredentialSource string `json:"credential_source"`
+	Provider             string `json:"provider"`
+	RequestedModel       string `json:"requested_model"`
+	ServedModel          string `json:"served_model"`
+	CredentialSource     string `json:"credential_source"`
+	ProviderCredentialID string `json:"provider_credential_id,omitempty"`
+	CredentialVersionID  string `json:"credential_version_id,omitempty"`
 }

@@ -150,13 +150,13 @@ func TestLegacyBudgetlessFingerprintReplayCompatibility(t *testing.T) {
 	}}
 	service := &RuntimeService{store: store}
 	v2, _ := InvocationFingerprintV2(input)
-	if _, found, err := service.findIdempotent(context.Background(), "account", "partition", "agent", "key", input, v2); err != nil || !found {
+	if _, found, err := service.findIdempotent(context.Background(), "account", "partition", "agent", "key", input, input, v2); err != nil || !found {
 		t.Fatalf("legacy replay found = %t, error = %v", found, err)
 	}
 	wall := int64(1800)
 	input.Spec.Budgets = &InvocationBudgetInput{WallClockTimeoutSeconds: &wall}
 	v2, _ = InvocationFingerprintV2(input)
-	if _, _, err := service.findIdempotent(context.Background(), "account", "partition", "agent", "key", input, v2); err == nil {
+	if _, _, err := service.findIdempotent(context.Background(), "account", "partition", "agent", "key", input, input, v2); err == nil {
 		t.Fatal("budget-bearing request matched legacy budgetless fingerprint")
 	}
 }
@@ -189,6 +189,7 @@ func TestV2FingerprintReplayRejectsAddedStructuredOutput(t *testing.T) {
 		"partition",
 		"agent",
 		"key",
+		input,
 		input,
 		v3,
 	); err == nil {
@@ -267,6 +268,7 @@ func TestV3FingerprintReplayRejectsAddedClientTools(t *testing.T) {
 		"partition",
 		"agent",
 		"key",
+		input,
 		input,
 		v4,
 	); err == nil {

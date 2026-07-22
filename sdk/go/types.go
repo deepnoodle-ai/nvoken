@@ -14,14 +14,25 @@ type Session = generated.Session
 type SessionMessage = generated.SessionMessage
 type PendingClientToolCall = generated.PendingClientToolCall
 type ToolResultResponse = generated.SubmitClientToolResultsResponse
+type ModelProvider = generated.ModelProvider
+type ProviderCredential = generated.ProviderCredential
+type ProviderCredentialList = generated.ProviderCredentialList
+type ProviderCredentialScope = generated.ProviderCredentialScope
+type ProviderCredentialStatus = generated.ProviderCredentialStatus
 
 const (
-	InvocationQueued    = generated.InvocationStatusQueued
-	InvocationRunning   = generated.InvocationStatusRunning
-	InvocationWaiting   = generated.InvocationStatusWaiting
-	InvocationCompleted = generated.InvocationStatusCompleted
-	InvocationFailed    = generated.InvocationStatusFailed
-	InvocationCancelled = generated.InvocationStatusCancelled
+	InvocationQueued                = generated.InvocationStatusQueued
+	InvocationRunning               = generated.InvocationStatusRunning
+	InvocationWaiting               = generated.InvocationStatusWaiting
+	InvocationCompleted             = generated.InvocationStatusCompleted
+	InvocationFailed                = generated.InvocationStatusFailed
+	InvocationCancelled             = generated.InvocationStatusCancelled
+	ModelProviderAnthropic          = generated.Anthropic
+	ModelProviderOpenAI             = generated.Openai
+	ProviderCredentialScopeAccount  = generated.Account
+	ProviderCredentialScopeTenant   = generated.Tenant
+	ProviderCredentialStatusActive  = generated.ProviderCredentialStatusActive
+	ProviderCredentialStatusRevoked = generated.ProviderCredentialStatusRevoked
 )
 
 type Model struct {
@@ -65,6 +76,30 @@ type InvokeRequest struct {
 	IdempotencyKey string
 	Input          string
 	Spec           ExecutionSpec
+}
+
+type ListProviderCredentialsOptions struct {
+	Provider  *ModelProvider
+	Scope     *ProviderCredentialScope
+	Status    *ProviderCredentialStatus
+	TenantRef *string
+	Limit     *int
+}
+
+type CreateProviderCredentialInput struct {
+	Provider       ModelProvider
+	Scope          ProviderCredentialScope
+	TenantRef      *string
+	APIKey         string
+	ExpiresAt      *time.Time
+	IdempotencyKey string
+}
+
+type RotateProviderCredentialInput struct {
+	APIKey         string
+	ExpiresAt      *time.Time
+	OverlapSeconds *int
+	IdempotencyKey string
 }
 
 type ToolResult struct {

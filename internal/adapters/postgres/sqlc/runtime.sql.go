@@ -116,6 +116,151 @@ func (q *Queries) ActivateCallbackDeliveries(ctx context.Context, arg ActivateCa
 	return result.RowsAffected(), nil
 }
 
+const activateProviderCredentialVersion = `-- name: ActivateProviderCredentialVersion :one
+WITH retired AS (
+    UPDATE provider_credential_versions AS version
+    SET status = CASE
+            WHEN $5::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN 'overlap'
+            ELSE 'revoked'
+        END,
+        overlap_expires_at = CASE
+            WHEN $5::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN $5
+            ELSE NULL
+        END,
+        encryption_key_id = CASE
+            WHEN $5::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN encryption_key_id
+            ELSE NULL
+        END,
+        nonce = CASE
+            WHEN $5::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN nonce
+            ELSE NULL
+        END,
+        ciphertext = CASE
+            WHEN $5::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN ciphertext
+            ELSE NULL
+        END,
+        destroyed_at = CASE
+            WHEN $5::timestamptz IS NOT NULL
+              AND version.status = 'active'
+              AND version.ciphertext IS NOT NULL THEN NULL
+            ELSE COALESCE(destroyed_at, $3)
+        END
+    FROM provider_credentials AS credential
+    WHERE credential.id = $4
+      AND credential.status = 'active'
+      AND credential.current_version_id = version.id
+    RETURNING version.id
+)
+UPDATE provider_credentials
+SET current_version_id = $1,
+    current_version = $2,
+    updated_at = $3
+WHERE provider_credentials.id = $4
+  AND status = 'active'
+  AND EXISTS (SELECT 1 FROM retired)
+RETURNING id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at
+`
+
+type ActivateProviderCredentialVersionParams struct {
+	CurrentVersionID string
+	CurrentVersion   int32
+	ObservedAt       time.Time
+	CredentialID     string
+	OverlapExpiresAt *time.Time
+}
+
+// ActivateProviderCredentialVersion
+//
+//	WITH retired AS (
+//	    UPDATE provider_credential_versions AS version
+//	    SET status = CASE
+//	            WHEN $5::timestamptz IS NOT NULL
+//	              AND version.status = 'active'
+//	              AND version.ciphertext IS NOT NULL THEN 'overlap'
+//	            ELSE 'revoked'
+//	        END,
+//	        overlap_expires_at = CASE
+//	            WHEN $5::timestamptz IS NOT NULL
+//	              AND version.status = 'active'
+//	              AND version.ciphertext IS NOT NULL THEN $5
+//	            ELSE NULL
+//	        END,
+//	        encryption_key_id = CASE
+//	            WHEN $5::timestamptz IS NOT NULL
+//	              AND version.status = 'active'
+//	              AND version.ciphertext IS NOT NULL THEN encryption_key_id
+//	            ELSE NULL
+//	        END,
+//	        nonce = CASE
+//	            WHEN $5::timestamptz IS NOT NULL
+//	              AND version.status = 'active'
+//	              AND version.ciphertext IS NOT NULL THEN nonce
+//	            ELSE NULL
+//	        END,
+//	        ciphertext = CASE
+//	            WHEN $5::timestamptz IS NOT NULL
+//	              AND version.status = 'active'
+//	              AND version.ciphertext IS NOT NULL THEN ciphertext
+//	            ELSE NULL
+//	        END,
+//	        destroyed_at = CASE
+//	            WHEN $5::timestamptz IS NOT NULL
+//	              AND version.status = 'active'
+//	              AND version.ciphertext IS NOT NULL THEN NULL
+//	            ELSE COALESCE(destroyed_at, $3)
+//	        END
+//	    FROM provider_credentials AS credential
+//	    WHERE credential.id = $4
+//	      AND credential.status = 'active'
+//	      AND credential.current_version_id = version.id
+//	    RETURNING version.id
+//	)
+//	UPDATE provider_credentials
+//	SET current_version_id = $1,
+//	    current_version = $2,
+//	    updated_at = $3
+//	WHERE provider_credentials.id = $4
+//	  AND status = 'active'
+//	  AND EXISTS (SELECT 1 FROM retired)
+//	RETURNING id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at
+func (q *Queries) ActivateProviderCredentialVersion(ctx context.Context, arg ActivateProviderCredentialVersionParams) (ProviderCredential, error) {
+	row := q.db.QueryRow(ctx, activateProviderCredentialVersion,
+		arg.CurrentVersionID,
+		arg.CurrentVersion,
+		arg.ObservedAt,
+		arg.CredentialID,
+		arg.OverlapExpiresAt,
+	)
+	var i ProviderCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Provider,
+		&i.Scope,
+		&i.Status,
+		&i.CurrentVersionID,
+		&i.CurrentVersion,
+		&i.CreateIdempotencyKey,
+		&i.CreateFingerprint,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const advanceInvocationCheckpoint = `-- name: AdvanceInvocationCheckpoint :one
 UPDATE invocations
 SET current_checkpoint_sequence = $1,
@@ -886,6 +1031,48 @@ func (q *Queries) ClearExpiredCredentialIssuance(ctx context.Context, arg ClearE
 	return err
 }
 
+const clearExpiredInvocationCredentialMaterial = `-- name: ClearExpiredInvocationCredentialMaterial :execrows
+WITH candidates AS (
+    SELECT id FROM invocation_provider_credentials
+    WHERE source = 'caller_ephemeral'
+      AND ciphertext IS NOT NULL
+      AND expires_at <= $1
+    ORDER BY expires_at, id
+    LIMIT $2
+)
+UPDATE invocation_provider_credentials
+SET encryption_key_id = NULL, nonce = NULL, ciphertext = NULL,
+    cleared_at = $1
+WHERE id IN (SELECT id FROM candidates)
+`
+
+type ClearExpiredInvocationCredentialMaterialParams struct {
+	ObservedAt *time.Time
+	BatchLimit int32
+}
+
+// ClearExpiredInvocationCredentialMaterial
+//
+//	WITH candidates AS (
+//	    SELECT id FROM invocation_provider_credentials
+//	    WHERE source = 'caller_ephemeral'
+//	      AND ciphertext IS NOT NULL
+//	      AND expires_at <= $1
+//	    ORDER BY expires_at, id
+//	    LIMIT $2
+//	)
+//	UPDATE invocation_provider_credentials
+//	SET encryption_key_id = NULL, nonce = NULL, ciphertext = NULL,
+//	    cleared_at = $1
+//	WHERE id IN (SELECT id FROM candidates)
+func (q *Queries) ClearExpiredInvocationCredentialMaterial(ctx context.Context, arg ClearExpiredInvocationCredentialMaterialParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearExpiredInvocationCredentialMaterial, arg.ObservedAt, arg.BatchLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createAPICredential = `-- name: CreateAPICredential :exec
 INSERT INTO api_credentials (
     id, account_id, kind, name, prefix, verifier, status, profile, role_cap,
@@ -1557,6 +1744,74 @@ func (q *Queries) CreateInvocationCheckpoint(ctx context.Context, arg CreateInvo
 	return err
 }
 
+const createInvocationProviderCredential = `-- name: CreateInvocationProviderCredential :exec
+INSERT INTO invocation_provider_credentials (
+    id, invocation_id, account_id, tenant_partition_id, provider, source,
+    provider_credential_id, credential_version_id, selector,
+    encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at
+) VALUES (
+    $1, $2, $3,
+    $4, $5, $6,
+    $7, $8,
+    $9, $10, $11,
+    $12, $13, $14,
+    $15
+)
+`
+
+type CreateInvocationProviderCredentialParams struct {
+	ID                   string
+	InvocationID         string
+	AccountID            string
+	TenantPartitionID    string
+	Provider             string
+	Source               string
+	ProviderCredentialID *string
+	CredentialVersionID  *string
+	Selector             *string
+	EncryptionKeyID      *string
+	Nonce                []byte
+	Ciphertext           []byte
+	ExpiresAt            *time.Time
+	ClearedAt            *time.Time
+	CreatedAt            time.Time
+}
+
+// CreateInvocationProviderCredential
+//
+//	INSERT INTO invocation_provider_credentials (
+//	    id, invocation_id, account_id, tenant_partition_id, provider, source,
+//	    provider_credential_id, credential_version_id, selector,
+//	    encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at
+//	) VALUES (
+//	    $1, $2, $3,
+//	    $4, $5, $6,
+//	    $7, $8,
+//	    $9, $10, $11,
+//	    $12, $13, $14,
+//	    $15
+//	)
+func (q *Queries) CreateInvocationProviderCredential(ctx context.Context, arg CreateInvocationProviderCredentialParams) error {
+	_, err := q.db.Exec(ctx, createInvocationProviderCredential,
+		arg.ID,
+		arg.InvocationID,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.Provider,
+		arg.Source,
+		arg.ProviderCredentialID,
+		arg.CredentialVersionID,
+		arg.Selector,
+		arg.EncryptionKeyID,
+		arg.Nonce,
+		arg.Ciphertext,
+		arg.ExpiresAt,
+		arg.ClearedAt,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const createMembership = `-- name: CreateMembership :exec
 INSERT INTO account_memberships (id, account_id, subject_id, role, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -1673,6 +1928,150 @@ func (q *Queries) CreateOperatorSubject(ctx context.Context, arg CreateOperatorS
 		arg.Issuer,
 		arg.Subject,
 		arg.CreatedAt,
+	)
+	return err
+}
+
+const createProviderCredential = `-- name: CreateProviderCredential :exec
+INSERT INTO provider_credentials (
+    id, account_id, tenant_partition_id, provider, scope, status,
+    current_version_id, current_version, create_idempotency_key,
+    create_fingerprint, created_by, created_at, updated_at, revoked_at
+) VALUES (
+    $1, $2, $3,
+    $4, $5, $6,
+    $7, $8,
+    $9, $10,
+    $11, $12, $13,
+    $14
+)
+`
+
+type CreateProviderCredentialParams struct {
+	ID                   string
+	AccountID            string
+	TenantPartitionID    *string
+	Provider             string
+	Scope                string
+	Status               string
+	CurrentVersionID     string
+	CurrentVersion       int32
+	CreateIdempotencyKey string
+	CreateFingerprint    []byte
+	CreatedBy            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	RevokedAt            *time.Time
+}
+
+// CreateProviderCredential
+//
+//	INSERT INTO provider_credentials (
+//	    id, account_id, tenant_partition_id, provider, scope, status,
+//	    current_version_id, current_version, create_idempotency_key,
+//	    create_fingerprint, created_by, created_at, updated_at, revoked_at
+//	) VALUES (
+//	    $1, $2, $3,
+//	    $4, $5, $6,
+//	    $7, $8,
+//	    $9, $10,
+//	    $11, $12, $13,
+//	    $14
+//	)
+func (q *Queries) CreateProviderCredential(ctx context.Context, arg CreateProviderCredentialParams) error {
+	_, err := q.db.Exec(ctx, createProviderCredential,
+		arg.ID,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.Provider,
+		arg.Scope,
+		arg.Status,
+		arg.CurrentVersionID,
+		arg.CurrentVersion,
+		arg.CreateIdempotencyKey,
+		arg.CreateFingerprint,
+		arg.CreatedBy,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.RevokedAt,
+	)
+	return err
+}
+
+const createProviderCredentialVersion = `-- name: CreateProviderCredentialVersion :exec
+INSERT INTO provider_credential_versions (
+    id, provider_credential_id, account_id, tenant_partition_id, provider,
+    version, status, previous_version_id, encryption_key_id, nonce,
+    ciphertext, expires_at, overlap_expires_at, rotation_idempotency_key,
+    rotation_fingerprint, created_by, created_at, destroyed_at
+) VALUES (
+    $1, $2, $3,
+    $4, $5, $6,
+    $7, $8,
+    $9, $10, $11,
+    $12, $13,
+    $14, $15,
+    $16, $17, $18
+)
+`
+
+type CreateProviderCredentialVersionParams struct {
+	ID                     string
+	ProviderCredentialID   string
+	AccountID              string
+	TenantPartitionID      *string
+	Provider               string
+	Version                int32
+	Status                 string
+	PreviousVersionID      *string
+	EncryptionKeyID        *string
+	Nonce                  []byte
+	Ciphertext             []byte
+	ExpiresAt              *time.Time
+	OverlapExpiresAt       *time.Time
+	RotationIdempotencyKey *string
+	RotationFingerprint    []byte
+	CreatedBy              string
+	CreatedAt              time.Time
+	DestroyedAt            *time.Time
+}
+
+// CreateProviderCredentialVersion
+//
+//	INSERT INTO provider_credential_versions (
+//	    id, provider_credential_id, account_id, tenant_partition_id, provider,
+//	    version, status, previous_version_id, encryption_key_id, nonce,
+//	    ciphertext, expires_at, overlap_expires_at, rotation_idempotency_key,
+//	    rotation_fingerprint, created_by, created_at, destroyed_at
+//	) VALUES (
+//	    $1, $2, $3,
+//	    $4, $5, $6,
+//	    $7, $8,
+//	    $9, $10, $11,
+//	    $12, $13,
+//	    $14, $15,
+//	    $16, $17, $18
+//	)
+func (q *Queries) CreateProviderCredentialVersion(ctx context.Context, arg CreateProviderCredentialVersionParams) error {
+	_, err := q.db.Exec(ctx, createProviderCredentialVersion,
+		arg.ID,
+		arg.ProviderCredentialID,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.Provider,
+		arg.Version,
+		arg.Status,
+		arg.PreviousVersionID,
+		arg.EncryptionKeyID,
+		arg.Nonce,
+		arg.Ciphertext,
+		arg.ExpiresAt,
+		arg.OverlapExpiresAt,
+		arg.RotationIdempotencyKey,
+		arg.RotationFingerprint,
+		arg.CreatedBy,
+		arg.CreatedAt,
+		arg.DestroyedAt,
 	)
 	return err
 }
@@ -2152,6 +2551,60 @@ func (q *Queries) ExchangeDeviceAuthorization(ctx context.Context, arg ExchangeD
 	return i, err
 }
 
+const expireProviderCredentialVersions = `-- name: ExpireProviderCredentialVersions :execrows
+WITH candidates AS (
+    SELECT id FROM provider_credential_versions
+    WHERE ciphertext IS NOT NULL
+      AND (
+          (expires_at IS NOT NULL AND expires_at <= $1)
+          OR (status = 'overlap' AND overlap_expires_at <= $1)
+      )
+    ORDER BY LEAST(
+        COALESCE(expires_at, 'infinity'::timestamptz),
+        COALESCE(overlap_expires_at, 'infinity'::timestamptz)
+    ), id
+    LIMIT $2
+)
+UPDATE provider_credential_versions
+SET status = 'expired', encryption_key_id = NULL, nonce = NULL,
+    ciphertext = NULL, overlap_expires_at = NULL,
+    destroyed_at = $1
+WHERE id IN (SELECT id FROM candidates)
+`
+
+type ExpireProviderCredentialVersionsParams struct {
+	ObservedAt *time.Time
+	BatchLimit int32
+}
+
+// ExpireProviderCredentialVersions
+//
+//	WITH candidates AS (
+//	    SELECT id FROM provider_credential_versions
+//	    WHERE ciphertext IS NOT NULL
+//	      AND (
+//	          (expires_at IS NOT NULL AND expires_at <= $1)
+//	          OR (status = 'overlap' AND overlap_expires_at <= $1)
+//	      )
+//	    ORDER BY LEAST(
+//	        COALESCE(expires_at, 'infinity'::timestamptz),
+//	        COALESCE(overlap_expires_at, 'infinity'::timestamptz)
+//	    ), id
+//	    LIMIT $2
+//	)
+//	UPDATE provider_credential_versions
+//	SET status = 'expired', encryption_key_id = NULL, nonce = NULL,
+//	    ciphertext = NULL, overlap_expires_at = NULL,
+//	    destroyed_at = $1
+//	WHERE id IN (SELECT id FROM candidates)
+func (q *Queries) ExpireProviderCredentialVersions(ctx context.Context, arg ExpireProviderCredentialVersionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, expireProviderCredentialVersions, arg.ObservedAt, arg.BatchLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const findNextQueuedInvocationForUpdate = `-- name: FindNextQueuedInvocationForUpdate :one
 SELECT i.id, i.session_id, i.account_id, i.tenant_partition_id, i.agent_id, i.spec_snapshot_id, i.idempotency_key, i.request_fingerprint, i.status, i.current_state_revision, i.error, i.created_at, i.updated_at, i.completed_at, i.lease_owner, i.lease_expires_at, i.lease_attempt, i.usage, i.provenance, i.request_fingerprint_version, i.wall_clock_timeout_ms, i.active_execution_timeout_ms, i.max_output_tokens, i.max_estimated_cost_microusd, i.max_iterations, i.active_execution_ms, i.wall_clock_deadline_at, i.active_segment_started_at, i.execution_deadline_at, i.execution_deadline_scope, i.current_checkpoint_sequence, i.current_iteration, i.output_schema_digest, i.output, i.output_provenance
 FROM invocations AS i
@@ -2424,6 +2877,49 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 	row := q.db.QueryRow(ctx, getAccount, id)
 	var i Account
 	err := row.Scan(&i.ID, &i.CreatedAt)
+	return i, err
+}
+
+const getActiveProviderCredential = `-- name: GetActiveProviderCredential :one
+SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials
+WHERE account_id = $1
+  AND tenant_partition_id IS NOT DISTINCT FROM $2::text
+  AND provider = $3
+  AND status = 'active'
+`
+
+type GetActiveProviderCredentialParams struct {
+	AccountID         string
+	TenantPartitionID *string
+	Provider          string
+}
+
+// GetActiveProviderCredential
+//
+//	SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials
+//	WHERE account_id = $1
+//	  AND tenant_partition_id IS NOT DISTINCT FROM $2::text
+//	  AND provider = $3
+//	  AND status = 'active'
+func (q *Queries) GetActiveProviderCredential(ctx context.Context, arg GetActiveProviderCredentialParams) (ProviderCredential, error) {
+	row := q.db.QueryRow(ctx, getActiveProviderCredential, arg.AccountID, arg.TenantPartitionID, arg.Provider)
+	var i ProviderCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Provider,
+		&i.Scope,
+		&i.Status,
+		&i.CurrentVersionID,
+		&i.CurrentVersion,
+		&i.CreateIdempotencyKey,
+		&i.CreateFingerprint,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RevokedAt,
+	)
 	return i, err
 }
 
@@ -3032,6 +3528,45 @@ func (q *Queries) GetInvocationForUpdate(ctx context.Context, id string) (Invoca
 	return i, err
 }
 
+const getInvocationProviderCredential = `-- name: GetInvocationProviderCredential :one
+SELECT id, invocation_id, account_id, tenant_partition_id, provider, source, provider_credential_id, credential_version_id, selector, encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at FROM invocation_provider_credentials
+WHERE invocation_id = $1
+  AND provider = $2
+`
+
+type GetInvocationProviderCredentialParams struct {
+	InvocationID string
+	Provider     string
+}
+
+// GetInvocationProviderCredential
+//
+//	SELECT id, invocation_id, account_id, tenant_partition_id, provider, source, provider_credential_id, credential_version_id, selector, encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at FROM invocation_provider_credentials
+//	WHERE invocation_id = $1
+//	  AND provider = $2
+func (q *Queries) GetInvocationProviderCredential(ctx context.Context, arg GetInvocationProviderCredentialParams) (InvocationProviderCredential, error) {
+	row := q.db.QueryRow(ctx, getInvocationProviderCredential, arg.InvocationID, arg.Provider)
+	var i InvocationProviderCredential
+	err := row.Scan(
+		&i.ID,
+		&i.InvocationID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Provider,
+		&i.Source,
+		&i.ProviderCredentialID,
+		&i.CredentialVersionID,
+		&i.Selector,
+		&i.EncryptionKeyID,
+		&i.Nonce,
+		&i.Ciphertext,
+		&i.ExpiresAt,
+		&i.ClearedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getLatestInvocationCheckpoint = `-- name: GetLatestInvocationCheckpoint :one
 SELECT id, invocation_id, session_id, account_id, tenant_partition_id, agent_id, sequence, iteration, kind, lease_attempt, through_message_sequence, usage_receipt_id, tool_call_id, created_at FROM invocation_checkpoints
 WHERE invocation_id = $1 ORDER BY sequence DESC LIMIT 1
@@ -3228,6 +3763,177 @@ func (q *Queries) GetOperatorSubjectByIdentity(ctx context.Context, arg GetOpera
 		&i.Issuer,
 		&i.Subject,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getProviderCredential = `-- name: GetProviderCredential :one
+SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials WHERE id = $1
+`
+
+// GetProviderCredential
+//
+//	SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials WHERE id = $1
+func (q *Queries) GetProviderCredential(ctx context.Context, id string) (ProviderCredential, error) {
+	row := q.db.QueryRow(ctx, getProviderCredential, id)
+	var i ProviderCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Provider,
+		&i.Scope,
+		&i.Status,
+		&i.CurrentVersionID,
+		&i.CurrentVersion,
+		&i.CreateIdempotencyKey,
+		&i.CreateFingerprint,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getProviderCredentialByCreateIdempotencyKey = `-- name: GetProviderCredentialByCreateIdempotencyKey :one
+SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials
+WHERE account_id = $1
+  AND create_idempotency_key = $2
+`
+
+type GetProviderCredentialByCreateIdempotencyKeyParams struct {
+	AccountID      string
+	IdempotencyKey string
+}
+
+// GetProviderCredentialByCreateIdempotencyKey
+//
+//	SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials
+//	WHERE account_id = $1
+//	  AND create_idempotency_key = $2
+func (q *Queries) GetProviderCredentialByCreateIdempotencyKey(ctx context.Context, arg GetProviderCredentialByCreateIdempotencyKeyParams) (ProviderCredential, error) {
+	row := q.db.QueryRow(ctx, getProviderCredentialByCreateIdempotencyKey, arg.AccountID, arg.IdempotencyKey)
+	var i ProviderCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Provider,
+		&i.Scope,
+		&i.Status,
+		&i.CurrentVersionID,
+		&i.CurrentVersion,
+		&i.CreateIdempotencyKey,
+		&i.CreateFingerprint,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getProviderCredentialForUpdate = `-- name: GetProviderCredentialForUpdate :one
+SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials WHERE id = $1 FOR UPDATE
+`
+
+// GetProviderCredentialForUpdate
+//
+//	SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials WHERE id = $1 FOR UPDATE
+func (q *Queries) GetProviderCredentialForUpdate(ctx context.Context, id string) (ProviderCredential, error) {
+	row := q.db.QueryRow(ctx, getProviderCredentialForUpdate, id)
+	var i ProviderCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Provider,
+		&i.Scope,
+		&i.Status,
+		&i.CurrentVersionID,
+		&i.CurrentVersion,
+		&i.CreateIdempotencyKey,
+		&i.CreateFingerprint,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getProviderCredentialVersion = `-- name: GetProviderCredentialVersion :one
+SELECT id, provider_credential_id, account_id, tenant_partition_id, provider, version, status, previous_version_id, encryption_key_id, nonce, ciphertext, expires_at, overlap_expires_at, rotation_idempotency_key, rotation_fingerprint, created_by, created_at, destroyed_at FROM provider_credential_versions WHERE id = $1
+`
+
+// GetProviderCredentialVersion
+//
+//	SELECT id, provider_credential_id, account_id, tenant_partition_id, provider, version, status, previous_version_id, encryption_key_id, nonce, ciphertext, expires_at, overlap_expires_at, rotation_idempotency_key, rotation_fingerprint, created_by, created_at, destroyed_at FROM provider_credential_versions WHERE id = $1
+func (q *Queries) GetProviderCredentialVersion(ctx context.Context, id string) (ProviderCredentialVersion, error) {
+	row := q.db.QueryRow(ctx, getProviderCredentialVersion, id)
+	var i ProviderCredentialVersion
+	err := row.Scan(
+		&i.ID,
+		&i.ProviderCredentialID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Provider,
+		&i.Version,
+		&i.Status,
+		&i.PreviousVersionID,
+		&i.EncryptionKeyID,
+		&i.Nonce,
+		&i.Ciphertext,
+		&i.ExpiresAt,
+		&i.OverlapExpiresAt,
+		&i.RotationIdempotencyKey,
+		&i.RotationFingerprint,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.DestroyedAt,
+	)
+	return i, err
+}
+
+const getProviderCredentialVersionByRotationIdempotencyKey = `-- name: GetProviderCredentialVersionByRotationIdempotencyKey :one
+SELECT id, provider_credential_id, account_id, tenant_partition_id, provider, version, status, previous_version_id, encryption_key_id, nonce, ciphertext, expires_at, overlap_expires_at, rotation_idempotency_key, rotation_fingerprint, created_by, created_at, destroyed_at FROM provider_credential_versions
+WHERE account_id = $1
+  AND rotation_idempotency_key = $2
+`
+
+type GetProviderCredentialVersionByRotationIdempotencyKeyParams struct {
+	AccountID      string
+	IdempotencyKey *string
+}
+
+// GetProviderCredentialVersionByRotationIdempotencyKey
+//
+//	SELECT id, provider_credential_id, account_id, tenant_partition_id, provider, version, status, previous_version_id, encryption_key_id, nonce, ciphertext, expires_at, overlap_expires_at, rotation_idempotency_key, rotation_fingerprint, created_by, created_at, destroyed_at FROM provider_credential_versions
+//	WHERE account_id = $1
+//	  AND rotation_idempotency_key = $2
+func (q *Queries) GetProviderCredentialVersionByRotationIdempotencyKey(ctx context.Context, arg GetProviderCredentialVersionByRotationIdempotencyKeyParams) (ProviderCredentialVersion, error) {
+	row := q.db.QueryRow(ctx, getProviderCredentialVersionByRotationIdempotencyKey, arg.AccountID, arg.IdempotencyKey)
+	var i ProviderCredentialVersion
+	err := row.Scan(
+		&i.ID,
+		&i.ProviderCredentialID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Provider,
+		&i.Version,
+		&i.Status,
+		&i.PreviousVersionID,
+		&i.EncryptionKeyID,
+		&i.Nonce,
+		&i.Ciphertext,
+		&i.ExpiresAt,
+		&i.OverlapExpiresAt,
+		&i.RotationIdempotencyKey,
+		&i.RotationFingerprint,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.DestroyedAt,
 	)
 	return i, err
 }
@@ -4434,6 +5140,84 @@ func (q *Queries) ListOpenToolCallsForUpdate(ctx context.Context, invocationID s
 			&i.UpdatedAt,
 			&i.CompletedAt,
 			&i.ResultOrigin,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProviderCredentials = `-- name: ListProviderCredentials :many
+SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials
+WHERE account_id = $1
+  AND (
+      $2::text IS NULL
+      OR tenant_partition_id = $2::text
+  )
+  AND ($3::text IS NULL OR provider = $3::text)
+  AND ($4::text IS NULL OR scope = $4::text)
+  AND ($5::text IS NULL OR status = $5::text)
+ORDER BY created_at DESC, id DESC
+LIMIT $6
+`
+
+type ListProviderCredentialsParams struct {
+	AccountID         string
+	TenantPartitionID *string
+	Provider          *string
+	Scope             *string
+	Status            *string
+	BatchLimit        int32
+}
+
+// ListProviderCredentials
+//
+//	SELECT id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at FROM provider_credentials
+//	WHERE account_id = $1
+//	  AND (
+//	      $2::text IS NULL
+//	      OR tenant_partition_id = $2::text
+//	  )
+//	  AND ($3::text IS NULL OR provider = $3::text)
+//	  AND ($4::text IS NULL OR scope = $4::text)
+//	  AND ($5::text IS NULL OR status = $5::text)
+//	ORDER BY created_at DESC, id DESC
+//	LIMIT $6
+func (q *Queries) ListProviderCredentials(ctx context.Context, arg ListProviderCredentialsParams) ([]ProviderCredential, error) {
+	rows, err := q.db.Query(ctx, listProviderCredentials,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.Provider,
+		arg.Scope,
+		arg.Status,
+		arg.BatchLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProviderCredential{}
+	for rows.Next() {
+		var i ProviderCredential
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.Provider,
+			&i.Scope,
+			&i.Status,
+			&i.CurrentVersionID,
+			&i.CurrentVersion,
+			&i.CreateIdempotencyKey,
+			&i.CreateFingerprint,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.RevokedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -5922,6 +6706,66 @@ func (q *Queries) RevokeAPICredential(ctx context.Context, arg RevokeAPICredenti
 		&i.LastUsedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const revokeProviderCredential = `-- name: RevokeProviderCredential :one
+WITH revoked_versions AS (
+    UPDATE provider_credential_versions
+    SET status = 'revoked', encryption_key_id = NULL, nonce = NULL,
+        ciphertext = NULL, overlap_expires_at = NULL,
+        destroyed_at = COALESCE(destroyed_at, $1)
+    WHERE provider_credential_id = $2
+      AND status IN ('active', 'overlap')
+    RETURNING id
+)
+UPDATE provider_credentials
+SET status = 'revoked', revoked_at = $1,
+    updated_at = $1
+WHERE provider_credentials.id = $2 AND status = 'active'
+RETURNING id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at
+`
+
+type RevokeProviderCredentialParams struct {
+	ObservedAt   *time.Time
+	CredentialID string
+}
+
+// RevokeProviderCredential
+//
+//	WITH revoked_versions AS (
+//	    UPDATE provider_credential_versions
+//	    SET status = 'revoked', encryption_key_id = NULL, nonce = NULL,
+//	        ciphertext = NULL, overlap_expires_at = NULL,
+//	        destroyed_at = COALESCE(destroyed_at, $1)
+//	    WHERE provider_credential_id = $2
+//	      AND status IN ('active', 'overlap')
+//	    RETURNING id
+//	)
+//	UPDATE provider_credentials
+//	SET status = 'revoked', revoked_at = $1,
+//	    updated_at = $1
+//	WHERE provider_credentials.id = $2 AND status = 'active'
+//	RETURNING id, account_id, tenant_partition_id, provider, scope, status, current_version_id, current_version, create_idempotency_key, create_fingerprint, created_by, created_at, updated_at, revoked_at
+func (q *Queries) RevokeProviderCredential(ctx context.Context, arg RevokeProviderCredentialParams) (ProviderCredential, error) {
+	row := q.db.QueryRow(ctx, revokeProviderCredential, arg.ObservedAt, arg.CredentialID)
+	var i ProviderCredential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Provider,
+		&i.Scope,
+		&i.Status,
+		&i.CurrentVersionID,
+		&i.CurrentVersion,
+		&i.CreateIdempotencyKey,
+		&i.CreateFingerprint,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RevokedAt,
 	)
 	return i, err
 }

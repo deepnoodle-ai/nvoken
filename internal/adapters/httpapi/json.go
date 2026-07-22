@@ -35,7 +35,7 @@ func decodeInvocationRequest(w http.ResponseWriter, r *http.Request, target *ser
 	if err != nil {
 		return err
 	}
-	if err := rejectNullOptionalStrings(payload); err != nil {
+	if err := rejectNullInvocationFields(payload); err != nil {
 		return err
 	}
 	if err := services.ValidateCreateInvocation(*target); err != nil {
@@ -256,7 +256,7 @@ func scanJSONValue(decoder *json.Decoder, depth int) error {
 	}
 }
 
-func rejectNullOptionalStrings(payload []byte) error {
+func rejectNullInvocationFields(payload []byte) error {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(payload, &object); err != nil {
 		return requestErrorf("Invalid request body: %v.", err)
@@ -265,6 +265,9 @@ func rejectNullOptionalStrings(payload []byte) error {
 		if raw, present := object[field]; present && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			return requestErrorf("%s must be a string when supplied.", field)
 		}
+	}
+	if raw, present := object["provider_credentials"]; present && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return requestErrorf("provider_credentials must be an array when supplied.")
 	}
 	return nil
 }

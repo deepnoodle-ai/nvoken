@@ -58,6 +58,7 @@ func newApp() *cli.App {
 	)
 	app.Use(authMiddleware())
 	registerRuntimeCommands(app)
+	registerProviderCredentialCommands(app)
 	registerAuthCommands(app)
 	registerCredentialCommands(app)
 	return app
