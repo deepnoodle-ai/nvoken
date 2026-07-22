@@ -5,7 +5,7 @@
 | Field | Value |
 | --- | --- |
 | Profile | `google_cloud` |
-| Tested revision | `7a39ec91f411a9f48dc711008b311584a9bcfda8` |
+| Tested revision | `2e248b70deb9f0b394c7f12f0babff3645f23c55` |
 | Dimensions | `Backup/restore` |
 | Result | `pass` |
 
@@ -40,7 +40,7 @@ This proves one isolated backup/restore and durable readback path. It does not
 set backup scheduling, RPO/RTO, cross-region recovery, promotion, or failover
 policy.
 The drill originally ran at `c69da17ba9a02ffd60f3eb4d7f25f66c82f14a21`;
-the recorded tested revision is its content-equivalent commit after rebasing on
+the recorded tested revision is its content-equivalent squash commit on
 `main`, with no verifier or migration changes in that history rewrite.
 
 ## Cleanup

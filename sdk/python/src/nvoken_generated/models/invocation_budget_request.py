@@ -26,12 +26,12 @@ from pydantic_core import to_jsonable_python
 
 class InvocationBudgetRequest(BaseModel):
     """
-    Optional requested limits. Installation defaults supply wall-clock, active-execution, and iteration limits. Output-token and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range.
+    Optional requested limits. Installation defaults supply wall-clock, active-execution, and iteration limits. Output-token and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range. A requested estimated-cost limit requires known USD pricing metadata and fails closed when unavailable.
     """ # noqa: E501
     wall_clock_timeout_seconds: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     active_execution_timeout_seconds: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     max_output_tokens: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
-    max_estimated_cost_usd: Optional[Union[Annotated[float, Field(multiple_of=0.0000010, strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = None
+    max_estimated_cost_usd: Optional[Union[Annotated[float, Field(multiple_of=0.0000010, strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = Field(default=None, description="Dive list-price guardrail, not preauthorization or a billing ledger. Requires known USD pricing for the selected model and otherwise fails closed with `budget_exceeded` and `details.kind = estimated_cost_unavailable`. When pricing absence is knowable before execution, nvoken rejects before a provider call. ")
     max_iterations: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     __properties: ClassVar[List[str]] = ["wall_clock_timeout_seconds", "active_execution_timeout_seconds", "max_output_tokens", "max_estimated_cost_usd", "max_iterations"]
 

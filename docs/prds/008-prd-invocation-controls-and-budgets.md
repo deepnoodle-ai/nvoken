@@ -78,11 +78,14 @@ synchronous guarantee that the provider has stopped when cancellation returns.
   limit must reach Dive before the call. Each model request consumes an
   iteration, and none may start after its time or iteration limit. Before
   assistant commit, normalized usage must satisfy token and estimated-cost
-  limits. A breach fails with `budget_exceeded`, discards assistant output, and
-  retains paired usage/provenance; schemas and validators must permit the same
-  evidence on post-response deadline failure. Pre-response failure and
-  cancellation retain neither. Missing cost evidence under a cost limit fails
-  closed. Cost is a post-call guardrail, not preauthorization.
+  limits. A breach fails with `budget_exceeded` and retains paired
+  usage/provenance. Canonical checkpoints remain evidence but assistant/tool
+  messages from a failed or cancelled Invocation are excluded from later model
+  context. Schemas and validators must permit the same evidence on
+  post-response deadline failure. Pre-response failure and cancellation retain
+  neither. A known-unpriceable capped model fails before the provider call with
+  public `estimated_cost_unavailable` detail; missing returned cost evidence
+  still fails closed. Cost is a guardrail, not preauthorization.
 
 - **R7 — One atomic terminal race.** Success, semantic failure, cancellation,
   deadline, budget failure, and reaping must use Session-before-Invocation lock
@@ -134,8 +137,10 @@ synchronous guarantee that the provider has stopped when cancellation returns.
 
 - [x] **A6 (R6, R7):** Deterministic Anthropic and OpenAI adapter tests receive
   the requested output-token ceiling and report one iteration. Token or cost
-  breach, and unavailable cost evidence under a cost limit, commit no assistant
-  message but retain normalized usage/provenance with `budget_exceeded`.
+  breach retains normalized usage/provenance with `budget_exceeded`; any
+  checkpointed failed output is excluded from later model context. A
+  known-unpriceable cost-capped model makes zero provider calls and exposes the
+  actionable public reason without fabricating usage/provenance.
   Deadline failure retains evidence only when a provider result produced it;
   cancellation and pre-response failure do not fabricate evidence.
 

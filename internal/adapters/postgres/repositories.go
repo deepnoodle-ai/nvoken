@@ -837,6 +837,29 @@ func (s *Store) ListSessionMessages(ctx context.Context, sessionID string) ([]do
 	return messages, nil
 }
 
+func (s *Store) ListSessionMessagesForGeneration(ctx context.Context, sessionID string) ([]domain.SessionMessage, error) {
+	rows, err := s.q(ctx).ListSessionMessagesForGeneration(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]domain.SessionMessage, len(rows))
+	for i, row := range rows {
+		messages[i] = domain.SessionMessage{
+			ID:                row.ID,
+			SessionID:         row.SessionID,
+			AccountID:         row.AccountID,
+			TenantPartitionID: row.TenantPartitionID,
+			AgentID:           row.AgentID,
+			InvocationID:      row.InvocationID,
+			Sequence:          row.Sequence,
+			Role:              domain.MessageRole(row.Role),
+			Content:           row.Content,
+			CreatedAt:         row.CreatedAt,
+		}
+	}
+	return messages, nil
+}
+
 func sessionMessageFromRow(row postgresdb.SessionMessage) domain.SessionMessage {
 	return domain.SessionMessage{
 		ID: row.ID, SessionID: row.SessionID, AccountID: row.AccountID,

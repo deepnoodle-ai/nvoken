@@ -132,7 +132,8 @@ Answering what the agent did, why, and what it cost:
 - **Usage and attribution.** Normalized usage per Invocation, for rebilling
   and analytics.
 - **Cost tracking.** Token usage including cache and reasoning tokens, priced
-  by a per-model registry.
+  by a per-model registry. Estimated-cost caps require known USD metadata and
+  fail closed before a provider call when the registry knows it is absent.
 - **Tracing.** Nested spans for the turn, each model call, and each tool call,
   with an OpenTelemetry adapter emitting GenAI semantic-convention spans and
   metrics.

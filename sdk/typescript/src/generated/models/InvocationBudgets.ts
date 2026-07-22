@@ -38,6 +38,8 @@ export interface InvocationBudgets {
      */
     maxOutputTokens?: number;
     /**
+     * Resolved USD list-price guardrail. It is present only when the host
+     * requested a cost limit; unknown price metadata fails closed.
      *
      * @type {number}
      * @memberof InvocationBudgets

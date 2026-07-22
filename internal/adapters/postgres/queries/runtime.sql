@@ -573,6 +573,19 @@ FROM session_messages
 WHERE session_id = $1
 ORDER BY sequence;
 
+-- name: ListSessionMessagesForGeneration :many
+SELECT message.id, message.session_id, message.account_id,
+       message.tenant_partition_id, message.agent_id, message.invocation_id,
+       message.sequence, message.role, message.content, message.created_at
+FROM session_messages AS message
+JOIN invocations AS invocation ON invocation.id = message.invocation_id
+WHERE message.session_id = $1
+  AND (
+      message.role = 'user'
+      OR invocation.status NOT IN ('failed', 'cancelled')
+  )
+ORDER BY message.sequence;
+
 -- name: AppendInvocationState :exec
 INSERT INTO invocation_states (
     id, invocation_id, session_id, account_id, tenant_partition_id,

@@ -27,6 +27,7 @@ type state struct {
 	rateLimitAttempts int
 	streamAttempts    int
 	lastEventID       string
+	onboarding        *onboardingState
 }
 
 func main() {
@@ -35,6 +36,9 @@ func main() {
 		address = "127.0.0.1:43109"
 	}
 	testState := &state{}
+	if os.Getenv("NVOKEN_CONFORMANCE_ONBOARDING") == "1" {
+		testState.onboarding = newOnboardingState()
+	}
 	server := &http.Server{
 		Addr:    address,
 		Handler: testState,
@@ -72,6 +76,10 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 			"stream_attempts":    s.streamAttempts,
 			"last_event_id":      s.lastEventID,
 		})
+		return
+	}
+	if s.onboarding != nil {
+		s.onboarding.serve(response, request)
 		return
 	}
 
@@ -195,8 +203,12 @@ func (s *state) session(response http.ResponseWriter, request *http.Request) {
 		writeJSON(response, http.StatusOK, secondSnapshot())
 	case strings.HasSuffix(path, "/messages") && request.Method == http.MethodGet:
 		cursor := request.URL.Query().Get("cursor")
+		items := []any{firstMessage()}
+		if cursor != "" {
+			items = []any{secondMessage()}
+		}
 		writeJSON(response, http.StatusOK, map[string]any{
-			"items":       []any{firstMessage()},
+			"items":       items,
 			"has_more":    cursor == "",
 			"next_cursor": nullable(cursor == "", "messages-page-2"),
 		})

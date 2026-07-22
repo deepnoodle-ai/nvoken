@@ -56,3 +56,7 @@ jobs:
           NVOKEN_TEST_DATABASE_URL: postgres://nvoken:nvoken-test@127.0.0.1:5432/nvoken_test?sslmode=disable
         run: go test ./cmd/nvokend -run '^TestSingleDaemonProfileExamplePassesDiagnostic$' -count=1
       - run: make sdk-check
+      - name: Check local TypeScript newcomer path
+        env:
+          NVOKEN_TEST_DATABASE_URL: postgres://nvoken:nvoken-test@127.0.0.1:5432/nvoken_test?sslmode=disable
+        run: make onboarding-check

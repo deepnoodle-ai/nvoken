@@ -147,7 +147,10 @@ and `session_key`, and an inline spec containing instructions plus model and
 provider selection. The spec may also carry optional wall-clock,
 active-execution, output-token, estimated-cost, and iteration budgets.
 Installation defaults supply both time limits and iterations; output-token and
-cost limits are absent unless requested. An optional `output.schema` declares
+cost limits are absent unless requested. A cost limit requires known USD model
+pricing and otherwise fails closed with `budget_exceeded` and
+`details.kind = "estimated_cost_unavailable"`; known absence is rejected before
+the provider call. An optional `output.schema` declares
 a bounded, self-contained object schema. nvoken exposes it to the model as the
 reserved `nvoken_submit_output` builtin and validates every submission itself.
 Schema-bearing requests require at least two model iterations; when the host
@@ -181,6 +184,12 @@ monotonicity.
 
 There is no public retry or resume endpoint. Terminal Invocations stay
 terminal; the host creates a new Invocation for another turn.
+
+Canonical Session reads retain every committed checkpoint as evidence. When a
+failed or cancelled Invocation has assistant or tool checkpoint messages, those
+messages remain readable but are excluded from future provider context. User
+messages remain eligible. The message `invocation_id` plus authoritative
+Invocation status makes the distinction observable to hosts.
 
 Cancellation is durable, first-terminal-wins, and idempotent; it also closes
 pending ToolCalls. Its response does not promise that an in-flight provider

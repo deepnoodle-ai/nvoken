@@ -495,6 +495,30 @@ func TestRuntimeRepositoriesCommitRollbackAndReadback(t *testing.T) {
 	if err != nil || storedInvocation.Status != domain.InvocationQueued || len(storedInvocation.Error) != 0 {
 		t.Fatalf("invocation = %#v, error = %v", storedInvocation, err)
 	}
+	generationMessages, err := store.ListSessionMessagesForGeneration(ctx, fixture.session.ID)
+	if err != nil || len(generationMessages) != 2 {
+		t.Fatalf("eligible generation messages = %#v, error = %v", generationMessages, err)
+	}
+	completedAt := now.Add(time.Second)
+	if err := updateInvocationStatusForTest(
+		ctx,
+		pool,
+		invocation.ID,
+		domain.InvocationFailed,
+		storedInvocation.CurrentStateRevision,
+		[]byte(`{"code":"budget_exceeded","message":"failed"}`),
+		&completedAt,
+	); err != nil {
+		t.Fatalf("mark Invocation failed: %v", err)
+	}
+	canonicalMessages, err := store.ListSessionMessages(ctx, fixture.session.ID)
+	if err != nil || len(canonicalMessages) != 2 {
+		t.Fatalf("canonical messages after failure = %#v, error = %v", canonicalMessages, err)
+	}
+	generationMessages, err = store.ListSessionMessagesForGeneration(ctx, fixture.session.ID)
+	if err != nil || len(generationMessages) != 1 || generationMessages[0].Role != domain.MessageRoleUser {
+		t.Fatalf("failed output remained in generation context: %#v, error = %v", generationMessages, err)
+	}
 
 	rolledBackID := testID(t, domain.PrefixExecutionSpecSnapshot)
 	wantRollback := errors.New("stop")

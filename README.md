@@ -11,7 +11,7 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0-2563eb)](LICENSE)
 [![status](https://img.shields.io/badge/status-early%20development-b7791f)](#how-to-help)
 
-[State Ownership](#your-app-owns-the-state) · [Contract](#the-contract) · [How it Compares](#how-it-compares) · [Docs](docs/README.md) · [Help Shape It](#how-to-help)
+[Local Quickstart](docs/guides/local-development.md) · [State Ownership](#your-app-owns-the-state) · [Contract](#the-contract) · [How it Compares](#how-it-compares) · [Docs](docs/README.md) · [Help Shape It](#how-to-help)
 
 </div>
 
@@ -149,6 +149,11 @@ Multi-provider support comes from
 [Dive](https://github.com/deepnoodle-ai/dive), so the contract never assumes a
 single vendor. More in [docs/product/why.md](docs/product/why.md) and
 [docs/product/harness.md](docs/product/harness.md).
+
+To run one durable TypeScript chat on a laptop, follow the
+[clone-to-first-response quickstart](docs/guides/local-development.md). It keeps
+the disposable development topology separate from the production deployment
+profiles.
 
 A managed version of nvoken is being considered. An earlier version of nvoken powers
 [MobiusOps.ai](https://mobiusops.ai).

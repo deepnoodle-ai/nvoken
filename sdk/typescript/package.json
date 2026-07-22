@@ -1,17 +1,53 @@
 {
-  "name": "@deepnoodle-ai/nvoken",
+  "name": "@deepnoodle/nvoken",
   "version": "0.1.0",
   "description": "TypeScript SDK for the nvoken durable agent runtime",
+  "keywords": [
+    "ai",
+    "agents",
+    "durable-execution",
+    "llm",
+    "nvoken"
+  ],
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
   "files": [
-    "dist"
+    "dist/callback.d.ts",
+    "dist/callback.js",
+    "dist/client.d.ts",
+    "dist/client.js",
+    "dist/generated",
+    "dist/index.d.ts",
+    "dist/index.js",
+    "dist/stream.d.ts",
+    "dist/stream.js"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepnoodle-ai/nvoken.git",
+    "directory": "sdk/typescript"
+  },
+  "homepage": "https://github.com/deepnoodle-ai/nvoken/tree/main/sdk/typescript#readme",
+  "bugs": {
+    "url": "https://github.com/deepnoodle-ai/nvoken/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test dist/test/*.test.js"
+    "test": "node --test dist/test/*.test.js",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build && npm test"
   },
   "devDependencies": {
     "@types/node": "24.0.15",

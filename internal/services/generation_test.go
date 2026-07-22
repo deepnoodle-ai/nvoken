@@ -94,6 +94,13 @@ func (*fakeGenerationStore) CreateExecutionSpecSnapshot(context.Context, domain.
 	return errors.New("not used")
 }
 
+func (s *fakeGenerationStore) ListSessionMessagesForGeneration(context.Context, string) ([]domain.SessionMessage, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return append([]domain.SessionMessage(nil), s.messages...), nil
+}
+
 func (s *fakeGenerationStore) ListSessionMessages(context.Context, string) ([]domain.SessionMessage, error) {
 	if s.err != nil {
 		return nil, s.err
@@ -220,6 +227,12 @@ type fakeModelGenerator struct {
 	response domain.GenerationResponse
 	err      error
 }
+
+type unpricedModelGenerator struct {
+	fakeModelGenerator
+}
+
+func (*unpricedModelGenerator) HasUSDModelPricing(string, string) bool { return false }
 
 type cancellingModelGenerator struct {
 	cancel   context.CancelFunc
@@ -829,6 +842,43 @@ func TestGenerationExecutorEnforcesResolvedBudgetsAndRetainsEvidence(t *testing.
 				t.Fatalf("failure = %s, want kind %q", result.Error, test.wantKind)
 			}
 		})
+	}
+}
+
+func TestGenerationExecutorRejectsKnownUnpricedModelBeforeProviderCall(t *testing.T) {
+	claim := generationClaim()
+	limit := int64(100_000)
+	claim.Invocation.MaxEstimatedCostMicros = &limit
+	generator := &unpricedModelGenerator{
+		fakeModelGenerator: fakeModelGenerator{response: successfulGenerationResponse()},
+	}
+
+	result, err := NewGenerationExecutor(
+		generationStoreFixture(claim),
+		generator,
+		nil,
+	).Execute(context.Background(), claim)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(generator.requests) != 0 {
+		t.Fatalf("provider requests = %d, want 0", len(generator.requests))
+	}
+	if result.Usage != nil || result.Provenance != nil || len(result.AssistantMessages) != 0 {
+		t.Fatalf("pre-provider failure fabricated evidence: %#v", result)
+	}
+	var failure struct {
+		Code    string            `json:"code"`
+		Message string            `json:"message"`
+		Details map[string]string `json:"details"`
+	}
+	if err := json.Unmarshal(result.Error, &failure); err != nil {
+		t.Fatalf("decode failure: %v", err)
+	}
+	if result.Status != domain.InvocationFailed || failure.Code != "budget_exceeded" ||
+		failure.Details["kind"] != "estimated_cost_unavailable" ||
+		!strings.Contains(failure.Message, "unavailable") {
+		t.Fatalf("failure = %#v", failure)
 	}
 }
 

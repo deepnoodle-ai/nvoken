@@ -17,7 +17,8 @@ import { mapValues } from '../runtime.js';
  * Optional requested limits. Installation defaults supply wall-clock,
  * active-execution, and iteration limits. Output-token and estimated-cost
  * limits are unlimited when omitted. Installation maxima may be lower
- * than the schema's numeric range.
+ * than the schema's numeric range. A requested estimated-cost limit
+ * requires known USD pricing metadata and fails closed when unavailable.
  *
  * @export
  * @interface InvocationBudgetRequest
@@ -42,6 +43,11 @@ export interface InvocationBudgetRequest {
      */
     maxOutputTokens?: number;
     /**
+     * Dive list-price guardrail, not preauthorization or a billing
+     * ledger. Requires known USD pricing for the selected model and
+     * otherwise fails closed with `budget_exceeded` and
+     * `details.kind = estimated_cost_unavailable`. When pricing absence
+     * is knowable before execution, nvoken rejects before a provider call.
      *
      * @type {number}
      * @memberof InvocationBudgetRequest

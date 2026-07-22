@@ -24,7 +24,7 @@ const credentialSourceInstallationBYOK = "installation_byok"
 
 type generationStore interface {
 	ports.ExecutionSpecSnapshotRepository
-	ports.SessionMessageRepository
+	ports.GenerationContextRepository
 }
 
 type generationInvocationReader interface {
@@ -104,7 +104,7 @@ func (e *GenerationExecutor) Execute(
 		return internalGenerationFailure(), nil
 	}
 
-	stored, err := e.store.ListSessionMessages(ctx, claim.Invocation.SessionID)
+	stored, err := e.store.ListSessionMessagesForGeneration(ctx, claim.Invocation.SessionID)
 	if err != nil {
 		return domain.InvocationExecutionResult{}, fmt.Errorf("load Session transcript: %w", err)
 	}
@@ -228,6 +228,16 @@ func (e *GenerationExecutor) Execute(
 			CredentialVersionID:     recovery.Provenance.CredentialVersionID,
 		}
 	} else {
+		if claim.Invocation.MaxEstimatedCostMicros != nil {
+			if pricing, ok := e.generator.(ports.ModelPricingResolver); ok &&
+				!pricing.HasUSDModelPricing(request.Provider, request.Model) {
+				e.logger.Warn("Model pricing unavailable before generation",
+					"invocation_id", claim.Invocation.ID,
+					"lease_attempt", claim.Attempt,
+					"budget_kind", "estimated_cost_unavailable")
+				return estimatedCostUnavailableGenerationFailure(), nil
+			}
+		}
 		if request.Resume != nil {
 			if kind := resumeBudgetExceeded(claim.Invocation, *request.Resume); kind != "" {
 				failed := budgetGenerationFailure(kind, request.Resume.Usage, recovery.Provenance)
@@ -856,11 +866,26 @@ func exceededGenerationBudget(invocation domain.Invocation, usage domain.ModelUs
 }
 
 func budgetGenerationFailure(kind string, usage domain.ModelUsage, provenance domain.ModelProvenance) domain.InvocationExecutionResult {
+	message := "The execution budget was exceeded."
+	if kind == "estimated_cost_unavailable" {
+		message = "Estimated cost is unavailable for the requested model."
+	}
 	return domain.InvocationExecutionResult{
 		Status:     domain.InvocationFailed,
-		Error:      invocationFailureWithDetails("budget_exceeded", "The execution budget was exceeded.", map[string]string{"kind": kind}),
+		Error:      invocationFailureWithDetails("budget_exceeded", message, map[string]string{"kind": kind}),
 		Usage:      &usage,
 		Provenance: &provenance,
+	}
+}
+
+func estimatedCostUnavailableGenerationFailure() domain.InvocationExecutionResult {
+	return domain.InvocationExecutionResult{
+		Status: domain.InvocationFailed,
+		Error: invocationFailureWithDetails(
+			"budget_exceeded",
+			"Estimated cost is unavailable for the requested model.",
+			map[string]string{"kind": "estimated_cost_unavailable"},
+		),
 	}
 }
 

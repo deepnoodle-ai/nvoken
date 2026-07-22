@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
-import { Client, NvokenError } from "@deepnoodle-ai/nvoken";
+import { Client, NvokenError } from "@deepnoodle/nvoken";
 
 const baseUrl = process.env.NVOKEN_BASE_URL ?? "http://localhost:8080";
 const apiKey = process.env.NVOKEN_API_KEY;
@@ -70,12 +70,14 @@ for await (const line of input) {
       throw new Error(`Invocation ${invocation.id} did not complete (${reason})`);
     }
 
-    const answer = await assistantText(handle.sessionId, handle.invocationId);
+    const answer = await handle.text();
     console.log(`agent> ${answer}\n`);
   } catch (error) {
     hadError = true;
     if (error instanceof NvokenError) {
-      console.error(`nvoken error [${error.category}]: ${error.message}`);
+      const code = error.code ? ` code=${error.code}` : "";
+      const request = error.requestId ? ` request_id=${error.requestId}` : "";
+      console.error(`nvoken error [${error.category}]${code}${request}: ${error.message}`);
     } else {
       console.error(error instanceof Error ? error.message : error);
     }
@@ -86,23 +88,3 @@ for await (const line of input) {
 
 input.close();
 if (hadError) process.exitCode = 1;
-
-async function assistantText(currentSessionId: string, invocationId: string): Promise<string> {
-  const messages = [];
-  let cursor: string | undefined;
-
-  do {
-    const page = await client.listMessages(currentSessionId, { cursor, limit: 100 });
-    messages.push(...page.items);
-    cursor = page.nextCursor ?? undefined;
-  } while (cursor);
-
-  const text = messages
-    .filter((message) => message.invocationId === invocationId && message.role === "assistant")
-    .flatMap((message) => message.content)
-    .filter((block) => block.type === "text" && typeof block.text === "string")
-    .map((block) => block.text as string)
-    .join("");
-
-  return text || "(the invocation completed without assistant text)";
-}

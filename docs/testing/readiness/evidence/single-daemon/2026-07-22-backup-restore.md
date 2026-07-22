@@ -5,7 +5,7 @@
 | Field | Value |
 | --- | --- |
 | Profile | `single_daemon` |
-| Tested revision | `7a39ec91f411a9f48dc711008b311584a9bcfda8` |
+| Tested revision | `2e248b70deb9f0b394c7f12f0babff3645f23c55` |
 | Dimensions | `Backup/restore` |
 | Result | `pass` |
 
@@ -39,7 +39,7 @@ restore and verification completed at `2026-07-22T02:32:12.476527Z`.
 This proves logical backup/restore mechanics and durable readback. Backup
 scheduling, storage, retention, and recovery objectives remain operator-owned.
 The drill originally ran at `c69da17ba9a02ffd60f3eb4d7f25f66c82f14a21`;
-the recorded tested revision is its content-equivalent commit after rebasing on
+the recorded tested revision is its content-equivalent squash commit on
 `main`, with no verifier or migration changes in that history rewrite.
 
 ## Cleanup
