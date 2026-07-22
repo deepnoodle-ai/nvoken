@@ -1,6 +1,6 @@
 # Qualify the Google Cloud execution path
 
-**Status:** Draft
+**Status:** Implemented; staging proof pending
 **Sequence:** 024
 **Depends on:** `009-prd-cloud-execution-dispatch-foundation.md`,
 `010-prd-cloud-tasks-invocation-execution.md`,

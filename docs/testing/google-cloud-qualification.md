@@ -1,7 +1,7 @@
 # Google Cloud qualification procedure
 
-**Status:** Planned by
-[`024-prd-google-cloud-qualification.md`](../prds/024-prd-google-cloud-qualification.md)
+**Status:** Implemented; staging run pending. Governed by
+[`024-prd-google-cloud-qualification.md`](../prds/024-prd-google-cloud-qualification.md).
 
 ## Purpose and claim
 
@@ -27,7 +27,8 @@ python3 deploy/google-cloud/qualify.py \
   --provider PROVIDER \
   --model MODEL \
   --callback-fixture-url HTTPS_URL \
-  --notification-channel projects/PROJECT/notificationChannels/CHANNEL
+  --notification-channel projects/PROJECT/notificationChannels/CHANNEL \
+  --terraform-var-file /absolute/path/to/staging.tfvars
 ```
 
 The exact flags may evolve with implementation, but the operating rules do
@@ -38,6 +39,9 @@ not:
   executable;
 - a dry run performs discovery and prints planned mutations without changing
   Google resources or sending a provider request;
+- a managed Runtime credential may be supplied through
+  `NVOKEN_QUALIFICATION_RUNTIME_TOKEN`; it is never accepted as a command-line
+  value or written to evidence;
 - the runner prints the resolved project, environment, region, service names,
   image, and intended mutations, then requires exact project confirmation;
 - new orchestration is Python, using Terraform, `gcloud`, and public Runtime

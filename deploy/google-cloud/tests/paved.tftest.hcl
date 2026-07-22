@@ -295,6 +295,26 @@ run "paved_defaults" {
   }
 
   assert {
+    condition = (
+      output.qualification_profile.project_id == "example-project" &&
+      output.qualification_profile.environment == "test" &&
+      output.qualification_profile.invocation_execution_mode == "cloud_tasks" &&
+      output.qualification_profile.redis_instance_name == google_redis_instance.live_events.name &&
+      output.qualification_profile.executor_max_instances == 10 &&
+      output.qualification_profile.executor_request_concurrency == 4 &&
+      output.qualification_profile.task_queue_max_concurrent_dispatches == 40 &&
+      output.qualification_profile.provider_secrets_configured.anthropic == true &&
+      output.qualification_profile.provider_secrets_configured.openai == false &&
+      output.qualification_profile.callback_signing_configured == true &&
+      contains(keys(output.qualification_profile), "execution_queue") &&
+      contains(keys(output.qualification_profile), "executor_service_url") &&
+      !contains(keys(output.qualification_profile), "database_url") &&
+      !contains(keys(output.qualification_profile), "redis_auth")
+    )
+    error_message = "The qualification runner must receive complete nonsecret resource identity and starting-configuration output."
+  }
+
+  assert {
     condition     = length(google_monitoring_alert_policy.dispatch_failures) == 5
     error_message = "Aged dispatch, publication failure, sustained executor retry, and authentication signals must be alertable."
   }

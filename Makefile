@@ -56,7 +56,8 @@ check-deploy:
 	terraform -chdir=deploy/google-cloud init -backend=false -input=false
 	terraform -chdir=deploy/google-cloud validate
 	terraform -chdir=deploy/google-cloud test
-	bash -n deploy/google-cloud/bootstrap-state.sh deploy/google-cloud/release.sh deploy/google-cloud/smoke.sh deploy/google-cloud/dispatch-smoke.sh
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s deploy/google-cloud -p 'test_*.py'
+	bash -n deploy/google-cloud/bootstrap-state.sh deploy/google-cloud/release.sh
 
 run:
 	go run ./cmd/nvokend

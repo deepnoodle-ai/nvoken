@@ -235,97 +235,61 @@ requires an explicit capacity reconciliation and threshold review.
 Change `monitoring_alert_thresholds` and `monitoring_alert_windows_seconds` as
 reviewed objects when the deployment needs different conservative bounds.
 
-## End-to-end smoke
+## End-to-end qualification
 
-Use a currently available model for the provider configured above:
-
-```bash
-export NVOKEN_SMOKE_PROVIDER='anthropic'
-export NVOKEN_SMOKE_MODEL='your-current-model-name'
-deploy/google-cloud/smoke.sh
-```
-
-The smoke test reads the generated Runtime bearer key directly from Secret
-Manager without printing it, checks the Cloud Run-safe `/health` endpoint,
-expects a `202` durable
-acknowledgement, polls `GET /v1/invocations/{id}` to `completed`, performs a
-second authoritative read, and confirms a structured Cloud Logging entry is
-correlatable by Invocation ID. To prove restart readback during a release test,
-deploy the next unique image revision and repeat the final `GET` with the same
-ID; the state remains in Cloud SQL.
-
-That generated key is imported once into the durable credential store. Keep
-`retain_legacy_runtime_key = true` while the immediately previous release must
-remain startable. To end the rollback window, first issue and verify separate
-host and CI Runtime credentials, revoke the imported credential, then set
-`retain_legacy_runtime_key = false` and apply Terraform. Subsequent nvoken
-starts do not recreate the revoked credential. The legacy smoke script uses the
-generated key and is therefore a pre-cutover check; after cutover, run the
-equivalent CLI or HTTP smoke with a managed Runtime credential.
-
-To inspect the resumable stream during the same Invocation, use the `session_id`
-from its `202` acknowledgement with a bearer-capable HTTP client:
+Use the one Python 3.11+ runner for live checks. Start with discovery-only mode;
+it reads Terraform and Google metadata but makes no provider request or resource
+mutation:
 
 ```bash
-curl --no-buffer \
-  -H "Authorization: Bearer ${NVOKEN_RUNTIME_API_KEY}" \
-  -H 'Accept: text/event-stream' \
-  "${NVOKEN_RUNTIME_URL}/v1/sessions/${NVOKEN_SESSION_ID}/transcript/stream"
+python3 deploy/google-cloud/qualify.py \
+  --environment staging \
+  --provider anthropic \
+  --model your-current-model-name \
+  --callback-fixture-url https://your-controlled-fixture.example/qualify \
+  --notification-channel projects/PROJECT/notificationChannels/CHANNEL \
+  --terraform-var-file /absolute/path/to/staging.tfvars \
+  --dry-run
 ```
 
-Only `transcript.snapshot` frames carry an `id`; reconnect with that value as
-`Last-Event-ID` or `?cursor=...`. `generation.delta` is an ephemeral preview.
-On `stream.resync`, discard provisional text and wait for the next canonical
-snapshot. `stream.end` reason `rotate` is a normal reconnect boundary and
-reason `terminal` follows the final Postgres reconciliation. A Redis outage may
-remove previews but the one-second Postgres poll still delivers committed
-messages and terminal state.
+Remove `--dry-run` only in a disposable or staging environment. The runner
+prints the resolved project, region, revisions, immutable image, queue, Redis
+instance, bounds, Terraform plan status, and intended temporary mutations. It
+then requires the exact project ID before starting any live scenario. It owns
+cleanup after success, failure, or interruption and writes a scrubbed result
+under `docs/testing/readiness/evidence/`.
 
-The paved Memorystore instance is private, requires Redis AUTH, and accepts
-only TLS connections. Terraform stores its generated AUTH string in Secret
-Manager and supplies every active Memorystore CA to both service roles; nvoken
-verifies the server certificate and supports overlapping CAs during rotation.
-
-Cloud Run reserves some external paths ending in `z` at Google Front End and
-can return a Google-generated `404` before the request reaches nvoken. nvoken
-therefore uses `/health` consistently for local checks, Cloud Run startup and
-liveness probes, and external smoke checks.
-
-After the normal Runtime smoke passes, prove the private authenticated handoff:
+Use repeated `--scenario` flags to rerun a failed scenario without inventing a
+second entry point. For example:
 
 ```bash
-deploy/google-cloud/dispatch-smoke.sh
+python3 deploy/google-cloud/qualify.py \
+  --environment staging \
+  --provider anthropic \
+  --model your-current-model-name \
+  --scenario baseline
 ```
 
-The script executes the one-shot `dispatch-smoke` Job, reads its generated
-dispatch ID from structured logs, and waits for the private executor to record
-durable synthetic settlement. The job writes synthetic work and dispatch intent
-in one transaction; the combined service publishes the named task, and the
-executor reloads all authority from Postgres. No model or provider key is used.
+The runner reads the generated legacy Runtime bearer from Secret Manager without
+printing or recording it. After credential cutover, set a managed token only for
+the child process through `NVOKEN_QUALIFICATION_RUNTIME_TOKEN`; never pass it as
+a command-line flag. Keep `retain_legacy_runtime_key = true` while the previous
+release must remain startable, then revoke the imported credential before
+setting it false.
 
-To exercise recoverability, pause the queue, run the smoke Job, verify an aged
-pending warning appears after `DISPATCH_STALE_AFTER`, and resume the queue. The
-same Postgres dispatch then publishes and settles. Do not delete or manually
-acknowledge an uncertain task. A published task that disappears is checked by
-the reconciler; safely replayable synthetic work gets one new successor
-dispatch, while already-settled work does not.
+The complete scenario contract, callback-fixture behavior, mutation boundaries,
+and evidence semantics are in the
+[Google Cloud qualification procedure](../../docs/testing/google-cloud-qualification.md).
+The former `smoke.sh` and `dispatch-smoke.sh` wrappers are retired; their public
+Runtime, authoritative readback, structured-log, and synthetic dispatch checks
+are covered by `qualify.py`.
 
-Use the Terraform `execution_queue` output with `gcloud tasks queues pause` and
-`gcloud tasks queues resume`; always pass the Terraform `project_id` and
-`region` outputs explicitly. To prove revision draining, temporarily set
-`TF_VAR_synthetic_dispatch_delay_seconds=20`, start the dispatch smoke, and
-deploy a new executor revision while its request is held. The old revision must
-log `handler_outcome=settled` before it exits. Cancelling the held request
-instead produces `503` and leaves both work and dispatch unsettled for delivery
-retry. Return the delay to zero after the test.
-
-Cloud Tasks retries only an HTTP request for which nvoken could not make a
-durable decision. Missing, terminal, malformed, or duplicate synthetic
-deliveries return `204`. A live duplicate Invocation delivery returns `503`
-with `Retry-After`; once the authoritative attempt is terminal, redelivery is a
-`204` no-op. Repeated `503` responses can back off the shared queue, so treat a
-sustained executor-retry alert as a capacity or durability incident rather than
-lost work.
+Cloud Tasks retries only a request for which nvoken could not make a durable
+decision. Missing, terminal, malformed, or duplicate synthetic deliveries return
+`204`. A live duplicate Invocation delivery returns `503` with `Retry-After`;
+once the authoritative attempt is terminal, redelivery is a `204` no-op.
+Repeated `503` responses can back off the shared queue, so treat a sustained
+executor-retry alert as a capacity or durability incident rather than lost work.
 
 ## Dashboard, alerts, and notifications
 
