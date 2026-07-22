@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	EventProcessStarted     = "process_started"
-	EventProcessStartFailed = "process_start_failed"
-	EventProcessFailed      = "process_failed"
-	EventDiagnosticCheck    = "diagnostic_check"
-	EventUpgradePreflight   = "upgrade_preflight"
+	EventProcessStarted      = "process_started"
+	EventProcessStartFailed  = "process_start_failed"
+	EventProcessFailed       = "process_failed"
+	EventDiagnosticCheck     = "diagnostic_check"
+	EventUpgradePreflight    = "upgrade_preflight"
+	EventRestoreVerification = "restore_verification"
 
 	EventHTTPRequest         = "http_request_completed"
 	EventHTTPRequestFailed   = "http_request_failed"

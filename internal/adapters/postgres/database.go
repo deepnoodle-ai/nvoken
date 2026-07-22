@@ -4,6 +4,8 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -14,8 +16,10 @@ const (
 )
 
 type PoolConfig struct {
-	MaxConns int32
-	MinConns int32
+	MaxConns                 int32
+	MinConns                 int32
+	StatementTimeout         time.Duration
+	IdleInTransactionTimeout time.Duration
 }
 
 func OpenPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
@@ -39,12 +43,18 @@ func OpenPoolWithConfig(ctx context.Context, databaseURL string, cfg PoolConfig)
 	if config.ConnConfig.RuntimeParams == nil {
 		config.ConnConfig.RuntimeParams = make(map[string]string)
 	}
-	if _, ok := config.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"]; !ok {
-		config.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"] = idleInTransactionTimeout
-	}
-	if _, ok := config.ConnConfig.RuntimeParams["statement_timeout"]; !ok {
-		config.ConnConfig.RuntimeParams["statement_timeout"] = statementTimeout
-	}
+	configurePoolTimeout(
+		config.ConnConfig.RuntimeParams,
+		"idle_in_transaction_session_timeout",
+		idleInTransactionTimeout,
+		cfg.IdleInTransactionTimeout,
+	)
+	configurePoolTimeout(
+		config.ConnConfig.RuntimeParams,
+		"statement_timeout",
+		statementTimeout,
+		cfg.StatementTimeout,
+	)
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("open database pool: %w", err)
@@ -54,4 +64,19 @@ func OpenPoolWithConfig(ctx context.Context, databaseURL string, cfg PoolConfig)
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 	return pool, nil
+}
+
+func configurePoolTimeout(
+	runtimeParams map[string]string,
+	name string,
+	defaultValue string,
+	override time.Duration,
+) {
+	if override > 0 {
+		runtimeParams[name] = strconv.FormatInt(max(1, override.Milliseconds()), 10)
+		return
+	}
+	if _, ok := runtimeParams[name]; !ok {
+		runtimeParams[name] = defaultValue
+	}
 }
