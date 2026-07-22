@@ -5,7 +5,7 @@
 | Field | Value |
 | --- | --- |
 | Profile | `google_cloud` |
-| Tested revision | `c69da17ba9a02ffd60f3eb4d7f25f66c82f14a21` |
+| Tested revision | `7a39ec91f411a9f48dc711008b311584a9bcfda8` |
 | Dimensions | `Backup/restore` |
 | Result | `pass` |
 
@@ -39,6 +39,9 @@ The selected backup ran from `2026-07-22T02:42:33.550Z` to
 This proves one isolated backup/restore and durable readback path. It does not
 set backup scheduling, RPO/RTO, cross-region recovery, promotion, or failover
 policy.
+The drill originally ran at `c69da17ba9a02ffd60f3eb4d7f25f66c82f14a21`;
+the recorded tested revision is its content-equivalent commit after rebasing on
+`main`, with no verifier or migration changes in that history rewrite.
 
 ## Cleanup
 

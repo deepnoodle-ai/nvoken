@@ -27,7 +27,9 @@ func VerifyRestore(parent context.Context, cfg RestoreVerificationConfig) error 
 	defer cancel()
 
 	pool, err := postgres.OpenPoolWithConfig(ctx, cfg.DatabaseURL, postgres.PoolConfig{
-		MaxConns: cfg.DatabaseMaxConns,
+		MaxConns:                 cfg.DatabaseMaxConns,
+		StatementTimeout:         timeout,
+		IdleInTransactionTimeout: timeout,
 	})
 	if err != nil {
 		logRestoreVerification(ctx, postgres.RestoreCheck{

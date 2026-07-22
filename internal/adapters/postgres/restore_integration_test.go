@@ -112,6 +112,69 @@ func TestVerifyRestoreRejectsUnsafeFixtures(t *testing.T) {
 			wantClass:     "missing",
 		},
 		{
+			name: "missing required constraint",
+			prepare: func(t *testing.T, pool *pgxpool.Pool) {
+				seedRestoreFixture(t, pool)
+				if _, err := pool.Exec(context.Background(),
+					"ALTER TABLE sessions DROP CONSTRAINT sessions_agent_boundary",
+				); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantComponent: "required_constraints",
+			wantClass:     "missing_or_unvalidated",
+		},
+		{
+			name: "missing nonterminal index",
+			prepare: func(t *testing.T, pool *pgxpool.Pool) {
+				seedRestoreFixture(t, pool)
+				if _, err := pool.Exec(context.Background(),
+					"DROP INDEX invocations_one_nonterminal_per_session",
+				); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantComponent: "nonterminal_unique_index",
+			wantClass:     "missing_or_invalid",
+		},
+		{
+			name: "multiple nonterminal invocations",
+			prepare: func(t *testing.T, pool *pgxpool.Pool) {
+				ids := seedRestoreFixture(t, pool)
+				if _, err := pool.Exec(context.Background(),
+					"DROP INDEX invocations_one_nonterminal_per_session",
+				); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Exec(context.Background(), `
+					INSERT INTO invocations (
+						id, session_id, account_id, tenant_partition_id, agent_id,
+						spec_snapshot_id, idempotency_key, request_fingerprint, status,
+						request_fingerprint_version, current_state_revision, error,
+						wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens,
+						max_estimated_cost_microusd, max_iterations, active_execution_ms,
+						wall_clock_deadline_at, output_schema_digest,
+						created_at, updated_at, completed_at
+					)
+					SELECT
+						'invk_018f0000-0000-7000-8000-000000000001',
+						session_id, account_id, tenant_partition_id, agent_id,
+						spec_snapshot_id, 'restore-conflict', request_fingerprint, status,
+						request_fingerprint_version, current_state_revision, error,
+						wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens,
+						max_estimated_cost_microusd, max_iterations, active_execution_ms,
+						wall_clock_deadline_at, output_schema_digest,
+						created_at, updated_at, completed_at
+					FROM invocations
+					WHERE id = $1
+				`, ids.queuedInvocation); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantComponent: "one_nonterminal_invocation_per_session",
+			wantClass:     "conflict",
+		},
+		{
 			name: "corrupt transcript cursor",
 			prepare: func(t *testing.T, pool *pgxpool.Pool) {
 				seedRestoreFixture(t, pool)
@@ -123,6 +186,21 @@ func TestVerifyRestoreRejectsUnsafeFixtures(t *testing.T) {
 				}
 			},
 			wantComponent: "transcript_cursor_bounds",
+			wantClass:     "out_of_bounds",
+		},
+		{
+			name: "corrupt checkpoint cursor",
+			prepare: func(t *testing.T, pool *pgxpool.Pool) {
+				ids := seedRestoreFixture(t, pool)
+				if _, err := pool.Exec(context.Background(), `
+					UPDATE invocations
+					SET current_checkpoint_sequence = current_checkpoint_sequence + 1
+					WHERE id = $1
+				`, ids.waitingInvocation); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantComponent: "checkpoint_cursor_bounds",
 			wantClass:     "out_of_bounds",
 		},
 		{

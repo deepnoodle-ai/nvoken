@@ -33,15 +33,25 @@ systems, or provide tenant-level recovery.
    without credentials or application content. Use the
    [drill record contract](../testing/backup-restore/README.md).
 
-The verifier defaults to a two-minute total timeout. Set
-`RESTORE_VERIFY_TIMEOUT` up to `30m` only for a large isolated restore. It checks
-the embedded schema version, required tables and validated constraints, the
+The verifier defaults to a two-minute total timeout. It applies the same value
+as the PostgreSQL `statement_timeout` and
+`idle_in_transaction_session_timeout` for its dedicated pool, so the command
+context remains the overall ceiling while no individual statement or
+in-transaction idle interval is capped earlier. Set `RESTORE_VERIFY_TIMEOUT` up
+to `30m` only for a large isolated restore. It checks the embedded schema
+version, required tables and validated constraints, the
 one-nonterminal-Invocation-per-Session index and data invariant, terminal state
 consistency, Session transcript/lifecycle cursor bounds, Invocation checkpoint
 bounds, and one metadata-only sample of a Session, Invocation, message,
 ToolCall, and checkpoint. Missing representative rows means the selected drill
 fixture is insufficient, not necessarily that an otherwise empty installation
 is corrupt.
+
+When all required tables remain queryable, the verifier deliberately continues
+after constraint, index, or invariant failures to emit multiple bounded
+diagnoses from the same snapshot. Treat checks reported after the first
+structural failure as potentially secondary until that structural fault is
+understood.
 
 ## Single-daemon logical backup and restore
 
