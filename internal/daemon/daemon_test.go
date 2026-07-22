@@ -176,7 +176,13 @@ func TestProcessStartupIdentityIsSafeAndCompleteForBothRoles(t *testing.T) {
 		var output bytes.Buffer
 		previous := slog.Default()
 		slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
-		logProcessStarted(cfg)
+		logProcessStarted(cfg, postgres.SchemaStatus{
+			State:                      postgres.SchemaCompatible,
+			Current:                    expectedSchema,
+			Expected:                   expectedSchema,
+			MinimumBinarySchemaVersion: expectedSchema,
+			CompatibilitySchemaVersion: expectedSchema,
+		})
 		slog.SetDefault(previous)
 
 		var entry map[string]any
@@ -186,7 +192,10 @@ func TestProcessStartupIdentityIsSafeAndCompleteForBothRoles(t *testing.T) {
 		if entry["event"] != "process_started" || entry["build_version"] != cfg.BuildVersion ||
 			entry["process_role"] != string(cfg.ProcessRole) ||
 			entry["execution_mode"] != string(cfg.InvocationExecutionMode) ||
-			entry["schema_version"] != float64(expectedSchema) {
+			entry["schema_version"] != float64(expectedSchema) ||
+			entry["database_schema_version"] != float64(expectedSchema) ||
+			entry["minimum_binary_schema_version"] != float64(expectedSchema) ||
+			entry["schema_compatibility"] != string(postgres.SchemaCompatible) {
 			t.Fatalf("startup identity = %#v", entry)
 		}
 		for _, secret := range []string{"anthropic-secret", "openai-secret", "callback-secret", "redis.example.test"} {
@@ -204,6 +213,10 @@ func TestProcessStartupIdentityDefaultsLocalBuildVersion(t *testing.T) {
 	logProcessStarted(Config{
 		ProcessRole:             ProcessRoleCombined,
 		InvocationExecutionMode: services.InvocationExecutionEmbedded,
+	}, postgres.SchemaStatus{
+		State:    postgres.SchemaCompatible,
+		Current:  14,
+		Expected: 14,
 	})
 	slog.SetDefault(previous)
 
@@ -222,6 +235,7 @@ func TestSchemaStartupFailurePreservesBoundedVerdict(t *testing.T) {
 		postgres.SchemaDirty,
 		postgres.SchemaBehind,
 		postgres.SchemaAhead,
+		postgres.SchemaUnknown,
 		postgres.SchemaInvalid,
 	} {
 		t.Run(string(state), func(t *testing.T) {

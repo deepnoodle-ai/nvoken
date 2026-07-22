@@ -152,7 +152,51 @@ func TestReleaseStopsBeforeServiceApplyWhenMigrationFails(t *testing.T) {
 	}
 }
 
+func TestReleasePassesServingRevisionToMigrationPreflight(t *testing.T) {
+	_, log := runReleaseWithCurrent(
+		t,
+		false,
+		false,
+		"us-central1-docker.pkg.dev/example-project/nvoken-test/nvokend:build-13",
+		"13",
+		"transition",
+	)
+	if !strings.Contains(log, "migration-vars current_image=us-central1-docker.pkg.dev/example-project/nvoken-test/nvokend:build-13 current_schema=13 target_schema=14 mode=transition") {
+		t.Fatalf("migration preflight did not receive the release pair:\n%s", log)
+	}
+}
+
+func TestReleaseLeavesPriorRevisionAfterSuccessfulMigrationAndFailedDeploy(t *testing.T) {
+	_, log := runReleaseWithCurrent(
+		t,
+		false,
+		true,
+		"us-central1-docker.pkg.dev/example-project/nvoken-test/nvokend:build-14",
+		"14",
+		"ordinary",
+	)
+	assertOrdered(t, log,
+		"gcloud run jobs execute nvoken-test-migrate",
+		"plan -out=",
+	)
+	if strings.Contains(log, "apply "+filepath.Join(repoRoot(t), "deploy/google-cloud/release.tfplan")) {
+		t.Fatalf("service apply ran after failed deploy plan:\n%s", log)
+	}
+}
+
 func runRelease(t *testing.T, failMigration bool) (string, string) {
+	t.Helper()
+	return runReleaseWithCurrent(t, failMigration, false, "", "", "ordinary")
+}
+
+func runReleaseWithCurrent(
+	t *testing.T,
+	failMigration bool,
+	failDeploy bool,
+	currentImage string,
+	currentSchema string,
+	migrationMode string,
+) (string, string) {
 	t.Helper()
 	fakeBin := t.TempDir()
 	logPath := filepath.Join(t.TempDir(), "commands.log")
@@ -163,6 +207,14 @@ exit 0
 `)
 	writeExecutable(t, fakeBin, "terraform", `#!/usr/bin/env bash
 printf 'terraform %s\n' "$*" >>"${NVOKEN_TEST_COMMAND_LOG}"
+if [[ "$*" == *"apply -auto-approve -target=google_cloud_run_v2_job.migrate"* ]]; then
+  printf 'migration-vars current_image=%s current_schema=%s target_schema=%s mode=%s\n' \
+    "${TF_VAR_previous_build_version}" "${TF_VAR_previous_schema_version}" \
+    "${TF_VAR_schema_version}" "${TF_VAR_migration_mode}" >>"${NVOKEN_TEST_COMMAND_LOG}"
+fi
+if [[ "${NVOKEN_TEST_FAIL_DEPLOY:-0}" == "1" && "$*" == *"plan -out="* ]]; then
+  exit 8
+fi
 case "$*" in
   *"output -raw artifact_repository"*) echo 'us-central1-docker.pkg.dev/example-project/nvoken-test' ;;
   *"output -raw build_service_account_name"*) echo 'projects/example-project/serviceAccounts/nvoken-test-build@example-project.iam.gserviceaccount.com' ;;
@@ -175,6 +227,14 @@ exit 0
 `)
 	writeExecutable(t, fakeBin, "gcloud", `#!/usr/bin/env bash
 printf 'gcloud %s\n' "$*" >>"${NVOKEN_TEST_COMMAND_LOG}"
+if [[ "$*" == run\ services\ describe*"containers[0].image"* ]]; then
+  printf '%s\n' "${NVOKEN_TEST_CURRENT_IMAGE}"
+  exit 0
+fi
+if [[ "$*" == run\ services\ describe*"nvoken_schema_version"* ]]; then
+  printf '%s\n' "${NVOKEN_TEST_CURRENT_SCHEMA}"
+  exit 0
+fi
 if [[ "${NVOKEN_TEST_FAIL_MIGRATION:-0}" == "1" && "$*" == run\ jobs\ execute* ]]; then
   exit 9
 fi
@@ -186,6 +246,10 @@ exit 0
 		"PATH="+fakeBin+":/usr/bin:/bin",
 		"NVOKEN_TEST_COMMAND_LOG="+logPath,
 		"NVOKEN_TEST_FAIL_MIGRATION="+boolString(failMigration),
+		"NVOKEN_TEST_FAIL_DEPLOY="+boolString(failDeploy),
+		"NVOKEN_TEST_CURRENT_IMAGE="+currentImage,
+		"NVOKEN_TEST_CURRENT_SCHEMA="+currentSchema,
+		"NVOKEN_MIGRATION_MODE="+migrationMode,
 		"TF_VAR_project_id=example-project",
 		"TF_VAR_environment=test",
 		"TF_VAR_image_tag=immutable-test-tag",
@@ -194,7 +258,7 @@ exit 0
 		"NVOKEN_DEPLOY_AUTO_APPROVE=1",
 	)
 	output, err := command.CombinedOutput()
-	if failMigration {
+	if failMigration || failDeploy {
 		if err == nil {
 			t.Fatalf("release succeeded despite migration failure: %s", output)
 		}

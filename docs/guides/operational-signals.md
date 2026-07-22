@@ -17,10 +17,11 @@ sensitive until its shape and bounds have a test.
 ## Startup and liveness
 
 Every successful daemon logs `process_started` with `build_version`, the
-embedded `schema_version`, `process_role`, `execution_mode`, provider and
-callback capability booleans, Cloud Tasks enablement, and `live_event_mode`.
-Local builds report `devel`. The release container injects its immutable image
-tag at build time.
+embedded `schema_version`, `database_schema_version`,
+`minimum_binary_schema_version`, `schema_compatibility`, `process_role`,
+`execution_mode`, provider and callback capability booleans, Cloud Tasks
+enablement, and `live_event_mode`. Local builds report `devel`. The release
+container injects its immutable image tag at build time.
 
 `process_start_failed` identifies the failed `check`, such as
 `configuration`, `database_connectivity`, or `database_schema`, without
@@ -51,7 +52,7 @@ Every result uses `event=diagnostic_check`:
 | --- | --- | --- |
 | `configuration` | The exact serve configuration is valid for the selected role and execution mode. | `invalid_configuration`: compare required environment variables with the deployment guide; do not print their values. |
 | `database_connectivity` | A bounded Postgres connection and ping succeed. | `timeout`, `transport`, or `internal`: check network reachability, credentials, and Postgres availability. |
-| `database_schema` | One clean migration row exactly matches the binary's embedded schema version. | `empty`, `dirty`, `behind`, `ahead`, or `invalid`: stop serving changes and follow the migration guide. Until PRD 019 defines a compatibility window, every ahead schema is unsafe. |
+| `database_schema` | The schema is clean and either exact or a declared `compatible_newer` version whose minimum includes this binary. | `empty`, `dirty`, `behind`, `ahead`, `unknown`, or `invalid`: stop serving changes and follow the migration guide. `ahead` is declared unsafe; `unknown` has no valid compatibility record. |
 | `live_event_redis` | The configured Redis endpoint answers `PING`, or the optional dependency reports `skipped` / `not_configured`. | `timeout`, `transport`, or `internal`: check Memorystore/Redis reachability and TLS configuration. Durable reads remain authoritative. |
 | `cloud_tasks_queue` | The configured queue is readable through Cloud Tasks without creating a task, or the optional dependency reports `skipped` / `not_configured`. | `timeout`, `transport`, or `internal`: check queue existence, API availability, and control-service IAM. Do not delete uncertain tasks. |
 
@@ -62,6 +63,7 @@ such as database connectivity, made the dependent verdict impossible.
 
 | Event | Meaning and useful correlation | First operator check |
 | --- | --- | --- |
+| `upgrade_preflight` | A read-only release check recorded the current and target build/schema pair before migration. | Require `outcome=success`; confirm `ordinary_compatibility_window=true` except for the explicit one-time transition. |
 | `http_request_completed` | One public request completed; use `request_id`, bounded route, method, status, outcome, and latency. | For `server_error`, find `http_request_failed` with the same request ID, then check Postgres and component events. |
 | `http_request_failed` | A handler returned an internal failure without logging its unsafe error text. | Check `error_class`, database diagnosis, then nearby Invocation events. |
 | `invocation_claimed` / `invocation_claim_failed` | An engine acquired work, or its queue/store claim failed. | Correlate `invocation_id` and `lease_attempt`; for failure, check Postgres connectivity. |

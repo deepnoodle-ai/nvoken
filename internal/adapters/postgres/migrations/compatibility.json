@@ -1,0 +1,10 @@
+{
+  "transition_schema_version": 14,
+  "migrations": [
+    {
+      "schema_version": 14,
+      "minimum_binary_schema_version": 14,
+      "classification": "transition"
+    }
+  ]
+}

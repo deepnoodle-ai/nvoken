@@ -66,7 +66,13 @@ func TestDiagnoseReportsEverySchemaVerdictWithoutMutation(t *testing.T) {
 			name:    "ahead",
 			migrate: true,
 			mutate: func(ctx context.Context, pool *pgxpool.Pool) error {
-				_, err := pool.Exec(ctx, "UPDATE nvoken_schema_migrations SET version = $1", expected+1)
+				if _, err := pool.Exec(ctx, "UPDATE nvoken_schema_migrations SET version = $1", expected+1); err != nil {
+					return err
+				}
+				_, err := pool.Exec(ctx, `
+					UPDATE nvoken_schema_compatibility
+					SET schema_version = $1, minimum_binary_schema_version = $1
+				`, expected+1)
 				return err
 			},
 			wantState: postgres.SchemaAhead,

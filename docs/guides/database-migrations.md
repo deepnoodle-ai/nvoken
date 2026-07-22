@@ -11,7 +11,8 @@ DATABASE_URL='postgres://…' go run ./cmd/nvokend migrate
 statements and defaults to `5m`. golang-migrate's pgx/v5 driver pins one
 connection and takes a session-scoped Postgres advisory lock, so concurrent
 release jobs serialize. It records the current version and dirty state; nvoken
-fails if that state is dirty or the database is ahead of the binary.
+fails if that state is dirty or its compatibility declaration is absent or
+unsafe for the binary.
 
 Committed `.up.sql` files are immutable. Fix a released migration by adding a
 new forward migration rather than editing the old file or migrating down.
@@ -19,9 +20,25 @@ new forward migration rather than editing the old file or migrating down.
 Normal `nvokend` or `nvokend serve` startup never runs migrations. On Cloud Run,
 use this command from one release step or Cloud Run Job before shifting service
 traffic; do not make every service replica perform schema work.
-The serve path checks that the schema is present, clean, and at the exact
-version expected by the binary; it exits rather than modifying an empty, dirty,
-older, or newer database.
+The serve path requires a present, clean schema. An exact version passes. A
+newer version passes only when its `nvoken_schema_compatibility` row declares
+the binary's embedded schema version or an older one as its minimum; unknown or
+unsafe newer schemas fail closed.
+
+For an upgrade, the target binary runs `upgrade-preflight` before migration and
+`migrate` repeats the same gate before calling golang-migrate. Both need the
+currently serving build and embedded schema identity:
+
+```bash
+NVOKEN_CURRENT_BUILD_VERSION='CURRENT_BUILD' \
+NVOKEN_CURRENT_SCHEMA_VERSION='CURRENT_SCHEMA' \
+DATABASE_URL='postgres://…' \
+./nvokend-next upgrade-preflight
+```
+
+See [Compatible upgrades and one-release rollback](compatible-upgrades.md) for
+the migration-author rule, one-time transition, expand/contract example, and
+single-daemon procedure.
 
 Use `nvokend diagnose` to report that same read-only compatibility verdict as a
 bounded `database_schema` result before shifting traffic. See
