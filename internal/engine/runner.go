@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
@@ -161,7 +162,9 @@ func (r *Runner) Run(ctx context.Context) error {
 			if err != nil {
 				if ctx.Err() == nil {
 					r.logger.Warn("Invocation claim failed; retrying",
-						"owner", r.owner, "error", err.Error())
+						"event", observability.EventInvocationClaimFailed,
+						"owner", r.owner,
+						"error_class", observability.ErrorClass(err))
 				}
 				claimFailed = true
 				break
@@ -172,6 +175,7 @@ func (r *Runner) Run(ctx context.Context) error {
 			r.inflight.Add(1)
 			workers.Add(1)
 			r.logger.Info("Invocation claimed",
+				"event", observability.EventInvocationClaimed,
 				"invocation_id", claim.Invocation.ID, "owner", claim.Owner,
 				"lease_attempt", claim.Attempt,
 				"queue_age_ms", max(0, time.Since(claim.Invocation.CreatedAt).Milliseconds()))
@@ -227,7 +231,10 @@ func (r *Runner) reap(ctx context.Context) {
 	}
 	if err != nil {
 		if ctx.Err() == nil {
-			r.logger.Warn("Invocation lease scan failed; retrying", "error", err.Error())
+			r.logger.Warn("Invocation lease scan failed; retrying",
+				"event", observability.EventInvocationMaintenanceFailed,
+				"operation", "reap_expired",
+				"error_class", observability.ErrorClass(err))
 		}
 	}
 }
@@ -246,9 +253,11 @@ func logReapedInvocation(logger *slog.Logger, invocation domain.Invocation) {
 		invocation.CurrentIteration,
 	}
 	if invocation.Status == domain.InvocationQueued {
+		fields = append(fields, "event", observability.EventInvocationRecovered)
 		logger.Info("Invocation lease recovered", fields...)
 		return
 	}
+	fields = append(fields, "event", observability.EventInvocationSettled)
 	fields = append(fields, failureLogFields(invocation.Error)...)
 	logger.Warn("Invocation deadline reaped", fields...)
 }
@@ -311,6 +320,8 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 		cancelExecutor()
 		r.logger.Info(
 			"Invocation executor observed stale ownership",
+			"event",
+			observability.EventInvocationLeaseLost,
 			"invocation_id",
 			claim.Invocation.ID,
 			"lease_attempt",
@@ -319,6 +330,10 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 	} else if errors.Is(err, ports.ErrRetryable) && executorCtx.Err() == nil {
 		r.logger.Warn(
 			"Invocation executor requested retry; awaiting lease recovery",
+			"event",
+			observability.EventInvocationExecutionFailed,
+			"error_class",
+			"retryable",
 			"invocation_id",
 			claim.Invocation.ID,
 			"lease_attempt",
@@ -326,13 +341,17 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 		)
 	} else if err != nil && executorCtx.Err() == nil {
 		r.logger.Warn("Invocation executor failed",
+			"event", observability.EventInvocationExecutionFailed,
+			"error_class", observability.ErrorClass(err),
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
-			"error", err.Error())
+		)
 		result = internalFailureResult()
 		hasResult = true
 	}
 	if err == nil && !validResult(result) {
 		r.logger.Warn("Invocation executor returned invalid result",
+			"event", observability.EventInvocationExecutionFailed,
+			"error_class", "invalid_result",
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt)
 		result = internalFailureResult()
 	}
@@ -353,7 +372,7 @@ func (r *Runner) runClaim(executorParent context.Context, claim domain.Invocatio
 
 	if state.settled.Load() {
 		fields := []any{
-			"event", "invocation_settled",
+			"event", observability.EventInvocationSettled,
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
 			"status", result.Status, "execution_latency_ms", time.Since(started).Milliseconds(),
 		}
@@ -435,8 +454,11 @@ func (r *Runner) heartbeat(
 			return
 		}
 		r.logger.Warn("Invocation lease renewal failed; retrying",
+			"event", observability.EventInvocationMaintenanceFailed,
+			"operation", "renew_lease",
+			"error_class", observability.ErrorClass(err),
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
-			"error", err.Error(), "lease_expires_at", leaseExpiresAt)
+			"lease_expires_at", leaseExpiresAt)
 		if !time.Now().UTC().Before(leaseExpiresAt) {
 			r.loseLease(cancelLease, cancelExecutor, claim, state, "renewal failures exhausted lease")
 			return
@@ -478,8 +500,11 @@ func (r *Runner) settleLoop(
 			continue
 		}
 		r.logger.Warn("Invocation settlement failed; retrying",
+			"event", observability.EventInvocationMaintenanceFailed,
+			"operation", "settle",
+			"error_class", observability.ErrorClass(err),
 			"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
-			"error", err.Error())
+		)
 		if !waitFor(ctx, min(r.config.HeartbeatInterval, 100*time.Millisecond)) {
 			return
 		}
@@ -497,6 +522,7 @@ func (r *Runner) loseLease(
 		return
 	}
 	r.logger.Warn("Invocation lease lost; cancelling execution",
+		"event", observability.EventInvocationLeaseLost,
 		"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
 		"reason", reason)
 	cancelLease()

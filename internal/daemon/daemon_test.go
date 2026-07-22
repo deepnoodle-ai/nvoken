@@ -1,13 +1,17 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/postgres"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
 
@@ -145,5 +149,97 @@ func TestRuntimeTopologyRejectsCloudModeWithoutDispatchControl(t *testing.T) {
 	_, err := resolveRuntimeTopology(ProcessRoleCombined, services.InvocationExecutionCloudTasks, false)
 	if err == nil || !strings.Contains(err.Error(), "requires Cloud Tasks") {
 		t.Fatalf("topology error = %v", err)
+	}
+}
+
+func TestProcessStartupIdentityIsSafeAndCompleteForBothRoles(t *testing.T) {
+	expectedSchema, err := postgres.ExpectedSchemaVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cfg := range []Config{
+		{
+			BuildVersion:            "build-combined",
+			ProcessRole:             ProcessRoleCombined,
+			InvocationExecutionMode: services.InvocationExecutionEmbedded,
+			AnthropicAPIKey:         "anthropic-secret",
+			CallbackSigningKey:      "callback-secret",
+			RedisURL:                "rediss://redis.example.test",
+		},
+		{
+			BuildVersion:            "build-executor",
+			ProcessRole:             ProcessRoleExecutor,
+			InvocationExecutionMode: services.InvocationExecutionCloudTasks,
+			OpenAIAPIKey:            "openai-secret",
+		},
+	} {
+		var output bytes.Buffer
+		previous := slog.Default()
+		slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+		logProcessStarted(cfg)
+		slog.SetDefault(previous)
+
+		var entry map[string]any
+		if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
+			t.Fatalf("decode startup log: %v", err)
+		}
+		if entry["event"] != "process_started" || entry["build_version"] != cfg.BuildVersion ||
+			entry["process_role"] != string(cfg.ProcessRole) ||
+			entry["execution_mode"] != string(cfg.InvocationExecutionMode) ||
+			entry["schema_version"] != float64(expectedSchema) {
+			t.Fatalf("startup identity = %#v", entry)
+		}
+		for _, secret := range []string{"anthropic-secret", "openai-secret", "callback-secret", "redis.example.test"} {
+			if strings.Contains(output.String(), secret) {
+				t.Fatalf("startup log contains secret or endpoint %q: %s", secret, output.String())
+			}
+		}
+	}
+}
+
+func TestProcessStartupIdentityDefaultsLocalBuildVersion(t *testing.T) {
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	logProcessStarted(Config{
+		ProcessRole:             ProcessRoleCombined,
+		InvocationExecutionMode: services.InvocationExecutionEmbedded,
+	})
+	slog.SetDefault(previous)
+
+	var entry map[string]any
+	if err := json.Unmarshal(output.Bytes(), &entry); err != nil {
+		t.Fatalf("decode startup log: %v", err)
+	}
+	if entry["build_version"] != "devel" {
+		t.Fatalf("startup identity = %#v, want local devel build", entry)
+	}
+}
+
+func TestDiagnoseReportsUnreachableDatabaseWithoutLeakingConfiguration(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	err := diagnose(context.Background(), Config{
+		DatabaseURL:       "postgres://operator:database-secret@127.0.0.1:1/nvoken",
+		DatabaseMaxConns:  1,
+		DiagnosticTimeout: 100 * time.Millisecond,
+	}, logger)
+	if err == nil {
+		t.Fatal("diagnose succeeded against unreachable database")
+	}
+	logs := output.String()
+	for _, required := range []string{
+		`"component":"configuration","outcome":"success"`,
+		`"component":"database_connectivity","outcome":"failed"`,
+		`"component":"database_schema","outcome":"skipped"`,
+	} {
+		if !strings.Contains(logs, required) {
+			t.Fatalf("diagnostic logs omit %s: %s", required, logs)
+		}
+	}
+	for _, forbidden := range []string{"database-secret", "127.0.0.1", "postgres://"} {
+		if strings.Contains(logs, forbidden) {
+			t.Fatalf("diagnostic logs contain %q: %s", forbidden, logs)
+		}
 	}
 }

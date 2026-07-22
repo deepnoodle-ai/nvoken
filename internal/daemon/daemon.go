@@ -26,6 +26,7 @@ import (
 	dispatchruntime "github.com/deepnoodle-ai/nvoken/internal/dispatch"
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
@@ -38,6 +39,7 @@ const (
 )
 
 type Config struct {
+	BuildVersion string
 	// Port is the listen port for the HTTP API.
 	Port                    string
 	DatabaseURL             string
@@ -57,6 +59,7 @@ type Config struct {
 	PlatformOpenAIAPIKey    string
 	PlatformFundingEnabled  bool
 	ShutdownTimeout         time.Duration
+	DiagnosticTimeout       time.Duration
 	ProcessRole             ProcessRole
 	InvocationExecutionMode services.InvocationExecutionMode
 	Engine                  engine.Config
@@ -151,6 +154,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	pool, err := postgres.OpenPoolWithConfig(ctx, cfg.DatabaseURL, postgres.PoolConfig{MaxConns: cfg.DatabaseMaxConns})
 	if err != nil {
+		logProcessStartFailure("database_connectivity", observability.ErrorClass(err))
 		return fmt.Errorf("open runtime database: %w", err)
 	}
 	closePool := true
@@ -160,6 +164,7 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 	}()
 	if err := postgres.CheckSchema(ctx, pool); err != nil {
+		logProcessStartFailure("database_schema", "incompatible")
 		return fmt.Errorf("check runtime database schema: %w", err)
 	}
 
@@ -194,11 +199,15 @@ func Run(ctx context.Context, cfg Config) error {
 			cfg.RedisURL, cfg.RedisPassword, cfg.RedisCACertificate, cfg.LiveEventBuffer, slog.Default(),
 		)
 		if err != nil {
+			logProcessStartFailure("live_event_fanout", "invalid_configuration")
 			return fmt.Errorf("configure Redis live-event fan-out: %w", err)
 		}
 		defer func() {
 			if err := liveBus.Close(); err != nil {
-				slog.Warn("close live-event fan-out", "error", err)
+				slog.Warn("close live-event fan-out",
+					"event", observability.EventProcessFailed,
+					"component", "live_event_fanout",
+					"error_class", observability.ErrorClass(err))
 			}
 		}()
 	} else {
@@ -247,6 +256,7 @@ func Run(ctx context.Context, cfg Config) error {
 		if err != nil {
 			return fmt.Errorf("configure private executor: %w", err)
 		}
+		logProcessStarted(cfg)
 		joined, err := runComponents(ctx, cfg.ShutdownTimeout, srv, attempts)
 		if !joined {
 			closePool = false
@@ -339,7 +349,10 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 		defer func() {
 			if err := tasks.Close(); err != nil {
-				slog.Warn("close Cloud Tasks client", "error", err)
+				slog.Warn("close Cloud Tasks client",
+					"event", observability.EventProcessFailed,
+					"component", "cloud_tasks_client",
+					"error_class", observability.ErrorClass(err))
 			}
 		}()
 		publisherOwner, err := executionOwner()
@@ -395,6 +408,7 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 		components = append(components, controller)
 	}
+	logProcessStarted(cfg)
 	joined, err := runComponents(ctx, cfg.ShutdownTimeout, components...)
 	if !joined {
 		// An uncooperative component can still hold a pool connection. Do not
@@ -405,6 +419,41 @@ func Run(ctx context.Context, cfg Config) error {
 			"shutdown_timeout_ms", cfg.ShutdownTimeout.Milliseconds())
 	}
 	return err
+}
+
+func logProcessStarted(cfg Config) {
+	version := cfg.BuildVersion
+	if version == "" {
+		version = "devel"
+	}
+	schemaVersion, err := postgres.ExpectedSchemaVersion()
+	if err != nil {
+		logProcessStartFailure("embedded_schema", "invalid_build")
+		return
+	}
+	liveEventMode := "in_process"
+	if cfg.RedisURL != "" {
+		liveEventMode = "redis"
+	}
+	reusableCredentials := cfg.CredentialCipher != nil
+	slog.Info("nvokend process started",
+		"event", observability.EventProcessStarted,
+		"build_version", version,
+		"schema_version", schemaVersion,
+		"process_role", cfg.ProcessRole,
+		"execution_mode", cfg.InvocationExecutionMode,
+		"anthropic_enabled", cfg.AnthropicAPIKey != "" || cfg.PlatformAnthropicAPIKey != "" || reusableCredentials,
+		"openai_enabled", cfg.OpenAIAPIKey != "" || cfg.PlatformOpenAIAPIKey != "" || reusableCredentials,
+		"callback_enabled", cfg.CallbackSigningKey != "",
+		"cloud_tasks_enabled", cfg.CloudTasks.Queue != "",
+		"live_event_mode", liveEventMode)
+}
+
+func logProcessStartFailure(check, errorClass string) {
+	slog.Error("process startup check failed",
+		"event", observability.EventProcessStartFailed,
+		"check", check,
+		"error_class", errorClass)
 }
 
 type inProcessLiveBus struct {

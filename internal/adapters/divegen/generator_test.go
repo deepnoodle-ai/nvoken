@@ -978,6 +978,36 @@ func TestGeneratorRejectsInvalidOutputAndProviderErrors(t *testing.T) {
 	}
 }
 
+func TestClassifiedProviderCallErrorPreservesOnlyBoundedClass(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		want ports.ProviderFailureClass
+	}{
+		{name: "unsupported", err: ports.ErrProviderUnsupported, want: ports.ProviderFailureConfiguration},
+		{name: "throttled", err: providerStatusError{status: 429}, want: ports.ProviderFailureThrottled},
+		{name: "rejected", err: providerStatusError{status: 400}, want: ports.ProviderFailureUpstreamRejected},
+		{name: "outage", err: providerStatusError{status: 503}, want: ports.ProviderFailureUpstreamUnavailable},
+		{name: "timeout", err: context.DeadlineExceeded, want: ports.ProviderFailureTimeoutOrTransport},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := classifiedProviderCallError(test.err)
+			var classified *ports.ProviderCallError
+			if !errors.As(err, &classified) || classified.Class != test.want || !errors.Is(err, ports.ErrGenerationFailed) {
+				t.Fatalf("classified error = %#v, %v", classified, err)
+			}
+			if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "503") {
+				t.Fatalf("provider detail leaked through bounded error: %v", err)
+			}
+		})
+	}
+}
+
+type providerStatusError struct{ status int }
+
+func (e providerStatusError) Error() string   { return "sensitive provider body" }
+func (e providerStatusError) StatusCode() int { return e.status }
+
 func TestGeneratorClassifiesDurableInputConversionSeparately(t *testing.T) {
 	model := &fakeLLM{result: successfulDiveResponse()}
 	generator := New(Config{AnthropicAPIKey: "secret"})

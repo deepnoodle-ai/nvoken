@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
@@ -94,12 +95,12 @@ func (e *GenerationExecutor) Execute(
 		return domain.InvocationExecutionResult{}, fmt.Errorf("load execution spec snapshot: %w", err)
 	}
 	if snapshot.AccountID != claim.Invocation.AccountID {
-		e.logFailure(claim, "invalid_spec_scope", "", "")
+		e.logExecutionFailure(claim, "invalid_spec_scope", "", "")
 		return internalGenerationFailure(), nil
 	}
 	spec, err := decodeInlineSpec(snapshot.Spec)
 	if err != nil {
-		e.logFailure(claim, "invalid_spec", "", "")
+		e.logExecutionFailure(claim, "invalid_spec", "", "")
 		return internalGenerationFailure(), nil
 	}
 
@@ -131,7 +132,7 @@ func (e *GenerationExecutor) Execute(
 	if spec.Output != nil {
 		digest, err := structuredOutputSchemaDigest(spec.Output.Schema)
 		if err != nil || !bytes.Equal(digest, claim.Invocation.OutputSchemaDigest) {
-			e.logFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.Name)
+			e.logExecutionFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.Name)
 			return internalGenerationFailure(), nil
 		}
 		request.StructuredOutput = &domain.StructuredOutputRequest{
@@ -139,7 +140,7 @@ func (e *GenerationExecutor) Execute(
 			SchemaDigest: append([]byte(nil), digest...),
 		}
 	} else if len(claim.Invocation.OutputSchemaDigest) != 0 {
-		e.logFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.Name)
+		e.logExecutionFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.Name)
 		return internalGenerationFailure(), nil
 	}
 	var recovery generationRecovery
@@ -149,7 +150,7 @@ func (e *GenerationExecutor) Execute(
 			if e.claimLost(ctx, claim) {
 				return domain.InvocationExecutionResult{}, ports.ErrLeaseLost
 			}
-			e.logFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.Name)
+			e.logExecutionFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.Name)
 			return internalGenerationFailure(), nil
 		}
 		recovery, err = loadGenerationRecovery(
@@ -164,7 +165,7 @@ func (e *GenerationExecutor) Execute(
 				if e.claimLost(ctx, claim) {
 					return domain.InvocationExecutionResult{}, ports.ErrLeaseLost
 				}
-				e.logFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.Name)
+				e.logExecutionFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.Name)
 				return internalGenerationFailure(), nil
 			}
 			return domain.InvocationExecutionResult{}, fmt.Errorf("load generation recovery: %w", err)
@@ -172,6 +173,8 @@ func (e *GenerationExecutor) Execute(
 		request.Resume = recovery.Resume
 		e.logger.Info(
 			"Invocation recovery prefix loaded",
+			"event",
+			observability.EventInvocationRecoveryLoaded,
 			"invocation_id",
 			claim.Invocation.ID,
 			"lease_attempt",
@@ -193,7 +196,7 @@ func (e *GenerationExecutor) Execute(
 		if claim.Invocation.CurrentCheckpointSequence > 0 {
 			class = "recovery_invalid"
 		}
-		e.logFailure(claim, class, spec.Model.Provider, spec.Model.Name)
+		e.logExecutionFailure(claim, class, spec.Model.Provider, spec.Model.Name)
 		return internalGenerationFailure(), nil
 	}
 	request.Messages = messages
@@ -267,7 +270,14 @@ func (e *GenerationExecutor) Execute(
 			return domain.InvocationExecutionResult{}, err
 		}
 		if errors.Is(err, ports.ErrCredentialUnavailable) {
-			e.logFailure(claim, class, request.Provider, request.Model)
+			e.logProviderFailure(
+				claim,
+				class,
+				request.Provider,
+				request.Model,
+				time.Since(providerStarted),
+				false,
+			)
 			if !response.CredentialSource.Valid() && recovery.Provenance.CredentialSource != "" {
 				response.CredentialSource = domain.ProviderCredentialSource(recovery.Provenance.CredentialSource)
 				response.ProviderCredentialID = recovery.Provenance.ProviderCredentialID
@@ -277,7 +287,7 @@ func (e *GenerationExecutor) Execute(
 		}
 		if errors.Is(err, ports.ErrGenerationInputInvalid) ||
 			errors.Is(err, ports.ErrGenerationRecoveryInvalid) {
-			e.logFailure(claim, class, request.Provider, request.Model)
+			e.logExecutionFailure(claim, class, request.Provider, request.Model)
 			return internalGenerationFailure(), nil
 		}
 		return providerGenerationFailure(), nil
@@ -312,14 +322,14 @@ func (e *GenerationExecutor) Execute(
 			if providerCalled {
 				e.logProviderFailure(
 					claim,
-					"invalid_provider_response",
+					string(ports.ProviderFailureInvalidResponse),
 					request.Provider,
 					request.Model,
 					time.Since(providerStarted),
 					false,
 				)
 			} else {
-				e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
+				e.logExecutionFailure(claim, string(ports.ProviderFailureInvalidResponse), request.Provider, request.Model)
 			}
 			return providerGenerationFailure(), nil
 		}
@@ -366,14 +376,14 @@ func (e *GenerationExecutor) Execute(
 		if providerCalled {
 			e.logProviderFailure(
 				claim,
-				"invalid_provider_response",
+				string(ports.ProviderFailureInvalidResponse),
 				request.Provider,
 				request.Model,
 				time.Since(providerStarted),
 				false,
 			)
 		} else {
-			e.logFailure(claim, "invalid_provider_response", request.Provider, request.Model)
+			e.logExecutionFailure(claim, string(ports.ProviderFailureInvalidResponse), request.Provider, request.Model)
 		}
 		return providerGenerationFailure(), nil
 	}
@@ -442,10 +452,13 @@ func (e *GenerationExecutor) generate(
 	return streaming.GenerateStream(ctx, request, emit)
 }
 
-func (e *GenerationExecutor) logFailure(claim domain.InvocationClaim, class, provider, model string) {
-	e.logger.Warn("Model generation failed",
+func (e *GenerationExecutor) logExecutionFailure(claim domain.InvocationClaim, class, provider, model string) {
+	e.logger.Warn("Invocation generation failed",
+		"event", observability.EventInvocationExecutionFailed,
+		"outcome", observability.OutcomeFailed,
+		"error_class", class,
 		"invocation_id", claim.Invocation.ID, "lease_attempt", claim.Attempt,
-		"class", class, "provider", provider, "requested_model", model)
+		"provider", provider, "requested_model", model)
 }
 
 func (e *GenerationExecutor) logProviderSuccess(
@@ -459,8 +472,10 @@ func (e *GenerationExecutor) logProviderSuccess(
 	e.logger.Info(
 		"Provider generation completed",
 		"event",
-		"provider_generation",
+		observability.EventProviderGeneration,
 		"outcome",
+		observability.OutcomeSuccess,
+		"outcome_class",
 		"success",
 		"invocation_id",
 		claim.Invocation.ID,
@@ -498,22 +513,22 @@ func (e *GenerationExecutor) logProviderFailure(
 	interrupted bool,
 ) {
 	message := "Provider generation failed"
-	outcome := "failed"
+	outcome := observability.OutcomeFailed
 	if interrupted {
 		message = "Provider generation canceled"
-		outcome = "canceled"
+		outcome = observability.OutcomeCanceled
 	}
 	e.logger.Warn(
 		message,
 		"event",
-		"provider_generation",
+		observability.EventProviderGeneration,
 		"outcome",
 		outcome,
 		"invocation_id",
 		claim.Invocation.ID,
 		"lease_attempt",
 		claim.Attempt,
-		"class",
+		"outcome_class",
 		class,
 		"provider",
 		provider,
@@ -902,27 +917,31 @@ func validateModelProvenance(provenance domain.ModelProvenance) error {
 }
 
 func generationErrorClass(err error) string {
+	var providerError *ports.ProviderCallError
+	if errors.As(err, &providerError) && providerError.Class != "" {
+		return string(providerError.Class)
+	}
 	switch {
 	case errors.Is(err, context.Canceled):
-		return "provider_canceled"
+		return "canceled"
 	case errors.Is(err, context.DeadlineExceeded):
-		return "provider_deadline_exceeded"
+		return string(ports.ProviderFailureTimeoutOrTransport)
 	case errors.Is(err, ports.ErrCredentialUnavailable):
-		return "credential_unavailable"
+		return string(ports.ProviderFailureConfiguration)
 	case errors.Is(err, ports.ErrRetryable):
 		return "retryable_infrastructure_failure"
 	case errors.Is(err, ports.ErrProviderUnsupported):
-		return "provider_unsupported"
+		return string(ports.ProviderFailureConfiguration)
 	case errors.Is(err, ports.ErrProviderKeyMissing):
-		return "provider_key_missing"
+		return string(ports.ProviderFailureConfiguration)
 	case errors.Is(err, ports.ErrModelResponseInvalid):
-		return "invalid_provider_response"
+		return string(ports.ProviderFailureInvalidResponse)
 	case errors.Is(err, ports.ErrGenerationInputInvalid):
 		return "invalid_generation_input"
 	case errors.Is(err, ports.ErrGenerationRecoveryInvalid):
 		return "recovery_invalid"
 	default:
-		return "provider_call_failed"
+		return string(ports.ProviderFailureUnknown)
 	}
 }
 

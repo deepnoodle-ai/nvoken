@@ -23,6 +23,11 @@ The serve path checks that the schema is present, clean, and at the exact
 version expected by the binary; it exits rather than modifying an empty, dirty,
 older, or newer database.
 
+Use `nvokend diagnose` to report that same read-only compatibility verdict as a
+bounded `database_schema` result before shifting traffic. See
+[Operational signals and diagnostics](operational-signals.md) for the command
+and result classes.
+
 The [Google Cloud paved deployment](../../deploy/google-cloud/README.md) runs the
 same immutable image as a single-task migration Job. Its release script updates
 and executes that Job to success before the full Terraform apply can move the

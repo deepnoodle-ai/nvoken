@@ -34,6 +34,28 @@ var (
 	ErrCallbackDeliveryLeaseLost  = errors.New("callback delivery lease lost")
 )
 
+type ProviderFailureClass string
+
+const (
+	ProviderFailureConfiguration       ProviderFailureClass = "configuration"
+	ProviderFailureThrottled           ProviderFailureClass = "throttled"
+	ProviderFailureUpstreamRejected    ProviderFailureClass = "upstream_rejected"
+	ProviderFailureUpstreamUnavailable ProviderFailureClass = "upstream_unavailable"
+	ProviderFailureTimeoutOrTransport  ProviderFailureClass = "timeout_or_transport"
+	ProviderFailureInvalidResponse     ProviderFailureClass = "invalid_response"
+	ProviderFailureUnknown             ProviderFailureClass = "unknown"
+)
+
+// ProviderCallError preserves a bounded provider failure class after an
+// adapter discards the unsafe upstream error body.
+type ProviderCallError struct {
+	Class ProviderFailureClass
+}
+
+func (e *ProviderCallError) Error() string { return "model provider call failed" }
+
+func (e *ProviderCallError) Unwrap() error { return ErrGenerationFailed }
+
 // Clock makes persisted timestamps deterministic in services and tests.
 type Clock interface {
 	Now() time.Time

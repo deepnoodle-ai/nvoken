@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
@@ -283,6 +284,7 @@ func (h *handler) writeStreamResync(w http.ResponseWriter, requestID, sessionID 
 	})
 	if err == nil {
 		h.logger.Warn("Session transcript stream resync",
+			"event", observability.EventStreamResync,
 			"request_id", requestID, "session_id", sessionID, "reason", "live_delivery_gap")
 	}
 	return err
@@ -295,9 +297,14 @@ func (h *handler) endStream(w http.ResponseWriter, sessionID, cursor, reason str
 }
 
 func (h *handler) logStreamClose(requestID, sessionID, reason string, err error) {
-	arguments := []any{"request_id", requestID, "session_id", sessionID, "reason", reason}
+	arguments := []any{
+		"event", observability.EventStreamClosed,
+		"request_id", requestID,
+		"session_id", sessionID,
+		"reason", reason,
+	}
 	if err != nil {
-		arguments = append(arguments, "error", err)
+		arguments = append(arguments, "error_class", observability.ErrorClass(err))
 		h.logger.Warn("Session transcript stream closed", arguments...)
 		return
 	}

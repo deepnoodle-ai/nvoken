@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
@@ -72,7 +73,7 @@ func newHandler(attempts AttemptService, logger *slog.Logger, attemptTimeout tim
 		r.Body = http.MaxBytesReader(w, r.Body, 0)
 		if _, err := io.ReadAll(r.Body); err != nil {
 			logger.Warn("ignored malformed execution dispatch delivery",
-				"event", "dispatch_attempt_decided", "dispatch_id", r.PathValue("dispatch_id"),
+				"event", observability.EventDispatchAttemptDecided, "dispatch_id", r.PathValue("dispatch_id"),
 				"handler_outcome", "poison_body")
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -88,14 +89,15 @@ func newHandler(attempts AttemptService, logger *slog.Logger, attemptTimeout tim
 				retryReason = "durable_decision_pending"
 			}
 			logger.Error("execution dispatch attempt undecided",
-				"event", "dispatch_attempt_retry", "dispatch_id", r.PathValue("dispatch_id"),
-				"handler_outcome", "retry", "retry_reason", retryReason, "error", err)
+				"event", observability.EventDispatchAttemptRetry, "dispatch_id", r.PathValue("dispatch_id"),
+				"handler_outcome", "retry", "retry_reason", retryReason,
+				"error_class", observability.ErrorClass(err))
 			w.Header().Set("Retry-After", "1")
 			http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		logger.Info("execution dispatch attempt decided",
-			"event", "dispatch_attempt_decided",
+			"event", observability.EventDispatchAttemptDecided,
 			"dispatch_id", r.PathValue("dispatch_id"), "handler_outcome", outcome)
 		w.WriteHeader(http.StatusNoContent)
 	})

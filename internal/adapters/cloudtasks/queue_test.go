@@ -61,6 +61,20 @@ func TestCreateTaskAlreadyExistsAndGetNotFoundConverge(t *testing.T) {
 	}
 }
 
+func TestCheckReadsQueueWithoutCreatingTask(t *testing.T) {
+	client := &fakeClient{}
+	queue, err := newWithClient(testConfig(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := queue.Check(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if client.checkedQueue != testConfig().Queue || client.created != nil {
+		t.Fatalf("check queue = %q, created = %#v", client.checkedQueue, client.created)
+	}
+}
+
 func testConfig() Config {
 	return Config{
 		Queue:              "projects/test/locations/us-central1/queues/execution",
@@ -72,9 +86,10 @@ func testConfig() Config {
 }
 
 type fakeClient struct {
-	created   *cloudtaskspb.CreateTaskRequest
-	createErr error
-	getErr    error
+	created      *cloudtaskspb.CreateTaskRequest
+	checkedQueue string
+	createErr    error
+	getErr       error
 }
 
 func (c *fakeClient) CreateTask(_ context.Context, request *cloudtaskspb.CreateTaskRequest, _ ...gax.CallOption) (*cloudtaskspb.Task, error) {
@@ -90,6 +105,14 @@ func (c *fakeClient) GetTask(_ context.Context, request *cloudtaskspb.GetTaskReq
 		return nil, c.getErr
 	}
 	return &cloudtaskspb.Task{Name: request.Name}, nil
+}
+
+func (c *fakeClient) GetQueue(_ context.Context, request *cloudtaskspb.GetQueueRequest, _ ...gax.CallOption) (*cloudtaskspb.Queue, error) {
+	c.checkedQueue = request.Name
+	if c.getErr != nil {
+		return nil, c.getErr
+	}
+	return &cloudtaskspb.Queue{Name: request.Name}, nil
 }
 
 func (c *fakeClient) Close() error { return nil }

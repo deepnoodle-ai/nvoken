@@ -44,6 +44,7 @@ type config struct {
 	PlatformOpenAIAPIKey      string        `env:"PLATFORM_OPENAI_API_KEY"`
 	PlatformFundingEnabled    bool          `env:"PLATFORM_FUNDING_ENABLED" envDefault:"false"`
 	ShutdownTimeout           time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"40s"`
+	DiagnosticTimeout         time.Duration `env:"DIAGNOSTIC_TIMEOUT" envDefault:"15s"`
 	ExecutorAttemptTimeout    time.Duration `env:"EXECUTOR_ATTEMPT_TIMEOUT" envDefault:"29m55s"`
 	RedisURL                  string        `env:"REDIS_URL"`
 	RedisPassword             string        `env:"REDIS_PASSWORD"`
@@ -174,6 +175,9 @@ func loadDaemonConfig() (daemon.Config, error) {
 	}
 	if cfg.ShutdownTimeout <= 0 {
 		return daemon.Config{}, fmt.Errorf("serve: SHUTDOWN_TIMEOUT must be positive")
+	}
+	if cfg.DiagnosticTimeout <= 0 || cfg.DiagnosticTimeout > 5*time.Minute {
+		return daemon.Config{}, fmt.Errorf("serve: DIAGNOSTIC_TIMEOUT must be positive and at most 5m")
 	}
 	if cfg.ShutdownTimeout <= time.Second {
 		return daemon.Config{}, fmt.Errorf("serve: SHUTDOWN_TIMEOUT must exceed 1s")
@@ -368,6 +372,7 @@ func loadDaemonConfig() (daemon.Config, error) {
 		PlatformOpenAIAPIKey:    cfg.PlatformOpenAIAPIKey,
 		PlatformFundingEnabled:  cfg.PlatformFundingEnabled,
 		ShutdownTimeout:         cfg.ShutdownTimeout,
+		DiagnosticTimeout:       cfg.DiagnosticTimeout,
 		Engine:                  engineConfig,
 		Budgets:                 budgetPolicy,
 		Dispatch:                dispatchConfig,

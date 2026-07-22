@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
@@ -762,14 +763,20 @@ func (h *handler) writeError(w http.ResponseWriter, requestID string, err error)
 			status = http.StatusInternalServerError
 		}
 		if status == http.StatusInternalServerError {
-			h.logger.Error("runtime request failed", "request_id", requestID, "error", err)
+			h.logger.Error("runtime request failed",
+				"event", observability.EventHTTPRequestFailed,
+				"request_id", requestID,
+				"error_class", observability.ErrorClass(err))
 		}
 	} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		status = http.StatusServiceUnavailable
 		response.Code = "unavailable"
 		response.Message = "The service is temporarily unavailable."
 	} else {
-		h.logger.Error("runtime request failed", "request_id", requestID, "error", err)
+		h.logger.Error("runtime request failed",
+			"event", observability.EventHTTPRequestFailed,
+			"request_id", requestID,
+			"error_class", observability.ErrorClass(err))
 	}
 	writeJSON(w, status, response)
 }
@@ -1106,7 +1113,15 @@ func (h *handler) logRequests(next http.Handler) http.Handler {
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		request := r.WithContext(ctx)
 		next.ServeHTTP(recorder, request)
+		outcome := observability.OutcomeSuccess
+		if recorder.status >= http.StatusInternalServerError {
+			outcome = observability.OutcomeServerError
+		} else if recorder.status >= http.StatusBadRequest {
+			outcome = observability.OutcomeClientError
+		}
 		h.logger.Info("http request",
+			"event", observability.EventHTTPRequest,
+			"outcome", outcome,
 			"request_id", requestID,
 			"method", r.Method,
 			"route", request.Pattern,

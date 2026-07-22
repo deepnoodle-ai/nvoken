@@ -17,6 +17,8 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 )
 
 const migrationTable = "nvoken_schema_migrations"
@@ -99,10 +101,16 @@ func (m *Migrator) Apply(ctx context.Context) error {
 	defer func() {
 		sourceErr, databaseErr := runner.Close()
 		if sourceErr != nil {
-			m.logger.Warn("close migration source", "error", sourceErr)
+			m.logger.Warn("close migration source",
+				"event", observability.EventProcessFailed,
+				"component", "migration_source",
+				"error_class", observability.ErrorClass(sourceErr))
 		}
 		if databaseErr != nil {
-			m.logger.Warn("close migration database", "error", databaseErr)
+			m.logger.Warn("close migration database",
+				"event", observability.EventProcessFailed,
+				"component", "migration_database",
+				"error_class", observability.ErrorClass(databaseErr))
 		}
 	}()
 

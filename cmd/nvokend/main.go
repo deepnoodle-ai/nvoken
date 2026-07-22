@@ -9,7 +9,10 @@ import (
 	"syscall"
 
 	"github.com/deepnoodle-ai/nvoken/internal/daemon"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 )
+
+var buildVersion = "devel"
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -19,7 +22,9 @@ func main() {
 	slog.SetDefault(logger)
 
 	if err := run(os.Args[1:]); err != nil {
-		logger.Error("fatal error", "error", err)
+		logger.Error("fatal error",
+			"event", observability.EventProcessFailed,
+			"error_class", observability.ErrorClass(err))
 		os.Exit(1)
 	}
 }
@@ -31,9 +36,27 @@ func run(args []string) error {
 	if len(args) == 0 || (len(args) == 1 && args[0] == "serve") {
 		cfg, err := loadDaemonConfig()
 		if err != nil {
+			slog.Error("process startup check failed",
+				"event", observability.EventProcessStartFailed,
+				"check", "configuration",
+				"error_class", "invalid_configuration")
 			return err
 		}
+		cfg.BuildVersion = buildVersion
 		return daemon.Run(ctx, cfg)
+	}
+	if len(args) == 1 && args[0] == "diagnose" {
+		cfg, err := loadDaemonConfig()
+		if err != nil {
+			slog.Error("diagnostic check failed",
+				"event", observability.EventDiagnosticCheck,
+				"component", "configuration",
+				"outcome", observability.OutcomeFailed,
+				"error_class", "invalid_configuration")
+			return fmt.Errorf("diagnostic configuration check failed")
+		}
+		cfg.BuildVersion = buildVersion
+		return daemon.Diagnose(ctx, cfg)
 	}
 	if len(args) == 1 && args[0] == "migrate" {
 		cfg, err := loadMigrationConfig()
@@ -56,7 +79,7 @@ func run(args []string) error {
 			"dispatch_kind", result.Dispatch.Kind, "dispatch_status", result.Dispatch.Status)
 		return nil
 	}
-	return fmt.Errorf("usage: nvokend [serve|migrate|dispatch-smoke]")
+	return fmt.Errorf("usage: nvokend [serve|diagnose|migrate|dispatch-smoke]")
 }
 
 func cloudLoggingReplaceAttr(groups []string, a slog.Attr) slog.Attr {

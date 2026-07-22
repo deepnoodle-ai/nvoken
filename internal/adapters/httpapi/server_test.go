@@ -143,13 +143,19 @@ func (f *fakeRuntime) GetSessionTranscriptStreamState(context.Context, domain.Ru
 }
 
 func TestHealthIsPublic(t *testing.T) {
+	var logs bytes.Buffer
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
 
-	testHandler(nil, nil, io.Discard).ServeHTTP(recorder, request)
+	testHandler(nil, nil, &logs).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK || recorder.Body.String() != "ok" {
 		t.Fatalf("GET /health = %d %q", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(logs.String(), "event=http_request_completed") ||
+		!strings.Contains(logs.String(), "outcome=success") ||
+		!strings.Contains(logs.String(), "route=/health") {
+		t.Fatalf("health request log = %s", logs.String())
 	}
 }
 

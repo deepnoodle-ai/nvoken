@@ -581,6 +581,10 @@ func TestRuntimeAdmissionCancellationWhileWaitingForSessionLockRollsBack(t *test
 
 func TestCheckSchemaNeverMigratesServeDatabase(t *testing.T) {
 	pool, _ := testDatabase(t, false)
+	emptyStatus, err := InspectSchema(context.Background(), pool)
+	if err != nil || emptyStatus.State != SchemaEmpty {
+		t.Fatalf("empty schema status = %#v, error = %v", emptyStatus, err)
+	}
 	if err := CheckSchema(context.Background(), pool); err == nil {
 		t.Fatal("empty schema passed compatibility check")
 	}
@@ -593,6 +597,10 @@ func TestCheckSchemaNeverMigratesServeDatabase(t *testing.T) {
 	}
 
 	migratedPool, _ := testDatabase(t, true)
+	compatibleStatus, err := InspectSchema(context.Background(), migratedPool)
+	if err != nil || !compatibleStatus.Compatible() {
+		t.Fatalf("compatible schema status = %#v, error = %v", compatibleStatus, err)
+	}
 	if err := CheckSchema(context.Background(), migratedPool); err != nil {
 		t.Fatalf("clean schema check: %v", err)
 	}
@@ -602,10 +610,34 @@ func TestCheckSchemaNeverMigratesServeDatabase(t *testing.T) {
 	if err := CheckSchema(context.Background(), migratedPool); err == nil {
 		t.Fatal("dirty schema passed compatibility check")
 	}
+	dirtyStatus, err := InspectSchema(context.Background(), migratedPool)
+	if err != nil || dirtyStatus.State != SchemaDirty {
+		t.Fatalf("dirty schema status = %#v, error = %v", dirtyStatus, err)
+	}
+
+	olderPool, _ := testDatabase(t, true)
+	expected, err := ExpectedSchemaVersion()
+	if err != nil {
+		t.Fatalf("expected schema version: %v", err)
+	}
+	if _, err := olderPool.Exec(context.Background(), "UPDATE nvoken_schema_migrations SET version = $1", expected-1); err != nil {
+		t.Fatalf("mark older: %v", err)
+	}
+	olderStatus, err := InspectSchema(context.Background(), olderPool)
+	if err != nil || olderStatus.State != SchemaBehind {
+		t.Fatalf("older schema status = %#v, error = %v", olderStatus, err)
+	}
+	if err := CheckSchema(context.Background(), olderPool); err == nil {
+		t.Fatal("older schema passed compatibility check")
+	}
 
 	newerPool, _ := testDatabase(t, true)
 	if _, err := newerPool.Exec(context.Background(), "UPDATE nvoken_schema_migrations SET version = 999"); err != nil {
 		t.Fatalf("mark newer: %v", err)
+	}
+	newerStatus, err := InspectSchema(context.Background(), newerPool)
+	if err != nil || newerStatus.State != SchemaAhead {
+		t.Fatalf("newer schema status = %#v, error = %v", newerStatus, err)
 	}
 	if err := CheckSchema(context.Background(), newerPool); err == nil {
 		t.Fatal("newer schema passed compatibility check")

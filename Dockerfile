@@ -2,6 +2,7 @@ FROM golang:1.26.2-bookworm AS build
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
+ARG NVOKEN_BUILD_VERSION=devel
 
 WORKDIR /src
 
@@ -10,7 +11,7 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags="-s -w" -o /out/nvokend ./cmd/nvokend
+    go build -trimpath -ldflags="-s -w -X main.buildVersion=${NVOKEN_BUILD_VERSION}" -o /out/nvokend ./cmd/nvokend
 
 FROM gcr.io/distroless/static-debian12:nonroot
 

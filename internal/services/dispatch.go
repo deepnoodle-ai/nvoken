@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
@@ -310,9 +311,9 @@ func (s *DispatchService) PublishClaim(ctx context.Context, tasks ports.Executio
 			return fmt.Errorf("publish task failed (%v) and return to pending failed: %w", createErr, returnErr)
 		}
 		s.logger.Warn("execution dispatch publication failed",
-			"event", "dispatch_publish_failure", "dispatch_id", claim.Dispatch.ID,
+			"event", observability.EventDispatchPublishFailed, "dispatch_id", claim.Dispatch.ID,
 			"dispatch_kind", claim.Dispatch.Kind, "publish_attempts", claim.Dispatch.PublishAttempts,
-			"error", message)
+			"error_class", observability.ErrorClass(createErr))
 		return createErr
 	}
 	_, err := s.repository.MarkExecutionDispatchPublished(ctx, claim.Dispatch.ID, claim.Owner, claim.Attempt, taskName, s.clock.Now())
@@ -565,9 +566,9 @@ type agedDispatchSummary struct {
 func summarizeAgedDispatches(items []domain.ExecutionDispatch) []agedDispatchSummary {
 	byEvent := make(map[string]*agedDispatchSummary, 2)
 	for _, dispatch := range items {
-		event := "dispatch_aged_pending"
+		event := observability.EventDispatchAgedPending
 		if dispatch.Status == domain.ExecutionDispatchPublished {
-			event = "dispatch_stale_published"
+			event = observability.EventDispatchStalePublished
 		}
 		summary := byEvent[event]
 		if summary == nil {

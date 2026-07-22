@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
@@ -142,7 +143,7 @@ func (s *CallbackDeliveryService) ClaimNext(
 	s.logger.Info(
 		"Callback delivery claimed",
 		"event",
-		"callback_delivery_claimed",
+		observability.EventCallbackClaimed,
 		"delivery_id",
 		delivery.ID,
 		"tool_call_id",
@@ -436,7 +437,7 @@ func (s *CallbackDeliveryService) retryClaim(
 		s.logger.Warn(
 			"Callback delivery scheduled for retry",
 			"event",
-			"callback_delivery_retry",
+			observability.EventCallbackRetry,
 			"delivery_id",
 			claim.Delivery.ID,
 			"tool_call_id",
@@ -475,7 +476,7 @@ func (s *CallbackDeliveryService) abandonClaim(
 		s.logger.Info(
 			"Callback delivery abandoned",
 			"event",
-			"callback_delivery_abandoned",
+			observability.EventCallbackAbandoned,
 			"delivery_id",
 			claim.Delivery.ID,
 			"tool_call_id",
@@ -741,7 +742,7 @@ func (s *CallbackDeliveryService) settleClaim(
 	s.logger.Info(
 		"Callback delivery settled",
 		"event",
-		"callback_delivery_settled",
+		observability.EventCallbackSettled,
 		"delivery_id",
 		claim.Delivery.ID,
 		"tool_call_id",
@@ -765,7 +766,7 @@ func (s *CallbackDeliveryService) logStaleClaim(
 	s.logger.Info(
 		"Callback delivery fence is stale",
 		"event",
-		"callback_delivery_stale",
+		observability.EventCallbackStale,
 		"delivery_id",
 		claim.Delivery.ID,
 		"tool_call_id",
