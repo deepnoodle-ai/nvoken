@@ -37,6 +37,8 @@ go.work.sum
 # SDK build output and local environments
 sdk/typescript/node_modules/
 sdk/typescript/dist/
+examples/typescript-chat/node_modules/
+examples/typescript-chat/dist/
 sdk/python/.venv/
 sdk/python/.pytest_cache/
 **/__pycache__/
