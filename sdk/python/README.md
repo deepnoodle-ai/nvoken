@@ -10,4 +10,5 @@ NVOKEN_BASE_URL=http://localhost:8080 NVOKEN_API_KEY=... \
 ```
 
 The async facade provides durable handles, replay-safe retries, typed errors,
-cursor iterators, resumable SSE, and callback verification.
+cursor iterators, resumable SSE, composed result reads (`result`,
+`list_messages`, `text`), and callback verification.

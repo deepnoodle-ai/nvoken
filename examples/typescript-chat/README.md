@@ -2,7 +2,8 @@
 
 This small command-line app uses the public `@deepnoodle/nvoken` package. It
 creates one durable Session, sends each line as a new Invocation, waits for the
-turn to finish, and reads the assistant reply from canonical Session messages.
+turn to finish, and reads the assistant reply from the composed Invocation
+result.
 
 For the complete first-time path—including official Homebrew binaries,
 disposable PostgreSQL, local credentials, and a cross-process Session proof—use
