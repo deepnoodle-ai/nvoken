@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
@@ -357,11 +358,11 @@ func (s *RuntimeService) SubmitClientToolResults(
 			deduplicated++
 		}
 	}
-	event := "client_tool_result_partial"
+	event := observability.EventClientToolResultPartial
 	if result.Status == domain.InvocationQueued {
-		event = "client_tool_resume_queued"
+		event = observability.EventClientToolResumeQueued
 	} else if deduplicated == len(result.Results) {
-		event = "client_tool_result_deduplicated"
+		event = observability.EventClientToolResultDeduplicated
 	}
 	s.logger.Info(
 		"Client tool results accepted",

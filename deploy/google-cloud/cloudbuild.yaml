@@ -1,6 +1,6 @@
 steps:
   - name: gcr.io/cloud-builders/docker
-    args: ["build", "--platform", "linux/amd64", "--tag", "${_IMAGE}", "."]
+    args: ["build", "--platform", "linux/amd64", "--build-arg", "NVOKEN_BUILD_VERSION=${_BUILD_VERSION}", "--tag", "${_IMAGE}", "."]
 
 images:
   - "${_IMAGE}"

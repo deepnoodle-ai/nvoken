@@ -83,7 +83,7 @@ gcloud builds submit "${nvoken_repo_root}" \
   --config="${nvoken_deploy_dir}/cloudbuild.yaml" \
   --service-account="${nvoken_build_service_account}" \
   --gcs-source-staging-dir="gs://${nvoken_build_source_bucket}/source" \
-  --substitutions="_IMAGE=${nvoken_image}"
+  --substitutions="_IMAGE=${nvoken_image},_BUILD_VERSION=${TF_VAR_image_tag}"
 
 # Update only the release job and its prerequisites. The serving revision still
 # points at the prior image until this exact image has migrated successfully.

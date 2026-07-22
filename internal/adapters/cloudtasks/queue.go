@@ -48,6 +48,7 @@ func ValidateConfig(cfg Config) error {
 type client interface {
 	CreateTask(context.Context, *cloudtaskspb.CreateTaskRequest, ...gax.CallOption) (*cloudtaskspb.Task, error)
 	GetTask(context.Context, *cloudtaskspb.GetTaskRequest, ...gax.CallOption) (*cloudtaskspb.Task, error)
+	GetQueue(context.Context, *cloudtaskspb.GetQueueRequest, ...gax.CallOption) (*cloudtaskspb.Queue, error)
 	Close() error
 }
 
@@ -126,6 +127,19 @@ func (q *Queue) TaskExists(ctx context.Context, taskName string) (bool, error) {
 		return false, fmt.Errorf("get Cloud Task: %w", err)
 	}
 	return true, nil
+}
+
+// Check verifies that the configured queue is readable without creating a
+// task or changing queue state.
+func (q *Queue) Check(ctx context.Context) error {
+	queue, err := q.client.GetQueue(ctx, &cloudtaskspb.GetQueueRequest{Name: q.config.Queue})
+	if err != nil {
+		return fmt.Errorf("get Cloud Tasks queue: %w", err)
+	}
+	if queue.GetName() != q.config.Queue {
+		return fmt.Errorf("Cloud Tasks returned an unexpected queue")
+	}
+	return nil
 }
 
 func (q *Queue) Close() error {

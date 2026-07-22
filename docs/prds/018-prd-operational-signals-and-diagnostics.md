@@ -1,6 +1,6 @@
 # Add portable operational signals and diagnostics
 
-**Status:** Draft
+**Status:** Implemented
 **Sequence:** 018
 **Depends on:** `017-prd-production-readiness-profiles.md`
 
@@ -74,19 +74,19 @@ health polling; an operator console.
 
 ## Acceptance
 
-- [ ] **A1 (R1, R2):** Tests capture representative success, retry, recovery,
+- [x] **A1 (R1, R2):** Tests capture representative success, retry, recovery,
   provider failure, and callback failure logs and prove stable events, bounded
   classes, useful error evidence, and absence of sensitive content.
-- [ ] **A2 (R3):** Combined and executor startup tests emit the correct role,
+- [x] **A2 (R3):** Combined and executor startup tests emit the correct role,
   mode, schema, version, and enabled-capability fields; invalid configuration
   exits with one attributable failure and no secret.
-- [ ] **A3 (R4):** Against healthy, unreachable, empty, dirty, behind, and ahead
+- [x] **A3 (R4):** Against healthy, unreachable, empty, dirty, behind, and ahead
   Postgres states, the diagnostic command exits zero only for the healthy
   compatible case and nonzero for each failed check, without writes. Once PRD
   019 lands, an ahead schema is reported as compatible or unsafe from its
   declared compatibility record; unknown ahead schemas fail. `/health` remains
   fast and independent of those dependency states after the process has started.
-- [ ] **A4 (R5):** An operator can use only the event catalog and captured logs
+- [x] **A4 (R5):** An operator can use only the event catalog and captured logs
   to classify one Invocation recovery, provider, callback, dispatch, live-event,
   and database incident without inspecting source code.
 

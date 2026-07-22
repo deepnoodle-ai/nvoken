@@ -29,6 +29,9 @@ func TestReleaseOrdersMigrationBeforeServiceApply(t *testing.T) {
 	if strings.Contains(log, "output -raw region") {
 		t.Fatalf("release queried an output that is absent after a first targeted apply:\n%s", log)
 	}
+	if !strings.Contains(log, "_BUILD_VERSION=immutable-test-tag") {
+		t.Fatalf("release did not inject the immutable build version:\n%s", log)
+	}
 }
 
 func TestBootstrapStateCreatesAndHardensMissingBucket(t *testing.T) {
@@ -123,6 +126,9 @@ func TestCloudBuildPinsLinuxAMD64WithoutBuildKitOnlyDockerfileArgs(t *testing.T)
 	if !strings.Contains(string(buildConfig), `"--platform", "linux/amd64"`) {
 		t.Fatal("Cloud Build must explicitly produce the paved linux/amd64 image")
 	}
+	if !strings.Contains(string(buildConfig), `NVOKEN_BUILD_VERSION=${_BUILD_VERSION}`) {
+		t.Fatal("Cloud Build must pass the release identifier to the Docker build")
+	}
 
 	dockerfile, err := os.ReadFile(filepath.Join(repoRoot(t), "Dockerfile"))
 	if err != nil {
@@ -130,6 +136,9 @@ func TestCloudBuildPinsLinuxAMD64WithoutBuildKitOnlyDockerfileArgs(t *testing.T)
 	}
 	if strings.Contains(string(dockerfile), "$BUILDPLATFORM") {
 		t.Fatal("Dockerfile must parse without BuildKit-only automatic platform arguments")
+	}
+	if !strings.Contains(string(dockerfile), `-X main.buildVersion=${NVOKEN_BUILD_VERSION}`) {
+		t.Fatal("Dockerfile must inject the build identifier into nvokend")
 	}
 }
 

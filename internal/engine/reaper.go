@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 )
 
 type ReaperOwnership interface {
@@ -50,6 +51,9 @@ func (r *Reaper) reap(ctx context.Context) {
 		logReapedInvocation(r.logger, invocation)
 	}
 	if err != nil && ctx.Err() == nil {
-		r.logger.Warn("Invocation lease scan failed; retrying", "error", err.Error())
+		r.logger.Warn("Invocation lease scan failed; retrying",
+			"event", observability.EventInvocationMaintenanceFailed,
+			"operation", "reap_expired",
+			"error_class", observability.ErrorClass(err))
 	}
 }

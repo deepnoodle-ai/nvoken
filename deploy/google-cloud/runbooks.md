@@ -169,7 +169,7 @@ gcloud secrets versions list PROVIDER_SECRET_ID \
   --project=PROJECT_ID --filter='state=ENABLED'
 ```
 
-**Correlate.** Use failure class, provider, requested model, Invocation ID,
+**Correlate.** Use `outcome_class`, provider, requested model, Invocation ID,
 lease attempt, executor revision, and latency. Never include the provider key,
 prompt, tool payload, or remote response body.
 

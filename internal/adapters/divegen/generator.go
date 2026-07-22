@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -116,6 +118,37 @@ func newModel(provider, model, apiKey string) (llm.LLM, error) {
 	default:
 		return nil, ports.ErrProviderUnsupported
 	}
+}
+
+func classifiedProviderCallError(err error) error {
+	class := ports.ProviderFailureUnknown
+	var statusError interface{ StatusCode() int }
+	var networkError net.Error
+	switch {
+	case errors.Is(err, ports.ErrProviderUnsupported), errors.Is(err, ports.ErrProviderKeyMissing), errors.Is(err, ports.ErrCredentialUnavailable):
+		class = ports.ProviderFailureConfiguration
+	case errors.Is(err, context.Canceled):
+		class = ports.ProviderFailureCanceled
+	case errors.Is(err, context.DeadlineExceeded):
+		class = ports.ProviderFailureTimeoutOrTransport
+	case errors.As(err, &statusError):
+		statusCode := statusError.StatusCode()
+		switch {
+		case statusCode == http.StatusTooManyRequests:
+			class = ports.ProviderFailureThrottled
+		case statusCode == http.StatusRequestTimeout || statusCode == http.StatusGatewayTimeout:
+			class = ports.ProviderFailureTimeoutOrTransport
+		case statusCode >= 400 && statusCode < 500:
+			class = ports.ProviderFailureUpstreamRejected
+		case statusCode >= 500:
+			class = ports.ProviderFailureUpstreamUnavailable
+		}
+	case errors.Is(err, dive.ErrLLMNoResponse), errors.Is(err, ports.ErrModelResponseInvalid):
+		class = ports.ProviderFailureInvalidResponse
+	case errors.As(err, &networkError):
+		class = ports.ProviderFailureTimeoutOrTransport
+	}
+	return &ports.ProviderCallError{Class: class}
 }
 
 func (g *Generator) Generate(ctx context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
@@ -370,7 +403,7 @@ func (g *Generator) generate(
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return domain.GenerationResponse{}, err
 		}
-		return domain.GenerationResponse{}, fmt.Errorf("%w: Dive provider call", ports.ErrGenerationFailed)
+		return domain.GenerationResponse{}, classifiedProviderCallError(err)
 	}
 	if response != nil && response.Status == dive.ResponseStatusSuspended && response.Suspension != nil {
 		if len(response.Suspension.PendingToolCalls) == 0 {

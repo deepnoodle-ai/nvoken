@@ -10,6 +10,7 @@ import (
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/engine"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 	"github.com/deepnoodle-ai/nvoken/internal/services"
 )
@@ -174,6 +175,7 @@ func (s *AttemptService) attemptInvocation(ctx context.Context, dispatch domain.
 			settlementMarginMS = claim.Invocation.ExecutionDeadlineAt.Sub(s.clock.Now().UTC()).Milliseconds()
 		}
 		s.logger.Info("request-bound Invocation dispatch settled",
+			"event", observability.EventDispatchAttemptSettled,
 			"dispatch_id", dispatch.ID, "invocation_id", invocation.ID,
 			"lease_attempt", claim.Attempt, "attempt_latency_ms", time.Since(started).Milliseconds(),
 			"settlement_margin_ms", settlementMarginMS)

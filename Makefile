@@ -1,4 +1,4 @@
-.PHONY: fmt build generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres vet openapi-check sdk-generate sdk-generate-check sdk-check check check-deploy run migrate
+.PHONY: fmt build generate generate-identity identity-generate-check sqlc sqlc-check test test-postgres vet openapi-check scripts-check sdk-generate sdk-generate-check sdk-check check check-deploy run migrate
 
 REDOCLY_VERSION := 1.34.11
 SQLC_VERSION := v1.31.1
@@ -30,8 +30,7 @@ test:
 	go test ./...
 
 test-postgres:
-	@if [ -z "$$NVOKEN_TEST_DATABASE_URL" ]; then echo "NVOKEN_TEST_DATABASE_URL is required"; exit 1; fi
-	go test ./... -count=1
+	@scripts/test-postgres.sh
 
 vet:
 	go vet ./...
@@ -39,6 +38,9 @@ vet:
 openapi-check:
 	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint openapi/runtime.yaml
 	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint openapi/identity.yaml
+
+scripts-check:
+	bash -n scripts/test-postgres.sh
 
 sdk-generate:
 	sdk/scripts/generate.sh
@@ -62,5 +64,5 @@ run:
 migrate:
 	go run ./cmd/nvokend migrate
 
-check: build vet test sqlc-check identity-generate-check openapi-check
+check: build vet test sqlc-check identity-generate-check openapi-check scripts-check
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi

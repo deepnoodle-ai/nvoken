@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/observability"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
@@ -80,6 +81,21 @@ func NewRedisURL(rawURL, password, caCertificate string, buffer int, logger *slo
 	return NewRedis(redis.NewClient(options), buffer, logger), nil
 }
 
+// CheckRedis validates the configured Redis endpoint without subscribing or
+// publishing live events.
+func CheckRedis(ctx context.Context, rawURL, password, caCertificate string) error {
+	options, err := redisOptions(rawURL, password, caCertificate)
+	if err != nil {
+		return err
+	}
+	client := redis.NewClient(options)
+	defer func() { _ = client.Close() }()
+	if err := client.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("ping Redis: %w", err)
+	}
+	return nil
+}
+
 func redisOptions(rawURL, password, caCertificate string) (*redis.Options, error) {
 	options, err := redis.ParseURL(rawURL)
 	if err != nil {
@@ -134,6 +150,8 @@ func (r *Redis) Publish(_ context.Context, event ports.LiveEvent) {
 	default:
 		r.recordPublishGap(event)
 		r.logger.Warn("live event publish buffer overflow",
+			"event", observability.EventLivePublishFailed,
+			"error_class", "buffer_full",
 			"account_id", event.AccountID, "session_id", event.SessionID, "event_type", event.Type)
 	}
 }
@@ -148,7 +166,10 @@ func (r *Redis) Subscribe(ctx context.Context, accountID, sessionID string) port
 		if current, ok := local.(*subscription); ok {
 			current.gapped.Store(true)
 		}
-		r.logger.Warn("live event Redis subscribe acknowledgement failed", "account_id", accountID, "error", err)
+		r.logger.Warn("live event Redis subscribe acknowledgement failed",
+			"event", observability.EventLiveSubscribeFailed,
+			"error_class", observability.ErrorClass(err),
+			"account_id", accountID)
 	}
 	return &redisSubscription{bus: r, scope: scope, local: local}
 }
@@ -176,7 +197,10 @@ func (r *Redis) publishOne(event ports.LiveEvent) {
 		Type: event.Type, AccountID: event.AccountID, SessionID: event.SessionID, Payload: event.Payload,
 	})
 	if err != nil {
-		r.logger.Warn("live event envelope encode failed", "event_type", event.Type, "error", err)
+		r.logger.Warn("live event envelope encode failed",
+			"event", observability.EventLivePublishFailed,
+			"error_class", "invalid_envelope",
+			"event_type", event.Type)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.ctx, 500*time.Millisecond)
@@ -184,7 +208,9 @@ func (r *Redis) publishOne(event ports.LiveEvent) {
 	if err := r.client.Publish(ctx, redisChannel(event.AccountID), envelope).Err(); err != nil && r.ctx.Err() == nil {
 		r.recordPublishGap(event)
 		r.logger.Warn("live event Redis publish failed",
-			"account_id", event.AccountID, "session_id", event.SessionID, "event_type", event.Type, "error", err)
+			"event", observability.EventLivePublishFailed,
+			"error_class", observability.ErrorClass(err),
+			"account_id", event.AccountID, "session_id", event.SessionID, "event_type", event.Type)
 	}
 }
 
@@ -290,7 +316,10 @@ func (r *Redis) readScope(ctx context.Context, scope *redisScope) {
 			return
 		}
 		r.markAccountGapped(scope.accountID)
-		r.logger.Warn("live event Redis subscription interrupted", "account_id", scope.accountID, "error", err)
+		r.logger.Warn("live event Redis subscription interrupted",
+			"event", observability.EventLiveSubscribeFailed,
+			"error_class", observability.ErrorClass(err),
+			"account_id", scope.accountID)
 		select {
 		case <-ctx.Done():
 			return
@@ -319,7 +348,9 @@ func (r *Redis) readScope(ctx context.Context, scope *redisScope) {
 func (r *Redis) dispatch(raw string) {
 	var envelope redisEnvelope
 	if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
-		r.logger.Warn("live event Redis envelope decode failed", "error", err)
+		r.logger.Warn("live event Redis envelope decode failed",
+			"event", observability.EventLiveDecodeFailed,
+			"error_class", "invalid_envelope")
 		return
 	}
 	r.local.Publish(r.ctx, ports.LiveEvent{

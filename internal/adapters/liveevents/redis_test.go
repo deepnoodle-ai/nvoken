@@ -72,6 +72,20 @@ func TestRedisOptionsApplySecretAndTLSRoots(t *testing.T) {
 	}
 }
 
+func TestCheckRedisPingsWithoutStartingFanout(t *testing.T) {
+	server := miniredis.RunT(t)
+	address := server.Addr()
+	if err := CheckRedis(context.Background(), "redis://"+address, "", ""); err != nil {
+		t.Fatalf("check Redis: %v", err)
+	}
+	server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if err := CheckRedis(ctx, "redis://"+address, "", ""); err == nil {
+		t.Fatal("closed Redis passed diagnostic")
+	}
+}
+
 func TestRedisPublishGapImmediatelyMarksLocalScopeOnce(t *testing.T) {
 	broker := &Redis{local: NewInProcess(1), gaps: make(map[string]ports.LiveEvent)}
 	subscription := broker.local.Subscribe(context.Background(), "account-a", "session-a")
