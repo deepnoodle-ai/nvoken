@@ -41,10 +41,10 @@ export interface CallbackToolSpec {
     description: string;
     /**
      *
-     * @type {any}
+     * @type {CallbackToolSpecModeEnum}
      * @memberof CallbackToolSpec
      */
-    mode: any | null;
+    mode: CallbackToolSpecModeEnum;
     /**
      * Object-root JSON Schema using the same bounded, self-contained
      * subset as structured output. Compact canonical JSON is limited to
@@ -61,6 +61,16 @@ export interface CallbackToolSpec {
      */
     callback: CallbackTarget;
 }
+
+
+/**
+ * @export
+ */
+export const CallbackToolSpecModeEnum = {
+    ModeCallback: 'callback'
+} as const;
+export type CallbackToolSpecModeEnum = typeof CallbackToolSpecModeEnum[keyof typeof CallbackToolSpecModeEnum];
+
 
 /**
  * Check if a given object implements the CallbackToolSpec interface.

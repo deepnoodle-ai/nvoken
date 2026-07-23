@@ -135,6 +135,13 @@ points to `sdk/typescript`:
 
 Then run `npm install` in the consumer.
 
+For a broader source-SDK exercise, the
+[TypeScript invoke showcase](https://github.com/deepnoodle-ai/nvoken/tree/main/examples/typescript-invoke-showcase)
+tests client tools, structured output, multi-turn Sessions, `agent_ref`,
+`tenant_ref`, idempotency, pagination, transcript cursors, and SSE against a
+real provider. It is intentionally more comprehensive than the first-response
+quickstart and may incur several small provider charges.
+
 ## Source-checkout two-turn and resume proof
 
 The repository-only quickstart sends two turns through a new Session and prints
@@ -208,10 +215,222 @@ stored twice.
 
 - A local wait timeout, aborted request, process exit, or dropped stream does
   not cancel durable work. Call `handle.cancel()` only to change server state.
+- `handle.wait()` waits for a terminal state. In a client-tool workflow, use
+  `handle.wait({ until: "actionable" })`; it returns when the Invocation is
+  `waiting`, `completed`, `failed`, or `cancelled`.
 - Derive an idempotency key from the host's durable message record. After an
   ambiguous acknowledgement, retry the exact request with that same key.
+- A newly admitted Handle retains `agentId` and `deduplicated` from the
+  acknowledgement. `deduplicated` is undefined only on a Handle reconstructed
+  later with `client.resume()`.
 - Assistant and tool checkpoints from a failed or cancelled Invocation remain
   readable as evidence but are excluded from future model context.
+
+## Client tools
+
+Define a tool once to bind its JSON Schema to an application type. nvoken
+validates admitted ToolCall input against the schema; `toolInput` checks the
+ToolCall name and returns that already-validated input with its TypeScript
+type:
+
+```ts
+import {
+  defineClientTool,
+  defineJsonSchema,
+  toolInput,
+} from "@deepnoodle/nvoken";
+
+interface LookupOrderInput {
+  order_id: string;
+}
+
+const lookupOrder = defineClientTool<LookupOrderInput>({
+  mode: "client",
+  name: "lookup_order",
+  description: "Look up an order by ID.",
+  inputSchema: defineJsonSchema<LookupOrderInput>({
+    type: "object",
+    properties: {
+      order_id: { type: "string" },
+    },
+    required: ["order_id"],
+    additionalProperties: false,
+  }),
+});
+
+const handle = await client.invoke({
+  agentRef: "support",
+  sessionKey: "ticket-42",
+  idempotencyKey: "message-101",
+  input: "Where is order-42?",
+  spec: {
+    instructions: "Use lookup_order before answering.",
+    model: { provider, name: model },
+    tools: [lookupOrder],
+  },
+});
+
+const actionable = await handle.wait({ until: "actionable" });
+if (actionable.status === "waiting") {
+  for (const call of actionable.pendingToolCalls ?? []) {
+    const input = toolInput(lookupOrder, call);
+    const order = await orders.get(input.order_id);
+    await handle.submitToolResults([{
+      toolCallId: call.id,
+      content: order,
+    }]);
+  }
+}
+
+const terminal = await handle.wait();
+if (terminal.status !== "completed") {
+  throw new Error(`${terminal.error?.code}: ${terminal.error?.message}`);
+}
+console.log(await handle.text());
+```
+
+Persist each ToolCall ID with its result. Retrying the same result is safe and
+reports `deduplicated: true`; submitting different content for a settled call
+returns `tool_result_conflict`. A `waiting` Invocation remains the Session's
+active Invocation, so do not admit another turn to that Session. Finish,
+cancel, or allow the earlier turn to settle first.
+
+`defineClientTool` and `defineJsonSchema` associate TypeScript types with
+runtime schemas; they do not perform local validation. The Runtime remains the
+authority that validates the admitted schema and generated tool input.
+
+## Typed structured output
+
+The same schema helper makes terminal structured output type-safe:
+
+```ts
+interface Classification {
+  category: "billing" | "technical";
+  priority: "normal" | "high";
+  needs_human: boolean;
+}
+
+const classificationSchema = defineJsonSchema<Classification>({
+  type: "object",
+  properties: {
+    category: { type: "string", enum: ["billing", "technical"] },
+    priority: { type: "string", enum: ["normal", "high"] },
+    needs_human: { type: "boolean" },
+  },
+  required: ["category", "priority", "needs_human"],
+  additionalProperties: false,
+});
+
+const handle = await client.invoke({
+  agentRef: "support",
+  sessionKey: "ticket-43",
+  idempotencyKey: "message-102",
+  input: "I was charged twice and need a person to review it.",
+  spec: {
+    instructions: "Classify the request.",
+    model: { provider, name: model },
+    outputSchema: classificationSchema,
+  },
+});
+
+const invocation = await handle.wait();
+if (invocation.status === "completed") {
+  const classification = invocation.structuredOutput; // Classification | null
+  console.log(classification?.priority);
+}
+```
+
+The Runtime validates the terminal object and records its ToolCall and schema
+digest in `structuredOutputProvenance`. The generic type is carried through
+`Handle`, `refresh()`, `wait()`, and `result()`. When reconstructing a typed
+Handle in another process, use `client.resume<Classification>(invocationId)`.
+
+## Agent, tenant, and Session identity
+
+Host references resolve under these scopes:
+
+```text
+Agent identity:    Account + agentRef
+Session identity:  Account + tenant partition + Agent + sessionKey
+Idempotency scope: Account + tenant partition + agentRef + idempotencyKey
+```
+
+The same `agentRef` therefore resolves to the same Account-wide `agentId`
+across tenants, while Sessions and idempotency remain tenant-partitioned. The
+Handle exposes the resolved ID needed for exact Session recovery:
+
+```ts
+const handle = await client.invoke({
+  agentRef: "support",
+  tenantRef: "tenant-acme",
+  sessionKey: "ticket-42",
+  idempotencyKey: "message-101",
+  input: "Hello",
+  spec,
+});
+
+const session = await client.getSessionByKey("ticket-42", {
+  tenantRef: "tenant-acme",
+  agentId: handle.agentId,
+});
+
+for await (const item of client.sessionPages({
+  tenantRef: "tenant-acme",
+  agentId: handle.agentId,
+  sessionKey: "ticket-42",
+  limit: 100,
+})) {
+  console.log(item.id);
+}
+```
+
+Use `{ defaultTenant: true, agentId }` instead of `tenantRef` for the default
+tenant partition. An Account-wide credential may continue a known Session by
+`sessionId` without repeating its tenant reference. Supplying an incompatible
+Agent or explicit tenant returns nondisclosing `not_found`.
+
+Only one queued, running, or waiting Invocation may own a Session. Serialize
+turn admission per Session. A `session_invocation_active` conflict means the
+earlier turn is still active; inspect or resume that Invocation instead of
+retrying the new turn under another idempotency key.
+
+## Session history and recovery
+
+Use the async iterators for complete collection traversal:
+
+```ts
+for await (const message of client.messagePages(session.id, { limit: 100 })) {
+  console.log(message.sequence, message.role);
+}
+
+for await (const invocation of client.invocationPages({
+  sessionId: session.id,
+  limit: 100,
+})) {
+  console.log(invocation.id, invocation.status);
+}
+```
+
+`drainTranscript` reads one fixed-cut snapshot and owns the page-token rules.
+Persist its `resumeCursor` to recover only newer durable messages and
+Invocation lifecycle changes later:
+
+```ts
+const initial = await client.drainTranscript(session.id, { pageSize: 100 });
+await checkpoints.put(session.id, initial.resumeCursor);
+
+const delta = await client.drainTranscript(session.id, {
+  cursor: await checkpoints.get(session.id),
+  pageSize: 100,
+});
+await apply(delta.messages, delta.invocationChanges);
+await checkpoints.put(session.id, delta.resumeCursor);
+```
+
+Use `handle.stream(...)` when the process should follow new Session output
+continuously. The stream resumes with durable cursors and reconciles against
+the authoritative transcript; `drainTranscript` is the simpler primitive for
+startup recovery, periodic synchronization, and bounded jobs.
 
 The package supports Node.js 20 and newer. This repository pins Node.js 24 as
 its development and CI baseline; that is not the package runtime floor.

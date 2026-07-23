@@ -13,14 +13,26 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TextInputBlock {
-    #[serde(rename = "type", deserialize_with = "Option::deserialize")]
-    pub r#type: Option<serde_json::Value>,
+    #[serde(rename = "type")]
+    pub r#type: Type,
     #[serde(rename = "text")]
     pub text: String,
 }
 
 impl TextInputBlock {
-    pub fn new(r#type: Option<serde_json::Value>, text: String) -> TextInputBlock {
+    pub fn new(r#type: Type, text: String) -> TextInputBlock {
         TextInputBlock { r#type, text }
+    }
+}
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum Type {
+    #[serde(rename = "text")]
+    InputTypeText,
+}
+
+impl Default for Type {
+    fn default() -> Type {
+        Self::InputTypeText
     }
 }

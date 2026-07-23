@@ -44,7 +44,7 @@ export interface StreamResyncEvent {
  * @export
  */
 export const StreamResyncEventEventTypeEnum = {
-    StreamResync: 'stream.resync'
+    EventStreamResync: 'stream.resync'
 } as const;
 export type StreamResyncEventEventTypeEnum = typeof StreamResyncEventEventTypeEnum[keyof typeof StreamResyncEventEventTypeEnum];
 
@@ -52,7 +52,7 @@ export type StreamResyncEventEventTypeEnum = typeof StreamResyncEventEventTypeEn
  * @export
  */
 export const StreamResyncEventReasonEnum = {
-    LiveDeliveryGap: 'live_delivery_gap'
+    ReasonLiveDeliveryGap: 'live_delivery_gap'
 } as const;
 export type StreamResyncEventReasonEnum = typeof StreamResyncEventReasonEnum[keyof typeof StreamResyncEventReasonEnum];
 

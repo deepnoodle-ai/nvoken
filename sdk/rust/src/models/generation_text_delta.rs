@@ -34,11 +34,11 @@ impl GenerationTextDelta {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Type {
     #[serde(rename = "text")]
-    Text,
+    DeltaTypeText,
 }
 
 impl Default for Type {
     fn default() -> Type {
-        Self::Text
+        Self::DeltaTypeText
     }
 }

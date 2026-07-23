@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 /// StructuredOutputProvenance : Immutable proof that output equals the request of the accepted reserved durable ToolCall under the admitted schema digest.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct StructuredOutputProvenance {
-    #[serde(rename = "source", deserialize_with = "Option::deserialize")]
-    pub source: Option<serde_json::Value>,
+    #[serde(rename = "source")]
+    pub source: Source,
     #[serde(rename = "tool_call_id")]
     pub tool_call_id: String,
     #[serde(rename = "schema_sha256")]
@@ -25,7 +25,7 @@ pub struct StructuredOutputProvenance {
 impl StructuredOutputProvenance {
     /// Immutable proof that output equals the request of the accepted reserved durable ToolCall under the admitted schema digest.
     pub fn new(
-        source: Option<serde_json::Value>,
+        source: Source,
         tool_call_id: String,
         schema_sha256: String,
     ) -> StructuredOutputProvenance {
@@ -34,5 +34,17 @@ impl StructuredOutputProvenance {
             tool_call_id,
             schema_sha256,
         }
+    }
+}
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum Source {
+    #[serde(rename = "tool_call")]
+    SourceToolCall,
+}
+
+impl Default for Source {
+    fn default() -> Source {
+        Self::SourceToolCall
     }
 }

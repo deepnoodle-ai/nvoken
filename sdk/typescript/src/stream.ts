@@ -43,9 +43,9 @@ export class Reducer {
   }
 }
 
-export async function streamSession(
+export async function streamSession<TOutput extends object>(
   client: Client,
-  handle: Handle,
+  handle: Handle<TOutput>,
   reducer: Reducer,
   consume: (event: StreamEvent, snapshot: ReducedSnapshot) => void | Promise<void>,
   signal?: AbortSignal,

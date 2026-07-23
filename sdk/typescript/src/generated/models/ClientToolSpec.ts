@@ -33,10 +33,10 @@ export interface ClientToolSpec {
     description: string;
     /**
      *
-     * @type {any}
+     * @type {ClientToolSpecModeEnum}
      * @memberof ClientToolSpec
      */
-    mode: any | null;
+    mode: ClientToolSpecModeEnum;
     /**
      * Object-root JSON Schema using the same bounded, self-contained
      * subset as structured output. Compact canonical JSON is limited to
@@ -47,6 +47,16 @@ export interface ClientToolSpec {
      */
     inputSchema: { [key: string]: any; };
 }
+
+
+/**
+ * @export
+ */
+export const ClientToolSpecModeEnum = {
+    ModeClient: 'client'
+} as const;
+export type ClientToolSpecModeEnum = typeof ClientToolSpecModeEnum[keyof typeof ClientToolSpecModeEnum];
+
 
 /**
  * Check if a given object implements the ClientToolSpec interface.

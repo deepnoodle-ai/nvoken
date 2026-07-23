@@ -352,7 +352,7 @@ impl Client {
                     models::ToolSpec::ClientToolSpec(Box::new(models::ClientToolSpec::new(
                         tool.name,
                         tool.description,
-                        Some(json!("client")),
+                        models::client_tool_spec::Mode::ModeClient,
                         tool.input_schema,
                     )))
                 }
@@ -360,7 +360,7 @@ impl Client {
                     models::ToolSpec::CallbackToolSpec(Box::new(models::CallbackToolSpec::new(
                         tool.name,
                         tool.description,
-                        Some(json!("callback")),
+                        models::callback_tool_spec::Mode::ModeCallback,
                         tool.input_schema,
                         models::CallbackTarget::new(url),
                     )))
@@ -370,7 +370,7 @@ impl Client {
         }
         spec.tools = (!tools.is_empty()).then_some(tools);
         let input = models::InvocationInput::new(vec![models::TextInputBlock::new(
-            Some(json!("text")),
+            models::text_input_block::Type::InputTypeText,
             request.input,
         )]);
         let mut body = models::CreateInvocationRequest::new(

@@ -17,6 +17,21 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for CallbackToolSpecMode.
+const (
+	ModeCallback CallbackToolSpecMode = "callback"
+)
+
+// Valid indicates whether the value is a known member of the CallbackToolSpecMode enum.
+func (e CallbackToolSpecMode) Valid() bool {
+	switch e {
+	case ModeCallback:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClientToolResultAcceptanceStatus.
 const (
 	ClientToolResultAcceptanceStatusCompleted ClientToolResultAcceptanceStatus = "completed"
@@ -29,6 +44,21 @@ func (e ClientToolResultAcceptanceStatus) Valid() bool {
 	case ClientToolResultAcceptanceStatusCompleted:
 		return true
 	case ClientToolResultAcceptanceStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClientToolSpecMode.
+const (
+	ModeClient ClientToolSpecMode = "client"
+)
+
+// Valid indicates whether the value is a known member of the ClientToolSpecMode enum.
+func (e ClientToolSpecMode) Valid() bool {
+	switch e {
+	case ModeClient:
 		return true
 	default:
 		return false
@@ -88,13 +118,13 @@ func (e ErrorCode) Valid() bool {
 
 // Defines values for GenerationDeltaEventEventType.
 const (
-	GenerationDelta GenerationDeltaEventEventType = "generation.delta"
+	EventGenerationDelta GenerationDeltaEventEventType = "generation.delta"
 )
 
 // Valid indicates whether the value is a known member of the GenerationDeltaEventEventType enum.
 func (e GenerationDeltaEventEventType) Valid() bool {
 	switch e {
-	case GenerationDelta:
+	case EventGenerationDelta:
 		return true
 	default:
 		return false
@@ -103,13 +133,13 @@ func (e GenerationDeltaEventEventType) Valid() bool {
 
 // Defines values for GenerationTextDeltaType.
 const (
-	Text GenerationTextDeltaType = "text"
+	DeltaTypeText GenerationTextDeltaType = "text"
 )
 
 // Valid indicates whether the value is a known member of the GenerationTextDeltaType enum.
 func (e GenerationTextDeltaType) Valid() bool {
 	switch e {
-	case Text:
+	case DeltaTypeText:
 		return true
 	default:
 		return false
@@ -118,13 +148,13 @@ func (e GenerationTextDeltaType) Valid() bool {
 
 // Defines values for GenerationThinkingDeltaType.
 const (
-	Thinking GenerationThinkingDeltaType = "thinking"
+	DeltaTypeThinking GenerationThinkingDeltaType = "thinking"
 )
 
 // Valid indicates whether the value is a known member of the GenerationThinkingDeltaType enum.
 func (e GenerationThinkingDeltaType) Valid() bool {
 	switch e {
-	case Thinking:
+	case DeltaTypeThinking:
 		return true
 	default:
 		return false
@@ -158,6 +188,21 @@ func (e InvocationFailureCode) Valid() bool {
 	case InvocationFailureCodeProviderError:
 		return true
 	case InvocationFailureCodeStructuredOutputUnsatisfied:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvocationProviderCredentialSelection0Source.
+const (
+	SourceCallerEphemeral InvocationProviderCredentialSelection0Source = "caller_ephemeral"
+)
+
+// Valid indicates whether the value is a known member of the InvocationProviderCredentialSelection0Source enum.
+func (e InvocationProviderCredentialSelection0Source) Valid() bool {
+	switch e {
+	case SourceCallerEphemeral:
 		return true
 	default:
 		return false
@@ -385,13 +430,13 @@ func (e SessionMessageRole) Valid() bool {
 
 // Defines values for StreamEndEventEventType.
 const (
-	StreamEnd StreamEndEventEventType = "stream.end"
+	EventStreamEnd StreamEndEventEventType = "stream.end"
 )
 
 // Valid indicates whether the value is a known member of the StreamEndEventEventType enum.
 func (e StreamEndEventEventType) Valid() bool {
 	switch e {
-	case StreamEnd:
+	case EventStreamEnd:
 		return true
 	default:
 		return false
@@ -418,13 +463,13 @@ func (e StreamEndEventReason) Valid() bool {
 
 // Defines values for StreamResyncEventEventType.
 const (
-	StreamResync StreamResyncEventEventType = "stream.resync"
+	EventStreamResync StreamResyncEventEventType = "stream.resync"
 )
 
 // Valid indicates whether the value is a known member of the StreamResyncEventEventType enum.
 func (e StreamResyncEventEventType) Valid() bool {
 	switch e {
-	case StreamResync:
+	case EventStreamResync:
 		return true
 	default:
 		return false
@@ -433,13 +478,43 @@ func (e StreamResyncEventEventType) Valid() bool {
 
 // Defines values for StreamResyncEventReason.
 const (
-	LiveDeliveryGap StreamResyncEventReason = "live_delivery_gap"
+	ReasonLiveDeliveryGap StreamResyncEventReason = "live_delivery_gap"
 )
 
 // Valid indicates whether the value is a known member of the StreamResyncEventReason enum.
 func (e StreamResyncEventReason) Valid() bool {
 	switch e {
-	case LiveDeliveryGap:
+	case ReasonLiveDeliveryGap:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StructuredOutputProvenanceSource.
+const (
+	SourceToolCall StructuredOutputProvenanceSource = "tool_call"
+)
+
+// Valid indicates whether the value is a known member of the StructuredOutputProvenanceSource enum.
+func (e StructuredOutputProvenanceSource) Valid() bool {
+	switch e {
+	case SourceToolCall:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TextInputBlockType.
+const (
+	InputTypeText TextInputBlockType = "text"
+)
+
+// Valid indicates whether the value is a known member of the TextInputBlockType enum.
+func (e TextInputBlockType) Valid() bool {
+	switch e {
+	case InputTypeText:
 		return true
 	default:
 		return false
@@ -483,11 +558,14 @@ type CallbackToolSpec struct {
 	// subset as structured output. Compact canonical JSON is limited to
 	// 32 KiB.
 	InputSchema map[string]interface{} `json:"input_schema"`
-	Mode        interface{}            `json:"mode"`
+	Mode        CallbackToolSpecMode   `json:"mode"`
 
 	// Name Unique within the spec; the `nvoken_` prefix is reserved.
 	Name string `json:"name"`
 }
+
+// CallbackToolSpecMode defines model for CallbackToolSpec.Mode.
+type CallbackToolSpecMode string
 
 // ClientToolResultAcceptance defines model for ClientToolResultAcceptance.
 type ClientToolResultAcceptance struct {
@@ -507,11 +585,14 @@ type ClientToolSpec struct {
 	// subset as structured output. Compact canonical JSON is limited to
 	// 32 KiB.
 	InputSchema map[string]interface{} `json:"input_schema"`
-	Mode        interface{}            `json:"mode"`
+	Mode        ClientToolSpecMode     `json:"mode"`
 
 	// Name Unique within the spec; the `nvoken_` prefix is reserved.
 	Name string `json:"name"`
 }
+
+// ClientToolSpecMode defines model for ClientToolSpec.Mode.
+type ClientToolSpecMode string
 
 // CreateInvocationRequest defines model for CreateInvocationRequest.
 type CreateInvocationRequest struct {
@@ -801,10 +882,13 @@ type InvocationProviderCredentialSelection struct {
 
 // InvocationProviderCredentialSelection0 defines model for InvocationProviderCredentialSelection.0.
 type InvocationProviderCredentialSelection0 struct {
-	Credential ProviderStaticCredential `json:"credential"`
-	Provider   ModelProvider            `json:"provider"`
-	Source     interface{}              `json:"source"`
+	Credential ProviderStaticCredential                     `json:"credential"`
+	Provider   ModelProvider                                `json:"provider"`
+	Source     InvocationProviderCredentialSelection0Source `json:"source"`
 }
+
+// InvocationProviderCredentialSelection0Source defines model for InvocationProviderCredentialSelection.0.Source.
+type InvocationProviderCredentialSelection0Source string
 
 // InvocationProviderCredentialSelection1 defines model for InvocationProviderCredentialSelection.1.
 type InvocationProviderCredentialSelection1 struct {
@@ -1081,10 +1165,13 @@ type StreamResyncEventReason string
 // StructuredOutputProvenance Immutable proof that output equals the request of the accepted
 // reserved durable ToolCall under the admitted schema digest.
 type StructuredOutputProvenance struct {
-	SchemaSha256 string      `json:"schema_sha256"`
-	Source       interface{} `json:"source"`
-	ToolCallID   string      `json:"tool_call_id"`
+	SchemaSha256 string                           `json:"schema_sha256"`
+	Source       StructuredOutputProvenanceSource `json:"source"`
+	ToolCallID   string                           `json:"tool_call_id"`
 }
+
+// StructuredOutputProvenanceSource defines model for StructuredOutputProvenance.Source.
+type StructuredOutputProvenanceSource string
 
 // StructuredOutputSpec Optional per-Invocation structured-output contract. nvoken exposes a
 // reserved durable submit tool and publishes only a server-validated
@@ -1130,9 +1217,12 @@ type SubmitClientToolResultsResponse struct {
 
 // TextInputBlock defines model for TextInputBlock.
 type TextInputBlock struct {
-	Text string      `json:"text"`
-	Type interface{} `json:"type"`
+	Text string             `json:"text"`
+	Type TextInputBlockType `json:"type"`
 }
+
+// TextInputBlockType defines model for TextInputBlock.Type.
+type TextInputBlockType string
 
 // ToolCallID defines model for ToolCallID.
 type ToolCallID = string

@@ -44,7 +44,7 @@ export interface GenerationThinkingDelta {
  * @export
  */
 export const GenerationThinkingDeltaTypeEnum = {
-    Thinking: 'thinking'
+    DeltaTypeThinking: 'thinking'
 } as const;
 export type GenerationThinkingDeltaTypeEnum = typeof GenerationThinkingDeltaTypeEnum[keyof typeof GenerationThinkingDeltaTypeEnum];
 

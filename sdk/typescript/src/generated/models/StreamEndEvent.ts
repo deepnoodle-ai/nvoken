@@ -50,7 +50,7 @@ export interface StreamEndEvent {
  * @export
  */
 export const StreamEndEventEventTypeEnum = {
-    StreamEnd: 'stream.end'
+    EventStreamEnd: 'stream.end'
 } as const;
 export type StreamEndEventEventTypeEnum = typeof StreamEndEventEventTypeEnum[keyof typeof StreamEndEventEventTypeEnum];
 

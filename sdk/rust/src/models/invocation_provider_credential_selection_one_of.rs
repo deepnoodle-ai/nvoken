@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 pub struct InvocationProviderCredentialSelectionOneOf {
     #[serde(rename = "provider")]
     pub provider: models::ModelProvider,
-    #[serde(rename = "source", deserialize_with = "Option::deserialize")]
-    pub source: Option<serde_json::Value>,
+    #[serde(rename = "source")]
+    pub source: Source,
     #[serde(rename = "credential")]
     pub credential: Box<models::ProviderStaticCredential>,
 }
@@ -24,7 +24,7 @@ pub struct InvocationProviderCredentialSelectionOneOf {
 impl InvocationProviderCredentialSelectionOneOf {
     pub fn new(
         provider: models::ModelProvider,
-        source: Option<serde_json::Value>,
+        source: Source,
         credential: models::ProviderStaticCredential,
     ) -> InvocationProviderCredentialSelectionOneOf {
         InvocationProviderCredentialSelectionOneOf {
@@ -32,5 +32,17 @@ impl InvocationProviderCredentialSelectionOneOf {
             source,
             credential: Box::new(credential),
         }
+    }
+}
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum Source {
+    #[serde(rename = "caller_ephemeral")]
+    SourceCallerEphemeral,
+}
+
+impl Default for Source {
+    fn default() -> Source {
+        Self::SourceCallerEphemeral
     }
 }

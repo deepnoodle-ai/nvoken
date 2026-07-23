@@ -76,7 +76,7 @@ export interface GenerationDeltaEvent {
  * @export
  */
 export const GenerationDeltaEventEventTypeEnum = {
-    GenerationDelta: 'generation.delta'
+    EventGenerationDelta: 'generation.delta'
 } as const;
 export type GenerationDeltaEventEventTypeEnum = typeof GenerationDeltaEventEventTypeEnum[keyof typeof GenerationDeltaEventEventTypeEnum];
 

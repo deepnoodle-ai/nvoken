@@ -22,6 +22,14 @@ wait timeout or a dropped stream stops only the caller; use explicit
 `cancel` to change durable Invocation state. Keep the same idempotency key and
 request after an uncertain admission response.
 
+The [TypeScript SDK guide](../../sdk/typescript/README.md) also covers
+actionable client-tool waits, schema-bound tool and structured-output types,
+Agent/tenant Session identity, exact host-key recovery, pagination, and
+fixed-cut transcript draining. The
+[TypeScript invoke showcase](../../examples/typescript-invoke-showcase/README.md)
+compiles those advanced flows in the normal SDK gate and can run them against a
+local Runtime and real provider.
+
 ## CLI
 
 The `nvoken` binary is a Runtime client; `nvokend` is the service daemon.

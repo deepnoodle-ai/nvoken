@@ -17,8 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Any, ClassVar, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from typing import Any, ClassVar, Dict, List
 from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
@@ -30,7 +30,7 @@ class ClientToolSpec(BaseModel):
     """ # noqa: E501
     name: Annotated[str, Field(min_length=1, strict=True, max_length=64)] = Field(description="Unique within the spec; the `nvoken_` prefix is reserved.")
     description: Annotated[str, Field(min_length=1, strict=True, max_length=4096)]
-    mode: Optional[Any]
+    mode: StrictStr
     input_schema: Dict[str, Any] = Field(description="Object-root JSON Schema using the same bounded, self-contained subset as structured output. Compact canonical JSON is limited to 32 KiB. ")
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["name", "description", "mode", "input_schema"]
@@ -43,6 +43,13 @@ class ClientToolSpec(BaseModel):
 
         if not re.match(r"^[A-Za-z0-9_-]+$", value):
             raise ValueError(r"must validate the regular expression /^[A-Za-z0-9_-]+$/")
+        return value
+
+    @field_validator('mode')
+    def mode_validate_enum(cls, value):
+        """Validates the enum"""
+        if value not in set(['client']):
+            raise ValueError("must be one of enum values ('client')")
         return value
 
     model_config = ConfigDict(
@@ -90,11 +97,6 @@ class ClientToolSpec(BaseModel):
         if self.additional_properties is not None:
             for _key, _value in self.additional_properties.items():
                 _dict[_key] = _value
-
-        # set to None if mode (nullable) is None
-        # and model_fields_set contains the field
-        if self.mode is None and "mode" in self.model_fields_set:
-            _dict['mode'] = None
 
         return _dict
 

@@ -17,8 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict
-from typing import Any, ClassVar, Dict, Optional
+from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
+from typing import Any, ClassVar, Dict
 from nvoken_generated.models.model_provider import ModelProvider
 from nvoken_generated.models.provider_static_credential import ProviderStaticCredential
 from typing import Optional, Set
@@ -30,9 +30,16 @@ class InvocationProviderCredentialSelectionOneOf(BaseModel):
     InvocationProviderCredentialSelectionOneOf
     """ # noqa: E501
     provider: ModelProvider
-    source: Optional[Any]
+    source: StrictStr
     credential: ProviderStaticCredential
     __properties: ClassVar[List[str]] = ["provider", "source", "credential"]
+
+    @field_validator('source')
+    def source_validate_enum(cls, value):
+        """Validates the enum"""
+        if value not in set(['caller_ephemeral']):
+            raise ValueError("must be one of enum values ('caller_ephemeral')")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -76,11 +83,6 @@ class InvocationProviderCredentialSelectionOneOf(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of credential
         if self.credential:
             _dict['credential'] = self.credential.to_dict()
-        # set to None if source (nullable) is None
-        # and model_fields_set contains the field
-        if self.source is None and "source" in self.model_fields_set:
-            _dict['source'] = None
-
         return _dict
 
     @classmethod
