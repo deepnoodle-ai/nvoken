@@ -31,7 +31,7 @@ pub struct InvocationLimitRequest {
     pub waiting_timeout_seconds: Option<u32>,
     #[serde(rename = "max_output_tokens", skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
-    /// Dive list-price guardrail, not preauthorization or a billing ledger. Requires known USD pricing for the selected model and otherwise fails closed with `budget_exceeded` and `details.kind = estimated_cost_unavailable`. When pricing absence is knowable before execution, nvoken rejects before a provider call.
+    /// nvoken's standard list-price guardrail, not preauthorization or a billing ledger. Requires known USD pricing for the selected model and otherwise fails closed with `budget_exceeded` and `details.kind = estimated_cost_unavailable`. When pricing absence is knowable before execution, nvoken rejects before a provider call.
     #[serde(
         rename = "max_estimated_cost_usd",
         skip_serializing_if = "Option::is_none"

@@ -50,7 +50,7 @@ export interface InvocationLimitRequest {
      */
     maxOutputTokens?: number;
     /**
-     * Dive list-price guardrail, not preauthorization or a billing
+     * nvoken's standard list-price guardrail, not preauthorization or a billing
      * ledger. Requires known USD pricing for the selected model and
      * otherwise fails closed with `budget_exceeded` and
      * `details.kind = estimated_cost_unavailable`. When pricing absence

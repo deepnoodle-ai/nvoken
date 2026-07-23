@@ -4,6 +4,7 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -74,7 +75,7 @@ type Config struct {
 	Addr                   string
 	Authenticator          ports.RuntimeAuthenticator
 	Runtime                RuntimeService
-	ModelPricing           ports.ModelPricingResolver
+	Models                 ports.ModelCatalogResolver
 	Identity               IdentityService
 	ProviderCredentials    ProviderCredentialService
 	Logger                 *slog.Logger
@@ -107,7 +108,7 @@ func NewServer(cfg Config) *Server {
 	handler := newHandler(handlerConfig{
 		authenticator:          cfg.Authenticator,
 		runtime:                cfg.Runtime,
-		modelPricing:           cfg.ModelPricing,
+		models:                 cfg.Models,
 		identity:               cfg.Identity,
 		providerCredentials:    cfg.ProviderCredentials,
 		logger:                 logger,
@@ -140,7 +141,7 @@ func NewServer(cfg Config) *Server {
 type handlerConfig struct {
 	authenticator          ports.RuntimeAuthenticator
 	runtime                RuntimeService
-	modelPricing           ports.ModelPricingResolver
+	models                 ports.ModelCatalogResolver
 	identity               IdentityService
 	providerCredentials    ProviderCredentialService
 	logger                 *slog.Logger
@@ -153,7 +154,7 @@ type handlerConfig struct {
 type handler struct {
 	authenticator          ports.RuntimeAuthenticator
 	runtime                RuntimeService
-	modelPricing           ports.ModelPricingResolver
+	models                 ports.ModelCatalogResolver
 	identity               IdentityService
 	providerCredentials    ProviderCredentialService
 	logger                 *slog.Logger
@@ -170,7 +171,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 	h := &handler{
 		authenticator:          cfg.authenticator,
 		runtime:                cfg.runtime,
-		modelPricing:           cfg.modelPricing,
+		models:                 cfg.models,
 		identity:               cfg.identity,
 		providerCredentials:    cfg.providerCredentials,
 		logger:                 cfg.logger,
@@ -206,7 +207,8 @@ func newHandler(cfg handlerConfig) http.Handler {
 	mux.HandleFunc("/v1/invocations/{invocation_id}/stream", h.requireMethod(http.MethodGet, h.streamInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/cancel", h.requireMethod(http.MethodPost, h.cancelInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/tool-results", h.requireMethod(http.MethodPost, h.submitHostToolResults))
-	mux.HandleFunc("/v1/model-pricing-capabilities", h.requireMethod(http.MethodGet, h.getModelPricingCapability))
+	mux.HandleFunc("/v1/models", h.requireMethod(http.MethodGet, h.listModels))
+	mux.HandleFunc("/v1/models/{provider}/{model_id}", h.requireMethod(http.MethodGet, h.getModel))
 	mux.HandleFunc("/v1/sessions", h.requireMethod(http.MethodGet, h.listSessions))
 	mux.HandleFunc("/v1/sessions/{session_id}/messages", h.requireMethod(http.MethodGet, h.listSessionMessages))
 	mux.HandleFunc("/v1/sessions/{session_id}/transcript", h.requireMethod(http.MethodGet, h.getSessionTranscript))
@@ -263,41 +265,93 @@ func (h *handler) health(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
-func (h *handler) getModelPricingCapability(w http.ResponseWriter, r *http.Request) {
+func (h *handler) listModels(w http.ResponseWriter, r *http.Request) {
 	requestID := requestIDFromContext(r.Context())
 	if _, err := h.authenticate(r); err != nil {
 		h.writeError(w, requestID, err)
 		return
 	}
-	query, err := strictQuery(r, "provider", "model")
+	query, err := strictQuery(r, "provider", "include_deprecated")
 	if err != nil {
 		h.writeError(w, requestID, invalidQuery(err))
 		return
 	}
-	provider := domain.ModelProvider(query.Get("provider"))
-	if provider != domain.ModelProviderAnthropic && provider != domain.ModelProviderOpenAI {
-		h.writeError(w, requestID, invalidQuery(errors.New("provider must be anthropic or openai")))
-		return
+	var provider domain.ModelProvider
+	if values, present := query["provider"]; present {
+		value := values[0]
+		if value == "" {
+			h.writeError(w, requestID, invalidQuery(errors.New("provider must not be blank")))
+			return
+		}
+		provider = domain.ModelProvider(value)
+		if !provider.Valid() {
+			h.writeError(w, requestID, invalidQuery(errors.New("provider is not supported")))
+			return
+		}
 	}
-	model := query.Get("model")
-	if model == "" || !utf8.ValidString(model) || utf8.RuneCountInString(model) > 255 {
-		h.writeError(w, requestID, invalidQuery(errors.New("model must contain 1 to 255 Unicode characters")))
-		return
+	includeDeprecated := false
+	if values, present := query["include_deprecated"]; present {
+		value := values[0]
+		if value == "" {
+			h.writeError(w, requestID, invalidQuery(errors.New("include_deprecated must be true or false")))
+			return
+		}
+		includeDeprecated, err = strconv.ParseBool(value)
+		if err != nil {
+			h.writeError(w, requestID, invalidQuery(errors.New("include_deprecated must be true or false")))
+			return
+		}
 	}
-	if h.modelPricing == nil {
+	if h.models == nil {
 		h.writeError(w, requestID, &services.PublicError{
 			Code:    services.CodeUnavailable,
 			Message: "The service is temporarily unavailable.",
 		})
 		return
 	}
-	capability := h.modelPricing.ResolveModelPricing(string(provider), model)
-	writeJSON(w, http.StatusOK, modelPricingCapabilityResponse{
-		Provider:        provider,
-		Model:           model,
-		Status:          capability.Status,
-		RegistryVersion: capability.RegistryVersion,
+	catalog := h.models.ListModels(provider, includeDeprecated)
+	items := make([]modelDescriptorResponse, 0, len(catalog.Items))
+	for _, descriptor := range catalog.Items {
+		items = append(items, modelDescriptorResponseFromDomain(descriptor))
+	}
+	writeConditionalJSON(w, r, http.StatusOK, modelListResponse{
+		Items:          items,
+		CatalogVersion: catalog.Version,
 	})
+}
+
+func (h *handler) getModel(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if _, err := h.authenticate(r); err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	if len(r.URL.Query()) != 0 {
+		h.writeError(w, requestID, invalidQuery(errors.New("query parameters are not supported")))
+		return
+	}
+	provider := domain.ModelProvider(r.PathValue("provider"))
+	if !provider.Valid() {
+		h.writeError(w, requestID, invalidQuery(errors.New("provider is not supported")))
+		return
+	}
+	model := r.PathValue("model_id")
+	if model == "" ||
+		!utf8.ValidString(model) ||
+		strings.TrimSpace(model) != model ||
+		utf8.RuneCountInString(model) > services.MaxReferenceCharacters {
+		h.writeError(w, requestID, invalidQuery(errors.New("model_id must contain 1 to 255 unpadded Unicode characters")))
+		return
+	}
+	if h.models == nil {
+		h.writeError(w, requestID, &services.PublicError{
+			Code:    services.CodeUnavailable,
+			Message: "The service is temporarily unavailable.",
+		})
+		return
+	}
+	descriptor := h.models.ResolveModel(provider, model)
+	writeConditionalJSON(w, r, http.StatusOK, modelDescriptorResponseFromDomain(descriptor))
 }
 
 func (h *handler) providerCredentialsCollection(w http.ResponseWriter, r *http.Request) {
@@ -886,11 +940,35 @@ type invocationAcknowledgementResponse struct {
 	DeadlineAt   time.Time               `json:"deadline_at"`
 }
 
-type modelPricingCapabilityResponse struct {
-	Provider        domain.ModelProvider      `json:"provider"`
-	Model           string                    `json:"model"`
-	Status          domain.ModelPricingStatus `json:"status"`
-	RegistryVersion string                    `json:"registry_version"`
+type modelListResponse struct {
+	Items          []modelDescriptorResponse `json:"items"`
+	CatalogVersion string                    `json:"catalog_version"`
+}
+
+type modelDescriptorResponse struct {
+	Provider            domain.ModelProvider `json:"provider"`
+	ID                  string               `json:"id"`
+	Cataloged           bool                 `json:"cataloged"`
+	DisplayName         string               `json:"display_name,omitempty"`
+	Description         string               `json:"description,omitempty"`
+	ContextWindowTokens *int                 `json:"context_window_tokens,omitempty"`
+	MaxOutputTokens     *int                 `json:"max_output_tokens,omitempty"`
+	InputModalities     []string             `json:"input_modalities,omitempty"`
+	Recommended         *bool                `json:"recommended,omitempty"`
+	Deprecated          *bool                `json:"deprecated,omitempty"`
+	Pricing             modelPricingResponse `json:"pricing"`
+}
+
+type modelPricingResponse struct {
+	Status         domain.ModelPricingStatus `json:"status"`
+	Currency       string                    `json:"currency,omitempty"`
+	Unit           string                    `json:"unit,omitempty"`
+	Input          string                    `json:"input,omitempty"`
+	Output         string                    `json:"output,omitempty"`
+	CacheRead      *string                   `json:"cache_read,omitempty"`
+	CacheWrite     *string                   `json:"cache_write,omitempty"`
+	UpdatedAt      string                    `json:"updated_at,omitempty"`
+	PricingVersion string                    `json:"pricing_version"`
 }
 
 type invocationResponse struct {
@@ -1081,6 +1159,35 @@ func sessionResponseFromService(session services.SessionRead) sessionResponse {
 	}
 }
 
+func modelDescriptorResponseFromDomain(descriptor domain.ModelDescriptor) modelDescriptorResponse {
+	response := modelDescriptorResponse{
+		Provider:            descriptor.Provider,
+		ID:                  descriptor.ID,
+		Cataloged:           descriptor.Cataloged,
+		DisplayName:         descriptor.DisplayName,
+		Description:         descriptor.Description,
+		ContextWindowTokens: descriptor.ContextWindowTokens,
+		MaxOutputTokens:     descriptor.MaxOutputTokens,
+		InputModalities:     descriptor.InputModalities,
+		Pricing: modelPricingResponse{
+			Status:         descriptor.Pricing.Status,
+			Currency:       descriptor.Pricing.Currency,
+			Unit:           descriptor.Pricing.Unit,
+			Input:          descriptor.Pricing.Input,
+			Output:         descriptor.Pricing.Output,
+			CacheRead:      descriptor.Pricing.CacheRead,
+			CacheWrite:     descriptor.Pricing.CacheWrite,
+			UpdatedAt:      descriptor.Pricing.UpdatedAt,
+			PricingVersion: descriptor.Pricing.PricingVersion,
+		},
+	}
+	if descriptor.Cataloged {
+		response.Recommended = &descriptor.Recommended
+		response.Deprecated = &descriptor.Deprecated
+	}
+	return response
+}
+
 func pendingHostToolCallResponses(calls []services.PendingHostToolCall) []pendingHostToolCallResponse {
 	responses := make([]pendingHostToolCallResponse, len(calls))
 	for index, call := range calls {
@@ -1260,6 +1367,39 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func writeConditionalJSON(w http.ResponseWriter, r *http.Request, status int, value any) {
+	body, err := json.Marshal(value)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Code:      "internal",
+			Message:   "The service encountered an internal error.",
+			RequestID: requestIDFromContext(r.Context()),
+		})
+		return
+	}
+	body = append(body, '\n')
+	sum := sha256.Sum256(body)
+	etag := `"` + hex.EncodeToString(sum[:]) + `"`
+	w.Header().Set("ETag", etag)
+	if etagMatches(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
+}
+
+func etagMatches(header, etag string) bool {
+	for value := range strings.SplitSeq(header, ",") {
+		value = strings.TrimSpace(value)
+		if value == "*" || value == etag || strings.TrimPrefix(value, "W/") == etag {
+			return true
+		}
+	}
+	return false
 }
 
 type requestIDContextKey struct{}

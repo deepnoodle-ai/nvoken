@@ -239,12 +239,12 @@ type unpricedModelGenerator struct {
 	fakeModelGenerator
 }
 
-func (*unpricedModelGenerator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
-	return domain.ModelPricingCapability{
-		Provider:        domain.ModelProvider(provider),
-		Model:           model,
-		Status:          domain.ModelPricingUnpriced,
-		RegistryVersion: "test",
+func (*unpricedModelGenerator) ResolveModelPricing(provider, model string) domain.ModelPricing {
+	return domain.ModelPricing{
+		Provider:       domain.ModelProvider(provider),
+		Model:          model,
+		Status:         domain.ModelPricingUnpriced,
+		PricingVersion: "test",
 	}
 }
 
@@ -252,12 +252,12 @@ type unknownPricingModelGenerator struct {
 	fakeModelGenerator
 }
 
-func (*unknownPricingModelGenerator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
-	return domain.ModelPricingCapability{
-		Provider:        domain.ModelProvider(provider),
-		Model:           model,
-		Status:          domain.ModelPricingUnknown,
-		RegistryVersion: "test",
+func (*unknownPricingModelGenerator) ResolveModelPricing(provider, model string) domain.ModelPricing {
+	return domain.ModelPricing{
+		Provider:       domain.ModelProvider(provider),
+		Model:          model,
+		Status:         domain.ModelPricingUnknown,
+		PricingVersion: "test",
 	}
 }
 

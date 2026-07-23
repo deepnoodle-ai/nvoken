@@ -19,7 +19,7 @@ __version__ = "0.1.0"
 # Define package exports
 __all__ = [
     "InvocationsApi",
-    "ModelPricingApi",
+    "ModelsApi",
     "ProviderCredentialsApi",
     "SessionsApi",
     "ApiResponse",
@@ -59,7 +59,9 @@ __all__ = [
     "InvocationStreamEvent",
     "InvocationUpdateEvent",
     "ModelCost",
-    "ModelPricingCapability",
+    "ModelDescriptor",
+    "ModelList",
+    "ModelPricing",
     "ModelProvenance",
     "ModelProvider",
     "ModelSelection",
@@ -94,7 +96,7 @@ __all__ = [
 
 # import apis into sdk package
 from nvoken_generated.api.invocations_api import InvocationsApi as InvocationsApi
-from nvoken_generated.api.model_pricing_api import ModelPricingApi as ModelPricingApi
+from nvoken_generated.api.models_api import ModelsApi as ModelsApi
 from nvoken_generated.api.provider_credentials_api import ProviderCredentialsApi as ProviderCredentialsApi
 from nvoken_generated.api.sessions_api import SessionsApi as SessionsApi
 
@@ -138,7 +140,9 @@ from nvoken_generated.models.invocation_status import InvocationStatus as Invoca
 from nvoken_generated.models.invocation_stream_event import InvocationStreamEvent as InvocationStreamEvent
 from nvoken_generated.models.invocation_update_event import InvocationUpdateEvent as InvocationUpdateEvent
 from nvoken_generated.models.model_cost import ModelCost as ModelCost
-from nvoken_generated.models.model_pricing_capability import ModelPricingCapability as ModelPricingCapability
+from nvoken_generated.models.model_descriptor import ModelDescriptor as ModelDescriptor
+from nvoken_generated.models.model_list import ModelList as ModelList
+from nvoken_generated.models.model_pricing import ModelPricing as ModelPricing
 from nvoken_generated.models.model_provenance import ModelProvenance as ModelProvenance
 from nvoken_generated.models.model_provider import ModelProvider as ModelProvider
 from nvoken_generated.models.model_selection import ModelSelection as ModelSelection

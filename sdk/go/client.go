@@ -224,21 +224,47 @@ func (c *Client) CancelInvocation(ctx context.Context, invocationID string) (*In
 	})
 }
 
-func (c *Client) PricingCapability(
+func (c *Client) ListModels(
 	ctx context.Context,
-	provider ModelProvider,
-	model string,
-) (*ModelPricingCapability, error) {
-	params := &generated.GetModelPricingCapabilityParams{
-		Provider: provider,
-		Model:    model,
+	options ListModelsOptions,
+) (*ModelList, error) {
+	params := &generated.ListModelsParams{
+		Provider:          options.Provider,
+		IncludeDeprecated: options.IncludeDeprecated,
 	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ModelPricingCapability], error) {
-		response, err := c.raw.GetModelPricingCapabilityWithResponse(ctx, params)
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ModelList], error) {
+		response, err := c.raw.ListModelsWithResponse(ctx, params)
 		if err != nil {
-			return callResult[generated.ModelPricingCapability]{}, err
+			return callResult[generated.ModelList]{}, err
 		}
-		return callResult[generated.ModelPricingCapability]{
+		return callResult[generated.ModelList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetModel(ctx context.Context, model Model) (*ModelDescriptor, error) {
+	if model.ID == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "model id is required"}
+	}
+	provider, err := generatedModelProvider(model.Provider)
+	if err != nil {
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ModelDescriptor], error) {
+		response, callErr := c.raw.GetModelWithResponse(
+			ctx,
+			provider,
+			model.ID,
+			&generated.GetModelParams{},
+		)
+		if callErr != nil {
+			return callResult[generated.ModelDescriptor]{}, callErr
+		}
+		return callResult[generated.ModelDescriptor]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),

@@ -28,6 +28,7 @@ const invocationId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
 const sessionId = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const toolCallId = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
 const waitId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
+const exactModelId = "experimental/model?variant=雪%#1";
 
 interface Answer {
   answer: string;
@@ -129,13 +130,13 @@ test("shared fault server semantics", async (context) => {
     apiKey: "test-key",
     retry: { maxAttempts: 3, minDelayMs: 1, maxDelayMs: 5 },
   });
-  const pricing = await client.pricingCapability({ provider: "openai", id: "gpt-test" });
-  assert.deepEqual(pricing, {
-    provider: "openai",
-    model: "gpt-test",
-    status: "priced",
-    registryVersion: "conformance-v1",
-  });
+  const models = await client.listModels();
+  assert.equal(models.catalogVersion, "conformance-catalog-v1");
+  assert.equal(models.items.find((model) => model.id === "future-model")?.provider, "future_provider");
+  const exactModel = await client.getModel({ provider: "openai", id: exactModelId });
+  assert.equal(exactModel.id, exactModelId);
+  assert.equal(exactModel.cataloged, false);
+  assert.equal(exactModel.pricing.status, "unpriced");
   const handle = await client.invoke({
     agentKey: "support",
     idempotencyKey: "typescript-lost-ack",

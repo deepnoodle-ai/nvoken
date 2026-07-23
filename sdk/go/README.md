@@ -13,3 +13,17 @@ NVOKEN_BASE_URL=http://localhost:8080 NVOKEN_API_KEY=... \
 
 The SDK is a separate Go module and does not bring the daemon's database,
 provider, or deployment dependencies into host applications.
+
+Discover models through the same facade:
+
+```go
+catalog, err := client.ListModels(ctx, nvoken.ListModelsOptions{})
+selected, err := client.GetModel(ctx, nvoken.Model{
+	Provider: "openai",
+	ID:       catalog.Items[0].ID,
+})
+```
+
+`ListModels` returns nvoken's curated catalog; `GetModel` also tolerantly
+inspects uncataloged exact IDs. Catalog membership does not prove provider
+account access.

@@ -41,7 +41,9 @@ from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.invocation_stream_event import InvocationStreamEvent
 from nvoken_generated.models.invocation_update_event import InvocationUpdateEvent
 from nvoken_generated.models.model_cost import ModelCost
-from nvoken_generated.models.model_pricing_capability import ModelPricingCapability
+from nvoken_generated.models.model_descriptor import ModelDescriptor
+from nvoken_generated.models.model_list import ModelList
+from nvoken_generated.models.model_pricing import ModelPricing
 from nvoken_generated.models.model_provenance import ModelProvenance
 from nvoken_generated.models.model_provider import ModelProvider
 from nvoken_generated.models.model_selection import ModelSelection

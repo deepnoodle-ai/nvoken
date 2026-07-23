@@ -125,6 +125,26 @@ or integration catalog. `/health`, `/ready`, and `/metrics` belong to
 deployment operation and are listed only because every installation exposes
 them.
 
+### Model discovery
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/v1/models` | List the complete, curated set of model selections nvoken advertises, optionally filtered by provider. |
+| `GET` | `/v1/models/{provider}/{model_id}` | Inspect one exact selection, including standard local pricing when the model is outside the curated catalog. |
+
+The Models API is model-centered: metadata, recommendation, deprecation, and
+the pricing evidence used by the estimated-cost guardrail travel together.
+`cataloged` says whether nvoken maintains descriptive metadata for the exact
+selection; it does not prove that the caller's provider account, region, or
+credential can access it. Model IDs are exact values and must be encoded as one
+path segment. Both reads support `ETag`/`If-None-Match`; the complete list also
+has an opaque `catalog_version`.
+
+`/v1/capabilities` remains installation-centered. It reports installed
+adapters and protocol features rather than acting as a model or pricing
+catalog. New model facts therefore extend `/v1/models`, while new runtime
+features extend `/v1/capabilities`.
+
 ## 2. Invocations
 
 The frozen background launch slice is deliberately smaller than the eventual

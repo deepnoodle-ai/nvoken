@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { InvocationsApi, ModelPricingApi, SessionsApi } from "./generated/apis/index.js";
+import { InvocationsApi, ModelsApi, SessionsApi } from "./generated/apis/index.js";
 import type {
   CreateInvocationRequest,
   Invocation,
@@ -11,7 +11,8 @@ import type {
   InvocationProviderCredentialSelection,
   InvocationResult,
   InvocationStatus,
-  ModelPricingCapability,
+  ModelDescriptor,
+  ModelList,
   ModelProvider,
   PendingHostToolCall,
   Session,
@@ -391,6 +392,11 @@ export interface ListInvocationOptions {
   limit?: number;
 }
 
+export interface ListModelsOptions {
+  provider?: ModelProvider;
+  includeDeprecated?: boolean;
+}
+
 export interface ListSessionOptions {
   tenantKey?: string;
   defaultTenant?: boolean;
@@ -443,7 +449,7 @@ export interface WaitOptions {
 
 export class Client {
   readonly invocations: InvocationsApi;
-  readonly modelPricing: ModelPricingApi;
+  readonly models: ModelsApi;
   readonly sessions: SessionsApi;
   readonly configuration: Configuration;
   readonly retry: Required<RetryPolicy>;
@@ -474,7 +480,7 @@ export class Client {
       headers: { "User-Agent": "@deepnoodle/nvoken" },
     });
     this.invocations = new InvocationsApi(this.configuration);
-    this.modelPricing = new ModelPricingApi(this.configuration);
+    this.models = new ModelsApi(this.configuration);
     this.sessions = new SessionsApi(this.configuration);
     this.retry = {
       maxAttempts: options.retry?.maxAttempts ?? 4,
@@ -496,8 +502,8 @@ export class Client {
     }
   }
 
-  raw(): { invocations: InvocationsApi; modelPricing: ModelPricingApi; sessions: SessionsApi } {
-    return { invocations: this.invocations, modelPricing: this.modelPricing, sessions: this.sessions };
+  raw(): { invocations: InvocationsApi; models: ModelsApi; sessions: SessionsApi } {
+    return { invocations: this.invocations, models: this.models, sessions: this.sessions };
   }
 
   agent<TOutput extends object = JsonObject>(
@@ -506,13 +512,26 @@ export class Client {
     return new Agent(this, options);
   }
 
-  pricingCapability(model: Model, signal?: AbortSignal): Promise<ModelPricingCapability> {
+  listModels(options: ListModelsOptions = {}, signal?: AbortSignal): Promise<ModelList> {
+    return this.replaySafe(
+      () => this.models.listModels(
+        {
+          provider: options.provider,
+          includeDeprecated: options.includeDeprecated,
+        },
+        { signal },
+      ),
+      signal,
+    );
+  }
+
+  getModel(model: Model, signal?: AbortSignal): Promise<ModelDescriptor> {
     if (!model.id) {
       throw new NvokenError("validation", "model id is required");
     }
     return this.replaySafe(
-      () => this.modelPricing.getModelPricingCapability(
-        { provider: model.provider, model: model.id },
+      () => this.models.getModel(
+        { provider: model.provider, modelId: model.id },
         { signal },
       ),
       signal,

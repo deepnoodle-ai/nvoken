@@ -56,16 +56,36 @@ type fakeProviderCredentials struct {
 	createCalls int
 }
 
-type fakeModelPricing struct {
-	capability domain.ModelPricingCapability
-	provider   string
-	model      string
+type fakeModels struct {
+	catalog           domain.ModelCatalog
+	descriptor        domain.ModelDescriptor
+	listProvider      domain.ModelProvider
+	includeDeprecated bool
+	resolvedProvider  domain.ModelProvider
+	resolvedModel     string
 }
 
-func (f *fakeModelPricing) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
-	f.provider = provider
-	f.model = model
-	return f.capability
+func (f *fakeModels) ListModels(
+	provider domain.ModelProvider,
+	includeDeprecated bool,
+) domain.ModelCatalog {
+	f.listProvider = provider
+	f.includeDeprecated = includeDeprecated
+	return f.catalog
+}
+
+func (f *fakeModels) ResolveModel(
+	provider domain.ModelProvider,
+	model string,
+) domain.ModelDescriptor {
+	f.resolvedProvider = provider
+	f.resolvedModel = model
+	descriptor := f.descriptor
+	descriptor.Provider = provider
+	descriptor.ID = model
+	descriptor.Pricing.Provider = provider
+	descriptor.Pricing.Model = model
+	return descriptor
 }
 
 func (f *fakeProviderCredentials) Create(
@@ -176,53 +196,201 @@ func TestHealthIsPublic(t *testing.T) {
 	}
 }
 
-func TestGetModelPricingCapability(t *testing.T) {
-	pricing := &fakeModelPricing{capability: domain.ModelPricingCapability{
-		Provider:        domain.ModelProviderAnthropic,
-		Model:           "adapter-metadata-is-not-authoritative",
-		Status:          domain.ModelPricingPriced,
-		RegistryVersion: "v1.16.0",
+func TestListModelsFiltersAndSupportsConditionalReads(t *testing.T) {
+	contextWindow := 1_000_000
+	models := &fakeModels{catalog: domain.ModelCatalog{
+		Items: []domain.ModelDescriptor{{
+			Provider:            domain.ModelProviderOpenAI,
+			ID:                  "gpt-test",
+			Cataloged:           true,
+			DisplayName:         "GPT Test",
+			Description:         "A test model.",
+			ContextWindowTokens: &contextWindow,
+			InputModalities:     []string{"text"},
+			Recommended:         true,
+			Pricing: domain.ModelPricing{
+				Status:         domain.ModelPricingPriced,
+				Currency:       "USD",
+				Unit:           "per_million_tokens",
+				Input:          "1",
+				Output:         "2",
+				UpdatedAt:      "2026-07-23",
+				PricingVersion: "pricing-1",
+			},
+		}},
+		Version: "catalog-1",
 	}}
 	authenticator := &fakeAuthenticator{auth: domain.RuntimeAuthContext{AccountID: testAccountID}}
 	handler := newHandler(handlerConfig{
 		authenticator: authenticator,
-		modelPricing:  pricing,
+		models:        models,
 		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, authenticatedRequest(
 		http.MethodGet,
-		"/v1/model-pricing-capabilities?provider=openai&model=gpt-test",
+		"/v1/models?provider=openai&include_deprecated=true",
 		nil,
 	))
-	if recorder.Code != http.StatusOK || pricing.provider != "openai" || pricing.model != "gpt-test" {
-		t.Fatalf("pricing capability = %d %s, provider = %q, model = %q", recorder.Code, recorder.Body.String(), pricing.provider, pricing.model)
+	if recorder.Code != http.StatusOK ||
+		models.listProvider != domain.ModelProviderOpenAI ||
+		!models.includeDeprecated {
+		t.Fatalf(
+			"model list = %d %s, provider = %q, include deprecated = %t",
+			recorder.Code,
+			recorder.Body.String(),
+			models.listProvider,
+			models.includeDeprecated,
+		)
 	}
-	for _, expected := range []string{`"provider":"openai"`, `"model":"gpt-test"`, `"status":"priced"`, `"registry_version":"v1.16.0"`} {
+	for _, expected := range []string{
+		`"provider":"openai"`,
+		`"id":"gpt-test"`,
+		`"cataloged":true`,
+		`"recommended":true`,
+		`"deprecated":false`,
+		`"pricing_version":"pricing-1"`,
+		`"catalog_version":"catalog-1"`,
+	} {
 		if !strings.Contains(recorder.Body.String(), expected) {
-			t.Fatalf("pricing capability missing %s: %s", expected, recorder.Body.String())
+			t.Fatalf("model list missing %s: %s", expected, recorder.Body.String())
+		}
+	}
+	etag := recorder.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("model list has no ETag")
+	}
+	conditional := authenticatedRequest(http.MethodGet, "/v1/models?provider=openai&include_deprecated=true", nil)
+	conditional.Header.Set("If-None-Match", "W/"+etag)
+	notModified := httptest.NewRecorder()
+	handler.ServeHTTP(notModified, conditional)
+	if notModified.Code != http.StatusNotModified || notModified.Body.Len() != 0 {
+		t.Fatalf("conditional model list = %d %q", notModified.Code, notModified.Body.String())
+	}
+	models.catalog.Items[0].Description = "Changed metadata."
+	changed := httptest.NewRecorder()
+	handler.ServeHTTP(changed, authenticatedRequest(http.MethodGet, "/v1/models", nil))
+	if changed.Header().Get("ETag") == etag {
+		t.Fatal("model metadata change did not change the ETag")
+	}
+}
+
+func TestGetModelRoundTripsEncodedModelIDAndOmitsUncatalogedMetadata(t *testing.T) {
+	models := &fakeModels{descriptor: domain.ModelDescriptor{
+		Cataloged: false,
+		Pricing: domain.ModelPricing{
+			Status:         domain.ModelPricingUnpriced,
+			PricingVersion: "pricing-1",
+		},
+	}}
+	handler := newHandler(handlerConfig{
+		authenticator: &fakeAuthenticator{auth: domain.RuntimeAuthContext{AccountID: testAccountID}},
+		models:        models,
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, authenticatedRequest(
+		http.MethodGet,
+		"/v1/models/openai/future%2Fmodel%3Fvariant%3D%E9%9B%AA%25",
+		nil,
+	))
+	if recorder.Code != http.StatusOK ||
+		models.resolvedProvider != domain.ModelProviderOpenAI ||
+		models.resolvedModel != "future/model?variant=雪%" {
+		t.Fatalf(
+			"model descriptor = %d %s, provider = %q, model = %q",
+			recorder.Code,
+			recorder.Body.String(),
+			models.resolvedProvider,
+			models.resolvedModel,
+		)
+	}
+	for _, expected := range []string{
+		`"provider":"openai"`,
+		`"id":"future/model?variant=雪%"`,
+		`"cataloged":false`,
+		`"status":"unpriced"`,
+		`"pricing_version":"pricing-1"`,
+	} {
+		if !strings.Contains(recorder.Body.String(), expected) {
+			t.Fatalf("model descriptor missing %s: %s", expected, recorder.Body.String())
+		}
+	}
+	for _, omitted := range []string{"display_name", "recommended", "deprecated", "currency", "unit"} {
+		if strings.Contains(recorder.Body.String(), omitted) {
+			t.Fatalf("uncataloged model includes %q: %s", omitted, recorder.Body.String())
+		}
+	}
+	etag := recorder.Header().Get("ETag")
+	conditional := authenticatedRequest(
+		http.MethodGet,
+		"/v1/models/openai/future%2Fmodel%3Fvariant%3D%E9%9B%AA%25",
+		nil,
+	)
+	conditional.Header.Set("If-None-Match", etag)
+	notModified := httptest.NewRecorder()
+	handler.ServeHTTP(notModified, conditional)
+	if notModified.Code != http.StatusNotModified || notModified.Body.Len() != 0 {
+		t.Fatalf("conditional model descriptor = %d %q", notModified.Code, notModified.Body.String())
+	}
+}
+
+func TestGetModelPreservesUnknownPricingShape(t *testing.T) {
+	models := &fakeModels{descriptor: domain.ModelDescriptor{
+		Pricing: domain.ModelPricing{
+			Status:         domain.ModelPricingUnknown,
+			PricingVersion: "pricing-unknown",
+		},
+	}}
+	handler := newHandler(handlerConfig{
+		authenticator: &fakeAuthenticator{auth: domain.RuntimeAuthContext{AccountID: testAccountID}},
+		models:        models,
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, authenticatedRequest(
+		http.MethodGet,
+		"/v1/models/openai/adapter-undecidable",
+		nil,
+	))
+	if recorder.Code != http.StatusOK ||
+		!strings.Contains(recorder.Body.String(), `"status":"unknown"`) ||
+		!strings.Contains(recorder.Body.String(), `"pricing_version":"pricing-unknown"`) {
+		t.Fatalf("unknown model descriptor = %d %s", recorder.Code, recorder.Body.String())
+	}
+	for _, omitted := range []string{"currency", "unit", "input", "output", "updated_at"} {
+		if strings.Contains(recorder.Body.String(), omitted) {
+			t.Fatalf("unknown pricing includes %q: %s", omitted, recorder.Body.String())
 		}
 	}
 }
 
-func TestGetModelPricingCapabilityValidatesAuthenticationAndQuery(t *testing.T) {
-	pricing := &fakeModelPricing{}
+func TestModelsValidateAuthenticationAndInput(t *testing.T) {
+	models := &fakeModels{}
 	for _, test := range []struct {
 		name   string
 		target string
 		auth   bool
 		status int
 	}{
-		{name: "authentication", target: "/v1/model-pricing-capabilities?provider=openai&model=gpt-test", status: http.StatusUnauthorized},
-		{name: "provider", target: "/v1/model-pricing-capabilities?provider=other&model=gpt-test", auth: true, status: http.StatusBadRequest},
-		{name: "missing model", target: "/v1/model-pricing-capabilities?provider=openai", auth: true, status: http.StatusBadRequest},
-		{name: "unknown query", target: "/v1/model-pricing-capabilities?provider=openai&model=gpt-test&extra=true", auth: true, status: http.StatusBadRequest},
+		{name: "authentication", target: "/v1/models", status: http.StatusUnauthorized},
+		{name: "list provider", target: "/v1/models?provider=other", auth: true, status: http.StatusBadRequest},
+		{name: "list provider alias", target: "/v1/models?provider=open-ai", auth: true, status: http.StatusBadRequest},
+		{name: "list blank provider", target: "/v1/models?provider=", auth: true, status: http.StatusBadRequest},
+		{name: "list boolean", target: "/v1/models?include_deprecated=yes", auth: true, status: http.StatusBadRequest},
+		{name: "list blank boolean", target: "/v1/models?include_deprecated=", auth: true, status: http.StatusBadRequest},
+		{name: "list repeated query", target: "/v1/models?provider=openai&provider=openai", auth: true, status: http.StatusBadRequest},
+		{name: "list unknown query", target: "/v1/models?extra=true", auth: true, status: http.StatusBadRequest},
+		{name: "item provider", target: "/v1/models/other/gpt-test", auth: true, status: http.StatusBadRequest},
+		{name: "item provider alias", target: "/v1/models/open-ai/gpt-test", auth: true, status: http.StatusBadRequest},
+		{name: "item padded model", target: "/v1/models/openai/%20gpt-test", auth: true, status: http.StatusBadRequest},
+		{name: "item unknown query", target: "/v1/models/openai/gpt-test?extra=true", auth: true, status: http.StatusBadRequest},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			authenticator := &fakeAuthenticator{auth: domain.RuntimeAuthContext{AccountID: testAccountID}}
 			handler := newHandler(handlerConfig{
 				authenticator: authenticator,
-				modelPricing:  pricing,
+				models:        models,
 				logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 			})
 			request := httptest.NewRequest(http.MethodGet, test.target, nil)

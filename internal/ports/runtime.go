@@ -420,5 +420,12 @@ type ModelGenerator interface {
 // unknown means the adapter cannot decide until normalized response evidence is
 // available.
 type ModelPricingResolver interface {
-	ResolveModelPricing(provider, model string) domain.ModelPricingCapability
+	ResolveModelPricing(provider, model string) domain.ModelPricing
+}
+
+// ModelCatalogResolver exposes nvoken's curated model set and tolerant exact
+// model descriptors without making provider-account availability claims.
+type ModelCatalogResolver interface {
+	ListModels(provider domain.ModelProvider, includeDeprecated bool) domain.ModelCatalog
+	ResolveModel(provider domain.ModelProvider, model string) domain.ModelDescriptor
 }

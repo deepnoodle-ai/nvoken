@@ -28,6 +28,7 @@ INVOCATION_ID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
 SESSION_ID = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
 TOOL_CALL_ID = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 WAIT_ID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
+EXACT_MODEL_ID = "experimental/model?variant=雪%#1"
 
 
 @pytest.mark.asyncio
@@ -43,6 +44,15 @@ async def test_shared_fault_server_semantics() -> None:
         "test-key",
         retry=RetryPolicy(max_attempts=3, min_delay=0.001, max_delay=0.005),
     ) as client:
+        models = await client.list_models()
+        assert models.catalog_version == "conformance-catalog-v1"
+        assert next(model for model in models.items if model.id == "future-model").provider == \
+            "future_provider"
+        exact_model = await client.get_model(Model(provider="openai", id=EXACT_MODEL_ID))
+        assert exact_model.id == EXACT_MODEL_ID
+        assert exact_model.cataloged is False
+        assert exact_model.pricing.status == "unpriced"
+
         handle = await client.invoke(InvokeRequest(
             agent_key="support",
             idempotency_key="python-lost-ack",

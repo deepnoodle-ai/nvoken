@@ -298,14 +298,14 @@ func Run(ctx context.Context, cfg Config) error {
 		services.WithCallbackTools(cfg.CallbackSigningKey != ""),
 		services.WithProviderCredentialPolicy(cfg.CredentialPolicy, cfg.CredentialCipher, cfg.CredentialCleanupGrace))
 	providerCredentials := services.NewProviderCredentialService(store, txm, clock, ids, cfg.CredentialCipher)
-	modelPricing := divegen.New(divegen.Config{})
+	modelCatalog := divegen.New(divegen.Config{})
 	ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
 		services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
 	srv := httpapi.NewServer(httpapi.Config{
 		Addr:                   ":" + cfg.Port,
 		Authenticator:          authenticator,
 		Runtime:                runtime,
-		ModelPricing:           modelPricing,
+		Models:                 modelCatalog,
 		Identity:               authenticator,
 		ProviderCredentials:    providerCredentials,
 		LiveEvents:             liveBus,
