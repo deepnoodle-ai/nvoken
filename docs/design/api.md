@@ -1,6 +1,6 @@
 # nvoken Runtime: API Surface
 
-**Status:** Proposed contract
+**Status:** Active contract
 **Date:** 2026-07-20
 **Level:** Endpoint and purpose. The frozen background launch schemas,
 operation IDs, examples, and errors are in
@@ -35,20 +35,20 @@ Authentication and tenancy:
   host backend calls nvoken on their behalf (`vision.md` section 7).
 - Each request resolves one fixed access profile plus optional narrowing
   constraints; credential types are not interchangeable.
-- Agent references are Account-wide. An Invocation may carry a
-  host-controlled `tenant_ref` (`vision.md` section 7), but it creates no
+- Agent keys are Account-wide. An Invocation may carry a
+  host-controlled `tenant_key` (`vision.md` section 7), but it creates no
   public Tenant or Project resource.
 - A tenant-constrained credential fixes the effective partition. Supplying a
-  different explicit `tenant_ref` returns `403 forbidden` before resource
+  different explicit `tenant_key` returns `403 forbidden` before resource
   lookup. For Session-key resolution or creation, an Account-wide credential
-  uses an explicit `tenant_ref` or the default partition. For Session-ID
-  access, an Account-wide credential may omit `tenant_ref` and use the
+  uses an explicit `tenant_key` or the default partition. For Session-ID
+  access, an Account-wide credential may omit `tenant_key` and use the
   Session's stored partition.
 
 Idempotency and concurrency:
 
 - Invocation creation requires a body `idempotency_key`, scoped to Account,
-  effective tenant partition, and Agent reference. An equal replay returns the
+  effective tenant partition, and Agent key. An equal replay returns the
   original records before the concurrency check; a materially changed replay
   returns `409 idempotency_conflict`.
 - At most one Invocation in `queued`, `running`, or `waiting` may exist for a
@@ -62,44 +62,41 @@ Idempotency and concurrency:
   transaction before acknowledgement or execution claim.
 
 Admission accepts at most 1,048,576 encoded JSON bytes and 64 text blocks.
-`agent_ref`, `tenant_ref`, `session_key`, `idempotency_key`, model provider, and
-model name are each limited to 255 Unicode characters. Retained fingerprint v1
-records remain comparable by the
-SHA-256 of compact UTF-8 JSON in fixed member order: `version`,
-`session_selector` (`kind` then `value`), `spec` (`instructions`, then `model`
-with `provider` then `name`), and `input` (`content`, with each block encoded as
-`type` then `text`). The selector kind is `none`, `id`, or `key`; `none` uses an
-empty value. JSON strings escape quotation mark, reverse solidus, and control
-characters only, using the usual short escapes and lowercase `\\u%04x` for
-remaining controls; all other Unicode is emitted directly. Source-object order
-therefore does not matter, while array order and exact string values do. The
-language-neutral canonical bytes and digests in
-[`admission-fingerprint-v1.json`](admission-fingerprint-v1.json) are the
-compatibility fixtures.
+`agent_key`, `tenant_key`, `session_key`, `idempotency_key`, model provider, and
+model ID are each limited to 255 Unicode characters. Admission hashes compact
+UTF-8 JSON in a versioned, fixed member order. Source-object order does not
+matter; array order and exact string values do. Schemas use recursive canonical
+JSON, and estimated cost is normalized to integer micro-USD.
 
-Fingerprint v2 preserves the v1 order and inserts
-`budgets` after `model` inside `spec`. Omitted budgets are `null`; otherwise the
-fixed members are wall-clock seconds, active-execution seconds, output tokens,
-estimated cost normalized to integer micro-USD, and iterations, with omitted
-members encoded as `null`. Explicit defaults therefore differ from omission.
-The compatibility vectors are in
-[`admission-fingerprint-v2.json`](admission-fingerprint-v2.json).
+New admissions use fingerprint v7. It records the current public vocabulary:
+`model.id`, `spec.limits` with total, active, and waiting timeouts, and
+`mode: "host"`. A string `input` is normalized to the same canonical single
+text block as its expanded wire form. Omitted instructions become the empty
+string with no hidden default. Literal provider-credential selection is
+included, but caller secret bytes and materialized defaults never are. Omitted
+optional objects remain `null`, so an explicit value stays materially different
+from omission.
 
-Fingerprint v3 preserves the v2 order and inserts
-`output` after `budgets`. Omitted output is `null`; otherwise it is an object
-containing `schema`, canonicalized recursively so object member order and
-equivalent JSON number spellings do not change the fingerprint. A request with
-output never replays a retained v1 or v2 row. A schema-free request may still
-replay those rows with their recorded algorithm. The compatibility vectors are
-in [`admission-fingerprint-v3.json`](admission-fingerprint-v3.json).
+Versions one through six exist only to preserve equality for already-admitted
+durable rows:
 
-New admissions use fingerprint v4. It preserves the v3 order and inserts the
-ordered `tools` array after `output`. Every client-tool item encodes `name`,
-`description`, `mode`, and recursively canonical `input_schema`; definition
-order remains material. A tools-bearing request cannot replay a retained v1-v3
-row, while a tools-free replay remains comparable by the row's recorded
-algorithm. Compatibility vectors are in
-[`admission-fingerprint-v4.json`](admission-fingerprint-v4.json).
+- v1 used `model.name` and the expanded text-block input form;
+- v2 added the historical `budgets` object with wall-clock and
+  active-execution timeout names;
+- v3 added structured output;
+- v4 added ordered tools using the historical `mode: "client"` spelling;
+- v5 added callback routing;
+- v6 added nonsecret provider-credential selections.
+
+The language-neutral canonical bytes and digests are compatibility fixtures:
+[v1](admission-fingerprint-v1.json),
+[v2](admission-fingerprint-v2.json),
+[v3](admission-fingerprint-v3.json),
+[v4](admission-fingerprint-v4.json),
+[v5](admission-fingerprint-v5.json),
+[v6](admission-fingerprint-v6.json), and
+[v7](admission-fingerprint-v7.json). A retry always uses the algorithm recorded
+on the retained row; only a new admission uses v7.
 
 Streaming and recovery:
 
@@ -138,16 +135,17 @@ Runtime surface:
 | `POST` | `/v1/invocations`                 | Atomically admit one background Invocation and return its stable Agent, Session, and Invocation identity.          |
 | `GET`  | `/v1/invocations`                 | List authoritative Invocations with exact tenant, Session, Agent, and status filters.                              |
 | `GET`  | `/v1/invocations/{invocation_id}` | Read authoritative identity, lifecycle, terminal error, aggregate usage, model provenance, and structured output. |
+| `GET`  | `/v1/invocations/{invocation_id}/stream` | Replay and follow one Invocation over resumable SSE. |
 | `GET`  | `/v1/invocations/{invocation_id}/result` | Read the composed result at any status: the authoritative Invocation, its canonical messages, and `output_text`. |
 | `POST` | `/v1/invocations/{invocation_id}/cancel` | Idempotently make nonterminal work cancelled and return the authoritative terminal row.                    |
-| `POST` | `/v1/invocations/{invocation_id}/tool-results` | Atomically accept a bounded batch of pending client ToolCall results and queue the Invocation when complete. |
+| `POST` | `/v1/invocations/{invocation_id}/tool-results` | Atomically accept a bounded batch of pending host ToolCall results and queue the Invocation when complete. |
 
-The launch create request carries `agent_ref`, body `idempotency_key`, one or
-more text input blocks, an optional `tenant_ref`, at most one of `session_id`
-and `session_key`, and an inline spec containing instructions plus model and
-provider selection. The spec may also carry optional wall-clock,
-active-execution, output-token, estimated-cost, and iteration budgets.
-Installation defaults supply both time limits and iterations; output-token and
+The launch create request carries `agent_key`, body `idempotency_key`, a text
+string or one or more text input blocks, an optional `tenant_key`, at most one
+of `session_id` and `session_key`, and an inline spec containing optional
+instructions plus model and provider selection. The spec may also carry
+optional total, active, waiting, output-token, estimated-cost, and iteration
+limits. Installation defaults supply all three time limits and iterations; output-token and
 cost limits are absent unless requested. A cost limit requires known USD model
 pricing and otherwise fails closed with `budget_exceeded` and
 `details.kind = "estimated_cost_unavailable"`; known absence is rejected before
@@ -155,8 +153,8 @@ the provider call. An optional `output.schema` declares
 a bounded, self-contained object schema. nvoken exposes it to the model as the
 reserved `nvoken_submit_output` builtin and validates every submission itself.
 Schema-bearing requests require at least two model iterations; when the host
-omits that budget nvoken resolves it to three or the lower installation maximum.
-The spec may declare up to 32 ordered client or callback tools with a unique
+omits that limit nvoken resolves it to three or the lower installation maximum.
+The spec may declare up to 32 ordered host or callback tools with a unique
 name, description, mode, and the same bounded schema subset for input. A
 callback additionally supplies exactly one public HTTPS URL and is admitted
 only when installation callback signing is configured.
@@ -169,14 +167,16 @@ immutable Invocation snapshot, never mutable Agent configuration.
 
 The background response is always `202 Accepted` after commit for both new
 admission and equal replay. It returns `agent_id`, `session_id`,
-`invocation_id`, current status, and `deduplicated`; a terminal replay also
-returns `202`. The request handler never owns model execution. A 5xx, timeout,
+`invocation_id`, current status, `deduplicated`, and `deadline_at`; a terminal
+replay also returns `202`. With `Accept: text/event-stream`, the same operation
+returns that acknowledgement as `invocation.accepted`, then follows the
+Invocation. The request handler never owns model execution. A 5xx, timeout,
 disconnect, or otherwise missing acknowledgement is recovered by retrying the
 same request and key.
 
 Public states are exactly `queued`, `running`, `waiting`, `completed`, `failed`,
-and `cancelled`. The last three are terminal and immutable; deadline or budget
-exhaustion is a typed `failed` outcome. `waiting` exposes durable pending client
+and `cancelled`. The last three are terminal and immutable; deadline or limit
+exhaustion is a typed `failed` outcome. `waiting` exposes durable pending host
 ToolCalls and owns no lease or engine capacity. Final result acceptance moves
 the same Invocation back to `queued`. Recovery may also visibly move a
 nonterminal Invocation from `running` back to `queued`; clients order
@@ -220,31 +220,32 @@ so terminal settlement cannot precede its referenced transcript watermark.
 Tokens grant no authority and every request re-authorizes the durable Session.
 
 The SSE stream accepts the transcript `cursor`, with explicit query input
-taking precedence over `Last-Event-ID`. Nonempty `transcript.snapshot` frames
-project one JSON snapshot page and alone carry `id: <resume_cursor>`.
-`generation.delta`, `stream.resync`, and `stream.end` frames are live/control
-signals with no ID and no replay promise. Redis may carry those lossy signals
+taking precedence over `Last-Event-ID`. Nonempty `transcript.update` frames
+project incremental durable messages and lifecycle changes and alone carry
+`id: <resume_cursor>`. `output_text.delta` and `thinking.delta` are id-less
+previews. `stream.resync` means discard buffered previews and wait for the next
+durable frame; `stream.end` either follows terminal reconciliation or tells the
+client to reconnect after deliberate rotation. Redis may carry lossy signals
 between processes, but Postgres polling and the fixed-cut drain determine
-committed content and terminal state. An already-idle Session drains and ends;
-an active stream ends after terminal reconciliation or rotates deliberately so
-the client can reconnect with its last durable ID. Disconnect never cancels an
+committed content and terminal state. Every frame payload carries `type`,
+`session_id`, and the relevant Invocation ID. Disconnect never cancels an
 Invocation.
 
 Metadata, retention, and destructive operations remain later contracts. There
-is no generic public Session-event append endpoint. Client ToolCall results and
+is no generic public Session-event append endpoint. Host ToolCall results and
 future steering use narrow commands defined with those features.
 
 ## 4. ToolCalls
 
 `ToolCall` is the universal durable trace resource for the three modes
-(`builtin`, `callback`, `client` — semantics in `architecture.md`). Tool
+(`builtin`, `callback`, `host` — semantics in `architecture.md`). Tool
 definitions travel in the execution specification or reference named custom
 tool definitions (section 5); there is no integration connection or OAuth
 resource.
 
 ToolCalls are not independent public resources. Inline execution specs may
-declare client and callback tools; the only public result write is the
-Invocation-scoped client command. Internally, the runtime may also exercise
+declare host and callback tools; the only public result write is the
+Invocation-scoped host command. Internally, the runtime may also exercise
 trusted builtins: their
 assistant request message,
 nvoken-owned ToolCall identity, attempt, tool-result message, per-model usage
@@ -255,8 +256,8 @@ with a canonical synthetic error result. Expired ownership instead requeues the
 same Invocation and preserves the open call for fenced recovery.
 
 The canonical transcript carries each request and result. Invocation get and
-Session get project unresolved client calls as stable `id`, `name`, canonical
-`input`, and `deadline_at`. A client ToolCall parks the Invocation in `waiting`
+Session get project unresolved host calls as stable `id`, `name`, canonical
+`input`, and `deadline_at`. A host ToolCall parks the Invocation in `waiting`
 with no engine capacity. The host submits 1-32 results to
 `POST /v1/invocations/{invocation_id}/tool-results`; one transaction validates
 the complete batch, appends result evidence for new items, and leaves the
@@ -277,7 +278,7 @@ optional actor context is reserved but omitted until admission owns a delegated
 actor claim. JWKS and per-tool signing-key CRUD remain deferred.
 
 The runtime stores no host integrations or business credentials; hosts use
-client tools, callback tools, or a credential broker.
+host tools, callback tools, or a credential broker.
 
 ## 5. Custom tools
 
@@ -410,7 +411,7 @@ CLI lists and revokes it through `/v1/account/credentials`.
 
 | Method | Endpoint           | Purpose                                                                                                         |
 | ------ | ------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/v1/usage-events` | Incrementally export normalized usage events filtered by tenant reference, Session, Invocation, model, or time. |
+| `GET`  | `/v1/usage-events` | Incrementally export normalized usage events filtered by tenant key, Session, Invocation, model, or time. |
 
 Usage events are an accounting ledger, distinct from the Session transcript and
 Invocation lifecycle projection; they serve reconciliation and rebilling.
@@ -419,18 +420,18 @@ Invocation lifecycle projection; they serve reconciliation and rebilling.
 
 | Removed surface                                     | Replacement                                                                                                             |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Projects and project ensure                         | `tenant_ref` on Invocation; internal partitioning is automatic.                                                         |
+| Projects and project ensure                         | `tenant_key` on Invocation; internal partitioning is automatic.                                                         |
 | Agent configuration resources                       | Auto-created identity anchor only; the execution specification arrives on every Invocation.                             |
 | Registry, Releases, pins, deployment tracks         | Host Git/CI selects an immutable spec reference and digest.                                                             |
 | Skills and toolkits                                 | Resolved into the execution specification; named custom tool definitions (section 5) are the only registration surface. |
-| Integration and OAuth resources                     | Host-owned integrations as client or callback tools.                                                                    |
+| Integration and OAuth resources                     | Host-owned integrations as host or callback tools.                                                                      |
 | General Runtime secret store                        | Model-provider credentials use the narrow surface above; all other secrets remain deployment input or host-brokered.    |
 | Environments, Session compute, runner inventory     | Host-owned sandboxes as host-executed tools; Environment concept deferred to a possible future version.                 |
 | Loops, schedules, triggers, source events, waits    | Host scheduler invokes nvoken.                                                                                          |
 | Tables, artifacts, files                            | Host application storage; agent memory is an optional runtime resource (section 6).                                     |
-| Interactions, inboxes, approvals, channels          | Client ToolCalls and host UI.                                                                                           |
+| Interactions, inboxes, approvals, channels          | Host ToolCalls and host UI.                                                                                           |
 | Webhook endpoint CRUD                               | Authoritative reads, later change projections, and signed callback tools.                                               |
-| End-user members and generic user CRUD              | Host identity via `tenant_ref` and delegated actor reference.                                                           |
+| End-user members and generic user CRUD              | Host identity via `tenant_key` and delegated actor reference.                                                           |
 | Custom roles, permission CRUD, portable invitations | Fixed Account roles; optional Cloud/deployment extensions.                                                              |
 | Plans, subscriptions, credits, checkout, invoices   | nvoken Cloud control plane (internal).                                                                                  |
 | General admin and support APIs                      | Internal surfaces.                                                                                                      |
@@ -453,15 +454,15 @@ OpenAPI-3.1-aware Redocly CLI. The repository's `make check` gate includes it.
 
 ```text
 POST /v1/invocations
-  agent_ref: host Agent identity
+  agent_key: host Agent identity
   idempotency_key: host retry identity
   spec: inline instructions + model/provider
-  input: one or more text blocks
+  input: text string or one or more text blocks
   session_id | session_key | neither
-  tenant_ref: optional host partition key
+  tenant_key: optional host partition key
 
 202 Accepted
-  agent_id, session_id, invocation_id, status, deduplicated
+  agent_id, session_id, invocation_id, status, deduplicated, deadline_at
 ```
 
 The answer is one read away. `GET /v1/invocations/{invocation_id}/result`
@@ -498,17 +499,17 @@ are prefixed UUIDv7 values using `agnt_`, `sesn_`, and `invk_` respectively.
 
 ### Identity and Session resolution
 
-1. An Account-wide credential posts `agent_ref=support-triage`,
-   `tenant_ref=tenant-a`, and `session_key=ticket-7`. nvoken creates the
+1. An Account-wide credential posts `agent_key=support-triage`,
+   `tenant_key=tenant-a`, and `session_key=ticket-7`. nvoken creates the
    Account-wide Agent anchor and the tenant-a Session in the admission
    transaction.
-2. The same Account and Agent post `tenant_ref=tenant-b` with the same
+2. The same Account and Agent post `tenant_key=tenant-b` with the same
    `session_key`. A distinct Session is created because tenant partition is in
    the key namespace. The Account-wide credential can read both Sessions by ID.
 3. A credential constrained to tenant-a can read only the first Session. If it
-   explicitly supplies `tenant_ref=tenant-b`, nvoken returns `403 forbidden`
+   explicitly supplies `tenant_key=tenant-b`, nvoken returns `403 forbidden`
    before lookup. A by-ID lookup outside the constraint returns `404 not_found`.
-4. When an Account-wide caller supplies `session_id` and omits `tenant_ref`, the
+4. When an Account-wide caller supplies `session_id` and omits `tenant_key`, the
    stored Session supplies the partition. An explicit but different tenant
    returns `404 not_found`. A Session ID for another Agent also returns
    `404 not_found`.
@@ -557,8 +558,7 @@ The admission transaction covers these crash windows:
 The executing process is separate from admission in both topologies; delivery
 identities, claim owners, leases, and fences never appear in the public
 acknowledgement or reads. Engine loss requeues the same Invocation and a new
-owner resumes from the last validated checkpoint; retained `execution_lost`
-rows remain readable as historical terminal outcomes. The same
+owner resumes from the last validated checkpoint. The same
 OpenAPI request, acknowledgement, read, replay, and conflict fixtures apply
 unchanged to the self-contained and split Cloud Run modes.
 

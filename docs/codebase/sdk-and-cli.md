@@ -58,13 +58,49 @@ deferred.
 Each SDK has three layers:
 
 1. A read-only generated transport exposing every Runtime operation and model.
-2. A handwritten client with `invoke`, `get`, `list`, `wait`, `stream`,
-   `resume`, `submitToolResults`, `cancel`, and the composed result read
-   (`result`, `listMessages`, `text`), plus typed errors and bounded
+2. A handwritten client with `invoke`, explicit resource reads and lists,
+   bounded waits, Invocation and Session streams, ToolCall result submission,
+   cancellation, and composed result reads, plus typed errors and bounded
    replay-safe retries.
 3. A durable handle carrying Invocation and Session IDs. Local timeout or
    cancellation stops only the caller's wait; explicit `cancel` is the only
    remote cancellation path.
+
+### Cross-language public convention
+
+The facades use one product vocabulary even when a language's casing or
+iteration syntax differs:
+
+- `Client` is the configured entry point; `client.invocation(id)` creates a
+  lazy `InvocationHandle` without a network request.
+- `InvocationHandle` exposes `refresh`, `wait`, `waitForAction`,
+  `waitForResult`, `result`, `text`, `stream`, ToolCall submission, and
+  `cancel` using native language casing.
+- Retry controls are `maxAttempts`, `minDelay`, and `maxDelay`; polling
+  controls are `minPollInterval` and `maxPollInterval`, with the language's
+  ordinary duration type or unit suffix.
+- JSON admission accepts a string shorthand while preserving text-block input,
+  generates an idempotency key when omitted from a facade call, and exposes
+  the actual key and acknowledgement metadata on the handle.
+- Session selectors are mutually exclusive types in handwritten facades.
+  Session pagination, message pagination, and fixed-cut transcript draining
+  have symmetric helpers.
+- Invocation streams expose the wire's discriminated event union directly.
+  `output_text.delta` plus `invocation.result` is the minimum useful consumer;
+  Session reducers are an advanced multi-turn primitive, not the golden path.
+- Typed errors distinguish transport/API failures, terminal Invocation
+  failures, Session-busy conflicts, and missing host-tool handlers while
+  retaining safe wire details and request IDs.
+- The generated transport remains an explicit raw escape hatch and owns
+  one-to-one operation coverage.
+
+The ergonomic Agent layer is specified as five verbs: `text`, `run`, `invoke`,
+`stream`, and `session`. A bound Session serializes turn admission in-process;
+the server remains authoritative across bindings and processes. Schema-capable
+languages accept an ecosystem-neutral schema protocol where one exists
+(Standard Schema in TypeScript) and retain raw JSON Schema. TypeScript is the
+reference implementation for this high-level layer; other languages adopt the
+same meanings as their facades grow rather than inventing different workflows.
 
 Facades use generated operations rather than duplicating routes. Admission
 retries reuse the same immutable request and idempotency key. Result retries
@@ -76,10 +112,12 @@ machine code, safe details, and retry delay.
 Streaming helpers use generated request builders or operation metadata, parse
 SSE incrementally, retain only durable event IDs, reconnect after disconnect
 or rotation with `Last-Event-ID`, and reconcile terminal state with an
-authoritative get. The
-shared reducer deduplicates messages by sequence and Invocation changes by
-Invocation ID plus revision. Ephemeral generation deltas never advance the
-resume cursor.
+authoritative read. Invocation streams yield typed
+`invocation.accepted`, `output_text.delta`, `thinking.delta`,
+`invocation.update`, `invocation.result`, `stream.resync`, and `stream.end`
+events. The Session-stream reducer deduplicates messages by sequence and
+Invocation changes by Invocation ID plus revision. Ephemeral deltas never
+advance the resume cursor.
 
 Callback verification is handwritten because the callback receiver wire
 contract is intentionally outside the Runtime OpenAPI document. Every language
@@ -127,7 +165,8 @@ stability boundary.
 
 ## Rollout
 
-This is additive. Existing daemon imports and deployment paths do not change.
-The initial packages remain version `0.1.0`; publication is a later explicit
-release operation. PRD 027 may add a separate generated identity/admin client
-and CLI credential profiles without expanding the Runtime facade.
+The initial packages remain pre-GA and may make coordinated contract breaks
+while there are no external adopters. Runtime OpenAPI, generated transports,
+handwritten facades, conformance fixtures, examples, and guides move together.
+PRD 027 may add a separate generated identity/admin client and CLI credential
+profiles without expanding the Runtime facade.

@@ -19,7 +19,7 @@ console.
 ## Why
 
 The embedded golden path currently has one installation Account and one
-configured `RUNTIME_API_KEY`, optionally constrained by `RUNTIME_TENANT_REF`.
+configured `RUNTIME_API_KEY`, optionally constrained by `RUNTIME_TENANT_KEY`.
 That is enough for one host backend but cannot safely support separate host and
 CI credentials, expiry, rotation, revocation, attribution, or a human-operated
 CLI.
@@ -74,7 +74,7 @@ business secrets; and automatic secret-manager publication.
 - **R2 — Explicit authorization profiles.** A machine credential has exactly
   one fixed `Runtime`, `Viewer`, or `Operator` profile; `Owner` is never an API
   credential profile. Constraints may only narrow that profile by
-  `tenant_ref`, Session, operation subset, and expiry. A user credential belongs
+  `tenant_key`, Session, operation subset, and expiry. A user credential belongs
   to the approving operator and resolves its effective role on every request
   from the owner's current membership role, clamped to at most `Operator`, and
   intersected with its `Operator` or `Viewer` cap; the cap defaults to

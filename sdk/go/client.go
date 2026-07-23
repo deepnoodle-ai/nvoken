@@ -2,8 +2,10 @@ package nvoken
 
 import (
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"math/rand/v2"
+	mathrand "math/rand/v2"
 	"net/http"
 	"time"
 
@@ -11,20 +13,20 @@ import (
 )
 
 type RetryPolicy struct {
-	MaximumAttempts int
-	MinimumDelay    time.Duration
-	MaximumDelay    time.Duration
+	MaxAttempts int
+	MinDelay    time.Duration
+	MaxDelay    time.Duration
 }
 
 func (p RetryPolicy) normalized() RetryPolicy {
-	if p.MaximumAttempts <= 0 {
-		p.MaximumAttempts = 4
+	if p.MaxAttempts <= 0 {
+		p.MaxAttempts = 4
 	}
-	if p.MinimumDelay <= 0 {
-		p.MinimumDelay = 100 * time.Millisecond
+	if p.MinDelay <= 0 {
+		p.MinDelay = 100 * time.Millisecond
 	}
-	if p.MaximumDelay <= 0 {
-		p.MaximumDelay = 2 * time.Second
+	if p.MaxDelay <= 0 {
+		p.MaxDelay = 2 * time.Second
 	}
 	return p
 }
@@ -87,7 +89,7 @@ type callResult[T any] struct {
 func callReplaySafe[T any](ctx context.Context, policy RetryPolicy, replaySafe bool, call func() (callResult[T], error)) (*T, error) {
 	policy = policy.normalized()
 	var lastErr error
-	for attempt := 1; attempt <= policy.MaximumAttempts; attempt++ {
+	for attempt := 1; attempt <= policy.MaxAttempts; attempt++ {
 		result, err := call()
 		if err == nil && result.Status >= 200 && result.Status < 300 && result.Value != nil {
 			return result.Value, nil
@@ -100,7 +102,7 @@ func callReplaySafe[T any](ctx context.Context, policy RetryPolicy, replaySafe b
 		} else {
 			lastErr = errorFromResponse(result.Status, result.Header, result.Body)
 		}
-		if !replaySafe || attempt == policy.MaximumAttempts || !retryable(err, result.Status) {
+		if !replaySafe || attempt == policy.MaxAttempts || !retryable(err, result.Status) {
 			return nil, lastErr
 		}
 		delay := retryDelay(policy, attempt, result.Header)
@@ -131,19 +133,19 @@ func retryable(transport error, status int) bool {
 
 func retryDelay(policy RetryPolicy, attempt int, header http.Header) time.Duration {
 	if delay := parseRetryAfter(header.Get("Retry-After"), time.Now()); delay > 0 {
-		if delay > policy.MaximumDelay {
-			return policy.MaximumDelay
+		if delay > policy.MaxDelay {
+			return policy.MaxDelay
 		}
 		return delay
 	}
-	delay := policy.MinimumDelay << (attempt - 1)
-	if delay > policy.MaximumDelay {
-		delay = policy.MaximumDelay
+	delay := policy.MinDelay << (attempt - 1)
+	if delay > policy.MaxDelay {
+		delay = policy.MaxDelay
 	}
 	if delay <= 1 {
 		return delay
 	}
-	return delay/2 + time.Duration(rand.Int64N(int64(delay/2)+1))
+	return delay/2 + time.Duration(mathrand.Int64N(int64(delay/2)+1))
 }
 
 func responseHeader(response *http.Response) http.Header {
@@ -153,7 +155,10 @@ func responseHeader(response *http.Response) http.Header {
 	return response.Header
 }
 
-func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*Handle, error) {
+func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*InvocationHandle, error) {
+	if request.IdempotencyKey == "" {
+		request.IdempotencyKey = generatedIdempotencyKey()
+	}
 	body, err := request.generated()
 	if err != nil {
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
@@ -173,18 +178,23 @@ func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*Handle, er
 	if err != nil {
 		return nil, err
 	}
-	return &Handle{client: c, InvocationID: ack.InvocationID, SessionID: ack.SessionID, Status: ack.Status}, nil
+	return &InvocationHandle{
+		client:         c,
+		InvocationID:   ack.InvocationID,
+		IdempotencyKey: request.IdempotencyKey,
+		SessionID:      ack.SessionID,
+		AgentID:        ack.AgentID,
+		Status:         ack.Status,
+		Deduplicated:   &ack.Deduplicated,
+		DeadlineAt:     ack.DeadlineAt,
+	}, nil
 }
 
-func (c *Client) Resume(ctx context.Context, invocationID string) (*Handle, error) {
-	invocation, err := c.Get(ctx, invocationID)
-	if err != nil {
-		return nil, err
-	}
-	return &Handle{client: c, InvocationID: invocation.ID, SessionID: invocation.SessionID, Status: invocation.Status}, nil
+func (c *Client) Invocation(invocationID string) *InvocationHandle {
+	return &InvocationHandle{client: c, InvocationID: invocationID}
 }
 
-func (c *Client) Get(ctx context.Context, invocationID string) (*Invocation, error) {
+func (c *Client) GetInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
 		response, err := c.raw.GetInvocationWithResponse(ctx, invocationID)
 		if err != nil {
@@ -194,7 +204,7 @@ func (c *Client) Get(ctx context.Context, invocationID string) (*Invocation, err
 	})
 }
 
-func (c *Client) GetResult(ctx context.Context, invocationID string) (*InvocationResult, error) {
+func (c *Client) GetInvocationResult(ctx context.Context, invocationID string) (*InvocationResult, error) {
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationResult], error) {
 		response, err := c.raw.GetInvocationResultWithResponse(ctx, invocationID)
 		if err != nil {
@@ -204,7 +214,7 @@ func (c *Client) GetResult(ctx context.Context, invocationID string) (*Invocatio
 	})
 }
 
-func (c *Client) Cancel(ctx context.Context, invocationID string) (*Invocation, error) {
+func (c *Client) CancelInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
 		response, err := c.raw.CancelInvocationWithResponse(ctx, invocationID)
 		if err != nil {
@@ -242,12 +252,12 @@ func (c *Client) SubmitToolResults(ctx context.Context, invocationID string, res
 	if err != nil {
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
 	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SubmitClientToolResultsResponse], error) {
-		response, callErr := c.raw.SubmitClientToolResultsWithResponse(ctx, invocationID, body)
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SubmitHostToolResultsResponse], error) {
+		response, callErr := c.raw.SubmitHostToolResultsWithResponse(ctx, invocationID, body)
 		if callErr != nil {
-			return callResult[generated.SubmitClientToolResultsResponse]{}, callErr
+			return callResult[generated.SubmitHostToolResultsResponse]{}, callErr
 		}
-		return callResult[generated.SubmitClientToolResultsResponse]{Value: response.JSON202, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		return callResult[generated.SubmitHostToolResultsResponse]{Value: response.JSON202, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
 	})
 }
 
@@ -264,7 +274,7 @@ func (c *Client) ListProviderCredentials(
 		Provider:  options.Provider,
 		Scope:     options.Scope,
 		Status:    status,
-		TenantRef: options.TenantRef,
+		TenantKey: options.TenantKey,
 		Limit:     options.Limit,
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredentialList], error) {
@@ -296,7 +306,7 @@ func (c *Client) CreateProviderCredential(
 		IdempotencyKey: input.IdempotencyKey,
 		Provider:       input.Provider,
 		Scope:          input.Scope,
-		TenantRef:      input.TenantRef,
+		TenantKey:      input.TenantKey,
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredential], error) {
 		response, err := c.raw.CreateProviderCredentialWithResponse(ctx, body)
@@ -374,7 +384,7 @@ func (c *Client) RevokeProviderCredential(ctx context.Context, id string) (*Prov
 
 func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOptions) (*generated.InvocationList, error) {
 	params := &generated.ListInvocationsParams{
-		TenantRef:     options.TenantRef,
+		TenantKey:     options.TenantKey,
 		DefaultTenant: options.DefaultTenant,
 		SessionID:     options.SessionID,
 		AgentID:       options.AgentID,
@@ -393,9 +403,10 @@ func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOpt
 
 func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) (*generated.SessionList, error) {
 	params := &generated.ListSessionsParams{
-		TenantRef:     options.TenantRef,
+		TenantKey:     options.TenantKey,
 		DefaultTenant: options.DefaultTenant,
 		AgentID:       options.AgentID,
+		SessionKey:    options.SessionKey,
 		Cursor:        options.Cursor,
 		Limit:         options.Limit,
 	}
@@ -449,24 +460,31 @@ func (c *Client) GetTranscript(ctx context.Context, sessionID string, options Tr
 	})
 }
 
-type Handle struct {
-	client       *Client
-	InvocationID string           `json:"invocation_id"`
-	SessionID    string           `json:"session_id"`
-	Status       InvocationStatus `json:"status"`
+type InvocationHandle struct {
+	client         *Client
+	InvocationID   string           `json:"invocation_id"`
+	IdempotencyKey string           `json:"idempotency_key,omitempty"`
+	SessionID      string           `json:"session_id,omitempty"`
+	AgentID        string           `json:"agent_id,omitempty"`
+	Status         InvocationStatus `json:"status,omitempty"`
+	Deduplicated   *bool            `json:"deduplicated,omitempty"`
+	DeadlineAt     time.Time        `json:"deadline_at,omitempty"`
 }
 
-func (h *Handle) Refresh(ctx context.Context) (*Invocation, error) {
-	invocation, err := h.client.Get(ctx, h.InvocationID)
+func (h *InvocationHandle) Refresh(ctx context.Context) (*Invocation, error) {
+	invocation, err := h.client.GetInvocation(ctx, h.InvocationID)
 	if err == nil {
+		h.SessionID = invocation.SessionID
+		h.AgentID = invocation.AgentID
 		h.Status = invocation.Status
+		h.DeadlineAt = invocation.DeadlineAt
 	}
 	return invocation, err
 }
 
-func (h *Handle) Wait(ctx context.Context, options WaitOptions) (*Invocation, error) {
+func (h *InvocationHandle) Wait(ctx context.Context, options WaitOptions) (*Invocation, error) {
 	options = options.normalized()
-	delay := options.MinimumDelay
+	delay := options.MinPollInterval
 	for {
 		invocation, err := h.Refresh(ctx)
 		if err != nil {
@@ -483,8 +501,8 @@ func (h *Handle) Wait(ctx context.Context, options WaitOptions) (*Invocation, er
 		case <-timer.C:
 		}
 		delay *= 2
-		if delay > options.MaximumDelay {
-			delay = options.MaximumDelay
+		if delay > options.MaxPollInterval {
+			delay = options.MaxPollInterval
 		}
 	}
 }
@@ -492,9 +510,11 @@ func (h *Handle) Wait(ctx context.Context, options WaitOptions) (*Invocation, er
 // Result reads the composed InvocationResult at any status: the
 // authoritative Invocation, this Invocation's canonical messages, and the
 // output_text projection.
-func (h *Handle) Result(ctx context.Context) (*InvocationResult, error) {
-	result, err := h.client.GetResult(ctx, h.InvocationID)
+func (h *InvocationHandle) Result(ctx context.Context) (*InvocationResult, error) {
+	result, err := h.client.GetInvocationResult(ctx, h.InvocationID)
 	if err == nil {
+		h.SessionID = result.Invocation.SessionID
+		h.AgentID = result.Invocation.AgentID
 		h.Status = result.Invocation.Status
 	}
 	return result, err
@@ -502,7 +522,7 @@ func (h *Handle) Result(ctx context.Context) (*InvocationResult, error) {
 
 // ListMessages returns this Invocation's canonical messages from the
 // composed result read.
-func (h *Handle) ListMessages(ctx context.Context) ([]SessionMessage, error) {
+func (h *InvocationHandle) ListMessages(ctx context.Context) ([]SessionMessage, error) {
 	result, err := h.Result(ctx)
 	if err != nil {
 		return nil, err
@@ -515,7 +535,7 @@ func (h *Handle) ListMessages(ctx context.Context) ([]SessionMessage, error) {
 // empty string: the wire keeps those distinct, but this helper
 // deliberately treats both as "no useful answer". Read Result directly
 // to observe the distinction.
-func (h *Handle) Text(ctx context.Context) (string, error) {
+func (h *InvocationHandle) Text(ctx context.Context) (string, error) {
 	result, err := h.Result(ctx)
 	if err != nil {
 		return "", err
@@ -529,7 +549,7 @@ func (h *Handle) Text(ctx context.Context) (string, error) {
 	return *result.OutputText, nil
 }
 
-func (h *Handle) SubmitToolResults(ctx context.Context, results []ToolResult) (*ToolResultResponse, error) {
+func (h *InvocationHandle) SubmitToolResults(ctx context.Context, results []ToolResult) (*ToolResultResponse, error) {
 	response, err := h.client.SubmitToolResults(ctx, h.InvocationID, results)
 	if err == nil {
 		h.Status = response.Status
@@ -537,10 +557,56 @@ func (h *Handle) SubmitToolResults(ctx context.Context, results []ToolResult) (*
 	return response, err
 }
 
-func (h *Handle) Cancel(ctx context.Context) (*Invocation, error) {
-	invocation, err := h.client.Cancel(ctx, h.InvocationID)
+func (h *InvocationHandle) Cancel(ctx context.Context) (*Invocation, error) {
+	invocation, err := h.client.CancelInvocation(ctx, h.InvocationID)
 	if err == nil {
+		h.SessionID = invocation.SessionID
+		h.AgentID = invocation.AgentID
 		h.Status = invocation.Status
 	}
 	return invocation, err
+}
+
+func (h *InvocationHandle) WaitForAction(ctx context.Context, options WaitOptions) (*Invocation, error) {
+	options = options.normalized()
+	delay := options.MinPollInterval
+	for {
+		invocation, err := h.Refresh(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if invocation.Status == InvocationWaiting || terminal(invocation.Status) {
+			return invocation, nil
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, transportError(ctx.Err())
+		case <-timer.C:
+		}
+		delay = min(delay*2, options.MaxPollInterval)
+	}
+}
+
+func (h *InvocationHandle) WaitForResult(ctx context.Context, options WaitOptions) (*InvocationResult, error) {
+	invocation, err := h.Wait(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	if invocation.Status != InvocationCompleted {
+		return nil, &Error{
+			Category: ErrorConflict,
+			Message:  fmt.Sprintf("Invocation %s ended with status %s", h.InvocationID, invocation.Status),
+		}
+	}
+	return h.Result(ctx)
+}
+
+func generatedIdempotencyKey() string {
+	var value [16]byte
+	if _, err := cryptorand.Read(value[:]); err != nil {
+		return fmt.Sprintf("nvoken-%d", time.Now().UnixNano())
+	}
+	return "nvoken-" + hex.EncodeToString(value[:])
 }

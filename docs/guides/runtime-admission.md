@@ -2,11 +2,11 @@
 
 > **API behavior reference.** For a first working application, complete
 > [Run nvoken locally](run-locally.md) and start from an SDK quickstart. Return
-> here when you need durable retry, Session, streaming, cancellation, budget,
+> here when you need durable retry, Session, streaming, cancellation, limit,
 > structured-output, or ToolCall semantics.
 
 The self-contained Runtime durably admits, executes, and reads Invocations,
-including structured output and host-executed client tools. Admission still
+including structured output and host tools. Admission still
 returns before model generation begins.
 
 This guide explains the runtime, not a production-readiness claim. The exact
@@ -19,6 +19,25 @@ command prepares those inputs automatically. Production operators should use a
 [deployment profile](../../deploy/single-daemon/README.md) and the
 [credential guide](credentials-and-cli-auth.md), not reconstruct daemon
 configuration from API examples in this document.
+
+The TypeScript facade keeps the ordinary path small:
+
+```ts
+import { Client } from "@deepnoodle/nvoken";
+
+const agent = new Client().agent({
+  agentKey: "support",
+  instructions: "Be concise and helpful.",
+});
+
+console.log(await agent.text("Why was I charged twice?"));
+```
+
+The examples below use curl so the admission and recovery wire mechanics remain
+visible. Use the [TypeScript SDK guide](../../sdk/typescript/README.md) for typed
+multi-turn Sessions, host tools, structured output, pagination, and streaming.
+
+## Provider credentials
 
 The self-hosted default is `installation_byok`, so an omitted credential
 selection uses the matching `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. If that
@@ -39,7 +58,7 @@ export PROVIDER_CREDENTIAL_ENCRYPTION_KEYS="{\"v1\":\"$(openssl rand -base64 32)
 Provider credential lifecycle authority comes from the durable credential
 profile described in [Credentials and CLI authentication](credentials-and-cli-auth.md).
 An Operator credential can manage Account and tenant credentials. A Runtime
-credential can manage tenant credentials only when its `tenant_ref` constraint
+credential can manage tenant credentials only when its `tenant_key` constraint
 matches that exact tenant; it cannot manage Account BYOK. A Viewer credential
 can list and read secret-free Account and tenant credential metadata but cannot
 create, rotate, or revoke credentials. The configured `RUNTIME_API_KEY` is
@@ -64,7 +83,7 @@ curl --fail-with-body http://localhost:8080/v1/provider-credentials \
   --data '{
     "provider": "anthropic",
     "scope": "tenant",
-    "tenant_ref": "customer-482",
+    "tenant_key": "customer-482",
     "credential": {"api_key": "replace-with-an-Anthropic-key"},
     "idempotency_key": "customer-482-anthropic-v1"
   }'
@@ -90,7 +109,7 @@ spec provider. Reusable selections contain no secret:
 }]
 ```
 
-Tenant BYOK uses `tenant_byok`; the effective `tenant_ref` must match. A
+Tenant BYOK uses `tenant_byok`; the effective `tenant_key` must match. A
 one-Invocation secret uses `caller_ephemeral` and is encrypted in its durable
 binding:
 
@@ -102,16 +121,17 @@ binding:
 }]
 ```
 
-Selection is outside the execution spec and transcript. Fingerprint v6 records
+Selection is outside the execution spec and transcript. Fingerprint v7 records
 literal omission or the explicit nonsecret source, never the raw secret or the
 resolved reusable version. Therefore an equal retry with a changed supplied
 secret returns the original Invocation and binding rather than replacing it.
-Caller ciphertext remains available through the Invocation wall-clock deadline
-plus `PROVIDER_CREDENTIAL_CLEANUP_GRACE` (default five minutes), including while
-the Invocation is waiting for client tools. Terminal settlement clears live
-ciphertext in the same database transaction, and the reaper clears expired
-material. Retained backups can still contain encrypted bytes until normal
-backup expiration; cleanup does not claim immediate physical erasure there.
+Caller ciphertext remains available through the Invocation's `deadline_at`
+plus `PROVIDER_CREDENTIAL_CLEANUP_GRACE` (default five minutes), including
+while the Invocation is waiting for host tools. Terminal settlement clears
+live ciphertext in the same database transaction, and the reaper clears
+expired material. Retained backups can still contain encrypted bytes until
+normal backup expiration; cleanup does not claim immediate physical erasure
+there.
 
 `MODEL_CREDENTIAL_DEPLOYMENT_MODE=cloud` disables `installation_byok` and may
 use `platform`; `PLATFORM_FUNDING_ENABLED=true` is the deployment-owned funding
@@ -120,6 +140,8 @@ allow hook and platform provider keys use `PLATFORM_ANTHROPIC_API_KEY` and
 startup. Self-hosted mode rejects `platform`. The installation default is set
 with `INVOCATION_DEFAULT_CREDENTIAL_SOURCE`; `caller_ephemeral` cannot be a
 default because it always needs request material.
+
+## Execution and limit policy
 
 Engine capacity and timing are
 bounded by `ENGINE_CONCURRENCY`, `ENGINE_POLL_INTERVAL`,
@@ -143,13 +165,18 @@ Memorystore and Secret Manager. `LIVE_EVENT_BUFFER`,
 rotation, and slow clients. Redis carries previews only. A Redis failure cannot
 change execution or committed recovery state.
 
-`INVOCATION_DEFAULT_WALL_CLOCK_TIMEOUT`,
-`INVOCATION_DEFAULT_ACTIVE_EXECUTION_TIMEOUT`, and
-`INVOCATION_DEFAULT_MAX_ITERATIONS` supply omitted limits. The corresponding
-`INVOCATION_MAX_*` settings reject requests above installation policy; output
-tokens and estimated cost have no default and remain unlimited unless the host
-requests them. `DATABASE_MAX_CONNS` must be at least two because the
-cross-process cancellation listener reserves one pool connection.
+`INVOCATION_DEFAULT_TOTAL_TIMEOUT`,
+`INVOCATION_DEFAULT_ACTIVE_TIMEOUT`,
+`INVOCATION_DEFAULT_WAITING_TIMEOUT`, and
+`INVOCATION_DEFAULT_MAX_ITERATIONS` supply omitted limits.
+`INVOCATION_MAX_TOTAL_TIMEOUT`, `INVOCATION_MAX_ACTIVE_TIMEOUT`,
+`INVOCATION_MAX_WAITING_TIMEOUT`, and `INVOCATION_MAX_ITERATIONS` reject
+requests above installation policy. Output tokens and estimated cost have no
+default and remain unlimited unless the host requests them; their installation
+ceilings are `INVOCATION_MAX_OUTPUT_TOKENS` and
+`INVOCATION_MAX_ESTIMATED_COST_MICROUSD`. `DATABASE_MAX_CONNS` must be at least
+two because the cross-process cancellation listener reserves one pool
+connection.
 
 `max_estimated_cost_usd` is a fail-closed list-price guardrail, not a charge
 reservation or billing ledger. It requires known USD pricing for the exact
@@ -187,7 +214,7 @@ nvoken model pricing --provider openai --model "$NVOKEN_MODEL"
 A request may add `spec.output.schema` for one validated object result. nvoken
 admits a bounded JSON Schema subset, presents it as the reserved
 `nvoken_submit_output` builtin, and persists its request/result through the
-normal durable ToolCall path. An omitted iteration budget resolves to three (or
+normal durable ToolCall path. An omitted iteration limit resolves to three (or
 the lower installation maximum); an explicit value below two is rejected. The
 model must submit a valid object and then finish with a normal assistant
 response. Prose or fenced JSON never substitutes for the tool submission.
@@ -195,15 +222,19 @@ Patterns are limited to 1,024 UTF-8 bytes. The accepted ToolCall is internal
 checkpoint evidence; public `structured_output` remains null until fenced
 terminal settlement commits the final object and provenance together.
 
+## Bootstrap identity
+
 On its first start, nvoken serializes creation of one installation Account, its
 default tenant partition, the local bootstrap Owner membership, and one durable
 `Runtime` machine credential derived from `RUNTIME_API_KEY`.
-`RUNTIME_TENANT_REF` optionally confines that imported credential to one tenant
+`RUNTIME_TENANT_KEY` optionally confines that imported credential to one tenant
 partition. Later starts resolve the import marker rather than configuration, so
 changing the environment cannot create a second credential and revocation is
 never undone. Keep the configured value only for the documented rollback
 window; after explicit cutover a current binary starts without it. The durable
 row stores only a nonreversible verifier, not the bearer secret.
+
+## Admit an Invocation
 
 Submit one turn:
 
@@ -212,16 +243,17 @@ curl --fail-with-body http://localhost:8080/v1/invocations \
   -H "Authorization: Bearer $RUNTIME_API_KEY" \
   -H 'Content-Type: application/json' \
   --data '{
-    "agent_ref": "support-triage",
+    "agent_key": "support-triage",
     "session_key": "ticket-483",
     "idempotency_key": "ticket-483:first-reply",
-    "input": {"content": [{"type": "text", "text": "Why was I charged twice?"}]},
+    "input": "Why was I charged twice?",
     "spec": {
       "instructions": "You are a concise billing support agent.",
-      "model": {"provider": "anthropic", "name": "claude-sonnet-5"},
-      "budgets": {
-        "wall_clock_timeout_seconds": 600,
-        "active_execution_timeout_seconds": 300,
+      "model": {"provider": "anthropic", "id": "claude-sonnet-5"},
+      "limits": {
+        "total_timeout_seconds": 600,
+        "active_timeout_seconds": 300,
+        "waiting_timeout_seconds": 900,
         "max_output_tokens": 4096,
         "max_iterations": 1
       }
@@ -230,21 +262,24 @@ curl --fail-with-body http://localhost:8080/v1/invocations \
 ```
 
 A committed request returns `202` with durable Agent, Session, and Invocation
-IDs before generation. The engine reconstructs the turn from Postgres and the
-Invocation eventually becomes `completed` or `failed`. If the acknowledgement
-is lost, retry the exact request and
-`idempotency_key`; nvoken returns the original IDs with `deduplicated: true`.
+IDs plus the resolved `deadline_at` before generation. The engine reconstructs
+the turn from Postgres and the Invocation eventually becomes `completed` or
+`failed`. If the acknowledgement is lost, retry the exact request and
+`idempotency_key`; nvoken returns the original IDs and deadline with
+`deduplicated: true`.
 A changed request using the same scoped key returns
 `409 idempotency_conflict`.
 Treat `503 unavailable` the same way as any ambiguous acknowledgement: retry
 the exact body and key rather than inventing a new key for the same turn.
 
-Canonical messages remain durable evidence even when a later budget or
+Canonical messages remain durable evidence even when a later limit or
 deadline settlement fails the Invocation. Future provider requests include the
 failed Invocation's user input but exclude its assistant and tool messages, so
 a rejected answer cannot silently steer a later turn. Hosts can make the same
 distinction by joining each message's `invocation_id` to the authoritative
 Invocation status.
+
+## Checkpoints, tools, and recovery
 
 The database retains checkpoint evidence at each accepted model
 iteration: the canonical assistant message, normalized usage/provenance
@@ -253,8 +288,8 @@ Accepted builtin outcomes likewise commit one canonical tool-role result and a
 fenced checkpoint. ToolCall rows contain lifecycle and message references, not
 a second copy of content.
 
-Declare a client tool inside `spec.tools` with `name`, `description`,
-`mode: "client"`, and a bounded object `input_schema`. When the model selects
+Declare a host tool inside `spec.tools` with `name`, `description`,
+`mode: "host"`, and a bounded object `input_schema`. When the model selects
 it, Invocation and Session reads expose the stable pending call after the
 Invocation parks in `waiting`; no engine lease or request stays alive. Submit a
 result with the returned ID. Tools require at least two model iterations;
@@ -279,7 +314,7 @@ batches remain `waiting`. The transaction that accepts the final pending call
 moves the same Invocation to `queued`; embedded mode wakes after commit and
 Cloud Tasks mode creates the successor dispatch in that transaction. Use
 `is_error: true` to return a model-visible tool failure. Cancellation and the
-wall deadline remain first-writer-wins.
+total deadline remain first-writer-wins.
 
 Declare a callback tool with the same name, description, and input schema plus
 `mode: "callback"` and `callback: {"url": "https://..."}`. Callback admission
@@ -301,18 +336,16 @@ deadlines remain terminal and close prepared calls with a synthetic result.
 There is still no public retry-in-place operation for terminal Invocations.
 
 Public reads and streams may observe `running → queued → running` during this
-recovery. Use lifecycle revision/cursors to order observations. Retained
-`execution_lost` rows are historical outcomes from the earlier policy; current
-recoverable lease expiry does not write that code. An internal recovery failure
-means the stored transcript/checkpoint evidence was inconsistent and is exposed
-only as the bounded public `internal` failure.
+recovery. Use lifecycle revision/cursors to order observations. An internal
+recovery failure means the stored transcript/checkpoint evidence was
+inconsistent and is exposed only as the bounded public `internal` failure.
 
 The execution-segment ceiling reserves time for a live owner to settle, not a
 hard terminal boundary after ownership is gone. A live owner or deadline reaper
 observing the cutoff before lease expiry writes the segment-scoped deadline
 failure. If no settlement lands and the lease itself later expires, recovery
 wins because a replacement cannot distinguish a crashed owner from a delayed
-settle. Wall-clock and active-execution budgets remain hard limits across that
+settle. Total and active-execution limits remain hard limits across that
 continuation; operators should keep the reaper cadence well below the lease
 duration for prompt outcomes.
 
@@ -323,6 +356,8 @@ stale publication and creates one successor for the queued Invocation. Keep the
 reconcile interval and aged-dispatch alerts tighter than the recovery latency
 your product promises; removing the active dispatch during reaping would lose
 this original-task retry path.
+
+## Read, cancel, and stream
 
 Read the durable state after any API restart:
 
@@ -337,13 +372,14 @@ curl --fail-with-body \
 ```
 
 The Invocation read includes terminal `error`, normalized aggregate `usage`,
-model `provenance`, resolved `budgets`, accrued `active_execution_ms`, and its
-wall-clock deadline. It also always includes nullable `structured_output` and
-`structured_output_provenance`. A successful schema-bearing Invocation returns
-the validated object and its reserved ToolCall ID/schema digest; failed,
-cancelled, or schema-free Invocations return null for both. If no valid
-submission was accepted, the failure code is `structured_output_unsatisfied`
-with a bounded missing, invalid, or oversized reason.
+model `provenance`, resolved `limits`, accrued `active_execution_ms`,
+`deadline_at`, and nullable `ended_at`. It also always includes nullable
+`structured_output` and `structured_output_provenance`. A successful
+schema-bearing Invocation returns the validated object and its reserved
+ToolCall ID/schema digest; failed, cancelled, or schema-free Invocations return
+null for both. If no valid submission was accepted, the failure code is
+`structured_output_unsatisfied` with a bounded missing, invalid, or oversized
+reason.
 
 To read the answer itself, use the composed result read. It returns the
 authoritative Invocation, this Invocation's canonical messages, and
@@ -377,13 +413,26 @@ curl --fail-with-body \
 
 curl --fail-with-body \
   -H "Authorization: Bearer $RUNTIME_API_KEY" \
-  'http://localhost:8080/v1/sessions?tenant_ref=customer-482'
+  'http://localhost:8080/v1/sessions?tenant_key=customer-482'
 ```
 
-Read the sole durable transcript directly, use the incremental JSON snapshot,
-or tail that same snapshot model with ephemeral live deltas:
+Follow one Invocation directly by adding `Accept: text/event-stream` to its
+admission, reconnect to an admitted Invocation by ID, or follow every turn in a
+Session:
 
 ```bash
+curl --no-buffer -X POST \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @invocation.json \
+  http://localhost:8080/v1/invocations
+
+curl --no-buffer \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  -H 'Accept: text/event-stream' \
+  http://localhost:8080/v1/invocations/invk_…/stream
+
 curl --fail-with-body \
   -H "Authorization: Bearer $RUNTIME_API_KEY" \
   'http://localhost:8080/v1/sessions/sesn_…/messages?limit=100'
@@ -406,18 +455,25 @@ response order cannot expose terminal completion before its committed assistant
 messages. Cursors and page tokens are scoped to their Account, Session, and
 filters and grant no authority of their own.
 
-The stream accepts that `resume_cursor` as `?cursor=...`, or as
-`Last-Event-ID` when the query parameter is absent. Only
-`transcript.snapshot` frames carry an SSE ID. `generation.delta` frames are
-live-only text or thinking previews, and `stream.resync` means discard the
-preview and wait for canonical state. `stream.end` reason `rotate` requests a
-normal reconnect with the last ID; reason `terminal` is emitted only after the
-final Postgres reconciliation. Closing or losing the stream never cancels the
-Invocation. Use a streaming HTTP client that can set the bearer header; the
-browser's bare `EventSource` constructor cannot.
+The minimal Invocation-stream consumer prints `output_text.delta` and finishes
+on `invocation.result`. `invocation.accepted` is the normal acknowledgement as
+the first admission frame; `invocation.update` carries incremental durable
+state. Session streams use the same delta names and `transcript.update` for
+durable batches. Every payload carries `type` plus its scope IDs.
+
+Durable update and result frames carry an SSE ID; ephemeral
+`output_text.delta` and `thinking.delta` previews never do. Streams accept a
+durable cursor as `?cursor=...`, or as `Last-Event-ID` when the query parameter
+is absent. On `stream.resync`, discard buffered previews and wait for durable
+state. `stream.end` reason `rotate` means reconnect with the last durable ID;
+reason `terminal` follows final Postgres reconciliation. Closing or losing a
+stream never cancels the Invocation. Use a streaming HTTP client that can set
+the bearer header; the browser's bare `EventSource` constructor cannot.
+
+## Request bounds
 
 Admission bodies are limited to 1 MiB, 64 JSON nesting levels, and 64 text
-blocks. Unknown fields, callback tools, malformed IDs, duplicate JSON member
-names, and trailing JSON values are rejected before admission. Client-result
-bodies are also limited to 1 MiB; each JSON result is limited to 256 KiB and 32
-nesting levels.
+blocks. Unknown fields, callback tools when callback signing is not configured,
+malformed IDs, duplicate JSON member names, and trailing JSON values are
+rejected before admission. Client-result bodies are also limited to 1 MiB; each
+JSON result is limited to 256 KiB and 32 nesting levels.

@@ -16,7 +16,7 @@ const (
 )
 
 type InvocationListInput struct {
-	TenantRef     *string
+	TenantKey     *string
 	DefaultTenant bool
 	SessionID     *string
 	AgentID       *string
@@ -26,7 +26,7 @@ type InvocationListInput struct {
 }
 
 type SessionListInput struct {
-	TenantRef     *string
+	TenantKey     *string
 	DefaultTenant bool
 	AgentID       *string
 	SessionKey    *string
@@ -129,7 +129,7 @@ func (s *RuntimeService) ListInvocations(ctx context.Context, auth domain.Runtim
 		}
 		input.SessionID = cloneString(auth.SessionConstraint)
 	}
-	partitionID, tenantScope, err := s.resolveListTenantScope(ctx, auth, input.TenantRef, input.DefaultTenant)
+	partitionID, tenantScope, err := s.resolveListTenantScope(ctx, auth, input.TenantKey, input.DefaultTenant)
 	if err != nil {
 		return InvocationList{}, err
 	}
@@ -209,12 +209,19 @@ func (s *RuntimeService) ListSessions(ctx context.Context, auth domain.RuntimeAu
 		if err != nil {
 			return SessionList{Items: []SessionRead{}}, nil
 		}
-		if input.AgentID != nil && *input.AgentID != session.AgentID || input.SessionKey != nil && (session.SessionKey == nil || *input.SessionKey != *session.SessionKey) || input.TenantRef != nil && (partition.TenantRef == nil || *input.TenantRef != *partition.TenantRef) || input.DefaultTenant && partition.TenantRef != nil {
+		if input.AgentID != nil && *input.AgentID != session.AgentID || input.SessionKey != nil && (session.SessionKey == nil || *input.SessionKey != *session.SessionKey) || input.TenantKey != nil && (partition.TenantKey == nil || *input.TenantKey != *partition.TenantKey) || input.DefaultTenant && partition.TenantKey != nil {
 			return SessionList{Items: []SessionRead{}}, nil
 		}
-		return SessionList{Items: []SessionRead{{ID: session.ID, AgentID: session.AgentID, TenantRef: cloneString(partition.TenantRef), SessionKey: cloneString(session.SessionKey), CreatedAt: session.CreatedAt, UpdatedAt: session.UpdatedAt}}}, nil
+		return SessionList{Items: []SessionRead{{
+			ID:         session.ID,
+			AgentID:    session.AgentID,
+			TenantKey:  cloneString(partition.TenantKey),
+			SessionKey: cloneString(session.SessionKey),
+			CreatedAt:  session.CreatedAt,
+			UpdatedAt:  session.UpdatedAt,
+		}}}, nil
 	}
-	partitionID, tenantScope, err := s.resolveListTenantScope(ctx, auth, input.TenantRef, input.DefaultTenant)
+	partitionID, tenantScope, err := s.resolveListTenantScope(ctx, auth, input.TenantKey, input.DefaultTenant)
 	if err != nil {
 		return SessionList{}, err
 	}
@@ -252,10 +259,14 @@ func (s *RuntimeService) ListSessions(ctx context.Context, auth domain.RuntimeAu
 	}
 	for _, row := range rows {
 		page.Items = append(page.Items, SessionRead{
-			ID: row.Session.ID, AgentID: row.Session.AgentID, TenantRef: cloneString(row.TenantRef),
-			SessionKey: cloneString(row.Session.SessionKey), ActiveInvocationID: cloneString(row.ActiveInvocationID),
+			ID:                     row.Session.ID,
+			AgentID:                row.Session.AgentID,
+			TenantKey:              cloneString(row.TenantKey),
+			SessionKey:             cloneString(row.Session.SessionKey),
+			ActiveInvocationID:     cloneString(row.ActiveInvocationID),
 			ActiveInvocationStatus: cloneStatus(row.ActiveInvocationStatus),
-			CreatedAt:              row.Session.CreatedAt, UpdatedAt: row.Session.UpdatedAt,
+			CreatedAt:              row.Session.CreatedAt,
+			UpdatedAt:              row.Session.UpdatedAt,
 		})
 	}
 	if page.HasMore && len(rows) > 0 {
@@ -428,7 +439,7 @@ func (s *RuntimeService) authorizedSession(ctx context.Context, auth domain.Runt
 		return domain.Session{}, domain.TenantPartition{}, notFound()
 	}
 	partition, err := s.store.GetTenantPartition(ctx, session.TenantPartitionID)
-	if err != nil || partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantRef) {
+	if err != nil || partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantKey) {
 		if errors.Is(err, ports.ErrNotFound) || err == nil {
 			return domain.Session{}, domain.TenantPartition{}, notFound()
 		}
@@ -437,17 +448,17 @@ func (s *RuntimeService) authorizedSession(ctx context.Context, auth domain.Runt
 	return session, partition, nil
 }
 
-func (s *RuntimeService) resolveListTenantScope(ctx context.Context, auth domain.RuntimeAuthContext, tenantRef *string, defaultTenant bool) (*string, string, error) {
-	if tenantRef != nil && defaultTenant {
-		return nil, "", invalidRequest("tenant_ref and default_tenant are mutually exclusive.")
+func (s *RuntimeService) resolveListTenantScope(ctx context.Context, auth domain.RuntimeAuthContext, tenantKey *string, defaultTenant bool) (*string, string, error) {
+	if tenantKey != nil && defaultTenant {
+		return nil, "", invalidRequest("tenant_key and default_tenant are mutually exclusive.")
 	}
-	if tenantRef != nil {
-		if err := validateBoundedString("tenant_ref", *tenantRef, MaxReferenceCharacters); err != nil {
+	if tenantKey != nil {
+		if err := validateBoundedString("tenant_key", *tenantKey, MaxReferenceCharacters); err != nil {
 			return nil, "", err
 		}
 	}
 	if auth.TenantConstraint != nil {
-		if defaultTenant || (tenantRef != nil && *tenantRef != *auth.TenantConstraint) {
+		if defaultTenant || (tenantKey != nil && *tenantKey != *auth.TenantConstraint) {
 			return nil, "", forbidden("The requested tenant filter conflicts with the credential constraint.")
 		}
 		partition, err := s.store.GetTenantPartitionByRef(ctx, auth.AccountID, *auth.TenantConstraint)
@@ -471,16 +482,16 @@ func (s *RuntimeService) resolveListTenantScope(ctx context.Context, auth domain
 		}
 		return &partition.ID, "default", nil
 	}
-	if tenantRef != nil {
-		partition, err := s.store.GetTenantPartitionByRef(ctx, auth.AccountID, *tenantRef)
+	if tenantKey != nil {
+		partition, err := s.store.GetTenantPartitionByRef(ctx, auth.AccountID, *tenantKey)
 		if errors.Is(err, ports.ErrNotFound) {
 			missing := ""
-			return &missing, "ref:" + *tenantRef, nil
+			return &missing, "ref:" + *tenantKey, nil
 		}
 		if err != nil {
 			return nil, "", err
 		}
-		return &partition.ID, "ref:" + *tenantRef, nil
+		return &partition.ID, "ref:" + *tenantKey, nil
 	}
 	return nil, "all", nil
 }

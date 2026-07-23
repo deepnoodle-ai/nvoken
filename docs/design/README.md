@@ -41,13 +41,18 @@ live in [`admission-fingerprint-v1.json`](admission-fingerprint-v1.json) and
 [`admission-fingerprint-v2.json`](admission-fingerprint-v2.json). New
 structured-output admissions use the v3 vectors in
 [`admission-fingerprint-v3.json`](admission-fingerprint-v3.json). New
-client-tool admissions use the v4 vectors in
+host-tool admissions use the v4 vectors in
 [`admission-fingerprint-v4.json`](admission-fingerprint-v4.json).
 New callback-tool admissions use the v5 vectors in
 [`admission-fingerprint-v5.json`](admission-fingerprint-v5.json).
 Per-provider credential selections use the v6 vectors in
 [`admission-fingerprint-v6.json`](admission-fingerprint-v6.json); secret bytes
 and materialized defaults are deliberately absent from those fixtures.
+The current wire vocabulary, string input normalization, timeout trio, and host
+tool mode use the v7 vectors in
+[`admission-fingerprint-v7.json`](admission-fingerprint-v7.json). Versions one
+through six remain readable only so already-admitted durable rows retain their
+original equality semantics.
 
 ## Document authority
 

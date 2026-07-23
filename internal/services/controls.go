@@ -12,112 +12,133 @@ import (
 )
 
 const (
-	maxBudgetSeconds      = int64((7 * 24 * time.Hour) / time.Second)
-	maxBudgetOutputTokens = 10_000_000
-	maxBudgetCostMicros   = int64(1_000_000 * 1_000_000)
-	maxBudgetIterations   = 10_000
+	maxLimitSeconds      = int64((7 * 24 * time.Hour) / time.Second)
+	maxLimitOutputTokens = 10_000_000
+	maxLimitCostMicros   = int64(1_000_000 * 1_000_000)
+	maxLimitIterations   = 10_000
 )
 
-type InvocationBudgetInput struct {
-	WallClockTimeoutSeconds       *int64   `json:"wall_clock_timeout_seconds,omitempty"`
-	ActiveExecutionTimeoutSeconds *int64   `json:"active_execution_timeout_seconds,omitempty"`
-	MaxOutputTokens               *int     `json:"max_output_tokens,omitempty"`
-	MaxEstimatedCostUSD           *float64 `json:"max_estimated_cost_usd,omitempty"`
-	MaxIterations                 *int     `json:"max_iterations,omitempty"`
+type InvocationLimitInput struct {
+	TotalTimeoutSeconds   *int64   `json:"total_timeout_seconds,omitempty"`
+	ActiveTimeoutSeconds  *int64   `json:"active_timeout_seconds,omitempty"`
+	WaitingTimeoutSeconds *int64   `json:"waiting_timeout_seconds,omitempty"`
+	MaxOutputTokens       *int     `json:"max_output_tokens,omitempty"`
+	MaxEstimatedCostUSD   *float64 `json:"max_estimated_cost_usd,omitempty"`
+	MaxIterations         *int     `json:"max_iterations,omitempty"`
 }
 
-type InvocationBudgetRead struct {
-	WallClockTimeoutSeconds       int64    `json:"wall_clock_timeout_seconds"`
-	ActiveExecutionTimeoutSeconds int64    `json:"active_execution_timeout_seconds"`
-	MaxOutputTokens               *int     `json:"max_output_tokens,omitempty"`
-	MaxEstimatedCostUSD           *float64 `json:"max_estimated_cost_usd,omitempty"`
-	MaxIterations                 int      `json:"max_iterations"`
+type InvocationLimitRead struct {
+	TotalTimeoutSeconds   int64    `json:"total_timeout_seconds"`
+	ActiveTimeoutSeconds  int64    `json:"active_timeout_seconds"`
+	WaitingTimeoutSeconds int64    `json:"waiting_timeout_seconds"`
+	MaxOutputTokens       *int     `json:"max_output_tokens,omitempty"`
+	MaxEstimatedCostUSD   *float64 `json:"max_estimated_cost_usd,omitempty"`
+	MaxIterations         int      `json:"max_iterations"`
 }
 
-type BudgetPolicy struct {
-	DefaultWallClockTimeout       time.Duration
-	DefaultActiveExecutionTimeout time.Duration
-	DefaultMaxIterations          int
-	MaxWallClockTimeout           time.Duration
-	MaxActiveExecutionTimeout     time.Duration
-	MaxOutputTokens               int
-	MaxEstimatedCostMicros        int64
-	MaxIterations                 int
+type LimitPolicy struct {
+	DefaultTotalTimeout    time.Duration
+	DefaultActiveTimeout   time.Duration
+	DefaultWaitingTimeout  time.Duration
+	DefaultMaxIterations   int
+	MaxTotalTimeout        time.Duration
+	MaxActiveTimeout       time.Duration
+	MaxWaitingTimeout      time.Duration
+	MaxOutputTokens        int
+	MaxEstimatedCostMicros int64
+	MaxIterations          int
 }
 
-type ResolvedBudgets struct {
-	WallClockTimeout       time.Duration
-	ActiveExecutionTimeout time.Duration
+type ResolvedLimits struct {
+	TotalTimeout           time.Duration
+	ActiveTimeout          time.Duration
+	WaitingTimeout         time.Duration
 	MaxOutputTokens        *int
 	MaxEstimatedCostMicros *int64
 	MaxIterations          int
 }
 
-func DefaultBudgetPolicy() BudgetPolicy {
-	return BudgetPolicy{
-		DefaultWallClockTimeout: 30 * time.Minute, DefaultActiveExecutionTimeout: 30 * time.Minute,
-		DefaultMaxIterations: 1, MaxWallClockTimeout: 24 * time.Hour,
-		MaxActiveExecutionTimeout: 24 * time.Hour, MaxOutputTokens: 1_000_000,
-		MaxEstimatedCostMicros: 1_000_000_000, MaxIterations: 100,
+func DefaultLimitPolicy() LimitPolicy {
+	return LimitPolicy{
+		DefaultTotalTimeout:    30 * time.Minute,
+		DefaultActiveTimeout:   30 * time.Minute,
+		DefaultWaitingTimeout:  30 * time.Minute,
+		DefaultMaxIterations:   1,
+		MaxTotalTimeout:        24 * time.Hour,
+		MaxActiveTimeout:       24 * time.Hour,
+		MaxWaitingTimeout:      24 * time.Hour,
+		MaxOutputTokens:        1_000_000,
+		MaxEstimatedCostMicros: 1_000_000_000,
+		MaxIterations:          100,
 	}
 }
 
-func validateRequestedBudgets(input *InvocationBudgetInput) error {
+func validateRequestedLimits(input *InvocationLimitInput) error {
 	if input == nil {
 		return nil
 	}
-	if input.WallClockTimeoutSeconds != nil && (*input.WallClockTimeoutSeconds <= 0 || *input.WallClockTimeoutSeconds > maxBudgetSeconds) {
-		return invalidRequest("spec.budgets.wall_clock_timeout_seconds must be a positive supported value.")
+	if input.TotalTimeoutSeconds != nil && (*input.TotalTimeoutSeconds <= 0 || *input.TotalTimeoutSeconds > maxLimitSeconds) {
+		return invalidRequest("spec.limits.total_timeout_seconds must be a positive supported value.")
 	}
-	if input.ActiveExecutionTimeoutSeconds != nil && (*input.ActiveExecutionTimeoutSeconds <= 0 || *input.ActiveExecutionTimeoutSeconds > maxBudgetSeconds) {
-		return invalidRequest("spec.budgets.active_execution_timeout_seconds must be a positive supported value.")
+	if input.ActiveTimeoutSeconds != nil && (*input.ActiveTimeoutSeconds <= 0 || *input.ActiveTimeoutSeconds > maxLimitSeconds) {
+		return invalidRequest("spec.limits.active_timeout_seconds must be a positive supported value.")
 	}
-	if input.MaxOutputTokens != nil && (*input.MaxOutputTokens <= 0 || *input.MaxOutputTokens > maxBudgetOutputTokens) {
-		return invalidRequest("spec.budgets.max_output_tokens must be a positive supported value.")
+	if input.WaitingTimeoutSeconds != nil && (*input.WaitingTimeoutSeconds <= 0 || *input.WaitingTimeoutSeconds > maxLimitSeconds) {
+		return invalidRequest("spec.limits.waiting_timeout_seconds must be a positive supported value.")
 	}
-	if input.MaxIterations != nil && (*input.MaxIterations <= 0 || *input.MaxIterations > maxBudgetIterations) {
-		return invalidRequest("spec.budgets.max_iterations must be a positive supported value.")
+	if input.MaxOutputTokens != nil && (*input.MaxOutputTokens <= 0 || *input.MaxOutputTokens > maxLimitOutputTokens) {
+		return invalidRequest("spec.limits.max_output_tokens must be a positive supported value.")
+	}
+	if input.MaxIterations != nil && (*input.MaxIterations <= 0 || *input.MaxIterations > maxLimitIterations) {
+		return invalidRequest("spec.limits.max_iterations must be a positive supported value.")
 	}
 	if input.MaxEstimatedCostUSD != nil {
 		value := *input.MaxEstimatedCostUSD
 		scaled := value * 1_000_000
-		if math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 || value > float64(maxBudgetCostMicros)/1_000_000 ||
+		if math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 || value > float64(maxLimitCostMicros)/1_000_000 ||
 			math.Abs(scaled-math.Round(scaled)) > 1e-6 {
-			return invalidRequest("spec.budgets.max_estimated_cost_usd must be positive, finite, and have at most six decimal places.")
+			return invalidRequest("spec.limits.max_estimated_cost_usd must be positive, finite, and have at most six decimal places.")
 		}
 	}
 	return nil
 }
 
-func (p BudgetPolicy) Resolve(input *InvocationBudgetInput) (ResolvedBudgets, error) {
-	if p.DefaultWallClockTimeout <= 0 || p.DefaultActiveExecutionTimeout <= 0 || p.DefaultMaxIterations <= 0 ||
-		p.MaxWallClockTimeout < p.DefaultWallClockTimeout || p.MaxActiveExecutionTimeout < p.DefaultActiveExecutionTimeout ||
+func (p LimitPolicy) Resolve(input *InvocationLimitInput) (ResolvedLimits, error) {
+	if p.DefaultTotalTimeout <= 0 || p.DefaultActiveTimeout <= 0 || p.DefaultWaitingTimeout <= 0 || p.DefaultMaxIterations <= 0 ||
+		p.MaxTotalTimeout < p.DefaultTotalTimeout || p.MaxActiveTimeout < p.DefaultActiveTimeout ||
+		p.MaxWaitingTimeout < p.DefaultWaitingTimeout ||
 		p.MaxOutputTokens <= 0 || p.MaxEstimatedCostMicros <= 0 || p.MaxIterations < p.DefaultMaxIterations {
-		return ResolvedBudgets{}, fmt.Errorf("invocation budget policy is invalid")
+		return ResolvedLimits{}, fmt.Errorf("invocation budget policy is invalid")
 	}
-	if p.MaxWallClockTimeout > time.Duration(maxBudgetSeconds)*time.Second ||
-		p.MaxActiveExecutionTimeout > time.Duration(maxBudgetSeconds)*time.Second ||
-		p.MaxOutputTokens > maxBudgetOutputTokens || p.MaxEstimatedCostMicros > maxBudgetCostMicros ||
-		p.MaxIterations > maxBudgetIterations {
-		return ResolvedBudgets{}, fmt.Errorf("invocation budget policy exceeds fixed safety limits")
+	if p.MaxTotalTimeout > time.Duration(maxLimitSeconds)*time.Second ||
+		p.MaxActiveTimeout > time.Duration(maxLimitSeconds)*time.Second ||
+		p.MaxWaitingTimeout > time.Duration(maxLimitSeconds)*time.Second ||
+		p.MaxOutputTokens > maxLimitOutputTokens || p.MaxEstimatedCostMicros > maxLimitCostMicros ||
+		p.MaxIterations > maxLimitIterations {
+		return ResolvedLimits{}, fmt.Errorf("invocation budget policy exceeds fixed safety limits")
 	}
-	if p.DefaultWallClockTimeout%time.Second != 0 || p.DefaultActiveExecutionTimeout%time.Second != 0 ||
-		p.MaxWallClockTimeout%time.Second != 0 || p.MaxActiveExecutionTimeout%time.Second != 0 {
-		return ResolvedBudgets{}, fmt.Errorf("invocation time budgets must use whole seconds")
+	if p.DefaultTotalTimeout%time.Second != 0 || p.DefaultActiveTimeout%time.Second != 0 || p.DefaultWaitingTimeout%time.Second != 0 ||
+		p.MaxTotalTimeout%time.Second != 0 || p.MaxActiveTimeout%time.Second != 0 || p.MaxWaitingTimeout%time.Second != 0 {
+		return ResolvedLimits{}, fmt.Errorf("invocation time limits must use whole seconds")
 	}
-	if err := validateRequestedBudgets(input); err != nil {
-		return ResolvedBudgets{}, err
+	if err := validateRequestedLimits(input); err != nil {
+		return ResolvedLimits{}, err
 	}
-	resolved := ResolvedBudgets{
-		WallClockTimeout: p.DefaultWallClockTimeout, ActiveExecutionTimeout: p.DefaultActiveExecutionTimeout,
-		MaxIterations: p.DefaultMaxIterations,
+	resolved := ResolvedLimits{
+		TotalTimeout:   p.DefaultTotalTimeout,
+		ActiveTimeout:  p.DefaultActiveTimeout,
+		WaitingTimeout: p.DefaultWaitingTimeout,
+		MaxIterations:  p.DefaultMaxIterations,
 	}
 	if input != nil {
-		if input.WallClockTimeoutSeconds != nil {
-			resolved.WallClockTimeout = time.Duration(*input.WallClockTimeoutSeconds) * time.Second
+		if input.TotalTimeoutSeconds != nil {
+			resolved.TotalTimeout = time.Duration(*input.TotalTimeoutSeconds) * time.Second
 		}
-		if input.ActiveExecutionTimeoutSeconds != nil {
-			resolved.ActiveExecutionTimeout = time.Duration(*input.ActiveExecutionTimeoutSeconds) * time.Second
+		if input.ActiveTimeoutSeconds != nil {
+			resolved.ActiveTimeout = time.Duration(*input.ActiveTimeoutSeconds) * time.Second
+		}
+		if input.WaitingTimeoutSeconds != nil {
+			resolved.WaitingTimeout = time.Duration(*input.WaitingTimeoutSeconds) * time.Second
 		}
 		if input.MaxOutputTokens != nil {
 			value := *input.MaxOutputTokens
@@ -131,49 +152,52 @@ func (p BudgetPolicy) Resolve(input *InvocationBudgetInput) (ResolvedBudgets, er
 			resolved.MaxIterations = *input.MaxIterations
 		}
 	}
-	if resolved.WallClockTimeout > p.MaxWallClockTimeout {
-		return ResolvedBudgets{}, invalidRequest("spec.budgets.wall_clock_timeout_seconds exceeds the installation maximum.")
+	if resolved.TotalTimeout > p.MaxTotalTimeout {
+		return ResolvedLimits{}, invalidRequest("spec.limits.total_timeout_seconds exceeds the installation maximum.")
 	}
-	if resolved.ActiveExecutionTimeout > p.MaxActiveExecutionTimeout {
-		return ResolvedBudgets{}, invalidRequest("spec.budgets.active_execution_timeout_seconds exceeds the installation maximum.")
+	if resolved.ActiveTimeout > p.MaxActiveTimeout {
+		return ResolvedLimits{}, invalidRequest("spec.limits.active_timeout_seconds exceeds the installation maximum.")
+	}
+	if resolved.WaitingTimeout > p.MaxWaitingTimeout {
+		return ResolvedLimits{}, invalidRequest("spec.limits.waiting_timeout_seconds exceeds the installation maximum.")
 	}
 	if resolved.MaxOutputTokens != nil && *resolved.MaxOutputTokens > p.MaxOutputTokens {
-		return ResolvedBudgets{}, invalidRequest("spec.budgets.max_output_tokens exceeds the installation maximum.")
+		return ResolvedLimits{}, invalidRequest("spec.limits.max_output_tokens exceeds the installation maximum.")
 	}
 	if resolved.MaxEstimatedCostMicros != nil && *resolved.MaxEstimatedCostMicros > p.MaxEstimatedCostMicros {
-		return ResolvedBudgets{}, invalidRequest("spec.budgets.max_estimated_cost_usd exceeds the installation maximum.")
+		return ResolvedLimits{}, invalidRequest("spec.limits.max_estimated_cost_usd exceeds the installation maximum.")
 	}
 	if resolved.MaxIterations > p.MaxIterations {
-		return ResolvedBudgets{}, invalidRequest("spec.budgets.max_iterations exceeds the installation maximum.")
+		return ResolvedLimits{}, invalidRequest("spec.limits.max_iterations exceeds the installation maximum.")
 	}
 	return resolved, nil
 }
 
-func (p BudgetPolicy) ResolveForOutput(input *InvocationBudgetInput, structured bool) (ResolvedBudgets, error) {
+func (p LimitPolicy) ResolveForOutput(input *InvocationLimitInput, structured bool) (ResolvedLimits, error) {
 	return p.ResolveForFeatures(input, structured, false)
 }
 
-func (p BudgetPolicy) ResolveForFeatures(
-	input *InvocationBudgetInput,
+func (p LimitPolicy) ResolveForFeatures(
+	input *InvocationLimitInput,
 	structuredOutput bool,
-	clientTools bool,
-) (ResolvedBudgets, error) {
+	hostTools bool,
+) (ResolvedLimits, error) {
 	resolved, err := p.Resolve(input)
-	if err != nil || (!structuredOutput && !clientTools) {
+	if err != nil || (!structuredOutput && !hostTools) {
 		return resolved, err
 	}
 	if p.MaxIterations < 2 {
-		return ResolvedBudgets{}, invalidRequest("The installation iteration maximum does not support multi-iteration specs.")
+		return ResolvedLimits{}, invalidRequest("The installation iteration maximum does not support multi-iteration specs.")
 	}
 	if input != nil && input.MaxIterations != nil {
 		if *input.MaxIterations < 2 {
 			feature := "spec.output or spec.tools"
-			if structuredOutput && !clientTools {
+			if structuredOutput && !hostTools {
 				feature = "spec.output"
-			} else if clientTools && !structuredOutput {
+			} else if hostTools && !structuredOutput {
 				feature = "spec.tools"
 			}
-			return ResolvedBudgets{}, invalidRequest("spec.budgets.max_iterations must be at least 2 when " + feature + " is present.")
+			return ResolvedLimits{}, invalidRequest("spec.limits.max_iterations must be at least 2 when " + feature + " is present.")
 		}
 		return resolved, nil
 	}
@@ -181,11 +205,13 @@ func (p BudgetPolicy) ResolveForFeatures(
 	return resolved, nil
 }
 
-func budgetReadFromDomain(invocation domain.Invocation) InvocationBudgetRead {
-	read := InvocationBudgetRead{
-		WallClockTimeoutSeconds:       invocation.WallClockTimeoutMS / 1000,
-		ActiveExecutionTimeoutSeconds: invocation.ActiveTimeoutMS / 1000,
-		MaxOutputTokens:               invocation.MaxOutputTokens, MaxIterations: invocation.MaxIterations,
+func limitReadFromDomain(invocation domain.Invocation) InvocationLimitRead {
+	read := InvocationLimitRead{
+		TotalTimeoutSeconds:   invocation.TotalTimeoutMS / 1000,
+		ActiveTimeoutSeconds:  invocation.ActiveTimeoutMS / 1000,
+		WaitingTimeoutSeconds: invocation.WaitingTimeoutMS / 1000,
+		MaxOutputTokens:       invocation.MaxOutputTokens,
+		MaxIterations:         invocation.MaxIterations,
 	}
 	if invocation.MaxEstimatedCostMicros != nil {
 		value := float64(*invocation.MaxEstimatedCostMicros) / 1_000_000
@@ -212,7 +238,7 @@ func (s *RuntimeService) CancelInvocation(ctx context.Context, auth domain.Runti
 		return InvocationRead{}, err
 	}
 	partition, err := s.store.GetTenantPartition(ctx, observed.TenantPartitionID)
-	if errors.Is(err, ports.ErrNotFound) || (err == nil && (partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantRef))) {
+	if errors.Is(err, ports.ErrNotFound) || (err == nil && (partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantKey))) {
 		return InvocationRead{}, notFound()
 	}
 	if err != nil {

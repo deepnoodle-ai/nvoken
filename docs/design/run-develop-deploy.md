@@ -1,6 +1,6 @@
 # Run, develop, deploy, and release nvoken
 
-**Status:** Implemented; public release pending
+**Status:** Implemented and released in v0.1.1
 
 **Date:** 2026-07-22
 
@@ -20,7 +20,7 @@ success path.
 
 ## Goals
 
-- Let a macOS or Linux evaluator run a durable TypeScript chat using the
+- Let a macOS or Linux evaluator run one durable TypeScript turn using the
   official Homebrew installation and public npm package, without compiling
   nvoken or its SDK, cloning the repository, or manually configuring Postgres,
   secrets, and migrations.
@@ -55,7 +55,7 @@ The documentation starts with three explicit choices:
    container, writes a protected marked `.env`, applies migrations, and serves
    the Runtime. A matching `nvoken-quickstart` executable from the public npm
    package reads only the generated `NVOKEN_*` settings and performs the
-   durable two-turn proof. This path requires no clone, Go, Python, Compose, or
+   one-response proof. This path requires no clone, Go, Python, Compose, or
    SDK build.
 2. **Develop nvoken.** Clone `main`, install the complete repository toolchain,
    use `go run ./cmd/nvokend quickstart` to exercise current daemon source, run
@@ -65,11 +65,10 @@ The documentation starts with three explicit choices:
    profile. Those guides retain the operational detail required to make honest
    production claims and point evaluators back to the Run guide.
 
-The Run proof is deliberately specific: write a fact into one durable Session,
-then recover it in a second Invocation. The executable also prints the
-host-owned Session key for an optional later-process resume. A plain one-shot
-hello remains useful as SDK reference material but is not the primary product
-demonstration.
+The Run proof is deliberately small: admit one turn, execute it, and print its
+canonical assistant response. Multi-turn Session behavior belongs in the
+separate TypeScript chat example and SDK guide, where the extra identity and
+recovery concepts are the point rather than first-run ceremony.
 
 `nvokend quickstart cleanup` removes only the exact container with the nvoken
 ownership label. It deliberately leaves `.env` so a restart preserves the same
@@ -178,20 +177,14 @@ small test-only distinction and preserves the artifact boundary that users see.
 
 ## Rollout
 
-1. Land release packaging, version surfaces, documentation split, example
-   dependency, and tests.
-2. Confirm `TAP_GITHUB_TOKEN` exists in the nvoken repository with write access
-   limited to `deepnoodle-ai/homebrew-tap` (confirmed 2026-07-22).
-3. From the exact merged and fully checked `main`, push both `v0.1.1` and
-   `npm-v0.1.1`.
-4. Independently verify the GitHub Release assets and checksums, npm registry
-   version, Homebrew formula commit, clean `brew install`, both `--version`
-   outputs, and the documented durable-session Run proof.
-5. Only after those public checks pass, describe the Homebrew/npm Run path as
-   available rather than merely prepared.
+Release packaging, version surfaces, the documentation split, public-shaped
+example, and tests landed before publication. On 2026-07-22, the exact release
+commit was published as both `v0.1.1` and `npm-v0.1.1`; the GitHub Release,
+`@deepnoodle/nvoken` registry version, Homebrew formula, clean installation,
+and both version commands were verified independently. The Run path can
+therefore describe those public artifacts as available.
 
 ## Open questions
 
-There are no design-blocking open questions. The first stable release must
-still prove that the configured cross-repository token can update the tap; the
-presence of the secret alone does not prove its scope.
+There are no design-blocking open questions. The v0.1.1 publication proved the
+cross-repository token can update the tap.

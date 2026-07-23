@@ -18,12 +18,12 @@ import (
 )
 
 const (
-	MaxInvocationBodyBytes             = 1 << 20
-	MaxInputBlocks                     = 64
-	MaxReferenceCharacters             = 255
-	MaxClientTools                     = 32
-	MaxClientToolNameBytes             = 64
-	MaxClientToolDescriptionCharacters = 4096
+	MaxInvocationBodyBytes           = 1 << 20
+	MaxInputBlocks                   = 64
+	MaxReferenceCharacters           = 255
+	MaxHostTools                     = 32
+	MaxHostToolNameBytes             = 64
+	MaxHostToolDescriptionCharacters = 4096
 )
 
 type TextInputBlock struct {
@@ -35,20 +35,44 @@ type InvocationInput struct {
 	Content []TextInputBlock `json:"content"`
 }
 
+func (i *InvocationInput) UnmarshalJSON(payload []byte) error {
+	trimmed := bytes.TrimSpace(payload)
+	if len(trimmed) != 0 && trimmed[0] == '"' {
+		var text string
+		if err := json.Unmarshal(trimmed, &text); err != nil {
+			return err
+		}
+		i.Content = []TextInputBlock{{Type: "text", Text: text}}
+		return nil
+	}
+	type wire InvocationInput
+	var decoded wire
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		return err
+	}
+	*i = InvocationInput(decoded)
+	return nil
+}
+
 type ModelSelection struct {
 	Provider string `json:"provider"`
-	Name     string `json:"name"`
+	ID       string `json:"id"`
 }
 
 type InlineExecutionSpec struct {
-	Instructions string                 `json:"instructions"`
-	Model        ModelSelection         `json:"model"`
-	Budgets      *InvocationBudgetInput `json:"budgets,omitempty"`
-	Output       *StructuredOutputSpec  `json:"output,omitempty"`
-	Tools        []ClientToolSpec       `json:"tools,omitempty"`
+	Instructions string                `json:"instructions,omitempty"`
+	Model        ModelSelection        `json:"model"`
+	Limits       *InvocationLimitInput `json:"limits,omitempty"`
+	Output       *StructuredOutputSpec `json:"output,omitempty"`
+	Tools        []HostToolSpec        `json:"tools,omitempty"`
 }
 
-type ClientToolSpec struct {
+type HostToolSpec struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Mode        string          `json:"mode"`
@@ -57,8 +81,8 @@ type ClientToolSpec struct {
 	callbackSet bool
 }
 
-func (s *ClientToolSpec) UnmarshalJSON(payload []byte) error {
-	type wire ClientToolSpec
+func (s *HostToolSpec) UnmarshalJSON(payload []byte) error {
+	type wire HostToolSpec
 	var decoded wire
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
@@ -72,7 +96,7 @@ func (s *ClientToolSpec) UnmarshalJSON(payload []byte) error {
 	if err := json.Unmarshal(payload, &members); err != nil {
 		return err
 	}
-	*s = ClientToolSpec(decoded)
+	*s = HostToolSpec(decoded)
 	_, s.callbackSet = members["callback"]
 	return nil
 }
@@ -86,8 +110,8 @@ type StructuredOutputSpec struct {
 }
 
 type CreateInvocationInput struct {
-	AgentRef            string                        `json:"agent_ref"`
-	TenantRef           *string                       `json:"tenant_ref,omitempty"`
+	AgentKey            string                        `json:"agent_key"`
+	TenantKey           *string                       `json:"tenant_key,omitempty"`
 	SessionID           *string                       `json:"session_id,omitempty"`
 	SessionKey          *string                       `json:"session_key,omitempty"`
 	IdempotencyKey      string                        `json:"idempotency_key"`
@@ -129,37 +153,38 @@ type InvocationAcknowledgement struct {
 	InvocationID string
 	Status       domain.InvocationStatus
 	Deduplicated bool
+	DeadlineAt   time.Time
 }
 
 type InvocationRead struct {
-	ID                  string
-	AgentID             string
-	SessionID           string
-	Status              domain.InvocationStatus
-	Error               json.RawMessage
-	Usage               json.RawMessage
-	Provenance          json.RawMessage
-	Output              json.RawMessage
-	OutputProvenance    json.RawMessage
-	Budgets             InvocationBudgetRead
-	ActiveExecutionMS   int64
-	WallClockDeadlineAt time.Time
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	CompletedAt         *time.Time
-	PendingToolCalls    []PendingClientToolCall
+	ID                string
+	AgentID           string
+	SessionID         string
+	Status            domain.InvocationStatus
+	Error             json.RawMessage
+	Usage             json.RawMessage
+	Provenance        json.RawMessage
+	Output            json.RawMessage
+	OutputProvenance  json.RawMessage
+	Limits            InvocationLimitRead
+	ActiveExecutionMS int64
+	DeadlineAt        time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	EndedAt           *time.Time
+	PendingToolCalls  []PendingHostToolCall
 }
 
 type SessionRead struct {
 	ID                     string
 	AgentID                string
-	TenantRef              *string
+	TenantKey              *string
 	SessionKey             *string
 	ActiveInvocationID     *string
 	ActiveInvocationStatus *domain.InvocationStatus
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
-	PendingToolCalls       []PendingClientToolCall
+	PendingToolCalls       []PendingHostToolCall
 }
 
 type admissionStore interface {
@@ -191,7 +216,7 @@ type RuntimeService struct {
 	ids                    ports.IDGenerator
 	signaller              ports.WorkSignaller
 	cancellations          ports.CancellationSignaller
-	budgetPolicy           BudgetPolicy
+	limitPolicy            LimitPolicy
 	logger                 *slog.Logger
 	executionMode          InvocationExecutionMode
 	dispatchQueue          string
@@ -211,8 +236,8 @@ func WithCancellationSignaller(signaller ports.CancellationSignaller) RuntimeOpt
 	return func(service *RuntimeService) { service.cancellations = signaller }
 }
 
-func WithBudgetPolicy(policy BudgetPolicy) RuntimeOption {
-	return func(service *RuntimeService) { service.budgetPolicy = policy }
+func WithLimitPolicy(policy LimitPolicy) RuntimeOption {
+	return func(service *RuntimeService) { service.limitPolicy = policy }
 }
 
 func WithRuntimeLogger(logger *slog.Logger) RuntimeOption {
@@ -266,8 +291,12 @@ func NewRuntimeService(
 	options ...RuntimeOption,
 ) *RuntimeService {
 	service := &RuntimeService{
-		store: store, txm: txm, clock: clock, ids: ids,
-		budgetPolicy: DefaultBudgetPolicy(), logger: slog.Default(),
+		store:         store,
+		txm:           txm,
+		clock:         clock,
+		ids:           ids,
+		limitPolicy:   DefaultLimitPolicy(),
+		logger:        slog.Default(),
 		executionMode: InvocationExecutionEmbedded,
 		credentialPolicy: ProviderCredentialPolicy{
 			DeploymentMode: CredentialDeploymentSelfHosted,
@@ -284,14 +313,14 @@ func NewRuntimeService(
 }
 
 func ValidateCreateInvocation(input CreateInvocationInput) error {
-	if err := validateBoundedString("agent_ref", input.AgentRef, MaxReferenceCharacters); err != nil {
+	if err := validateBoundedString("agent_key", input.AgentKey, MaxReferenceCharacters); err != nil {
 		return err
 	}
 	if err := validateBoundedString("idempotency_key", input.IdempotencyKey, MaxReferenceCharacters); err != nil {
 		return err
 	}
-	if input.TenantRef != nil {
-		if err := validateBoundedString("tenant_ref", *input.TenantRef, MaxReferenceCharacters); err != nil {
+	if input.TenantKey != nil {
+		if err := validateBoundedString("tenant_key", *input.TenantKey, MaxReferenceCharacters); err != nil {
 			return err
 		}
 	}
@@ -317,16 +346,17 @@ func ValidateCreateInvocation(input CreateInvocationInput) error {
 			return invalidRequest(fmt.Sprintf("input.content[%d].text must not be blank.", index))
 		}
 	}
-	if !utf8.ValidString(input.Spec.Instructions) || strings.TrimSpace(input.Spec.Instructions) == "" {
-		return invalidRequest("spec.instructions must not be blank.")
+	if !utf8.ValidString(input.Spec.Instructions) ||
+		(input.Spec.Instructions != "" && strings.TrimSpace(input.Spec.Instructions) == "") {
+		return invalidRequest("spec.instructions must not be blank when supplied.")
 	}
 	if err := validateBoundedString("spec.model.provider", input.Spec.Model.Provider, MaxReferenceCharacters); err != nil {
 		return err
 	}
-	if err := validateBoundedString("spec.model.name", input.Spec.Model.Name, MaxReferenceCharacters); err != nil {
+	if err := validateBoundedString("spec.model.id", input.Spec.Model.ID, MaxReferenceCharacters); err != nil {
 		return err
 	}
-	if err := validateRequestedBudgets(input.Spec.Budgets); err != nil {
+	if err := validateRequestedLimits(input.Spec.Limits); err != nil {
 		return err
 	}
 	if input.Spec.Output != nil {
@@ -334,7 +364,7 @@ func ValidateCreateInvocation(input CreateInvocationInput) error {
 			return invalidRequest("spec.output.schema is invalid: " + err.Error() + ".")
 		}
 	}
-	if err := validateClientTools(input.Spec.Tools); err != nil {
+	if err := validateHostTools(input.Spec.Tools); err != nil {
 		return err
 	}
 	provider, ok := CanonicalModelProvider(input.Spec.Model.Provider)
@@ -405,14 +435,14 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 	if hasCallbackTools(input.Spec.Tools) && !s.callbackTools {
 		return InvocationAcknowledgement{}, invalidRequest("spec.tools callback mode is not configured for this installation.")
 	}
-	if auth.TenantConstraint != nil && input.TenantRef != nil && *auth.TenantConstraint != *input.TenantRef {
-		return InvocationAcknowledgement{}, forbidden("The requested tenant_ref conflicts with the credential constraint.")
+	if auth.TenantConstraint != nil && input.TenantKey != nil && *auth.TenantConstraint != *input.TenantKey {
+		return InvocationAcknowledgement{}, forbidden("The requested tenant_key conflicts with the credential constraint.")
 	}
 	if auth.SessionConstraint != nil && (input.SessionID == nil || *input.SessionID != *auth.SessionConstraint) {
 		return InvocationAcknowledgement{}, forbidden("The requested Session conflicts with the credential constraint.")
 	}
-	resolvedBudgets, err := s.budgetPolicy.ResolveForFeatures(
-		input.Spec.Budgets,
+	resolvedLimits, err := s.limitPolicy.ResolveForFeatures(
+		input.Spec.Limits,
 		input.Spec.Output != nil,
 		len(input.Spec.Tools) != 0,
 	)
@@ -426,7 +456,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 		}
 	}
-	fingerprint, err := InvocationFingerprintV6(input)
+	fingerprint, err := InvocationFingerprintV7(input)
 	if err != nil {
 		return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 	}
@@ -444,7 +474,10 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 				return err
 			}
 			agent, err := s.store.ResolveAgent(txCtx, domain.Agent{
-				ID: agentID, AccountID: account.ID, AgentRef: input.AgentRef, CreatedAt: now,
+				ID:        agentID,
+				AccountID: account.ID,
+				AgentKey:  input.AgentKey,
+				CreatedAt: now,
 			})
 			if err != nil {
 				return err
@@ -527,16 +560,17 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 				SpecSnapshotID:         snapshot.ID,
 				IdempotencyKey:         input.IdempotencyKey,
 				RequestFingerprint:     fingerprint[:],
-				FingerprintVersion:     6,
+				FingerprintVersion:     7,
 				Status:                 domain.InvocationQueued,
 				CurrentStateRevision:   revision,
-				WallClockTimeoutMS:     resolvedBudgets.WallClockTimeout.Milliseconds(),
-				ActiveTimeoutMS:        resolvedBudgets.ActiveExecutionTimeout.Milliseconds(),
-				MaxOutputTokens:        resolvedBudgets.MaxOutputTokens,
-				MaxEstimatedCostMicros: resolvedBudgets.MaxEstimatedCostMicros,
-				MaxIterations:          resolvedBudgets.MaxIterations,
+				TotalTimeoutMS:         resolvedLimits.TotalTimeout.Milliseconds(),
+				ActiveTimeoutMS:        resolvedLimits.ActiveTimeout.Milliseconds(),
+				WaitingTimeoutMS:       resolvedLimits.WaitingTimeout.Milliseconds(),
+				MaxOutputTokens:        resolvedLimits.MaxOutputTokens,
+				MaxEstimatedCostMicros: resolvedLimits.MaxEstimatedCostMicros,
+				MaxIterations:          resolvedLimits.MaxIterations,
 				OutputSchemaDigest:     outputSchemaDigest,
-				WallClockDeadlineAt:    now.Add(resolvedBudgets.WallClockTimeout),
+				DeadlineAt:             now.Add(resolvedLimits.TotalTimeout),
 				CreatedAt:              now,
 				UpdatedAt:              now,
 			}
@@ -652,7 +686,7 @@ func (s *RuntimeService) resolvePartitionAndSelectedSession(
 		if err != nil {
 			return domain.TenantPartition{}, nil, err
 		}
-		if partition.AccountID != account.ID || !tenantMatches(auth.TenantConstraint, partition.TenantRef) || !tenantMatches(input.TenantRef, partition.TenantRef) {
+		if partition.AccountID != account.ID || !tenantMatches(auth.TenantConstraint, partition.TenantKey) || !tenantMatches(input.TenantKey, partition.TenantKey) {
 			return domain.TenantPartition{}, nil, notFound()
 		}
 		return partition, &session, nil
@@ -660,7 +694,7 @@ func (s *RuntimeService) resolvePartitionAndSelectedSession(
 
 	effectiveTenant := auth.TenantConstraint
 	if effectiveTenant == nil {
-		effectiveTenant = input.TenantRef
+		effectiveTenant = input.TenantKey
 	}
 	if effectiveTenant == nil {
 		partition, err := s.store.GetDefaultTenantPartition(ctx, account.ID)
@@ -671,7 +705,10 @@ func (s *RuntimeService) resolvePartitionAndSelectedSession(
 		return domain.TenantPartition{}, nil, err
 	}
 	partition, err := s.store.ResolveTenantPartition(ctx, domain.TenantPartition{
-		ID: partitionID, AccountID: account.ID, TenantRef: cloneString(effectiveTenant), CreatedAt: now,
+		ID:        partitionID,
+		AccountID: account.ID,
+		TenantKey: cloneString(effectiveTenant),
+		CreatedAt: now,
 	})
 	return partition, nil, err
 }
@@ -727,14 +764,14 @@ func (s *RuntimeService) GetInvocation(ctx context.Context, auth domain.RuntimeA
 		return InvocationRead{}, notFound()
 	}
 	partition, err := s.store.GetTenantPartition(ctx, invocation.TenantPartitionID)
-	if err != nil || partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantRef) {
+	if err != nil || partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantKey) {
 		if errors.Is(err, ports.ErrNotFound) || err == nil {
 			return InvocationRead{}, notFound()
 		}
 		return InvocationRead{}, err
 	}
 	read := invocationReadFromDomain(invocation)
-	read.PendingToolCalls, err = s.pendingClientToolCalls(ctx, invocation)
+	read.PendingToolCalls, err = s.pendingHostToolCalls(ctx, invocation)
 	if err != nil {
 		return InvocationRead{}, err
 	}
@@ -762,7 +799,7 @@ func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuth
 		return SessionRead{}, notFound()
 	}
 	partition, err := s.store.GetTenantPartition(ctx, session.TenantPartitionID)
-	if err != nil || partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantRef) {
+	if err != nil || partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantKey) {
 		if errors.Is(err, ports.ErrNotFound) || err == nil {
 			return SessionRead{}, notFound()
 		}
@@ -770,12 +807,12 @@ func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuth
 	}
 	var activeID *string
 	var activeStatus *domain.InvocationStatus
-	var pending []PendingClientToolCall
+	var pending []PendingHostToolCall
 	active, err := s.store.GetNonterminalInvocationBySession(ctx, session.ID)
 	if err == nil {
 		activeID = &active.ID
 		activeStatus = &active.Status
-		pending, err = s.pendingClientToolCalls(ctx, active)
+		pending, err = s.pendingHostToolCalls(ctx, active)
 		if err != nil {
 			return SessionRead{}, err
 		}
@@ -785,7 +822,7 @@ func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuth
 	return SessionRead{
 		ID:                     session.ID,
 		AgentID:                session.AgentID,
-		TenantRef:              cloneString(partition.TenantRef),
+		TenantKey:              cloneString(partition.TenantKey),
 		SessionKey:             cloneString(session.SessionKey),
 		ActiveInvocationID:     activeID,
 		ActiveInvocationStatus: activeStatus,
@@ -797,21 +834,21 @@ func (s *RuntimeService) GetSession(ctx context.Context, auth domain.RuntimeAuth
 
 func invocationReadFromDomain(invocation domain.Invocation) InvocationRead {
 	return InvocationRead{
-		ID:                  invocation.ID,
-		AgentID:             invocation.AgentID,
-		SessionID:           invocation.SessionID,
-		Status:              invocation.Status,
-		Error:               invocation.Error,
-		Usage:               invocation.Usage,
-		Provenance:          invocation.Provenance,
-		Output:              invocation.Output,
-		OutputProvenance:    invocation.OutputProvenance,
-		Budgets:             budgetReadFromDomain(invocation),
-		ActiveExecutionMS:   invocation.ActiveExecutionMS,
-		WallClockDeadlineAt: invocation.WallClockDeadlineAt,
-		CreatedAt:           invocation.CreatedAt,
-		UpdatedAt:           invocation.UpdatedAt,
-		CompletedAt:         invocation.CompletedAt,
+		ID:                invocation.ID,
+		AgentID:           invocation.AgentID,
+		SessionID:         invocation.SessionID,
+		Status:            invocation.Status,
+		Error:             invocation.Error,
+		Usage:             invocation.Usage,
+		Provenance:        invocation.Provenance,
+		Output:            invocation.Output,
+		OutputProvenance:  invocation.OutputProvenance,
+		Limits:            limitReadFromDomain(invocation),
+		ActiveExecutionMS: invocation.ActiveExecutionMS,
+		DeadlineAt:        invocation.DeadlineAt,
+		CreatedAt:         invocation.CreatedAt,
+		UpdatedAt:         invocation.UpdatedAt,
+		EndedAt:           invocation.CompletedAt,
 	}
 }
 
@@ -867,7 +904,7 @@ func (s *RuntimeService) findIdempotent(
 	expected := fingerprint[:]
 	switch existing.FingerprintVersion {
 	case 1:
-		if legacyInput.Spec.Budgets != nil || legacyInput.Spec.Output != nil || len(legacyInput.Spec.Tools) != 0 || legacyInput.ProviderCredentials != nil {
+		if legacyInput.Spec.Limits != nil || legacyInput.Spec.Output != nil || len(legacyInput.Spec.Tools) != 0 || legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
 		}
 		legacy, legacyErr := InvocationFingerprintV1(legacyInput)
@@ -923,6 +960,17 @@ func (s *RuntimeService) findIdempotent(
 		if bindingErr != nil || binding.InvocationID != existing.ID || binding.Provider != provider {
 			return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
 		}
+		legacy, legacyErr := InvocationFingerprintV6(input)
+		if legacyErr != nil {
+			return domain.Invocation{}, false, legacyErr
+		}
+		expected = legacy[:]
+	case 7:
+		provider := input.Spec.Model.Provider
+		binding, bindingErr := s.store.GetInvocationProviderCredential(ctx, existing.ID, provider)
+		if bindingErr != nil || binding.InvocationID != existing.ID || binding.Provider != provider {
+			return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
+		}
 	default:
 		return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
 	}
@@ -965,8 +1013,12 @@ func (s *RuntimeService) newAdmissionIDs(includeDispatch bool) (admissionIDs, er
 
 func acknowledgementFor(invocation domain.Invocation, deduplicated bool) InvocationAcknowledgement {
 	return InvocationAcknowledgement{
-		AgentID: invocation.AgentID, SessionID: invocation.SessionID,
-		InvocationID: invocation.ID, Status: invocation.Status, Deduplicated: deduplicated,
+		AgentID:      invocation.AgentID,
+		SessionID:    invocation.SessionID,
+		InvocationID: invocation.ID,
+		Status:       invocation.Status,
+		Deduplicated: deduplicated,
+		DeadlineAt:   invocation.DeadlineAt,
 	}
 }
 

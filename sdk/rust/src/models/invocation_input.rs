@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -11,15 +11,17 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct InvocationInput {
-    /// Ordered caller-input blocks. The launch contract supports text only.
-    #[serde(rename = "content")]
-    pub content: Vec<models::TextInputBlock>,
+/// InvocationInput : A plain string is shorthand for one text block. Use the object form for ordered multi-block input; the launch contract supports text only.
+/// A plain string is shorthand for one text block. Use the object form for ordered multi-block input; the launch contract supports text only.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum InvocationInput {
+    String(String),
+    InvocationInputBlocks(Box<models::InvocationInputBlocks>),
 }
 
-impl InvocationInput {
-    pub fn new(content: Vec<models::TextInputBlock>) -> InvocationInput {
-        InvocationInput { content }
+impl Default for InvocationInput {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }

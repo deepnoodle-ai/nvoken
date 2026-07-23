@@ -1,24 +1,27 @@
--- Durable Invocation controls. Logical budgets are admission-time facts;
+-- Durable Invocation controls. Logical limits are admission-time facts;
 -- active execution is accrued from one persisted segment at a time.
 
 BEGIN;
 
 ALTER TABLE invocations
     ADD COLUMN request_fingerprint_version smallint NOT NULL DEFAULT 1,
-    ADD COLUMN wall_clock_timeout_ms bigint NOT NULL DEFAULT 1800000,
-    ADD COLUMN active_execution_timeout_ms bigint NOT NULL DEFAULT 1800000,
+    ADD COLUMN total_timeout_ms bigint NOT NULL DEFAULT 1800000,
+    ADD COLUMN active_timeout_ms bigint NOT NULL DEFAULT 1800000,
+    ADD COLUMN waiting_timeout_ms bigint NOT NULL DEFAULT 1800000,
     ADD COLUMN max_output_tokens integer,
     ADD COLUMN max_estimated_cost_microusd bigint,
     ADD COLUMN max_iterations integer NOT NULL DEFAULT 1,
     ADD COLUMN active_execution_ms bigint NOT NULL DEFAULT 0,
-    ADD COLUMN wall_clock_deadline_at timestamptz,
+    ADD COLUMN waiting_execution_ms bigint NOT NULL DEFAULT 0,
+    ADD COLUMN deadline_at timestamptz,
     ADD COLUMN active_segment_started_at timestamptz,
+    ADD COLUMN waiting_segment_started_at timestamptz,
     ADD COLUMN execution_deadline_at timestamptz,
     ADD COLUMN execution_deadline_scope text;
 
 UPDATE invocations
-SET wall_clock_deadline_at = created_at + interval '30 minutes'
-WHERE wall_clock_deadline_at IS NULL;
+SET deadline_at = created_at + interval '30 minutes'
+WHERE deadline_at IS NULL;
 
 -- A rolling upgrade may observe claims created by a pre-controls binary.
 -- Seed one conservative segment without changing lifecycle or lease ownership;
@@ -26,35 +29,39 @@ WHERE wall_clock_deadline_at IS NULL;
 UPDATE invocations
 SET active_segment_started_at = LEAST(
         updated_at,
-        wall_clock_deadline_at - interval '1 millisecond'
+        deadline_at - interval '1 millisecond'
     )
 WHERE status = 'running';
 
 UPDATE invocations
 SET execution_deadline_at = LEAST(
-        wall_clock_deadline_at,
+        deadline_at,
         active_segment_started_at + interval '15 minutes'
     ),
     execution_deadline_scope = CASE
-        WHEN wall_clock_deadline_at <= active_segment_started_at + interval '15 minutes'
-            THEN 'wall_clock'
+        WHEN deadline_at <= active_segment_started_at + interval '15 minutes'
+            THEN 'total'
         ELSE 'execution_segment'
     END
 WHERE status = 'running';
 
 ALTER TABLE invocations
-    ALTER COLUMN wall_clock_deadline_at SET NOT NULL,
+    ALTER COLUMN deadline_at SET NOT NULL,
     ADD CONSTRAINT invocations_fingerprint_version_positive CHECK (request_fingerprint_version > 0),
-    ADD CONSTRAINT invocations_wall_timeout_positive CHECK (wall_clock_timeout_ms > 0),
-    ADD CONSTRAINT invocations_active_timeout_positive CHECK (active_execution_timeout_ms > 0),
+    ADD CONSTRAINT invocations_wall_timeout_positive CHECK (total_timeout_ms > 0),
+    ADD CONSTRAINT invocations_active_timeout_positive CHECK (active_timeout_ms > 0),
+    ADD CONSTRAINT invocations_waiting_timeout_positive CHECK (waiting_timeout_ms > 0),
     ADD CONSTRAINT invocations_output_limit_positive CHECK (max_output_tokens IS NULL OR max_output_tokens > 0),
     ADD CONSTRAINT invocations_cost_limit_positive CHECK (max_estimated_cost_microusd IS NULL OR max_estimated_cost_microusd > 0),
     ADD CONSTRAINT invocations_iteration_limit_positive CHECK (max_iterations > 0),
     ADD CONSTRAINT invocations_active_execution_bounded CHECK (
-        active_execution_ms >= 0 AND active_execution_ms <= active_execution_timeout_ms
+        active_execution_ms >= 0 AND active_execution_ms <= active_timeout_ms
+    ),
+    ADD CONSTRAINT invocations_waiting_execution_bounded CHECK (
+        waiting_execution_ms >= 0 AND waiting_execution_ms <= waiting_timeout_ms
     ),
     ADD CONSTRAINT invocations_wall_deadline_consistent CHECK (
-        wall_clock_deadline_at = created_at + wall_clock_timeout_ms * interval '1 millisecond'
+        deadline_at = created_at + total_timeout_ms * interval '1 millisecond'
     ),
     ADD CONSTRAINT invocations_active_segment_shape CHECK (
         (
@@ -62,13 +69,17 @@ ALTER TABLE invocations
             AND active_segment_started_at IS NOT NULL
             AND execution_deadline_at IS NOT NULL
             AND execution_deadline_at > active_segment_started_at
-            AND execution_deadline_scope IN ('wall_clock', 'active_execution', 'execution_segment')
+            AND execution_deadline_scope IN ('total', 'active_execution', 'execution_segment')
         ) OR (
             status <> 'running'
             AND active_segment_started_at IS NULL
             AND execution_deadline_at IS NULL
             AND execution_deadline_scope IS NULL
         )
+    ),
+    ADD CONSTRAINT invocations_waiting_segment_shape CHECK (
+        (status = 'waiting' AND waiting_segment_started_at IS NOT NULL)
+        OR (status <> 'waiting' AND waiting_segment_started_at IS NULL)
     );
 
 ALTER TABLE invocations
@@ -78,7 +89,7 @@ ALTER TABLE invocations
     );
 
 CREATE INDEX invocations_expired_logical_deadlines
-    ON invocations (wall_clock_deadline_at, id)
+    ON invocations (deadline_at, id)
     WHERE status IN ('queued', 'running', 'waiting');
 
 CREATE INDEX invocations_expired_execution_deadlines
@@ -88,9 +99,9 @@ CREATE INDEX invocations_expired_execution_deadlines
 CREATE OR REPLACE FUNCTION nvoken_default_invocation_controls()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-    IF NEW.wall_clock_deadline_at IS NULL THEN
-        NEW.wall_clock_deadline_at := NEW.created_at
-            + NEW.wall_clock_timeout_ms * interval '1 millisecond';
+    IF NEW.deadline_at IS NULL THEN
+        NEW.deadline_at := NEW.created_at
+            + NEW.total_timeout_ms * interval '1 millisecond';
     END IF;
     RETURN NEW;
 END;
@@ -112,8 +123,9 @@ BEGIN
        OR NEW.idempotency_key <> OLD.idempotency_key
        OR NEW.request_fingerprint <> OLD.request_fingerprint
        OR NEW.request_fingerprint_version <> OLD.request_fingerprint_version
-       OR NEW.wall_clock_timeout_ms <> OLD.wall_clock_timeout_ms
-       OR NEW.active_execution_timeout_ms <> OLD.active_execution_timeout_ms
+       OR NEW.total_timeout_ms <> OLD.total_timeout_ms
+       OR NEW.active_timeout_ms <> OLD.active_timeout_ms
+       OR NEW.waiting_timeout_ms <> OLD.waiting_timeout_ms
        OR NEW.max_output_tokens IS DISTINCT FROM OLD.max_output_tokens
        OR NEW.max_estimated_cost_microusd IS DISTINCT FROM OLD.max_estimated_cost_microusd
        OR NEW.max_iterations <> OLD.max_iterations THEN
@@ -130,6 +142,10 @@ BEGIN
     END IF;
     IF NEW.active_execution_ms < OLD.active_execution_ms THEN
         RAISE EXCEPTION 'invocation active execution cannot move backward'
+            USING ERRCODE = '23514';
+    END IF;
+    IF NEW.waiting_execution_ms < OLD.waiting_execution_ms THEN
+        RAISE EXCEPTION 'invocation waiting time cannot move backward'
             USING ERRCODE = '23514';
     END IF;
     IF NEW.lease_owner IS DISTINCT FROM OLD.lease_owner

@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -21,8 +21,8 @@ pub struct ProviderCredential {
     pub provider: models::ModelProvider,
     #[serde(rename = "scope")]
     pub scope: models::ProviderCredentialScope,
-    #[serde(rename = "tenant_ref", deserialize_with = "Option::deserialize")]
-    pub tenant_ref: Option<String>,
+    #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
+    pub tenant_key: Option<String>,
     /// Active roots remain rotatable and revocable even when their current version has expired.
     #[serde(rename = "status")]
     pub status: Status,
@@ -63,7 +63,7 @@ impl ProviderCredential {
         id: String,
         provider: models::ModelProvider,
         scope: models::ProviderCredentialScope,
-        tenant_ref: Option<String>,
+        tenant_key: Option<String>,
         status: Status,
         version: u32,
         version_id: String,
@@ -80,7 +80,7 @@ impl ProviderCredential {
             id,
             provider,
             scope,
-            tenant_ref,
+            tenant_key,
             status,
             version,
             version_id,

@@ -68,7 +68,7 @@ application records; rollout selection or product entitlements.
 The primary API operation:
 
 ```text
-invoke(execution_spec, input, optional_session, optional_tenant_ref)
+invoke(execution_spec, input, optional_session, optional_tenant_key)
   -> durable invocation
 ```
 
@@ -79,7 +79,7 @@ first. The host can:
 - create or continue a Session by host session key;
 - receive ordinary output, generation streaming, or structured output
   against a host-provided schema;
-- receive client ToolCalls over a later stream and submit results through a
+- receive host ToolCalls over a later stream and submit results through a
   narrow durable command;
 - expose server-to-server capabilities as signed callback tools;
 - tag requests with indexed metadata that links Sessions and Invocations to
@@ -116,7 +116,7 @@ sandbox for code execution — but it is deferred for now.
 ## 5. The public nouns
 
 - **Agent** — an Account-wide lightweight identity anchor, auto-created on
-  first Invocation from the caller-controlled `agent_ref`. It groups Sessions
+  first Invocation from the caller-controlled `agent_key`. It groups Sessions
   and Invocations across tenant partitions for lookup and observability and
   carries no configuration. Its ID is UUIDv7 with an `agnt_` prefix; the
   execution specification still arrives with every Invocation.
@@ -133,7 +133,7 @@ sandbox for code execution — but it is deferred for now.
   resolved spec and digest, model/tool activity, output (including
   structured output), error, usage, and recovery state.
 - **ToolCall** — the durable governance boundary between what the model
-  requested and what actually happened. Modes: builtin, callback, client.
+  requested and what actually happened. Modes: builtin, callback, host.
 
 Optional adjacent resources: agent memory records (when the host opts in)
 and named custom tool definitions. Everything else is caller input,
@@ -143,7 +143,7 @@ state.
 ## 6. Caller-owned agent specifications
 
 An agent is a specification the host supplies per Invocation: instructions,
-model preference, tool schemas and modes, output constraints, budgets. The
+model preference, tool schemas and modes, output constraints, limits. The
 host's Git is source of truth; its CI decides which version each tenant
 receives. nvoken may snapshot the exact resolved bytes and digest for
 reproducibility and cache by digest — the client avoids resending a large
@@ -156,7 +156,7 @@ are all "send a different digest."
 Embedded end-users never authenticate to nvoken directly; the host
 application makes requests to nvoken on their behalf. A future version of
 nvoken may let end-users make direct requests with a new form of credentials —
-deferred for now. The host may supply a stable `tenant_ref` per Invocation,
+deferred for now. The host may supply a stable `tenant_key` per Invocation,
 used for Session partitioning, credential scoping, usage attribution, operator
 filtering, callback context, and audit. A tenant-constrained credential fixes
 that partition; otherwise an explicit reference or the Account default applies
@@ -176,7 +176,7 @@ and its result persisting, the call may run again on resumption — hosts make
 business effects idempotent by ToolCall ID.
 
 **Tool governance.** Three modes: `builtin` (small trusted runtime
-capabilities), `callback` (signed durable delivery to the host), `client`
+capabilities), `callback` (signed durable delivery to the host), `host`
 (generation-style ToolCall; the parked turn resumes on the result). The
 model receives tool capability, not ambient credentials. Every tool with side
 effects executes on the host's side of the boundary: nvoken runs the turn
@@ -186,7 +186,7 @@ but never executes host or end-user code.
 views compose those messages with append-only Invocation state revisions;
 neither a change feed nor a live stream stores a second copy of content.
 Invocations expose authoritative state, output, error, usage, and provenance;
-pending client ToolCalls are queryable after reconnect. Transports are never
+pending host ToolCalls are queryable after reconnect. Transports are never
 the source of truth.
 
 **Provider neutrality.** The spec selects models per Invocation and may route
@@ -198,8 +198,8 @@ provider, nvoken Cloud accepts an Invocation-supplied ephemeral credential,
 reusable Account BYOK, reusable tenant BYOK, or a platform-funded credential.
 Platform credentials never silently replace an explicitly selected BYOK
 source and carry a small markup on tokens. The spec carries token, cost,
-iteration, and wall-clock ceilings; budget consumption is visible in usage
-events while the turn runs.
+iteration, total-time, active-time, and waiting-time limits; consumption is
+visible in usage events while the turn runs.
 
 **Observability.** The session viewer and the invocation trace are primary
 product surfaces: transcript, ToolCall attempts and results, spec digest,

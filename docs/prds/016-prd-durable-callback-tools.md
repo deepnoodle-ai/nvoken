@@ -4,13 +4,13 @@
 **Sequence:** 016
 **Depends on:** `012-prd-durable-toolcall-and-checkpoint-model.md`,
 `014-prd-checkpoint-crash-recovery.md`, and
-`015-prd-durable-client-tools.md`
+`015-prd-durable-host-tools.md`
 
 ## ELI5
 
 An agent can ask nvoken to call a host-owned HTTPS endpoint. nvoken first saves
 the ToolCall, then sends a signed, retryable request with stable IDs. A valid
-response becomes the same durable tool result used by client tools, so any
+response becomes the same durable tool result used by host tools, so any
 engine can continue the parked Invocation after a crash or restart.
 
 ## Why
@@ -58,7 +58,7 @@ staging proof.
   Callback URLs are at most 2,048 bytes, contain no userinfo or fragment, and
   use HTTPS. Unknown fields, unsupported modes, or callback declarations when
   callback signing is not configured are rejected before writes. Callback and
-  client tools may coexist. All new admissions use fingerprint v5. It preserves
+  host tools may coexist. All new admissions use fingerprint v5. It preserves
   v4 order and encodes `callback` after `input_schema` as `null` for client
   tools or `{"url": ...}` for callback tools. A request containing no callback
   tool may replay a retained v1–v4 row using that row's recorded version; a
@@ -79,7 +79,7 @@ staging proof.
 - **R3 — Stable signed protocol.** Every transport retry uses the same delivery
   ID and ToolCall ID. The exact compact JSON body has `schema_version: 1`, a
   runtime context containing delivery, ToolCall, Invocation, Session, Agent
-  reference, and optional tenant reference, plus the canonical tool `input`.
+  reference, and optional tenant key, plus the canonical tool `input`.
   nvoken signs `v1.<delivery_id>.<unix_timestamp>.<raw_body>` with HMAC-SHA256
   and sends `X-Nvoken-Signature`, `X-Nvoken-Signature-Version`,
   `X-Nvoken-Timestamp`, `X-Nvoken-Delivery-Id`,
@@ -134,7 +134,7 @@ staging proof.
   client results leave the Invocation waiting. Closing the final external call
   atomically queues the same Invocation and, in external execution mode,
   creates its successor execution dispatch. A later engine reconstructs
-  results in original model batch order and continues cumulative budgets.
+  results in original model batch order and continues cumulative limits.
 
 - **R8 — Terminal controls dominate undelivered work.** Cancellation or wall
   deadline settlement abandons every active callback delivery and closes its
@@ -173,7 +173,7 @@ staging proof.
 - [x] **A4 (R6, R7):** Valid, error, malformed, oversized, deep, permanent-4xx,
   and exhausted responses produce the required atomic evidence. Mixed callback
   and client batches remain waiting until the last result, then queue once;
-  another engine continues with batch-ordered results and unchanged budgets.
+  another engine continues with batch-ordered results and unchanged limits.
 - [x] **A5 (R5–R8):** Duplicate/late delivery, cancellation, deadline, lease
   expiry, and crash-at-send/settle races converge to one ToolCall result and at
   most one resume dispatch. Stale delivery owners commit nothing, and ambiguous

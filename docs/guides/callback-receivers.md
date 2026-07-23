@@ -1,7 +1,7 @@
 # Callback receiver contract
 
 > **For host applications implementing callback tools.** You can use ordinary
-> model turns and client tools without this guide. Read it before allowing
+> model turns and host tools without this guide. Read it before allowing
 > nvoken to invoke a public endpoint that may apply an external effect.
 
 A callback tool lets nvoken deliver one durable ToolCall to a host-owned public
@@ -47,14 +47,14 @@ media type is `application/vnd.nvoken.tool-callback+json; version=1`:
     "tool_call_id": "tcal_…",
     "invocation_id": "invk_…",
     "session_id": "sesn_…",
-    "agent_ref": "support-agent",
-    "tenant_ref": "tenant-123"
+    "agent_key": "support-agent",
+    "tenant_key": "tenant-123"
   },
   "input": {"order_id": "order-123"}
 }
 ```
 
-`tenant_ref` is omitted for the default partition. The v1 context reserves an
+`tenant_key` is omitted for the default partition. The v1 context reserves an
 optional actor member, but current admission has no delegated actor claim and
 therefore does not send it. Receivers should ignore future unknown context
 members after the signed envelope version remains understood.
@@ -74,7 +74,7 @@ nest at most 32 levels. `is_error` is optional and defaults to false. A valid
 transport delivery.
 
 nvoken retries transport failures, 408, 425, 429, and 5xx with persisted
-backoff, at most five attempts and never beyond the Invocation wall deadline.
+backoff, at most five attempts and never beyond the Invocation total deadline.
 Other non-2xx responses, redirects, an invalid success envelope, and an
 oversized response become a bounded model-visible callback error. Response
 bodies from failures are neither persisted nor logged.

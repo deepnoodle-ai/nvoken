@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -57,7 +57,7 @@ export interface ProviderCredential {
      * @type {string}
      * @memberof ProviderCredential
      */
-    tenantRef: string | null;
+    tenantKey: string | null;
     /**
      * Active roots remain rotatable and revocable even when their current version has expired.
      * @type {ProviderCredentialStatusEnum}
@@ -155,7 +155,7 @@ export function instanceOfProviderCredential(value: object): value is ProviderCr
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('provider' in value) || value['provider'] === undefined) return false;
     if (!('scope' in value) || value['scope'] === undefined) return false;
-    if (!('tenantRef' in value) || value['tenantRef'] === undefined) return false;
+    if (!('tenantKey' in value) || value['tenantKey'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('version' in value) || value['version'] === undefined) return false;
     if (!('versionId' in value) || value['versionId'] === undefined) return false;
@@ -183,7 +183,7 @@ export function ProviderCredentialFromJSONTyped(json: any, ignoreDiscriminator: 
         'id': json['id'],
         'provider': ModelProviderFromJSON(json['provider']),
         'scope': ProviderCredentialScopeFromJSON(json['scope']),
-        'tenantRef': json['tenant_ref'],
+        'tenantKey': json['tenant_key'],
         'status': json['status'],
         'version': json['version'],
         'versionId': json['version_id'],
@@ -212,7 +212,7 @@ export function ProviderCredentialToJSONTyped(value?: ProviderCredential | null,
         'id': value['id'],
         'provider': ModelProviderToJSON(value['provider']),
         'scope': ProviderCredentialScopeToJSON(value['scope']),
-        'tenant_ref': value['tenantRef'],
+        'tenant_key': value['tenantKey'],
         'status': value['status'],
         'version': value['version'],
         'version_id': value['versionId'],

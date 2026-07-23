@@ -45,7 +45,7 @@ acknowledgement, reads, and errors; topology-neutral semantics; focused OpenAPI,
 examples, and design-decision updates.
 
 **Out:** Database choices and detailed table design; model execution; leases and
-fencing; cancellation endpoints and budgets; SSE and live deltas; tools;
+fencing; cancellation endpoints and limits; SSE and live deltas; tools;
 structured output; spec references; indexed metadata and retention management;
 the private delivery protocol; Cloud Tasks resource identities; SDKs.
 
@@ -53,11 +53,11 @@ the private delivery protocol; Cloud Tasks resource identities; SDKs.
 
 - **R1 — Account, tenant, and Agent identity.** Every Invocation must execute
   within its authenticated Account and name one stable, caller-controlled
-  `agent_ref`. nvoken must resolve or auto-create an Agent identity anchor for
+  `agent_key`. nvoken must resolve or auto-create an Agent identity anchor for
   that reference, unique within the Account; the anchor stores identity, not
   mutable execution configuration or tenant data. The Agent namespace is
   deliberately Account-wide, so its ID may be shared across tenant partitions.
-  For an Account-wide credential, explicit `tenant_ref` selects a partition;
+  For an Account-wide credential, explicit `tenant_key` selects a partition;
   omission uses the default partition for Session-key resolution or creation,
   while by-ID access may resolve any partition in the Account. A
   tenant-constrained credential is confined to its constraint; an explicit
@@ -66,11 +66,11 @@ the private delivery protocol; Cloud Tasks resource identities; SDKs.
 - **R2 — Unambiguous Session resolution.** A request must supply at most one of
   `session_id` and `session_key`. A Session ID must resolve an existing Session
   for the same Account and Agent and must match an explicit or credential-bound
-  tenant. If an Account-wide caller omits `tenant_ref`, the stored Session
-  supplies the partition; if it supplies a mismatching `tenant_ref`, the result
+  tenant. If an Account-wide caller omits `tenant_key`, the stored Session
+  supplies the partition; if it supplies a mismatching `tenant_key`, the result
   is `404 not_found`. A Session key must resolve or create one Session in
   `(Account, effective tenant partition, Agent, session_key)`. Omitting both
-  must create a new Session. `tenant_ref` and Agent identity are immutable on a
+  must create a new Session. `tenant_key` and Agent identity are immutable on a
   Session. The same key in two tenant partitions resolves different Sessions.
 
 - **R3 — Small, terminal lifecycle.** Public Invocation states must be
@@ -82,9 +82,9 @@ the private delivery protocol; Cloud Tasks resource identities; SDKs.
   `waiting` is reserved now for later durable ToolCalls.
 
 - **R4 — Stable admission idempotency.** The request must carry a body
-  `idempotency_key`, scoped to `(Account, effective tenant partition, agent_ref,
+  `idempotency_key`, scoped to `(Account, effective tenant partition, agent_key,
   idempotency_key)`. For a Session key or no selector, the partition comes from
-  the credential constraint, explicit `tenant_ref`, or default, in that order.
+  the credential constraint, explicit `tenant_key`, or default, in that order.
   For a Session ID, nvoken must authorize and read the Session's immutable
   partition before deduplication, without mutating records. This keeps the key
   usable when no Session existed while preserving per-tenant namespaces.
@@ -121,10 +121,10 @@ the private delivery protocol; Cloud Tasks resource identities; SDKs.
   this contract.
 
 - **R7 — Durable background JSON contract.** `POST /v1/invocations` must accept
-  caller input, `agent_ref`, `idempotency_key`, the optional tenant and Session
+  caller input, `agent_key`, `idempotency_key`, the optional tenant and Session
   selectors, and a typed inline execution spec. The launch spec subset is
   instructions plus model/provider selection; fields deferred to later PRDs,
-  including references, tools, structured output, and budgets, must be rejected
+  including references, tools, structured output, and limits, must be rejected
   rather than ignored. In this background JSON mode, the endpoint must return
   `202 Accepted` for a new admission or idempotent replay, with `agent_id`,
   `session_id`, `invocation_id`, current status, and `deduplicated`. The handler
@@ -172,7 +172,7 @@ the private delivery protocol; Cloud Tasks resource identities; SDKs.
 
 - [x] **A1 (R1, R2):** Contract examples show first-use Agent and Session
   creation, existing ID and key resolution, omission of both selectors, tenant
-  constraint inheritance, and two tenant references resolving the same
+  constraint inheritance, and two tenant keys resolving the same
   `session_key` to distinct Session IDs. An Account-wide credential can read
   either Session by ID; a constrained credential can read only the Session in
   its partition, and an explicit constraint mismatch returns `403` without
@@ -225,5 +225,5 @@ the private delivery protocol; Cloud Tasks resource identities; SDKs.
   idempotency or runtime-history cleanup exists in the initial store.
 - The recovery PRD will finalize the opaque composite cursor and fixed-cut
   pagination semantics for transcript changes.
-- The client-tools PRD will choose narrow commands for ToolCall results instead
+- The host-tools PRD will choose narrow commands for ToolCall results instead
   of reviving a generic event append endpoint.

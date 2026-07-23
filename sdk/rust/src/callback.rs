@@ -16,8 +16,8 @@ pub struct CallbackContext {
     pub tool_call_id: String,
     pub invocation_id: String,
     pub session_id: String,
-    pub agent_ref: String,
-    pub tenant_ref: Option<String>,
+    pub agent_key: String,
+    pub tenant_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

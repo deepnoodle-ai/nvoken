@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -39,21 +39,21 @@ pub struct Invocation {
         deserialize_with = "Option::deserialize"
     )]
     pub structured_output_provenance: Option<Box<models::StructuredOutputProvenance>>,
-    #[serde(rename = "budgets")]
-    pub budgets: Box<models::InvocationBudgets>,
+    #[serde(rename = "limits")]
+    pub limits: Box<models::InvocationLimits>,
     #[serde(rename = "active_execution_ms")]
     pub active_execution_ms: u32,
-    #[serde(rename = "wall_clock_deadline_at")]
-    pub wall_clock_deadline_at: chrono::DateTime<chrono::FixedOffset>,
+    #[serde(rename = "deadline_at")]
+    pub deadline_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "created_at")]
     pub created_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "updated_at")]
     pub updated_at: chrono::DateTime<chrono::FixedOffset>,
-    #[serde(rename = "completed_at", deserialize_with = "Option::deserialize")]
-    pub completed_at: Option<chrono::DateTime<chrono::FixedOffset>>,
-    /// Present for a waiting Invocation with unresolved client calls.
+    #[serde(rename = "ended_at", deserialize_with = "Option::deserialize")]
+    pub ended_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    /// Present for a waiting Invocation with unresolved host calls.
     #[serde(rename = "pending_tool_calls", skip_serializing_if = "Option::is_none")]
-    pub pending_tool_calls: Option<Vec<models::PendingClientToolCall>>,
+    pub pending_tool_calls: Option<Vec<models::PendingHostToolCall>>,
 }
 
 impl Invocation {
@@ -67,12 +67,12 @@ impl Invocation {
         provenance: Option<models::ModelProvenance>,
         structured_output: Option<std::collections::HashMap<String, serde_json::Value>>,
         structured_output_provenance: Option<models::StructuredOutputProvenance>,
-        budgets: models::InvocationBudgets,
+        limits: models::InvocationLimits,
         active_execution_ms: u32,
-        wall_clock_deadline_at: chrono::DateTime<chrono::FixedOffset>,
+        deadline_at: chrono::DateTime<chrono::FixedOffset>,
         created_at: chrono::DateTime<chrono::FixedOffset>,
         updated_at: chrono::DateTime<chrono::FixedOffset>,
-        completed_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+        ended_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     ) -> Invocation {
         Invocation {
             id,
@@ -100,12 +100,12 @@ impl Invocation {
             } else {
                 None
             },
-            budgets: Box::new(budgets),
+            limits: Box::new(limits),
             active_execution_ms,
-            wall_clock_deadline_at,
+            deadline_at,
             created_at,
             updated_at,
-            completed_at,
+            ended_at,
             pending_tool_calls: None,
         }
     }

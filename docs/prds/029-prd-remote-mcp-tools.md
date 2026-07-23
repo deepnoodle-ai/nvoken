@@ -4,7 +4,7 @@
 **Sequence:** 029
 **Depends on:** `012-prd-durable-toolcall-and-checkpoint-model.md`,
 `014-prd-checkpoint-crash-recovery.md`,
-`015-prd-durable-client-tools.md`,
+`015-prd-durable-host-tools.md`,
 `016-prd-durable-callback-tools.md`, and
 `028-prd-per-provider-credential-modes.md`
 
@@ -61,7 +61,7 @@ without creating an Invocation.
 
 ## Scope
 
-**In:** inline `spec.mcp_servers` declarations, validation, and fingerprint v7;
+**In:** inline `spec.mcp_servers` declarations, validation, and fingerprint v8;
 encrypted per-Invocation MCP server credential bindings with terminal cleanup;
 one durable tool-discovery snapshot per Invocation with allowlist and
 projection rules; in-turn fenced execution through the coordinator boundary as
@@ -97,7 +97,7 @@ staging proof.
   transports are rejected before durable writes.
 
 - **R2 — Admission identity without secret material.** New admissions use
-  fingerprint v7. It preserves v6 order and inserts `mcp_servers` after
+  fingerprint v8. It preserves v7 order and inserts `mcp_servers` after
   `tools`; each ordered entry encodes `name`, `url`, `transport`, ordered
   `allowed_tools`, and resolved `timeouts`. `headers` is excluded entirely
   from canonicalization and from the durable spec snapshot, following the
@@ -106,7 +106,7 @@ staging proof.
   replay does not rebind credentials on the existing Invocation. An
   `mcp_servers`-bearing request cannot replay a retained v1–v6 row; earlier
   shapes remain comparable by their recorded versions. Compatibility vectors
-  live in `docs/design/admission-fingerprint-v7.json`.
+  live in `docs/design/admission-fingerprint-v8.json`.
 
 - **R3 — Encrypted per-Invocation server credentials.** Declared `headers`
   persist only as one credential binding per server per Invocation, sealed
@@ -225,7 +225,7 @@ staging proof.
   boundary and reject the ninth, bad names, the `nvoken` prefix, non-HTTPS or
   userinfo URLs, header and timeout violations, unknown fields and
   transports, and confirm the two-iteration floor and coexistence with
-  `tools` and `output`. `docs/design/admission-fingerprint-v7.json` fixtures
+  `tools` and `output`. `docs/design/admission-fingerprint-v8.json` fixtures
   prove ordering materiality, secret exclusion, equal replay across differing
   headers, changed non-secret conflict, and v1–v6 compatibility.
 
@@ -262,7 +262,7 @@ staging proof.
 
 - [ ] **A6 (R5, R8):** Cancellation and wall-deadline races against an active
   MCP call yield one winner; MCP time accrues to active execution and
-  budgets; ToolCall reads and SSE expose mode and origin; logs contain IDs,
+  limits; ToolCall reads and SSE expose mode and origin; logs contain IDs,
   counts, and codes only.
 
 - [ ] **A7 (R9):** For the same declaration against the scripted server, the
@@ -316,7 +316,7 @@ staging proof.
   never executes this content; the host chooses which servers to attach.
 - Provider-native remote MCP connectors (Anthropic, OpenAI) were considered
   and rejected for v1: the provider would execute calls outside nvoken's
-  ToolCall evidence, budgets, and recovery, with per-provider semantics.
-- Local and stdio servers stay host-side behind client tools; a managed
+  ToolCall evidence, limits, and recovery, with per-provider semantics.
+- Local and stdio servers stay host-side behind host tools; a managed
   stdio posture raises process isolation questions that deserve their own
   PRD if demand appears.

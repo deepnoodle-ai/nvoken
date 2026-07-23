@@ -79,7 +79,7 @@ non-Google deployment automation.
 - **R4 — Existing execution controls remain authoritative.** Request-bound
   execution must use the same heartbeat, lease fence, cancellation fallback,
   wall-clock deadline, active-execution accrual, output-token/cost/iteration
-  budgets, transcript append, and first-terminal rules as embedded execution.
+  limits, transcript append, and first-terminal rules as embedded execution.
   A task retry must not replenish a logical budget. A stale or cancelled owner
   may finish local computation but cannot append output or settle.
 

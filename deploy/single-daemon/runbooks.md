@@ -61,13 +61,13 @@ run down migrations, or point a binary at an unknown newer schema.
 requires. Queueing can be ordinary saturation. Recovery after abrupt loss waits
 for the recorded lease boundary before a new fence can claim the work.
 
-**Safe actions.** Read the Invocation's status, budget deadline, active-execution
-time, pending client ToolCalls, and error. Inspect `invocation_claimed`,
-`invocation_recovered`, `invocation_maintenance_failed`, provider, and settlement
-events. Confirm Postgres is healthy, `ENGINE_CONCURRENCY` is nonzero, and the
-lease/reaper intervals still match the deployed example. Restore the dependency
-or capacity and allow the engine to converge. Cancel through the public API only
-when the host intends cancellation.
+**Safe actions.** Read the Invocation's status, `deadline_at`, resolved total,
+active, and waiting limits, pending host ToolCalls, and error. Inspect
+`invocation_claimed`, `invocation_recovered`, `invocation_maintenance_failed`,
+provider, and settlement events. Confirm Postgres is healthy,
+`ENGINE_CONCURRENCY` is nonzero, and the lease/reaper intervals still match the
+deployed example. Restore the dependency or capacity and allow the engine to
+converge. Cancel through the public API only when the host intends cancellation.
 
 **Recovery.** Queue age declines; a newer claim/fence progresses from the last
 committed checkpoint; or the Invocation settles once with an authoritative
@@ -85,10 +85,10 @@ upstream rejection/outage, timeout/transport, invalid response, or success. A
 provider dependency is not covered by nvoken availability.
 
 **Safe actions.** Check the bounded `outcome_class`, selected provider/model,
-credential source, provider status, and Invocation deadline/budget. Repair the
-selected credential or dependency. A terminal `provider_error` is immutable;
-the host may admit a new intentional turn with a new idempotency key only after
-deciding that another model effect is wanted.
+credential source, provider status, and Invocation deadline and resolved limits.
+Repair the selected credential or dependency. A terminal `provider_error` is
+immutable; the host may admit a new intentional turn with a new idempotency key
+only after deciding that another model effect is wanted.
 
 **Recovery.** New bounded smoke work succeeds through the same explicitly
 selected provider and existing failed Invocations remain readable as failed.

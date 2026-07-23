@@ -135,7 +135,7 @@ type SessionListQuery struct {
 
 type SessionRecoveryRow struct {
 	Session                domain.Session
-	TenantRef              *string
+	TenantKey              *string
 	ActiveInvocationID     *string
 	ActiveInvocationStatus *domain.InvocationStatus
 }
@@ -178,7 +178,7 @@ type InvocationRepository interface {
 	ClaimInvocation(context.Context, string, string, time.Time, int64, time.Time, time.Time, string) (domain.Invocation, error)
 	RenewInvocationLease(context.Context, string, string, int64, time.Time, time.Time) (domain.Invocation, error)
 	SettleInvocation(context.Context, string, string, int64, domain.InvocationStatus, int64, []byte, []byte, []byte, []byte, []byte, time.Time) (domain.Invocation, error)
-	ParkInvocationForClientTools(context.Context, string, string, int64, int64, time.Time) (domain.Invocation, error)
+	ParkInvocationForHostTools(context.Context, string, string, int64, int64, time.Time) (domain.Invocation, error)
 	QueueWaitingInvocation(context.Context, string, int64, time.Time) (domain.Invocation, error)
 	RecoverInvocationLease(context.Context, string, int64, int64, time.Time) (domain.Invocation, error)
 	CancelInvocation(context.Context, string, int64, time.Time) (domain.Invocation, error)

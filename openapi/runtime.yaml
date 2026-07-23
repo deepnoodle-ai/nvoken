@@ -16,7 +16,7 @@ info:
     complete inventory and any future ordered-deletion contract are governed by
     the design packet's Data and retention section.
 
-    Inline and callback client tools, structured output, and reusable model
+    Inline and callback host tools, structured output, and reusable model
     provider credential lifecycle are included. Spec references and general
     administrative APIs remain outside this version.
 servers:
@@ -42,12 +42,12 @@ paths:
       description: |
         Returns newest-first durable Invocation state. Exact filters combine
         with AND. An Account-wide caller may list all tenant partitions, one
-        named partition with `tenant_ref`, or the default partition with
+        named partition with `tenant_key`, or the default partition with
         `default_tenant=true`. A tenant-constrained credential is always scoped
         to its partition. The opaque cursor is bound to the normalized filter
         set and credential tenant scope.
       parameters:
-        - $ref: "#/components/parameters/TenantRefFilter"
+        - $ref: "#/components/parameters/TenantKeyFilter"
         - $ref: "#/components/parameters/DefaultTenantFilter"
         - name: session_id
           in: query
@@ -95,22 +95,24 @@ paths:
 
         `session_id` and `session_key` are mutually exclusive. A Session ID must
         belong to the authenticated Account and named Agent. An Account-wide
-        credential may omit `tenant_ref` and use the Session's stored partition.
+        credential may omit `tenant_key` and use the Session's stored partition.
         A tenant-constrained credential cannot cross its partition; an explicit
         mismatch is rejected with `403 forbidden` before resource lookup.
 
         `idempotency_key` is scoped to the authenticated Account, effective
-        tenant partition, and `agent_ref`. A same-key replay is checked before
+        tenant partition, and `agent_key`. A same-key replay is checked before
         the Session's one-nonterminal-Invocation rule. It returns the original
         records without appending input, even when the Invocation is terminal.
         Material equality covers the Session selector kind and value, the inline
-        spec, and input. Requested budgets are compared before default resolution,
+        spec, and input. Requested limits are compared before default resolution,
         so an explicit default differs from omission. JSON object member
         order is ignored, array order is significant, and strings are not
         rewritten. A changed material field returns `idempotency_conflict`.
 
         The encoded JSON request body is limited to 1 MiB. Requests over that
-        limit are rejected before admission.
+        limit are rejected before admission. With `Accept: text/event-stream`,
+        the committed admission is the first `invocation.accepted` frame and
+        the connection tails that Invocation through `invocation.result`.
       requestBody:
         required: true
         content:
@@ -121,23 +123,19 @@ paths:
               newSession:
                 summary: First use creates the Agent anchor and a new Session
                 value:
-                  agent_ref: support-triage
-                  tenant_ref: tenant-acme
+                  agent_key: support-triage
+                  tenant_key: tenant-acme
                   idempotency_key: ticket-483:first-reply
-                  input:
-                    content:
-                      - type: text
-                        text: Why was I charged twice?
+                  input: Why was I charged twice?
                   spec:
-                    instructions: You are a concise billing support agent.
                     model:
                       provider: anthropic
-                      name: claude-sonnet-5
+                      id: claude-sonnet-5
               keyedSession:
                 summary: Resolve or create a tenant-partitioned host Session key
                 value:
-                  agent_ref: support-triage
-                  tenant_ref: tenant-acme
+                  agent_key: support-triage
+                  tenant_key: tenant-acme
                   session_key: ticket-483
                   idempotency_key: ticket-483:follow-up-2
                   input:
@@ -148,11 +146,11 @@ paths:
                     instructions: You are a concise billing support agent.
                     model:
                       provider: anthropic
-                      name: claude-sonnet-5
+                      id: claude-sonnet-5
               existingSession:
                 summary: Continue an existing Session by durable ID
                 value:
-                  agent_ref: support-triage
+                  agent_key: support-triage
                   session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                   idempotency_key: ticket-483:follow-up-3
                   input:
@@ -163,11 +161,11 @@ paths:
                     instructions: You are a concise billing support agent.
                     model:
                       provider: openai
-                      name: gpt-5.4
+                      id: gpt-5.4
               structuredOutput:
                 summary: Require one validated machine-readable object
                 value:
-                  agent_ref: support-triage
+                  agent_key: support-triage
                   session_key: ticket-483
                   idempotency_key: ticket-483:classification
                   input:
@@ -178,7 +176,7 @@ paths:
                     instructions: Classify the request, then submit the result.
                     model:
                       provider: anthropic
-                      name: claude-sonnet-5
+                      id: claude-sonnet-5
                     output:
                       schema:
                         type: object
@@ -193,7 +191,10 @@ paths:
           description: |
             The Invocation is durably admitted, or an existing Invocation was
             returned for an equal idempotent replay. A replay remains `202` even
-            when the returned status is terminal.
+            when the returned status is terminal. `Accept: text/event-stream`
+            selects an Invocation-scoped stream with `invocation.accepted` as
+            its first frame and `invocation.result` as its terminal durable
+            frame.
           content:
             application/json:
               schema:
@@ -207,6 +208,7 @@ paths:
                     invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     status: queued
                     deduplicated: false
+                    deadline_at: "2026-07-20T14:31:02Z"
                 replayed:
                   summary: Lost acknowledgement followed by equal replay
                   value:
@@ -215,6 +217,7 @@ paths:
                     invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     status: running
                     deduplicated: true
+                    deadline_at: "2026-07-20T14:31:02Z"
                 terminalReplay:
                   summary: Equal replay after settlement still returns 202
                   value:
@@ -223,6 +226,10 @@ paths:
                     invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     status: completed
                     deduplicated: true
+                    deadline_at: "2026-07-20T14:31:02Z"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/InvocationStreamEvent"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -293,15 +300,16 @@ paths:
                     provenance: null
                     structured_output: null
                     structured_output_provenance: null
-                    budgets:
-                      wall_clock_timeout_seconds: 1800
-                      active_execution_timeout_seconds: 1800
+                    limits:
+                      total_timeout_seconds: 1800
+                      active_timeout_seconds: 1800
+                      waiting_timeout_seconds: 1800
                       max_iterations: 1
                     active_execution_ms: 7000
-                    wall_clock_deadline_at: "2026-07-20T14:31:02Z"
+                    deadline_at: "2026-07-20T14:31:02Z"
                     created_at: "2026-07-20T14:01:02Z"
                     updated_at: "2026-07-20T14:01:09Z"
-                    completed_at: "2026-07-20T14:01:09Z"
+                    ended_at: "2026-07-20T14:01:09Z"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -351,15 +359,16 @@ paths:
                       provenance: null
                       structured_output: null
                       structured_output_provenance: null
-                      budgets:
-                        wall_clock_timeout_seconds: 1800
-                        active_execution_timeout_seconds: 1800
+                      limits:
+                        total_timeout_seconds: 1800
+                        active_timeout_seconds: 1800
+                        waiting_timeout_seconds: 1800
                         max_iterations: 1
                       active_execution_ms: 7000
-                      wall_clock_deadline_at: "2026-07-20T14:31:02Z"
+                      deadline_at: "2026-07-20T14:31:02Z"
                       created_at: "2026-07-20T14:01:02Z"
                       updated_at: "2026-07-20T14:01:09Z"
-                      completed_at: "2026-07-20T14:01:09Z"
+                      ended_at: "2026-07-20T14:01:09Z"
                     messages:
                       - id: smsg_019b0a12-9e61-7a44-bed2-0e07c1bdb333
                         session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
@@ -382,6 +391,52 @@ paths:
                             text: Hello!
                         created_at: "2026-07-20T14:01:09Z"
                     output_text: Hello!
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/invocations/{invocation_id}/stream:
+    parameters:
+      - $ref: "#/components/parameters/InvocationID"
+    get:
+      tags: [Invocations]
+      operationId: streamInvocation
+      summary: Resume and tail one Invocation over SSE
+      description: |
+        Replays durable updates after `cursor`, forwards ephemeral output
+        previews for this Invocation, and ends only when this Invocation
+        settles or the connection rotates. Durable frames carry an SSE `id`;
+        previews and control frames do not. After `stream.resync`, discard
+        provisional output and wait for durable state.
+
+        The explicit `cursor` query parameter takes precedence over
+        `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
+        last durable ID. Disconnecting never cancels the Invocation.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - name: Last-Event-ID
+          in: header
+          description: Opaque cursor from the last durable frame; ignored when `cursor` is supplied.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Invocation-scoped event stream.
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/InvocationStreamEvent"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -433,8 +488,8 @@ paths:
       - $ref: "#/components/parameters/InvocationID"
     post:
       tags: [Invocations]
-      operationId: submitClientToolResults
-      summary: Submit durable results for pending client ToolCalls
+      operationId: submitHostToolResults
+      summary: Submit durable results for pending host ToolCalls
       description: |
         Atomically accepts one bounded batch for a waiting Invocation. The
         first committed result for each ToolCall wins. An equal replay is
@@ -443,7 +498,7 @@ paths:
         queues the same Invocation and its successor execution dispatch before
         returning `202`.
 
-        This command accepts only client-mode calls owned by the path
+        This command accepts only host-mode calls owned by the path
         Invocation and authenticated Account/tenant scope. It is not a generic
         Session append endpoint. The body is limited to 1 MiB; each result
         content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -452,7 +507,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SubmitClientToolResultsRequest"
+              $ref: "#/components/schemas/SubmitHostToolResultsRequest"
             example:
               results:
                 - tool_call_id: tcal_019b0a12-9e61-7144-bed2-0e07c1bdb333
@@ -469,7 +524,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SubmitClientToolResultsResponse"
+                $ref: "#/components/schemas/SubmitHostToolResultsResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -488,7 +543,7 @@ paths:
                 notWaiting:
                   value:
                     code: invocation_not_waiting
-                    message: The Invocation is not waiting for this client tool result.
+                    message: The Invocation is not waiting for this host tool result.
                     request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR3
                 conflict:
                   value:
@@ -498,7 +553,7 @@ paths:
                 expired:
                   value:
                     code: tool_result_expired
-                    message: The client tool result deadline has expired.
+                    message: The host tool result deadline has expired.
                     request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR3
         "500":
           $ref: "#/components/responses/Internal"
@@ -524,7 +579,7 @@ paths:
           schema:
             type: string
             enum: [active, revoked]
-        - name: tenant_ref
+        - name: tenant_key
           in: query
           schema:
             type: string
@@ -716,7 +771,7 @@ paths:
         Invocation state. Exact filters combine with AND. Tenant filtering and
         cursor binding follow the Invocation-list rules.
       parameters:
-        - $ref: "#/components/parameters/TenantRefFilter"
+        - $ref: "#/components/parameters/TenantKeyFilter"
         - $ref: "#/components/parameters/DefaultTenantFilter"
         - name: agent_id
           in: query
@@ -774,7 +829,7 @@ paths:
                   value:
                     id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                    tenant_ref: tenant-acme
+                    tenant_key: tenant-acme
                     session_key: ticket-483
                     active_invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     active_invocation_status: running
@@ -889,15 +944,15 @@ paths:
         bounded poll, and closes after authoritative terminal reconciliation or
         deliberate rotation. Disconnecting never cancels the Invocation.
 
-        `transcript.snapshot` data has the `TranscriptSnapshot` shape. Every
-        nonempty snapshot frame carries `id: <resume_cursor>`; that opaque ID is
-        the only replay position clients persist. `generation.delta`,
-        `stream.resync`, and `stream.end` are live/control frames and never carry
-        an `id`. Token and thinking deltas are ephemeral and may be lost; after
-        `stream.resync`, discard provisional output and wait for canonical
-        messages. `stream.end` reason `terminal` means the final Postgres drain
-        observed no nonterminal Invocation. Reason `rotate` means reconnect with
-        the last durable ID. An abnormal close has no terminal meaning.
+        Every nonempty `transcript.update` frame carries
+        `id: <resume_cursor>`; that opaque ID is the only replay position
+        clients persist. `output_text.delta`, `thinking.delta`,
+        `stream.resync`, and `stream.end` never carry an `id`. Deltas are
+        ephemeral and may be lost; after `stream.resync`, discard provisional
+        output and wait for canonical messages. `stream.end` reason `terminal`
+        means the final Postgres drain observed no nonterminal Invocation.
+        Reason `rotate` means reconnect with the last durable ID. An abnormal
+        close has no terminal meaning.
 
         The explicit `cursor` query parameter takes precedence over
         `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
@@ -908,17 +963,15 @@ paths:
         - $ref: "#/components/parameters/Cursor"
         - name: Last-Event-ID
           in: header
-          description: Opaque `resume_cursor` from the last cursor-bearing snapshot frame; ignored when `cursor` is supplied.
+          description: Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.
           schema:
             type: string
             minLength: 1
       responses:
         "200":
           description: |
-            SSE frames named `transcript.snapshot`, `generation.delta`,
-            `stream.resync`, and `stream.end`. Payload schemas are
-            `TranscriptSnapshot`, `GenerationDeltaEvent`, `StreamResyncEvent`,
-            and `StreamEndEvent` respectively.
+            SSE frames named `transcript.update`, `output_text.delta`,
+            `thinking.delta`, `stream.resync`, and `stream.end`.
           content:
             text/event-stream:
               schema:
@@ -977,8 +1030,8 @@ components:
         minimum: 1
         maximum: 200
         default: 100
-    TenantRefFilter:
-      name: tenant_ref
+    TenantKeyFilter:
+      name: tenant_key
       in: query
       description: Exact non-default tenant partition reference.
       schema:
@@ -988,7 +1041,7 @@ components:
     DefaultTenantFilter:
       name: default_tenant
       in: query
-      description: Select only the default tenant partition. Mutually exclusive with tenant_ref.
+      description: Select only the default tenant partition. Mutually exclusive with tenant_key.
       schema:
         type: boolean
         default: false
@@ -1043,19 +1096,19 @@ components:
     CreateInvocationRequest:
       type: object
       additionalProperties: false
-      required: [agent_ref, idempotency_key, input, spec]
+      required: [agent_key, idempotency_key, input, spec]
       not:
         required: [session_id, session_key]
       properties:
-        agent_ref:
+        agent_key:
           type: string
           minLength: 1
           maxLength: 255
           description: |
-            Stable caller-controlled Agent reference, unique within the
+            Stable caller-controlled Agent key, unique within the
             authenticated Account. The resulting Agent anchor stores identity
             only and is shared across tenant partitions.
-        tenant_ref:
+        tenant_key:
           type: string
           minLength: 1
           maxLength: 255
@@ -1080,7 +1133,7 @@ components:
           maxLength: 255
           description: |
             Stable admission identity scoped to (Account, effective tenant
-            partition, agent_ref). Reuse an unchanged request after any 5xx,
+            partition, agent_key). Reuse an unchanged request after any 5xx,
             timeout, disconnect, or missing acknowledgement. Deduplication is
             guaranteed while the original Invocation is retained.
         input:
@@ -1098,7 +1151,10 @@ components:
             Omission selects the deployment's configured default. The
             selection is stored outside the execution spec; only
             caller_ephemeral accepts secret material. Equal idempotent replay
-            never replaces the original encrypted credential.
+            never replaces the original encrypted credential. The field is
+            deliberately plural even though this contract currently permits
+            one entry: future routed invocations may select credentials for
+            more than one model provider.
     InvocationProviderCredentialSelection:
       oneOf:
         - type: object
@@ -1143,7 +1199,7 @@ components:
           $ref: "#/components/schemas/ModelProvider"
         scope:
           $ref: "#/components/schemas/ProviderCredentialScope"
-        tenant_ref:
+        tenant_key:
           type: string
           minLength: 1
           maxLength: 255
@@ -1179,7 +1235,7 @@ components:
     ProviderCredential:
       type: object
       additionalProperties: false
-      required: [id, provider, scope, tenant_ref, status, version, version_id, previous_version_id, version_status, expires_at, overlap_expires_at, created_by, created_at, updated_at, revoked_at]
+      required: [id, provider, scope, tenant_key, status, version, version_id, previous_version_id, version_status, expires_at, overlap_expires_at, created_by, created_at, updated_at, revoked_at]
       properties:
         id:
           $ref: "#/components/schemas/ProviderCredentialID"
@@ -1187,7 +1243,7 @@ components:
           $ref: "#/components/schemas/ModelProvider"
         scope:
           $ref: "#/components/schemas/ProviderCredentialScope"
-        tenant_ref:
+        tenant_key:
           oneOf:
             - type: string
             - type: "null"
@@ -1242,6 +1298,14 @@ components:
           items:
             $ref: "#/components/schemas/ProviderCredential"
     InvocationInput:
+      description: |
+        A plain string is shorthand for one text block. Use the object form
+        for ordered multi-block input; the launch contract supports text only.
+      oneOf:
+        - type: string
+          minLength: 1
+        - $ref: "#/components/schemas/InvocationInputBlocks"
+    InvocationInputBlocks:
       type: object
       additionalProperties: false
       required: [content]
@@ -1252,7 +1316,7 @@ components:
           maxItems: 64
           items:
             $ref: "#/components/schemas/TextInputBlock"
-          description: Ordered caller-input blocks. The launch contract supports text only.
+          description: Ordered caller-input blocks.
     TextInputBlock:
       type: object
       additionalProperties: false
@@ -1268,15 +1332,16 @@ components:
     InlineExecutionSpec:
       type: object
       additionalProperties: false
-      required: [instructions, model]
+      required: [model]
       properties:
         instructions:
           type: string
           minLength: 1
+          description: Optional model instructions. Omission adds no hidden default.
         model:
           $ref: "#/components/schemas/ModelSelection"
-        budgets:
-          $ref: "#/components/schemas/InvocationBudgetRequest"
+        limits:
+          $ref: "#/components/schemas/InvocationLimitRequest"
         output:
           $ref: "#/components/schemas/StructuredOutputSpec"
         tools:
@@ -1292,9 +1357,9 @@ components:
         or the lower installation maximum.
     ToolSpec:
       oneOf:
-        - $ref: "#/components/schemas/ClientToolSpec"
+        - $ref: "#/components/schemas/HostToolSpec"
         - $ref: "#/components/schemas/CallbackToolSpec"
-    ClientToolSpec:
+    HostToolSpec:
       type: object
       additionalProperties: false
       required: [name, description, mode, input_schema]
@@ -1311,8 +1376,8 @@ components:
           maxLength: 4096
         mode:
           type: string
-          enum: [client]
-          x-enum-varnames: [ModeClient]
+          enum: [host]
+          x-enum-varnames: [ModeHost]
         input_schema:
           type: object
           additionalProperties: true
@@ -1381,14 +1446,17 @@ components:
         Optional per-Invocation structured-output contract. nvoken exposes a
         reserved durable submit tool and publishes only a server-validated
         terminal object. This does not enable host-defined tools.
-    InvocationBudgetRequest:
+    InvocationLimitRequest:
       type: object
       additionalProperties: false
       properties:
-        wall_clock_timeout_seconds:
+        total_timeout_seconds:
           type: integer
           minimum: 1
-        active_execution_timeout_seconds:
+        active_timeout_seconds:
+          type: integer
+          minimum: 1
+        waiting_timeout_seconds:
           type: integer
           minimum: 1
         max_output_tokens:
@@ -1408,19 +1476,20 @@ components:
           type: integer
           minimum: 1
       description: |
-        Optional requested limits. Installation defaults supply wall-clock,
-        active-execution, and iteration limits. Output-token and estimated-cost
-        limits are unlimited when omitted. Installation maxima may be lower
-        than the schema's numeric range. A requested estimated-cost limit
-        requires known USD pricing metadata and fails closed when unavailable.
+        Optional requested limits. Total time bounds the entire turn, active
+        time bounds model and tool execution, and waiting time bounds the
+        cumulative time parked for host or callback tool results. Installation
+        defaults supply all three time limits and the iteration limit.
+        Output-token and estimated-cost limits are unlimited when omitted.
+        Installation maxima may be lower than the schema's numeric range.
     ModelSelection:
       type: object
       additionalProperties: false
-      required: [provider, name]
+      required: [provider, id]
       properties:
         provider:
           $ref: "#/components/schemas/ModelProvider"
-        name:
+        id:
           type: string
           minLength: 1
           maxLength: 255
@@ -1430,14 +1499,14 @@ components:
       description: |
         `completed`, `failed`, and `cancelled` are terminal and immutable.
         Deadline or budget exhaustion settles as `failed`. `waiting` means the
-        Invocation has durable pending client ToolCalls and owns no execution
+        Invocation has durable pending host ToolCalls and owns no execution
         lease. Final result acceptance moves it back to `queued`. Checkpoint
         recovery may also move `running` back to `queued`; lifecycle revision
         orders every transition.
     InvocationAcknowledgement:
       type: object
       additionalProperties: false
-      required: [agent_id, session_id, invocation_id, status, deduplicated]
+      required: [agent_id, session_id, invocation_id, status, deduplicated, deadline_at]
       properties:
         agent_id:
           $ref: "#/components/schemas/AgentID"
@@ -1449,10 +1518,13 @@ components:
           $ref: "#/components/schemas/InvocationStatus"
         deduplicated:
           type: boolean
+        deadline_at:
+          type: string
+          format: date-time
     Invocation:
       type: object
       additionalProperties: false
-      required: [id, agent_id, session_id, status, error, usage, provenance, structured_output, structured_output_provenance, budgets, active_execution_ms, wall_clock_deadline_at, created_at, updated_at, completed_at]
+      required: [id, agent_id, session_id, status, error, usage, provenance, structured_output, structured_output_provenance, limits, active_execution_ms, deadline_at, created_at, updated_at, ended_at]
       properties:
         id:
           $ref: "#/components/schemas/InvocationID"
@@ -1488,12 +1560,12 @@ components:
           oneOf:
             - $ref: "#/components/schemas/StructuredOutputProvenance"
             - type: "null"
-        budgets:
-          $ref: "#/components/schemas/InvocationBudgets"
+        limits:
+          $ref: "#/components/schemas/InvocationLimits"
         active_execution_ms:
           type: integer
           minimum: 0
-        wall_clock_deadline_at:
+        deadline_at:
           type: string
           format: date-time
         created_at:
@@ -1502,7 +1574,7 @@ components:
         updated_at:
           type: string
           format: date-time
-        completed_at:
+        ended_at:
           oneOf:
             - type: string
               format: date-time
@@ -1510,8 +1582,8 @@ components:
         pending_tool_calls:
           type: array
           items:
-            $ref: "#/components/schemas/PendingClientToolCall"
-          description: Present for a waiting Invocation with unresolved client calls.
+            $ref: "#/components/schemas/PendingHostToolCall"
+          description: Present for a waiting Invocation with unresolved host calls.
     InvocationList:
       type: object
       additionalProperties: false
@@ -1646,7 +1718,7 @@ components:
     ToolCallID:
       type: string
       pattern: "^tcal_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    PendingClientToolCall:
+    PendingHostToolCall:
       type: object
       additionalProperties: false
       required: [id, name, input, deadline_at]
@@ -1659,7 +1731,7 @@ components:
         deadline_at:
           type: string
           format: date-time
-    SubmitClientToolResultsRequest:
+    SubmitHostToolResultsRequest:
       type: object
       additionalProperties: false
       required: [results]
@@ -1678,7 +1750,7 @@ components:
               content: {}
               is_error:
                 type: boolean
-    ClientToolResultAcceptance:
+    HostToolResultAcceptance:
       type: object
       additionalProperties: false
       required: [tool_call_id, status, deduplicated]
@@ -1690,7 +1762,7 @@ components:
           enum: [completed, failed]
         deduplicated:
           type: boolean
-    SubmitClientToolResultsResponse:
+    SubmitHostToolResultsResponse:
       type: object
       additionalProperties: false
       required: [invocation_id, session_id, status, results, pending_tool_calls]
@@ -1706,11 +1778,11 @@ components:
           minItems: 1
           maxItems: 32
           items:
-            $ref: "#/components/schemas/ClientToolResultAcceptance"
+            $ref: "#/components/schemas/HostToolResultAcceptance"
         pending_tool_calls:
           type: array
           items:
-            $ref: "#/components/schemas/PendingClientToolCall"
+            $ref: "#/components/schemas/PendingHostToolCall"
     InvocationFailure:
       type: object
       additionalProperties: false
@@ -1721,7 +1793,6 @@ components:
           enum:
             - deadline_exceeded
             - budget_exceeded
-            - execution_lost
             - credential_unavailable
             - provider_error
             - structured_output_unsatisfied
@@ -1733,20 +1804,20 @@ components:
           additionalProperties: true
       description: |
         Failed Invocations may carry paired usage and provenance when a model
-        response produced safe normalized evidence before deadline or budget
+        response produced safe normalized evidence before deadline or limit
         settlement. Cancellation and pre-response failures carry neither.
-        `execution_lost` is retained for historical rows written before
-        checkpoint recovery; recoverable lease expiry now requeues the same
-        Invocation and does not write that failure.
-    InvocationBudgets:
+    InvocationLimits:
       type: object
       additionalProperties: false
-      required: [wall_clock_timeout_seconds, active_execution_timeout_seconds, max_iterations]
+      required: [total_timeout_seconds, active_timeout_seconds, waiting_timeout_seconds, max_iterations]
       properties:
-        wall_clock_timeout_seconds:
+        total_timeout_seconds:
           type: integer
           minimum: 1
-        active_execution_timeout_seconds:
+        active_timeout_seconds:
+          type: integer
+          minimum: 1
+        waiting_timeout_seconds:
           type: integer
           minimum: 1
         max_output_tokens:
@@ -1765,13 +1836,13 @@ components:
     Session:
       type: object
       additionalProperties: false
-      required: [id, agent_id, tenant_ref, session_key, active_invocation_id, active_invocation_status, created_at, updated_at]
+      required: [id, agent_id, tenant_key, session_key, active_invocation_id, active_invocation_status, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/SessionID"
         agent_id:
           $ref: "#/components/schemas/AgentID"
-        tenant_ref:
+        tenant_key:
           oneOf:
             - type: string
             - type: "null"
@@ -1800,8 +1871,8 @@ components:
         pending_tool_calls:
           type: array
           items:
-            $ref: "#/components/schemas/PendingClientToolCall"
-          description: Pending client calls for the active waiting Invocation.
+            $ref: "#/components/schemas/PendingHostToolCall"
+          description: Pending host calls for the active waiting Invocation.
     SessionList:
       type: object
       additionalProperties: false
@@ -1937,77 +2008,110 @@ components:
           oneOf:
             - type: string
             - type: "null"
-    GenerationTextDelta:
+    TranscriptUpdate:
       type: object
       additionalProperties: false
-      required: [content_index, type, text]
+      required: [type, session_id, messages, invocation_changes, resume_cursor]
       properties:
-        content_index:
-          type: integer
-          minimum: 0
         type:
           type: string
-          enum: [text]
-          x-enum-varnames: [DeltaTypeText]
-        text:
+          enum: [transcript.update]
+          x-enum-varnames: [EventTranscriptUpdate]
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionMessage"
+        invocation_changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvocationChange"
+        resume_cursor:
           type: string
           minLength: 1
-    GenerationThinkingDelta:
+          description: Delivered composite message-sequence and lifecycle-revision watermark.
+    OutputTextDeltaEvent:
       type: object
       additionalProperties: false
-      required: [content_index, type, thinking]
+      required: [type, session_id, invocation_id, attempt, iteration, content_index, text, emitted_at]
       properties:
-        content_index:
-          type: integer
-          minimum: 0
         type:
           type: string
-          enum: [thinking]
-          x-enum-varnames: [DeltaTypeThinking]
-        thinking:
-          type: string
-          minLength: 1
-    GenerationDeltaEvent:
-      type: object
-      additionalProperties: false
-      required: [event_type, session_id, invocation_id, lease_attempt, delta_sequence, delta, emitted_at]
-      properties:
-        event_type:
-          type: string
-          enum: [generation.delta]
-          x-enum-varnames: [EventGenerationDelta]
+          enum: [output_text.delta]
+          x-enum-varnames: [EventOutputTextDelta]
         session_id:
           $ref: "#/components/schemas/SessionID"
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
-        lease_attempt:
+        attempt:
           type: integer
           format: int64
           minimum: 1
-          description: Fenced execution attempt that emitted this live preview.
-        delta_sequence:
+          description: |
+            Execution attempt that emitted this preview. Discard provisional
+            output from earlier attempts when this value increases.
+        iteration:
+          type: integer
+          minimum: 1
+          description: Model iteration that owns the assistant message.
+        content_index:
+          type: integer
+          minimum: 0
+        text:
+          type: string
+          minLength: 1
+        emitted_at:
+          type: string
+          format: date-time
+    ThinkingDeltaEvent:
+      type: object
+      additionalProperties: false
+      required: [type, session_id, invocation_id, attempt, iteration, content_index, thinking, emitted_at]
+      properties:
+        type:
+          type: string
+          enum: [thinking.delta]
+          x-enum-varnames: [EventThinkingDelta]
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        attempt:
           type: integer
           format: int64
           minimum: 1
-          description: Attempt-local live ordering hint; never a replay cursor.
-        delta:
-          oneOf:
-            - $ref: "#/components/schemas/GenerationTextDelta"
-            - $ref: "#/components/schemas/GenerationThinkingDelta"
+          description: |
+            Execution attempt that emitted this preview. Discard provisional
+            output from earlier attempts when this value increases.
+        iteration:
+          type: integer
+          minimum: 1
+          description: Model iteration that owns the assistant message.
+        content_index:
+          type: integer
+          minimum: 0
+        thinking:
+          type: string
+          minLength: 1
         emitted_at:
           type: string
           format: date-time
     StreamResyncEvent:
       type: object
       additionalProperties: false
-      required: [event_type, session_id, reason]
+      required: [type, session_id, invocation_id, reason]
       properties:
-        event_type:
+        type:
           type: string
           enum: [stream.resync]
           x-enum-varnames: [EventStreamResync]
         session_id:
           $ref: "#/components/schemas/SessionID"
+        invocation_id:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationID"
+            - type: "null"
         reason:
           type: string
           enum: [live_delivery_gap]
@@ -2015,27 +2119,105 @@ components:
     StreamEndEvent:
       type: object
       additionalProperties: false
-      required: [event_type, session_id, reason, resume_cursor]
+      required: [type, session_id, invocation_id, reason, resume_cursor]
       properties:
-        event_type:
+        type:
           type: string
           enum: [stream.end]
           x-enum-varnames: [EventStreamEnd]
         session_id:
           $ref: "#/components/schemas/SessionID"
+        invocation_id:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationID"
+            - type: "null"
         reason:
           type: string
           enum: [terminal, rotate]
+          description: |
+            `rotate` means reconnect with `resume_cursor`. `terminal` means
+            the scoped Invocation settled, or the Session became idle for a
+            Session-scoped stream.
         resume_cursor:
           type: string
           minLength: 1
     TranscriptStreamEvent:
       description: |
-        The JSON value carried by one SSE `data:` field. SSE framing supplies
-        the event name and, for `TranscriptSnapshot` only, the durable ID.
+        The JSON value carried by one Session-stream SSE `data:` field.
+        Durable `transcript.update` frames carry the resume cursor as both
+        payload data and SSE `id`; preview and control frames never carry IDs.
       oneOf:
-        - $ref: "#/components/schemas/TranscriptSnapshot"
-        - $ref: "#/components/schemas/GenerationDeltaEvent"
+        - $ref: "#/components/schemas/TranscriptUpdate"
+        - $ref: "#/components/schemas/OutputTextDeltaEvent"
+        - $ref: "#/components/schemas/ThinkingDeltaEvent"
+        - $ref: "#/components/schemas/StreamResyncEvent"
+        - $ref: "#/components/schemas/StreamEndEvent"
+    InvocationAcceptedEvent:
+      type: object
+      additionalProperties: false
+      required: [type, agent_id, session_id, invocation_id, status, deduplicated, deadline_at]
+      properties:
+        type:
+          type: string
+          enum: [invocation.accepted]
+          x-enum-varnames: [EventInvocationAccepted]
+        agent_id:
+          $ref: "#/components/schemas/AgentID"
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        status:
+          $ref: "#/components/schemas/InvocationStatus"
+        deduplicated:
+          type: boolean
+        deadline_at:
+          type: string
+          format: date-time
+    InvocationUpdateEvent:
+      type: object
+      additionalProperties: false
+      required: [type, session_id, invocation_id, invocation, new_messages]
+      properties:
+        type:
+          type: string
+          enum: [invocation.update]
+          x-enum-varnames: [EventInvocationUpdate]
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        invocation:
+          $ref: "#/components/schemas/Invocation"
+        new_messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionMessage"
+    InvocationResultEvent:
+      type: object
+      additionalProperties: false
+      required: [type, session_id, invocation_id, result]
+      properties:
+        type:
+          type: string
+          enum: [invocation.result]
+          x-enum-varnames: [EventInvocationResult]
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        result:
+          $ref: "#/components/schemas/InvocationResult"
+    InvocationStreamEvent:
+      description: |
+        Typed event from one Invocation stream. A minimal consumer prints
+        `output_text.delta` and finishes on `invocation.result`.
+      oneOf:
+        - $ref: "#/components/schemas/InvocationAcceptedEvent"
+        - $ref: "#/components/schemas/OutputTextDeltaEvent"
+        - $ref: "#/components/schemas/ThinkingDeltaEvent"
+        - $ref: "#/components/schemas/InvocationUpdateEvent"
+        - $ref: "#/components/schemas/InvocationResultEvent"
         - $ref: "#/components/schemas/StreamResyncEvent"
         - $ref: "#/components/schemas/StreamEndEvent"
     ErrorCode:
@@ -2077,7 +2259,7 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             code: invalid_request
-            message: spec.tools[0].mode must be client.
+            message: spec.tools[0].mode must be host.
             request_id: req_01K0NV9K7Z9WR3Y3Q3RMV2G7H0
             details:
               field: spec.tools[0].mode
@@ -2099,7 +2281,7 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             code: forbidden
-            message: The requested tenant_ref conflicts with the credential constraint.
+            message: The requested tenant_key conflicts with the credential constraint.
             request_id: req_01K0NVAE24H917QNE9P1QMX95Y
     NotFound:
       description: The resource is missing or cannot be disclosed in this scope.

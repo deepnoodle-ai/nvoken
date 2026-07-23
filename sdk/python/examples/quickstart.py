@@ -10,12 +10,11 @@ async def main() -> None:
         os.environ["NVOKEN_API_KEY"],
     ) as client:
         handle = await client.invoke(InvokeRequest(
-            agent_ref="support",
-            idempotency_key="ticket-42:message-1",
+            agent_key="support",
             input="Why was I charged twice?",
             spec=ExecutionSpec(
                 instructions="Help the customer with billing questions.",
-                model=Model(provider="anthropic", name="claude-sonnet-5"),
+                model=Model(provider="anthropic", id="claude-sonnet-5"),
             ),
         ))
         invocation = await handle.wait()

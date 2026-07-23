@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -58,7 +58,7 @@ export interface CreateProviderCredentialRequest {
      * @type {string}
      * @memberof CreateProviderCredentialRequest
      */
-    tenantRef?: string;
+    tenantKey?: string;
     /**
      *
      * @type {ProviderStaticCredential}
@@ -104,7 +104,7 @@ export function CreateProviderCredentialRequestFromJSONTyped(json: any, ignoreDi
 
         'provider': ModelProviderFromJSON(json['provider']),
         'scope': ProviderCredentialScopeFromJSON(json['scope']),
-        'tenantRef': json['tenant_ref'] == null ? undefined : json['tenant_ref'],
+        'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
         'credential': ProviderStaticCredentialFromJSON(json['credential']),
         'expiresAt': json['expires_at'] == null ? undefined : (new Date(json['expires_at'])),
         'idempotencyKey': json['idempotency_key'],
@@ -124,7 +124,7 @@ export function CreateProviderCredentialRequestToJSONTyped(value?: CreateProvide
 
         'provider': ModelProviderToJSON(value['provider']),
         'scope': ProviderCredentialScopeToJSON(value['scope']),
-        'tenant_ref': value['tenantRef'],
+        'tenant_key': value['tenantKey'],
         'credential': ProviderStaticCredentialToJSON(value['credential']),
         'expires_at': value['expiresAt'] == null ? value['expiresAt'] : value['expiresAt'].toISOString(),
         'idempotency_key': value['idempotencyKey'],

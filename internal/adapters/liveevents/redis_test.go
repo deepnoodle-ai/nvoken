@@ -28,12 +28,14 @@ func TestRedisFansEventsAcrossProcessesAndMarksDisconnectGap(t *testing.T) {
 	subscription := subscriber.Subscribe(context.Background(), "account-a", "session-a")
 	t.Cleanup(subscription.Close)
 	publisher.Publish(context.Background(), ports.LiveEvent{
-		Type: "generation.delta", AccountID: "account-a", SessionID: "session-a",
-		Payload: json.RawMessage(`{"text":"hello"}`),
+		Type:      "output_text.delta",
+		AccountID: "account-a",
+		SessionID: "session-a",
+		Payload:   json.RawMessage(`{"text":"hello"}`),
 	})
 	select {
 	case event := <-subscription.Events():
-		if event.Type != "generation.delta" || event.AccountID != "account-a" ||
+		if event.Type != "output_text.delta" || event.AccountID != "account-a" ||
 			event.SessionID != "session-a" || string(event.Payload) != `{"text":"hello"}` {
 			t.Fatalf("received event = %#v", event)
 		}
@@ -56,7 +58,8 @@ func TestRedisFansEventsAcrossProcessesAndMarksDisconnectGap(t *testing.T) {
 func TestRedisOptionsApplySecretAndTLSRoots(t *testing.T) {
 	tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	testCA := pem.EncodeToMemory(&pem.Block{
-		Type: "CERTIFICATE", Bytes: tlsServer.TLS.Certificates[0].Certificate[0],
+		Type:  "CERTIFICATE",
+		Bytes: tlsServer.TLS.Certificates[0].Certificate[0],
 	})
 	tlsServer.Close()
 	options, err := redisOptions("rediss://10.42.0.4:6378/0", "redis-secret", string(testCA))
@@ -91,8 +94,10 @@ func TestRedisPublishGapImmediatelyMarksLocalScopeOnce(t *testing.T) {
 	subscription := broker.local.Subscribe(context.Background(), "account-a", "session-a")
 	t.Cleanup(subscription.Close)
 	event := ports.LiveEvent{
-		Type: "generation.delta", AccountID: "account-a", SessionID: "session-a",
-		Payload: json.RawMessage(`{"event_type":"generation.delta"}`),
+		Type:      "output_text.delta",
+		AccountID: "account-a",
+		SessionID: "session-a",
+		Payload:   json.RawMessage(`{"type":"output_text.delta"}`),
 	}
 	broker.recordPublishGap(event)
 	if !subscription.TakeGap() {

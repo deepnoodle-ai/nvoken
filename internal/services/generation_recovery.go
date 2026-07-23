@@ -176,7 +176,7 @@ func loadGenerationRecovery(
 		if call.Iteration != invocation.CurrentIteration {
 			return generationRecovery{}, errRecoveryInvalid
 		}
-		if call.Mode == domain.ToolCallModeClient || call.Mode == domain.ToolCallModeCallback {
+		if call.Mode == domain.ToolCallModeHost || call.Mode == domain.ToolCallModeCallback {
 			if call.Status != domain.ToolCallPending {
 				return generationRecovery{}, errRecoveryInvalid
 			}

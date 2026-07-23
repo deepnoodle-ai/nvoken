@@ -13,14 +13,14 @@ type Account struct {
 type TenantPartition struct {
 	ID        string
 	AccountID string
-	TenantRef *string
+	TenantKey *string
 	CreatedAt time.Time
 }
 
 type Agent struct {
 	ID        string
 	AccountID string
-	AgentRef  string
+	AgentKey  string
 	CreatedAt time.Time
 }
 
@@ -78,14 +78,17 @@ type Invocation struct {
 	LeaseOwner                *string
 	LeaseExpiresAt            *time.Time
 	LeaseAttempt              int64
-	WallClockTimeoutMS        int64
+	TotalTimeoutMS            int64
 	ActiveTimeoutMS           int64
+	WaitingTimeoutMS          int64
 	MaxOutputTokens           *int
 	MaxEstimatedCostMicros    *int64
 	MaxIterations             int
 	ActiveExecutionMS         int64
-	WallClockDeadlineAt       time.Time
+	WaitingExecutionMS        int64
+	DeadlineAt                time.Time
 	ActiveSegmentStartedAt    *time.Time
+	WaitingSegmentStartedAt   *time.Time
 	ExecutionDeadlineAt       *time.Time
 	ExecutionDeadlineScope    *string
 	CurrentCheckpointSequence int64
@@ -178,7 +181,7 @@ type GenerationRequest struct {
 	Provider         string
 	Model            string
 	Messages         []GenerationMessage
-	ClientTools      []ClientToolDefinition
+	HostTools        []HostToolDefinition
 	MaxOutputTokens  *int
 	MaxIterations    int
 	Claim            *InvocationClaim
@@ -200,7 +203,7 @@ type GenerationResponse struct {
 	CredentialVersionID     string
 }
 
-type ClientToolDefinition struct {
+type HostToolDefinition struct {
 	Name        string
 	Description string
 	InputSchema json.RawMessage

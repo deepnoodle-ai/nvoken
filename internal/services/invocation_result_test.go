@@ -75,15 +75,15 @@ func newInvocationResultTestService(store *invocationResultTestStore) *RuntimeSe
 func resultTestInvocation(status domain.InvocationStatus) domain.Invocation {
 	now := time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC)
 	return domain.Invocation{
-		ID:                  resultInvocationID,
-		AccountID:           resultAccountID,
-		TenantPartitionID:   resultPartitionID,
-		AgentID:             resultAgentID,
-		SessionID:           resultSessionID,
-		Status:              status,
-		WallClockDeadlineAt: now.Add(time.Hour),
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		ID:                resultInvocationID,
+		AccountID:         resultAccountID,
+		TenantPartitionID: resultPartitionID,
+		AgentID:           resultAgentID,
+		SessionID:         resultSessionID,
+		Status:            status,
+		DeadlineAt:        now.Add(time.Hour),
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 }
 
@@ -134,7 +134,7 @@ func TestGetInvocationResultOutputTextRules(t *testing.T) {
 		InvocationID:     resultInvocationID,
 		SessionID:        resultSessionID,
 		Name:             "lookup",
-		Mode:             domain.ToolCallModeClient,
+		Mode:             domain.ToolCallModeHost,
 		RequestMessageID: toolRequest.ID,
 		Status:           domain.ToolCallPending,
 		DeadlineAt:       time.Date(2026, time.July, 21, 13, 0, 0, 0, time.UTC),
@@ -300,7 +300,7 @@ func TestGetInvocationResultReadsInsideOneSnapshot(t *testing.T) {
 
 // TestGetInvocationResultWaitingReadsInsideOneSnapshot covers the one
 // status whose composition performs extra reads: recovering pending
-// client tool calls and their stored inputs must also stay inside the
+// host tool calls and their stored inputs must also stay inside the
 // single snapshot.
 func TestGetInvocationResultWaitingReadsInsideOneSnapshot(t *testing.T) {
 	toolRequest := resultTestMessage(2, domain.MessageRoleAssistant, `[{"type":"tool_use","id":"tcal_wait","name":"lookup","input":{"order_id":"o-1"}}]`)
@@ -319,7 +319,7 @@ func TestGetInvocationResultWaitingReadsInsideOneSnapshot(t *testing.T) {
 					InvocationID:     resultInvocationID,
 					SessionID:        resultSessionID,
 					Name:             "lookup",
-					Mode:             domain.ToolCallModeClient,
+					Mode:             domain.ToolCallModeHost,
 					RequestMessageID: toolRequest.ID,
 					Status:           domain.ToolCallPending,
 					DeadlineAt:       time.Date(2026, time.July, 21, 13, 0, 0, 0, time.UTC),

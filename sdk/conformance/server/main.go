@@ -118,6 +118,7 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 		"invocation_id": invocationID,
 		"status":        "queued",
 		"deduplicated":  attempt > 1,
+		"deadline_at":   "2026-07-21T12:05:00Z",
 	})
 }
 
@@ -132,6 +133,10 @@ func (s *state) listInvocations(response http.ResponseWriter, request *http.Requ
 
 func (s *state) invocation(response http.ResponseWriter, request *http.Request) {
 	remainder := strings.TrimPrefix(request.URL.Path, "/v1/invocations/")
+	if strings.HasSuffix(remainder, "/stream") && request.Method == http.MethodGet {
+		s.invocationStream(response, request)
+		return
+	}
 	if strings.HasSuffix(remainder, "/tool-results") && request.Method == http.MethodPost {
 		s.mu.Lock()
 		s.resultAttempts++
@@ -242,27 +247,84 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	}
 	if attempt == 1 {
 		_, _ = fmt.Fprint(response, "retry: 1\n")
-		writeSSE(response, "cursor-1", "transcript.snapshot", firstSnapshot())
+		writeSSE(response, "cursor-1", "transcript.update", firstTranscriptUpdate())
 		flusher.Flush()
 		return
 	}
-	writeSSE(response, "cursor-1", "transcript.snapshot", firstSnapshot())
+	writeSSE(response, "cursor-1", "transcript.update", firstTranscriptUpdate())
 	if attempt == 2 {
 		writeSSE(response, "", "stream.end", map[string]any{
-			"event_type":    "stream.end",
+			"type":          "stream.end",
 			"session_id":    sessionID,
+			"invocation_id": nil,
 			"reason":        "rotate",
 			"resume_cursor": "cursor-1",
 		})
 		flusher.Flush()
 		return
 	}
-	writeSSE(response, "cursor-2", "transcript.snapshot", secondSnapshot())
+	writeSSE(response, "cursor-2", "transcript.update", secondTranscriptUpdate())
 	writeSSE(response, "", "stream.end", map[string]any{
-		"event_type":    "stream.end",
+		"type":          "stream.end",
 		"session_id":    sessionID,
+		"invocation_id": nil,
 		"reason":        "terminal",
 		"resume_cursor": "cursor-2",
+	})
+	flusher.Flush()
+}
+
+func (s *state) invocationStream(response http.ResponseWriter, request *http.Request) {
+	s.mu.Lock()
+	s.streamAttempts++
+	attempt := s.streamAttempts
+	s.lastEventID = request.Header.Get("Last-Event-ID")
+	s.mu.Unlock()
+	response.Header().Set("Content-Type", "text/event-stream")
+	response.WriteHeader(http.StatusOK)
+	flusher, ok := response.(http.Flusher)
+	if !ok {
+		return
+	}
+	update := func(cursor string) {
+		writeSSE(response, cursor, "invocation.update", map[string]any{
+			"type":          "invocation.update",
+			"session_id":    sessionID,
+			"invocation_id": invocationID,
+			"invocation":    invocation("completed"),
+			"new_messages":  []any{secondMessage()},
+		})
+	}
+	if attempt == 1 {
+		_, _ = fmt.Fprint(response, "retry: 1\n")
+		update("cursor-1")
+		flusher.Flush()
+		return
+	}
+	if attempt == 2 {
+		writeSSE(response, "", "stream.end", map[string]any{
+			"type":          "stream.end",
+			"session_id":    sessionID,
+			"invocation_id": invocationID,
+			"reason":        "rotate",
+			"resume_cursor": "cursor-1",
+		})
+		flusher.Flush()
+		return
+	}
+	update("cursor-2")
+	writeSSE(response, "cursor-3", "invocation.result", map[string]any{
+		"type":          "invocation.result",
+		"session_id":    sessionID,
+		"invocation_id": invocationID,
+		"result":        invocationResult(),
+	})
+	writeSSE(response, "", "stream.end", map[string]any{
+		"type":          "stream.end",
+		"session_id":    sessionID,
+		"invocation_id": invocationID,
+		"reason":        "terminal",
+		"resume_cursor": "cursor-3",
 	})
 	flusher.Flush()
 }
@@ -285,9 +347,9 @@ func invocation(status string) map[string]any {
 }
 
 func invocationWithID(id string, status string) map[string]any {
-	completedAt := any(nil)
+	endedAt := any(nil)
 	if status == "completed" || status == "cancelled" || status == "failed" {
-		completedAt = "2026-07-21T12:00:03Z"
+		endedAt = "2026-07-21T12:00:03Z"
 	}
 	value := map[string]any{
 		"id":                           id,
@@ -299,12 +361,13 @@ func invocationWithID(id string, status string) map[string]any {
 		"provenance":                   nil,
 		"structured_output":            nil,
 		"structured_output_provenance": nil,
-		"budgets":                      map[string]any{"wall_clock_timeout_seconds": 300, "active_execution_timeout_seconds": 120, "max_iterations": 16},
+		"limits":                       map[string]any{"total_timeout_seconds": 300, "active_timeout_seconds": 120, "waiting_timeout_seconds": 180, "max_iterations": 16},
 		"active_execution_ms":          250,
-		"wall_clock_deadline_at":       "2026-07-21T12:05:00Z",
+		"waiting_execution_ms":         0,
+		"deadline_at":                  "2026-07-21T12:05:00Z",
 		"created_at":                   "2026-07-21T12:00:00Z",
 		"updated_at":                   "2026-07-21T12:00:03Z",
-		"completed_at":                 completedAt,
+		"ended_at":                     endedAt,
 	}
 	if status == "waiting" {
 		value["pending_tool_calls"] = []any{map[string]any{
@@ -338,7 +401,7 @@ func session() map[string]any {
 	return map[string]any{
 		"id":                       sessionID,
 		"agent_id":                 agentID,
-		"tenant_ref":               "acme",
+		"tenant_key":               "acme",
 		"session_key":              "ticket-A-42",
 		"active_invocation_id":     nil,
 		"active_invocation_status": nil,
@@ -406,6 +469,16 @@ func firstSnapshot() map[string]any {
 	}
 }
 
+func firstTranscriptUpdate() map[string]any {
+	return map[string]any{
+		"type":               "transcript.update",
+		"session_id":         sessionID,
+		"messages":           []any{firstMessage()},
+		"invocation_changes": []any{firstChange()},
+		"resume_cursor":      "cursor-1",
+	}
+}
+
 func secondSnapshot() map[string]any {
 	return map[string]any{
 		"messages":           []any{firstMessage(), secondMessage()},
@@ -413,6 +486,16 @@ func secondSnapshot() map[string]any {
 		"has_more":           false,
 		"resume_cursor":      "cursor-2",
 		"next_page_token":    nil,
+	}
+}
+
+func secondTranscriptUpdate() map[string]any {
+	return map[string]any{
+		"type":               "transcript.update",
+		"session_id":         sessionID,
+		"messages":           []any{firstMessage(), secondMessage()},
+		"invocation_changes": []any{firstChange(), secondChange()},
+		"resume_cursor":      "cursor-2",
 	}
 }
 

@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -42,14 +42,14 @@ import {
  */
 export interface CreateInvocationRequest {
     /**
-     * Stable caller-controlled Agent reference, unique within the
+     * Stable caller-controlled Agent key, unique within the
      * authenticated Account. The resulting Agent anchor stores identity
      * only and is shared across tenant partitions.
      *
      * @type {string}
      * @memberof CreateInvocationRequest
      */
-    agentRef: string;
+    agentKey: string;
     /**
      * Optional tenant partition. For Session-key resolution or a new
      * Session, precedence is credential constraint, this explicit value,
@@ -59,7 +59,7 @@ export interface CreateInvocationRequest {
      * @type {string}
      * @memberof CreateInvocationRequest
      */
-    tenantRef?: string;
+    tenantKey?: string;
     /**
      * Existing Session to continue. Mutually exclusive with session_key.
      * @type {string}
@@ -76,7 +76,7 @@ export interface CreateInvocationRequest {
     sessionKey?: string;
     /**
      * Stable admission identity scoped to (Account, effective tenant
-     * partition, agent_ref). Reuse an unchanged request after any 5xx,
+     * partition, agent_key). Reuse an unchanged request after any 5xx,
      * timeout, disconnect, or missing acknowledgement. Deduplication is
      * guaranteed while the original Invocation is retained.
      *
@@ -101,7 +101,10 @@ export interface CreateInvocationRequest {
      * Omission selects the deployment's configured default. The
      * selection is stored outside the execution spec; only
      * caller_ephemeral accepts secret material. Equal idempotent replay
-     * never replaces the original encrypted credential.
+     * never replaces the original encrypted credential. The field is
+     * deliberately plural even though this contract currently permits
+     * one entry: future routed invocations may select credentials for
+     * more than one model provider.
      *
      * @type {Array<InvocationProviderCredentialSelection>}
      * @memberof CreateInvocationRequest
@@ -113,7 +116,7 @@ export interface CreateInvocationRequest {
  * Check if a given object implements the CreateInvocationRequest interface.
  */
 export function instanceOfCreateInvocationRequest(value: object): value is CreateInvocationRequest {
-    if (!('agentRef' in value) || value['agentRef'] === undefined) return false;
+    if (!('agentKey' in value) || value['agentKey'] === undefined) return false;
     if (!('idempotencyKey' in value) || value['idempotencyKey'] === undefined) return false;
     if (!('input' in value) || value['input'] === undefined) return false;
     if (!('spec' in value) || value['spec'] === undefined) return false;
@@ -130,8 +133,8 @@ export function CreateInvocationRequestFromJSONTyped(json: any, ignoreDiscrimina
     }
     return {
 
-        'agentRef': json['agent_ref'],
-        'tenantRef': json['tenant_ref'] == null ? undefined : json['tenant_ref'],
+        'agentKey': json['agent_key'],
+        'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
         'sessionId': json['session_id'] == null ? undefined : json['session_id'],
         'sessionKey': json['session_key'] == null ? undefined : json['session_key'],
         'idempotencyKey': json['idempotency_key'],
@@ -152,8 +155,8 @@ export function CreateInvocationRequestToJSONTyped(value?: CreateInvocationReque
 
     return {
 
-        'agent_ref': value['agentRef'],
-        'tenant_ref': value['tenantRef'],
+        'agent_key': value['agentKey'],
+        'tenant_key': value['tenantKey'],
         'session_id': value['sessionId'],
         'session_key': value['sessionKey'],
         'idempotency_key': value['idempotencyKey'],

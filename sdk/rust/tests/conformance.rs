@@ -31,27 +31,27 @@ async fn shared_fault_server_semantics() {
         &base_url,
         "test-key",
         RetryPolicy {
-            maximum_attempts: 3,
-            minimum_delay: Duration::from_millis(1),
-            maximum_delay: Duration::from_millis(5),
+            max_attempts: 3,
+            min_delay: Duration::from_millis(1),
+            max_delay: Duration::from_millis(5),
         },
     )
     .unwrap();
     let handle = client
         .invoke(InvokeRequest {
-            agent_ref: "support".to_owned(),
-            tenant_ref: None,
+            agent_key: "support".to_owned(),
+            tenant_key: None,
             session_id: None,
             session_key: None,
-            idempotency_key: "rust-lost-ack".to_owned(),
+            idempotency_key: Some("rust-lost-ack".to_owned()),
             input: "hello".to_owned(),
             spec: ExecutionSpec {
-                instructions: "help".to_owned(),
+                instructions: Some("help".to_owned()),
                 model: Model {
                     provider: "openai".to_owned(),
-                    name: "gpt-test".to_owned(),
+                    id: "gpt-test".to_owned(),
                 },
-                budgets: None,
+                limits: None,
                 tools: Vec::new(),
                 output_schema: None,
             },
@@ -59,12 +59,16 @@ async fn shared_fault_server_semantics() {
         .await
         .unwrap();
     assert_eq!(handle.invocation_id, INVOCATION_ID);
-    assert_eq!(handle.session_id, SESSION_ID);
+    assert_eq!(handle.session_id.as_deref(), Some(SESSION_ID));
 
-    let resumed = client.resume(INVOCATION_ID).await.unwrap();
-    assert_eq!(resumed.status, nvoken::models::InvocationStatus::Completed);
+    let mut resumed = client.invocation(INVOCATION_ID);
+    resumed.refresh().await.unwrap();
+    assert_eq!(
+        resumed.status,
+        Some(nvoken::models::InvocationStatus::Completed)
+    );
 
-    let mut waiting = client.resume(WAIT_ID).await.unwrap();
+    let mut waiting = client.invocation(WAIT_ID);
     let timeout = waiting
         .wait(Some(Duration::from_millis(10)))
         .await
@@ -137,24 +141,28 @@ async fn shared_fault_server_semantics() {
 
     assert_error(&client, "conflict", ErrorCategory::Conflict, 409).await;
     assert_eq!(
-        client.get("rate-limit").await.unwrap().status,
+        client.get_invocation("rate-limit").await.unwrap().status,
         nvoken::models::InvocationStatus::Completed
     );
     assert_error(&client, "rate-limit-always", ErrorCategory::RateLimit, 429).await;
     assert_error(&client, "server-error", ErrorCategory::Server, 503).await;
 
-    let stream_handle = client.resume(INVOCATION_ID).await.unwrap();
+    let stream_handle = client.invocation(INVOCATION_ID);
     let stream = stream_handle.stream();
     futures_util::pin_mut!(stream);
-    let mut reduced = None;
+    let mut event_types = Vec::new();
     while let Some(item) = stream.next().await {
-        let (_, snapshot) = item.unwrap();
-        reduced = Some(snapshot);
+        event_types.push(item.unwrap().event_type);
     }
-    let reduced = reduced.unwrap();
-    assert_eq!(reduced.messages.len(), 2);
-    assert_eq!(reduced.invocation_changes.len(), 2);
-    assert_eq!(reduced.resume_cursor.as_deref(), Some("cursor-2"));
+    assert_eq!(
+        event_types,
+        vec![
+            "invocation.update",
+            "stream.end",
+            "invocation.update",
+            "invocation.result",
+        ]
+    );
 
     let state = reqwest::get(format!("{base_url}/__test/state"))
         .await
@@ -230,7 +238,7 @@ struct ReducerExpected {
 }
 
 async fn assert_error(client: &Client, id: &str, category: ErrorCategory, status: u16) {
-    let error = client.get(id).await.unwrap_err();
+    let error = client.get_invocation(id).await.unwrap_err();
     assert_eq!(error.category, category);
     assert_eq!(error.status, Some(status));
     assert!(error.request_id.is_some());

@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -12,36 +12,22 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from '../runtime.js';
-import type { TextInputBlock } from './TextInputBlock.js';
+import type { InvocationInputBlocks } from './InvocationInputBlocks.js';
 import {
-    TextInputBlockFromJSON,
-    TextInputBlockFromJSONTyped,
-    TextInputBlockToJSON,
-    TextInputBlockToJSONTyped,
-} from './TextInputBlock.js';
+    instanceOfInvocationInputBlocks,
+    InvocationInputBlocksFromJSON,
+    InvocationInputBlocksFromJSONTyped,
+    InvocationInputBlocksToJSON,
+} from './InvocationInputBlocks.js';
 
 /**
+ * @type InvocationInput
+ * A plain string is shorthand for one text block. Use the object form
+ * for ordered multi-block input; the launch contract supports text only.
  *
  * @export
- * @interface InvocationInput
  */
-export interface InvocationInput {
-    /**
-     * Ordered caller-input blocks. The launch contract supports text only.
-     * @type {Array<TextInputBlock>}
-     * @memberof InvocationInput
-     */
-    content: Array<TextInputBlock>;
-}
-
-/**
- * Check if a given object implements the InvocationInput interface.
- */
-export function instanceOfInvocationInput(value: object): value is InvocationInput {
-    if (!('content' in value) || value['content'] === undefined) return false;
-    return true;
-}
+export type InvocationInput = InvocationInputBlocks | string;
 
 export function InvocationInputFromJSON(json: any): InvocationInput {
     return InvocationInputFromJSONTyped(json, false);
@@ -51,13 +37,19 @@ export function InvocationInputFromJSONTyped(json: any, ignoreDiscriminator: boo
     if (json == null) {
         return json;
     }
-    return {
-
-        'content': ((json['content'] as Array<any>).map(TextInputBlockFromJSON)),
-    };
+    if (typeof json !== 'object') {
+        return json;
+    }
+    if (instanceOfInvocationInputBlocks(json)) {
+        return InvocationInputBlocksFromJSONTyped(json, true);
+    }
+    if (typeof json === 'string') {
+        return json;
+    }
+    return {} as any;
 }
 
-export function InvocationInputToJSON(json: any): InvocationInput {
+export function InvocationInputToJSON(json: any): any {
     return InvocationInputToJSONTyped(json, false);
 }
 
@@ -65,9 +57,14 @@ export function InvocationInputToJSONTyped(value?: InvocationInput | null, ignor
     if (value == null) {
         return value;
     }
-
-    return {
-
-        'content': ((value['content'] as Array<any>).map(TextInputBlockToJSON)),
-    };
+    if (typeof value !== 'object') {
+        return value;
+    }
+    if (instanceOfInvocationInputBlocks(value)) {
+        return InvocationInputBlocksToJSON(value as InvocationInputBlocks);
+    }
+    if (typeof value === 'string') {
+        return value;
+    }
+    return {};
 }

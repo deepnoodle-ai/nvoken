@@ -13,27 +13,27 @@ CREATE TABLE accounts (
 CREATE TABLE tenant_partitions (
     id text PRIMARY KEY,
     account_id text NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-    tenant_ref text,
+    tenant_key text,
     created_at timestamptz NOT NULL,
     CONSTRAINT tenant_partitions_id_format CHECK (id ~ '^tprt_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
-    CONSTRAINT tenant_partitions_ref_nonempty CHECK (tenant_ref IS NULL OR tenant_ref <> ''),
+    CONSTRAINT tenant_partitions_ref_nonempty CHECK (tenant_key IS NULL OR tenant_key <> ''),
     CONSTRAINT tenant_partitions_id_account_unique UNIQUE (id, account_id)
 );
 
 CREATE UNIQUE INDEX tenant_partitions_one_default_per_account
     ON tenant_partitions (account_id)
-    WHERE tenant_ref IS NULL;
+    WHERE tenant_key IS NULL;
 
 CREATE UNIQUE INDEX tenant_partitions_ref_per_account
-    ON tenant_partitions (account_id, tenant_ref)
-    WHERE tenant_ref IS NOT NULL;
+    ON tenant_partitions (account_id, tenant_key)
+    WHERE tenant_key IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION nvoken_account_requires_default_partition()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM tenant_partitions
-        WHERE account_id = NEW.id AND tenant_ref IS NULL
+        WHERE account_id = NEW.id AND tenant_key IS NULL
     ) THEN
         RAISE EXCEPTION 'account % requires one default tenant partition', NEW.id
             USING ERRCODE = '23514';
@@ -53,7 +53,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM accounts WHERE id = OLD.account_id)
        AND NOT EXISTS (
            SELECT 1 FROM tenant_partitions
-           WHERE account_id = OLD.account_id AND tenant_ref IS NULL
+           WHERE account_id = OLD.account_id AND tenant_key IS NULL
        ) THEN
         RAISE EXCEPTION 'account % requires one default tenant partition', OLD.account_id
             USING ERRCODE = '23514';
@@ -75,11 +75,11 @@ CREATE CONSTRAINT TRIGGER tenant_partitions_preserve_default_after_update
 CREATE TABLE agents (
     id text PRIMARY KEY,
     account_id text NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-    agent_ref text NOT NULL,
+    agent_key text NOT NULL,
     created_at timestamptz NOT NULL,
     CONSTRAINT agents_id_format CHECK (id ~ '^agnt_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
-    CONSTRAINT agents_ref_nonempty CHECK (agent_ref <> ''),
-    CONSTRAINT agents_account_ref_unique UNIQUE (account_id, agent_ref),
+    CONSTRAINT agents_ref_nonempty CHECK (agent_key <> ''),
+    CONSTRAINT agents_account_ref_unique UNIQUE (account_id, agent_key),
     CONSTRAINT agents_id_account_unique UNIQUE (id, account_id)
 );
 

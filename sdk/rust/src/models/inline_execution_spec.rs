@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -14,12 +14,13 @@ use serde::{Deserialize, Serialize};
 /// InlineExecutionSpec : Immutable launch snapshot. Unknown or deferred fields, including spec references, are rejected rather than ignored. Callback declarations require installation callback signing configuration. A tools-bearing spec requires at least two model iterations; omission resolves to three or the lower installation maximum.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InlineExecutionSpec {
-    #[serde(rename = "instructions")]
-    pub instructions: String,
+    /// Optional model instructions. Omission adds no hidden default.
+    #[serde(rename = "instructions", skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
     #[serde(rename = "model")]
     pub model: Box<models::ModelSelection>,
-    #[serde(rename = "budgets", skip_serializing_if = "Option::is_none")]
-    pub budgets: Option<Box<models::InvocationBudgetRequest>>,
+    #[serde(rename = "limits", skip_serializing_if = "Option::is_none")]
+    pub limits: Option<Box<models::InvocationLimitRequest>>,
     #[serde(rename = "output", skip_serializing_if = "Option::is_none")]
     pub output: Option<Box<models::StructuredOutputSpec>>,
     #[serde(rename = "tools", skip_serializing_if = "Option::is_none")]
@@ -28,11 +29,11 @@ pub struct InlineExecutionSpec {
 
 impl InlineExecutionSpec {
     /// Immutable launch snapshot. Unknown or deferred fields, including spec references, are rejected rather than ignored. Callback declarations require installation callback signing configuration. A tools-bearing spec requires at least two model iterations; omission resolves to three or the lower installation maximum.
-    pub fn new(instructions: String, model: models::ModelSelection) -> InlineExecutionSpec {
+    pub fn new(model: models::ModelSelection) -> InlineExecutionSpec {
         InlineExecutionSpec {
-            instructions,
+            instructions: None,
             model: Box::new(model),
-            budgets: None,
+            limits: None,
             output: None,
             tools: None,
         }

@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -13,26 +13,26 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CreateInvocationRequest {
-    /// Stable caller-controlled Agent reference, unique within the authenticated Account. The resulting Agent anchor stores identity only and is shared across tenant partitions.
-    #[serde(rename = "agent_ref")]
-    pub agent_ref: String,
+    /// Stable caller-controlled Agent key, unique within the authenticated Account. The resulting Agent anchor stores identity only and is shared across tenant partitions.
+    #[serde(rename = "agent_key")]
+    pub agent_key: String,
     /// Optional tenant partition. For Session-key resolution or a new Session, precedence is credential constraint, this explicit value, then the Account's default partition. For Session-ID resolution, an Account-wide caller may omit it and use the stored partition.
-    #[serde(rename = "tenant_ref", skip_serializing_if = "Option::is_none")]
-    pub tenant_ref: Option<String>,
+    #[serde(rename = "tenant_key", skip_serializing_if = "Option::is_none")]
+    pub tenant_key: Option<String>,
     /// Existing Session to continue. Mutually exclusive with session_key.
     #[serde(rename = "session_id", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     /// Caller key resolved within (Account, effective tenant partition, Agent, session_key). Mutually exclusive with session_id.
     #[serde(rename = "session_key", skip_serializing_if = "Option::is_none")]
     pub session_key: Option<String>,
-    /// Stable admission identity scoped to (Account, effective tenant partition, agent_ref). Reuse an unchanged request after any 5xx, timeout, disconnect, or missing acknowledgement. Deduplication is guaranteed while the original Invocation is retained.
+    /// Stable admission identity scoped to (Account, effective tenant partition, agent_key). Reuse an unchanged request after any 5xx, timeout, disconnect, or missing acknowledgement. Deduplication is guaranteed while the original Invocation is retained.
     #[serde(rename = "idempotency_key")]
     pub idempotency_key: String,
     #[serde(rename = "input")]
     pub input: Box<models::InvocationInput>,
     #[serde(rename = "spec")]
     pub spec: Box<models::InlineExecutionSpec>,
-    /// Explicit nonsecret source selection for the spec model provider. Omission selects the deployment's configured default. The selection is stored outside the execution spec; only caller_ephemeral accepts secret material. Equal idempotent replay never replaces the original encrypted credential.
+    /// Explicit nonsecret source selection for the spec model provider. Omission selects the deployment's configured default. The selection is stored outside the execution spec; only caller_ephemeral accepts secret material. Equal idempotent replay never replaces the original encrypted credential. The field is deliberately plural even though this contract currently permits one entry: future routed invocations may select credentials for more than one model provider.
     #[serde(
         rename = "provider_credentials",
         skip_serializing_if = "Option::is_none"
@@ -42,14 +42,14 @@ pub struct CreateInvocationRequest {
 
 impl CreateInvocationRequest {
     pub fn new(
-        agent_ref: String,
+        agent_key: String,
         idempotency_key: String,
         input: models::InvocationInput,
         spec: models::InlineExecutionSpec,
     ) -> CreateInvocationRequest {
         CreateInvocationRequest {
-            agent_ref,
-            tenant_ref: None,
+            agent_key,
+            tenant_key: None,
             session_id: None,
             session_key: None,
             idempotency_key,

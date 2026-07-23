@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -57,6 +57,12 @@ export interface InvocationAcknowledgement {
      * @memberof InvocationAcknowledgement
      */
     deduplicated: boolean;
+    /**
+     *
+     * @type {Date}
+     * @memberof InvocationAcknowledgement
+     */
+    deadlineAt: Date;
 }
 
 
@@ -70,6 +76,7 @@ export function instanceOfInvocationAcknowledgement(value: object): value is Inv
     if (!('invocationId' in value) || value['invocationId'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('deduplicated' in value) || value['deduplicated'] === undefined) return false;
+    if (!('deadlineAt' in value) || value['deadlineAt'] === undefined) return false;
     return true;
 }
 
@@ -88,6 +95,7 @@ export function InvocationAcknowledgementFromJSONTyped(json: any, ignoreDiscrimi
         'invocationId': json['invocation_id'],
         'status': InvocationStatusFromJSON(json['status']),
         'deduplicated': json['deduplicated'],
+        'deadlineAt': (new Date(json['deadline_at'])),
     };
 }
 
@@ -107,5 +115,6 @@ export function InvocationAcknowledgementToJSONTyped(value?: InvocationAcknowled
         'invocation_id': value['invocationId'],
         'status': InvocationStatusToJSON(value['status']),
         'deduplicated': value['deduplicated'],
+        'deadline_at': value['deadlineAt'].toISOString(),
     };
 }

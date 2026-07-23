@@ -228,7 +228,7 @@ def main() -> int:
             "POST",
             "/v1/invocations",
             {
-                "agent_ref": "single-daemon-load",
+                "agent_key": "single-daemon-load",
                 "session_key": key,
                 "idempotency_key": key,
                 "input": {
@@ -239,7 +239,7 @@ def main() -> int:
                 },
                 "spec": {
                     "instructions": "Reply with only the word ready.",
-                    "model": {"provider": provider, "name": model},
+                    "model": {"provider": provider, "id": model},
                 },
             },
         )

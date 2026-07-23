@@ -16,6 +16,7 @@ const fingerprintVersionV3 = 3
 const fingerprintVersionV4 = 4
 const fingerprintVersionV5 = 5
 const fingerprintVersionV6 = 6
+const fingerprintVersionV7 = 7
 
 // InvocationFingerprintV1 hashes a fixed JSON representation whose object-key
 // order is part of the versioned contract. Values are already typed, so source
@@ -56,7 +57,7 @@ func invocationFingerprintBytesV1(input CreateInvocationInput) ([]byte, error) {
 		return nil, err
 	}
 	buffer.WriteString(`,"name":`)
-	if err := writeJSONString(&buffer, input.Spec.Model.Name); err != nil {
+	if err := writeJSONString(&buffer, input.Spec.Model.ID); err != nil {
 		return nil, err
 	}
 	buffer.WriteString(`}},"input":`)
@@ -115,27 +116,27 @@ func invocationFingerprintBytesV2(input CreateInvocationInput) ([]byte, error) {
 	}
 	var budgets bytes.Buffer
 	budgets.WriteString(`},"budgets":`)
-	if input.Spec.Budgets == nil {
+	if input.Spec.Limits == nil {
 		budgets.WriteString("null")
 	} else {
 		budgets.WriteString(`{"wall_clock_timeout_seconds":`)
-		writeOptionalInt64(&budgets, input.Spec.Budgets.WallClockTimeoutSeconds)
+		writeOptionalInt64(&budgets, input.Spec.Limits.TotalTimeoutSeconds)
 		budgets.WriteString(`,"active_execution_timeout_seconds":`)
-		writeOptionalInt64(&budgets, input.Spec.Budgets.ActiveExecutionTimeoutSeconds)
+		writeOptionalInt64(&budgets, input.Spec.Limits.ActiveTimeoutSeconds)
 		budgets.WriteString(`,"max_output_tokens":`)
-		writeOptionalInt(&budgets, input.Spec.Budgets.MaxOutputTokens)
+		writeOptionalInt(&budgets, input.Spec.Limits.MaxOutputTokens)
 		budgets.WriteString(`,"max_estimated_cost_microusd":`)
-		if input.Spec.Budgets.MaxEstimatedCostUSD == nil {
+		if input.Spec.Limits.MaxEstimatedCostUSD == nil {
 			budgets.WriteString("null")
 		} else {
-			value := *input.Spec.Budgets.MaxEstimatedCostUSD
+			value := *input.Spec.Limits.MaxEstimatedCostUSD
 			if math.IsNaN(value) || math.IsInf(value, 0) {
 				return nil, fmt.Errorf("budget cost is not finite")
 			}
 			budgets.WriteString(strconv.FormatInt(int64(math.Round(value*1_000_000)), 10))
 		}
 		budgets.WriteString(`,"max_iterations":`)
-		writeOptionalInt(&budgets, input.Spec.Budgets.MaxIterations)
+		writeOptionalInt(&budgets, input.Spec.Limits.MaxIterations)
 		budgets.WriteByte('}')
 	}
 	return []byte(canonical[:index] + budgets.String() + canonical[index+1:]), nil
@@ -237,7 +238,11 @@ func invocationFingerprintBytesV4(input CreateInvocationInput) ([]byte, error) {
 			return nil, err
 		}
 		tools.WriteString(`,"mode":`)
-		if err := writeJSONString(&tools, tool.Mode); err != nil {
+		mode := tool.Mode
+		if mode == "host" {
+			mode = "client"
+		}
+		if err := writeJSONString(&tools, mode); err != nil {
 			return nil, err
 		}
 		schema, err := canonicalJSON(tool.InputSchema)
@@ -302,7 +307,11 @@ func invocationFingerprintBytesV5(input CreateInvocationInput) ([]byte, error) {
 			return nil, err
 		}
 		tools.WriteString(`,"mode":`)
-		if err := writeJSONString(&tools, tool.Mode); err != nil {
+		mode := tool.Mode
+		if mode == "host" {
+			mode = "client"
+		}
+		if err := writeJSONString(&tools, mode); err != nil {
 			return nil, err
 		}
 		schema, err := canonicalJSON(tool.InputSchema)
@@ -384,6 +393,47 @@ func invocationFingerprintBytesV6(input CreateInvocationInput) ([]byte, error) {
 		selections.WriteByte(']')
 	}
 	return []byte(canonical[:index] + selections.String() + canonical[index:]), nil
+}
+
+// InvocationFingerprintV7 adopts the public model.id, spec.limits, and host
+// tool vocabulary. Older versions remain readable so retained rows can still
+// be compared using the canonical contract under which they were admitted.
+func InvocationFingerprintV7(input CreateInvocationInput) ([sha256.Size]byte, error) {
+	canonical, err := invocationFingerprintBytesV7(input)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(canonical), nil
+}
+
+func invocationFingerprintBytesV7(input CreateInvocationInput) ([]byte, error) {
+	v6, err := invocationFingerprintBytesV6(input)
+	if err != nil {
+		return nil, err
+	}
+	canonical := string(v6)
+	canonical = strings.Replace(
+		canonical,
+		`{"version":`+strconv.Itoa(fingerprintVersionV6),
+		`{"version":`+strconv.Itoa(fingerprintVersionV7),
+		1,
+	)
+	canonical = strings.Replace(canonical, `,"name":`, `,"id":`, 1)
+	canonical = strings.Replace(canonical, `},"budgets":`, `},"limits":`, 1)
+	canonical = strings.ReplaceAll(canonical, `"mode":"client"`, `"mode":"host"`)
+	needle := `,"active_execution_timeout_seconds":`
+	canonical = strings.Replace(canonical, `"wall_clock_timeout_seconds":`, `"total_timeout_seconds":`, 1)
+	canonical = strings.Replace(canonical, needle, `,"active_timeout_seconds":`, 1)
+	waitingNeedle := `,"max_output_tokens":`
+	var waiting bytes.Buffer
+	waiting.WriteString(`,"waiting_timeout_seconds":`)
+	if input.Spec.Limits == nil {
+		waiting.WriteString("null")
+	} else {
+		writeOptionalInt64(&waiting, input.Spec.Limits.WaitingTimeoutSeconds)
+	}
+	canonical = strings.Replace(canonical, waitingNeedle, waiting.String()+waitingNeedle, 1)
+	return []byte(canonical), nil
 }
 
 func writeOptionalInt(buffer *bytes.Buffer, value *int) {

@@ -1,0 +1,48 @@
+[
+  {
+    "name": "omitted-limits-and-provider-credential-selection",
+    "selector": { "kind": "none", "value": "" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "anthropic", "id": "test-model" }
+    },
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":7,\"session_selector\":{\"kind\":\"none\",\"value\":\"\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"id\":\"test-model\"},\"limits\":null,\"output\":null,\"tools\":[],\"provider_credentials\":null},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "9627653c09d378b9bcff2b303cc5f3b7732784456169fb22cc57ae9ccbf6d6bb"
+  },
+  {
+    "name": "host-tool-limits-and-account-byok",
+    "selector": { "kind": "key", "value": "ticket-1" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "openai", "id": "gpt-test" },
+      "limits": {
+        "total_timeout_seconds": 600,
+        "active_timeout_seconds": 300,
+        "waiting_timeout_seconds": 900,
+        "max_output_tokens": 4096,
+        "max_estimated_cost_usd": 0.125,
+        "max_iterations": 2
+      },
+      "tools": [
+        {
+          "name": "lookup",
+          "description": "Look up an order",
+          "mode": "host",
+          "input_schema": {
+            "type": "object",
+            "properties": { "order_id": { "type": "string" } },
+            "required": ["order_id"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "provider_credentials": [
+      { "provider": "openai", "source": "account_byok" }
+    ],
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":7,\"session_selector\":{\"kind\":\"key\",\"value\":\"ticket-1\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"openai\",\"id\":\"gpt-test\"},\"limits\":{\"total_timeout_seconds\":600,\"active_timeout_seconds\":300,\"waiting_timeout_seconds\":900,\"max_output_tokens\":4096,\"max_estimated_cost_microusd\":125000,\"max_iterations\":2},\"output\":null,\"tools\":[{\"name\":\"lookup\",\"description\":\"Look up an order\",\"mode\":\"host\",\"input_schema\":{\"additionalProperties\":false,\"properties\":{\"order_id\":{\"type\":\"string\"}},\"required\":[\"order_id\"],\"type\":\"object\"},\"callback\":null}],\"provider_credentials\":[{\"provider\":\"openai\",\"source\":\"account_byok\"}]},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "1a485462d3ae10d632034a39ee52e6349debebc88fa160a0725648418ab66a79"
+  }
+]

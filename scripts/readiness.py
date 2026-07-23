@@ -433,7 +433,7 @@ def check_repository_facts(matrix_text: str, claims: dict[str, str]) -> list[str
 
     try:
         tool_block = "\n".join([
-            yaml_schema_block(openapi, "ClientToolSpec"),
+            yaml_schema_block(openapi, "HostToolSpec"),
             yaml_schema_block(openapi, "CallbackToolSpec"),
         ])
         tool_modes = singleton_schema_values(tool_block)
@@ -441,7 +441,7 @@ def check_repository_facts(matrix_text: str, claims: dict[str, str]) -> list[str
         tool_modes = set()
     wanted_modes = comma_values(expected["openapi_tool_modes"])
     admission_guide = (ROOT / "docs/guides/runtime-admission.md").read_text()
-    guide_modes = set(re.findall(r'mode:\s*"(client|callback)"', admission_guide))
+    guide_modes = set(re.findall(r'mode:\s*"(host|callback)"', admission_guide))
     if tool_modes != wanted_modes or not wanted_modes.issubset(guide_modes):
         errors.append("openapi_tool_modes")
 

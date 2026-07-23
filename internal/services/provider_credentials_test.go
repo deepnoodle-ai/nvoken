@@ -269,10 +269,10 @@ func TestProviderCredentialLifecycleEncryptsSecretsAndReturnsMetadataOnly(t *tes
 	if bytes.Contains(encoded, []byte("create-secret")) || bytes.Contains(encoded, []byte("api_key")) {
 		t.Fatalf("metadata disclosed secret shape: %s", encoded)
 	}
-	tenantRef := "tenant-a"
+	tenantKey := "tenant-a"
 	runtimeAuth := auth
 	runtimeAuth.EffectiveProfile = domain.CredentialProfileRuntime
-	runtimeAuth.TenantConstraint = &tenantRef
+	runtimeAuth.TenantConstraint = &tenantKey
 	for name, attempt := range map[string]func() error{
 		"get": func() error {
 			_, err := service.Get(context.Background(), runtimeAuth, created.ID)
@@ -403,9 +403,9 @@ func TestProviderCredentialAccountScopeRequiresOperator(t *testing.T) {
 	if !errors.As(err, &public) || public.Code != CodeForbidden {
 		t.Fatalf("Runtime Account create error = %v", err)
 	}
-	tenantRef := "tenant-a"
+	tenantKey := "tenant-a"
 	auth.EffectiveProfile = domain.CredentialProfileOperator
-	auth.TenantConstraint = &tenantRef
+	auth.TenantConstraint = &tenantKey
 	_, err = service.Create(context.Background(), auth, CreateProviderCredentialInput{
 		Provider: "openai",
 		Scope:    domain.ProviderCredentialScopeAccount,

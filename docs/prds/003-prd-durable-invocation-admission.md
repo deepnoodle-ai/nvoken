@@ -43,7 +43,7 @@ wiring, and concurrency proof.
 
 **Out:** Model execution; polling; claims, leases, fencing, heartbeats, and
 reaping; dispatch intent and Cloud Tasks; transcript list/recovery endpoints;
-SSE; cancellation; tools; structured output; budgets; rate-limit enforcement;
+SSE; cancellation; tools; structured output; limits; rate-limit enforcement;
 portable credential issuance or administration; multi-Account provisioning;
 SDK generation.
 
@@ -51,7 +51,7 @@ SDK generation.
 
 - **R1 — Authenticated installation context.** Runtime routes must require an
   `Authorization: Bearer` credential and receive an adapter-neutral auth context
-  containing the Account ID, an optional `tenant_ref` constraint, and permitted
+  containing the Account ID, an optional `tenant_key` constraint, and permitted
   runtime operations; Account identity must never come from request JSON. A
   narrow self-hosted adapter must map a configured secret to one default
   Account, optionally constrain one tenant, and serialize first-start bootstrap
@@ -63,13 +63,13 @@ SDK generation.
 
 - **R2 — Strict, bounded request contract.** The HTTP adapter must accept only
   the launch request shape already frozen in `openapi/runtime.yaml`: one
-  `agent_ref`, one body `idempotency_key`, one or more text input blocks, an
-  inline instructions-plus-model spec, optional `tenant_ref`, and at most one
+  `agent_key`, one body `idempotency_key`, one or more text input blocks, an
+  inline instructions-plus-model spec, optional `tenant_key`, and at most one
   Session selector. It must reject unknown or deferred fields, duplicate JSON
   member names, trailing values, blank required strings, invalid IDs, and
   invalid UTF-8 before writes. The encoded body must be capped at 1 MiB, input
-  at 64 blocks, and `agent_ref`, `tenant_ref`, `session_key`,
-  `idempotency_key`, `spec.model.provider`, and `spec.model.name` at 255 Unicode
+  at 64 blocks, and `agent_key`, `tenant_key`, `session_key`,
+  `idempotency_key`, `spec.model.provider`, and `spec.model.id` at 255 Unicode
   characters each. The build must add these limits to OpenAPI, document the body cap
   on the operation, and record the contract refinement in the decision log.
   Failures return `invalid_request` and write nothing.
@@ -79,7 +79,7 @@ SDK generation.
   selector kind and value, inline spec, and input after documented defaults.
   JSON object member order must not matter, array order must matter, and string
   values must not be silently trimmed or rewritten. Account, effective tenant
-  partition, Agent reference, and idempotency key define the lookup scope and
+  partition, Agent key, and idempotency key define the lookup scope and
   are not duplicated in the fingerprint. The v1 encoding must be documented
   with language-neutral vectors under `docs/design/`; together they are a
   compatibility contract across restarts and releases while the Invocation is
@@ -89,7 +89,7 @@ SDK generation.
   transaction, nvoken must resolve or conflict-safely create the Account-wide
   Agent anchor and the effective tenant partition. A credential constraint
   wins over request selection; an explicit mismatch returns `forbidden` before
-  resource lookup. Otherwise an explicit nonempty `tenant_ref` resolves or
+  resource lookup. Otherwise an explicit nonempty `tenant_key` resolves or
   creates its internal partition and omission uses the default partition. A
   `session_key` conflict-safely resolves or creates one Session; no selector
   creates a Session. A `session_id` must exist in the Account, belong to the
@@ -127,7 +127,7 @@ SDK generation.
   current status, and an accurate `deduplicated` flag, including replay after
   terminal settlement. `GET /v1/invocations/{id}` must return authoritative
   identity, current state, typed error, and timestamps. `GET /v1/sessions/{id}`
-  must return immutable identity, effective `tenant_ref`, optional Session key,
+  must return immutable identity, effective `tenant_key`, optional Session key,
   and the current nonterminal Invocation ID if present. Reads must enforce the
   same auth constraints and remain correct after restart. These minimum reads
   omit transcript content and lifecycle history.
@@ -158,7 +158,7 @@ SDK generation.
   them, and the pinned OpenAPI lint passes in `make check`.
 
 - [x] **A3 (R4):** End-to-end cases prove Account-wide Agent reuse across two
-  tenant references; automatic partition creation; default-partition use;
+  tenant keys; automatic partition creation; default-partition use;
   same-key Session isolation by tenant; no-selector creation; and by-ID lookup
   with omitted tenant. Credential mismatch returns `403` before lookup;
   cross-Account, cross-Agent, and incompatible IDs share one `404` envelope.

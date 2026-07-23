@@ -114,7 +114,7 @@ func providerCredentialFixture(id, status string, version int) string {
 		"id":                  id,
 		"provider":            "openai",
 		"scope":               "account",
-		"tenant_ref":          nil,
+		"tenant_key":          nil,
 		"status":              status,
 		"version":             version,
 		"version_id":          "pcvr_019b0a12-8d51-7f34-aed2-0e07c1bdb331",

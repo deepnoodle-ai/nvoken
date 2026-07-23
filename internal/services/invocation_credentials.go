@@ -120,7 +120,7 @@ func (s *RuntimeService) invocationProviderCredentialBinding(
 			}
 		}
 		keyID := encrypted.KeyID
-		expiresAt := invocation.WallClockDeadlineAt.Add(s.credentialCleanupGrace)
+		expiresAt := invocation.DeadlineAt.Add(s.credentialCleanupGrace)
 		binding.EncryptionKeyID = &keyID
 		binding.Nonce = encrypted.Nonce
 		binding.Ciphertext = encrypted.Ciphertext
@@ -139,8 +139,8 @@ func (s *RuntimeService) invocationProviderCredentialBinding(
 		binding.ProviderCredentialID = &credential.ID
 		binding.CredentialVersionID = &version.ID
 	case domain.ProviderCredentialSourceTenantBYOK:
-		if partition.TenantRef == nil {
-			return domain.InvocationProviderCredential{}, invalidRequest("tenant_byok requires a named tenant_ref partition.")
+		if partition.TenantKey == nil {
+			return domain.InvocationProviderCredential{}, invalidRequest("tenant_byok requires a named tenant_key partition.")
 		}
 		partitionID := partition.ID
 		credential, version, err := s.activeProviderCredentialVersion(

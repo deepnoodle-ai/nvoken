@@ -16,14 +16,14 @@
 The implemented Runtime and source TypeScript SDK worked across every scenario
 in this pass. I started the source daemon through the documented quickstart,
 ran the standard two-turn SDK proof, then built a separate TypeScript app that
-exercised ordinary chat, exact idempotent replay, client tools, structured
-output, tenant and Agent references, authoritative Session reads, pagination,
+exercised ordinary chat, exact idempotent replay, host tools, structured
+output, tenant and Agent keys, authoritative Session reads, pagination,
 incremental transcript cursors, and SSE. I found no Runtime correctness failure
 in those paths.
 
 At the tested revision, the remaining developer-experience gap was depth, not
 first-run viability. The TypeScript README made basic invoke/wait/text
-pleasant, but gave no TypeScript path for client tools, structured output,
+pleasant, but gave no TypeScript path for host tools, structured output,
 tenant partitioning, or Session recovery APIs. The HTTP Runtime guide contained
 the semantics, and the generated client contained most operations, but a
 TypeScript user had to combine both and inspect SDK types or source.
@@ -39,12 +39,12 @@ Every concrete SDK gap below was addressed in the same change as this report:
 
 | Finding | Improvement |
 | --- | --- |
-| Terminal-only wait hid client-tool work | `handle.wait({ until: "actionable" })` now returns on `waiting` or a terminal status; explicit status sets are also supported. |
-| Advanced TypeScript flows were undocumented | The SDK guide now covers typed client tools, structured output, identity scopes, Session ownership, pagination, transcript recovery, and SSE; the live showcase uses only the public facade. |
+| Terminal-only wait hid host-tool work | `handle.wait({ until: "actionable" })` now returns on `waiting` or a terminal status; explicit status sets are also supported. |
+| Advanced TypeScript flows were undocumented | The SDK guide now covers typed host tools, structured output, identity scopes, Session ownership, pagination, transcript recovery, and SSE; the live showcase uses only the public facade. |
 | `sessionKey` was absent from the facade | `listSessions({ sessionKey })` is supported, with exact `getSessionByKey(sessionKey, scope)` recovery. |
 | Collection and transcript traversal were asymmetric | `sessionPages`, `messagePages`, `getTranscriptPage`, and fixed-cut `drainTranscript` were added alongside `invocationPages`. |
 | Admission metadata was discarded | New Handles retain `agentId` and `deduplicated`; resumed Handles expose the recovered Agent ID and leave acknowledgement-only deduplication undefined. |
-| Schema-bearing values degraded to `any` | `defineClientTool`, `toolInput`, and `defineJsonSchema<T>` carry application types through tool dispatch and structured Invocation results. OpenAPI singleton constants now generate as literal enums in all SDKs. |
+| Schema-bearing values degraded to `any` | `defineHostTool`, `toolInput`, and `defineJsonSchema<T>` carry application types through tool dispatch and structured Invocation results. OpenAPI singleton constants now generate as literal enums in all SDKs. |
 
 The normal SDK gate compiles the showcase so future facade or documentation
 drift fails before merge. The live provider exercise remains opt-in because it
@@ -90,10 +90,10 @@ provider requests. It prints IDs and assertions but no credentials.
 | Pricing preflight | Passed | The exact OpenAI/model pair was `priced` under registry `v1.16.0`. |
 | Basic text result | Passed | `invoke()`, `wait()`, and `text()` returned the completed assistant response. |
 | Multi-turn chat | Passed | Turn two recalled `ORCHID-724` from turn one when invoked with the returned `sessionId`. |
-| Session resume without repeated tenant | Passed | An Account-wide Runtime credential could omit `tenantRef` when continuing by `sessionId`; the Session retained its original tenant. |
+| Session resume without repeated tenant | Passed | An Account-wide Runtime credential could omit `tenantKey` when continuing by `sessionId`; the Session retained its original tenant. |
 | Exact idempotent replay | Passed | Replaying the exact first request returned the same Invocation and Session IDs without another transcript append. |
 | Changed idempotent replay | Passed | Changing only the input under the same scoped key returned `idempotency_conflict`. |
-| Client tool | Passed | `lookup_order` parked the Invocation in `waiting` with one stable pending ToolCall and no active owner. |
+| Host tool | Passed | `lookup_order` parked the Invocation in `waiting` with one stable pending ToolCall and no active owner. |
 | Waiting Session visibility | Passed | Both Invocation and Session reads exposed the same ToolCall ID, input, and waiting state. |
 | Busy Session rule | Passed | A second turn on the waiting Session returned `session_invocation_active` and appended no input. |
 | Tool result acceptance | Passed | The first result was accepted, an equal retry was deduplicated, and a changed retry returned `tool_result_conflict`. |
@@ -101,9 +101,9 @@ provider requests. It prints IDs and assertions but no credentials.
 | Later tool-aware turn | Passed | A later Invocation in the Session recalled the tool result and answered `tomorrow`. |
 | Structured output | Passed | The terminal object was `{"category":"billing","needs_human":true,"priority":"high"}` with ToolCall ID and schema-digest provenance. |
 | Composed result | Passed | Structured output and ordinary assistant text were both available on the completed Invocation/result. |
-| Agent reference identity | Passed | One `agentRef` resolved to the same `agentId` in two tenants. A different `agentRef` produced a different Agent. |
-| Tenant partitioning | Passed | The same Agent reference, Session key, and idempotency key produced independent Sessions and Invocations in different tenants. |
-| Agent partitioning | Passed | The same tenant, Session key, and idempotency key produced independent work under a different Agent reference. |
+| Agent key identity | Passed | One `agentKey` resolved to the same `agentId` in two tenants. A different `agentKey` produced a different Agent. |
+| Tenant partitioning | Passed | The same Agent key, Session key, and idempotency key produced independent Sessions and Invocations in different tenants. |
+| Agent partitioning | Passed | The same tenant, Session key, and idempotency key produced independent work under a different Agent key. |
 | Scope mismatch | Passed | Using the wrong Agent or explicit tenant with an existing Session ID returned nondisclosing `not_found`. |
 | Session reads and filters | Passed | Get, tenant/Agent list filtering, default-tenant filtering, and exact raw lookup agreed with invoke results. |
 | Message pagination | Passed | One-message pages produced the canonical sequence `1,2,3,4` and roles `user,assistant,user,assistant`. |
@@ -111,27 +111,27 @@ provider requests. It prints IDs and assertions but no credentials.
 | Incremental transcript | Passed | Resuming from the cursor after turn one returned only turn-two messages and lifecycle changes. |
 | Session SSE | Passed | The facade reduced durable snapshot frames and ended only after authoritative terminal reconciliation. |
 
-## Agent and tenant reference behavior
+## Agent and tenant key behavior
 
 The behavior is coherent once the identity tuple is understood:
 
 ```text
-Agent identity:    Account + agent_ref
+Agent identity:    Account + agent_key
 Session identity:  Account + tenant partition + Agent + session_key
-Idempotency scope: Account + tenant partition + agent_ref + idempotency_key
+Idempotency scope: Account + tenant partition + agent_key + idempotency_key
 ```
 
 Consequences confirmed by the run:
 
-- `agent_ref` is not tenant-local. The same reference maps to one Account-wide
+- `agent_key` is not tenant-local. The same reference maps to one Account-wide
   Agent anchor across tenant partitions.
-- `tenant_ref` partitions Sessions and idempotency. Reusing a Session key and
+- `tenant_key` partitions Sessions and idempotency. Reusing a Session key and
   idempotency key in another tenant does not collide.
-- changing `agent_ref` also isolates Session and idempotency scope, even inside
+- changing `agent_key` also isolates Session and idempotency scope, even inside
   one tenant.
 - a host with Account-wide authority can continue a known Session ID without
-  resending its tenant reference.
-- an explicit incompatible tenant or Agent reference does not disclose that
+  resending its tenant key.
+- an explicit incompatible tenant or Agent key does not disclose that
   the Session exists.
 
 This is a good multi-tenant contract. It needs one TypeScript-oriented
@@ -164,7 +164,7 @@ a handwritten loop. The improvements above close those gaps.
 ### P1 (addressed): document advanced TypeScript workflows
 
 The TypeScript README has a strong minimal application and result-read section,
-but contains no `Tool`, `outputSchema`, `submitToolResults`, `tenantRef`,
+but contains no `Tool`, `outputSchema`, `submitToolResults`, `tenantKey`,
 `listSessions`, transcript, or Session-pagination example. The Runtime guide
 explains most of these through JSON and curl. A TypeScript user has to translate
 snake_case wire fields to facade names and discover which operations are
@@ -173,7 +173,7 @@ wrapped versus raw.
 The resulting task-oriented TypeScript guide covers:
 
 1. invoke and inspect `waiting`;
-2. dispatch pending client ToolCalls and replay their results;
+2. dispatch pending host ToolCalls and replay their results;
 3. request and read typed structured output;
 4. resolve/list Sessions by tenant, Agent, and host key; and
 5. recover by message pages, transcript cursor, and SSE.
@@ -184,13 +184,13 @@ gate.
 ### P1 (addressed): make `waiting` actionable in the facade
 
 `Handle.wait()` waits only for `completed`, `failed`, or `cancelled`.
-`waiting` is intentionally nonterminal, so calling `wait()` on a client-tool
+`waiting` is intentionally nonterminal, so calling `wait()` on a host-tool
 Invocation blocks while the application action needed to make progress is
 hidden behind `refresh()`. The current TypeScript README does not warn about
 this.
 
 The showcase needed a custom polling loop that stopped on either `waiting` or
-a terminal status. This is the most likely client-tool onboarding trap.
+a terminal status. This is the most likely host-tool onboarding trap.
 
 The facade now provides:
 
@@ -279,9 +279,9 @@ Keep the basic packed-package onboarding gate short. Add a separate opt-in live
 integration profile based on the showcase that proves:
 
 - one multi-turn Session;
-- one parked client ToolCall plus equal and changed result replay;
+- one parked host ToolCall plus equal and changed result replay;
 - one structured output result with provenance;
-- same/different Agent and tenant reference scoping;
+- same/different Agent and tenant key scoping;
 - busy-Session rejection;
 - message and Invocation pagination;
 - incremental transcript recovery; and

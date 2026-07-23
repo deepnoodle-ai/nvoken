@@ -3,7 +3,7 @@
 **Status:** Implemented
 **Sequence:** 014
 **Depends on:** `004-prd-engine-claims-and-fencing.md`,
-`008-prd-invocation-controls-and-budgets.md`,
+`008-prd-invocation-controls-and-limits.md`,
 `010-prd-cloud-tasks-invocation-execution.md`,
 `012-prd-durable-toolcall-and-checkpoint-model.md`, and
 `013-prd-structured-output.md`
@@ -13,7 +13,7 @@
 If an nvoken engine disappears, another engine should continue the same
 Invocation from its last saved model or tool boundary. Saved work is reused,
 while work that finished outside Postgres but was never checkpointed may run
-again. This does not add a public retry button, client tools, or arbitrary
+again. This does not add a public retry button, host tools, or arbitrary
 mid-request snapshots.
 
 ## Why
@@ -46,7 +46,7 @@ ToolCall reuse; structured-output recovery; existing-dispatch redelivery;
 crash-boundary tests and operational logs.
 
 **Out:** public retry or resume endpoints; resuming terminal Invocations;
-callback/client tools; arbitrary provider-process snapshots; cooperative
+callback/host tools; arbitrary provider-process snapshots; cooperative
 checkpoint-and-chain at the intentional execution-segment ceiling; exactly-once
 model requests or provider charges; external-side-effect reconciliation; replay
 after retention or corrupt evidence.
@@ -103,10 +103,10 @@ after retention or corrupt evidence.
   replacement Invocation lease without changing the ToolCall ID or immutable
   request. A previously accepted result must be reused without running the
   builtin again. The deterministic test builtin and reserved structured-output
-  builtin must both satisfy this path; callback and client modes remain
+  builtin must both satisfy this path; callback and host modes remain
   non-runnable.
 
-- **R6 — Receipts and budgets span owners.** Recovery must initialize iteration
+- **R6 — Receipts and limits span owners.** Recovery must initialize iteration
   and aggregate usage from accepted receipts, continue at the next iteration,
   and apply output-token, cost, iteration, wall-clock, active-execution, and
   segment checks to cumulative evidence before more work. Receipt uniqueness

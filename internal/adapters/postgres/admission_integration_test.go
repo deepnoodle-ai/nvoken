@@ -94,27 +94,33 @@ func TestResolveTenantPartitionConvergesWithinExplicitConflictScope(t *testing.T
 	pool, _, store, auth := newRuntimeFixture(t)
 	now := time.Now().UTC()
 	defaultCandidate := domain.TenantPartition{
-		ID: testID(t, domain.PrefixTenantPartition), AccountID: auth.AccountID, CreatedAt: now,
+		ID:        testID(t, domain.PrefixTenantPartition),
+		AccountID: auth.AccountID,
+		CreatedAt: now,
 	}
 	resolvedDefault, err := store.ResolveTenantPartition(context.Background(), defaultCandidate)
 	if err != nil {
 		t.Fatalf("resolve default partition: %v", err)
 	}
-	if resolvedDefault.ID == defaultCandidate.ID || resolvedDefault.TenantRef != nil {
+	if resolvedDefault.ID == defaultCandidate.ID || resolvedDefault.TenantKey != nil {
 		t.Fatalf("resolved default partition = %#v", resolvedDefault)
 	}
 
-	tenantRef := "tenant-a"
+	tenantKey := "tenant-a"
 	first, err := store.ResolveTenantPartition(context.Background(), domain.TenantPartition{
-		ID: testID(t, domain.PrefixTenantPartition), AccountID: auth.AccountID,
-		TenantRef: &tenantRef, CreatedAt: now,
+		ID:        testID(t, domain.PrefixTenantPartition),
+		AccountID: auth.AccountID,
+		TenantKey: &tenantKey,
+		CreatedAt: now,
 	})
 	if err != nil {
 		t.Fatalf("resolve tenant partition: %v", err)
 	}
 	second, err := store.ResolveTenantPartition(context.Background(), domain.TenantPartition{
-		ID: testID(t, domain.PrefixTenantPartition), AccountID: auth.AccountID,
-		TenantRef: &tenantRef, CreatedAt: now,
+		ID:        testID(t, domain.PrefixTenantPartition),
+		AccountID: auth.AccountID,
+		TenantKey: &tenantKey,
+		CreatedAt: now,
 	})
 	if err != nil || second.ID != first.ID {
 		t.Fatalf("second tenant resolution = %#v, error = %v; first = %#v", second, err, first)
@@ -177,7 +183,7 @@ func TestRuntimeAdmissionRetryReadsAndTenantIsolation(t *testing.T) {
 	}
 
 	wrongAgent := runtimeInput()
-	wrongAgent.AgentRef = "other-agent"
+	wrongAgent.AgentKey = "other-agent"
 	wrongAgent.SessionKey = nil
 	wrongAgent.SessionID = &first.SessionID
 	wrongAgent.IdempotencyKey = "wrong-agent"
@@ -188,7 +194,7 @@ func TestRuntimeAdmissionRetryReadsAndTenantIsolation(t *testing.T) {
 	wrongTenant := runtimeInput()
 	wrongTenant.SessionKey = nil
 	wrongTenant.SessionID = &first.SessionID
-	wrongTenant.TenantRef = pointerString("other-tenant")
+	wrongTenant.TenantKey = pointerString("other-tenant")
 	wrongTenant.IdempotencyKey = "wrong-tenant"
 	_, err = service.Admit(ctx, auth, wrongTenant)
 	assertPublicCode(t, err, services.CodeNotFound)
@@ -213,7 +219,7 @@ func TestRuntimeAdmissionRetryReadsAndTenantIsolation(t *testing.T) {
 	}
 
 	tenantInput := runtimeInput()
-	tenantInput.TenantRef = pointerString("tenant-a")
+	tenantInput.TenantKey = pointerString("tenant-a")
 	tenantInput.IdempotencyKey = input.IdempotencyKey
 	tenantInput.SessionKey = pointerString("ticket-1")
 	tenantAck, err := service.Admit(ctx, auth, tenantInput)
@@ -234,11 +240,11 @@ func TestRuntimeAdmissionRetryReadsAndTenantIsolation(t *testing.T) {
 	constrained := runtimeAuth(auth.AccountID)
 	constrained.TenantConstraint = pointerString("tenant-a")
 	mismatch := runtimeInput()
-	mismatch.TenantRef = pointerString("tenant-b")
+	mismatch.TenantKey = pointerString("tenant-b")
 	_, err = service.Admit(ctx, constrained, mismatch)
 	assertPublicCode(t, err, services.CodeForbidden)
 	var tenantB int
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM tenant_partitions WHERE tenant_ref = 'tenant-b'").Scan(&tenantB); err != nil || tenantB != 0 {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM tenant_partitions WHERE tenant_key = 'tenant-b'").Scan(&tenantB); err != nil || tenantB != 0 {
 		t.Fatalf("tenant-b count = %d, error = %v", tenantB, err)
 	}
 
@@ -398,7 +404,7 @@ func TestRuntimeAdmissionRollsBackEveryWriteStage(t *testing.T) {
 			faults := &faultingAdmissionStore{Store: store, failAt: failAt}
 			service := services.NewRuntimeService(faults, NewTransactionManager(pool), clock, identity.NewUUIDv7Generator(clock))
 			input := runtimeInput()
-			input.TenantRef = pointerString("tenant-a")
+			input.TenantKey = pointerString("tenant-a")
 			_, err := service.Admit(context.Background(), auth, input)
 			if err == nil {
 				t.Fatal("faulted admission succeeded")
@@ -799,10 +805,16 @@ func runtimeAuth(accountID string) domain.RuntimeAuthContext {
 
 func runtimeInput() services.CreateInvocationInput {
 	return services.CreateInvocationInput{
-		AgentRef: "support", SessionKey: pointerString("ticket-1"), IdempotencyKey: "request-1",
-		Input: services.InvocationInput{Content: []services.TextInputBlock{{Type: "text", Text: "hello"}}},
+		AgentKey:       "support",
+		SessionKey:     pointerString("ticket-1"),
+		IdempotencyKey: "request-1",
+		Input:          services.InvocationInput{Content: []services.TextInputBlock{{Type: "text", Text: "hello"}}},
 		Spec: services.InlineExecutionSpec{
-			Instructions: "help", Model: services.ModelSelection{Provider: "anthropic", Name: "test-model"},
+			Instructions: "help",
+			Model: services.ModelSelection{
+				Provider: "anthropic",
+				ID:       "test-model",
+			},
 		},
 	}
 }

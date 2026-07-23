@@ -49,13 +49,13 @@ type RuntimeService interface {
 	GetSessionTranscriptStreamState(context.Context, domain.RuntimeAuthContext, string) (services.TranscriptStreamState, error)
 }
 
-type clientToolRuntimeService interface {
-	SubmitClientToolResults(
+type hostToolRuntimeService interface {
+	SubmitHostToolResults(
 		context.Context,
 		domain.RuntimeAuthContext,
 		string,
-		services.SubmitClientToolResultsInput,
-	) (services.SubmitClientToolResultsResult, error)
+		services.SubmitHostToolResultsInput,
+	) (services.SubmitHostToolResultsResult, error)
 }
 
 type cancellationRuntimeService interface {
@@ -203,8 +203,9 @@ func newHandler(cfg handlerConfig) http.Handler {
 	mux.HandleFunc("/v1/invocations", h.invocations)
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/result", h.requireMethod(http.MethodGet, h.getInvocationResult))
+	mux.HandleFunc("/v1/invocations/{invocation_id}/stream", h.requireMethod(http.MethodGet, h.streamInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/cancel", h.requireMethod(http.MethodPost, h.cancelInvocation))
-	mux.HandleFunc("/v1/invocations/{invocation_id}/tool-results", h.requireMethod(http.MethodPost, h.submitClientToolResults))
+	mux.HandleFunc("/v1/invocations/{invocation_id}/tool-results", h.requireMethod(http.MethodPost, h.submitHostToolResults))
 	mux.HandleFunc("/v1/model-pricing-capabilities", h.requireMethod(http.MethodGet, h.getModelPricingCapability))
 	mux.HandleFunc("/v1/sessions", h.requireMethod(http.MethodGet, h.listSessions))
 	mux.HandleFunc("/v1/sessions/{session_id}/messages", h.requireMethod(http.MethodGet, h.listSessionMessages))
@@ -227,7 +228,8 @@ func (h *handler) invocations(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
-			Code: "invalid_request", Message: "The request method is not allowed.",
+			Code:      "invalid_request",
+			Message:   "The request method is not allowed.",
 			RequestID: requestIDFromContext(r.Context()),
 		})
 	}
@@ -238,7 +240,8 @@ func (h *handler) requireMethod(method string, next http.HandlerFunc) http.Handl
 		if r.Method != method {
 			w.Header().Set("Allow", method)
 			writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
-				Code: "invalid_request", Message: "The request method is not allowed.",
+				Code:      "invalid_request",
+				Message:   "The request method is not allowed.",
 				RequestID: requestIDFromContext(r.Context()),
 			})
 			return
@@ -249,7 +252,8 @@ func (h *handler) requireMethod(method string, next http.HandlerFunc) http.Handl
 
 func (h *handler) notFound(w http.ResponseWriter, r *http.Request) {
 	h.writeError(w, requestIDFromContext(r.Context()), &services.PublicError{
-		Code: services.CodeNotFound, Message: "The requested resource was not found.",
+		Code:    services.CodeNotFound,
+		Message: "The requested resource was not found.",
 	})
 }
 
@@ -282,13 +286,16 @@ func (h *handler) getModelPricingCapability(w http.ResponseWriter, r *http.Reque
 	}
 	if h.modelPricing == nil {
 		h.writeError(w, requestID, &services.PublicError{
-			Code: services.CodeUnavailable, Message: "The service is temporarily unavailable.",
+			Code:    services.CodeUnavailable,
+			Message: "The service is temporarily unavailable.",
 		})
 		return
 	}
 	capability := h.modelPricing.ResolveModelPricing(string(provider), model)
 	writeJSON(w, http.StatusOK, modelPricingCapabilityResponse{
-		Provider: provider, Model: model, Status: capability.Status,
+		Provider:        provider,
+		Model:           model,
+		Status:          capability.Status,
 		RegistryVersion: capability.RegistryVersion,
 	})
 }
@@ -302,7 +309,8 @@ func (h *handler) providerCredentialsCollection(w http.ResponseWriter, r *http.R
 	default:
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
-			Code: "invalid_request", Message: "The request method is not allowed.",
+			Code:      "invalid_request",
+			Message:   "The request method is not allowed.",
 			RequestID: requestIDFromContext(r.Context()),
 		})
 	}
@@ -317,7 +325,8 @@ func (h *handler) providerCredentialResource(w http.ResponseWriter, r *http.Requ
 	default:
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodDelete)
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{
-			Code: "invalid_request", Message: "The request method is not allowed.",
+			Code:      "invalid_request",
+			Message:   "The request method is not allowed.",
 			RequestID: requestIDFromContext(r.Context()),
 		})
 	}
@@ -354,14 +363,14 @@ func (h *handler) listProviderCredentials(w http.ResponseWriter, r *http.Request
 		h.writeError(w, requestID, err)
 		return
 	}
-	query, err := strictQuery(r, "provider", "scope", "status", "tenant_ref", "limit")
+	query, err := strictQuery(r, "provider", "scope", "status", "tenant_key", "limit")
 	if err != nil {
 		h.writeError(w, requestID, invalidQuery(err))
 		return
 	}
 	input := services.ProviderCredentialListInput{
 		Provider:  optionalQueryString(query, "provider"),
-		TenantRef: optionalQueryString(query, "tenant_ref"),
+		TenantKey: optionalQueryString(query, "tenant_key"),
 	}
 	if value := optionalQueryString(query, "scope"); value != nil {
 		scope := domain.ProviderCredentialScope(*value)
@@ -486,11 +495,30 @@ func (h *handler) createInvocation(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, requestID, err)
 		return
 	}
+	if acceptsEventStream(r) {
+		h.streamAdmittedInvocation(w, r, requestID, auth, acknowledgement)
+		return
+	}
 	writeJSON(w, http.StatusAccepted, invocationAcknowledgementResponse{
-		AgentID: acknowledgement.AgentID, SessionID: acknowledgement.SessionID,
-		InvocationID: acknowledgement.InvocationID, Status: acknowledgement.Status,
+		AgentID:      acknowledgement.AgentID,
+		SessionID:    acknowledgement.SessionID,
+		InvocationID: acknowledgement.InvocationID,
+		Status:       acknowledgement.Status,
 		Deduplicated: acknowledgement.Deduplicated,
+		DeadlineAt:   acknowledgement.DeadlineAt,
 	})
+}
+
+func acceptsEventStream(r *http.Request) bool {
+	for _, value := range r.Header.Values("Accept") {
+		for item := range strings.SplitSeq(value, ",") {
+			mediaType := strings.TrimSpace(strings.SplitN(item, ";", 2)[0])
+			if strings.EqualFold(mediaType, "text/event-stream") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (h *handler) getInvocation(w http.ResponseWriter, r *http.Request) {
@@ -560,14 +588,14 @@ func (h *handler) cancelInvocation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, invocationResponseFromService(invocation))
 }
 
-func (h *handler) submitClientToolResults(w http.ResponseWriter, r *http.Request) {
+func (h *handler) submitHostToolResults(w http.ResponseWriter, r *http.Request) {
 	requestID := requestIDFromContext(r.Context())
 	auth, err := h.authenticate(r)
 	if err != nil {
 		h.writeError(w, requestID, err)
 		return
 	}
-	var input services.SubmitClientToolResultsInput
+	var input services.SubmitHostToolResultsInput
 	if err := decodeBoundedStrictJSON(w, r, &input, services.MaxInvocationBodyBytes); err != nil {
 		h.writeError(w, requestID, &services.PublicError{
 			Code:    services.CodeInvalidRequest,
@@ -575,7 +603,7 @@ func (h *handler) submitClientToolResults(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
-	runtime, ok := h.runtime.(clientToolRuntimeService)
+	runtime, ok := h.runtime.(hostToolRuntimeService)
 	if !ok {
 		h.writeError(w, requestID, &services.PublicError{
 			Code:    services.CodeUnavailable,
@@ -583,7 +611,7 @@ func (h *handler) submitClientToolResults(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
-	result, err := runtime.SubmitClientToolResults(
+	result, err := runtime.SubmitHostToolResults(
 		r.Context(),
 		auth,
 		r.PathValue("invocation_id"),
@@ -593,7 +621,7 @@ func (h *handler) submitClientToolResults(w http.ResponseWriter, r *http.Request
 		h.writeError(w, requestID, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, clientToolResultsResponseFromService(result))
+	writeJSON(w, http.StatusAccepted, hostToolResultsResponseFromService(result))
 }
 
 func (h *handler) listInvocations(w http.ResponseWriter, r *http.Request) {
@@ -603,7 +631,7 @@ func (h *handler) listInvocations(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, requestID, err)
 		return
 	}
-	query, err := strictQuery(r, "tenant_ref", "default_tenant", "session_id", "agent_id", "status", "cursor", "limit")
+	query, err := strictQuery(r, "tenant_key", "default_tenant", "session_id", "agent_id", "status", "cursor", "limit")
 	if err != nil {
 		h.writeError(w, requestID, invalidQuery(err))
 		return
@@ -655,7 +683,7 @@ func (h *handler) listSessions(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, requestID, err)
 		return
 	}
-	query, err := strictQuery(r, "tenant_ref", "default_tenant", "agent_id", "session_key", "cursor", "limit")
+	query, err := strictQuery(r, "tenant_key", "default_tenant", "agent_id", "session_key", "cursor", "limit")
 	if err != nil {
 		h.writeError(w, requestID, invalidQuery(err))
 		return
@@ -703,7 +731,8 @@ func (h *handler) listSessionMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, err := h.runtime.ListSessionMessages(r.Context(), auth, r.PathValue("session_id"), services.MessageListInput{
-		Cursor: query.Get("cursor"), Limit: limit,
+		Cursor: query.Get("cursor"),
+		Limit:  limit,
 	})
 	if err != nil {
 		h.writeError(w, requestID, err)
@@ -738,7 +767,9 @@ func (h *handler) getSessionTranscript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snapshot, err := h.runtime.GetSessionTranscript(r.Context(), auth, r.PathValue("session_id"), services.TranscriptInput{
-		Cursor: query.Get("cursor"), PageToken: query.Get("page_token"), Limit: limit,
+		Cursor:    query.Get("cursor"),
+		PageToken: query.Get("page_token"),
+		Limit:     limit,
 	})
 	if err != nil {
 		h.writeError(w, requestID, err)
@@ -753,8 +784,11 @@ func (h *handler) getSessionTranscript(w http.ResponseWriter, r *http.Request) {
 		changes[i] = invocationChangeResponseFromDomain(item)
 	}
 	writeJSON(w, http.StatusOK, transcriptSnapshotResponse{
-		Messages: messages, InvocationChanges: changes, HasMore: snapshot.HasMore,
-		ResumeCursor: snapshot.ResumeCursor, NextPageToken: snapshot.NextPageToken,
+		Messages:          messages,
+		InvocationChanges: changes,
+		HasMore:           snapshot.HasMore,
+		ResumeCursor:      snapshot.ResumeCursor,
+		NextPageToken:     snapshot.NextPageToken,
 	})
 }
 
@@ -849,6 +883,7 @@ type invocationAcknowledgementResponse struct {
 	InvocationID string                  `json:"invocation_id"`
 	Status       domain.InvocationStatus `json:"status"`
 	Deduplicated bool                    `json:"deduplicated"`
+	DeadlineAt   time.Time               `json:"deadline_at"`
 }
 
 type modelPricingCapabilityResponse struct {
@@ -859,22 +894,22 @@ type modelPricingCapabilityResponse struct {
 }
 
 type invocationResponse struct {
-	ID                  string                          `json:"id"`
-	AgentID             string                          `json:"agent_id"`
-	SessionID           string                          `json:"session_id"`
-	Status              domain.InvocationStatus         `json:"status"`
-	Error               any                             `json:"error"`
-	Usage               any                             `json:"usage"`
-	Provenance          any                             `json:"provenance"`
-	Output              any                             `json:"structured_output"`
-	OutputProvenance    any                             `json:"structured_output_provenance"`
-	Budgets             services.InvocationBudgetRead   `json:"budgets"`
-	ActiveExecutionMS   int64                           `json:"active_execution_ms"`
-	WallClockDeadlineAt time.Time                       `json:"wall_clock_deadline_at"`
-	CreatedAt           time.Time                       `json:"created_at"`
-	UpdatedAt           time.Time                       `json:"updated_at"`
-	CompletedAt         *time.Time                      `json:"completed_at"`
-	PendingToolCalls    []pendingClientToolCallResponse `json:"pending_tool_calls,omitempty"`
+	ID                string                        `json:"id"`
+	AgentID           string                        `json:"agent_id"`
+	SessionID         string                        `json:"session_id"`
+	Status            domain.InvocationStatus       `json:"status"`
+	Error             any                           `json:"error"`
+	Usage             any                           `json:"usage"`
+	Provenance        any                           `json:"provenance"`
+	Output            any                           `json:"structured_output"`
+	OutputProvenance  any                           `json:"structured_output_provenance"`
+	Limits            services.InvocationLimitRead  `json:"limits"`
+	ActiveExecutionMS int64                         `json:"active_execution_ms"`
+	DeadlineAt        time.Time                     `json:"deadline_at"`
+	CreatedAt         time.Time                     `json:"created_at"`
+	UpdatedAt         time.Time                     `json:"updated_at"`
+	EndedAt           *time.Time                    `json:"ended_at"`
+	PendingToolCalls  []pendingHostToolCallResponse `json:"pending_tool_calls,omitempty"`
 }
 
 type invocationListResponse struct {
@@ -890,36 +925,36 @@ type invocationResultResponse struct {
 }
 
 type sessionResponse struct {
-	ID                     string                          `json:"id"`
-	AgentID                string                          `json:"agent_id"`
-	TenantRef              *string                         `json:"tenant_ref"`
-	SessionKey             *string                         `json:"session_key"`
-	ActiveInvocationID     *string                         `json:"active_invocation_id"`
-	ActiveInvocationStatus *domain.InvocationStatus        `json:"active_invocation_status"`
-	CreatedAt              time.Time                       `json:"created_at"`
-	UpdatedAt              time.Time                       `json:"updated_at"`
-	PendingToolCalls       []pendingClientToolCallResponse `json:"pending_tool_calls,omitempty"`
+	ID                     string                        `json:"id"`
+	AgentID                string                        `json:"agent_id"`
+	TenantKey              *string                       `json:"tenant_key"`
+	SessionKey             *string                       `json:"session_key"`
+	ActiveInvocationID     *string                       `json:"active_invocation_id"`
+	ActiveInvocationStatus *domain.InvocationStatus      `json:"active_invocation_status"`
+	CreatedAt              time.Time                     `json:"created_at"`
+	UpdatedAt              time.Time                     `json:"updated_at"`
+	PendingToolCalls       []pendingHostToolCallResponse `json:"pending_tool_calls,omitempty"`
 }
 
-type pendingClientToolCallResponse struct {
+type pendingHostToolCallResponse struct {
 	ID         string          `json:"id"`
 	Name       string          `json:"name"`
 	Input      json.RawMessage `json:"input"`
 	DeadlineAt time.Time       `json:"deadline_at"`
 }
 
-type clientToolResultAcceptanceResponse struct {
+type hostToolResultAcceptanceResponse struct {
 	ToolCallID   string                `json:"tool_call_id"`
 	Status       domain.ToolCallStatus `json:"status"`
 	Deduplicated bool                  `json:"deduplicated"`
 }
 
-type clientToolResultsResponse struct {
-	InvocationID     string                               `json:"invocation_id"`
-	SessionID        string                               `json:"session_id"`
-	Status           domain.InvocationStatus              `json:"status"`
-	Results          []clientToolResultAcceptanceResponse `json:"results"`
-	PendingToolCalls []pendingClientToolCallResponse      `json:"pending_tool_calls"`
+type hostToolResultsResponse struct {
+	InvocationID     string                             `json:"invocation_id"`
+	SessionID        string                             `json:"session_id"`
+	Status           domain.InvocationStatus            `json:"status"`
+	Results          []hostToolResultAcceptanceResponse `json:"results"`
+	PendingToolCalls []pendingHostToolCallResponse      `json:"pending_tool_calls"`
 }
 
 type sessionListResponse struct {
@@ -966,24 +1001,57 @@ type transcriptSnapshotResponse struct {
 	NextPageToken     *string                    `json:"next_page_token"`
 }
 
+type transcriptUpdateResponse struct {
+	Type              string                     `json:"type"`
+	SessionID         string                     `json:"session_id"`
+	Messages          []sessionMessageResponse   `json:"messages"`
+	InvocationChanges []invocationChangeResponse `json:"invocation_changes"`
+	ResumeCursor      string                     `json:"resume_cursor"`
+}
+
+type invocationAcceptedEventResponse struct {
+	Type         string                  `json:"type"`
+	AgentID      string                  `json:"agent_id"`
+	SessionID    string                  `json:"session_id"`
+	InvocationID string                  `json:"invocation_id"`
+	Status       domain.InvocationStatus `json:"status"`
+	Deduplicated bool                    `json:"deduplicated"`
+	DeadlineAt   time.Time               `json:"deadline_at"`
+}
+
+type invocationUpdateEventResponse struct {
+	Type         string                   `json:"type"`
+	SessionID    string                   `json:"session_id"`
+	InvocationID string                   `json:"invocation_id"`
+	Invocation   invocationResponse       `json:"invocation"`
+	NewMessages  []sessionMessageResponse `json:"new_messages"`
+}
+
+type invocationResultEventResponse struct {
+	Type         string                   `json:"type"`
+	SessionID    string                   `json:"session_id"`
+	InvocationID string                   `json:"invocation_id"`
+	Result       invocationResultResponse `json:"result"`
+}
+
 func invocationResponseFromService(invocation services.InvocationRead) invocationResponse {
 	return invocationResponse{
-		ID:                  invocation.ID,
-		AgentID:             invocation.AgentID,
-		SessionID:           invocation.SessionID,
-		Status:              invocation.Status,
-		Error:               rawJSONOrNil(invocation.Error),
-		Usage:               rawJSONOrNil(invocation.Usage),
-		Provenance:          rawJSONOrNil(invocation.Provenance),
-		Output:              rawJSONOrNil(invocation.Output),
-		OutputProvenance:    rawJSONOrNil(invocation.OutputProvenance),
-		Budgets:             invocation.Budgets,
-		ActiveExecutionMS:   invocation.ActiveExecutionMS,
-		WallClockDeadlineAt: invocation.WallClockDeadlineAt,
-		CreatedAt:           invocation.CreatedAt,
-		UpdatedAt:           invocation.UpdatedAt,
-		CompletedAt:         invocation.CompletedAt,
-		PendingToolCalls:    pendingClientToolCallResponses(invocation.PendingToolCalls),
+		ID:                invocation.ID,
+		AgentID:           invocation.AgentID,
+		SessionID:         invocation.SessionID,
+		Status:            invocation.Status,
+		Error:             rawJSONOrNil(invocation.Error),
+		Usage:             rawJSONOrNil(invocation.Usage),
+		Provenance:        rawJSONOrNil(invocation.Provenance),
+		Output:            rawJSONOrNil(invocation.Output),
+		OutputProvenance:  rawJSONOrNil(invocation.OutputProvenance),
+		Limits:            invocation.Limits,
+		ActiveExecutionMS: invocation.ActiveExecutionMS,
+		DeadlineAt:        invocation.DeadlineAt,
+		CreatedAt:         invocation.CreatedAt,
+		UpdatedAt:         invocation.UpdatedAt,
+		EndedAt:           invocation.EndedAt,
+		PendingToolCalls:  pendingHostToolCallResponses(invocation.PendingToolCalls),
 	}
 }
 
@@ -1003,20 +1071,20 @@ func sessionResponseFromService(session services.SessionRead) sessionResponse {
 	return sessionResponse{
 		ID:                     session.ID,
 		AgentID:                session.AgentID,
-		TenantRef:              session.TenantRef,
+		TenantKey:              session.TenantKey,
 		SessionKey:             session.SessionKey,
 		ActiveInvocationID:     session.ActiveInvocationID,
 		ActiveInvocationStatus: session.ActiveInvocationStatus,
-		PendingToolCalls:       pendingClientToolCallResponses(session.PendingToolCalls),
+		PendingToolCalls:       pendingHostToolCallResponses(session.PendingToolCalls),
 		CreatedAt:              session.CreatedAt,
 		UpdatedAt:              session.UpdatedAt,
 	}
 }
 
-func pendingClientToolCallResponses(calls []services.PendingClientToolCall) []pendingClientToolCallResponse {
-	responses := make([]pendingClientToolCallResponse, len(calls))
+func pendingHostToolCallResponses(calls []services.PendingHostToolCall) []pendingHostToolCallResponse {
+	responses := make([]pendingHostToolCallResponse, len(calls))
 	for index, call := range calls {
-		responses[index] = pendingClientToolCallResponse{
+		responses[index] = pendingHostToolCallResponse{
 			ID:         call.ID,
 			Name:       call.Name,
 			Input:      call.Input,
@@ -1026,29 +1094,34 @@ func pendingClientToolCallResponses(calls []services.PendingClientToolCall) []pe
 	return responses
 }
 
-func clientToolResultsResponseFromService(result services.SubmitClientToolResultsResult) clientToolResultsResponse {
-	responses := make([]clientToolResultAcceptanceResponse, len(result.Results))
+func hostToolResultsResponseFromService(result services.SubmitHostToolResultsResult) hostToolResultsResponse {
+	responses := make([]hostToolResultAcceptanceResponse, len(result.Results))
 	for index, accepted := range result.Results {
-		responses[index] = clientToolResultAcceptanceResponse{
+		responses[index] = hostToolResultAcceptanceResponse{
 			ToolCallID:   accepted.ToolCallID,
 			Status:       accepted.Status,
 			Deduplicated: accepted.Deduplicated,
 		}
 	}
-	return clientToolResultsResponse{
+	return hostToolResultsResponse{
 		InvocationID:     result.InvocationID,
 		SessionID:        result.SessionID,
 		Status:           result.Status,
 		Results:          responses,
-		PendingToolCalls: pendingClientToolCallResponses(result.PendingToolCalls),
+		PendingToolCalls: pendingHostToolCallResponses(result.PendingToolCalls),
 	}
 }
 
 func sessionMessageResponseFromDomain(message domain.SessionMessage) sessionMessageResponse {
 	return sessionMessageResponse{
-		ID: message.ID, SessionID: message.SessionID, AgentID: message.AgentID,
-		InvocationID: message.InvocationID, Sequence: message.Sequence, Role: message.Role,
-		Content: message.Content, CreatedAt: message.CreatedAt,
+		ID:           message.ID,
+		SessionID:    message.SessionID,
+		AgentID:      message.AgentID,
+		InvocationID: message.InvocationID,
+		Sequence:     message.Sequence,
+		Role:         message.Role,
+		Content:      message.Content,
+		CreatedAt:    message.CreatedAt,
 	}
 }
 
@@ -1100,9 +1173,12 @@ func invocationListInput(query url.Values) (services.InvocationListInput, error)
 		return services.InvocationListInput{}, err
 	}
 	input := services.InvocationListInput{
-		TenantRef: optionalQueryString(query, "tenant_ref"), DefaultTenant: defaultTenant,
-		SessionID: optionalQueryString(query, "session_id"), AgentID: optionalQueryString(query, "agent_id"),
-		Cursor: query.Get("cursor"), Limit: limit,
+		TenantKey:     optionalQueryString(query, "tenant_key"),
+		DefaultTenant: defaultTenant,
+		SessionID:     optionalQueryString(query, "session_id"),
+		AgentID:       optionalQueryString(query, "agent_id"),
+		Cursor:        query.Get("cursor"),
+		Limit:         limit,
 	}
 	if value := optionalQueryString(query, "status"); value != nil {
 		status := domain.InvocationStatus(*value)
@@ -1121,9 +1197,12 @@ func sessionListInput(query url.Values) (services.SessionListInput, error) {
 		return services.SessionListInput{}, err
 	}
 	return services.SessionListInput{
-		TenantRef: optionalQueryString(query, "tenant_ref"), DefaultTenant: defaultTenant,
-		AgentID: optionalQueryString(query, "agent_id"), SessionKey: optionalQueryString(query, "session_key"),
-		Cursor: query.Get("cursor"), Limit: limit,
+		TenantKey:     optionalQueryString(query, "tenant_key"),
+		DefaultTenant: defaultTenant,
+		AgentID:       optionalQueryString(query, "agent_id"),
+		SessionKey:    optionalQueryString(query, "session_key"),
+		Cursor:        query.Get("cursor"),
+		Limit:         limit,
 	}, nil
 }
 

@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -62,7 +62,7 @@ export interface ListSessionMessagesRequest {
 }
 
 export interface ListSessionsRequest {
-    tenantRef?: string;
+    tenantKey?: string;
     defaultTenant?: boolean;
     agentId?: string;
     sessionKey?: string;
@@ -272,8 +272,8 @@ export class SessionsApi extends runtime.BaseAPI {
     async listSessionsRequestOpts(requestParameters: ListSessionsRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
 
-        if (requestParameters['tenantRef'] != null) {
-            queryParameters['tenant_ref'] = requestParameters['tenantRef'];
+        if (requestParameters['tenantKey'] != null) {
+            queryParameters['tenant_key'] = requestParameters['tenantKey'];
         }
 
         if (requestParameters['defaultTenant'] != null) {
@@ -381,7 +381,7 @@ export class SessionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Opens a resumable Server-Sent Events projection over the same fixed-cut transcript read model as the JSON endpoint. The server subscribes to live fan-out before its first Postgres drain, re-drains Postgres on a bounded poll, and closes after authoritative terminal reconciliation or deliberate rotation. Disconnecting never cancels the Invocation.  `transcript.snapshot` data has the `TranscriptSnapshot` shape. Every nonempty snapshot frame carries `id: <resume_cursor>`; that opaque ID is the only replay position clients persist. `generation.delta`, `stream.resync`, and `stream.end` are live/control frames and never carry an `id`. Token and thinking deltas are ephemeral and may be lost; after `stream.resync`, discard provisional output and wait for canonical messages. `stream.end` reason `terminal` means the final Postgres drain observed no nonterminal Invocation. Reason `rotate` means reconnect with the last durable ID. An abnormal close has no terminal meaning.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP client that can set the `Authorization` header; the browser EventSource constructor alone cannot do so. The server emits `retry: 1000` as its default reconnect delay.
+     * Opens a resumable Server-Sent Events projection over the same fixed-cut transcript read model as the JSON endpoint. The server subscribes to live fan-out before its first Postgres drain, re-drains Postgres on a bounded poll, and closes after authoritative terminal reconciliation or deliberate rotation. Disconnecting never cancels the Invocation.  Every nonempty `transcript.update` frame carries `id: <resume_cursor>`; that opaque ID is the only replay position clients persist. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`. Deltas are ephemeral and may be lost; after `stream.resync`, discard provisional output and wait for canonical messages. `stream.end` reason `terminal` means the final Postgres drain observed no nonterminal Invocation. Reason `rotate` means reconnect with the last durable ID. An abnormal close has no terminal meaning.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP client that can set the `Authorization` header; the browser EventSource constructor alone cannot do so. The server emits `retry: 1000` as its default reconnect delay.
      * Replay and tail one Session transcript over SSE
      */
     async streamSessionTranscriptRaw(requestParameters: StreamSessionTranscriptRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<TranscriptStreamEvent>> {
@@ -392,7 +392,7 @@ export class SessionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Opens a resumable Server-Sent Events projection over the same fixed-cut transcript read model as the JSON endpoint. The server subscribes to live fan-out before its first Postgres drain, re-drains Postgres on a bounded poll, and closes after authoritative terminal reconciliation or deliberate rotation. Disconnecting never cancels the Invocation.  `transcript.snapshot` data has the `TranscriptSnapshot` shape. Every nonempty snapshot frame carries `id: <resume_cursor>`; that opaque ID is the only replay position clients persist. `generation.delta`, `stream.resync`, and `stream.end` are live/control frames and never carry an `id`. Token and thinking deltas are ephemeral and may be lost; after `stream.resync`, discard provisional output and wait for canonical messages. `stream.end` reason `terminal` means the final Postgres drain observed no nonterminal Invocation. Reason `rotate` means reconnect with the last durable ID. An abnormal close has no terminal meaning.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP client that can set the `Authorization` header; the browser EventSource constructor alone cannot do so. The server emits `retry: 1000` as its default reconnect delay.
+     * Opens a resumable Server-Sent Events projection over the same fixed-cut transcript read model as the JSON endpoint. The server subscribes to live fan-out before its first Postgres drain, re-drains Postgres on a bounded poll, and closes after authoritative terminal reconciliation or deliberate rotation. Disconnecting never cancels the Invocation.  Every nonempty `transcript.update` frame carries `id: <resume_cursor>`; that opaque ID is the only replay position clients persist. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`. Deltas are ephemeral and may be lost; after `stream.resync`, discard provisional output and wait for canonical messages. `stream.end` reason `terminal` means the final Postgres drain observed no nonterminal Invocation. Reason `rotate` means reconnect with the last durable ID. An abnormal close has no terminal meaning.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP client that can set the `Authorization` header; the browser EventSource constructor alone cannot do so. The server emits `retry: 1000` as its default reconnect delay.
      * Replay and tail one Session transcript over SSE
      */
     async streamSessionTranscript(requestParameters: StreamSessionTranscriptRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<TranscriptStreamEvent> {

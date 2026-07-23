@@ -8,8 +8,8 @@
     "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
     "X-Nvoken-Signing-Key-Version": "1",
     "Idempotency-Key": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
-    "X-Nvoken-Signature": "sha256=d47e8586c0e18d754839277d24d6fedab0b79a80e761f1e29c0388e5e27a9e3f"
+    "X-Nvoken-Signature": "sha256=a5b473b4ab714b6611c1d364907d935cbcbc3285ab77fc8ececac3ce586a8dee"
   },
-  "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"cbdy_019b0a12-8d51-7f34-aed2-0e07c1bdb326\",\"tool_call_id\":\"tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325\",\"invocation_id\":\"invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"agent_ref\":\"support\",\"tenant_ref\":\"acme\"},\"input\":{\"ticket\":\"A-42\"}}",
+  "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"cbdy_019b0a12-8d51-7f34-aed2-0e07c1bdb326\",\"tool_call_id\":\"tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325\",\"invocation_id\":\"invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"input\":{\"ticket\":\"A-42\"}}",
   "tampering": ["body", "timestamp", "delivery_id", "signature"]
 }

@@ -565,6 +565,23 @@ run "segment_ceiling_outside_attempt_is_rejected" {
   expect_failures = [google_cloud_run_v2_service.executor]
 }
 
+run "waiting_timeout_default_above_maximum_is_rejected" {
+  command = plan
+
+  variables {
+    project_id                                 = "example-project"
+    environment                                = "test"
+    image_tag                                  = "abcdef0123456789"
+    schema_version                             = 14
+    anthropic_api_key_secret_id                = "nvoken-test-anthropic"
+    invocation_default_waiting_timeout_seconds = 3600
+    invocation_max_waiting_timeout_seconds     = 1800
+    database_deletion_protection               = false
+  }
+
+  expect_failures = [google_cloud_run_v2_service.runtime]
+}
+
 run "missing_provider_is_rejected" {
   command = plan
 

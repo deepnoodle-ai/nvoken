@@ -400,7 +400,7 @@ func (s *ToolCheckpointService) prepareToolCalls(
 	sequence int64,
 	now time.Time,
 ) ([]domain.ToolCall, []domain.CallbackDelivery, json.RawMessage, error) {
-	if len(input.ToolCalls) > MaxClientTools {
+	if len(input.ToolCalls) > MaxHostTools {
 		return nil, nil, nil, fmt.Errorf("model checkpoint exceeds the maximum ToolCall batch size")
 	}
 	var blocks []map[string]json.RawMessage
@@ -423,7 +423,7 @@ func (s *ToolCheckpointService) prepareToolCalls(
 		}
 		byProvider[requested.ProviderCallID] = requested
 	}
-	deadline := invocation.WallClockDeadlineAt
+	deadline := invocation.DeadlineAt
 	calls := make([]domain.ToolCall, 0, len(input.ToolCalls))
 	deliveries := make([]domain.CallbackDelivery, 0, len(input.ToolCalls))
 	ordinal := 0
@@ -917,7 +917,7 @@ func closeOpenToolCallsForTerminal(
 		errorCode := "invocation_terminal"
 		if terminalStatus == domain.InvocationCancelled {
 			errorCode = "invocation_cancelled"
-		} else if !invocation.WallClockDeadlineAt.After(now) {
+		} else if !invocation.DeadlineAt.After(now) {
 			errorCode = "deadline_exceeded"
 		}
 		if _, err := callbacks.AbandonActiveCallbackDeliveries(

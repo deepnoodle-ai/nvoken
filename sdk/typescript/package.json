@@ -1,6 +1,6 @@
 {
   "name": "@deepnoodle/nvoken",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "TypeScript SDK for the nvoken durable agent runtime",
   "keywords": [
     "ai",
@@ -34,6 +34,8 @@
     "dist/generated",
     "dist/index.d.ts",
     "dist/index.js",
+    "dist/invocation-error.d.ts",
+    "dist/invocation-error.js",
     "dist/stream.d.ts",
     "dist/stream.js"
   ],

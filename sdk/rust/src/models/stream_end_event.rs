@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -13,11 +13,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct StreamEndEvent {
-    #[serde(rename = "event_type")]
-    pub event_type: EventType,
+    #[serde(rename = "type")]
+    pub r#type: Type,
     /// UUIDv7 with the public `sesn_` prefix.
     #[serde(rename = "session_id")]
     pub session_id: String,
+    /// UUIDv7 with the public `invk_` prefix.
+    #[serde(rename = "invocation_id", deserialize_with = "Option::deserialize")]
+    pub invocation_id: Option<String>,
+    /// `rotate` means reconnect with `resume_cursor`. `terminal` means the scoped Invocation settled, or the Session became idle for a Session-scoped stream.
     #[serde(rename = "reason")]
     pub reason: Reason,
     #[serde(rename = "resume_cursor")]
@@ -26,14 +30,16 @@ pub struct StreamEndEvent {
 
 impl StreamEndEvent {
     pub fn new(
-        event_type: EventType,
+        r#type: Type,
         session_id: String,
+        invocation_id: Option<String>,
         reason: Reason,
         resume_cursor: String,
     ) -> StreamEndEvent {
         StreamEndEvent {
-            event_type,
+            r#type,
             session_id,
+            invocation_id,
             reason,
             resume_cursor,
         }
@@ -41,17 +47,17 @@ impl StreamEndEvent {
 }
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum EventType {
+pub enum Type {
     #[serde(rename = "stream.end")]
     EventStreamEnd,
 }
 
-impl Default for EventType {
-    fn default() -> EventType {
+impl Default for Type {
+    fn default() -> Type {
         Self::EventStreamEnd
     }
 }
-///
+/// `rotate` means reconnect with `resume_cursor`. `terminal` means the scoped Invocation settled, or the Session became idle for a Session-scoped stream.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Reason {
     #[serde(rename = "terminal")]

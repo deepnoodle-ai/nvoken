@@ -71,7 +71,7 @@ func runCredentialCreate(ctx *cli.Context) error {
 	}
 	body := identityclient.CreateCredentialRequest{Name: name, Profile: identityclient.Profile(ctx.String("credential-profile"))}
 	if value := strings.TrimSpace(ctx.String("tenant-ref")); value != "" {
-		body.TenantRef = &value
+		body.TenantKey = &value
 	}
 	if value := strings.TrimSpace(ctx.String("session-id")); value != "" {
 		body.SessionId = &value

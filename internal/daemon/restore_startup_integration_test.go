@@ -40,7 +40,7 @@ func TestTerminalOnlyRestoreStartsDaemonAndReadsWithoutExecution(t *testing.T) {
 		ProcessRole:             ProcessRoleCombined,
 		InvocationExecutionMode: services.InvocationExecutionEmbedded,
 		Engine:                  engineConfig,
-		Budgets:                 services.DefaultBudgetPolicy(),
+		Limits:                  services.DefaultLimitPolicy(),
 		LiveEventBuffer:         8,
 	}
 
@@ -125,7 +125,7 @@ func seedTerminalRestoreFixture(t *testing.T, databaseURL string) string {
 		},
 	}
 	ack, err := runtime.Admit(ctx, auth, services.CreateInvocationInput{
-		AgentRef:       "restore-test",
+		AgentKey:       "restore-test",
 		SessionKey:     restoreStringPointer("terminal-only"),
 		IdempotencyKey: "terminal-only",
 		Input: services.InvocationInput{
@@ -137,7 +137,7 @@ func seedTerminalRestoreFixture(t *testing.T, databaseURL string) string {
 			Instructions: "terminal restore fixture",
 			Model: services.ModelSelection{
 				Provider: "anthropic",
-				Name:     "test-model",
+				ID:       "test-model",
 			},
 		},
 	})

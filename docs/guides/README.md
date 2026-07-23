@@ -12,10 +12,12 @@ order.
 
 ## Integrate nvoken into an application
 
+- [TypeScript SDK](../../sdk/typescript/README.md) — first response,
+  multi-turn Sessions, host tools, structured output, streaming, and recovery
 - [SDKs and client CLI](sdks-and-cli.md) — install a client and choose its
   supported workflow facade
-- [Runtime admission](runtime-admission.md) — durable Invocation, Session,
-  streaming, cancellation, and ToolCall behavior
+- [Runtime admission](runtime-admission.md) — wire-level durable Invocation,
+  Session, streaming, cancellation, and ToolCall behavior
 - [Credentials and CLI authentication](credentials-and-cli-auth.md) — machine
   credentials, device login, scope, and rotation
 - [Callback receivers](callback-receivers.md) — safely receive at-least-once

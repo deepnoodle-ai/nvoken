@@ -11,8 +11,8 @@ pub use callback::{
     VerifiedCallback,
 };
 pub use client::{
-    Budgets, Client, ErrorCategory, ExecutionSpec, Handle, InvokeRequest, ListInvocationsOptions,
-    ListSessionsOptions, MessageListOptions, Model, NvokenError, RetryPolicy, Tool, ToolMode,
-    ToolResult,
+    Client, ErrorCategory, ExecutionSpec, InvocationHandle, InvokeRequest, Limits,
+    ListInvocationsOptions, ListSessionsOptions, MessageListOptions, Model, NvokenError,
+    RetryPolicy, Tool, ToolMode, ToolResult,
 };
 pub use stream::{ReducedSnapshot, Reducer, StreamEvent};

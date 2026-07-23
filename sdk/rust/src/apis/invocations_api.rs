@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -82,10 +82,24 @@ pub enum ListInvocationsError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`submit_client_tool_results`]
+/// struct for typed errors of method [`stream_invocation`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum SubmitClientToolResultsError {
+pub enum StreamInvocationError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`submit_host_tool_results`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum SubmitHostToolResultsError {
     Status400(models::ErrorResponse),
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
@@ -149,7 +163,7 @@ pub async fn cancel_invocation(
     }
 }
 
-/// Resolves or creates the Account-wide Agent identity anchor, resolves or creates a Session, snapshots the inline execution spec, appends exactly one caller-input message, and creates one queued Invocation in a single transaction. The response is sent only after that transaction commits; the request handler never executes the model.  `session_id` and `session_key` are mutually exclusive. A Session ID must belong to the authenticated Account and named Agent. An Account-wide credential may omit `tenant_ref` and use the Session's stored partition. A tenant-constrained credential cannot cross its partition; an explicit mismatch is rejected with `403 forbidden` before resource lookup.  `idempotency_key` is scoped to the authenticated Account, effective tenant partition, and `agent_ref`. A same-key replay is checked before the Session's one-nonterminal-Invocation rule. It returns the original records without appending input, even when the Invocation is terminal. Material equality covers the Session selector kind and value, the inline spec, and input. Requested budgets are compared before default resolution, so an explicit default differs from omission. JSON object member order is ignored, array order is significant, and strings are not rewritten. A changed material field returns `idempotency_conflict`.  The encoded JSON request body is limited to 1 MiB. Requests over that limit are rejected before admission.
+/// Resolves or creates the Account-wide Agent identity anchor, resolves or creates a Session, snapshots the inline execution spec, appends exactly one caller-input message, and creates one queued Invocation in a single transaction. The response is sent only after that transaction commits; the request handler never executes the model.  `session_id` and `session_key` are mutually exclusive. A Session ID must belong to the authenticated Account and named Agent. An Account-wide credential may omit `tenant_key` and use the Session's stored partition. A tenant-constrained credential cannot cross its partition; an explicit mismatch is rejected with `403 forbidden` before resource lookup.  `idempotency_key` is scoped to the authenticated Account, effective tenant partition, and `agent_key`. A same-key replay is checked before the Session's one-nonterminal-Invocation rule. It returns the original records without appending input, even when the Invocation is terminal. Material equality covers the Session selector kind and value, the inline spec, and input. Requested limits are compared before default resolution, so an explicit default differs from omission. JSON object member order is ignored, array order is significant, and strings are not rewritten. A changed material field returns `idempotency_conflict`.  The encoded JSON request body is limited to 1 MiB. Requests over that limit are rejected before admission. With `Accept: text/event-stream`, the committed admission is the first `invocation.accepted` frame and the connection tails that Invocation through `invocation.result`.
 pub async fn create_invocation(
     configuration: &configuration::Configuration,
     create_invocation_request: models::CreateInvocationRequest,
@@ -301,10 +315,10 @@ pub async fn get_invocation_result(
     }
 }
 
-/// Returns newest-first durable Invocation state. Exact filters combine with AND. An Account-wide caller may list all tenant partitions, one named partition with `tenant_ref`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope.
+/// Returns newest-first durable Invocation state. Exact filters combine with AND. An Account-wide caller may list all tenant partitions, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope.
 pub async fn list_invocations(
     configuration: &configuration::Configuration,
-    tenant_ref: Option<&str>,
+    tenant_key: Option<&str>,
     default_tenant: Option<bool>,
     session_id: Option<&str>,
     agent_id: Option<&str>,
@@ -313,7 +327,7 @@ pub async fn list_invocations(
     limit: Option<u32>,
 ) -> Result<models::InvocationList, Error<ListInvocationsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
-    let p_query_tenant_ref = tenant_ref;
+    let p_query_tenant_key = tenant_key;
     let p_query_default_tenant = default_tenant;
     let p_query_session_id = session_id;
     let p_query_agent_id = agent_id;
@@ -324,8 +338,8 @@ pub async fn list_invocations(
     let uri_str = format!("{}/v1/invocations", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    if let Some(ref param_value) = p_query_tenant_ref {
-        req_builder = req_builder.query(&[("tenant_ref", &param_value.to_string())]);
+    if let Some(ref param_value) = p_query_tenant_key {
+        req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_default_tenant {
         req_builder = req_builder.query(&[("default_tenant", &param_value.to_string())]);
@@ -381,32 +395,37 @@ pub async fn list_invocations(
     }
 }
 
-/// Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor execution dispatch before returning `202`.  This command accepts only client-mode calls owned by the path Invocation and authenticated Account/tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.
-pub async fn submit_client_tool_results(
+/// Replays durable updates after `cursor`, forwards ephemeral output previews for this Invocation, and ends only when this Invocation settles or the connection rotates. Durable frames carry an SSE `id`; previews and control frames do not. After `stream.resync`, discard provisional output and wait for durable state.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the last durable ID. Disconnecting never cancels the Invocation.
+pub async fn stream_invocation(
     configuration: &configuration::Configuration,
     invocation_id: &str,
-    submit_client_tool_results_request: models::SubmitClientToolResultsRequest,
-) -> Result<models::SubmitClientToolResultsResponse, Error<SubmitClientToolResultsError>> {
+    cursor: Option<&str>,
+    last_event_id: Option<&str>,
+) -> Result<models::InvocationStreamEvent, Error<StreamInvocationError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_invocation_id = invocation_id;
-    let p_body_submit_client_tool_results_request = submit_client_tool_results_request;
+    let p_query_cursor = cursor;
+    let p_header_last_event_id = last_event_id;
 
     let uri_str = format!(
-        "{}/v1/invocations/{invocation_id}/tool-results",
+        "{}/v1/invocations/{invocation_id}/stream",
         configuration.base_path,
         invocation_id = crate::apis::urlencode(p_path_invocation_id)
     );
-    let mut req_builder = configuration
-        .client
-        .request(reqwest::Method::POST, &uri_str);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_cursor {
+        req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(param_value) = p_header_last_event_id {
+        req_builder = req_builder.header("Last-Event-ID", param_value.to_string());
     }
     if let Some(ref token) = configuration.bearer_access_token {
         req_builder = req_builder.bearer_auth(token.to_owned());
     };
-    req_builder = req_builder.json(&p_body_submit_client_tool_results_request);
 
     let req = req_builder.build()?;
     let resp = configuration.client.execute(req).await?;
@@ -423,12 +442,68 @@ pub async fn submit_client_tool_results(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SubmitClientToolResultsResponse`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SubmitClientToolResultsResponse`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::InvocationStreamEvent`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::InvocationStreamEvent`")))),
         }
     } else {
         let content = resp.text().await?;
-        let entity: Option<SubmitClientToolResultsError> = serde_json::from_str(&content).ok();
+        let entity: Option<StreamInvocationError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor execution dispatch before returning `202`.  This command accepts only host-mode calls owned by the path Invocation and authenticated Account/tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.
+pub async fn submit_host_tool_results(
+    configuration: &configuration::Configuration,
+    invocation_id: &str,
+    submit_host_tool_results_request: models::SubmitHostToolResultsRequest,
+) -> Result<models::SubmitHostToolResultsResponse, Error<SubmitHostToolResultsError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_invocation_id = invocation_id;
+    let p_body_submit_host_tool_results_request = submit_host_tool_results_request;
+
+    let uri_str = format!(
+        "{}/v1/invocations/{invocation_id}/tool-results",
+        configuration.base_path,
+        invocation_id = crate::apis::urlencode(p_path_invocation_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+    req_builder = req_builder.json(&p_body_submit_host_tool_results_request);
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SubmitHostToolResultsResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SubmitHostToolResultsResponse`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<SubmitHostToolResultsError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,

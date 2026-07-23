@@ -60,7 +60,7 @@ backup scheduling; autoscaling; UI or console.
 
 - **R3 — Representative smoke.** One script or documented command sequence must
   prove health, authenticated durable admission, terminal authoritative read,
-  restart readback, resumable transcript, client tool result submission, and—
+  restart readback, resumable transcript, host tool result submission, and—
   when configured—one callback delivery. Provider/model selection remains an
   explicit operator input because model availability changes independently.
 

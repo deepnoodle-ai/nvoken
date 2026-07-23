@@ -47,7 +47,7 @@ type credentialResponse struct {
 	OwnerSubjectID        *string                   `json:"owner_subject_id,omitempty"`
 	CreatorSubjectID      *string                   `json:"creator_subject_id,omitempty"`
 	CreatorCredentialID   *string                   `json:"creator_credential_id,omitempty"`
-	TenantConstraint      *string                   `json:"tenant_ref,omitempty"`
+	TenantConstraint      *string                   `json:"tenant_key,omitempty"`
 	SessionConstraint     *string                   `json:"session_id,omitempty"`
 	OperationConstraints  []domain.RuntimeOperation `json:"operations"`
 	ExpiresAt             *time.Time                `json:"expires_at,omitempty"`
@@ -127,7 +127,7 @@ func (h *handler) getCurrentAccount(w http.ResponseWriter, r *http.Request) {
 			"credential_id":     current.Credential.ID,
 			"credential_kind":   current.Credential.Kind,
 			"effective_profile": current.EffectiveRole,
-			"tenant_ref":        current.Credential.TenantConstraint,
+			"tenant_key":        current.Credential.TenantConstraint,
 			"session_id":        current.Credential.SessionConstraint,
 			"operations":        current.Operations,
 			"method":            current.Method,
@@ -455,7 +455,7 @@ func (h *handler) deviceApprovalPage(w http.ResponseWriter, r *http.Request) {
 		Subject:     view.Approver.Subject,
 		DeviceLabel: view.DeviceLabel,
 		RoleCap:     string(view.RoleCap),
-		TenantRef:   view.TenantConstraint,
+		TenantKey:   view.TenantConstraint,
 		SessionID:   view.SessionConstraint,
 	})
 }
@@ -520,11 +520,11 @@ type devicePageData struct {
 	Subject     string
 	DeviceLabel string
 	RoleCap     string
-	TenantRef   *string
+	TenantKey   *string
 	SessionID   *string
 }
 
-var devicePage = template.Must(template.New("device").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorize nvoken CLI</title><style>body{font:16px system-ui;max-width:36rem;margin:10vh auto;padding:0 1.5rem;color:#171717}main{border:1px solid #ddd;border-radius:14px;padding:2rem}label{display:block;margin:1rem 0 .4rem}input,button{font:inherit;padding:.7rem;border-radius:8px;border:1px solid #aaa}input{width:100%;box-sizing:border-box}button{cursor:pointer}.approve{background:#171717;color:white}.row{display:flex;gap:.75rem;margin-top:1.5rem}dt{font-weight:600}dd{margin:0 0 .8rem}.error{color:#a00}</style></head><body><main>{{if .Complete}}<h1>Device authorization complete</h1><p>You can return to the nvoken CLI.</p>{{else if .Login}}<h1>Authorize nvoken CLI</h1>{{if .Error}}<p class="error">{{.Error}}</p>{{end}}<form method="post" action="/v1/auth/bootstrap/session"><label>Device code</label><input name="user_code" value="{{.UserCode}}" required><label>Bootstrap Owner secret</label><input name="bootstrap_secret" type="password" required><button class="approve" type="submit">Continue</button></form>{{else if .Error}}<h1>Unable to authorize</h1><p class="error">{{.Error}}</p>{{else}}<h1>Approve this device?</h1><dl><dt>Account</dt><dd>{{.AccountID}}</dd><dt>Approving principal</dt><dd>{{.Subject}}</dd><dt>Device</dt><dd>{{.DeviceLabel}}</dd><dt>Permission cap</dt><dd>{{.RoleCap}}</dd>{{if .TenantRef}}<dt>Tenant</dt><dd>{{.TenantRef}}</dd>{{end}}{{if .SessionID}}<dt>Session</dt><dd>{{.SessionID}}</dd>{{end}}</dl><form method="post" action="/v1/auth/device/confirm"><input type="hidden" name="user_code" value="{{.UserCode}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><div class="row"><button class="approve" name="decision" value="approve">Approve</button><button name="decision" value="deny">Deny</button></div></form>{{end}}</main></body></html>`))
+var devicePage = template.Must(template.New("device").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorize nvoken CLI</title><style>body{font:16px system-ui;max-width:36rem;margin:10vh auto;padding:0 1.5rem;color:#171717}main{border:1px solid #ddd;border-radius:14px;padding:2rem}label{display:block;margin:1rem 0 .4rem}input,button{font:inherit;padding:.7rem;border-radius:8px;border:1px solid #aaa}input{width:100%;box-sizing:border-box}button{cursor:pointer}.approve{background:#171717;color:white}.row{display:flex;gap:.75rem;margin-top:1.5rem}dt{font-weight:600}dd{margin:0 0 .8rem}.error{color:#a00}</style></head><body><main>{{if .Complete}}<h1>Device authorization complete</h1><p>You can return to the nvoken CLI.</p>{{else if .Login}}<h1>Authorize nvoken CLI</h1>{{if .Error}}<p class="error">{{.Error}}</p>{{end}}<form method="post" action="/v1/auth/bootstrap/session"><label>Device code</label><input name="user_code" value="{{.UserCode}}" required><label>Bootstrap Owner secret</label><input name="bootstrap_secret" type="password" required><button class="approve" type="submit">Continue</button></form>{{else if .Error}}<h1>Unable to authorize</h1><p class="error">{{.Error}}</p>{{else}}<h1>Approve this device?</h1><dl><dt>Account</dt><dd>{{.AccountID}}</dd><dt>Approving principal</dt><dd>{{.Subject}}</dd><dt>Device</dt><dd>{{.DeviceLabel}}</dd><dt>Permission cap</dt><dd>{{.RoleCap}}</dd>{{if .TenantKey}}<dt>Tenant</dt><dd>{{.TenantKey}}</dd>{{end}}{{if .SessionID}}<dt>Session</dt><dd>{{.SessionID}}</dd>{{end}}</dl><form method="post" action="/v1/auth/device/confirm"><input type="hidden" name="user_code" value="{{.UserCode}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><div class="row"><button class="approve" name="decision" value="approve">Approve</button><button name="decision" value="deny">Deny</button></div></form>{{end}}</main></body></html>`))
 
 func renderDevicePage(w http.ResponseWriter, data devicePageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

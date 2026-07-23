@@ -29,9 +29,12 @@ func TestInvocationCancellationAccruesSegmentAndWinsStaleSettlement(t *testing.T
 	auth := runtimeAuth(account.ID)
 	input := runtimeInput()
 	wall, active, output, iterations, cost := int64(60), int64(30), 4096, 2, 0.25
-	input.Spec.Budgets = &services.InvocationBudgetInput{
-		WallClockTimeoutSeconds: &wall, ActiveExecutionTimeoutSeconds: &active,
-		MaxOutputTokens: &output, MaxEstimatedCostUSD: &cost, MaxIterations: &iterations,
+	input.Spec.Limits = &services.InvocationLimitInput{
+		TotalTimeoutSeconds:  &wall,
+		ActiveTimeoutSeconds: &active,
+		MaxOutputTokens:      &output,
+		MaxEstimatedCostUSD:  &cost,
+		MaxIterations:        &iterations,
 	}
 	ack, err := runtime.Admit(context.Background(), auth, input)
 	if err != nil {
@@ -43,9 +46,9 @@ func TestInvocationCancellationAccruesSegmentAndWinsStaleSettlement(t *testing.T
 	}
 	changed := input
 	changedOutput := output + 1
-	changedBudgets := *input.Spec.Budgets
-	changedBudgets.MaxOutputTokens = &changedOutput
-	changed.Spec.Budgets = &changedBudgets
+	changedLimits := *input.Spec.Limits
+	changedLimits.MaxOutputTokens = &changedOutput
+	changed.Spec.Limits = &changedLimits
 	_, err = runtime.Admit(context.Background(), auth, changed)
 	assertPublicCode(t, err, services.CodeIdempotencyConflict)
 	execution := services.NewInvocationExecutionService(store, txm, clock, ids,
@@ -60,8 +63,8 @@ func TestInvocationCancellationAccruesSegmentAndWinsStaleSettlement(t *testing.T
 		t.Fatalf("cancel: %v", err)
 	}
 	if cancelled.Status != domain.InvocationCancelled || cancelled.ActiveExecutionMS != 1250 ||
-		cancelled.Budgets.MaxOutputTokens == nil || *cancelled.Budgets.MaxOutputTokens != output ||
-		cancelled.Budgets.MaxEstimatedCostUSD == nil || *cancelled.Budgets.MaxEstimatedCostUSD != cost {
+		cancelled.Limits.MaxOutputTokens == nil || *cancelled.Limits.MaxOutputTokens != output ||
+		cancelled.Limits.MaxEstimatedCostUSD == nil || *cancelled.Limits.MaxEstimatedCostUSD != cost {
 		t.Fatalf("cancelled Invocation = %#v", cancelled)
 	}
 	if err := execution.Settle(context.Background(), claim, completedResult()); !errors.Is(err, ports.ErrLeaseLost) {
@@ -193,8 +196,8 @@ func TestCancellationScopeFailureDoesNotPublishWake(t *testing.T) {
 	assertPublicCode(t, err, services.CodeNotFound)
 
 	conflictingTenant := auth
-	tenantRef := "other-tenant"
-	conflictingTenant.TenantConstraint = &tenantRef
+	tenantKey := "other-tenant"
+	conflictingTenant.TenantConstraint = &tenantKey
 	_, err = runtime.CancelInvocation(context.Background(), conflictingTenant, ack.InvocationID)
 	assertPublicCode(t, err, services.CodeNotFound)
 	if got := signaller.notifications.Load(); got != 0 {
@@ -226,7 +229,7 @@ func TestInvocationDeadlineReaperDistinguishesLogicalAndSegmentExpiry(t *testing
 
 	input := runtimeInput()
 	wall := int64(2)
-	input.Spec.Budgets = &services.InvocationBudgetInput{WallClockTimeoutSeconds: &wall}
+	input.Spec.Limits = &services.InvocationLimitInput{TotalTimeoutSeconds: &wall}
 	queued, err := runtime.Admit(context.Background(), auth, input)
 	if err != nil {
 		t.Fatalf("admit queued deadline: %v", err)
@@ -248,10 +251,10 @@ func TestInvocationDeadlineReaperDistinguishesLogicalAndSegmentExpiry(t *testing
 	if _, err := execution.ReapExpired(context.Background(), 10); err != nil {
 		t.Fatalf("reap queued deadline: %v", err)
 	}
-	assertInvocationFailureScope(t, store, queued.InvocationID, "deadline_exceeded", "wall_clock")
+	assertInvocationFailureScope(t, store, queued.InvocationID, "deadline_exceeded", "total")
 
 	input.IdempotencyKey = "segment-deadline"
-	input.Spec.Budgets = nil
+	input.Spec.Limits = nil
 	running, err := runtime.Admit(context.Background(), auth, input)
 	if err != nil {
 		t.Fatalf("admit segment deadline: %v", err)
@@ -288,7 +291,7 @@ func TestClaimNextSkipsExpiredQueuedPrefixForDeadlineReaper(t *testing.T) {
 	wallInput.SessionKey = pointerString("expired-wall-session")
 	wallInput.IdempotencyKey = "expired-wall-request"
 	shortWall := int64(1)
-	wallInput.Spec.Budgets = &services.InvocationBudgetInput{WallClockTimeoutSeconds: &shortWall}
+	wallInput.Spec.Limits = &services.InvocationLimitInput{TotalTimeoutSeconds: &shortWall}
 	wallExpired, err := runtime.Admit(context.Background(), auth, wallInput)
 	if err != nil {
 		t.Fatalf("admit wall-expired prefix: %v", err)
@@ -303,7 +306,7 @@ func TestClaimNextSkipsExpiredQueuedPrefixForDeadlineReaper(t *testing.T) {
 	}
 	if _, err := pool.Exec(context.Background(), `
 		UPDATE invocations
-		SET active_execution_ms = active_execution_timeout_ms
+		SET active_execution_ms = active_timeout_ms
 		WHERE id = $1
 	`, activeExpired.InvocationID); err != nil {
 		t.Fatalf("exhaust active budget: %v", err)
@@ -332,7 +335,7 @@ func TestClaimNextSkipsExpiredQueuedPrefixForDeadlineReaper(t *testing.T) {
 	if _, err := execution.ReapExpired(context.Background(), 10); err != nil {
 		t.Fatalf("reap skipped prefix: %v", err)
 	}
-	assertInvocationFailureScope(t, store, wallExpired.InvocationID, "deadline_exceeded", "wall_clock")
+	assertInvocationFailureScope(t, store, wallExpired.InvocationID, "deadline_exceeded", "total")
 	assertInvocationFailureScope(t, store, activeExpired.InvocationID, "deadline_exceeded", "active_execution")
 }
 

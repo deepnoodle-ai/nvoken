@@ -25,7 +25,7 @@ type AccountMembership struct {
 type Agent struct {
 	ID        string
 	AccountID string
-	AgentRef  string
+	AgentKey  string
 	CreatedAt time.Time
 }
 
@@ -168,14 +168,17 @@ type Invocation struct {
 	Usage                     []byte
 	Provenance                []byte
 	RequestFingerprintVersion int16
-	WallClockTimeoutMs        int64
-	ActiveExecutionTimeoutMs  int64
+	TotalTimeoutMs            int64
+	ActiveTimeoutMs           int64
+	WaitingTimeoutMs          int64
 	MaxOutputTokens           *int32
 	MaxEstimatedCostMicrousd  *int64
 	MaxIterations             int32
 	ActiveExecutionMs         int64
-	WallClockDeadlineAt       time.Time
+	WaitingExecutionMs        int64
+	DeadlineAt                time.Time
 	ActiveSegmentStartedAt    *time.Time
+	WaitingSegmentStartedAt   *time.Time
 	ExecutionDeadlineAt       *time.Time
 	ExecutionDeadlineScope    *string
 	CurrentCheckpointSequence int64
@@ -346,7 +349,7 @@ type SyntheticDispatchWork struct {
 type TenantPartition struct {
 	ID        string
 	AccountID string
-	TenantRef *string
+	TenantKey *string
 	CreatedAt time.Time
 }
 

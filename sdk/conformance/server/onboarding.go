@@ -27,20 +27,15 @@ type onboardingSession struct {
 }
 
 type onboardingCreateRequest struct {
-	AgentRef       string  `json:"agent_ref"`
-	SessionID      *string `json:"session_id"`
-	SessionKey     *string `json:"session_key"`
-	IdempotencyKey string  `json:"idempotency_key"`
-	Input          struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
-	} `json:"input"`
-	Spec struct {
+	AgentKey       string          `json:"agent_key"`
+	SessionID      *string         `json:"session_id"`
+	SessionKey     *string         `json:"session_key"`
+	IdempotencyKey string          `json:"idempotency_key"`
+	Input          json.RawMessage `json:"input"`
+	Spec           struct {
 		Model struct {
 			Provider string `json:"provider"`
-			Name     string `json:"name"`
+			ID       string `json:"id"`
 		} `json:"model"`
 	} `json:"spec"`
 }
@@ -86,7 +81,8 @@ func (s *onboardingState) create(response http.ResponseWriter, request *http.Req
 		writeError(response, http.StatusBadRequest, "invalid_request", "invalid JSON body")
 		return
 	}
-	if input.IdempotencyKey == "" || len(input.Input.Content) == 0 {
+	text, ok := onboardingInputText(input.Input)
+	if input.IdempotencyKey == "" || !ok {
 		writeError(response, http.StatusBadRequest, "invalid_request", "missing onboarding request fields")
 		return
 	}
@@ -108,7 +104,6 @@ func (s *onboardingState) create(response http.ResponseWriter, request *http.Req
 	s.next++
 	invocationID := onboardingID("invk", s.next)
 	createdAt := time.Date(2026, 7, 22, 12, 0, s.next%60, 0, time.UTC)
-	text := input.Input.Content[0].Text
 	session.messages = append(session.messages, onboardingMessage(
 		session,
 		invocationID,
@@ -119,7 +114,7 @@ func (s *onboardingState) create(response http.ResponseWriter, request *http.Req
 
 	status := "completed"
 	var failure any
-	if input.Spec.Model.Name == "invalid-model" {
+	if input.Spec.Model.ID == "invalid-model" {
 		status = "failed"
 		failure = map[string]any{
 			"code":    "provider_error",
@@ -149,9 +144,27 @@ func (s *onboardingState) create(response http.ResponseWriter, request *http.Req
 		"invocation_id": invocationID,
 		"status":        "queued",
 		"deduplicated":  false,
+		"deadline_at":   createdAt.Add(5 * time.Minute).Format(time.RFC3339),
 	}
 	s.idempotencyAck[input.IdempotencyKey] = cloneMap(ack)
 	writeJSON(response, http.StatusAccepted, ack)
+}
+
+func onboardingInputText(raw json.RawMessage) (string, bool) {
+	var text string
+	if json.Unmarshal(raw, &text) == nil && text != "" {
+		return text, true
+	}
+	var blocks struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil || len(blocks.Content) == 0 {
+		return "", false
+	}
+	return blocks.Content[0].Text, blocks.Content[0].Type == "text" && blocks.Content[0].Text != ""
 }
 
 func (s *onboardingState) resolveSession(input onboardingCreateRequest) (*onboardingSession, bool) {
@@ -160,7 +173,13 @@ func (s *onboardingState) resolveSession(input onboardingCreateRequest) (*onboar
 		return session, ok
 	}
 	if input.SessionKey == nil || *input.SessionKey == "" {
-		return nil, false
+		session := &onboardingSession{
+			id:      onboardingID("sesn", s.next+1),
+			agentID: onboardingID("agnt", s.next+1),
+			facts:   map[string]string{},
+		}
+		s.sessionsByID[session.id] = session
+		return session, true
 	}
 	if session, ok := s.sessionsByKey[*input.SessionKey]; ok {
 		return session, true
@@ -268,7 +287,7 @@ func (s *onboardingState) getSession(response http.ResponseWriter, request *http
 	writeJSON(response, http.StatusOK, map[string]any{
 		"id":                       session.id,
 		"agent_id":                 session.agentID,
-		"tenant_ref":               nil,
+		"tenant_key":               nil,
 		"session_key":              session.key,
 		"active_invocation_id":     nil,
 		"active_invocation_status": nil,
@@ -314,12 +333,12 @@ func onboardingInvocation(
 		"provenance":                   nil,
 		"structured_output":            nil,
 		"structured_output_provenance": nil,
-		"budgets":                      map[string]any{"wall_clock_timeout_seconds": 300, "active_execution_timeout_seconds": 120, "max_output_tokens": 300, "max_iterations": 1},
+		"limits":                       map[string]any{"total_timeout_seconds": 300, "active_timeout_seconds": 120, "waiting_timeout_seconds": 180, "max_output_tokens": 300, "max_iterations": 1},
 		"active_execution_ms":          10,
-		"wall_clock_deadline_at":       createdAt.Add(5 * time.Minute).Format(time.RFC3339),
+		"deadline_at":                  createdAt.Add(5 * time.Minute).Format(time.RFC3339),
 		"created_at":                   createdAt.Format(time.RFC3339),
 		"updated_at":                   createdAt.Add(time.Second).Format(time.RFC3339),
-		"completed_at":                 createdAt.Add(time.Second).Format(time.RFC3339),
+		"ended_at":                     createdAt.Add(time.Second).Format(time.RFC3339),
 	}
 }
 

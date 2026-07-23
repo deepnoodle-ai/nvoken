@@ -14,16 +14,16 @@ import (
 
 const MaxCallbackURLBytes = 2048
 
-var clientToolNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+var hostToolNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-func validateClientTools(tools []ClientToolSpec) error {
-	if len(tools) > MaxClientTools {
-		return invalidRequest(fmt.Sprintf("spec.tools must contain at most %d tools.", MaxClientTools))
+func validateHostTools(tools []HostToolSpec) error {
+	if len(tools) > MaxHostTools {
+		return invalidRequest(fmt.Sprintf("spec.tools must contain at most %d tools.", MaxHostTools))
 	}
 	seen := make(map[string]struct{}, len(tools))
 	for index, tool := range tools {
-		if len(tool.Name) == 0 || len(tool.Name) > MaxClientToolNameBytes ||
-			!clientToolNamePattern.MatchString(tool.Name) || strings.HasPrefix(tool.Name, "nvoken_") {
+		if len(tool.Name) == 0 || len(tool.Name) > MaxHostToolNameBytes ||
+			!hostToolNamePattern.MatchString(tool.Name) || strings.HasPrefix(tool.Name, "nvoken_") {
 			return invalidRequest(fmt.Sprintf("spec.tools[%d].name is invalid.", index))
 		}
 		if _, duplicate := seen[tool.Name]; duplicate {
@@ -31,7 +31,7 @@ func validateClientTools(tools []ClientToolSpec) error {
 		}
 		seen[tool.Name] = struct{}{}
 		switch tool.Mode {
-		case string(domain.ToolCallModeClient):
+		case string(domain.ToolCallModeHost):
 			if tool.Callback != nil || tool.callbackSet {
 				return invalidRequest(fmt.Sprintf("spec.tools[%d].callback is allowed only for callback mode.", index))
 			}
@@ -40,10 +40,10 @@ func validateClientTools(tools []ClientToolSpec) error {
 				return invalidRequest(fmt.Sprintf("spec.tools[%d].callback.url is invalid.", index))
 			}
 		default:
-			return invalidRequest(fmt.Sprintf("spec.tools[%d].mode must be client or callback.", index))
+			return invalidRequest(fmt.Sprintf("spec.tools[%d].mode must be host or callback.", index))
 		}
 		if !utf8.ValidString(tool.Description) || strings.TrimSpace(tool.Description) == "" ||
-			utf8.RuneCountInString(tool.Description) > MaxClientToolDescriptionCharacters {
+			utf8.RuneCountInString(tool.Description) > MaxHostToolDescriptionCharacters {
 			return invalidRequest(fmt.Sprintf("spec.tools[%d].description is invalid.", index))
 		}
 		canonical, err := canonicalJSON(tool.InputSchema)
@@ -66,7 +66,7 @@ func validCallbackURL(value string) bool {
 		parsed.User == nil && parsed.Fragment == "" && parsed.Opaque == ""
 }
 
-func hasCallbackTools(tools []ClientToolSpec) bool {
+func hasCallbackTools(tools []HostToolSpec) bool {
 	for _, tool := range tools {
 		if tool.Mode == string(domain.ToolCallModeCallback) {
 			return true

@@ -22,7 +22,7 @@ entries originate in the design program for nvoken's predecessor runtime
 
 9. Terminology: the word "loop" is reserved for the predecessor runtime's Loops feature (scheduled automations), which nvoken does not recreate. The model-and-tool-call cycle within one Invocation is a "turn" (agent turn, turn engine). The positioning phrase is "agent runtime as a service".
 
-10. Interaction model: the Session event log is the single interaction medium — agent output, ToolCalls, lifecycle, and host input are durable, cursor-ordered events. Live delivery is SSE with cursor resume; host input (tool results, directions) is an HTTP POST of typed events; there is no WebSocket. A client ToolCall parks the Invocation in a waiting state, holding no compute, until the result event arrives. Chosen over a duplex WebSocket for client flexibility and ops/debuggability, informed by the CMA event model (which we beat on cursor resume).
+10. Interaction model: the Session event log is the single interaction medium — agent output, ToolCalls, lifecycle, and host input are durable, cursor-ordered events. Live delivery is SSE with cursor resume; host input (tool results, directions) is an HTTP POST of typed events; there is no WebSocket. A host ToolCall parks the Invocation in a waiting state, holding no compute, until the result event arrives. Chosen over a duplex WebSocket for client flexibility and ops/debuggability, informed by the CMA event model (which we beat on cursor resume).
 
 11. Credential unification (2026-07-20): CLI credentials are no longer a separate resource. API credentials are one resource at `/v1/account/credentials` with two kinds: `machine` (one fixed Operator, Viewer, or Runtime profile plus narrowing constraints) and `user` (issued through the device authorization flow; effective role resolved at authentication time as the owner's current membership role intersected with an optional Operator/Viewer cap). The parallel `/v1/auth/cli-credentials` CRUD is removed; the CLI lists and revokes its credential through the unified collection. Auth-time role resolution preserves the property that demoting or removing the human takes effect immediately.
 
@@ -36,13 +36,13 @@ durable representation of caller, agent, and ToolCall content. Invocation state
 and append-only lifecycle revisions may reference message sequence numbers but
 cannot copy message payloads. Incremental reads and SSE are projections over
 those records plus explicitly ephemeral live deltas. A generic Session event
-append endpoint is removed; later client ToolCall results and steering use
+append endpoint is removed; later host ToolCall results and steering use
 narrow commands. This follows the Mobius transcript source-of-truth reversal,
 where duplicate durable message and event encodings had already diverged under
 retention and live reconciliation.
 
 15. Account-wide Agent and tenant-partitioned Session namespace (2026-07-20):
-`agent_ref` resolves an identity-only Agent anchor unique within the Account and
+`agent_key` resolves an identity-only Agent anchor unique within the Account and
 shared across tenant partitions. Session keys are unique within `(Account,
 effective tenant partition, Agent, session_key)`, and a Session's Agent and
 partition are immutable. Tenant-constrained credentials reject an explicit
@@ -55,7 +55,7 @@ the last three are immutable and deadline or budget exhaustion is a typed
 failure. One Session has at most one nonterminal Invocation. Admission commits
 Agent and Session resolution or creation, the inline spec snapshot, one input
 message, and one queued Invocation in one Postgres transaction. Body
-idempotency is scoped to Account, effective tenant partition, Agent reference,
+idempotency is scoped to Account, effective tenant partition, Agent key,
 and caller key. Equal replay precedes the nonterminal check and returns the
 original work; materially different reuse conflicts. Background admission and
 equal replay return `202` after commit, including replay of a terminal
@@ -88,7 +88,7 @@ surface that accumulated there.
 
 19. Bounded admission and stable request fingerprint (2026-07-20): the
 background Invocation request is limited to 1 MiB of encoded JSON and 64 text
-blocks. `agent_ref`, `tenant_ref`, `session_key`, `idempotency_key`, and the
+blocks. `agent_key`, `tenant_key`, `session_key`, `idempotency_key`, and the
 model provider/name are each limited to 255 Unicode characters; whitespace-only
 required strings are invalid. Idempotency comparison uses the documented v1
 SHA-256 canonical representation under `docs/design/`, so JSON object order is
@@ -135,7 +135,7 @@ adapter knows USD pricing is unavailable, and exposes
 `estimated_cost_unavailable` as safe public detail. Canonical failed checkpoints
 remain readable evidence, but failed/cancelled assistant and tool messages are
 excluded from future provider context. New requests use fingerprint v2 with
-requested budgets as material input; retained v1 budgetless work remains
+requested limits as material input; retained v1 budgetless work remains
 replay-compatible. This adopts
 Mobius Cloud's cancellation and active-segment invariants without importing its
 turn/run ownership or wait/job tables.
@@ -147,7 +147,7 @@ defaults to embedded polling. The paved Google Cloud deployment defaults to a
 private Cloud Tasks-to-Cloud Run executor because its in-flight HTTP request
 allows normal revision draining. Admission in that mode commits an Invocation
 dispatch intent atomically, while Postgres exact claims, leases, fences,
-cancellation, budgets, and terminal writes remain authoritative. The combined
+cancellation, limits, and terminal writes remain authoritative. The combined
 service continues non-request-bound publication, reconciliation, repair, and
 reaping with instance CPU and nonzero minimum capacity. Until checkpoint replay
 ships, an abruptly lost model segment fails visibly as `execution_lost` rather
@@ -229,12 +229,12 @@ written for recoverable lease expiry. This decision does not add a public retry
 endpoint, arbitrary provider snapshots, exactly-once billing or external
 effects, or cooperative checkpoint-and-chain at the intentional segment limit.
 
-28. Client tools park and resume through one Invocation command (2026-07-21):
+28. Host tools park and resume through one Invocation command (2026-07-21):
 an inline immutable spec may declare up to 32 ordered `mode: client` tools with
 bounded object schemas. New admissions use fingerprint v4, which makes the
 ordered declarations material while recursively canonicalizing schema objects;
 retained tools-free v1-v3 rows remain comparable by their recorded algorithm.
-When Dive selects a client tool, nvoken commits the assistant request, stable
+When Dive selects a host tool, nvoken commits the assistant request, stable
 ToolCall identities, receipt, and checkpoint before atomically parking the
 Invocation in `waiting` with no lease or active segment. Invocation and Session
 reads project unresolved calls from that evidence. The only public write is
@@ -277,7 +277,7 @@ configures application-layer credential encryption, but cannot select
 `platform`; nvoken Cloud may enable the four API sources but cannot select
 `installation_byok`. Reusable Account and tenant BYOK live as encrypted,
 versioned model-provider credential resources; tenant scope is the effective
-internal partition resolved from the host-controlled `tenant_ref`, not an
+internal partition resolved from the host-controlled `tenant_key`, not an
 end-user identity or new Tenant resource. An `InvocationProviderCredential`
 binding records exactly one source per Invocation and canonical provider. The
 current spec names one provider, so the current binding set has one row; the
@@ -345,3 +345,24 @@ is untouched because it participates in fingerprint canonicalization; its
 naming belongs to the pre-freeze naming sweep with a fingerprint version.
 Internal database columns and Go identifiers may keep their names; this is a
 wire-contract rename.
+
+34. Pre-freeze invoke and stream vocabulary is consumer-shaped (2026-07-23):
+while there are no external adopters, one coordinated breaking revision adopts
+`agent_key`, `tenant_key`, `model.id`, `spec.limits`, the total/active/waiting
+timeout trio, `deadline_at`, `ended_at`, and tool mode `host`; accepts string
+input; and makes instructions optional without supplying a hidden default.
+Fingerprint v7 covers that literal request vocabulary and string
+normalization. The public `execution_lost` failure code is removed because
+checkpoint recovery no longer writes it. No compatibility aliases are served;
+older fingerprint algorithms remain only to compare durable admissions made
+under those versions.
+
+The same revision makes one Invocation the ordinary streaming scope. Admission
+with `Accept: text/event-stream` starts with `invocation.accepted`, and
+`GET /v1/invocations/{invocation_id}/stream` reconnects by durable cursor.
+Consumers print `output_text.delta` and finish on `invocation.result`; optional
+thinking previews, durable `invocation.update`, `stream.resync`, and
+`stream.end` preserve the richer recovery contract. Session streams use
+`transcript.update` plus the same delta names. Every payload carries `type` and
+scope IDs, durable frames alone carry SSE IDs, public `attempt` hides lease
+terminology, and `iteration` separates assistant messages in tool loops.

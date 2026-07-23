@@ -53,7 +53,7 @@ The package contains:
 | Artifact | Purpose |
 | --- | --- |
 | [`nvoken.env.example`](nvoken.env.example) | Secret-free, machine-checked canonical configuration. |
-| [`smoke.py`](smoke.py) | Normal, restart, client ToolCall, and optional callback smoke paths. |
+| [`smoke.py`](smoke.py) | Normal, restart, host ToolCall, and optional callback smoke paths. |
 | [`load.py`](load.py) | Bounded admissions, reads, stream, queue, memory, and connection recorder. |
 | [`failure-drills.md`](failure-drills.md) | Disposable process and dependency failure procedure. |
 | [`runbooks.md`](runbooks.md) | First checks, safe actions, and recovery signals for profile incidents. |
@@ -119,7 +119,7 @@ the protected environment file, never an image layer or command-line argument.
 `NVOKEN_PUBLIC_BASE_URL` is the externally reachable HTTPS origin used by the
 device authorization flow. Keep `NVOKEN_TRUST_FORWARDED_CLIENT_IP=false` unless
 one trusted ingress overwrites the forwarded client-IP headers. The example's
-connection, concurrency, timeout, drain, stream, budget, and retention values
+connection, concurrency, timeout, drain, stream, limit, and retention values
 are the initial safety bounds; change them only with a recorded load or
 operational reason.
 
@@ -187,7 +187,7 @@ export NVOKEN_BASE_URL=https://nvoken.example.com
 export NVOKEN_API_KEY=<runtime-credential>
 export NVOKEN_TESTED_REVISION=<git-revision-or-image-digest>
 export NVOKEN_SMOKE_PROVIDER=anthropic
-export NVOKEN_SMOKE_MODEL=<current-model-name>
+export NVOKEN_SMOKE_MODEL=<current-model-id>
 python3 deploy/single-daemon/smoke.py run
 ```
 
@@ -203,10 +203,10 @@ same immutable build, rerun `diagnose`, and verify Postgres readback:
 python3 deploy/single-daemon/smoke.py verify-restart
 ```
 
-Exercise a durable client ToolCall, including equal result replay:
+Exercise a durable host ToolCall, including equal result replay:
 
 ```bash
-python3 deploy/single-daemon/smoke.py client-tool
+python3 deploy/single-daemon/smoke.py host-tool
 ```
 
 When callbacks are enabled, point the smoke at a public HTTPS receiver that
@@ -233,7 +233,7 @@ to stop its named unit. Do not use broad `pkill` patterns. The daemon stops
 admitting work, drains owned execution and callback work within the configured
 graces, releases claims, and exits inside `SHUTDOWN_TIMEOUT`. After restart,
 Postgres polling and the reaper make retained queued or expired-lease work
-eligible; a waiting client ToolCall remains parked without a goroutine.
+eligible; a waiting host ToolCall remains parked without a goroutine.
 
 There is intentionally no API for deleting authoritative Sessions or
 Invocations. Put smoke and drill data in a dedicated disposable installation or
@@ -265,7 +265,7 @@ local files, and any future delivery adapter are not restore authorities.
 Provider, callback, identity, and encryption secrets remain configuration
 recovery concerns and are not part of the logical database dump.
 
-Use PostgreSQL 17 client tools and credential-safe `PGSERVICE` entries. For the
+Use PostgreSQL 17 host tools and credential-safe `PGSERVICE` entries. For the
 initial drill, gracefully stop the daemon so no external effect or claim can
 advance while the recovery point is taken:
 
@@ -301,7 +301,7 @@ export NVOKEN_DAEMON_PID=<exact-pid>
 export NVOKEN_LOAD_MACHINE='2 vCPU, 4 GiB RAM, Linux <version>'
 export NVOKEN_LOAD_DATABASE='PostgreSQL 17.x, local SSD, <connection limit>'
 export NVOKEN_LOAD_PROVIDER=anthropic
-export NVOKEN_LOAD_MODEL=<current-model-name>
+export NVOKEN_LOAD_MODEL=<current-model-id>
 export NVOKEN_LOAD_REQUESTS=12
 export NVOKEN_LOAD_CONCURRENCY=4
 export NVOKEN_ENGINE_CONCURRENCY=8

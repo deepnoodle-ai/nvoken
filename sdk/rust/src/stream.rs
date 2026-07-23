@@ -6,7 +6,7 @@ use futures_util::StreamExt;
 use reqwest::header::{HeaderName, ACCEPT, AUTHORIZATION};
 use serde_json::Value;
 
-use crate::client::{Handle, NvokenError};
+use crate::client::{InvocationHandle, NvokenError};
 use crate::models;
 use crate::routes;
 
@@ -34,24 +34,24 @@ pub struct Reducer {
 
 impl Reducer {
     pub fn apply(&mut self, event: &StreamEvent) -> Result<(), NvokenError> {
-        if event.event_type != "transcript.snapshot" {
+        if event.event_type != "transcript.update" {
             return Ok(());
         }
-        let snapshot: models::TranscriptSnapshot = serde_json::from_value(event.data.clone())
-            .map_err(|error| {
+        let update: models::TranscriptUpdate =
+            serde_json::from_value(event.data.clone()).map_err(|error| {
                 NvokenError::unexpected(format!(
                     "decode {} event payload: {error}",
                     event.event_type
                 ))
             })?;
-        for message in snapshot.messages {
+        for message in update.messages {
             self.messages.insert(message.sequence, message);
         }
-        for change in snapshot.invocation_changes {
+        for change in update.invocation_changes {
             self.changes
                 .insert((change.invocation_id.clone(), change.revision), change);
         }
-        self.cursor = event.id.clone().or(Some(snapshot.resume_cursor));
+        self.cursor = event.id.clone().or(Some(update.resume_cursor));
         Ok(())
     }
 
@@ -65,15 +65,15 @@ impl Reducer {
 }
 
 pub fn stream_handle(
-    handle: &Handle,
-) -> impl futures_core::Stream<Item = Result<(StreamEvent, ReducedSnapshot), NvokenError>> + '_ {
+    handle: &InvocationHandle,
+) -> impl futures_core::Stream<Item = Result<StreamEvent, NvokenError>> + '_ {
     try_stream! {
-        let mut reducer = Reducer::default();
+        let mut cursor: Option<String> = None;
         let mut retry = Duration::from_secs(1);
-        loop {
-            let path = routes::STREAM_SESSION_TRANSCRIPT.replace(
-                "{session_id}",
-                &crate::apis::urlencode(&handle.session_id),
+        'invocation: loop {
+            let path = routes::STREAM_INVOCATION.replace(
+                "{invocation_id}",
+                &crate::apis::urlencode(&handle.invocation_id),
             );
             let url = format!("{}{}", handle.client.configuration.base_path, path);
             let mut request = handle
@@ -84,7 +84,7 @@ pub fn stream_handle(
             if let Some(token) = &handle.client.configuration.bearer_access_token {
                 request = request.header(AUTHORIZATION, format!("Bearer {token}"));
             }
-            if let Some(cursor) = &reducer.snapshot().resume_cursor {
+            if let Some(cursor) = &cursor {
                 request = request.header(HeaderName::from_static("last-event-id"), cursor);
             }
             let response = match request.send().await {
@@ -103,7 +103,6 @@ pub fn stream_handle(
             }
             let mut decoder = Decoder::default();
             let mut bytes = response.bytes_stream();
-            let mut terminal_end = false;
             while let Some(chunk) = bytes.next().await {
                 let chunk = match chunk {
                     Ok(chunk) => chunk,
@@ -113,28 +112,24 @@ pub fn stream_handle(
                     if let Some(value) = event.retry {
                         retry = value.min(Duration::from_secs(30));
                     }
-                    reducer.apply(&event)?;
-                    if event.event_type == "stream.end" {
-                        if let Ok(end) = serde_json::from_value::<models::StreamEndEvent>(event.data.clone()) {
-                            terminal_end = end.reason == models::stream_end_event::Reason::Terminal;
-                        }
+                    if event.id.is_some() {
+                        cursor.clone_from(&event.id);
                     }
-                    yield (event, reducer.snapshot());
+                    let settled = event.event_type == "invocation.result";
+                    yield event;
+                    if settled {
+                        break 'invocation;
+                    }
                 }
             }
             for event in decoder.finish()? {
-                reducer.apply(&event)?;
-                yield (event, reducer.snapshot());
-            }
-            if terminal_end {
-                let invocation = handle.client.get(&handle.invocation_id).await?;
-                if matches!(
-                    invocation.status,
-                    models::InvocationStatus::Completed
-                        | models::InvocationStatus::Failed
-                        | models::InvocationStatus::Cancelled
-                ) {
-                    break;
+                if event.id.is_some() {
+                    cursor.clone_from(&event.id);
+                }
+                let settled = event.event_type == "invocation.result";
+                yield event;
+                if settled {
+                    break 'invocation;
                 }
             }
             tokio::time::sleep(retry).await;

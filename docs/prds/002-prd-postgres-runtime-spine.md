@@ -70,7 +70,7 @@ runtime deletion or compaction; Cloud Run and Cloud SQL provisioning.
 
 - **R3 — Tenant and Session identity invariants.** An Account must have exactly
   one default tenant partition and may have at most one partition per nonempty
-  `tenant_ref`. An Agent must be unique by `(account_id, agent_ref)`. A Session
+  `tenant_key`. An Agent must be unique by `(account_id, agent_key)`. A Session
   must permanently reference one Account, tenant partition, and Agent, and a
   non-null `session_key` must be unique within that tuple. Composite foreign
   keys or equivalent constraints must prevent cross-Account, cross-partition,

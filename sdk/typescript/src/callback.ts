@@ -5,8 +5,8 @@ export interface CallbackEnvelope {
     tool_call_id: string;
     invocation_id: string;
     session_id: string;
-    agent_ref: string;
-    tenant_ref?: string;
+    agent_key: string;
+    tenant_key?: string;
   };
   input: unknown;
 }

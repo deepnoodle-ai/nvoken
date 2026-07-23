@@ -35,9 +35,11 @@ npm run build --prefix sdk/typescript
 node sdk/typescript/dist/examples/quickstart.js
 ```
 
-The source quickstart reads the generated `.env`, writes and recalls a code
-word across two Invocations, and prints the Session key. This path imports the
-SDK build from your checkout, so local SDK changes are exercised.
+The source quickstart reads the generated `.env`, sends one concise prompt, and
+prints the assistant response. This path imports the SDK build from your
+checkout, so local SDK changes are exercised. Use the
+[TypeScript chat example](../../examples/typescript-chat/README.md) when a
+change needs a multi-turn Session proof.
 
 ## 3. Check your changes
 

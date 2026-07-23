@@ -8,10 +8,10 @@ from typing import Any, AsyncIterator, Awaitable, Callable, TYPE_CHECKING
 from nvoken_generated.models.invocation_change import InvocationChange
 from nvoken_generated.models.session_message import SessionMessage
 from nvoken_generated.models.stream_end_event import StreamEndEvent
-from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot
+from nvoken_generated.models.transcript_update import TranscriptUpdate
 
 if TYPE_CHECKING:
-    from .client import Client, Handle
+    from .client import Client, InvocationHandle
 
 
 @dataclass(frozen=True)
@@ -36,15 +36,15 @@ class Reducer:
         self._cursor: str | None = None
 
     def apply(self, event: StreamEvent) -> None:
-        if event.type != "transcript.snapshot":
+        if event.type != "transcript.update":
             return
-        snapshot = TranscriptSnapshot.from_dict(event.data)
-        assert snapshot is not None
-        for message in snapshot.messages:
+        update = TranscriptUpdate.from_dict(event.data)
+        assert update is not None
+        for message in update.messages:
             self._messages[message.sequence] = message
-        for change in snapshot.invocation_changes:
+        for change in update.invocation_changes:
             self._changes[(change.invocation_id, change.revision)] = change
-        self._cursor = event.id or snapshot.resume_cursor or self._cursor
+        self._cursor = event.id or update.resume_cursor or self._cursor
 
     def snapshot(self) -> ReducedSnapshot:
         return ReducedSnapshot(
@@ -59,11 +59,16 @@ class Reducer:
 
 async def stream_session(
     client: Client,
-    handle: Handle,
+    handle: InvocationHandle,
     reducer: Reducer,
     consume: Callable[[StreamEvent, ReducedSnapshot], Awaitable[None] | None],
 ) -> None:
     retry = 1.0
+    if handle.session_id is None:
+        await handle.refresh()
+    if handle.session_id is None:
+        from .client import NvokenError
+        raise NvokenError("unexpected_response", "Invocation did not resolve to a Session")
     while True:
         serialized = client.sessions._stream_session_transcript_serialize(
             session_id=handle.session_id,
@@ -103,6 +108,48 @@ async def stream_session(
             invocation = await handle.refresh()
             if invocation.status in {"completed", "failed", "cancelled"}:
                 return
+        await asyncio.sleep(retry)
+
+
+async def stream_invocation(
+    client: Client,
+    handle: InvocationHandle,
+    consume: Callable[[StreamEvent], Awaitable[None] | None],
+) -> None:
+    retry = 1.0
+    cursor: str | None = None
+    while True:
+        serialized = client.invocations._stream_invocation_serialize(
+            invocation_id=handle.invocation_id,
+            cursor=None,
+            last_event_id=cursor,
+            _request_auth=None,
+            _content_type=None,
+            _headers=None,
+            _host_index=0,
+        )
+        method, url, headers, _, _ = serialized
+        try:
+            async with client.stream_client.stream(method, url, headers=headers) as response:
+                if response.is_error:
+                    from .client import normalize_httpx_response
+                    raise await normalize_httpx_response(response)
+                async for event in parse_sse(response.aiter_lines()):
+                    if event.retry is not None:
+                        retry = min(event.retry, 30.0)
+                    if event.id:
+                        cursor = event.id
+                    consumed = consume(event)
+                    if consumed is not None:
+                        await consumed
+                    if event.type == "invocation.result":
+                        return
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            from .client import NvokenError
+            if isinstance(error, NvokenError):
+                raise
         await asyncio.sleep(retry)
 
 

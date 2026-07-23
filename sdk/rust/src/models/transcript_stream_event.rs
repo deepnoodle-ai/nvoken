@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -11,35 +11,44 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// TranscriptStreamEvent : The JSON value carried by one SSE `data:` field. SSE framing supplies the event name and, for `TranscriptSnapshot` only, the durable ID.
-/// The JSON value carried by one SSE `data:` field. SSE framing supplies the event name and, for `TranscriptSnapshot` only, the durable ID.
+/// TranscriptStreamEvent : The JSON value carried by one Session-stream SSE `data:` field. Durable `transcript.update` frames carry the resume cursor as both payload data and SSE `id`; preview and control frames never carry IDs.
+/// The JSON value carried by one Session-stream SSE `data:` field. Durable `transcript.update` frames carry the resume cursor as both payload data and SSE `id`; preview and control frames never carry IDs.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TranscriptStreamEvent {
-    TranscriptSnapshot(Box<models::TranscriptSnapshot>),
-    GenerationDeltaEvent(Box<models::GenerationDeltaEvent>),
+    TranscriptUpdate(Box<models::TranscriptUpdate>),
+    OutputTextDeltaEvent(Box<models::OutputTextDeltaEvent>),
+    ThinkingDeltaEvent(Box<models::ThinkingDeltaEvent>),
     StreamResyncEvent(Box<models::StreamResyncEvent>),
     StreamEndEvent(Box<models::StreamEndEvent>),
 }
 
 impl Default for TranscriptStreamEvent {
     fn default() -> Self {
-        Self::TranscriptSnapshot(Default::default())
+        Self::TranscriptUpdate(Default::default())
     }
 }
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum EventType {
+pub enum Type {
+    #[serde(rename = "transcript.update")]
+    EventTranscriptUpdate,
+    #[serde(rename = "output_text.delta")]
+    OutputTextDelta,
+    #[serde(rename = "thinking.delta")]
+    ThinkingDelta,
+    #[serde(rename = "stream.resync")]
+    StreamResync,
     #[serde(rename = "stream.end")]
-    EventStreamEnd,
+    StreamEnd,
 }
 
-impl Default for EventType {
-    fn default() -> EventType {
-        Self::EventStreamEnd
+impl Default for Type {
+    fn default() -> Type {
+        Self::EventTranscriptUpdate
     }
 }
-///
+/// `rotate` means reconnect with `resume_cursor`. `terminal` means the scoped Invocation settled, or the Session became idle for a Session-scoped stream.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Reason {
     #[serde(rename = "terminal")]

@@ -5,10 +5,10 @@ from .callback import (
     verify_callback,
 )
 from .client import (
-    Budgets,
+    Limits,
     Client,
     ExecutionSpec,
-    Handle,
+    InvocationHandle,
     InvokeRequest,
     Model,
     NvokenError,
@@ -20,11 +20,11 @@ from .stream import Reducer, ReducedSnapshot, StreamEvent
 from nvoken_generated import *  # noqa: F403
 
 __all__ = [
-    "Budgets",
+    "Limits",
     "CallbackResultStore",
     "Client",
     "ExecutionSpec",
-    "Handle",
+    "InvocationHandle",
     "InvokeRequest",
     "Model",
     "NvokenError",

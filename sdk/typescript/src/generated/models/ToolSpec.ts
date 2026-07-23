@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -19,20 +19,20 @@ import {
     CallbackToolSpecFromJSONTyped,
     CallbackToolSpecToJSON,
 } from './CallbackToolSpec.js';
-import type { ClientToolSpec } from './ClientToolSpec.js';
+import type { HostToolSpec } from './HostToolSpec.js';
 import {
-    instanceOfClientToolSpec,
-    ClientToolSpecFromJSON,
-    ClientToolSpecFromJSONTyped,
-    ClientToolSpecToJSON,
-} from './ClientToolSpec.js';
+    instanceOfHostToolSpec,
+    HostToolSpecFromJSON,
+    HostToolSpecFromJSONTyped,
+    HostToolSpecToJSON,
+} from './HostToolSpec.js';
 
 /**
  * @type ToolSpec
  *
  * @export
  */
-export type ToolSpec = CallbackToolSpec | ClientToolSpec;
+export type ToolSpec = CallbackToolSpec | HostToolSpec;
 
 export function ToolSpecFromJSON(json: any): ToolSpec {
     return ToolSpecFromJSONTyped(json, false);
@@ -48,8 +48,8 @@ export function ToolSpecFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
     if (instanceOfCallbackToolSpec(json)) {
         return CallbackToolSpecFromJSONTyped(json, true);
     }
-    if (instanceOfClientToolSpec(json)) {
-        return ClientToolSpecFromJSONTyped(json, true);
+    if (instanceOfHostToolSpec(json)) {
+        return HostToolSpecFromJSONTyped(json, true);
     }
     return {} as any;
 }
@@ -68,8 +68,8 @@ export function ToolSpecToJSONTyped(value?: ToolSpec | null, ignoreDiscriminator
     if (instanceOfCallbackToolSpec(value)) {
         return CallbackToolSpecToJSON(value as CallbackToolSpec);
     }
-    if (instanceOfClientToolSpec(value)) {
-        return ClientToolSpecToJSON(value as ClientToolSpec);
+    if (instanceOfHostToolSpec(value)) {
+        return HostToolSpecToJSON(value as HostToolSpec);
     }
     return {};
 }

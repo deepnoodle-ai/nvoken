@@ -7,13 +7,13 @@ and release reference for integrators and contributors.
 nvoken ships supported workflow facades for Go, TypeScript, Python, and Rust.
 They are generated from `openapi/runtime.yaml`, then wrapped with the durable
 semantics an ordinary host needs: exact-request admission replay, typed errors,
-bounded polling, cursor pagination, resumable Session SSE, client ToolCall
+bounded polling, cursor pagination, resumable Session SSE, host ToolCall
 result replay, and callback verification.
 
 | Package | Supported facade | Raw generated client |
 | --- | --- | --- |
 | Go | `sdk/go` package `nvoken` | `Client.Raw()` |
-| TypeScript | `Client` from `@deepnoodle/nvoken` | `raw` export |
+| TypeScript | `Client` from `@deepnoodle/nvoken` | `client.raw()` |
 | Python | `nvoken.Client` | `nvoken_generated` |
 | Rust | `nvoken::Client` | `nvoken::apis` |
 
@@ -22,8 +22,14 @@ wait timeout or a dropped stream stops only the caller; use explicit
 `cancel` to change durable Invocation state. Keep the same idempotency key and
 request after an uncertain admission response.
 
+All four handwritten facades follow the
+[cross-language SDK surface convention](../codebase/sdk-and-cli.md#cross-language-public-convention):
+lazy Invocation handles, generated idempotency for ordinary calls, actionable
+and terminal waits, direct Invocation event streams, symmetric collection
+helpers, typed errors, and an explicit raw generated-client escape hatch.
+
 The [TypeScript SDK guide](../../sdk/typescript/README.md) also covers
-actionable client-tool waits, schema-bound tool and structured-output types,
+actionable host-tool waits, schema-bound tool and structured-output types,
 Agent/tenant Session identity, exact host-key recovery, pagination, and
 fixed-cut transcript draining. The
 [TypeScript invoke showcase](../../examples/typescript-invoke-showcase/README.md)

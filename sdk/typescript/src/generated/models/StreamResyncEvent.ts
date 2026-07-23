@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -21,16 +21,22 @@ import { mapValues } from '../runtime.js';
 export interface StreamResyncEvent {
     /**
      *
-     * @type {StreamResyncEventEventTypeEnum}
+     * @type {StreamResyncEventTypeEnum}
      * @memberof StreamResyncEvent
      */
-    eventType: StreamResyncEventEventTypeEnum;
+    type: StreamResyncEventTypeEnum;
     /**
      * UUIDv7 with the public `sesn_` prefix.
      * @type {string}
      * @memberof StreamResyncEvent
      */
     sessionId: string;
+    /**
+     * UUIDv7 with the public `invk_` prefix.
+     * @type {string}
+     * @memberof StreamResyncEvent
+     */
+    invocationId: string | null;
     /**
      *
      * @type {StreamResyncEventReasonEnum}
@@ -43,10 +49,10 @@ export interface StreamResyncEvent {
 /**
  * @export
  */
-export const StreamResyncEventEventTypeEnum = {
+export const StreamResyncEventTypeEnum = {
     EventStreamResync: 'stream.resync'
 } as const;
-export type StreamResyncEventEventTypeEnum = typeof StreamResyncEventEventTypeEnum[keyof typeof StreamResyncEventEventTypeEnum];
+export type StreamResyncEventTypeEnum = typeof StreamResyncEventTypeEnum[keyof typeof StreamResyncEventTypeEnum];
 
 /**
  * @export
@@ -61,8 +67,9 @@ export type StreamResyncEventReasonEnum = typeof StreamResyncEventReasonEnum[key
  * Check if a given object implements the StreamResyncEvent interface.
  */
 export function instanceOfStreamResyncEvent(value: object): value is StreamResyncEvent {
-    if (!('eventType' in value) || value['eventType'] === undefined) return false;
+    if (!('type' in value) || value['type'] === undefined) return false;
     if (!('sessionId' in value) || value['sessionId'] === undefined) return false;
+    if (!('invocationId' in value) || value['invocationId'] === undefined) return false;
     if (!('reason' in value) || value['reason'] === undefined) return false;
     return true;
 }
@@ -77,8 +84,9 @@ export function StreamResyncEventFromJSONTyped(json: any, ignoreDiscriminator: b
     }
     return {
 
-        'eventType': json['event_type'],
+        'type': json['type'],
         'sessionId': json['session_id'],
+        'invocationId': json['invocation_id'],
         'reason': json['reason'],
     };
 }
@@ -94,8 +102,9 @@ export function StreamResyncEventToJSONTyped(value?: StreamResyncEvent | null, i
 
     return {
 
-        'event_type': value['eventType'],
+        'type': value['type'],
         'session_id': value['sessionId'],
+        'invocation_id': value['invocationId'],
         'reason': value['reason'],
     };
 }

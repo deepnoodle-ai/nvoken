@@ -36,9 +36,11 @@ func TestLoadDaemonConfigDefaults(t *testing.T) {
 		cfg.Engine.SettlementReserve != 5*time.Second {
 		t.Fatalf("Engine defaults: %#v", cfg.Engine)
 	}
-	if cfg.Budgets.DefaultWallClockTimeout != 30*time.Minute ||
-		cfg.Budgets.DefaultActiveExecutionTimeout != 30*time.Minute || cfg.Budgets.DefaultMaxIterations != 1 {
-		t.Fatalf("budget defaults: %#v", cfg.Budgets)
+	if cfg.Limits.DefaultTotalTimeout != 30*time.Minute ||
+		cfg.Limits.DefaultActiveTimeout != 30*time.Minute ||
+		cfg.Limits.DefaultWaitingTimeout != 30*time.Minute ||
+		cfg.Limits.DefaultMaxIterations != 1 {
+		t.Fatalf("budget defaults: %#v", cfg.Limits)
 	}
 	if cfg.ProcessRole != "combined" || cfg.InvocationExecutionMode != "embedded" || cfg.Dispatch.Queue != "execution" ||
 		cfg.Dispatch.PublicationLease != 30*time.Second || cfg.Dispatch.StaleAfter != 5*time.Minute ||
@@ -381,7 +383,7 @@ func TestLoadDaemonConfigFromEnv(t *testing.T) {
 	setServeConfig(t)
 	t.Setenv("PORT", "9090")
 	t.Setenv("DATABASE_MAX_CONNS", "17")
-	t.Setenv("RUNTIME_TENANT_REF", "tenant-acme")
+	t.Setenv("RUNTIME_TENANT_KEY", "tenant-acme")
 	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret")
 	t.Setenv("OPENAI_API_KEY", "openai-secret")
 	t.Setenv("ENGINE_CONCURRENCY", "3")
@@ -478,7 +480,7 @@ func TestLoadDaemonConfigRequiresRuntimeDependencies(t *testing.T) {
 	}
 
 	t.Setenv("RUNTIME_API_KEY", "0123456789abcdef0123456789abcdef")
-	t.Setenv("RUNTIME_TENANT_REF", strings.Repeat("界", 256))
+	t.Setenv("RUNTIME_TENANT_KEY", strings.Repeat("界", 256))
 	if _, err := loadDaemonConfig(); err == nil || !strings.Contains(err.Error(), "255 Unicode characters") {
 		t.Fatalf("long tenant constraint error = %v", err)
 	}

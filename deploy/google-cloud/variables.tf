@@ -182,7 +182,7 @@ variable "callback_signing_key_version" {
   }
 }
 
-variable "runtime_tenant_ref" {
+variable "runtime_tenant_key" {
   description = "Optional tenant constraint for the installation Runtime credential."
   type        = string
   default     = null
@@ -603,14 +603,20 @@ variable "engine_settlement_reserve_seconds" {
   }
 }
 
-variable "invocation_default_wall_clock_timeout_seconds" {
-  description = "Default logical wall-clock limit for an Invocation."
+variable "invocation_default_total_timeout_seconds" {
+  description = "Default total-time limit for an Invocation."
   type        = number
   default     = 1800
 }
 
-variable "invocation_default_active_execution_timeout_seconds" {
+variable "invocation_default_active_timeout_seconds" {
   description = "Default active model-execution limit for an Invocation."
+  type        = number
+  default     = 1800
+}
+
+variable "invocation_default_waiting_timeout_seconds" {
+  description = "Default parked waiting-time limit for an Invocation."
   type        = number
   default     = 1800
 }
@@ -621,14 +627,20 @@ variable "invocation_default_max_iterations" {
   default     = 1
 }
 
-variable "invocation_max_wall_clock_timeout_seconds" {
-  description = "Installation maximum logical wall-clock limit."
+variable "invocation_max_total_timeout_seconds" {
+  description = "Installation maximum total-time limit."
   type        = number
   default     = 86400
 }
 
-variable "invocation_max_active_execution_timeout_seconds" {
+variable "invocation_max_active_timeout_seconds" {
   description = "Installation maximum active model-execution limit."
+  type        = number
+  default     = 86400
+}
+
+variable "invocation_max_waiting_timeout_seconds" {
+  description = "Installation maximum parked waiting-time limit."
   type        = number
   default     = 86400
 }

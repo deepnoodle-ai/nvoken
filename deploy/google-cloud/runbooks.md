@@ -177,7 +177,7 @@ prompt, tool payload, or remote response body.
 bad revision. For provider throttling/outage, reduce new admission or wait for
 recovery; do not create replacement Invocations for acknowledged work. A
 checkpointed Invocation remains authoritative and follows its existing retry,
-deadline, and budget contract.
+deadline, and resolved limit contract.
 
 **Recovery.** Success outcomes resume, failure rate stays below threshold, and
 affected Invocations settle durably or expose their typed failure.

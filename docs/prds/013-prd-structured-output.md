@@ -6,7 +6,7 @@
 
 **Depends on:** `003-prd-durable-invocation-admission.md`,
 `007-prd-recovery-and-transcript-reads.md`,
-`008-prd-invocation-controls-and-budgets.md`,
+`008-prd-invocation-controls-and-limits.md`,
 `010-prd-cloud-tasks-invocation-execution.md`,
 `011-prd-resumable-streaming.md`, and
 `012-prd-durable-toolcall-and-checkpoint-model.md`

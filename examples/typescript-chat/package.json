@@ -8,7 +8,7 @@
     "start": "node dist/chat.js"
   },
   "dependencies": {
-    "@deepnoodle/nvoken": "0.1.1"
+    "@deepnoodle/nvoken": "0.2.0"
   },
   "devDependencies": {
     "@types/node": "24.0.15",

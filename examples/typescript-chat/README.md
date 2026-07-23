@@ -25,7 +25,7 @@ account can use:
 ```bash
 NVOKEN_API_KEY='<runtime-credential>' \
 NVOKEN_PROVIDER='openai' \
-NVOKEN_MODEL='<model-name>' \
+NVOKEN_MODEL='<model-id>' \
 npm start
 ```
 
@@ -33,9 +33,10 @@ npm start
 host-owned Session key. Set `NVOKEN_SESSION_KEY` to that value in a later
 process to resolve the same durable Session.
 
-This demo creates an idempotency key in memory for each line. A production host
-should derive that key from its durable message record and reuse it after an
-uncertain admission response or process restart.
+The SDK generates an idempotency key for each line and reuses it during
+ambiguous admission retries. A production host should pass a key derived from
+its durable message record when it must recover the same admission across a
+process restart.
 
 The demo intentionally omits an estimated-cost cap. Cost limits fail closed
 when nvoken does not have USD pricing for the selected model. A local wait

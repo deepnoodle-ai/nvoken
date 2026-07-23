@@ -41,27 +41,28 @@ async def test_shared_fault_server_semantics() -> None:
     async with Client(
         base_url,
         "test-key",
-        retry=RetryPolicy(maximum_attempts=3, minimum_delay=0.001, maximum_delay=0.005),
+        retry=RetryPolicy(max_attempts=3, min_delay=0.001, max_delay=0.005),
     ) as client:
         handle = await client.invoke(InvokeRequest(
-            agent_ref="support",
+            agent_key="support",
             idempotency_key="python-lost-ack",
             input="hello",
             spec=ExecutionSpec(
                 instructions="help",
-                model=Model(provider="openai", name="gpt-test"),
+                model=Model(provider="openai", id="gpt-test"),
             ),
         ))
         assert handle.invocation_id == INVOCATION_ID
         assert handle.session_id == SESSION_ID
 
-        resumed = await client.resume(INVOCATION_ID)
+        resumed = client.invocation(INVOCATION_ID)
+        await resumed.refresh()
         assert resumed.status == "completed"
 
-        waiting = await client.resume(WAIT_ID)
+        waiting = client.invocation(WAIT_ID)
         with pytest.raises(NvokenError) as timeout:
             await asyncio.wait_for(
-                waiting.wait(minimum_delay=0.001, maximum_delay=0.002),
+                waiting.wait(min_poll_interval=0.001, max_poll_interval=0.002),
                 timeout=0.01,
             )
         assert timeout.value.category == "timeout"
@@ -91,31 +92,33 @@ async def test_shared_fault_server_semantics() -> None:
         assert (await handle.cancel()).status == "cancelled"
 
         with pytest.raises(NvokenError) as conflict:
-            await client.get("conflict")
+            await client.get_invocation("conflict")
         assert conflict.value.category == "conflict"
         assert conflict.value.status == 409
         assert conflict.value.request_id
-        assert (await client.get("rate-limit")).status == "completed"
+        assert (await client.get_invocation("rate-limit")).status == "completed"
         with pytest.raises(NvokenError) as rate_limited:
-            await client.get("rate-limit-always")
+            await client.get_invocation("rate-limit-always")
         assert rate_limited.value.category == "rate_limit"
         assert rate_limited.value.status == 429
         assert rate_limited.value.retry_after == 1
         with pytest.raises(NvokenError) as unavailable:
-            await client.get("server-error")
+            await client.get_invocation("server-error")
         assert unavailable.value.category == "server"
         assert unavailable.value.status == 503
 
-        reduced: Any = None
+        event_types: list[str] = []
 
-        async def consume(_event: Any, snapshot: Any) -> None:
-            nonlocal reduced
-            reduced = snapshot
+        async def consume(event: StreamEvent) -> None:
+            event_types.append(event.type)
 
-        await (await client.resume(INVOCATION_ID)).stream(consume)
-        assert len(reduced.messages) == 2
-        assert len(reduced.invocation_changes) == 2
-        assert reduced.resume_cursor == "cursor-2"
+        await client.invocation(INVOCATION_ID).stream(consume)
+        assert event_types == [
+            "invocation.update",
+            "stream.end",
+            "invocation.update",
+            "invocation.result",
+        ]
 
     async with httpx.AsyncClient() as inspect:
         state = (await inspect.get(f"{base_url}/__test/state")).json()

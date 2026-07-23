@@ -49,7 +49,7 @@ release and smoke-test commands; structured operational logs.
 
 **Out:** Cloud Tasks or a separate executor service; Redis; custom domains and
 load balancers; multi-region or zero-downtime database migration guarantees;
-automatic scaling from durable queue depth; tools, streams, controls, budgets,
+automatic scaling from durable queue depth; tools, streams, controls, limits,
 or crash continuation; a general Terraform platform for every Google Cloud
 topology. PRDs 009 and 010 add the split execution path.
 

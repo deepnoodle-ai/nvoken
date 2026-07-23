@@ -77,12 +77,17 @@
       "path": "/v1/provider-credentials/{provider_credential_id}/rotate"
     },
     {
+      "operation_id": "streamInvocation",
+      "method": "GET",
+      "path": "/v1/invocations/{invocation_id}/stream"
+    },
+    {
       "operation_id": "streamSessionTranscript",
       "method": "GET",
       "path": "/v1/sessions/{session_id}/transcript/stream"
     },
     {
-      "operation_id": "submitClientToolResults",
+      "operation_id": "submitHostToolResults",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/tool-results"
     }

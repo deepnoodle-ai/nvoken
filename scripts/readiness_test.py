@@ -13,11 +13,11 @@ class MatrixTest(unittest.TestCase):
     def test_singleton_schema_values_accepts_const_and_enum(self):
         self.assertEqual(
             readiness.singleton_schema_values(
-                "      const: client\n"
+                "      const: host\n"
                 "      enum: [callback]\n"
                 "      enum: [ignored, because-multiple]\n"
             ),
-            {"client", "callback"},
+            {"host", "callback"},
         )
 
     def test_repository_matrix_parses_and_checked_facts_agree(self):

@@ -119,7 +119,7 @@ def model_selection() -> tuple[str, str]:
 def invocation_request(
     *,
     run_key: str,
-    agent_ref: str,
+    agent_key: str,
     input_text: str,
     instructions: str,
     provider: str,
@@ -128,13 +128,13 @@ def invocation_request(
 ) -> dict[str, Any]:
     spec: dict[str, Any] = {
         "instructions": instructions,
-        "model": {"provider": provider, "name": model},
+        "model": {"provider": provider, "id": model},
     }
     if tools:
-        spec["budgets"] = {"max_iterations": 3}
+        spec["limits"] = {"max_iterations": 3}
         spec["tools"] = tools
     return {
-        "agent_ref": agent_ref,
+        "agent_key": agent_key,
         "session_key": run_key,
         "idempotency_key": run_key,
         "input": {"content": [{"type": "text", "text": input_text}]},
@@ -164,7 +164,7 @@ def run_smoke(
         "/v1/invocations",
         invocation_request(
             run_key=run_key,
-            agent_ref="single-daemon-smoke",
+            agent_key="single-daemon-smoke",
             input_text="Reply briefly to confirm this nvoken installation is working.",
             instructions="You are a concise deployment smoke-test agent.",
             provider=provider,
@@ -244,19 +244,19 @@ def verify_restart(
     print(f"invocation: {state['invocation_id']}")
 
 
-def admit_client_tool(
+def admit_host_tool(
     client: RuntimeClient,
     state_path: pathlib.Path,
     tested_revision: str,
 ) -> None:
     provider, model = model_selection()
     client.health()
-    run_key = f"single-daemon-client-tool-smoke:{uuid.uuid4().hex}"
+    run_key = f"single-daemon-host-tool-smoke:{uuid.uuid4().hex}"
     acknowledgement = client.post(
         "/v1/invocations",
         invocation_request(
             run_key=run_key,
-            agent_ref="single-daemon-client-tool-smoke",
+            agent_key="single-daemon-host-tool-smoke",
             input_text="Use get_smoke_value for key health, then report its value.",
             instructions="Call get_smoke_value exactly once before answering. Do not invent its result.",
             provider=provider,
@@ -264,7 +264,7 @@ def admit_client_tool(
             tools=[{
                 "name": "get_smoke_value",
                 "description": "Return a deterministic smoke-test value for one key.",
-                "mode": "client",
+                "mode": "host",
                 "input_schema": {
                     "type": "object",
                     "properties": {"key": {"type": "string"}},
@@ -278,13 +278,13 @@ def admit_client_tool(
     waiting = client.wait_for_status(invocation_id, "waiting")
     pending = waiting.get("pending_tool_calls", [])
     if len(pending) != 1:
-        raise RuntimeError(f"expected one pending client ToolCall, got {len(pending)}")
+        raise RuntimeError(f"expected one pending host ToolCall, got {len(pending)}")
     tool_call_id = pending[0]["id"]
     write_state(
         state_path,
         {
             "profile": "single_daemon",
-            "exercise": "client_tool",
+            "exercise": "host_tool",
             "tested_revision": tested_revision,
             "admitted_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "invocation_id": invocation_id,
@@ -293,33 +293,33 @@ def admit_client_tool(
             "result_submitted_at": None,
         },
     )
-    print("single_daemon client ToolCall is durably waiting")
+    print("single_daemon host ToolCall is durably waiting")
     print(f"invocation: {invocation_id}")
     print(f"tool_call: {tool_call_id}")
     print(f"state: {state_path}")
 
 
-def resume_client_tool(
+def resume_host_tool(
     client: RuntimeClient,
     state_path: pathlib.Path,
     tested_revision: str,
 ) -> None:
     client.health()
     if not state_path.is_file():
-        raise RuntimeError(f"client ToolCall state not found: {state_path}")
+        raise RuntimeError(f"host ToolCall state not found: {state_path}")
     state = json.loads(state_path.read_text())
     if (
         state.get("profile") != "single_daemon"
-        or state.get("exercise") != "client_tool"
+        or state.get("exercise") != "host_tool"
         or state.get("tested_revision") != tested_revision
     ):
-        raise RuntimeError("client ToolCall state profile, exercise, or revision does not match")
+        raise RuntimeError("host ToolCall state profile, exercise, or revision does not match")
     invocation_id = state["invocation_id"]
     tool_call_id = state["tool_call_id"]
     waiting = client.get(f"/v1/invocations/{invocation_id}")
     pending_ids = {item["id"] for item in waiting.get("pending_tool_calls", [])}
     if waiting.get("status") != "waiting" or tool_call_id not in pending_ids:
-        raise RuntimeError("client ToolCall was not still waiting before result submission")
+        raise RuntimeError("host ToolCall was not still waiting before result submission")
     result_body = {
         "results": [{
             "tool_call_id": tool_call_id,
@@ -328,25 +328,25 @@ def resume_client_tool(
     }
     accepted = client.post(f"/v1/invocations/{invocation_id}/tool-results", result_body)
     if accepted["results"][0]["deduplicated"] is not False:
-        raise RuntimeError("first client ToolCall result was unexpectedly deduplicated")
+        raise RuntimeError("first host ToolCall result was unexpectedly deduplicated")
     replayed = client.post(f"/v1/invocations/{invocation_id}/tool-results", result_body)
     if replayed["results"][0]["deduplicated"] is not True:
-        raise RuntimeError("equal client ToolCall result replay did not deduplicate")
+        raise RuntimeError("equal host ToolCall result replay did not deduplicate")
     client.wait_for_status(invocation_id, "completed")
     state["result_submitted_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
     write_state(state_path, state)
-    print("single_daemon client ToolCall smoke passed")
+    print("single_daemon host ToolCall smoke passed")
     print(f"invocation: {invocation_id}")
     print(f"tool_call: {tool_call_id}")
 
 
-def run_client_tool(
+def run_host_tool(
     client: RuntimeClient,
     state_path: pathlib.Path,
     tested_revision: str,
 ) -> None:
-    admit_client_tool(client, state_path, tested_revision)
-    resume_client_tool(client, state_path, tested_revision)
+    admit_host_tool(client, state_path, tested_revision)
+    resume_host_tool(client, state_path, tested_revision)
 
 
 def run_callback(client: RuntimeClient) -> None:
@@ -358,7 +358,7 @@ def run_callback(client: RuntimeClient) -> None:
         "/v1/invocations",
         invocation_request(
             run_key=run_key,
-            agent_ref="single-daemon-callback-smoke",
+            agent_key="single-daemon-callback-smoke",
             input_text="Use callback_smoke for key health, then report its value.",
             instructions="Call callback_smoke exactly once before answering. Do not invent its result.",
             provider=provider,
@@ -400,9 +400,9 @@ def parse_args() -> argparse.Namespace:
         choices=(
             "run",
             "verify-restart",
-            "client-tool",
-            "client-tool-admit",
-            "client-tool-resume",
+            "host-tool",
+            "host-tool-admit",
+            "host-tool-resume",
             "callback",
         ),
         default="run",
@@ -419,7 +419,7 @@ def main() -> int:
     args = parse_args()
     try:
         default_state_name = (
-            "client-tool-state.json" if args.action.startswith("client-tool") else "smoke-state.json"
+            "host-tool-state.json" if args.action.startswith("host-tool") else "smoke-state.json"
         )
         state_path = args.state_file or pathlib.Path(
             os.environ.get("NVOKEN_SMOKE_STATE_FILE", PROFILE_DIR / default_state_name)
@@ -434,12 +434,12 @@ def main() -> int:
             run_smoke(client, state_path, tested_revision)
         elif args.action == "verify-restart":
             verify_restart(client, state_path, tested_revision)
-        elif args.action == "client-tool":
-            run_client_tool(client, state_path, tested_revision)
-        elif args.action == "client-tool-admit":
-            admit_client_tool(client, state_path, tested_revision)
-        elif args.action == "client-tool-resume":
-            resume_client_tool(client, state_path, tested_revision)
+        elif args.action == "host-tool":
+            run_host_tool(client, state_path, tested_revision)
+        elif args.action == "host-tool-admit":
+            admit_host_tool(client, state_path, tested_revision)
+        elif args.action == "host-tool-resume":
+            resume_host_tool(client, state_path, tested_revision)
         else:
             run_callback(client)
         return 0

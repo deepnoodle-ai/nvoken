@@ -444,7 +444,9 @@ func createRuntimeFixture(t *testing.T, ctx context.Context, store *Store, txm *
 	fixture := runtimeFixture{
 		account: domain.Account{ID: testID(t, domain.PrefixAccount), CreatedAt: now},
 		agent: domain.Agent{
-			ID: testID(t, domain.PrefixAgent), AgentRef: "support-agent", CreatedAt: now,
+			ID:        testID(t, domain.PrefixAgent),
+			AgentKey:  "support-agent",
+			CreatedAt: now,
 		},
 		session: domain.Session{
 			ID: testID(t, domain.PrefixSession), SessionKey: stringPointer("ticket-1"),
@@ -484,8 +486,10 @@ func TestRuntimeRepositoriesCommitRollbackAndReadback(t *testing.T) {
 	now := time.Now().UTC()
 
 	snapshot := domain.ExecutionSpecSnapshot{
-		ID: testID(t, domain.PrefixExecutionSpecSnapshot), AccountID: fixture.account.ID,
-		Spec: []byte(`{"instructions":"help","model":{"provider":"anthropic","name":"test"}}`), CreatedAt: now,
+		ID:        testID(t, domain.PrefixExecutionSpecSnapshot),
+		AccountID: fixture.account.ID,
+		Spec:      []byte(`{"instructions":"help","model":{"provider":"anthropic","id":"test"}}`),
+		CreatedAt: now,
 	}
 	invocation := domain.Invocation{
 		ID: testID(t, domain.PrefixInvocation), SessionID: fixture.session.ID,
@@ -618,7 +622,10 @@ func TestRuntimeRepositoriesCommitRollbackAndReadback(t *testing.T) {
 	}
 
 	panicAgent := domain.Agent{
-		ID: testID(t, domain.PrefixAgent), AccountID: fixture.account.ID, AgentRef: "panic-agent", CreatedAt: now,
+		ID:        testID(t, domain.PrefixAgent),
+		AccountID: fixture.account.ID,
+		AgentKey:  "panic-agent",
+		CreatedAt: now,
 	}
 	func() {
 		defer func() {
@@ -633,7 +640,7 @@ func TestRuntimeRepositoriesCommitRollbackAndReadback(t *testing.T) {
 			panic("test panic")
 		})
 	}()
-	if _, err := store.GetAgentByRef(ctx, fixture.account.ID, panicAgent.AgentRef); !errors.Is(err, ports.ErrNotFound) {
+	if _, err := store.GetAgentByRef(ctx, fixture.account.ID, panicAgent.AgentKey); !errors.Is(err, ports.ErrNotFound) {
 		t.Fatalf("panic write read error = %v", err)
 	}
 }
@@ -707,12 +714,12 @@ func TestRuntimeSchemaConstraints(t *testing.T) {
 		}
 		assertPostgresCode(t, store.CreateTenantPartition(ctx, duplicate), "23505")
 		assertPostgresCode(t, execError(ctx, pool,
-			"UPDATE tenant_partitions SET tenant_ref = 'not-default' WHERE id = $1", fixture.partition.ID,
+			"UPDATE tenant_partitions SET tenant_key = 'not-default' WHERE id = $1", fixture.partition.ID,
 		), "23514")
 	})
 
 	t.Run("identities and boundaries", func(t *testing.T) {
-		badAgent := domain.Agent{ID: "agnt_bad", AccountID: fixture.account.ID, AgentRef: "bad", CreatedAt: now}
+		badAgent := domain.Agent{ID: "agnt_bad", AccountID: fixture.account.ID, AgentKey: "bad", CreatedAt: now}
 		assertPostgresCode(t, store.CreateAgent(ctx, badAgent), "23514")
 
 		otherAccount := domain.Account{ID: testID(t, domain.PrefixAccount), CreatedAt: now}
@@ -738,10 +745,12 @@ func TestRuntimeSchemaConstraints(t *testing.T) {
 	})
 
 	t.Run("tenant ref and session key scopes", func(t *testing.T) {
-		tenantRef := "tenant-a"
+		tenantKey := "tenant-a"
 		partition := domain.TenantPartition{
-			ID: testID(t, domain.PrefixTenantPartition), AccountID: fixture.account.ID,
-			TenantRef: &tenantRef, CreatedAt: now,
+			ID:        testID(t, domain.PrefixTenantPartition),
+			AccountID: fixture.account.ID,
+			TenantKey: &tenantKey,
+			CreatedAt: now,
 		}
 		if err := store.CreateTenantPartition(ctx, partition); err != nil {
 			t.Fatalf("create named partition: %v", err)
@@ -819,10 +828,16 @@ func TestRuntimeSchemaRejectsEveryMalformedID(t *testing.T) {
 
 	assertPostgresCode(t, store.CreateAccount(ctx, domain.Account{ID: "acct_bad", CreatedAt: now}), "23514")
 	assertPostgresCode(t, store.CreateTenantPartition(ctx, domain.TenantPartition{
-		ID: "tprt_bad", AccountID: fixture.account.ID, TenantRef: stringPointer("bad-partition"), CreatedAt: now,
+		ID:        "tprt_bad",
+		AccountID: fixture.account.ID,
+		TenantKey: stringPointer("bad-partition"),
+		CreatedAt: now,
 	}), "23514")
 	assertPostgresCode(t, store.CreateAgent(ctx, domain.Agent{
-		ID: "agnt_bad", AccountID: fixture.account.ID, AgentRef: "bad-agent", CreatedAt: now,
+		ID:        "agnt_bad",
+		AccountID: fixture.account.ID,
+		AgentKey:  "bad-agent",
+		CreatedAt: now,
 	}), "23514")
 	badSession := fixture.session
 	badSession.ID = "sesn_bad"
@@ -867,7 +882,10 @@ func TestRuntimeSchemaRejectsCompositeBoundaryCrossing(t *testing.T) {
 		ID: testID(t, domain.PrefixTenantPartition), AccountID: otherAccount.ID, CreatedAt: now,
 	}
 	otherAgent := domain.Agent{
-		ID: testID(t, domain.PrefixAgent), AccountID: otherAccount.ID, AgentRef: "other-agent", CreatedAt: now,
+		ID:        testID(t, domain.PrefixAgent),
+		AccountID: otherAccount.ID,
+		AgentKey:  "other-agent",
+		CreatedAt: now,
 	}
 	if err := txm.WithTransaction(ctx, func(ctx context.Context) error {
 		if err := store.CreateAccount(ctx, otherAccount); err != nil {
@@ -1010,10 +1028,12 @@ func TestInvocationUniquenessAndRetention(t *testing.T) {
 	}
 	assertPostgresCode(t, store.CreateInvocation(ctx, duplicateInvocation), "23505")
 
-	otherTenantRef := "other"
+	otherTenantKey := "other"
 	otherPartition := domain.TenantPartition{
-		ID: testID(t, domain.PrefixTenantPartition), AccountID: fixture.account.ID,
-		TenantRef: &otherTenantRef, CreatedAt: now,
+		ID:        testID(t, domain.PrefixTenantPartition),
+		AccountID: fixture.account.ID,
+		TenantKey: &otherTenantKey,
+		CreatedAt: now,
 	}
 	otherSession := fixture.session
 	otherSession.ID = testID(t, domain.PrefixSession)
@@ -1068,10 +1088,10 @@ func createInvocationRecords(
 
 func setTestInvocationControls(invocation *domain.Invocation, createdAt time.Time) {
 	invocation.FingerprintVersion = 1
-	invocation.WallClockTimeoutMS = int64((30 * time.Minute) / time.Millisecond)
+	invocation.TotalTimeoutMS = int64((30 * time.Minute) / time.Millisecond)
 	invocation.ActiveTimeoutMS = int64((30 * time.Minute) / time.Millisecond)
 	invocation.MaxIterations = 1
-	invocation.WallClockDeadlineAt = createdAt.Add(30 * time.Minute)
+	invocation.DeadlineAt = createdAt.Add(30 * time.Minute)
 }
 
 func testID(t *testing.T, prefix domain.StableIDPrefix) string {
