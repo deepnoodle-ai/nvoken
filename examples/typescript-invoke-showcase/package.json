@@ -1,0 +1,21 @@
+{
+  "name": "nvoken-typescript-invoke-showcase",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/showcase.js",
+    "check": "npm run build && npm start"
+  },
+  "dependencies": {
+    "@deepnoodle/nvoken": "file:../../sdk/typescript"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.15",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

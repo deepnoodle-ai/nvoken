@@ -27,13 +27,13 @@ impl Default for GenerationDeltaEventDelta {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Type {
     #[serde(rename = "text")]
-    Text,
+    DeltaTypeText,
     #[serde(rename = "thinking")]
     Thinking,
 }
 
 impl Default for Type {
     fn default() -> Type {
-        Self::Text
+        Self::DeltaTypeText
     }
 }

@@ -2,8 +2,11 @@
 set -euo pipefail
 
 readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-readonly BASE_URL="http://127.0.0.1:43109"
+readonly SERVER_PORT="$(python3 -c 'import socket; sock = socket.socket(); sock.bind(("127.0.0.1", 0)); print(sock.getsockname()[1]); sock.close()')"
+readonly BASE_URL="http://127.0.0.1:${SERVER_PORT}"
 readonly SERVER_LOG="$(mktemp "${TMPDIR:-/tmp}/nvoken-conformance.XXXXXX.log")"
+readonly SERVER_WORK="$(mktemp -d "${TMPDIR:-/tmp}/nvoken-conformance.XXXXXX")"
+readonly SERVER_BIN="${SERVER_WORK}/server"
 
 server_pid=""
 cleanup() {
@@ -12,13 +15,15 @@ cleanup() {
     wait "$server_pid" 2>/dev/null || true
   fi
   rm -f "$SERVER_LOG"
+  rm -rf "$SERVER_WORK"
 }
 trap cleanup EXIT
 
 cd "$ROOT"
 sdk/scripts/check-generated.sh
 
-go run ./sdk/conformance/server >"$SERVER_LOG" 2>&1 &
+go build -o "$SERVER_BIN" ./sdk/conformance/server
+NVOKEN_CONFORMANCE_ADDR="127.0.0.1:${SERVER_PORT}" "$SERVER_BIN" >"$SERVER_LOG" 2>&1 &
 server_pid="$!"
 for _ in {1..100}; do
   if curl --fail --silent "$BASE_URL/healthz" >/dev/null; then
@@ -41,6 +46,8 @@ export NVOKEN_CONFORMANCE_URL="$BASE_URL"
 npm ci --prefix sdk/typescript
 npm run build --prefix sdk/typescript
 npm test --prefix sdk/typescript
+npm ci --prefix examples/typescript-invoke-showcase
+npm run build --prefix examples/typescript-invoke-showcase
 
 python3 -m venv sdk/python/.venv
 sdk/python/.venv/bin/python -m pip install --quiet --upgrade pip

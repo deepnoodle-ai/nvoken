@@ -42,10 +42,10 @@ export interface InvocationProviderCredentialSelectionOneOf {
     provider: ModelProvider;
     /**
      *
-     * @type {any}
+     * @type {InvocationProviderCredentialSelectionOneOfSourceEnum}
      * @memberof InvocationProviderCredentialSelectionOneOf
      */
-    source: any | null;
+    source: InvocationProviderCredentialSelectionOneOfSourceEnum;
     /**
      *
      * @type {ProviderStaticCredential}
@@ -54,6 +54,14 @@ export interface InvocationProviderCredentialSelectionOneOf {
     credential: ProviderStaticCredential;
 }
 
+
+/**
+ * @export
+ */
+export const InvocationProviderCredentialSelectionOneOfSourceEnum = {
+    SourceCallerEphemeral: 'caller_ephemeral'
+} as const;
+export type InvocationProviderCredentialSelectionOneOfSourceEnum = typeof InvocationProviderCredentialSelectionOneOfSourceEnum[keyof typeof InvocationProviderCredentialSelectionOneOfSourceEnum];
 
 
 /**

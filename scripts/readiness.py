@@ -376,6 +376,21 @@ def comma_values(value: str) -> set[str]:
     return {item.strip() for item in value.split(",") if item.strip()}
 
 
+def singleton_schema_values(schema_block: str) -> set[str]:
+    """Read equivalent OpenAPI const and single-value enum declarations."""
+    constants = re.findall(
+        r"^\s+const:\s*([A-Za-z0-9_.-]+)\s*$",
+        schema_block,
+        re.MULTILINE,
+    )
+    enums = re.findall(
+        r"^\s+enum:\s*\[\s*([A-Za-z0-9_.-]+)\s*]\s*$",
+        schema_block,
+        re.MULTILINE,
+    )
+    return set(constants + enums)
+
+
 def check_repository_facts(matrix_text: str, claims: dict[str, str]) -> list[str]:
     expected = parse_expected_facts(matrix_text)
     errors: list[str] = []
@@ -421,7 +436,7 @@ def check_repository_facts(matrix_text: str, claims: dict[str, str]) -> list[str
             yaml_schema_block(openapi, "ClientToolSpec"),
             yaml_schema_block(openapi, "CallbackToolSpec"),
         ])
-        tool_modes = set(re.findall(r"^\s+const:\s*([a-z_]+)\s*$", tool_block, re.MULTILINE))
+        tool_modes = singleton_schema_values(tool_block)
     except ValueError:
         tool_modes = set()
     wanted_modes = comma_values(expected["openapi_tool_modes"])
