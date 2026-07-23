@@ -198,8 +198,8 @@ provider, nvoken Cloud accepts an Invocation-supplied ephemeral credential,
 reusable Account BYOK, reusable tenant BYOK, or a platform-funded credential.
 Platform credentials never silently replace an explicitly selected BYOK
 source and carry a small markup on tokens. The spec carries token, cost,
-iteration, and wall-clock ceilings; budget consumption is visible in usage
-events while the turn runs.
+iteration, total-time, active-time, and waiting-time limits; consumption is
+visible in usage events while the turn runs.
 
 **Observability.** The session viewer and the invocation trace are primary
 product surfaces: transcript, ToolCall attempts and results, spec digest,

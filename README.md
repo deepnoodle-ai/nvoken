@@ -48,9 +48,12 @@ export OPENAI_API_KEY='<your-provider-key>'
 nvokend quickstart --provider openai --model '<model-you-can-access>'
 ```
 
-Then the official npm quickstart proves two turns share one durable Session.
-Follow [Run nvoken locally](docs/guides/run-locally.md) for that command and
-cleanup.
+Then the official npm quickstart sends one turn and prints the assistant's
+response, proving the installed package can admit, execute, and read durable
+work through your local Runtime. Follow
+[Run nvoken locally](docs/guides/run-locally.md) for that command and cleanup;
+use the [TypeScript SDK guide](sdk/typescript/README.md#multiple-turns) when you
+are ready to keep a conversation in one durable Session.
 If you intend to change this repository, use [Develop nvoken](docs/guides/developing-nvoken.md)
 instead. Production operators should choose the [single-daemon](deploy/single-daemon/README.md)
 or [Google Cloud](deploy/google-cloud/README.md) deployment profile only after

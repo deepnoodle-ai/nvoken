@@ -119,7 +119,7 @@ the protected environment file, never an image layer or command-line argument.
 `NVOKEN_PUBLIC_BASE_URL` is the externally reachable HTTPS origin used by the
 device authorization flow. Keep `NVOKEN_TRUST_FORWARDED_CLIENT_IP=false` unless
 one trusted ingress overwrites the forwarded client-IP headers. The example's
-connection, concurrency, timeout, drain, stream, budget, and retention values
+connection, concurrency, timeout, drain, stream, limit, and retention values
 are the initial safety bounds; change them only with a recorded load or
 operational reason.
 
@@ -187,7 +187,7 @@ export NVOKEN_BASE_URL=https://nvoken.example.com
 export NVOKEN_API_KEY=<runtime-credential>
 export NVOKEN_TESTED_REVISION=<git-revision-or-image-digest>
 export NVOKEN_SMOKE_PROVIDER=anthropic
-export NVOKEN_SMOKE_MODEL=<current-model-name>
+export NVOKEN_SMOKE_MODEL=<current-model-id>
 python3 deploy/single-daemon/smoke.py run
 ```
 
@@ -301,7 +301,7 @@ export NVOKEN_DAEMON_PID=<exact-pid>
 export NVOKEN_LOAD_MACHINE='2 vCPU, 4 GiB RAM, Linux <version>'
 export NVOKEN_LOAD_DATABASE='PostgreSQL 17.x, local SSD, <connection limit>'
 export NVOKEN_LOAD_PROVIDER=anthropic
-export NVOKEN_LOAD_MODEL=<current-model-name>
+export NVOKEN_LOAD_MODEL=<current-model-id>
 export NVOKEN_LOAD_REQUESTS=12
 export NVOKEN_LOAD_CONCURRENCY=4
 export NVOKEN_ENGINE_CONCURRENCY=8

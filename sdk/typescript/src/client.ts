@@ -471,7 +471,7 @@ export class Client {
       basePath: baseUrl.replace(/\/$/, ""),
       accessToken: apiKey,
       fetchApi: this.fetch,
-      headers: { "User-Agent": "nvoken-typescript/0.1.1" },
+      headers: { "User-Agent": "@deepnoodle/nvoken" },
     });
     this.invocations = new InvocationsApi(this.configuration);
     this.modelPricing = new ModelPricingApi(this.configuration);

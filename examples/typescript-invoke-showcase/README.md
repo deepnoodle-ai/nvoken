@@ -33,8 +33,8 @@ npm run check --prefix examples/typescript-invoke-showcase
 
 The example uses a unique tenant, Agent key, Session key, and idempotency
 key namespace on every run. It prints identifiers and assertion results but
-never prints credentials. Expect seven small model requests. They may be billed
-by the configured provider.
+never prints credentials. Expect up to nine small model requests. They may be
+billed by the configured provider.
 
 The local `file:` dependency intentionally targets `sdk/typescript`, so `dist/`
 must exist before `npm install`. This example is for contributors evaluating

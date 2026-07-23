@@ -74,7 +74,7 @@ nest at most 32 levels. `is_error` is optional and defaults to false. A valid
 transport delivery.
 
 nvoken retries transport failures, 408, 425, 429, and 5xx with persisted
-backoff, at most five attempts and never beyond the Invocation wall deadline.
+backoff, at most five attempts and never beyond the Invocation total deadline.
 Other non-2xx responses, redirects, an invalid success envelope, and an
 oversized response become a bounded model-visible callback error. Response
 bodies from failures are neither persisted nor logged.

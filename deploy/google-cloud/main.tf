@@ -868,8 +868,13 @@ resource "google_cloud_run_v2_service" "runtime" {
         var.invocation_default_active_timeout_seconds >= 1 &&
         var.invocation_default_active_timeout_seconds == floor(var.invocation_default_active_timeout_seconds) &&
         var.invocation_default_active_timeout_seconds <= var.invocation_max_active_timeout_seconds &&
-        var.invocation_max_active_timeout_seconds <= 604800
-        && var.invocation_max_active_timeout_seconds == floor(var.invocation_max_active_timeout_seconds)
+        var.invocation_max_active_timeout_seconds <= 604800 &&
+        var.invocation_max_active_timeout_seconds == floor(var.invocation_max_active_timeout_seconds) &&
+        var.invocation_default_waiting_timeout_seconds >= 1 &&
+        var.invocation_default_waiting_timeout_seconds == floor(var.invocation_default_waiting_timeout_seconds) &&
+        var.invocation_default_waiting_timeout_seconds <= var.invocation_max_waiting_timeout_seconds &&
+        var.invocation_max_waiting_timeout_seconds <= 604800 &&
+        var.invocation_max_waiting_timeout_seconds == floor(var.invocation_max_waiting_timeout_seconds)
       )
       error_message = "Invocation time defaults must be positive, no greater than their maxima, and maxima cannot exceed seven days."
     }

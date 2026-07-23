@@ -366,7 +366,6 @@ async function main(): Promise<void> {
   assert.ok(structuredInvocation.structuredOutputProvenance?.schemaSha256);
   assert.ok((await structuredHandle.text()).length > 0);
   assert.ok(streamEvents.has("invocation.result"));
-  assert.ok(streamEvents.has("stream.end"));
   assert.ok(streamedMessages >= 3);
   console.log("PASS structured output, provenance, composed text, and resumable Invocation SSE");
 

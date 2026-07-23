@@ -1,6 +1,6 @@
 # nvoken Runtime: API Surface
 
-**Status:** Proposed contract
+**Status:** Active contract
 **Date:** 2026-07-20
 **Level:** Endpoint and purpose. The frozen background launch schemas,
 operation IDs, examples, and errors are in
@@ -63,43 +63,40 @@ Idempotency and concurrency:
 
 Admission accepts at most 1,048,576 encoded JSON bytes and 64 text blocks.
 `agent_key`, `tenant_key`, `session_key`, `idempotency_key`, model provider, and
-model name are each limited to 255 Unicode characters. Retained fingerprint v1
-records remain comparable by the
-SHA-256 of compact UTF-8 JSON in fixed member order: `version`,
-`session_selector` (`kind` then `value`), `spec` (`instructions`, then `model`
-with `provider` then `name`), and `input` (`content`, with each block encoded as
-`type` then `text`). The selector kind is `none`, `id`, or `key`; `none` uses an
-empty value. JSON strings escape quotation mark, reverse solidus, and control
-characters only, using the usual short escapes and lowercase `\\u%04x` for
-remaining controls; all other Unicode is emitted directly. Source-object order
-therefore does not matter, while array order and exact string values do. The
-language-neutral canonical bytes and digests in
-[`admission-fingerprint-v1.json`](admission-fingerprint-v1.json) are the
-compatibility fixtures.
+model ID are each limited to 255 Unicode characters. Admission hashes compact
+UTF-8 JSON in a versioned, fixed member order. Source-object order does not
+matter; array order and exact string values do. Schemas use recursive canonical
+JSON, and estimated cost is normalized to integer micro-USD.
 
-Fingerprint v2 preserves the v1 order and inserts
-`limits` after `model` inside `spec`. Omitted limits are `null`; otherwise the
-fixed members are wall-clock seconds, active-execution seconds, output tokens,
-estimated cost normalized to integer micro-USD, and iterations, with omitted
-members encoded as `null`. Explicit defaults therefore differ from omission.
-The compatibility vectors are in
-[`admission-fingerprint-v2.json`](admission-fingerprint-v2.json).
+New admissions use fingerprint v7. It records the current public vocabulary:
+`model.id`, `spec.limits` with total, active, and waiting timeouts, and
+`mode: "host"`. A string `input` is normalized to the same canonical single
+text block as its expanded wire form. Omitted instructions become the empty
+string with no hidden default. Literal provider-credential selection is
+included, but caller secret bytes and materialized defaults never are. Omitted
+optional objects remain `null`, so an explicit value stays materially different
+from omission.
 
-Fingerprint v3 preserves the v2 order and inserts
-`output` after `limits`. Omitted output is `null`; otherwise it is an object
-containing `schema`, canonicalized recursively so object member order and
-equivalent JSON number spellings do not change the fingerprint. A request with
-output never replays a retained v1 or v2 row. A schema-free request may still
-replay those rows with their recorded algorithm. The compatibility vectors are
-in [`admission-fingerprint-v3.json`](admission-fingerprint-v3.json).
+Versions one through six exist only to preserve equality for already-admitted
+durable rows:
 
-New admissions use fingerprint v4. It preserves the v3 order and inserts the
-ordered `tools` array after `output`. Every host-tool item encodes `name`,
-`description`, `mode`, and recursively canonical `input_schema`; definition
-order remains material. A tools-bearing request cannot replay a retained v1-v3
-row, while a tools-free replay remains comparable by the row's recorded
-algorithm. Compatibility vectors are in
-[`admission-fingerprint-v4.json`](admission-fingerprint-v4.json).
+- v1 used `model.name` and the expanded text-block input form;
+- v2 added the historical `budgets` object with wall-clock and
+  active-execution timeout names;
+- v3 added structured output;
+- v4 added ordered tools using the historical `mode: "client"` spelling;
+- v5 added callback routing;
+- v6 added nonsecret provider-credential selections.
+
+The language-neutral canonical bytes and digests are compatibility fixtures:
+[v1](admission-fingerprint-v1.json),
+[v2](admission-fingerprint-v2.json),
+[v3](admission-fingerprint-v3.json),
+[v4](admission-fingerprint-v4.json),
+[v5](admission-fingerprint-v5.json),
+[v6](admission-fingerprint-v6.json), and
+[v7](admission-fingerprint-v7.json). A retry always uses the algorithm recorded
+on the retained row; only a new admission uses v7.
 
 Streaming and recovery:
 
@@ -460,12 +457,12 @@ POST /v1/invocations
   agent_key: host Agent identity
   idempotency_key: host retry identity
   spec: inline instructions + model/provider
-  input: one or more text blocks
+  input: text string or one or more text blocks
   session_id | session_key | neither
   tenant_key: optional host partition key
 
 202 Accepted
-  agent_id, session_id, invocation_id, status, deduplicated
+  agent_id, session_id, invocation_id, status, deduplicated, deadline_at
 ```
 
 The answer is one read away. `GET /v1/invocations/{invocation_id}/result`

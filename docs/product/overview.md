@@ -21,7 +21,7 @@ provider portability, and observability.
 ## The primary operation
 
 ```text
-invoke(execution_spec, input, optional_session) -> durable invocation
+invoke(execution_spec, input, optional_session, optional_tenant_key) -> durable invocation
 ```
 
 No provisioning first. Your application sends the agent specification with

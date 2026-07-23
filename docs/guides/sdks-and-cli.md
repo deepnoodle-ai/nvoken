@@ -13,7 +13,7 @@ result replay, and callback verification.
 | Package | Supported facade | Raw generated client |
 | --- | --- | --- |
 | Go | `sdk/go` package `nvoken` | `Client.Raw()` |
-| TypeScript | `Client` from `@deepnoodle/nvoken` | `raw` export |
+| TypeScript | `Client` from `@deepnoodle/nvoken` | `client.raw()` |
 | Python | `nvoken.Client` | `nvoken_generated` |
 | Rust | `nvoken::Client` | `nvoken::apis` |
 

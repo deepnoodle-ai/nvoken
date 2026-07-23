@@ -119,7 +119,7 @@ One admitted agent turn, identified by UUIDv7 with an `invk_` prefix. Its
 public state is exactly `queued`, `running`,
 `waiting`, `completed`, `failed`, or `cancelled`; the last three are terminal
 and immutable, and the first valid terminal settlement wins. Deadline and
-budget exhaustion are typed failures, not additional lifecycle states.
+limit exhaustion are typed failures, not additional lifecycle states.
 `waiting` means durable host ToolCalls are pending while the Invocation owns
 no engine lease or active segment. The Invocation owns caller
 context; resolved spec bytes and digest; attempts, leases, and checkpoints;
@@ -140,7 +140,7 @@ A new turn is a new Invocation.
 | `running` | No | A fenced engine owns the current execution segment. |
 | `waiting` | No | Durable host ToolCalls are pending; no execution owner or engine is held. |
 | `completed` | Yes | The turn settled successfully. |
-| `failed` | Yes | The turn settled unsuccessfully, including deadline, budget, or temporary pre-recovery engine-loss outcomes. |
+| `failed` | Yes | The turn settled unsuccessfully, including deadline, limit, or temporary pre-recovery engine-loss outcomes. |
 | `cancelled` | Yes | Cancellation won terminal settlement. |
 
 Every terminal write is conditional on the stored state remaining nonterminal;
@@ -159,7 +159,8 @@ Supplied inline or by an immutable reference plus expected content digest.
 Includes instructions; model and provider selection, including routing
 steps across providers; tool schemas and modes, inline or referencing named
 custom tool definitions; output requirements, including a structured-output
-schema; token, cost, iteration, and wall-clock ceilings; host metadata.
+schema; output-token, estimated-cost, iteration, total-time, active-time, and
+waiting-time limits; host metadata.
 nvoken resolves, validates, and digests the spec, may retain the snapshot
 as provenance, and caches by digest so hosts avoid resending large specs.
 There is no registry, publish, pin, or mutable definition API.
@@ -226,14 +227,16 @@ treating a delivery service as execution authority.
 Live output is a projection, not an execution or storage boundary. A Session
 SSE handler subscribes to bounded fan-out before draining the fixed-cut
 Postgres transcript, then polls that read model as its correctness fallback.
-Only transcript snapshots carry the opaque durable cursor. Provider-normalized
-generation deltas are best-effort, id-less previews; buffer overflow or Redis
-loss asks clients to discard provisional output and reconcile to canonical
-`SessionMessage` plus Invocation lifecycle state. Self-contained mode may use
-an in-process adapter. Split execution uses private Redis Pub/Sub between the
-executor and API replicas; the paved path authenticates it and verifies its TLS
-server certificate. Redis never grants a claim, advances a cursor, or
-determines terminal state.
+Durable `transcript.update`, `invocation.update`, and `invocation.result` frames
+carry opaque cursors. Provider-normalized `output_text.delta` and
+`thinking.delta` frames are best-effort, id-less previews; buffer overflow or
+Redis loss asks clients to discard provisional output and reconcile to
+canonical `SessionMessage` plus Invocation lifecycle state. An Invocation
+stream follows one turn; a Session stream uses the same event vocabulary
+across turns. Self-contained mode may use an in-process adapter. Split execution
+uses private Redis Pub/Sub between the executor and API replicas; the paved
+path authenticates it and verifies its TLS server certificate. Redis never
+grants a claim, advances a cursor, or determines terminal state.
 
 An executing turn is an I/O-bound state machine: one goroutine per active
 Invocation, thousands per process; a parked Invocation — waiting on a tool
@@ -247,18 +250,18 @@ Bounded lease plus fencing token per claim; heartbeats extend only the current
 lease; checkpoint, ToolCall, usage, and terminal commits verify the fence; a
 stale instance may finish local computation but cannot commit. The reaper
 accrues the abandoned segment only through its recorded lease/deadline boundary,
-clears ownership, and makes the same Invocation queued. Wall-clock,
-active-execution, cancellation, and already-terminal outcomes still win.
+clears ownership, and makes the same Invocation queued. Total-time,
+active-time, cancellation, and already-terminal outcomes still win.
 
 Cancellation uses the same first-terminal transaction and Session-before-
 Invocation lock order as settlement. A committed cancellation may notify other
 instances through PostgreSQL LISTEN/NOTIFY, but notification grants no
 authority; a missed wake is recovered when renewal or settlement loses its
 fence. Each claim also persists one active-execution segment and a deadline
-chosen from wall-clock remainder, active-execution remainder, and the
+chosen from total-time remainder, active-time remainder, and the
 installation segment ceiling. Model work stops before that deadline to reserve
 settlement time. Segment accrual and terminal state commit atomically. Queue
-time consumes wall clock only. A healthy owner that reaches its segment cutoff
+time consumes total time only. A healthy owner that reaches its segment cutoff
 settles a typed deadline failure; if ownership itself expires before settlement,
 the replacement resumes from the durable prefix instead.
 
@@ -405,7 +408,7 @@ carry over; the mapping below records how its concepts land in nvoken.
 | Custom action           | Callback or host tool                                              |
 | Integration             | Host-owned tool implementation or credential broker                  |
 | Worker action/model job | Engine work claim or host-owned callback tool                        |
-| Environment             | Host-owned sandbox exposed as a host-executed tool                   |
+| Environment             | Host-owned sandbox exposed as a host tool                            |
 | Loop                    | Not recreated; hosts bring their own scheduler                       |
 | Usage events            | Normalized usage on Invocations plus identity/admin usage monitoring |
 

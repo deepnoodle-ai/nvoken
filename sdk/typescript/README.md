@@ -72,7 +72,7 @@ console.log(result.agentId, result.sessionId, result.deduplicated);
 
 ```ts
 const handle = await agent.invoke("Summarize this issue.");
-const invocation = await handle.waitForResult();
+const result = await handle.waitForResult();
 ```
 
 Use a lazy handle to recover work in another process. Creating it performs no

@@ -604,7 +604,7 @@ variable "engine_settlement_reserve_seconds" {
 }
 
 variable "invocation_default_total_timeout_seconds" {
-  description = "Default logical wall-clock limit for an Invocation."
+  description = "Default total-time limit for an Invocation."
   type        = number
   default     = 1800
 }
@@ -628,7 +628,7 @@ variable "invocation_default_max_iterations" {
 }
 
 variable "invocation_max_total_timeout_seconds" {
-  description = "Installation maximum logical wall-clock limit."
+  description = "Installation maximum total-time limit."
   type        = number
   default     = 86400
 }

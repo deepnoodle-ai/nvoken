@@ -1,9 +1,9 @@
 # Run nvoken locally
 
 This is the shortest path to seeing nvoken work. It uses official releases,
-starts a disposable local database, and runs a small TypeScript app that proves
-Session memory across two agent turns. You do not need to clone this repository
-or install Go or Python.
+starts a disposable local database, and runs a small TypeScript app through one
+complete agent turn. You do not need to clone this repository or install Go or
+Python.
 
 ## Before you start
 
@@ -18,7 +18,7 @@ You need:
 
 Find a model ID in the official [OpenAI model catalog](https://developers.openai.com/api/docs/models)
 or [Anthropic model overview](https://platform.claude.com/docs/en/about-claude/models/overview).
-The quickstart makes two small model requests, which your provider may bill.
+The quickstart makes one small model request, which your provider may bill.
 
 ## 1. Start nvoken
 
@@ -59,9 +59,9 @@ npx --yes --package "@deepnoodle/nvoken@$(nvokend --version)" nvoken-quickstart
 ```
 
 The official npm package reads only the `NVOKEN_*` settings from the marked
-`.env`. It asks nvoken to remember the code word `cedar`, then asks for the word
-in a second Invocation. Output ending with `agent> cedar` proves the durable
-Session retained context between turns.
+`.env`. It sends one concise prompt and prints the assistant response. Seeing
+that response proves the published package discovered the local configuration,
+admitted durable work, let nvoken execute it, and read the canonical result.
 
 ## Stop and clean up
 
@@ -87,7 +87,10 @@ then run the same quickstart command again.
 
 Install `@deepnoodle/nvoken` in your TypeScript app and use its `Client` API.
 The [TypeScript SDK guide](../../sdk/typescript/README.md) contains a complete
-one-message example, error handling, and production guidance.
+one-message example, multi-turn Sessions, host tools, structured output, error
+handling, and production guidance. The
+[TypeScript chat example](../../examples/typescript-chat/README.md) is the
+smallest runnable multi-turn application.
 
 This laptop setup is for evaluation, not production: it has no TLS, backups,
 supervisor, durable secret store, or high availability. When you are ready to

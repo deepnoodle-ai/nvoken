@@ -284,7 +284,7 @@ mutation:
 python3 deploy/google-cloud/qualify.py \
   --environment staging \
   --provider anthropic \
-  --model your-current-model-name \
+  --model your-current-model-id \
   --callback-fixture-url https://your-controlled-fixture.example/qualify \
   --notification-channel projects/PROJECT/notificationChannels/CHANNEL \
   --terraform-var-file /absolute/path/to/staging.tfvars \
@@ -305,7 +305,7 @@ second entry point. For example:
 python3 deploy/google-cloud/qualify.py \
   --environment staging \
   --provider anthropic \
-  --model your-current-model-name \
+  --model your-current-model-id \
   --scenario baseline
 ```
 

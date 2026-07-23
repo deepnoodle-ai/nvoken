@@ -82,7 +82,7 @@ Preflight must stop before mutation unless all of the following are true:
 6. The queue is running, both services are healthy, Memorystore is `READY`, and
    the starting Terraform plan and mutable resource settings have been captured
    for cleanup comparison.
-7. A maximum provider-call count, wall-clock deadline, and cleanup deadline are
+7. A maximum provider-call count, qualification deadline, and cleanup deadline are
    set. Failure to finish cleanup makes the run fail.
 
 Cloud Run resolves environment-variable secrets before starting an instance;

@@ -136,7 +136,9 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
   platform-funded credential. Platform credentials never silently replace an
   explicitly selected BYOK source and carry a small markup on tokens.
 - Our library deepnoodle-ai/dive is used for multi-provider support in nvoken.
-- Execution specs carry token, cost, iteration, and wall-clock ceilings, and budget consumption is visible while the turn runs.
+- Execution specs carry output-token, estimated-cost, iteration, total-time,
+  active-time, and waiting-time limits; consumption is visible while the turn
+  runs.
 
 ## Deployment and observability
 
@@ -172,7 +174,7 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
   time.
 - Invocation states are exactly `queued`, `running`, `waiting`, `completed`,
   `failed`, and `cancelled`; the last three are terminal, the first terminal
-  settlement wins, and deadline or budget exhaustion is a typed failure.
+  settlement wins, and deadline or limit exhaustion is a typed failure.
 - Terminal Invocations stay terminal; there is no public retry or resume, and a new turn is a new Invocation.
 - Invocation admission is one Postgres transaction covering Agent and Session
   resolution or creation, the immutable inline spec snapshot, one caller-input

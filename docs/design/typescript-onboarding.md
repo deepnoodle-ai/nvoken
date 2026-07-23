@@ -1,6 +1,6 @@
 # Local TypeScript onboarding
 
-**Status:** Third-pass corrections implemented; `@deepnoodle/nvoken` 0.1.1 pending corrected release
+**Status:** Newcomer surface implemented in source; 0.2.0 release pending
 **Author:** OpenAI Codex  
 **Date:** 2026-07-22  
 **Workflow:** Spec and build in parallel; the field report supplies the acceptance criteria.
@@ -12,28 +12,34 @@ proved that the Runtime and TypeScript facade worked, but also found 33 distribu
 bootstrap, failure-semantics, ergonomics, and CI gaps. The implementation closed those
 gaps and the reviewed 0.1.0 artifact is now public at `@deepnoodle/nvoken`. It also
 sharpened estimated-cost enforcement now that durable model checkpoints can retain a
-provider response before terminal budget settlement.
+provider response before terminal cost-limit settlement.
 
 A [second-pass validation](../research/2026-07-22-local-typescript-onboarding-second-pass.md)
 found eight remaining issues. The follow-up makes the packed README executable,
 separates Session identity from durable message identity, makes selected-provider
 startup deterministic, adds an authenticated pricing-capability preflight, and
-expands minimum-runtime and newcomer regressions. Those source changes target
-0.1.1; registry publication remains an explicit post-merge release step.
+expands minimum-runtime and newcomer regressions. Those corrections shipped in
+`@deepnoodle/nvoken` 0.1.1.
 
 A third-pass review caught that the initial pricing preflight looked up a globally
-registered model name after validating—but not applying—the provider. The corrected
-adapter resolves the provider-specific pricing table, and both public and
-source-checkout quickstarts now render validation and transport failures without an
-internal Node.js stack.
+registered model ID after validating—but not applying—the provider. The corrected
+adapter resolves the provider-specific pricing table, and the packaged and
+source-checkout quickstart commands render validation and transport failures
+without an internal Node.js stack.
+
+A fourth pass treated the package as a new product with no compatibility burden.
+It reduced the ordinary path to `new Client().agent(...).text(...)`, made string
+input and generated idempotency the defaults, separated the one-response
+quickstart from the multi-turn chat example, and organized advanced behavior
+around five verbs: `text`, `run`, `invoke`, `stream`, and `session`.
 
 ## Goals
 
 - Make every documented install command truthful and ship a public, packed-artifact
   test for `@deepnoodle/nvoken` 0.1.0.
-- Provide one clone-to-first-response path with disposable PostgreSQL 17, generated
-  local secrets, migration, health verification, TypeScript chat, resume, and exact
-  cleanup commands.
+- Provide one install-to-first-response path with disposable PostgreSQL 17,
+  generated local secrets, migration, health verification, one TypeScript turn,
+  and exact cleanup commands.
 - Make the supported TypeScript quickstart configurable, visibly successful, and
   nonzero with safe actionable details on failure.
 - Let a host obtain the exact Invocation's canonical messages and assistant text
@@ -41,7 +47,8 @@ internal Node.js stack.
 - Fail capped, known-unpriceable work before a provider call and prevent output from
   a failed or cancelled Invocation from influencing a later model turn.
 - Continuously test source and packed-package onboarding, including success,
-  failure, multi-turn context, and cross-process Session resolution.
+  failure, an anonymous first response, multi-turn context, and cross-process
+  Session resolution.
 
 ## Non-goals
 
@@ -74,43 +81,65 @@ availability.
 
 ### Local development path
 
-`deploy/local` owns a development-only Compose file, a secret-free environment
-template, and a small Python configurator. Compose binds PostgreSQL 17 to localhost
-and uses a profile-specific named volume. The configurator generates independent
-Runtime, bootstrap Owner, and 32-byte delivery secrets without printing them, copies
-exactly one selected provider key from the caller's environment, writes the ignored
-root `.env` with mode 0600, and refuses to overwrite an existing file by default.
+`nvokend quickstart` owns the disposable local lifecycle. It starts one
+explicitly labeled PostgreSQL 17 container on localhost, generates independent
+Runtime, bootstrap Owner, and delivery secrets without printing them, copies
+exactly one selected provider key from the caller's environment, writes a
+marked ignored `.env` with mode 0600, applies migrations, and runs the daemon.
+Re-running it reuses only the marked resources; `nvokend quickstart cleanup`
+removes only the owned container.
 
-A single guide connects these artifacts to `nvokend migrate`, `nvokend serve`,
-`GET /health`, the TypeScript chat example, Session-key resume, and volume cleanup.
-It labels the topology disposable and keeps TLS, supervisors, backups, immutable
-artifacts, failure drills, and availability claims in the production profiles.
+The Run guide pairs the official binary with the packaged one-response command.
+The Develop guide uses the same daemon automation from source and the SDK build
+from the checkout. `deploy/local` remains lower-level test and debugging
+infrastructure, not the first-time path. Both guides label the topology
+disposable and keep TLS, supervisors, backups, immutable artifacts, failure
+drills, and availability claims in the production profiles.
 
 ### TypeScript facade and examples
 
-The facade adds:
+The newcomer surface is:
 
 ```ts
-interface TextContentBlock { type: "text"; text: string }
-isTextContentBlock(block): block is TextContentBlock
-handle.result(): Promise<InvocationResult>
-handle.listMessages(): Promise<SessionMessage[]>
-handle.text(): Promise<string>
+import { Client } from "@deepnoodle/nvoken";
+
+const agent = new Client().agent({
+  agentKey: "support",
+  instructions: "Be concise and helpful.",
+});
+
+console.log(await agent.text("Why was I charged twice?"));
 ```
 
-All three handle methods are served by the one composed result read,
+`Client` resolves explicit options first, then `NVOKEN_*`, then only the marked
+`.env` created by `nvokend quickstart`. It never loads an arbitrary dotenv file
+or mutates `process.env`. `agent.text()` returns text, `agent.run()` returns the
+typed composed result, `agent.invoke()` returns a lazy durable handle,
+`agent.stream()` exposes one-turn events, and `agent.session()` binds and
+serializes a multi-turn Session. The SDK generates an idempotency key before
+admission; hosts supply one only when they need to reproduce the same logical
+turn across processes.
+
+The handle exposes acknowledgement identity, `refresh()`, actionable and
+terminal waits, result/text/message reads, host-tool submission, cancellation,
+and Invocation-scoped streaming. Failed or cancelled terminal work raises an
+actionable `InvocationError` carrying the handle and authoritative Invocation.
+Schema helpers bind TypeScript input/output types to host-tool and structured
+output schemas without pretending to perform runtime validation. Symmetric
+async iterators cover Session, Invocation, message, and transcript pagination;
+`drainTranscript()` preserves the fixed-cut cursor contract.
+
+All composed result helpers are served by
 `GET /v1/invocations/{invocation_id}/result`, which returns the authoritative
 Invocation, this Invocation's canonical messages, and the wire `output_text`
-projection. `text()` returns `output_text` and reports an actionable client
-error when the Invocation has no canonical assistant text. Nothing is cached
-or copied; the projection is computed from canonical rows at read time.
+projection. Nothing is cached or copied; the projection is computed from
+canonical rows at read time.
 
-The quickstart requires `NVOKEN_API_KEY`, `NVOKEN_PROVIDER`, and `NVOKEN_MODEL`, uses
-bounded output/iteration limits without an estimated-cost cap, performs two turns,
-and prints each assistant response. Failed or cancelled work prints status,
-Invocation ID, public error code/message, safe detail, and a structured-log pointer,
-then exits nonzero. The chat example uses the same handle helper, accepts a durable
-Session key, and documents message-derived idempotency and local wait semantics.
+The packaged quickstart performs one anonymous turn and prints the assistant
+response. Anonymous one-shot work uses a real durable Session internally but
+does not expose a Session binding in the newcomer code. The separate chat
+example demonstrates durable Session identity, SDK-generated idempotency, and
+cross-process recovery.
 
 Node 20 remains the supported package runtime floor and now runs the complete
 onboarding gate in CI. Node 24 remains the pinned repository development baseline.
@@ -158,8 +187,9 @@ One Python orchestration test performs the non-trivial lifecycle work:
 3. pack and inspect the npm artifact;
 4. install it into an empty TypeScript project and compile a facade-only consumer;
 5. run the quickstart and chat example against the deterministic conformance double;
-6. prove two-turn context, cross-process Session-key resume, invalid-credential and
-   invalid-model failures, useful identifiers, and absence of raw provider content;
+6. prove the anonymous first response, two-turn context, cross-process Session-key
+   resume, invalid-credential and invalid-model failures, useful identifiers, and
+   absence of raw provider content;
 7. verify the linked docs and cleanup command remain present.
 
 The normal SDK gate continues to exercise shared transport/retry behavior. This
@@ -171,11 +201,11 @@ new check focuses on what a newcomer installs and sees.
 consumer would still reimplement pagination, Invocation filtering, and open-ended
 content narrowing. A canonical-reading helper is smaller and more reliable.
 
-**Discard a model checkpoint when later budget settlement fails.** This makes the
-public transcript look simpler but loses durable evidence after a paid provider call
-and can cause a crash retry to repeat the external call. Retaining evidence while
-excluding failed output from future context preserves both durability and semantic
-safety.
+**Discard a model checkpoint when later cost-limit settlement fails.** This
+makes the public transcript look simpler but loses durable evidence after a paid
+provider call and can cause a crash retry to repeat the external call. Retaining
+evidence while excluding failed output from future context preserves both
+durability and semantic safety.
 
 **Publish from a long-lived npm token.** It would bootstrap automation quickly, but
 npm trusted publishing removes a reusable write credential and automatically adds
@@ -202,13 +232,15 @@ profile keeps both paths honest.
 ## Rollout
 
 Version 0.1.0 was packed, inspected, tested, and published interactively from the
-exact merged `main` revision. The second- and third-pass corrections bump the
-TypeScript package to 0.1.1. After the corrected changes merge and the exact `main`
-gates pass, push `npm-v0.1.1`; npm trusted publishing is connected to repository
-`deepnoodle-ai/nvoken`, workflow `release-npm.yml`, and the `npm publish` action.
+exact merged `main` revision, and the second- and third-pass corrections shipped
+in 0.1.1. The redesigned surface is versioned 0.2.0. Publish `v0.2.0` and
+`npm-v0.2.0` only from the same exact merged `main` commit after its full
+repository, SDK, and onboarding gates pass. npm trusted publishing is connected
+to repository `deepnoodle-ai/nvoken`, workflow `release-npm.yml`, and the
+`npm publish` action.
 
 ## Open questions
 
 There are no unresolved design questions. The public package coordinate is
-`@deepnoodle/nvoken`; publication of 0.1.1 is deliberately deferred until the
-provider-scoped corrections are merged and verified from the exact `main` revision.
+`@deepnoodle/nvoken`; 0.2.0 publication remains deliberately separate from a
+green source branch.

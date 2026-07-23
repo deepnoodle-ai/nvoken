@@ -27,10 +27,10 @@ to run unattended:
 
 - **The tool call loop.** Multi-round execution of model calls and tool
   dispatch until the turn produces a final response.
-- **Guardrails.** An iteration limit and a response timeout bound every run,
-  and on the last allowed iteration tools are disabled and the model is
-  instructed to answer, so a turn never strands mid tool call.
-- **Limits.** Token, cost, iteration, and wall-clock ceilings from the
+- **Guardrails.** Iteration, total-time, active-time, and waiting-time limits
+  bound every run, and on the last allowed iteration tools are disabled and the
+  model is instructed to answer, so a turn never strands mid tool call.
+- **Limits.** Output-token, estimated-cost, iteration, and time limits from the
   execution spec, enforced while the turn runs.
 - **Parallel and background execution.** Batches of tool calls run
   concurrently, with sequential fallback when a tool declares it must run
