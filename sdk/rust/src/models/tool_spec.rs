@@ -23,3 +23,15 @@ impl Default for ToolSpec {
         Self::ClientToolSpec(Default::default())
     }
 }
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum Mode {
+    #[serde(rename = "callback")]
+    ModeCallback,
+}
+
+impl Default for Mode {
+    fn default() -> Mode {
+        Self::ModeCallback
+    }
+}

@@ -10,6 +10,16 @@ import readiness
 
 
 class MatrixTest(unittest.TestCase):
+    def test_singleton_schema_values_accepts_const_and_enum(self):
+        self.assertEqual(
+            readiness.singleton_schema_values(
+                "      const: client\n"
+                "      enum: [callback]\n"
+                "      enum: [ignored, because-multiple]\n"
+            ),
+            {"client", "callback"},
+        )
+
     def test_repository_matrix_parses_and_checked_facts_agree(self):
         text = readiness.MATRIX.read_text()
         claims, profiles = readiness.parse_matrix(text)

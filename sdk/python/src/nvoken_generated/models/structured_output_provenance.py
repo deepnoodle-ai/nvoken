@@ -17,8 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Any, ClassVar, Dict, Optional
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from typing import Any, ClassVar, Dict
 from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
@@ -28,10 +28,17 @@ class StructuredOutputProvenance(BaseModel):
     """
     Immutable proof that output equals the request of the accepted reserved durable ToolCall under the admitted schema digest.
     """ # noqa: E501
-    source: Optional[Any]
+    source: StrictStr
     tool_call_id: Annotated[str, Field(strict=True)]
     schema_sha256: Annotated[str, Field(strict=True)]
     __properties: ClassVar[List[str]] = ["source", "tool_call_id", "schema_sha256"]
+
+    @field_validator('source')
+    def source_validate_enum(cls, value):
+        """Validates the enum"""
+        if value not in set(['tool_call']):
+            raise ValueError("must be one of enum values ('tool_call')")
+        return value
 
     @field_validator('tool_call_id')
     def tool_call_id_validate_regular_expression(cls, value):
@@ -92,11 +99,6 @@ class StructuredOutputProvenance(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # set to None if source (nullable) is None
-        # and model_fields_set contains the field
-        if self.source is None and "source" in self.model_fields_set:
-            _dict['source'] = None
-
         return _dict
 
     @classmethod

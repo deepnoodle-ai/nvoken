@@ -1,0 +1,41 @@
+# TypeScript invoke showcase
+
+This source-checkout example exercises the TypeScript SDK beyond the basic chat
+quickstart. It makes real provider requests and verifies:
+
+- two turns sharing one durable Session;
+- exact idempotent admission replay and changed-request conflict;
+- client ToolCall parking, Session visibility, result submission, and replay;
+- schema-bound client-tool input and structured output;
+- actionable waiting plus admission acknowledgement metadata;
+- `agent_ref` identity and `tenant_ref` Session partitioning;
+- exact Session-key lookup, facade pagination, transcript draining, and SSE.
+
+The app intentionally uses only the supported `Client` facade. Its build is
+part of `make sdk-check`, so the advanced examples fail CI if the public SDK
+surface drifts.
+
+Start the source daemon as described in
+[Develop nvoken](../../docs/guides/developing-nvoken.md), build the SDK, then
+install and run this example:
+
+```bash
+npm ci --prefix sdk/typescript
+npm run build --prefix sdk/typescript
+npm ci --prefix examples/typescript-invoke-showcase
+
+set -a
+source .env
+set +a
+npm run check --prefix examples/typescript-invoke-showcase
+```
+
+The example uses a unique tenant, Agent reference, Session key, and idempotency
+key namespace on every run. It prints identifiers and assertion results but
+never prints credentials. Expect seven small model requests. They may be billed
+by the configured provider.
+
+The local `file:` dependency intentionally targets `sdk/typescript`, so `dist/`
+must exist before `npm install`. This example is for contributors evaluating
+the checked-out SDK. Applications should install the published
+`@deepnoodle/nvoken` package instead.

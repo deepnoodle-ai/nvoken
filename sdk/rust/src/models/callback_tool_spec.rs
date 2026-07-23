@@ -18,8 +18,8 @@ pub struct CallbackToolSpec {
     pub name: String,
     #[serde(rename = "description")]
     pub description: String,
-    #[serde(rename = "mode", deserialize_with = "Option::deserialize")]
-    pub mode: Option<serde_json::Value>,
+    #[serde(rename = "mode")]
+    pub mode: Mode,
     /// Object-root JSON Schema using the same bounded, self-contained subset as structured output. Compact canonical JSON is limited to 32 KiB.
     #[serde(rename = "input_schema")]
     pub input_schema: std::collections::HashMap<String, serde_json::Value>,
@@ -31,7 +31,7 @@ impl CallbackToolSpec {
     pub fn new(
         name: String,
         description: String,
-        mode: Option<serde_json::Value>,
+        mode: Mode,
         input_schema: std::collections::HashMap<String, serde_json::Value>,
         callback: models::CallbackTarget,
     ) -> CallbackToolSpec {
@@ -42,5 +42,17 @@ impl CallbackToolSpec {
             input_schema,
             callback: Box::new(callback),
         }
+    }
+}
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum Mode {
+    #[serde(rename = "callback")]
+    ModeCallback,
+}
+
+impl Default for Mode {
+    fn default() -> Mode {
+        Self::ModeCallback
     }
 }

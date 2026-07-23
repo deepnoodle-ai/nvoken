@@ -35,23 +35,23 @@ impl StreamResyncEvent {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum EventType {
     #[serde(rename = "stream.resync")]
-    StreamResync,
+    EventStreamResync,
 }
 
 impl Default for EventType {
     fn default() -> EventType {
-        Self::StreamResync
+        Self::EventStreamResync
     }
 }
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Reason {
     #[serde(rename = "live_delivery_gap")]
-    LiveDeliveryGap,
+    ReasonLiveDeliveryGap,
 }
 
 impl Default for Reason {
     fn default() -> Reason {
-        Self::LiveDeliveryGap
+        Self::ReasonLiveDeliveryGap
     }
 }

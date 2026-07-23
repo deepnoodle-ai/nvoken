@@ -23,10 +23,10 @@ import { mapValues } from '../runtime.js';
 export interface StructuredOutputProvenance {
     /**
      *
-     * @type {any}
+     * @type {StructuredOutputProvenanceSourceEnum}
      * @memberof StructuredOutputProvenance
      */
-    source: any | null;
+    source: StructuredOutputProvenanceSourceEnum;
     /**
      *
      * @type {string}
@@ -40,6 +40,16 @@ export interface StructuredOutputProvenance {
      */
     schemaSha256: string;
 }
+
+
+/**
+ * @export
+ */
+export const StructuredOutputProvenanceSourceEnum = {
+    SourceToolCall: 'tool_call'
+} as const;
+export type StructuredOutputProvenanceSourceEnum = typeof StructuredOutputProvenanceSourceEnum[keyof typeof StructuredOutputProvenanceSourceEnum];
+
 
 /**
  * Check if a given object implements the StructuredOutputProvenance interface.

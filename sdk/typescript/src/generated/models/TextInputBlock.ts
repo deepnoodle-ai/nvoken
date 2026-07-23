@@ -21,10 +21,10 @@ import { mapValues } from '../runtime.js';
 export interface TextInputBlock {
     /**
      *
-     * @type {any}
+     * @type {TextInputBlockTypeEnum}
      * @memberof TextInputBlock
      */
-    type: any | null;
+    type: TextInputBlockTypeEnum;
     /**
      *
      * @type {string}
@@ -32,6 +32,16 @@ export interface TextInputBlock {
      */
     text: string;
 }
+
+
+/**
+ * @export
+ */
+export const TextInputBlockTypeEnum = {
+    InputTypeText: 'text'
+} as const;
+export type TextInputBlockTypeEnum = typeof TextInputBlockTypeEnum[keyof typeof TextInputBlockTypeEnum];
+
 
 /**
  * Check if a given object implements the TextInputBlock interface.

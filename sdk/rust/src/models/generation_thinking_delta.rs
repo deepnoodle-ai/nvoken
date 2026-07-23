@@ -34,11 +34,11 @@ impl GenerationThinkingDelta {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Type {
     #[serde(rename = "thinking")]
-    Thinking,
+    DeltaTypeThinking,
 }
 
 impl Default for Type {
     fn default() -> Type {
-        Self::Thinking
+        Self::DeltaTypeThinking
     }
 }

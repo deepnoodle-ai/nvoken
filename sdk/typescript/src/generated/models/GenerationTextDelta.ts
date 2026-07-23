@@ -44,7 +44,7 @@ export interface GenerationTextDelta {
  * @export
  */
 export const GenerationTextDeltaTypeEnum = {
-    Text: 'text'
+    DeltaTypeText: 'text'
 } as const;
 export type GenerationTextDeltaTypeEnum = typeof GenerationTextDeltaTypeEnum[keyof typeof GenerationTextDeltaTypeEnum];
 

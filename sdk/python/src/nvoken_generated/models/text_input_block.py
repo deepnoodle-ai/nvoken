@@ -17,8 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, ClassVar, Dict, Optional
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from typing import Any, ClassVar, Dict
 from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
@@ -28,9 +28,16 @@ class TextInputBlock(BaseModel):
     """
     TextInputBlock
     """ # noqa: E501
-    type: Optional[Any]
+    type: StrictStr
     text: Annotated[str, Field(min_length=1, strict=True)]
     __properties: ClassVar[List[str]] = ["type", "text"]
+
+    @field_validator('type')
+    def type_validate_enum(cls, value):
+        """Validates the enum"""
+        if value not in set(['text']):
+            raise ValueError("must be one of enum values ('text')")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,11 +78,6 @@ class TextInputBlock(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # set to None if type (nullable) is None
-        # and model_fields_set contains the field
-        if self.type is None and "type" in self.model_fields_set:
-            _dict['type'] = None
-
         return _dict
 
     @classmethod

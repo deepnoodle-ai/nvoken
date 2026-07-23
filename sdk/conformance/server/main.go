@@ -188,7 +188,7 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 	case "server-error":
 		writeError(response, http.StatusServiceUnavailable, "unavailable", "try later")
 	case waitID:
-		writeJSON(response, http.StatusOK, invocationWithID(waitID, "running"))
+		writeJSON(response, http.StatusOK, invocationWithID(waitID, "waiting"))
 	default:
 		writeJSON(response, http.StatusOK, invocation("completed"))
 	}
@@ -289,7 +289,7 @@ func invocationWithID(id string, status string) map[string]any {
 	if status == "completed" || status == "cancelled" || status == "failed" {
 		completedAt = "2026-07-21T12:00:03Z"
 	}
-	return map[string]any{
+	value := map[string]any{
 		"id":                           id,
 		"agent_id":                     agentID,
 		"session_id":                   sessionID,
@@ -306,6 +306,15 @@ func invocationWithID(id string, status string) map[string]any {
 		"updated_at":                   "2026-07-21T12:00:03Z",
 		"completed_at":                 completedAt,
 	}
+	if status == "waiting" {
+		value["pending_tool_calls"] = []any{map[string]any{
+			"id":          toolCallID,
+			"name":        "lookup_order",
+			"input":       map[string]any{"order_id": "order-42"},
+			"deadline_at": "2026-07-21T12:05:00Z",
+		}}
+	}
+	return value
 }
 
 func invocationResult() map[string]any {

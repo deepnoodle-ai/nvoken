@@ -1108,7 +1108,9 @@ components:
             provider:
               $ref: "#/components/schemas/ModelProvider"
             source:
-              const: caller_ephemeral
+              type: string
+              enum: [caller_ephemeral]
+              x-enum-varnames: [SourceCallerEphemeral]
             credential:
               $ref: "#/components/schemas/ProviderStaticCredential"
         - type: object
@@ -1257,7 +1259,9 @@ components:
       required: [type, text]
       properties:
         type:
-          const: text
+          type: string
+          enum: [text]
+          x-enum-varnames: [InputTypeText]
         text:
           type: string
           minLength: 1
@@ -1306,7 +1310,9 @@ components:
           minLength: 1
           maxLength: 4096
         mode:
-          const: client
+          type: string
+          enum: [client]
+          x-enum-varnames: [ModeClient]
         input_schema:
           type: object
           additionalProperties: true
@@ -1330,7 +1336,9 @@ components:
           minLength: 1
           maxLength: 4096
         mode:
-          const: callback
+          type: string
+          enum: [callback]
+          x-enum-varnames: [ModeCallback]
         input_schema:
           type: object
           additionalProperties: true
@@ -1623,7 +1631,9 @@ components:
       required: [source, tool_call_id, schema_sha256]
       properties:
         source:
-          const: tool_call
+          type: string
+          enum: [tool_call]
+          x-enum-varnames: [SourceToolCall]
         tool_call_id:
           type: string
           pattern: "^tcal_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -1937,7 +1947,8 @@ components:
           minimum: 0
         type:
           type: string
-          const: text
+          enum: [text]
+          x-enum-varnames: [DeltaTypeText]
         text:
           type: string
           minLength: 1
@@ -1951,7 +1962,8 @@ components:
           minimum: 0
         type:
           type: string
-          const: thinking
+          enum: [thinking]
+          x-enum-varnames: [DeltaTypeThinking]
         thinking:
           type: string
           minLength: 1
@@ -1962,7 +1974,8 @@ components:
       properties:
         event_type:
           type: string
-          const: generation.delta
+          enum: [generation.delta]
+          x-enum-varnames: [EventGenerationDelta]
         session_id:
           $ref: "#/components/schemas/SessionID"
         invocation_id:
@@ -1991,12 +2004,14 @@ components:
       properties:
         event_type:
           type: string
-          const: stream.resync
+          enum: [stream.resync]
+          x-enum-varnames: [EventStreamResync]
         session_id:
           $ref: "#/components/schemas/SessionID"
         reason:
           type: string
-          const: live_delivery_gap
+          enum: [live_delivery_gap]
+          x-enum-varnames: [ReasonLiveDeliveryGap]
     StreamEndEvent:
       type: object
       additionalProperties: false
@@ -2004,7 +2019,8 @@ components:
       properties:
         event_type:
           type: string
-          const: stream.end
+          enum: [stream.end]
+          x-enum-varnames: [EventStreamEnd]
         session_id:
           $ref: "#/components/schemas/SessionID"
         reason:

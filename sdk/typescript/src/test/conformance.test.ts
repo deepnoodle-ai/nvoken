@@ -7,15 +7,25 @@ import {
   NvokenError,
   Reducer,
   deduplicateCallbackResult,
+  defineClientTool,
+  defineJsonSchema,
   formatInvocationFailure,
   formatNvokenError,
+  toolInput,
   verifyCallback,
+  type ClientTool,
+  type Tool,
 } from "../index.js";
 
+const agentId = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
 const invocationId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
 const sessionId = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const toolCallId = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
 const waitId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
+
+interface Answer {
+  answer: string;
+}
 
 test("public diagnostics stay concise and provider-aware", () => {
   assert.equal(
@@ -86,15 +96,33 @@ test("shared fault server semantics", async (context) => {
     spec: {
       instructions: "help",
       model: { provider: "openai", name: "gpt-test" },
+      outputSchema: defineJsonSchema<Answer>({
+        type: "object",
+        properties: { answer: { type: "string" } },
+        required: ["answer"],
+        additionalProperties: false,
+      }),
     },
   });
   assert.equal(handle.invocationId, invocationId);
   assert.equal(handle.sessionId, sessionId);
+  assert.equal(handle.agentId, agentId);
+  assert.equal(handle.deduplicated, true);
 
   const resumed = await client.resume(invocationId);
   assert.equal(resumed.status, "completed");
+  assert.equal(resumed.agentId, agentId);
+  assert.equal(resumed.deduplicated, undefined);
 
   const waiting = await client.resume(waitId);
+  const actionable = await waiting.wait({
+    until: "actionable",
+    minimumDelayMs: 1,
+    maximumDelayMs: 2,
+  });
+  assert.equal(actionable.status, "waiting");
+  assert.equal(actionable.pendingToolCalls?.[0]?.id, toolCallId);
+
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 10);
   await assert.rejects(
@@ -109,6 +137,35 @@ test("shared fault server semantics", async (context) => {
   assert.equal(secondPage.hasMore, false);
   const messages = await client.listMessages(sessionId);
   assert.equal(messages.nextCursor, "messages-page-2");
+  const traversedMessages = [];
+  for await (const message of client.messagePages(sessionId, { limit: 1 })) {
+    traversedMessages.push(message);
+  }
+  assert.deepEqual(traversedMessages.map((message) => message.role), ["user", "assistant"]);
+
+  const traversedSessions = [];
+  for await (const session of client.sessionPages({
+    tenantRef: "acme",
+    agentId,
+    sessionKey: "ticket-A-42",
+    limit: 1,
+  })) {
+    traversedSessions.push(session);
+  }
+  assert.equal(traversedSessions.length, 2);
+  assert.equal(traversedSessions[0]?.id, sessionId);
+
+  const exactSession = await client.getSessionByKey("ticket-A-42", {
+    tenantRef: "acme",
+    agentId,
+  });
+  assert.equal(exactSession.id, sessionId);
+
+  const transcript = await client.drainTranscript(sessionId, { pageSize: 1 });
+  assert.deepEqual(transcript.messages.map((message) => message.role), ["user", "assistant"]);
+  assert.deepEqual(transcript.invocationChanges.map((change) => change.revision), [1, 2]);
+  assert.equal(transcript.resumeCursor, "cursor-2");
+
   assert.deepEqual((await handle.listMessages()).map((message) => message.role), ["user", "assistant"]);
   assert.equal(await handle.text(), "world");
 
@@ -116,6 +173,7 @@ test("shared fault server semantics", async (context) => {
   assert.equal(composed.invocation.id, invocationId);
   assert.equal(composed.invocation.status, "completed");
   assert.deepEqual(composed.invocation.structuredOutput, { answer: "world" });
+  assert.equal(composed.invocation.structuredOutput?.answer, "world");
   assert.equal(composed.invocation.structuredOutputProvenance?.source, "tool_call");
   assert.deepEqual(composed.messages.map((message) => message.role), ["user", "assistant"]);
   assert.equal(composed.outputText, await handle.text());
@@ -167,6 +225,59 @@ test("shared fault server semantics", async (context) => {
     stream_attempts: 3,
     last_event_id: "cursor-1",
   });
+});
+
+test("schema-bound tool helpers preserve application types", () => {
+  interface LookupOrderInput {
+    orderId: string;
+  }
+
+  const lookupOrder = defineClientTool<LookupOrderInput>({
+    mode: "client",
+    name: "lookup_order",
+    description: "Look up one order.",
+    inputSchema: defineJsonSchema<LookupOrderInput>({
+      type: "object",
+      properties: { orderId: { type: "string" } },
+      required: ["orderId"],
+      additionalProperties: false,
+    }),
+  });
+  const input = toolInput(lookupOrder, {
+    id: toolCallId,
+    name: "lookup_order",
+    input: { orderId: "order-42" },
+    deadlineAt: new Date("2026-07-21T12:05:00Z"),
+  });
+  assert.equal(input.orderId, "order-42");
+  assert.throws(
+    () => toolInput(lookupOrder, {
+      id: toolCallId,
+      name: "different_tool",
+      input: {},
+      deadlineAt: new Date("2026-07-21T12:05:00Z"),
+    }),
+    (error: unknown) => error instanceof NvokenError && error.category === "validation",
+  );
+
+  // @ts-expect-error callback mode requires callback configuration.
+  const invalidCallback: Tool = {
+    mode: "callback",
+    name: "notify",
+    description: "Notify a host.",
+    inputSchema: {},
+  };
+  void invalidCallback;
+
+  const invalidClient: ClientTool = {
+    mode: "client",
+    name: "lookup",
+    description: "Lookup",
+    inputSchema: {},
+    // @ts-expect-error client tools cannot carry callback configuration.
+    callback: { url: "https://example.com/callback" },
+  };
+  void invalidClient;
 });
 
 test("shared reducer vector", async () => {
