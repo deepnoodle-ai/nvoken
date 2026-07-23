@@ -54,3 +54,5 @@ sdk/rust/target/
 *.tfstate
 *.tfstate.*
 *.tfplan
+
+.vscode
