@@ -13,7 +13,6 @@ import (
 	"math"
 	"net"
 	"net/http"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,7 +44,6 @@ type Generator struct {
 	clock              ports.Clock
 	logger             *slog.Logger
 	credentialResolver ports.ProviderCredentialResolver
-	registryVersion    func(string) string
 }
 
 type Option func(*Generator)
@@ -98,11 +96,10 @@ func (systemClock) Now() time.Time { return time.Now() }
 
 func New(config Config, options ...Option) *Generator {
 	generator := &Generator{
-		config:          config,
-		factory:         newModel,
-		clock:           systemClock{},
-		logger:          slog.Default(),
-		registryVersion: diveRegistryVersion,
+		config:  config,
+		factory: newModel,
+		clock:   systemClock{},
+		logger:  slog.Default(),
 	}
 	for _, option := range options {
 		if option != nil {
@@ -110,64 +107,6 @@ func New(config Config, options ...Option) *Generator {
 		}
 	}
 	return generator
-}
-
-func (g *Generator) ResolveModelPricing(provider, model string) domain.ModelPricingCapability {
-	capability := domain.ModelPricingCapability{
-		Provider:        domain.ModelProvider(provider),
-		Model:           model,
-		Status:          domain.ModelPricingUnknown,
-		RegistryVersion: g.registryVersion(provider),
-	}
-	var pricing llm.PricingInfo
-	var ok bool
-	switch provider {
-	case string(domain.ModelProviderAnthropic):
-		pricing, ok = anthropic.TextModelPricing[model]
-	case string(domain.ModelProviderOpenAI):
-		pricing, ok = openai.TextModelPricing[model]
-	default:
-		return capability
-	}
-	if !ok || !strings.EqualFold(pricing.Currency, "USD") {
-		capability.Status = domain.ModelPricingUnpriced
-		return capability
-	}
-	capability.Status = domain.ModelPricingPriced
-	return capability
-}
-
-func diveRegistryVersion(provider string) string {
-	build, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "unknown"
-	}
-	return diveRegistryVersionFromDependencies(provider, build.Deps)
-}
-
-func diveRegistryVersionFromDependencies(provider string, dependencies []*debug.Module) string {
-	dependencyPath := map[string]string{
-		string(domain.ModelProviderAnthropic): "github.com/deepnoodle-ai/dive",
-		string(domain.ModelProviderOpenAI):    "github.com/deepnoodle-ai/dive/providers/openai",
-	}[provider]
-	if dependencyPath == "" {
-		return "unknown"
-	}
-	for _, dependency := range dependencies {
-		if dependency.Path != dependencyPath {
-			continue
-		}
-		if dependency.Replace != nil {
-			if dependency.Replace.Version != "" {
-				return dependency.Replace.Version
-			}
-			return "local"
-		}
-		if dependency.Version != "" {
-			return dependency.Version
-		}
-	}
-	return "unknown"
 }
 
 func newModel(provider, model, apiKey string) (llm.LLM, error) {

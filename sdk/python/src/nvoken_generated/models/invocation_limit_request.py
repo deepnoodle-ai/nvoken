@@ -32,7 +32,7 @@ class InvocationLimitRequest(BaseModel):
     active_timeout_seconds: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     waiting_timeout_seconds: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     max_output_tokens: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
-    max_estimated_cost_usd: Optional[Union[Annotated[float, Field(multiple_of=0.0000010, strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = Field(default=None, description="Dive list-price guardrail, not preauthorization or a billing ledger. Requires known USD pricing for the selected model and otherwise fails closed with `budget_exceeded` and `details.kind = estimated_cost_unavailable`. When pricing absence is knowable before execution, nvoken rejects before a provider call. ")
+    max_estimated_cost_usd: Optional[Union[Annotated[float, Field(multiple_of=0.0000010, strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = Field(default=None, description="nvoken's standard list-price guardrail, not preauthorization or a billing ledger. Requires known USD pricing for the selected model and otherwise fails closed with `budget_exceeded` and `details.kind = estimated_cost_unavailable`. When pricing absence is knowable before execution, nvoken rejects before a provider call. ")
     max_iterations: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     __properties: ClassVar[List[str]] = ["total_timeout_seconds", "active_timeout_seconds", "waiting_timeout_seconds", "max_output_tokens", "max_estimated_cost_usd", "max_iterations"]
 

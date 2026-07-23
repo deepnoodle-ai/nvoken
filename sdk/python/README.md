@@ -12,3 +12,16 @@ NVOKEN_BASE_URL=http://localhost:8080 NVOKEN_API_KEY=... \
 The async facade provides durable handles, replay-safe retries, typed errors,
 cursor iterators, resumable SSE, composed result reads (`result`,
 `list_messages`, `text`), and callback verification.
+
+Discover models through the same async facade:
+
+```python
+catalog = await client.list_models(provider="openai")
+selected = await client.get_model(
+    Model(provider="openai", id=catalog.items[0].id)
+)
+print(selected.cataloged, selected.pricing.status)
+```
+
+The list is curated discovery metadata, not proof of provider-account access.
+Exact inspection also accepts uncataloged IDs.

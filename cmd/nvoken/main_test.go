@@ -53,14 +53,60 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		baseURL,
 		false,
 		"model",
+		"list",
+	)
+	if err != nil ||
+		!strings.Contains(output, "openai\tgpt-test\tpriced\tGPT Test (recommended)\n") ||
+		!strings.Contains(output, "future_provider\tfuture-model\tpriced\tFuture Model (recommended)\n") {
+		t.Fatalf("model list output=%q err=%v", output, err)
+	}
+
+	output, err = executeCLI(
+		t,
+		baseURL,
+		false,
+		"model",
+		"get",
+		"--provider",
+		"openai",
+		"--model",
+		"gpt-test",
+	)
+	if err != nil || output != "openai\tgpt-test\tcataloged=true\tpriced\n" {
+		t.Fatalf("model get output=%q err=%v", output, err)
+	}
+
+	output, err = executeCLI(
+		t,
+		baseURL,
+		false,
+		"model",
 		"pricing",
 		"--provider",
 		"openai",
 		"--model",
 		"gpt-test",
 	)
-	if err != nil || output != "openai\tgpt-test\tpriced\tconformance-v1\n" {
+	if err != nil || output != "openai\tgpt-test\tpriced\tconformance-pricing-v1\n" {
 		t.Fatalf("model pricing output=%q err=%v", output, err)
+	}
+	output, err = executeCLI(
+		t,
+		baseURL,
+		true,
+		"model",
+		"pricing",
+		"--provider",
+		"openai",
+		"--model",
+		"gpt-test",
+	)
+	if err != nil ||
+		!strings.Contains(output, `"provider":"openai"`) ||
+		!strings.Contains(output, `"id":"gpt-test"`) ||
+		!strings.Contains(output, `"pricing":{`) ||
+		!strings.Contains(output, `"status":"priced"`) {
+		t.Fatalf("model pricing JSON output=%q err=%v", output, err)
 	}
 
 	output, err = executeCLI(t, baseURL, false, "invocation", "get", testInvocationID)

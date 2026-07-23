@@ -16,7 +16,9 @@ type SessionMessage = generated.SessionMessage
 type PendingHostToolCall = generated.PendingHostToolCall
 type ToolResultResponse = generated.SubmitHostToolResultsResponse
 type ModelProvider = generated.ModelProvider
-type ModelPricingCapability = generated.ModelPricingCapability
+type ModelDescriptor = generated.ModelDescriptor
+type ModelList = generated.ModelList
+type ModelPricing = generated.ModelPricing
 type ProviderCredential = generated.ProviderCredential
 type ProviderCredentialList = generated.ProviderCredentialList
 type ProviderCredentialScope = generated.ProviderCredentialScope
@@ -87,6 +89,11 @@ type ListProviderCredentialsOptions struct {
 	Status    *ProviderCredentialStatus
 	TenantKey *string
 	Limit     *int
+}
+
+type ListModelsOptions struct {
+	Provider          *ModelProvider
+	IncludeDeprecated *bool
 }
 
 type CreateProviderCredentialInput struct {
@@ -203,6 +210,16 @@ func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
 		return generated.CreateInvocationRequest{}, fmt.Errorf("convert invocation to generated transport: %w", err)
 	}
 	return request, nil
+}
+
+func generatedModelProvider(provider string) (generated.ModelProvider, error) {
+	value := generated.ModelProvider(provider)
+	switch value {
+	case generated.Anthropic, generated.Openai:
+		return value, nil
+	default:
+		return "", fmt.Errorf("model provider must be anthropic or openai")
+	}
 }
 
 func generatedToolResults(results []ToolResult) (generated.SubmitHostToolResultsRequest, error) {

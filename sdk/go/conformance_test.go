@@ -16,6 +16,7 @@ const (
 	conformanceSessionID    = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
 	conformanceToolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 	conformanceWaitID       = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
+	conformanceExactModelID = "experimental/model?variant=雪%#1"
 )
 
 func TestConformance(t *testing.T) {
@@ -31,6 +32,26 @@ func TestConformance(t *testing.T) {
 	}))
 	if err != nil {
 		t.Fatal(err)
+	}
+	models, err := client.ListModels(context.Background(), ListModelsOptions{})
+	if err != nil || models.CatalogVersion != "conformance-catalog-v1" {
+		t.Fatalf("list models: %#v err=%v", models, err)
+	}
+	foundFutureProvider := false
+	for _, model := range models.Items {
+		if model.ID == "future-model" && model.Provider == "future_provider" {
+			foundFutureProvider = true
+		}
+	}
+	if !foundFutureProvider {
+		t.Fatalf("future provider did not decode: %#v", models.Items)
+	}
+	exactModel, err := client.GetModel(context.Background(), Model{
+		Provider: "openai",
+		ID:       conformanceExactModelID,
+	})
+	if err != nil || exactModel.ID != conformanceExactModelID || exactModel.Cataloged {
+		t.Fatalf("exact model lookup: %#v err=%v", exactModel, err)
 	}
 	request := InvokeRequest{
 		AgentKey:       "support",

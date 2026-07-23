@@ -12,6 +12,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Literal
 import httpx
 
 from nvoken_generated.api.invocations_api import InvocationsApi
+from nvoken_generated.api.models_api import ModelsApi
 from nvoken_generated.api.sessions_api import SessionsApi
 from nvoken_generated.api_client import ApiClient
 from nvoken_generated.configuration import Configuration
@@ -28,6 +29,9 @@ from nvoken_generated.models.invocation_list import InvocationList
 from nvoken_generated.models.invocation_result import InvocationResult
 from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.model_selection import ModelSelection
+from nvoken_generated.models.model_descriptor import ModelDescriptor
+from nvoken_generated.models.model_list import ModelList
+from nvoken_generated.models.model_provider import ModelProvider
 from nvoken_generated.models.session import Session
 from nvoken_generated.models.session_list import SessionList
 from nvoken_generated.models.session_message import SessionMessage
@@ -153,6 +157,7 @@ class Client:
         configuration.discard_unknown_keys = False
         self.api_client = ApiClient(configuration)
         self.invocations = InvocationsApi(self.api_client)
+        self.models = ModelsApi(self.api_client)
         self.sessions = SessionsApi(self.api_client)
         self.stream_client = httpx.AsyncClient(
             base_url=self.base_url,
@@ -171,8 +176,28 @@ class Client:
         await self.api_client.close()
         await self.stream_client.aclose()
 
-    def raw(self) -> tuple[InvocationsApi, SessionsApi]:
-        return self.invocations, self.sessions
+    def raw(self) -> tuple[InvocationsApi, ModelsApi, SessionsApi]:
+        return self.invocations, self.models, self.sessions
+
+    async def list_models(
+        self,
+        *,
+        provider: str | None = None,
+        include_deprecated: bool = False,
+    ) -> ModelList:
+        generated_provider = _model_provider(provider) if provider is not None else None
+        return await self._replay_safe(lambda: self.models.list_models(
+            provider=generated_provider,
+            include_deprecated=include_deprecated,
+        ))
+
+    async def get_model(self, model: Model) -> ModelDescriptor:
+        if not model.id:
+            raise NvokenError("validation", "model id is required")
+        return await self._replay_safe(lambda: self.models.get_model(
+            _model_provider(model.provider),
+            model.id,
+        ))
 
     async def invoke(self, request: InvokeRequest) -> InvocationHandle:
         if not request.agent_key or not request.input:
@@ -361,6 +386,16 @@ class Client:
                     else exponential / 2 + random.random() * exponential / 2
                 await asyncio.sleep(delay)
         raise last_error or NvokenError("unexpected_response", "request did not run")
+
+
+def _model_provider(provider: str) -> ModelProvider:
+    try:
+        return ModelProvider(provider)
+    except ValueError as error:
+        raise NvokenError(
+            "validation",
+            "model provider must be anthropic or openai",
+        ) from error
 
 
 @dataclass

@@ -27,8 +27,8 @@ security:
 tags:
   - name: Invocations
     description: Durable agent-turn admission and state.
-  - name: Model pricing
-    description: Local USD pricing-registry capability for exact model IDs.
+  - name: Models
+    description: Curated model discovery and exact model-selection inspection.
   - name: Sessions
     description: Durable conversation identity and state.
   - name: Provider credentials
@@ -706,61 +706,135 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
-  /v1/model-pricing-capabilities:
+  /v1/models:
     get:
-      tags: [Model pricing]
-      operationId: getModelPricingCapability
-      summary: Inspect local USD pricing capability for an exact model
+      tags: [Models]
+      operationId: listModels
+      summary: List nvoken's curated model catalog
       description: |
-        Reports whether this nvoken installation's embedded pricing registry
-        has standard USD pricing for the exact provider and model ID. This is
-        a local guardrail capability check only: it does not call the provider,
-        verify provider-account access, or guarantee that a provider response
-        will identify the same served model and include usable token evidence.
-
-        `priced` means the exact requested model has a standard USD entry.
-        `unpriced` means the local registry can determine that it has no
-        standard USD entry, so a cost-capped Invocation will fail before a
-        provider call. `unknown` means the active adapter cannot decide before
-        execution; capped work can fail closed after normalized response
-        evidence is available.
+        Returns the complete bounded set of text-generation models nvoken
+        intentionally advertises. Catalog membership means nvoken maintains
+        metadata for the exact provider/model selection. It does not prove that
+        the caller's provider account, region, or selected credential can access
+        the model. Ordering is deterministic but has no semantic meaning.
       parameters:
         - name: provider
           in: query
-          required: true
+          description: Limit results to one installed canonical provider.
           schema:
             $ref: "#/components/schemas/ModelProvider"
-        - name: model
+        - name: include_deprecated
           in: query
-          required: true
+          description: Include catalog entries nvoken marks as deprecated.
           schema:
-            type: string
-            minLength: 1
-            maxLength: 255
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":
-          description: The exact model's local pricing capability.
+          description: The complete matching model catalog.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ModelPricingCapability"
+                $ref: "#/components/schemas/ModelList"
               examples:
-                priced:
+                catalog:
+                  value:
+                    items:
+                      - provider: anthropic
+                        id: claude-opus-4-8
+                        cataloged: true
+                        display_name: Claude Opus 4.8
+                        description: Deep reasoning for complex agent workloads.
+                        context_window_tokens: 1000000
+                        max_output_tokens: 128000
+                        input_modalities: [text]
+                        recommended: false
+                        deprecated: false
+                        pricing:
+                          status: priced
+                          currency: USD
+                          unit: per_million_tokens
+                          input: "5"
+                          output: "25"
+                          cache_read: "0.5"
+                          cache_write: "6.25"
+                          updated_at: "2026-05-28"
+                          pricing_version: b3f91e2a
+                    catalog_version: 665048c7
+        "304":
+          description: The matching representation has not changed.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/models/{provider}/{model_id}:
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        description: Installed canonical model provider.
+        schema:
+          $ref: "#/components/schemas/ModelProvider"
+      - name: model_id
+        in: path
+        required: true
+        allowReserved: false
+        description: |
+          Exact model ID used in `spec.model.id`. Encode the complete value as
+          one path segment, including `/`, reserved characters, and Unicode.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+    get:
+      tags: [Models]
+      operationId: getModel
+      summary: Inspect one exact provider/model selection
+      description: |
+        Returns a descriptor for any valid installed provider and exact model
+        ID, including IDs outside the curated catalog. `cataloged` distinguishes
+        maintained metadata from tolerant inspection. Pricing is the standard
+        local USD estimate used by nvoken's estimated-cost guardrail, not
+        provider billing or proof of account access.
+      parameters:
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Exact model-selection descriptor.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelDescriptor"
+              examples:
+                uncataloged:
                   value:
                     provider: openai
-                    model: gpt-5.4-mini
-                    status: priced
-                    registry_version: v1.16.0
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
-        "429":
-          $ref: "#/components/responses/RateLimited"
-        "500":
-          $ref: "#/components/responses/Internal"
-        "503":
-          $ref: "#/components/responses/Unavailable"
+                    id: experimental/model
+                    cataloged: false
+                    pricing:
+                      status: unpriced
+                      pricing_version: 8fd0a7c2
+        "304":
+          description: The exact descriptor has not changed.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /v1/sessions:
     get:
       tags: [Sessions]
@@ -995,7 +1069,19 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+  headers:
+    ETag:
+      description: Strong validator for this exact JSON representation.
+      schema:
+        type: string
   parameters:
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      description: ETag from a prior response for this exact representation.
+      schema:
+        type: string
+        minLength: 1
     InvocationID:
       name: invocation_id
       in: path
@@ -1069,27 +1155,109 @@ components:
     ModelProvider:
       type: string
       enum: [anthropic, openai]
-    ModelPricingCapability:
+    ModelCatalogProvider:
+      type: string
+      pattern: "^[a-z][a-z0-9_]*$"
+      description: |
+        Extensible canonical provider identifier. Consumers must preserve
+        unknown values so adding a provider does not break catalog decoding.
+    ModelPricing:
       type: object
       additionalProperties: false
-      required: [provider, model, status, registry_version]
+      required: [status, pricing_version]
+      description: |
+        Standard local price evidence used by nvoken's estimated-cost
+        guardrail. A `priced` object also carries currency, unit, input, output,
+        and update date. `unpriced` and `unknown` carry only status and the
+        opaque pricing version. Clients compare versions for equality only.
       properties:
-        provider:
-          $ref: "#/components/schemas/ModelProvider"
-        model:
-          type: string
-          minLength: 1
-          maxLength: 255
         status:
           type: string
           enum: [priced, unpriced, unknown]
-        registry_version:
+        currency:
+          type: string
+          enum: [USD]
+        unit:
+          type: string
+          enum: [per_million_tokens]
+        input:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)(\.[0-9]+)?$'
+        output:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)(\.[0-9]+)?$'
+        cache_read:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)(\.[0-9]+)?$'
+        cache_write:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)(\.[0-9]+)?$'
+        updated_at:
+          type: string
+          format: date
+        pricing_version:
           type: string
           minLength: 1
           description: |
-            Opaque version of the embedded local pricing snapshot. A changed
-            version can change capability without changing provider-account
-            availability.
+            Opaque nvoken-owned identifier for the local pricing snapshot.
+            Values never encode an upstream dependency name or version.
+    ModelDescriptor:
+      type: object
+      additionalProperties: false
+      required: [provider, id, cataloged, pricing]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ModelCatalogProvider"
+        id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        cataloged:
+          type: boolean
+          description: Whether nvoken advertises and maintains metadata for this selection.
+        display_name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          minLength: 1
+        context_window_tokens:
+          type: integer
+          minimum: 1
+        max_output_tokens:
+          type: integer
+          minimum: 1
+        input_modalities:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            pattern: "^[a-z][a-z0-9_]*$"
+          description: Input types nvoken currently accepts for this model selection.
+        recommended:
+          type: boolean
+          description: nvoken's suggested general-purpose starting point for this provider.
+        deprecated:
+          type: boolean
+        pricing:
+          $ref: "#/components/schemas/ModelPricing"
+      description: |
+        Cataloged descriptors include all maintained metadata fields.
+        Uncataloged descriptors include only provider, id, cataloged, and
+        pricing; absent metadata is unknown rather than false or zero.
+    ModelList:
+      type: object
+      additionalProperties: false
+      required: [items, catalog_version]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelDescriptor"
+        catalog_version:
+          type: string
+          minLength: 1
+          description: Opaque version of the complete unfiltered catalog and pricing snapshot.
     ProviderCredentialScope:
       type: string
       enum: [account, tenant]
@@ -1467,7 +1635,7 @@ components:
           exclusiveMinimum: 0
           multipleOf: 0.000001
           description: |
-            Dive list-price guardrail, not preauthorization or a billing
+            nvoken's standard list-price guardrail, not preauthorization or a billing
             ledger. Requires known USD pricing for the selected model and
             otherwise fails closed with `budget_exceeded` and
             `details.kind = estimated_cost_unavailable`. When pricing absence

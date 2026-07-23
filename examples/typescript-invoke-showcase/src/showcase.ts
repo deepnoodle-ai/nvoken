@@ -72,8 +72,11 @@ async function main(): Promise<void> {
   console.log(`nvoken=${baseUrl}`);
   console.log(`run_id=${runId}`);
 
-  const pricing = await client.pricingCapability({ provider, id: model });
-  console.log(`PASS pricing preflight: ${pricing.status} (${pricing.registryVersion})`);
+  const selectedModel = await client.getModel({ provider, id: model });
+  console.log(
+    `PASS model preflight: cataloged=${selectedModel.cataloged} `
+    + `pricing=${selectedModel.pricing.status} (${selectedModel.pricing.pricingVersion})`,
+  );
 
   const firstRequest: InvokeRequest = {
     agentKey: primaryAgentKey,

@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/deepnoodle-ai/dive/llm"
+	"github.com/deepnoodle-ai/dive/providers/openai"
 
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
@@ -158,118 +158,228 @@ func TestGeneratorPreservesCredentialUnavailableForDurableSettlement(t *testing.
 
 func TestGeneratorReportsRegisteredUSDModelPricing(t *testing.T) {
 	generator := New(Config{})
-	dependencies := []*debug.Module{
-		{
-			Path:    "github.com/deepnoodle-ai/dive",
-			Version: "v1.2.3",
-		},
-		{
-			Path:    "github.com/deepnoodle-ai/dive/providers/openai",
-			Version: "v4.5.6",
-		},
-	}
-	generator.registryVersion = func(provider string) string {
-		return diveRegistryVersionFromDependencies(provider, dependencies)
-	}
 	tests := []struct {
-		name            string
-		provider        string
-		model           string
-		status          domain.ModelPricingStatus
-		registryVersion string
+		name      string
+		provider  string
+		model     string
+		status    domain.ModelPricingStatus
+		input     string
+		output    string
+		cacheRead string
 	}{
 		{
-			name:            "known OpenAI model",
-			provider:        "openai",
-			model:           "gpt-5.4-mini",
-			status:          domain.ModelPricingPriced,
-			registryVersion: "v4.5.6",
+			name:     "known OpenAI model",
+			provider: "openai",
+			model:    "gpt-5.4-mini",
+			status:   domain.ModelPricingPriced,
+			input:    "0.75",
+			output:   "4.5",
 		},
 		{
-			name:            "known Anthropic model",
-			provider:        "anthropic",
-			model:           "claude-sonnet-4-6",
-			status:          domain.ModelPricingPriced,
-			registryVersion: "v1.2.3",
+			name:      "known Anthropic model uses enforcement cache rates",
+			provider:  "anthropic",
+			model:     "claude-opus-4-8",
+			status:    domain.ModelPricingPriced,
+			input:     "5",
+			output:    "25",
+			cacheRead: "0.5",
 		},
 		{
-			name:            "Anthropic model under OpenAI",
-			provider:        "openai",
-			model:           "claude-sonnet-4-6",
-			status:          domain.ModelPricingUnpriced,
-			registryVersion: "v4.5.6",
+			name:     "Anthropic model under OpenAI",
+			provider: "openai",
+			model:    "claude-sonnet-4-6",
+			status:   domain.ModelPricingUnpriced,
 		},
 		{
-			name:            "OpenAI model under Anthropic",
-			provider:        "anthropic",
-			model:           "gpt-5.4-mini",
-			status:          domain.ModelPricingUnpriced,
-			registryVersion: "v1.2.3",
+			name:     "OpenAI model under Anthropic",
+			provider: "anthropic",
+			model:    "gpt-5.4-mini",
+			status:   domain.ModelPricingUnpriced,
 		},
 		{
-			name:            "unregistered model",
-			provider:        "openai",
-			model:           "unregistered-model",
-			status:          domain.ModelPricingUnpriced,
-			registryVersion: "v4.5.6",
+			name:     "unregistered model",
+			provider: "openai",
+			model:    "unregistered-model",
+			status:   domain.ModelPricingUnpriced,
 		},
 		{
-			name:            "unsupported provider",
-			provider:        "unsupported",
-			model:           "gpt-5.4-mini",
-			status:          domain.ModelPricingUnknown,
-			registryVersion: "unknown",
+			name:     "unsupported provider",
+			provider: "unsupported",
+			model:    "gpt-5.4-mini",
+			status:   domain.ModelPricingUnknown,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			capability := generator.ResolveModelPricing(test.provider, test.model)
-			if capability.Status != test.status || capability.RegistryVersion != test.registryVersion {
-				t.Fatalf(
-					"pricing capability = %#v, want status %q and registry version %q",
-					capability,
-					test.status,
-					test.registryVersion,
-				)
+			if capability.Status != test.status {
+				t.Fatalf("pricing capability = %#v, want status %q", capability, test.status)
+			}
+			if domain.ModelProvider(test.provider).Valid() && capability.PricingVersion == "" {
+				t.Fatalf("pricing capability has no opaque version: %#v", capability)
+			}
+			if test.status == domain.ModelPricingPriced {
+				if capability.Currency != "USD" ||
+					capability.Unit != pricingUnit ||
+					capability.Input != test.input ||
+					capability.Output != test.output {
+					t.Fatalf("priced capability = %#v", capability)
+				}
+				if test.cacheRead != "" &&
+					(capability.CacheRead == nil || *capability.CacheRead != test.cacheRead) {
+					t.Fatalf("priced capability cache read = %#v", capability.CacheRead)
+				}
 			}
 		})
 	}
 }
 
-func TestDiveRegistryVersionUsesProviderDependency(t *testing.T) {
-	dependencies := []*debug.Module{
-		{
-			Path:    "github.com/deepnoodle-ai/dive",
-			Version: "v1.2.3",
-		},
-		{
-			Path:    "github.com/deepnoodle-ai/dive/providers/openai",
-			Version: "v4.5.6",
-		},
+func TestModelCatalogIsCompleteStableAndProviderScoped(t *testing.T) {
+	generator := New(Config{})
+	all := generator.ListModels("", false)
+	if len(all.Items) != len(modelCatalog) || all.Version == "" {
+		t.Fatalf("model catalog = %#v", all)
 	}
+	seen := make(map[string]struct{}, len(all.Items))
+	recommended := make(map[domain.ModelProvider]int)
+	for _, model := range all.Items {
+		key := string(model.Provider) + "/" + model.ID
+		if _, ok := seen[key]; ok {
+			t.Fatalf("duplicate model %s", key)
+		}
+		seen[key] = struct{}{}
+		if !model.Cataloged || model.Pricing.Status != domain.ModelPricingPriced {
+			t.Fatalf("cataloged model = %#v", model)
+		}
+		if model.Recommended {
+			recommended[model.Provider]++
+		}
+	}
+	if recommended[domain.ModelProviderAnthropic] != 1 ||
+		recommended[domain.ModelProviderOpenAI] != 1 {
+		t.Fatalf("recommended counts = %#v", recommended)
+	}
+	openAI := generator.ListModels(domain.ModelProviderOpenAI, false)
+	if len(openAI.Items) == 0 || len(openAI.Items) >= len(all.Items) || openAI.Version != all.Version {
+		t.Fatalf("OpenAI catalog = %#v", openAI)
+	}
+	if repeated := generator.ListModels("", false); repeated.Version != all.Version {
+		t.Fatalf("catalog version changed: %q then %q", all.Version, repeated.Version)
+	}
+	changedMetadata := append([]domain.ModelDescriptor(nil), all.Items...)
+	changedMetadata[0] = cloneDescriptor(changedMetadata[0])
+	changedMetadata[0].Description += " Changed."
+	if contentVersion(changedMetadata) == all.Version {
+		t.Fatal("catalog metadata change did not change the content version")
+	}
+	changedPricing := append([]domain.ModelDescriptor(nil), all.Items...)
+	changedPricing[0] = cloneDescriptor(changedPricing[0])
+	changedPricing[0].Pricing.Input += "1"
+	if contentVersion(changedPricing) == all.Version {
+		t.Fatal("catalog pricing change did not change the content version")
+	}
+}
+
+func TestModelCatalogValidationRejectsDrift(t *testing.T) {
+	base := append([]catalogEntry(nil), modelCatalog...)
 	tests := []struct {
-		provider string
-		want     string
+		name   string
+		mutate func([]catalogEntry) []catalogEntry
+		want   string
 	}{
 		{
-			provider: "anthropic",
-			want:     "v1.2.3",
+			name: "duplicate compound identity",
+			mutate: func(entries []catalogEntry) []catalogEntry {
+				return append(entries, entries[0])
+			},
+			want: "duplicate model catalog key",
 		},
 		{
-			provider: "openai",
-			want:     "v4.5.6",
+			name: "missing recommendation",
+			mutate: func(entries []catalogEntry) []catalogEntry {
+				for index := range entries {
+					if entries[index].provider == domain.ModelProviderAnthropic {
+						entries[index].recommended = false
+					}
+				}
+				return entries
+			},
+			want: "active recommended models",
 		},
 		{
-			provider: "unsupported",
-			want:     "unknown",
+			name: "contradictory deprecated recommendation",
+			mutate: func(entries []catalogEntry) []catalogEntry {
+				for index := range entries {
+					if entries[index].recommended {
+						entries[index].deprecated = true
+						break
+					}
+				}
+				return entries
+			},
+			want: "cannot be recommended",
+		},
+		{
+			name: "unknown metadata omitted rather than fabricated",
+			mutate: func(entries []catalogEntry) []catalogEntry {
+				invalid := -1
+				entries[0].contextWindowTokens = &invalid
+				return entries
+			},
+			want: "invalid context window",
+		},
+		{
+			name: "model not backed by provider pricing",
+			mutate: func(entries []catalogEntry) []catalogEntry {
+				entries[0].id = "not-a-provider-model"
+				return entries
+			},
+			want: "not backed by its provider pricing table",
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.provider, func(t *testing.T) {
-			if got := diveRegistryVersionFromDependencies(test.provider, dependencies); got != test.want {
-				t.Fatalf("registry version = %q, want %q", got, test.want)
+		t.Run(test.name, func(t *testing.T) {
+			entries := append([]catalogEntry(nil), base...)
+			err := validateModelCatalog(test.mutate(entries))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("validation error = %v, want %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestInstalledPricingTablesMatchCostEnforcementWithoutCollisions(t *testing.T) {
+	if err := validateInstalledPricingTables(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestResolveModelDistinguishesCatalogMembership(t *testing.T) {
+	generator := New(Config{})
+	cataloged := generator.ResolveModel(
+		domain.ModelProviderAnthropic,
+		"claude-opus-4-8",
+	)
+	if !cataloged.Cataloged || cataloged.DisplayName == "" {
+		t.Fatalf("cataloged descriptor = %#v", cataloged)
+	}
+	uncataloged := generator.ResolveModel(
+		domain.ModelProviderOpenAI,
+		"future/model?雪",
+	)
+	if uncataloged.Cataloged ||
+		uncataloged.ID != "future/model?雪" ||
+		uncataloged.DisplayName != "" ||
+		uncataloged.Pricing.Status != domain.ModelPricingUnpriced {
+		t.Fatalf("uncataloged descriptor = %#v", uncataloged)
+	}
+	pricedUncataloged := generator.ResolveModel(
+		domain.ModelProviderOpenAI,
+		openai.ModelGPT52,
+	)
+	if pricedUncataloged.Cataloged ||
+		pricedUncataloged.Pricing.Status != domain.ModelPricingPriced {
+		t.Fatalf("priced uncataloged descriptor = %#v", pricedUncataloged)
 	}
 }
 

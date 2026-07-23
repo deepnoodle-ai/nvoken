@@ -22,24 +22,25 @@ const localBaseURL = defaultBaseURL
 var version = "devel"
 
 var operationCommands = map[string]string{
-	"cancelInvocation":          "invocation cancel",
-	"createInvocation":          "invoke",
-	"createProviderCredential":  "provider-credential create",
-	"getInvocation":             "invocation get",
-	"getInvocationResult":       "invocation result",
-	"getModelPricingCapability": "model pricing",
-	"getProviderCredential":     "provider-credential get",
-	"getSession":                "session get",
-	"getSessionTranscript":      "session transcript",
-	"listInvocations":           "invocation list",
-	"listProviderCredentials":   "provider-credential list",
-	"listSessionMessages":       "session messages",
-	"listSessions":              "session list",
-	"revokeProviderCredential":  "provider-credential revoke",
-	"rotateProviderCredential":  "provider-credential rotate",
-	"streamInvocation":          "invocation stream",
-	"streamSessionTranscript":   "session stream",
-	"submitHostToolResults":     "tool-result submit",
+	"cancelInvocation":         "invocation cancel",
+	"createInvocation":         "invoke",
+	"createProviderCredential": "provider-credential create",
+	"getInvocation":            "invocation get",
+	"getInvocationResult":      "invocation result",
+	"getModel":                 "model get",
+	"getProviderCredential":    "provider-credential get",
+	"getSession":               "session get",
+	"getSessionTranscript":     "session transcript",
+	"listInvocations":          "invocation list",
+	"listModels":               "model list",
+	"listProviderCredentials":  "provider-credential list",
+	"listSessionMessages":      "session messages",
+	"listSessions":             "session list",
+	"revokeProviderCredential": "provider-credential revoke",
+	"rotateProviderCredential": "provider-credential rotate",
+	"streamInvocation":         "invocation stream",
+	"streamSessionTranscript":  "session stream",
+	"submitHostToolResults":    "tool-result submit",
 }
 
 type runtimeConfig struct {
@@ -83,8 +84,21 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runInvocationList)
 
-	models := app.Group("model").Description("Inspect model capabilities")
+	models := app.Group("model").Description("Discover and inspect models")
+	models.Command("list").
+		Flags(
+			cli.String("provider").Enum("anthropic", "openai").Help("Limit results to one provider"),
+			cli.Bool("include-deprecated").Help("Include deprecated catalog entries"),
+		).
+		Run(runModelList)
+	models.Command("get").
+		Flags(
+			cli.String("provider").Required().Enum("anthropic", "openai").Help("Model provider"),
+			cli.String("model", "m").Required().Help("Exact model ID"),
+		).
+		Run(runModelGet)
 	models.Command("pricing").
+		Description("Inspect the standard price evidence for an exact model").
 		Flags(
 			cli.String("provider").Required().Enum("anthropic", "openai").Help("Model provider"),
 			cli.String("model", "m").Required().Help("Exact model ID"),
@@ -127,30 +141,107 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runToolResultSubmit)
 }
 
-func runModelPricing(command *cli.Context) error {
+func runModelList(command *cli.Context) error {
 	client, err := runtimeClient(command)
 	if err != nil {
 		return err
 	}
-	capability, err := client.PricingCapability(
-		command.Context(),
-		nvoken.ModelProvider(command.String("provider")),
-		command.String("model"),
-	)
+	options := nvoken.ListModelsOptions{
+		IncludeDeprecated: optionalBool(command.Bool("include-deprecated")),
+	}
+	if provider := command.String("provider"); provider != "" {
+		value := nvoken.ModelProvider(provider)
+		options.Provider = &value
+	}
+	models, err := client.ListModels(command.Context(), options)
 	if err != nil {
 		return err
 	}
-	return writeOutput(command, capability, func(writer io.Writer) error {
+	return writeOutput(command, models, func(writer io.Writer) error {
+		for _, model := range models.Items {
+			if _, err := fmt.Fprintf(
+				writer,
+				"%s\t%s\t%s\t%s\n",
+				model.Provider,
+				model.ID,
+				model.Pricing.Status,
+				modelLabel(model),
+			); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func runModelGet(command *cli.Context) error {
+	model, err := selectedModel(command)
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, model, func(writer io.Writer) error {
 		_, err := fmt.Fprintf(
 			writer,
-			"%s\t%s\t%s\t%s\n",
-			capability.Provider,
-			capability.Model,
-			capability.Status,
-			capability.RegistryVersion,
+			"%s\t%s\tcataloged=%t\t%s\n",
+			model.Provider,
+			model.ID,
+			model.Cataloged,
+			model.Pricing.Status,
 		)
 		return err
 	})
+}
+
+func runModelPricing(command *cli.Context) error {
+	model, err := selectedModel(command)
+	if err != nil {
+		return err
+	}
+	output := struct {
+		Provider string              `json:"provider"`
+		ID       string              `json:"id"`
+		Pricing  nvoken.ModelPricing `json:"pricing"`
+	}{
+		Provider: string(model.Provider),
+		ID:       model.ID,
+		Pricing:  model.Pricing,
+	}
+	return writeOutput(command, output, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(
+			writer,
+			"%s\t%s\t%s\t%s\n",
+			model.Provider,
+			model.ID,
+			model.Pricing.Status,
+			model.Pricing.PricingVersion,
+		)
+		return err
+	})
+}
+
+func selectedModel(command *cli.Context) (*nvoken.ModelDescriptor, error) {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetModel(command.Context(), nvoken.Model{
+		Provider: command.String("provider"),
+		ID:       command.String("model"),
+	})
+}
+
+func modelLabel(model nvoken.ModelDescriptor) string {
+	label := ""
+	if model.DisplayName != nil {
+		label = *model.DisplayName
+	}
+	if model.Recommended != nil && *model.Recommended {
+		if label != "" {
+			label += " "
+		}
+		label += "(recommended)"
+	}
+	return label
 }
 
 func runInvoke(command *cli.Context) error {
@@ -509,6 +600,13 @@ func optionalString(value string) *string {
 
 func optionalInt(value int) *int {
 	if value <= 0 {
+		return nil
+	}
+	return &value
+}
+
+func optionalBool(value bool) *bool {
+	if !value {
 		return nil
 	}
 	return &value

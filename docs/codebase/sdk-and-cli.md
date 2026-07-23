@@ -85,6 +85,10 @@ iteration syntax differs:
 - Session selectors are mutually exclusive types in handwritten facades.
   Session pagination, message pagination, and fixed-cut transcript draining
   have symmetric helpers.
+- Model discovery uses `listModels` and `getModel` (with native language
+  casing). Catalog response providers remain raw strings for additive provider
+  compatibility, while model-selection requests retain the installed-provider
+  type.
 - Invocation streams expose the wire's discriminated event union directly.
   `output_text.delta` plus `invocation.result` is the minimum useful consumer;
   Session reducers are an advanced multi-turn primitive, not the golden path.

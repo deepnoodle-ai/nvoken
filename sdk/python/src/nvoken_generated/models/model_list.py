@@ -17,30 +17,21 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
-from typing import Any, ClassVar, Dict
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, ClassVar, Dict, List
 from typing_extensions import Annotated
-from nvoken_generated.models.model_provider import ModelProvider
+from nvoken_generated.models.model_descriptor import ModelDescriptor
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class ModelPricingCapability(BaseModel):
+class ModelList(BaseModel):
     """
-    ModelPricingCapability
+    ModelList
     """ # noqa: E501
-    provider: ModelProvider
-    model: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
-    status: StrictStr
-    registry_version: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque version of the embedded local pricing snapshot. A changed version can change capability without changing provider-account availability. ")
-    __properties: ClassVar[List[str]] = ["provider", "model", "status", "registry_version"]
-
-    @field_validator('status')
-    def status_validate_enum(cls, value):
-        """Validates the enum"""
-        if value not in set(['priced', 'unpriced', 'unknown']):
-            raise ValueError("must be one of enum values ('priced', 'unpriced', 'unknown')")
-        return value
+    items: List[ModelDescriptor]
+    catalog_version: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque version of the complete unfiltered catalog and pricing snapshot.")
+    __properties: ClassVar[List[str]] = ["items", "catalog_version"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -60,7 +51,7 @@ class ModelPricingCapability(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of ModelPricingCapability from a JSON string"""
+        """Create an instance of ModelList from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -81,11 +72,18 @@ class ModelPricingCapability(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of each item in items (list)
+        _items = []
+        if self.items:
+            for _item_items in self.items:
+                if _item_items:
+                    _items.append(_item_items.to_dict())
+            _dict['items'] = _items
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of ModelPricingCapability from a dict"""
+        """Create an instance of ModelList from a dict"""
         if obj is None:
             return None
 
@@ -93,9 +91,7 @@ class ModelPricingCapability(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "provider": obj.get("provider"),
-            "model": obj.get("model"),
-            "status": obj.get("status"),
-            "registry_version": obj.get("registry_version")
+            "items": [ModelDescriptor.from_dict(_item) for _item in obj["items"]] if obj.get("items") is not None else None,
+            "catalog_version": obj.get("catalog_version")
         })
         return _obj

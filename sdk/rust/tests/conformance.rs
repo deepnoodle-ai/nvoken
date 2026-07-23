@@ -6,8 +6,8 @@ use futures_util::StreamExt;
 use http::HeaderMap;
 use nvoken::{
     deduplicate_callback_result, verify_callback, CallbackResultStore, Client, ErrorCategory,
-    ExecutionSpec, InvokeRequest, ListInvocationsOptions, MessageListOptions, Model, Reducer,
-    RetryPolicy, StreamEvent, ToolResult,
+    ExecutionSpec, InvokeRequest, ListInvocationsOptions, ListModelsOptions, MessageListOptions,
+    Model, Reducer, RetryPolicy, StreamEvent, ToolResult,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -16,6 +16,7 @@ const INVOCATION_ID: &str = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
 const SESSION_ID: &str = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const TOOL_CALL_ID: &str = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
 const WAIT_ID: &str = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
+const EXACT_MODEL_ID: &str = "experimental/model?variant=雪%#1";
 
 #[tokio::test]
 async fn shared_fault_server_semantics() {
@@ -37,6 +38,33 @@ async fn shared_fault_server_semantics() {
         },
     )
     .unwrap();
+    let models = client
+        .list_models(ListModelsOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(models.catalog_version, "conformance-catalog-v1");
+    assert_eq!(
+        models
+            .items
+            .iter()
+            .find(|model| model.id == "future-model")
+            .unwrap()
+            .provider,
+        "future_provider"
+    );
+    let exact_model = client
+        .get_model(&Model {
+            provider: "openai".to_owned(),
+            id: EXACT_MODEL_ID.to_owned(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(exact_model.id, EXACT_MODEL_ID);
+    assert!(!exact_model.cataloged);
+    assert_eq!(
+        exact_model.pricing.status,
+        nvoken::models::model_pricing::Status::Unpriced
+    );
     let handle = client
         .invoke(InvokeRequest {
             agent_key: "support".to_owned(),

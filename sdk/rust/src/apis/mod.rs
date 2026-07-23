@@ -123,7 +123,7 @@ impl From<&str> for ContentType {
 }
 
 pub mod invocations_api;
-pub mod model_pricing_api;
+pub mod models_api;
 pub mod provider_credentials_api;
 pub mod sessions_api;
 

@@ -8,7 +8,7 @@ nvoken ships supported workflow facades for Go, TypeScript, Python, and Rust.
 They are generated from `openapi/runtime.yaml`, then wrapped with the durable
 semantics an ordinary host needs: exact-request admission replay, typed errors,
 bounded polling, cursor pagination, resumable Session SSE, host ToolCall
-result replay, and callback verification.
+result replay, callback verification, and model discovery.
 
 | Package | Supported facade | Raw generated client |
 | --- | --- | --- |
@@ -61,11 +61,12 @@ precedence is `--base-url`, `NVOKEN_BASE_URL`, the JSON config file, then
 
 Use `--json` before the command for machine-readable output. The CLI covers
 durable invoke, Invocation get/result/list/wait/cancel, Session get/list/
-messages/transcript/stream, model-pricing preflight, and ToolCall result
-submission. `invocation result` prints the composed result: the Invocation,
-its canonical messages, and the assistant text. It
-imports the Go SDK and does not maintain HTTP routes or payload types of its
-own.
+messages/transcript/stream, model discovery and pricing inspection, and
+ToolCall result submission. Model discovery is organized under `model list`,
+`model get`, and the pricing-focused `model pricing` view. `invocation result`
+prints the composed result: the Invocation, its canonical messages, and the
+assistant text. It imports the Go SDK and does not maintain HTTP routes or
+payload types of its own.
 
 ## Development
 

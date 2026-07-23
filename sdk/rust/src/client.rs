@@ -264,6 +264,12 @@ pub struct ListInvocationsOptions {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct ListModelsOptions {
+    pub provider: Option<String>,
+    pub include_deprecated: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct ListSessionsOptions {
     pub tenant_key: Option<String>,
     pub default_tenant: Option<bool>,
@@ -339,15 +345,7 @@ impl Client {
         if request.agent_key.is_empty() || request.input.is_empty() {
             return Err(NvokenError::validation("agent key and input are required"));
         }
-        let provider = match request.spec.model.provider.as_str() {
-            "anthropic" => models::ModelProvider::Anthropic,
-            "openai" => models::ModelProvider::Openai,
-            _ => {
-                return Err(NvokenError::validation(
-                    "model provider must be anthropic or openai",
-                ))
-            }
-        };
+        let provider = model_provider(&request.spec.model.provider)?;
         let model = models::ModelSelection::new(provider, request.spec.model.id);
         let mut spec = models::InlineExecutionSpec::new(model);
         spec.instructions = request.spec.instructions;
@@ -426,6 +424,39 @@ impl Client {
             deduplicated: None,
             deadline_at: None,
         }
+    }
+
+    pub async fn list_models(
+        &self,
+        options: ListModelsOptions,
+    ) -> Result<models::ModelList, NvokenError> {
+        let provider = options
+            .provider
+            .as_deref()
+            .map(model_provider)
+            .transpose()?;
+        apis::models_api::list_models(
+            &self.configuration,
+            provider,
+            options.include_deprecated,
+            None,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn get_model(&self, model: &Model) -> Result<models::ModelDescriptor, NvokenError> {
+        if model.id.is_empty() {
+            return Err(NvokenError::validation("model id is required"));
+        }
+        apis::models_api::get_model(
+            &self.configuration,
+            model_provider(&model.provider)?,
+            &model.id,
+            None,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn get_invocation(
@@ -547,6 +578,16 @@ impl Client {
             }
         }
         normalized
+    }
+}
+
+fn model_provider(provider: &str) -> Result<models::ModelProvider, NvokenError> {
+    match provider {
+        "anthropic" => Ok(models::ModelProvider::Anthropic),
+        "openai" => Ok(models::ModelProvider::Openai),
+        _ => Err(NvokenError::validation(
+            "model provider must be anthropic or openai",
+        )),
     }
 }
 

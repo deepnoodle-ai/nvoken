@@ -50,6 +50,25 @@ const client = new Client({
 });
 ```
 
+## Discover models
+
+List nvoken's curated selections, then inspect the exact model you plan to use:
+
+```ts
+const catalog = await client.listModels({ provider: "anthropic" });
+const recommended = catalog.items.find((model) => model.recommended);
+
+const selected = await client.getModel({
+  provider: "anthropic",
+  id: recommended?.id ?? "claude-sonnet-5",
+});
+console.log(selected.cataloged, selected.pricing.status);
+```
+
+Catalog membership does not guarantee that your provider account can access a
+model. `getModel()` also accepts uncataloged IDs and safely encodes IDs
+containing `/`, reserved characters, or Unicode.
+
 ## Choose the level of control
 
 `agent.text()` returns only the assistant text:

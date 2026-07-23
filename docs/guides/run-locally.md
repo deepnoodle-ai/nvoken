@@ -50,9 +50,25 @@ instead. Leave this terminal running.
 writes a protected `.env`, applies database migrations, and starts nvoken at
 `http://localhost:8080`. Re-running the command reuses those local resources.
 
-## 2. Run the TypeScript app
+## 2. Inspect nvoken's model catalog
 
-Open a second terminal in the same `nvoken-quickstart` directory and run:
+Open a second terminal in the same directory. The generated `.env` contains
+the local Runtime credential, so load it and ask nvoken what it advertises:
+
+```bash
+set -a
+. ./.env
+set +a
+nvoken model list --provider openai
+nvoken model get --provider openai --model "$NVOKEN_MODEL"
+```
+
+The catalog is discovery metadata, not an account-access probe. Your provider
+key, plan, or region may not permit every listed model.
+
+## 3. Run the TypeScript app
+
+In that second terminal, run:
 
 ```bash
 npx --yes --package "@deepnoodle/nvoken@$(nvokend --version)" nvoken-quickstart

@@ -366,3 +366,17 @@ thinking previews, durable `invocation.update`, `stream.resync`, and
 `transcript.update` plus the same delta names. Every payload carries `type` and
 scope IDs, durable frames alone carry SSE IDs, public `attempt` hides lease
 terminology, and `iteration` separates assistant messages in tool loops.
+
+35. Model discovery is one model-centered resource family (2026-07-23):
+authenticated `GET /v1/models` lists nvoken's bounded curated catalog, and
+`GET /v1/models/{provider}/{model_id}` tolerantly inspects any exact selection
+for an installed provider. Descriptive metadata, catalog membership, and the
+standard pricing evidence used by estimated-cost enforcement travel together;
+catalog membership and pricing never claim provider-account access. Exact
+model IDs are percent-encoded as one path segment, both reads are conditionally
+cacheable, and response provider identifiers remain open strings so older
+clients can decode newly installed providers. `/v1/capabilities` remains the
+installation and protocol-feature boundary, not a provider or model catalog.
+The pre-freeze `/v1/model-pricing-capabilities` experiment is removed without
+an alias. Public versions and fields use nvoken-owned vocabulary and do not
+expose implementation dependency identities.

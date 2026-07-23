@@ -188,26 +188,30 @@ is used after the call. Omit the field when trying a newly available model whose
 price metadata has not yet shipped.
 
 Before admitting capped work, an authenticated host can inspect the exact
-provider/model capability without making a provider call:
+provider/model selection without making a provider call:
 
 ```bash
-curl --silent --show-error --fail --get \
-  http://localhost:8080/v1/model-pricing-capabilities \
+curl --silent --show-error --fail \
+  "http://localhost:8080/v1/models/openai/gpt-5.4-mini" \
   -H "Authorization: Bearer $NVOKEN_API_KEY" \
-  --data-urlencode provider=openai \
-  --data-urlencode "model=$NVOKEN_MODEL"
 ```
 
-`priced` means the local registry has standard USD pricing for the exact model;
-`unpriced` means it knows that entry is absent; and `unknown` means the adapter
-cannot decide before execution. The response also includes the local
-`registry_version`. This preflight reports enforcement capability only. It does
-not call the provider, verify account access, or guarantee which model and usage
-evidence the provider will ultimately serve.
+The response includes catalog metadata when nvoken advertises the selection,
+plus a nested pricing object. `priced` means nvoken has standard USD pricing
+for the exact model; `unpriced` means it knows that entry is absent; and
+`unknown` means the adapter cannot decide before execution. The nested object
+also includes an opaque `pricing_version`. This preflight reports enforcement
+capability only. It does not call the provider, verify account access, or
+guarantee which model and usage evidence the provider will ultimately serve.
+Use an SDK or `nvoken model get` for model IDs containing `/`, reserved
+characters, or Unicode; those clients encode the complete ID as one path
+segment.
 
-The same check is available through the Go facade and CLI:
+Discover the curated set or inspect the same pricing through the CLI:
 
 ```bash
+nvoken model list --provider openai
+nvoken model get --provider openai --model "$NVOKEN_MODEL"
 nvoken model pricing --provider openai --model "$NVOKEN_MODEL"
 ```
 

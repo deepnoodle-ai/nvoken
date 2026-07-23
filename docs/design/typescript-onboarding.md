@@ -162,12 +162,14 @@ When pricing is available, the existing post-response cost calculation remains a
 guardrail rather than a reservation. Unknown or non-USD cost evidence still fails
 closed if an adapter could not decide before the call.
 
-Authenticated hosts can call `GET /v1/model-pricing-capabilities` for an exact
-provider/model before admission. Its `priced`, `unpriced`, or `unknown` result and
-local registry version describe only whether nvoken can enforce the USD cap without
-relying on a paid provider response; they do not claim provider-account access or
-served-model identity. The TypeScript facade exposes the same operation through
-`Client.pricingCapability()`.
+Authenticated hosts can call `GET /v1/models` to discover nvoken's curated
+selections and `GET /v1/models/{provider}/{model_id}` to inspect an exact
+selection before admission. The nested pricing object's `priced`, `unpriced`,
+or `unknown` result and opaque `pricing_version` describe only whether nvoken
+can enforce the USD cap without relying on a paid provider response; they do
+not claim provider-account access or served-model identity. The TypeScript
+facade exposes the same operations through `Client.listModels()` and
+`Client.getModel()`.
 
 Model checkpoints remain canonical durability evidence, including checkpoints that
 precede a later terminal failure. Public Session reads therefore remain lossless.

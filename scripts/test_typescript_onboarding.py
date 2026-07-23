@@ -14,7 +14,7 @@ import tarfile
 import tempfile
 import time
 from urllib.error import URLError
-from urllib.parse import urlencode
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 
@@ -134,6 +134,19 @@ def check_daemon(work: Path, database_url: str) -> None:
         process = subprocess.Popen([str(binary), "serve"], cwd=work, env=environment, stdout=log, stderr=log)
         try:
             wait_for(f"http://127.0.0.1:{port}/health", process)
+            catalog_request = Request(
+                f"http://127.0.0.1:{port}/v1/models",
+                headers={"Authorization": f"Bearer {runtime_api_key}"},
+            )
+            with urlopen(catalog_request, timeout=2) as response:
+                catalog = json.load(response)
+                if not response.headers.get("ETag"):
+                    raise RuntimeError("model catalog response did not include an ETag")
+            if not catalog.get("catalog_version") or not catalog.get("items"):
+                raise RuntimeError(f"model catalog was incomplete: {catalog}")
+            if "dive" in json.dumps(catalog).lower():
+                raise RuntimeError("model catalog exposed an internal dependency name")
+
             pricing_cases = (
                 ("openai", "gpt-5.4-mini", "priced"),
                 ("anthropic", "claude-sonnet-4-6", "priced"),
@@ -141,16 +154,24 @@ def check_daemon(work: Path, database_url: str) -> None:
                 ("anthropic", "gpt-5.4-mini", "unpriced"),
             )
             for provider, model, expected_status in pricing_cases:
-                query = urlencode({"provider": provider, "model": model})
                 request = Request(
-                    f"http://127.0.0.1:{port}/v1/model-pricing-capabilities?{query}",
+                    f"http://127.0.0.1:{port}/v1/models/"
+                    f"{quote(provider, safe='')}/{quote(model, safe='')}",
                     headers={"Authorization": f"Bearer {runtime_api_key}"},
                 )
                 with urlopen(request, timeout=2) as response:
-                    capability = json.load(response)
-                if capability.get("status") != expected_status or not capability.get("registry_version"):
+                    descriptor = json.load(response)
+                pricing = descriptor.get("pricing", {})
+                if (
+                    descriptor.get("provider") != provider
+                    or descriptor.get("id") != model
+                    or pricing.get("status") != expected_status
+                    or not pricing.get("pricing_version")
+                    or "dive" in json.dumps(descriptor).lower()
+                ):
                     raise RuntimeError(
-                        f"pricing capability for {provider}/{model} = {capability}, want {expected_status}"
+                        f"model descriptor for {provider}/{model} = {descriptor}, "
+                        f"want {expected_status}"
                     )
         finally:
             stop(process)

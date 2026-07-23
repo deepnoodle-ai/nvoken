@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ const (
 	invocationID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
 	waitID       = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
 	toolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+	exactModelID = "experimental/model?variant=雪%#1"
 )
 
 type state struct {
@@ -84,11 +86,7 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	}
 
 	switch {
-	case request.URL.Path == "/v1/model-pricing-capabilities" && request.Method == http.MethodGet:
-		writeJSON(response, http.StatusOK, map[string]any{
-			"provider": request.URL.Query().Get("provider"), "model": request.URL.Query().Get("model"),
-			"status": "priced", "registry_version": "conformance-v1",
-		})
+	case serveModels(response, request):
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
 		s.createInvocation(response, request)
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodGet:
@@ -101,6 +99,88 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		s.session(response, request)
 	default:
 		writeError(response, http.StatusNotFound, "not_found", "unknown conformance route")
+	}
+}
+
+func serveModels(response http.ResponseWriter, request *http.Request) bool {
+	if request.Method != http.MethodGet {
+		return false
+	}
+	if request.URL.Path == "/v1/models" {
+		items := []map[string]any{
+			catalogModel("openai", "gpt-test", "GPT Test"),
+			catalogModel("future_provider", "future-model", "Future Model"),
+		}
+		if provider := request.URL.Query().Get("provider"); provider != "" {
+			filtered := make([]map[string]any, 0, len(items))
+			for _, item := range items {
+				if item["provider"] == provider {
+					filtered = append(filtered, item)
+				}
+			}
+			items = filtered
+		}
+		response.Header().Set("ETag", `"conformance-catalog-v1"`)
+		writeJSON(response, http.StatusOK, map[string]any{
+			"items":           items,
+			"catalog_version": "conformance-catalog-v1",
+		})
+		return true
+	}
+	const prefix = "/v1/models/"
+	if !strings.HasPrefix(request.URL.Path, prefix) {
+		return false
+	}
+	escaped := strings.TrimPrefix(request.URL.EscapedPath(), prefix)
+	parts := strings.SplitN(escaped, "/", 2)
+	if len(parts) != 2 {
+		writeError(response, http.StatusNotFound, "not_found", "unknown model route")
+		return true
+	}
+	provider, providerErr := url.PathUnescape(parts[0])
+	modelID, modelErr := url.PathUnescape(parts[1])
+	if providerErr != nil || modelErr != nil {
+		writeError(response, http.StatusBadRequest, "invalid_request", "invalid encoded model path")
+		return true
+	}
+	response.Header().Set("ETag", `"conformance-model-v1"`)
+	if provider == "openai" && modelID == "gpt-test" {
+		writeJSON(response, http.StatusOK, catalogModel(provider, modelID, "GPT Test"))
+		return true
+	}
+	writeJSON(response, http.StatusOK, map[string]any{
+		"provider":  provider,
+		"id":        modelID,
+		"cataloged": false,
+		"pricing": map[string]any{
+			"status":          "unpriced",
+			"pricing_version": "conformance-pricing-v1",
+		},
+	})
+	return true
+}
+
+func catalogModel(provider, modelID, displayName string) map[string]any {
+	return map[string]any{
+		"provider":              provider,
+		"id":                    modelID,
+		"cataloged":             true,
+		"display_name":          displayName,
+		"description":           "A conformance fixture model.",
+		"context_window_tokens": 128000,
+		"max_output_tokens":     32000,
+		"input_modalities":      []string{"text"},
+		"recommended":           true,
+		"deprecated":            false,
+		"pricing": map[string]any{
+			"status":          "priced",
+			"currency":        "USD",
+			"unit":            "per_million_tokens",
+			"input":           "1.25",
+			"output":          "10",
+			"updated_at":      "2026-07-23",
+			"pricing_version": "conformance-pricing-v1",
+		},
 	}
 }
 
