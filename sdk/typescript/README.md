@@ -14,8 +14,11 @@ Node.js 20 or newer is required.
 
 ## First response
 
-After `nvokend quickstart`, the generated `.env` contains the API key and model:
+After following the
+[local quickstart](https://github.com/deepnoodle-ai/nvoken/blob/main/docs/guides/run-locally.md),
+the generated `.env` contains the API key and model:
 
+<!-- public-quickstart:start -->
 ```ts
 import { Client } from "@deepnoodle/nvoken";
 
@@ -26,6 +29,7 @@ const agent = new Client().agent({
 
 console.log(await agent.text("Why was I charged twice?"));
 ```
+<!-- public-quickstart:end -->
 
 `new Client()` resolves configuration in this order:
 
@@ -84,7 +88,7 @@ Useful handle methods are:
 - `refresh()` for the current authoritative state;
 - `waitForAction()` for `waiting` or terminal state;
 - `waitForResult()` for successful terminal work, with
-  `InvocationTerminalError` on failure or cancellation;
+  `InvocationError` on failure or cancellation;
 - `result()`, `text()`, and `listMessages()` for composed result reads;
 - `submitToolResults()` and `cancel()` for explicit orchestration;
 - `stream()` for the lower-level Invocation event stream.
@@ -274,7 +278,7 @@ next durable `resumeCursor`.
 
 All facade failures normalize to `NvokenError`, with `category`, HTTP `status`,
 wire `code`, `requestId`, retry metadata, and safe structured `details`.
-`SessionBusyError`, `InvocationTerminalError`, and
+`SessionBusyError`, `InvocationError`, and
 `MissingToolHandlerError` add workflow-specific context.
 
 Use generated APIs only when you need the one-to-one wire surface:

@@ -173,7 +173,13 @@ func (s *onboardingState) resolveSession(input onboardingCreateRequest) (*onboar
 		return session, ok
 	}
 	if input.SessionKey == nil || *input.SessionKey == "" {
-		return nil, false
+		session := &onboardingSession{
+			id:      onboardingID("sesn", s.next+1),
+			agentID: onboardingID("agnt", s.next+1),
+			facts:   map[string]string{},
+		}
+		s.sessionsByID[session.id] = session
+		return session, true
 	}
 	if session, ok := s.sessionsByKey[*input.SessionKey]; ok {
 		return session, true

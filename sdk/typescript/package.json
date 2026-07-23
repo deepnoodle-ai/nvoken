@@ -34,6 +34,8 @@
     "dist/generated",
     "dist/index.d.ts",
     "dist/index.js",
+    "dist/invocation-error.d.ts",
+    "dist/invocation-error.js",
     "dist/stream.d.ts",
     "dist/stream.js"
   ],

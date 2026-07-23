@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   Client,
+  InvocationError,
   SessionBusyError,
   NvokenError,
   Reducer,
@@ -19,6 +20,7 @@ import {
   type HostTool,
   type Tool,
   type StandardJSONSchemaV1,
+  type TypedInvocation,
 } from "../index.js";
 
 const agentId = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
@@ -72,6 +74,47 @@ test("public diagnostics stay concise and provider-aware", () => {
   );
   assert.match(localDiagnostic, new RegExp(`structured daemon logs for invocation_id=${invocationId}`));
   assert.match(localDiagnostic, /private upstream response bodies are intentionally omitted\.$/);
+});
+
+test("InvocationError is actionable without a formatter", () => {
+  const handle = new Client({ apiKey: "test-key" }).invocation(invocationId);
+  handle.modelProvider = "openai";
+  const invocation = {
+    id: invocationId,
+    agentId,
+    sessionId,
+    status: "failed",
+    error: {
+      code: "provider_error",
+      message: "The provider rejected the requested model.",
+      details: { classification: "upstream_rejected" },
+    },
+    usage: null,
+    provenance: null,
+    structuredOutput: null,
+    structuredOutputProvenance: null,
+    limits: {
+      totalTimeoutSeconds: 300,
+      activeTimeoutSeconds: 120,
+      waitingTimeoutSeconds: 180,
+      maxOutputTokens: 100,
+      maxIterations: 1,
+    },
+    activeExecutionMs: 20,
+    deadlineAt: new Date("2026-07-21T12:05:00Z"),
+    createdAt: new Date("2026-07-21T12:00:00Z"),
+    updatedAt: new Date("2026-07-21T12:00:01Z"),
+    endedAt: new Date("2026-07-21T12:00:01Z"),
+  } satisfies TypedInvocation;
+  const error = new InvocationError(handle, invocation);
+
+  assert.equal(error.invocationId, invocationId);
+  assert.equal(error.sessionId, sessionId);
+  assert.equal(error.terminalStatus, "failed");
+  assert.equal(error.failureCode, "provider_error");
+  assert.match(error.message, new RegExp(`^Invocation ${invocationId} failed: provider_error:`));
+  assert.match(error.message, /"classification":"upstream_rejected"/);
+  assert.match(error.message, /https:\/\/developers\.openai\.com\/api\/docs\/models\.$/);
 });
 
 test("shared fault server semantics", async (context) => {

@@ -23,6 +23,7 @@ import type {
   TranscriptSnapshot,
 } from "./generated/models/index.js";
 import { Configuration, FetchError, ResponseError } from "./generated/runtime.js";
+import { invocationFailureMessage } from "./invocation-error.js";
 import {
   streamInvocation as streamInvocationEvents,
   streamInvocationByID,
@@ -41,6 +42,7 @@ export type ErrorCategory =
   | "server"
   | "transport"
   | "timeout"
+  | "invocation"
   | "unexpected_response";
 
 export class NvokenError extends Error {
@@ -72,22 +74,34 @@ export class SessionBusyError extends NvokenError {
   }
 }
 
-export class InvocationTerminalError<TOutput extends object = JsonObject> extends NvokenError {
+export class InvocationError<TOutput extends object = JsonObject> extends NvokenError {
+  readonly invocationId: string;
+  readonly sessionId: string;
+  readonly terminalStatus: InvocationStatus;
+  readonly failureCode?: string;
+
   constructor(
     public readonly handle: InvocationHandle<TOutput>,
     public readonly invocation: TypedInvocation<TOutput>,
   ) {
     super(
-      "conflict",
-      invocation.error?.message
-        ?? `Invocation ${invocation.id} ended with status ${invocation.status}`,
+      "invocation",
+      invocationFailureMessage(
+        invocation.id,
+        invocation,
+        handle.modelProvider,
+      ),
       undefined,
       invocation.error?.code,
       undefined,
       undefined,
       invocation.error?.details,
     );
-    this.name = "InvocationTerminalError";
+    this.name = "InvocationError";
+    this.invocationId = invocation.id;
+    this.sessionId = invocation.sessionId;
+    this.terminalStatus = invocation.status;
+    this.failureCode = invocation.error?.code;
   }
 }
 
@@ -543,6 +557,7 @@ export class Client {
       ack.status,
       ack.deduplicated,
       ack.deadlineAt,
+      request.spec.model.provider,
     );
   }
 
@@ -877,6 +892,7 @@ export class Agent<TOutput extends object = JsonObject> {
           event.status,
           event.deduplicated,
           event.deadlineAt,
+          this.model.provider,
         );
       } else if (event.type === "invocation.update") {
         handle?.applyInvocation(event.invocation);
@@ -1060,6 +1076,7 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     public status?: InvocationStatus,
     public readonly deduplicated?: boolean,
     public deadlineAt?: Date,
+    public modelProvider?: ModelProvider,
   ) {}
 
   applyInvocation(invocation: TypedInvocation<TOutput>): void {
@@ -1067,6 +1084,15 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     this.agentId = invocation.agentId;
     this.status = invocation.status;
     this.deadlineAt = invocation.deadlineAt;
+    if (
+      !this.modelProvider
+      && (
+        invocation.provenance?.provider === "openai"
+        || invocation.provenance?.provider === "anthropic"
+      )
+    ) {
+      this.modelProvider = invocation.provenance.provider;
+    }
   }
 
   async refresh(signal?: AbortSignal): Promise<TypedInvocation<TOutput>> {
@@ -1121,7 +1147,7 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
   ): Promise<TypedInvocationResult<TOutput>> {
     const invocation = await this.wait({ ...options, until: "terminal" });
     if (invocation.status !== "completed") {
-      throw new InvocationTerminalError(this, invocation);
+      throw new InvocationError(this, invocation);
     }
     return this.result(options.signal);
   }
