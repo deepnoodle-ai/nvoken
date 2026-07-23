@@ -532,7 +532,7 @@ func TestGenerationExecutorPublishesNormalizedLiveDeltasWithoutChangingResult(t 
 		t.Fatalf("published events = %d, want 2", len(publisher.events))
 	}
 	for index, event := range publisher.events {
-		if event.Type != domain.LiveEventGenerationDelta || event.AccountID != claim.Invocation.AccountID ||
+		if event.Type != domain.LiveEventOutputTextDelta || event.AccountID != claim.Invocation.AccountID ||
 			event.SessionID != claim.Invocation.SessionID {
 			t.Fatalf("event %d routing = %#v", index, event)
 		}
@@ -540,8 +540,9 @@ func TestGenerationExecutorPublishesNormalizedLiveDeltasWithoutChangingResult(t 
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			t.Fatalf("decode event %d: %v", index, err)
 		}
-		if payload.LeaseAttempt != claim.Attempt || payload.DeltaSequence != int64(index+1) ||
-			payload.InvocationID != claim.Invocation.ID || payload.Delta.Text == "" {
+		if payload.Attempt != claim.Attempt || payload.Iteration != claim.Invocation.CurrentIteration+1 ||
+			payload.InvocationID != claim.Invocation.ID || payload.Text == "" ||
+			payload.Type != domain.LiveEventOutputTextDelta {
 			t.Fatalf("event %d payload = %#v", index, payload)
 		}
 	}
@@ -614,7 +615,7 @@ func TestGenerationExecutorRejectsInvalidDurableInputsWithoutModelCall(t *testin
 		mutate func(*fakeGenerationStore, domain.InvocationClaim)
 	}{
 		{"unknown spec field", func(store *fakeGenerationStore, _ domain.InvocationClaim) {
-			store.snapshot.Spec = json.RawMessage(`{"instructions":"x","model":{"provider":"openai","name":"gpt-test"},"unknown":true}`)
+			store.snapshot.Spec = json.RawMessage(`{"instructions":"x","model":{"provider":"openai","id":"gpt-test"},"unknown":true}`)
 		}},
 		{"tool history", func(store *fakeGenerationStore, _ domain.InvocationClaim) {
 			store.messages[0].Content = json.RawMessage(`[{"type":"tool_use","id":"secret"}]`)
@@ -798,7 +799,7 @@ func TestGenerationExecutorMapsStructuredOutputFailureReasons(t *testing.T) {
 			}
 			claim.Invocation.OutputSchemaDigest = digest
 			store.snapshot.Spec = json.RawMessage(
-				`{"instructions":"durable instructions","model":{"provider":"ANTHROPIC","name":"claude-test"},"output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"]}}}`,
+				`{"instructions":"durable instructions","model":{"provider":"ANTHROPIC","id":"claude-test"},"output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"]}}}`,
 			)
 			generator := &fakeModelGenerator{
 				response: domain.GenerationResponse{
@@ -827,7 +828,7 @@ func TestGenerationExecutorMapsStructuredOutputFailureReasons(t *testing.T) {
 	}
 }
 
-func TestGenerationExecutorEnforcesResolvedBudgetsAndRetainsEvidence(t *testing.T) {
+func TestGenerationExecutorEnforcesResolvedLimitsAndRetainsEvidence(t *testing.T) {
 	for _, test := range []struct {
 		name      string
 		configure func(*domain.Invocation, *domain.GenerationResponse)
@@ -996,7 +997,7 @@ func TestGenerationExecutorRecordsProviderCancellation(t *testing.T) {
 
 func TestGenerationExecutorRetainsEvidenceWhenDeadlineFiresAfterResponse(t *testing.T) {
 	claim := generationClaim()
-	scope := "wall_clock"
+	scope := "total"
 	claim.Invocation.ExecutionDeadlineScope = &scope
 	claim.Invocation.MaxIterations = 1
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1033,7 +1034,7 @@ func generationStoreFixture(claim domain.InvocationClaim) *fakeGenerationStore {
 	return &fakeGenerationStore{
 		snapshot: domain.ExecutionSpecSnapshot{
 			ID: claim.Invocation.SpecSnapshotID, AccountID: claim.Invocation.AccountID,
-			Spec: json.RawMessage(`{"instructions":"durable instructions","model":{"provider":"ANTHROPIC","name":"claude-test"}}`),
+			Spec: json.RawMessage(`{"instructions":"durable instructions","model":{"provider":"ANTHROPIC","id":"claude-test"}}`),
 		},
 		messages: []domain.SessionMessage{
 			message("inv_first", 1, domain.MessageRoleUser, "first"),

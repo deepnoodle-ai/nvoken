@@ -50,14 +50,14 @@ func (s *RuntimeService) GetInvocationResult(ctx context.Context, auth domain.Ru
 			return notFound()
 		}
 		partition, err := s.store.GetTenantPartition(ctx, invocation.TenantPartitionID)
-		if err != nil || partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantRef) {
+		if err != nil || partition.AccountID != auth.AccountID || !tenantMatches(auth.TenantConstraint, partition.TenantKey) {
 			if errors.Is(err, ports.ErrNotFound) || err == nil {
 				return notFound()
 			}
 			return err
 		}
 		read := invocationReadFromDomain(invocation)
-		read.PendingToolCalls, err = s.pendingClientToolCalls(ctx, invocation)
+		read.PendingToolCalls, err = s.pendingHostToolCalls(ctx, invocation)
 		if err != nil {
 			return err
 		}

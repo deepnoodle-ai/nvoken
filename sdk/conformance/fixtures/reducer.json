@@ -2,8 +2,10 @@
   "events": [
     {
       "id": "cursor-1",
-      "event": "transcript.snapshot",
+      "event": "transcript.update",
       "data": {
+        "type": "transcript.update",
+        "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [
           {
             "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
@@ -30,15 +32,15 @@
             "occurred_at": "2026-07-21T12:00:01Z"
           }
         ],
-        "has_more": false,
-        "resume_cursor": "cursor-1",
-        "next_page_token": null
+        "resume_cursor": "cursor-1"
       }
     },
     {
       "id": "cursor-2",
-      "event": "transcript.snapshot",
+      "event": "transcript.update",
       "data": {
+        "type": "transcript.update",
+        "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [
           {
             "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
@@ -87,9 +89,7 @@
             "occurred_at": "2026-07-21T12:00:03Z"
           }
         ],
-        "has_more": false,
-        "resume_cursor": "cursor-2",
-        "next_page_token": null
+        "resume_cursor": "cursor-2"
       }
     }
   ],

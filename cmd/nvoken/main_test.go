@@ -114,7 +114,7 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 
 	resetServer(t, baseURL)
 	output, err = executeCLI(t, baseURL, false, "session", "stream", testSessionID)
-	if err != nil || !strings.Contains(output, "transcript.snapshot\tcursor-2") || !strings.Contains(output, "stream.end\tcursor-2") {
+	if err != nil || !strings.Contains(output, "transcript.update\tcursor-2") || !strings.Contains(output, "stream.end\tcursor-2") {
 		t.Fatalf("stream output=%q err=%v", output, err)
 	}
 }

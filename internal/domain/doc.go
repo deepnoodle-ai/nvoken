@@ -11,5 +11,5 @@
 //   - Invocation: one durable agent turn, ending in exactly one terminal
 //     state.
 //   - ToolCall: the durable record of what the model requested and what
-//     actually happened, across builtin, callback, and client modes.
+//     actually happened, across builtin, callback, and host modes.
 package domain

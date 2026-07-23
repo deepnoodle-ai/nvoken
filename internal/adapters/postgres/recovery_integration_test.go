@@ -87,9 +87,9 @@ func TestRecoveryReadsPageFilterAndPreserveTranscriptOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("admit default Invocation: %v", err)
 	}
-	tenantRef := "tenant-a"
+	tenantKey := "tenant-a"
 	secondInput := runtimeInput()
-	secondInput.TenantRef = &tenantRef
+	secondInput.TenantKey = &tenantKey
 	secondInput.SessionKey = pointerString("tenant-ticket")
 	secondInput.IdempotencyKey = "tenant-request"
 	second, err := runtime.Admit(ctx, auth, secondInput)
@@ -121,7 +121,7 @@ func TestRecoveryReadsPageFilterAndPreserveTranscriptOrdering(t *testing.T) {
 		t.Fatalf("align Session timestamps: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
-		"UPDATE invocations SET created_at = $1::timestamptz, wall_clock_deadline_at = $1::timestamptz + wall_clock_timeout_ms * interval '1 millisecond' WHERE id = ANY($2::text[])",
+		"UPDATE invocations SET created_at = $1::timestamptz, deadline_at = $1::timestamptz + total_timeout_ms * interval '1 millisecond' WHERE id = ANY($2::text[])",
 		equalCreatedAt, []string{first.InvocationID, second.InvocationID},
 	); err != nil {
 		t.Fatalf("align Invocation timestamps: %v", err)
@@ -183,12 +183,12 @@ func TestRecoveryReadsPageFilterAndPreserveTranscriptOrdering(t *testing.T) {
 	if err != nil || len(defaultOnly.Items) != 1 || defaultOnly.Items[0].ID != first.SessionID {
 		t.Fatalf("default Sessions = %#v, error = %v", defaultOnly, err)
 	}
-	tenantOnly, err := runtime.ListInvocations(ctx, auth, services.InvocationListInput{TenantRef: &tenantRef})
+	tenantOnly, err := runtime.ListInvocations(ctx, auth, services.InvocationListInput{TenantKey: &tenantKey})
 	if err != nil || len(tenantOnly.Items) != 1 || tenantOnly.Items[0].ID != second.InvocationID {
 		t.Fatalf("tenant Invocations = %#v, error = %v", tenantOnly, err)
 	}
 	constrained := auth
-	constrained.TenantConstraint = &tenantRef
+	constrained.TenantConstraint = &tenantKey
 	constrainedSessions, err := runtime.ListSessions(ctx, constrained, services.SessionListInput{})
 	if err != nil || len(constrainedSessions.Items) != 1 || constrainedSessions.Items[0].ID != second.SessionID {
 		t.Fatalf("constrained Sessions = %#v, error = %v", constrainedSessions, err)

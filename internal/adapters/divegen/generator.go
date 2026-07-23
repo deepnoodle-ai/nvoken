@@ -293,17 +293,17 @@ func (g *Generator) generate(
 		}
 	}
 	var tools []dive.Tool
-	externalTools := make(map[string]domain.ClientToolDefinition, len(request.ClientTools))
-	for _, definition := range request.ClientTools {
+	externalTools := make(map[string]domain.HostToolDefinition, len(request.HostTools))
+	for _, definition := range request.HostTools {
 		if definition.Mode == "" {
-			definition.Mode = domain.ToolCallModeClient
+			definition.Mode = domain.ToolCallModeHost
 		}
 		var toolSchema dive.Schema
 		if err := json.Unmarshal(definition.InputSchema, &toolSchema); err != nil {
-			return domain.GenerationResponse{}, fmt.Errorf("%w: project client tool schema", ports.ErrGenerationInputInvalid)
+			return domain.GenerationResponse{}, fmt.Errorf("%w: project host tool schema", ports.ErrGenerationInputInvalid)
 		}
 		externalTools[definition.Name] = definition
-		tools = append(tools, &clientTool{
+		tools = append(tools, &hostTool{
 			name:        definition.Name,
 			description: definition.Description,
 			schema:      &toolSchema,
@@ -384,6 +384,7 @@ func (g *Generator) generate(
 		options = append(options, dive.WithEventCallback(func(_ context.Context, item *dive.ResponseItem) error {
 			if delta, ok := normalizedDelta(item); ok {
 				if emit != nil {
+					delta.Iteration = int(checkpointState.iteration.Load()) + 1
 					emit(delta)
 				}
 			}
@@ -634,8 +635,8 @@ func checkpointBudgetExceeded(request domain.GenerationRequest, usage domain.Mod
 		}
 	}
 	if request.Claim != nil {
-		if !request.Claim.Invocation.WallClockDeadlineAt.After(now) {
-			return "wall_clock"
+		if !request.Claim.Invocation.DeadlineAt.After(now) {
+			return "total"
 		}
 		if request.Claim.Invocation.ExecutionDeadlineAt != nil && !request.Claim.Invocation.ExecutionDeadlineAt.After(now) {
 			if request.Claim.Invocation.ExecutionDeadlineScope != nil {
@@ -651,7 +652,7 @@ func toolRequests(
 	message *llm.Message,
 	structured bool,
 	testBuiltin bool,
-	externalTools map[string]domain.ClientToolDefinition,
+	externalTools map[string]domain.HostToolDefinition,
 ) ([]domain.ToolCallRequest, error) {
 	var requests []domain.ToolCallRequest
 	if message == nil {
@@ -682,30 +683,30 @@ func toolRequests(
 	return requests, nil
 }
 
-type clientTool struct {
+type hostTool struct {
 	name        string
 	description string
 	schema      *dive.Schema
 }
 
-func (t *clientTool) Name() string {
+func (t *hostTool) Name() string {
 	return t.name
 }
 
-func (t *clientTool) Description() string {
+func (t *hostTool) Description() string {
 	return t.description
 }
 
-func (t *clientTool) Schema() *dive.Schema {
+func (t *hostTool) Schema() *dive.Schema {
 	return t.schema
 }
 
-func (*clientTool) Annotations() *dive.ToolAnnotations {
+func (*hostTool) Annotations() *dive.ToolAnnotations {
 	return &dive.ToolAnnotations{}
 }
 
-func (t *clientTool) Call(context.Context, any) (*dive.ToolResult, error) {
-	return dive.NewSuspendResult("Waiting for the host to provide the client tool result.", map[string]any{
+func (t *hostTool) Call(context.Context, any) (*dive.ToolResult, error) {
+	return dive.NewSuspendResult("Waiting for the host to provide the host tool result.", map[string]any{
 		"tool_name": t.name,
 	}), nil
 }

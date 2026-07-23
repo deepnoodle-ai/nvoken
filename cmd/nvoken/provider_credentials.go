@@ -54,7 +54,7 @@ func runProviderCredentialList(command *cli.Context) error {
 		Provider:  optionalModelProvider(command.String("provider")),
 		Scope:     optionalProviderCredentialScope(command.String("scope")),
 		Status:    optionalProviderCredentialStatus(command.String("status")),
-		TenantRef: optionalString(command.String("tenant")),
+		TenantKey: optionalString(command.String("tenant")),
 		Limit:     optionalInt(command.Int("limit")),
 	})
 	if err != nil {
@@ -86,7 +86,7 @@ func runProviderCredentialCreate(command *cli.Context) error {
 	credential, err := client.CreateProviderCredential(command.Context(), nvoken.CreateProviderCredentialInput{
 		Provider:       nvoken.ModelProvider(command.String("provider")),
 		Scope:          nvoken.ProviderCredentialScope(command.String("scope")),
-		TenantRef:      optionalString(command.String("tenant")),
+		TenantKey:      optionalString(command.String("tenant")),
 		APIKey:         apiKey,
 		ExpiresAt:      expiresAt,
 		IdempotencyKey: command.String("idempotency-key"),

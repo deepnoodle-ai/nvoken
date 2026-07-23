@@ -106,11 +106,11 @@ callback bodies, credentials, environment dumps, or Terraform state.
 1. Call `/health` and the Runtime API through Terraform's public `service_url`,
    not an instance URL or local proxy.
 2. Admit one tool-free real generation and require `202 Accepted`.
-3. Open its Session stream, observe at least one live `generation.delta`, retain
-   a durable `transcript.snapshot` SSE ID, close the connection, then reconnect
+3. Open its Session stream, observe at least one live `output_text.delta`,
+   retain a durable `transcript.update` SSE ID, close the connection, then reconnect
    with `Last-Event-ID`.
 4. Require no replay of an already-acknowledged durable row. Ephemeral
-   `generation.delta` frames may be lost or repeated across the disconnect.
+   delta frames may be lost or repeated across the disconnect.
 5. Reach terminal stream state and verify two JSON reads return the same
    terminal Invocation and canonical transcript state.
 6. Correlate the Invocation with the public Runtime revision, Cloud Tasks task

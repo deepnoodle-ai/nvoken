@@ -23,7 +23,7 @@ class FakeRuntimeClient:
 
     def post(self, path: str, body: dict[str, object]) -> dict[str, object]:
         if path == "/v1/invocations":
-            self.exercise = str(body["agent_ref"])
+            self.exercise = str(body["agent_key"])
             return {
                 "invocation_id": "invk_test",
                 "session_id": "sesn_test",
@@ -42,7 +42,7 @@ class FakeRuntimeClient:
         query: dict[str, str | int] | None = None,
     ) -> dict[str, object]:
         if path == "/v1/invocations/invk_test":
-            if "client-tool" in self.exercise and self.result_submissions == 0:
+            if "host-tool" in self.exercise and self.result_submissions == 0:
                 return {
                     "id": "invk_test",
                     "status": "waiting",
@@ -111,15 +111,15 @@ class SmokeTest(unittest.TestCase):
             self.assertIsNotNone(state["restart_verified_at"])
             self.assertEqual(client.health_checks, 2)
 
-    def test_client_tool_admit_resume_and_equal_replay(self) -> None:
+    def test_host_tool_admit_resume_and_equal_replay(self) -> None:
         client = FakeRuntimeClient()
         with tempfile.TemporaryDirectory() as directory:
-            state_path = pathlib.Path(directory) / "client-tool-state.json"
-            smoke.admit_client_tool(client, state_path, "revision-test")
+            state_path = pathlib.Path(directory) / "host-tool-state.json"
+            smoke.admit_host_tool(client, state_path, "revision-test")
             state = json.loads(state_path.read_text())
             self.assertEqual(state["tool_call_id"], "tcal_test")
 
-            smoke.resume_client_tool(client, state_path, "revision-test")
+            smoke.resume_host_tool(client, state_path, "revision-test")
             state = json.loads(state_path.read_text())
             self.assertIsNotNone(state["result_submitted_at"])
             self.assertEqual(client.result_submissions, 2)

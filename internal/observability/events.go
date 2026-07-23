@@ -60,9 +60,9 @@ const (
 	EventDispatchAttemptRetry    = "dispatch_attempt_retry"
 	EventDispatchAttemptDecided  = "dispatch_attempt_decided"
 
-	EventClientToolResultPartial      = "client_tool_result_partial"
-	EventClientToolResumeQueued       = "client_tool_resume_queued"
-	EventClientToolResultDeduplicated = "client_tool_result_deduplicated"
+	EventHostToolResultPartial      = "host_tool_result_partial"
+	EventHostToolResumeQueued       = "host_tool_resume_queued"
+	EventHostToolResultDeduplicated = "host_tool_result_deduplicated"
 )
 
 const (

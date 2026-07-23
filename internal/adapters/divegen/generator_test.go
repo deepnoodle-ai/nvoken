@@ -643,7 +643,7 @@ func TestDeterministicBuiltinCheckpointsBeforeExecutionAndNextModelCall(t *testi
 	}
 }
 
-func TestClientToolSuspendsAfterDurableModelCheckpoint(t *testing.T) {
+func TestHostToolSuspendsAfterDurableModelCheckpoint(t *testing.T) {
 	coordinator := &recordingToolCoordinator{}
 	model := &sequenceLLM{
 		responses: []*llm.Response{
@@ -677,7 +677,7 @@ func TestClientToolSuspendsAfterDurableModelCheckpoint(t *testing.T) {
 	request.Messages = request.Messages[:1]
 	request.Claim = generationClaim()
 	request.MaxIterations = 2
-	request.ClientTools = []domain.ClientToolDefinition{
+	request.HostTools = []domain.HostToolDefinition{
 		{
 			Name:        "lookup_order",
 			Description: "Look up an order",
@@ -691,15 +691,15 @@ func TestClientToolSuspendsAfterDurableModelCheckpoint(t *testing.T) {
 	}
 	events, checkpoints, starts := coordinator.snapshot()
 	if !reflect.DeepEqual(events, []string{"checkpoint"}) || starts != 0 || len(checkpoints) != 1 {
-		t.Fatalf("client tool events = %#v, starts = %d, checkpoints = %#v", events, starts, checkpoints)
+		t.Fatalf("host tool events = %#v, starts = %d, checkpoints = %#v", events, starts, checkpoints)
 	}
 	if len(checkpoints[0].ToolCalls) != 1 ||
 		checkpoints[0].ToolCalls[0].Name != "lookup_order" ||
-		checkpoints[0].ToolCalls[0].Mode != domain.ToolCallModeClient {
-		t.Fatalf("client tool checkpoint = %#v", checkpoints[0])
+		checkpoints[0].ToolCalls[0].Mode != domain.ToolCallModeHost {
+		t.Fatalf("host tool checkpoint = %#v", checkpoints[0])
 	}
 	if !response.ExternalToolsPending || !response.MessagesCheckpointed || response.Usage.Iterations != 1 {
-		t.Fatalf("client tool response = %#v", response)
+		t.Fatalf("host tool response = %#v", response)
 	}
 }
 
@@ -981,14 +981,14 @@ func TestCheckpointBudgetUsesInjectedObservationTime(t *testing.T) {
 	request := generationRequest("anthropic")
 	request.Claim = &domain.InvocationClaim{
 		Invocation: domain.Invocation{
-			WallClockDeadlineAt: deadline,
+			DeadlineAt: deadline,
 		},
 	}
 	if got := checkpointBudgetExceeded(request, domain.ModelUsage{}, false, deadline.Add(-time.Nanosecond)); got != "" {
 		t.Fatalf("budget before deadline = %q", got)
 	}
-	if got := checkpointBudgetExceeded(request, domain.ModelUsage{}, false, deadline); got != "wall_clock" {
-		t.Fatalf("budget at deadline = %q, want wall_clock", got)
+	if got := checkpointBudgetExceeded(request, domain.ModelUsage{}, false, deadline); got != "total" {
+		t.Fatalf("budget at deadline = %q, want total", got)
 	}
 }
 
@@ -1004,7 +1004,7 @@ func generationClaim() *domain.InvocationClaim {
 			LeaseOwner:          &owner,
 			LeaseExpiresAt:      &leaseExpiresAt,
 			LeaseAttempt:        1,
-			WallClockDeadlineAt: now.Add(time.Hour),
+			DeadlineAt:          now.Add(time.Hour),
 			ExecutionDeadlineAt: &executionDeadlineAt,
 		},
 		Owner:          owner,

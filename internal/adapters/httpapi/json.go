@@ -261,7 +261,7 @@ func rejectNullInvocationFields(payload []byte) error {
 	if err := json.Unmarshal(payload, &object); err != nil {
 		return requestErrorf("Invalid request body: %v.", err)
 	}
-	for _, field := range []string{"tenant_ref", "session_id", "session_key"} {
+	for _, field := range []string{"tenant_key", "session_id", "session_key"} {
 		if raw, present := object[field]; present && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			return requestErrorf("%s must be a string when supplied.", field)
 		}

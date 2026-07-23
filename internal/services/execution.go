@@ -180,7 +180,7 @@ func (s *InvocationExecutionService) claimWithSessionLocked(
 		return domain.InvocationClaim{}, errQueuedInvocationChanged
 	}
 	now := s.clock.Now().UTC()
-	if !invocation.WallClockDeadlineAt.After(now) {
+	if !invocation.DeadlineAt.After(now) {
 		if _, _, err := s.reapDeadlineWithSessionLocked(ctx, invocation, now); err != nil {
 			return domain.InvocationClaim{}, err
 		}
@@ -424,7 +424,7 @@ func (s *InvocationExecutionService) parkForExternalTools(
 	if err != nil {
 		return err
 	}
-	if len(calls) == 0 || len(calls) > MaxClientTools {
+	if len(calls) == 0 || len(calls) > MaxHostTools {
 		return ports.ErrExecutionResultInvalid
 	}
 	invocation, err = s.settlePendingBuiltinSiblingsForExternalWait(
@@ -442,7 +442,7 @@ func (s *InvocationExecutionService) parkForExternalTools(
 		return ports.ErrExecutionResultInvalid
 	}
 	for _, call := range calls {
-		if (call.Mode != domain.ToolCallModeClient && call.Mode != domain.ToolCallModeCallback) ||
+		if (call.Mode != domain.ToolCallModeHost && call.Mode != domain.ToolCallModeCallback) ||
 			call.Iteration != invocation.CurrentIteration ||
 			call.Status != domain.ToolCallPending {
 			return ports.ErrExecutionResultInvalid
@@ -461,7 +461,7 @@ func (s *InvocationExecutionService) parkForExternalTools(
 	if err != nil {
 		return err
 	}
-	parked, err := s.store.ParkInvocationForClientTools(
+	parked, err := s.store.ParkInvocationForHostTools(
 		ctx,
 		invocation.ID,
 		claim.Owner,
@@ -519,7 +519,7 @@ func (s *InvocationExecutionService) settlePendingBuiltinSiblingsForExternalWait
 			return domain.Invocation{}, ports.ErrExecutionResultInvalid
 		}
 		switch call.Mode {
-		case domain.ToolCallModeClient, domain.ToolCallModeCallback:
+		case domain.ToolCallModeHost, domain.ToolCallModeCallback:
 			if call.Status != domain.ToolCallPending {
 				return domain.Invocation{}, ports.ErrExecutionResultInvalid
 			}
@@ -541,7 +541,7 @@ func (s *InvocationExecutionService) settlePendingBuiltinSiblingsForExternalWait
 	}
 	payload, err := syntheticToolResultPayload(
 		builtins,
-		"Tool execution was deferred while the Invocation waited for a client tool result.",
+		"Tool execution was deferred while the Invocation waited for a host tool result.",
 	)
 	if err != nil {
 		return domain.Invocation{}, err
@@ -714,10 +714,12 @@ func (s *InvocationExecutionService) reapDeadlineCandidate(ctx context.Context, 
 
 func (s *InvocationExecutionService) reapDeadlineWithSessionLocked(ctx context.Context, invocation domain.Invocation, now time.Time) (domain.Invocation, bool, error) {
 	scope := ""
-	if !invocation.WallClockDeadlineAt.After(now) {
-		scope = "wall_clock"
+	if !invocation.DeadlineAt.After(now) {
+		scope = "total"
 	} else if effectiveActiveExecutionMS(invocation, now) >= invocation.ActiveTimeoutMS {
 		scope = "active_execution"
+	} else if effectiveWaitingExecutionMS(invocation, now) >= invocation.WaitingTimeoutMS {
+		scope = "waiting"
 	} else if invocation.Status == domain.InvocationRunning && invocation.ExecutionDeadlineAt != nil && !invocation.ExecutionDeadlineAt.After(now) {
 		if invocation.ExecutionDeadlineScope != nil {
 			scope = *invocation.ExecutionDeadlineScope
@@ -790,6 +792,17 @@ func effectiveActiveExecutionMS(invocation domain.Invocation, now time.Time) int
 		active += through.Sub(*invocation.ActiveSegmentStartedAt).Milliseconds()
 	}
 	return active
+}
+
+func effectiveWaitingExecutionMS(invocation domain.Invocation, now time.Time) int64 {
+	waiting := invocation.WaitingExecutionMS
+	if invocation.Status != domain.InvocationWaiting || invocation.WaitingSegmentStartedAt == nil {
+		return waiting
+	}
+	if now.After(*invocation.WaitingSegmentStartedAt) {
+		waiting += now.Sub(*invocation.WaitingSegmentStartedAt).Milliseconds()
+	}
+	return waiting
 }
 
 func (s *InvocationExecutionService) reapCandidate(
@@ -1143,8 +1156,8 @@ func executionDeadline(invocation domain.Invocation, startedAt time.Time, segmen
 	if activeDeadline := startedAt.Add(remainingActive); activeDeadline.Before(deadline) {
 		deadline, scope = activeDeadline, "active_execution"
 	}
-	if invocation.WallClockDeadlineAt.Before(deadline) {
-		deadline, scope = invocation.WallClockDeadlineAt, "wall_clock"
+	if invocation.DeadlineAt.Before(deadline) {
+		deadline, scope = invocation.DeadlineAt, "total"
 	}
 	return deadline, scope, nil
 }

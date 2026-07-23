@@ -62,7 +62,7 @@ requires. Queueing can be ordinary saturation. Recovery after abrupt loss waits
 for the recorded lease boundary before a new fence can claim the work.
 
 **Safe actions.** Read the Invocation's status, budget deadline, active-execution
-time, pending client ToolCalls, and error. Inspect `invocation_claimed`,
+time, pending host ToolCalls, and error. Inspect `invocation_claimed`,
 `invocation_recovered`, `invocation_maintenance_failed`, provider, and settlement
 events. Confirm Postgres is healthy, `ENGINE_CONCURRENCY` is nonzero, and the
 lease/reaper intervals still match the deployed example. Restore the dependency

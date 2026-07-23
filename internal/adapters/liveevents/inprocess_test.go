@@ -14,8 +14,16 @@ func TestInProcessScopesAndMarksOverflow(t *testing.T) {
 	t.Cleanup(sub.Close)
 	t.Cleanup(other.Close)
 
-	bus.Publish(context.Background(), ports.LiveEvent{Type: "generation.delta", AccountID: "account-a", SessionID: "session-a"})
-	bus.Publish(context.Background(), ports.LiveEvent{Type: "generation.delta", AccountID: "account-a", SessionID: "session-a"})
+	bus.Publish(context.Background(), ports.LiveEvent{
+		Type:      "output_text.delta",
+		AccountID: "account-a",
+		SessionID: "session-a",
+	})
+	bus.Publish(context.Background(), ports.LiveEvent{
+		Type:      "output_text.delta",
+		AccountID: "account-a",
+		SessionID: "session-a",
+	})
 
 	if !sub.TakeGap() || sub.TakeGap() {
 		t.Fatal("overflow gap was not reported exactly once")

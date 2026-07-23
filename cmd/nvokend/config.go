@@ -30,7 +30,7 @@ type config struct {
 	DatabaseURL               string        `env:"DATABASE_URL"`
 	DatabaseMaxConns          int32         `env:"DATABASE_MAX_CONNS" envDefault:"10"`
 	RuntimeAPIKey             string        `env:"RUNTIME_API_KEY"`
-	RuntimeTenantRef          string        `env:"RUNTIME_TENANT_REF"`
+	RuntimeTenantKey          string        `env:"RUNTIME_TENANT_KEY"`
 	BootstrapOwnerSecret      string        `env:"BOOTSTRAP_OWNER_SECRET"`
 	CredentialDeliveryKey     string        `env:"CREDENTIAL_DELIVERY_KEY"`
 	PublicBaseURL             string        `env:"NVOKEN_PUBLIC_BASE_URL"`
@@ -103,14 +103,16 @@ type config struct {
 	EngineExecutionSegmentCeiling time.Duration `env:"ENGINE_EXECUTION_SEGMENT_CEILING" envDefault:"15m"`
 	EngineSettlementReserve       time.Duration `env:"ENGINE_SETTLEMENT_RESERVE" envDefault:"5s"`
 
-	InvocationDefaultWallClockTimeout time.Duration `env:"INVOCATION_DEFAULT_WALL_CLOCK_TIMEOUT" envDefault:"30m"`
-	InvocationDefaultActiveTimeout    time.Duration `env:"INVOCATION_DEFAULT_ACTIVE_EXECUTION_TIMEOUT" envDefault:"30m"`
-	InvocationDefaultMaxIterations    int           `env:"INVOCATION_DEFAULT_MAX_ITERATIONS" envDefault:"1"`
-	InvocationMaxWallClockTimeout     time.Duration `env:"INVOCATION_MAX_WALL_CLOCK_TIMEOUT" envDefault:"24h"`
-	InvocationMaxActiveTimeout        time.Duration `env:"INVOCATION_MAX_ACTIVE_EXECUTION_TIMEOUT" envDefault:"24h"`
-	InvocationMaxOutputTokens         int           `env:"INVOCATION_MAX_OUTPUT_TOKENS" envDefault:"1000000"`
-	InvocationMaxEstimatedCostMicros  int64         `env:"INVOCATION_MAX_ESTIMATED_COST_MICROUSD" envDefault:"1000000000"`
-	InvocationMaxIterations           int           `env:"INVOCATION_MAX_ITERATIONS" envDefault:"100"`
+	InvocationDefaultTotalTimeout    time.Duration `env:"INVOCATION_DEFAULT_TOTAL_TIMEOUT" envDefault:"30m"`
+	InvocationDefaultActiveTimeout   time.Duration `env:"INVOCATION_DEFAULT_ACTIVE_TIMEOUT" envDefault:"30m"`
+	InvocationDefaultWaitingTimeout  time.Duration `env:"INVOCATION_DEFAULT_WAITING_TIMEOUT" envDefault:"30m"`
+	InvocationDefaultMaxIterations   int           `env:"INVOCATION_DEFAULT_MAX_ITERATIONS" envDefault:"1"`
+	InvocationMaxTotalTimeout        time.Duration `env:"INVOCATION_MAX_TOTAL_TIMEOUT" envDefault:"24h"`
+	InvocationMaxActiveTimeout       time.Duration `env:"INVOCATION_MAX_ACTIVE_TIMEOUT" envDefault:"24h"`
+	InvocationMaxWaitingTimeout      time.Duration `env:"INVOCATION_MAX_WAITING_TIMEOUT" envDefault:"24h"`
+	InvocationMaxOutputTokens        int           `env:"INVOCATION_MAX_OUTPUT_TOKENS" envDefault:"1000000"`
+	InvocationMaxEstimatedCostMicros int64         `env:"INVOCATION_MAX_ESTIMATED_COST_MICROUSD" envDefault:"1000000000"`
+	InvocationMaxIterations          int           `env:"INVOCATION_MAX_ITERATIONS" envDefault:"100"`
 }
 
 type migrationConfig struct {
@@ -168,17 +170,19 @@ func loadDaemonConfig() (daemon.Config, error) {
 		ExecutionSegmentCeiling: cfg.EngineExecutionSegmentCeiling,
 		SettlementReserve:       cfg.EngineSettlementReserve,
 	}
-	budgetPolicy := services.BudgetPolicy{
-		DefaultWallClockTimeout:       cfg.InvocationDefaultWallClockTimeout,
-		DefaultActiveExecutionTimeout: cfg.InvocationDefaultActiveTimeout,
-		DefaultMaxIterations:          cfg.InvocationDefaultMaxIterations,
-		MaxWallClockTimeout:           cfg.InvocationMaxWallClockTimeout,
-		MaxActiveExecutionTimeout:     cfg.InvocationMaxActiveTimeout,
-		MaxOutputTokens:               cfg.InvocationMaxOutputTokens,
-		MaxEstimatedCostMicros:        cfg.InvocationMaxEstimatedCostMicros,
-		MaxIterations:                 cfg.InvocationMaxIterations,
+	limitPolicy := services.LimitPolicy{
+		DefaultTotalTimeout:    cfg.InvocationDefaultTotalTimeout,
+		DefaultActiveTimeout:   cfg.InvocationDefaultActiveTimeout,
+		DefaultWaitingTimeout:  cfg.InvocationDefaultWaitingTimeout,
+		DefaultMaxIterations:   cfg.InvocationDefaultMaxIterations,
+		MaxTotalTimeout:        cfg.InvocationMaxTotalTimeout,
+		MaxActiveTimeout:       cfg.InvocationMaxActiveTimeout,
+		MaxWaitingTimeout:      cfg.InvocationMaxWaitingTimeout,
+		MaxOutputTokens:        cfg.InvocationMaxOutputTokens,
+		MaxEstimatedCostMicros: cfg.InvocationMaxEstimatedCostMicros,
+		MaxIterations:          cfg.InvocationMaxIterations,
 	}
-	if _, err := budgetPolicy.Resolve(nil); err != nil {
+	if _, err := limitPolicy.Resolve(nil); err != nil {
 		return daemon.Config{}, fmt.Errorf("invalid Invocation budget configuration: %w", err)
 	}
 	if err := engine.ValidateConfig(engineConfig); err != nil {
@@ -357,14 +361,14 @@ func loadDaemonConfig() (daemon.Config, error) {
 		return daemon.Config{}, fmt.Errorf("serve: the Invocation-generating role requires a platform provider key for the platform default")
 	}
 	var tenantConstraint *string
-	if cfg.RuntimeTenantRef != "" {
-		if !utf8.ValidString(cfg.RuntimeTenantRef) || strings.TrimSpace(cfg.RuntimeTenantRef) == "" {
-			return daemon.Config{}, fmt.Errorf("serve: RUNTIME_TENANT_REF must be valid UTF-8 and not blank")
+	if cfg.RuntimeTenantKey != "" {
+		if !utf8.ValidString(cfg.RuntimeTenantKey) || strings.TrimSpace(cfg.RuntimeTenantKey) == "" {
+			return daemon.Config{}, fmt.Errorf("serve: RUNTIME_TENANT_KEY must be valid UTF-8 and not blank")
 		}
-		if utf8.RuneCountInString(cfg.RuntimeTenantRef) > 255 {
-			return daemon.Config{}, fmt.Errorf("serve: RUNTIME_TENANT_REF must be at most 255 Unicode characters")
+		if utf8.RuneCountInString(cfg.RuntimeTenantKey) > 255 {
+			return daemon.Config{}, fmt.Errorf("serve: RUNTIME_TENANT_KEY must be at most 255 Unicode characters")
 		}
-		tenantConstraint = &cfg.RuntimeTenantRef
+		tenantConstraint = &cfg.RuntimeTenantKey
 	}
 	return daemon.Config{
 		Port:                    cfg.Port,
@@ -389,7 +393,7 @@ func loadDaemonConfig() (daemon.Config, error) {
 		ShutdownTimeout:         cfg.ShutdownTimeout,
 		DiagnosticTimeout:       cfg.DiagnosticTimeout,
 		Engine:                  engineConfig,
-		Budgets:                 budgetPolicy,
+		Limits:                  limitPolicy,
 		Dispatch:                dispatchConfig,
 		DispatchController:      controllerConfig,
 		CloudTasks:              cloudTasksConfig,

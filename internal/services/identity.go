@@ -139,7 +139,7 @@ func NewIdentityService(
 type CredentialCreateInput struct {
 	Name                 string                    `json:"name"`
 	Profile              domain.CredentialProfile  `json:"profile"`
-	TenantConstraint     *string                   `json:"tenant_ref,omitempty"`
+	TenantConstraint     *string                   `json:"tenant_key,omitempty"`
 	SessionConstraint    *string                   `json:"session_id,omitempty"`
 	OperationConstraints []domain.RuntimeOperation `json:"operations,omitempty"`
 	ExpiresAt            *time.Time                `json:"expires_at,omitempty"`
@@ -169,7 +169,7 @@ type AccountIdentity struct {
 type DeviceCodeInput struct {
 	DeviceLabel       string                   `json:"device_label"`
 	RoleCap           domain.CredentialProfile `json:"role_cap,omitempty"`
-	TenantConstraint  *string                  `json:"tenant_ref,omitempty"`
+	TenantConstraint  *string                  `json:"tenant_key,omitempty"`
 	SessionConstraint *string                  `json:"session_id,omitempty"`
 }
 
@@ -1000,7 +1000,7 @@ func validateCredentialCreate(input CredentialCreateInput, now time.Time) error 
 	if input.Profile != domain.CredentialProfileRuntime && input.Profile != domain.CredentialProfileViewer && input.Profile != domain.CredentialProfileOperator {
 		return invalidIdentityRequest("profile must be Runtime, Viewer, or Operator")
 	}
-	if err := validateConstraint(input.TenantConstraint, "tenant_ref", false); err != nil {
+	if err := validateConstraint(input.TenantConstraint, "tenant_key", false); err != nil {
 		return invalidIdentityRequest(err.Error())
 	}
 	if err := validateConstraint(input.SessionConstraint, "session_id", true); err != nil {
@@ -1038,7 +1038,7 @@ func validateDeviceInput(input DeviceCodeInput) error {
 	if input.RoleCap != "" && input.RoleCap != domain.CredentialProfileOperator && input.RoleCap != domain.CredentialProfileViewer {
 		return invalidIdentityRequest("role_cap must be Operator or Viewer")
 	}
-	if err := validateConstraint(input.TenantConstraint, "tenant_ref", false); err != nil {
+	if err := validateConstraint(input.TenantConstraint, "tenant_key", false); err != nil {
 		return invalidIdentityRequest(err.Error())
 	}
 	if err := validateConstraint(input.SessionConstraint, "session_id", true); err != nil {

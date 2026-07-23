@@ -14,7 +14,7 @@
 An accepted turn can now call Anthropic or OpenAI and save the reply. The model
 call runs only after the engine owns the durable work, and the reply becomes
 visible state only if transcript and completion commit together. This slice has
-no tools, streaming, public transcript endpoint, budgets, or crash resume.
+no tools, streaming, public transcript endpoint, limits, or crash resume.
 
 ## Why
 
@@ -48,7 +48,7 @@ optional live smoke tests.
 
 **Out:** tools or multiple model iterations; spec references; structured output;
 public transcript, output, usage, provenance, or capabilities endpoints; streaming
-or token deltas; cancellation and budgets; per-Account credentials or platform
+or token deltas; cancellation and limits; per-Account credentials or platform
 credits; Cloud Run deployment assets; Cloud Tasks; checkpoints or replay after an
 engine crash. PRD 007 exposes the transcript, and PRD 014 makes an interrupted
 provider call resumable.

@@ -64,7 +64,7 @@ the local evaluation path.
 > page the canonical transcript, and drain fixed-cut incremental recovery
 > snapshots or tail the same state over resumable SSE with ephemeral live
 > generation deltas. Durable builtin checkpoints and crash continuation resume
-> a lost execution owner from its last committed boundary, and durable client
+> a lost execution owner from its last committed boundary, and durable host
 > and signed callback tools can safely continue parked work. Generated Go,
 > TypeScript, Python, and Rust SDKs wrap that surface with workflow helpers;
 > the Go `nvoken` client CLI uses the same SDK contract.
@@ -82,16 +82,14 @@ the local evaluation path.
 ```jsonc
 POST /v1/invocations
 {
-  "agent_ref": "support-triage",                 // Account-wide identity only
-  "tenant_ref": "customer-482",                  // optional Session partition
+  "agent_key": "support-triage",                 // Account-wide identity only
+  "tenant_key": "customer-482",                  // optional Session partition
   "session_key": "thread-8813",                  // yours; resolved or created
   "idempotency_key": "thread-8813:message-7",    // safe retry identity
-  "input": {
-    "content": [{ "type": "text", "text": "why was I charged twice?" }]
-  },
+  "input": "why was I charged twice?",
   "spec": {
     "instructions": "You are a billing support agent…",
-    "model": { "provider": "anthropic", "name": "claude-sonnet-5" }
+    "model": { "provider": "anthropic", "id": "claude-sonnet-5" }
   }
 }
 
@@ -101,7 +99,8 @@ POST /v1/invocations
   "session_id": "sesn_…",
   "invocation_id": "invk_…",
   "status": "queued",
-  "deduplicated": false
+  "deduplicated": false,
+  "deadline_at": "2026-07-23T16:30:00Z"
 }
 ```
 
@@ -110,12 +109,15 @@ admission, execution does not belong to the request handler, and clients recover
 authoritative state by durable ID or a scope-bound cursor. The answer is one
 read away: `GET /v1/invocations/{invocation_id}/result` returns the
 authoritative Invocation, the turn's canonical messages, and the assistant text
-as one `output_text` string. A Session SSE stream
-replays that same cursor model and adds id-less token previews; disconnecting it
-never affects execution. Hosts can bound or idempotently cancel accepted work;
+as one `output_text` string. The same `POST` streams one Invocation when the
+client sends `Accept: text/event-stream`; `output_text.delta` previews are
+id-less, while durable `invocation.update` and `invocation.result` frames carry
+resume cursors. A Session SSE stream exposes the same vocabulary across turns.
+Disconnecting either stream never affects execution. Hosts can bound or
+idempotently cancel accepted work;
 Postgres decides the terminal winner. If an execution owner is lost, the same
 Invocation is requeued and continues from its last validated checkpoint. A
-client tool parks that Invocation without holding compute; the host can recover
+host tool parks that Invocation without holding compute; the host can recover
 the pending call by ID, submit its result idempotently, and let any engine
 continue it. A callback tool instead lets nvoken deliver the same durable call
 to a public host HTTPS endpoint with a stable ToolCall idempotency key and a

@@ -49,11 +49,11 @@ OpenAPI and recovery examples. The existing `active_invocation_id` field
 remains compatible; this slice adds its status as a sibling field and records
 that additive contract evolution in the decision log.
 
-**Out:** SSE and ephemeral token deltas; cancellation and budgets; ToolCalls or
+**Out:** SSE and ephemeral token deltas; cancellation and limits; ToolCalls or
 pending interactions; structured output; spec disclosure; usage-event
 accounting; retention and cursor expiry; transcript compaction, reverse paging,
 search, or metadata filters; SDK generation. PRD 011 projects this read model as
-SSE, and PRD 015 adds recoverable pending client ToolCalls.
+SSE, and PRD 015 adds recoverable pending host ToolCalls.
 
 ## Requirements
 
@@ -62,17 +62,17 @@ SSE, and PRD 015 adds recoverable pending client ToolCalls.
   Invocation identity, status, error, timestamps, and nullable aggregate
   `usage` and `provenance`. `GET /v1/invocations` must return the same shape in
   newest-first keyset order and support optional exact filters for `session_id`,
-  `agent_id`, `tenant_ref`, and `status`. Filters combine with AND. Public reads
+  `agent_id`, `tenant_key`, and `status`. Filters combine with AND. Public reads
   must never expose the spec snapshot, idempotency material, request
   fingerprint, lease owner, lease expiry, or fencing attempt.
 
 - **R2 — Authoritative Session reads and history.**
   `GET /v1/sessions/{session_id}` and `GET /v1/sessions` must expose immutable
-  Session identity, tenant reference, host key, timestamps, and the current
+  Session identity, tenant key, host key, timestamps, and the current
   nonterminal Invocation through the existing nullable `active_invocation_id`
   plus a new nullable `active_invocation_status`; the two fields must be present
   or null together. The Session list must use newest-first keyset order and
-  support optional exact filters for `agent_id`, `tenant_ref`, and
+  support optional exact filters for `agent_id`, `tenant_key`, and
   `session_key`. Reads must derive active state from authoritative Invocation
   rows; lifecycle notifications or process memory are not inputs.
 
@@ -81,10 +81,10 @@ SSE, and PRD 015 adds recoverable pending client ToolCalls.
   `has_more`, and nullable `next_cursor`. Cursors must be opaque, versioned, and
   bound to the authenticated Account, collection kind, sort position, and
   normalized filters, including the effective tenant scope. For a constrained
-  credential, omission and a matching `tenant_ref` both mean that credential's
+  credential, omission and a matching `tenant_key` both mean that credential's
   partition. For an Account-wide credential, omission means all partitions,
-  `tenant_ref` selects one non-default partition, and `default_tenant=true`
-  selects only the default partition; `tenant_ref` and `default_tenant` are
+  `tenant_key` selects one non-default partition, and `default_tenant=true`
+  selects only the default partition; `tenant_key` and `default_tenant` are
   mutually exclusive. Reusing a cursor with another Account, collection, or
   normalized filter set—including a different effective tenant scope—must
   return `400 invalid_request`. Pagination must use stable `(created_at, id)`
@@ -131,7 +131,7 @@ SSE, and PRD 015 adds recoverable pending client ToolCalls.
 - **R7 — Scope, validation, and failure semantics.** Every resource and cursor
   read must re-authorize the authenticated Account and optional tenant
   constraint. Cross-Account, cross-tenant, missing, and undisclosable resources
-  must return `404 not_found`; an explicit `tenant_ref` conflicting with a
+  must return `404 not_found`; an explicit `tenant_key` conflicting with a
   credential constraint must return `403 forbidden` before listing. Malformed
   IDs, limits, booleans, statuses, cursors, page tokens, duplicate query
   parameters, and incompatible cursor/filter combinations must return
@@ -198,7 +198,7 @@ SSE, and PRD 015 adds recoverable pending client ToolCalls.
 
 ## Sequencing notes
 
-- PRD 008 can add cancellation and budgets without inventing a separate status
+- PRD 008 can add cancellation and limits without inventing a separate status
   channel; their durable transitions flow through this snapshot.
 - PRD 011 must replay these same durable messages and lifecycle changes before
   live deltas and use `resume_cursor` as its reconciliation boundary.

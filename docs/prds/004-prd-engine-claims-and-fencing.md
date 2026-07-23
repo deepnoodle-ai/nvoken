@@ -45,7 +45,7 @@ expired-lease reaper, redacted operational logs, and integration proof with an
 injected deterministic executor.
 
 **Out:** Model or tool execution; transcript output; checkpoint/resume;
-cancellation and budgets; public API changes; Cloud Tasks, dispatch outbox, or
+cancellation and limits; public API changes; Cloud Tasks, dispatch outbox, or
 private executor HTTP protocol; retrying a semantically failed execution. The
 production daemon must not run the synthetic executor or claim work until PRD
 005 supplies the real generation executor.

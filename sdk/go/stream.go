@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,8 @@ type StreamEvent struct {
 	Retry time.Duration   `json:"retry,omitempty"`
 }
 
+var errInvocationStreamSettled = errors.New("Invocation stream settled")
+
 type ReducedSnapshot struct {
 	Messages          []SessionMessage             `json:"messages"`
 	InvocationChanges []generated.InvocationChange `json:"invocation_changes"`
@@ -39,24 +42,24 @@ func NewReducer() *Reducer {
 }
 
 func (r *Reducer) Apply(event StreamEvent) error {
-	if event.Type != "transcript.snapshot" {
+	if event.Type != "transcript.update" {
 		return nil
 	}
-	var snapshot generated.TranscriptSnapshot
-	if err := json.Unmarshal(event.Data, &snapshot); err != nil {
-		return fmt.Errorf("decode transcript snapshot: %w", err)
+	var update generated.TranscriptUpdate
+	if err := json.Unmarshal(event.Data, &update); err != nil {
+		return fmt.Errorf("decode transcript update: %w", err)
 	}
-	for _, message := range snapshot.Messages {
+	for _, message := range update.Messages {
 		r.messages[message.Sequence] = message
 	}
-	for _, change := range snapshot.InvocationChanges {
+	for _, change := range update.InvocationChanges {
 		key := fmt.Sprintf("%s:%d", change.InvocationID, change.Revision)
 		r.changes[key] = change
 	}
 	if event.ID != "" {
 		r.cursor = event.ID
-	} else if snapshot.ResumeCursor != "" {
-		r.cursor = snapshot.ResumeCursor
+	} else if update.ResumeCursor != "" {
+		r.cursor = update.ResumeCursor
 	}
 	return nil
 }
@@ -80,7 +83,60 @@ func (r *Reducer) Snapshot() ReducedSnapshot {
 	return ReducedSnapshot{Messages: messages, InvocationChanges: changes, ResumeCursor: r.cursor}
 }
 
-func (h *Handle) Stream(ctx context.Context, consume func(StreamEvent, ReducedSnapshot) error) error {
+func (h *InvocationHandle) Stream(ctx context.Context, consume func(StreamEvent) error) error {
+	retryDelay := time.Second
+	cursor := ""
+	for {
+		params := &generated.StreamInvocationParams{}
+		if cursor != "" {
+			params.LastEventID = &cursor
+		}
+		response, err := h.client.raw.ClientInterface.StreamInvocation(ctx, h.InvocationID, params)
+		if err != nil {
+			if err := waitForReconnect(ctx, retryDelay); err != nil {
+				return err
+			}
+			continue
+		}
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			body, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+			_ = response.Body.Close()
+			return errorFromResponse(response.StatusCode, response.Header, body)
+		}
+		settled := false
+		err = readSSE(response.Body, func(event StreamEvent) error {
+			if event.Retry > 0 {
+				retryDelay = event.Retry
+			}
+			if event.ID != "" {
+				cursor = event.ID
+			}
+			if err := consume(event); err != nil {
+				return err
+			}
+			if event.Type == "invocation.result" {
+				settled = true
+				return errInvocationStreamSettled
+			}
+			return nil
+		})
+		_ = response.Body.Close()
+		if errors.Is(err, errInvocationStreamSettled) {
+			return nil
+		}
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if settled {
+			return nil
+		}
+		if err := waitForReconnect(ctx, retryDelay); err != nil {
+			return err
+		}
+	}
+}
+
+func (c *Client) StreamSession(ctx context.Context, sessionID string, consume func(StreamEvent, ReducedSnapshot) error) error {
 	reducer := NewReducer()
 	retryDelay := time.Second
 	for {
@@ -89,7 +145,7 @@ func (h *Handle) Stream(ctx context.Context, consume func(StreamEvent, ReducedSn
 		if cursor != "" {
 			params.LastEventID = &cursor
 		}
-		response, err := h.client.raw.ClientInterface.StreamSessionTranscript(ctx, h.SessionID, params)
+		response, err := c.raw.ClientInterface.StreamSessionTranscript(ctx, sessionID, params)
 		if err != nil {
 			if err := waitForReconnect(ctx, retryDelay); err != nil {
 				return err
@@ -125,29 +181,12 @@ func (h *Handle) Stream(ctx context.Context, consume func(StreamEvent, ReducedSn
 			return err
 		}
 		if terminalEnd {
-			if h.InvocationID == "" {
-				return nil
-			}
-			invocation, err := h.Refresh(ctx)
-			if err != nil {
-				return err
-			}
-			if terminal(invocation.Status) {
-				return nil
-			}
+			return nil
 		}
 		if err := waitForReconnect(ctx, retryDelay); err != nil {
 			return err
 		}
 	}
-}
-
-func (c *Client) StreamSession(ctx context.Context, sessionID string, consume func(StreamEvent, ReducedSnapshot) error) error {
-	handle := &Handle{
-		client:    c,
-		SessionID: sessionID,
-	}
-	return handle.Stream(ctx, consume)
 }
 
 func readSSE(reader io.Reader, consume func(StreamEvent) error) error {

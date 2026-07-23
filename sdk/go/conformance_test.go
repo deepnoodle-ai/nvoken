@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"testing"
@@ -24,22 +25,22 @@ func TestConformance(t *testing.T) {
 	}
 	resetConformance(t, baseURL)
 	client, err := NewClient(baseURL, "test-key", WithRetryPolicy(RetryPolicy{
-		MaximumAttempts: 3,
-		MinimumDelay:    time.Millisecond,
-		MaximumDelay:    5 * time.Millisecond,
+		MaxAttempts: 3,
+		MinDelay:    time.Millisecond,
+		MaxDelay:    5 * time.Millisecond,
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	request := InvokeRequest{
-		AgentRef:       "support",
+		AgentKey:       "support",
 		IdempotencyKey: "conformance-lost-ack",
 		Input:          "hello",
 		Spec: ExecutionSpec{
 			Instructions: "help",
 			Model: Model{
 				Provider: "openai",
-				Name:     "gpt-test",
+				ID:       "gpt-test",
 			},
 		},
 	}
@@ -50,20 +51,18 @@ func TestConformance(t *testing.T) {
 	if handle.InvocationID != conformanceInvocationID || handle.SessionID != conformanceSessionID {
 		t.Fatalf("unexpected durable handle: %#v", handle)
 	}
-	resumed, err := client.Resume(context.Background(), conformanceInvocationID)
+	resumed := client.Invocation(conformanceInvocationID)
+	_, err = resumed.Refresh(context.Background())
 	if err != nil || resumed.Status != InvocationCompleted {
 		t.Fatalf("resume by ID: status=%v err=%v", resumed.Status, err)
 	}
 
-	waitHandle, err := client.Resume(context.Background(), conformanceWaitID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	waitInvocationHandle := client.Invocation(conformanceWaitID)
 	waitContext, cancelWait := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancelWait()
-	_, err = waitHandle.Wait(waitContext, WaitOptions{
-		MinimumDelay: time.Millisecond,
-		MaximumDelay: 2 * time.Millisecond,
+	_, err = waitInvocationHandle.Wait(waitContext, WaitOptions{
+		MinPollInterval: time.Millisecond,
+		MaxPollInterval: 2 * time.Millisecond,
 	})
 	var waitError *Error
 	if !errors.As(err, &waitError) || waitError.Category != ErrorTimeout {
@@ -123,25 +122,22 @@ func TestConformance(t *testing.T) {
 	}
 
 	assertGoError(t, client, "conflict", ErrorConflict, http.StatusConflict)
-	if _, err := client.Get(context.Background(), "rate-limit"); err != nil {
+	if _, err := client.GetInvocation(context.Background(), "rate-limit"); err != nil {
 		t.Fatalf("429 should be retried: %v", err)
 	}
 	assertGoError(t, client, "rate-limit-always", ErrorRateLimit, http.StatusTooManyRequests)
 	assertGoError(t, client, "server-error", ErrorServer, http.StatusServiceUnavailable)
 
-	streamHandle, err := client.Resume(context.Background(), conformanceInvocationID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var snapshot ReducedSnapshot
-	if err := streamHandle.Stream(context.Background(), func(_ StreamEvent, next ReducedSnapshot) error {
-		snapshot = next
+	streamInvocationHandle := client.Invocation(conformanceInvocationID)
+	var eventTypes []string
+	if err := streamInvocationHandle.Stream(context.Background(), func(event StreamEvent) error {
+		eventTypes = append(eventTypes, event.Type)
 		return nil
 	}); err != nil {
 		t.Fatalf("resumable stream: %v", err)
 	}
-	if len(snapshot.Messages) != 2 || len(snapshot.InvocationChanges) != 2 || snapshot.ResumeCursor != "cursor-2" {
-		t.Fatalf("unexpected reduced stream snapshot: %#v", snapshot)
+	if fmt.Sprint(eventTypes) != "[invocation.update stream.end invocation.update invocation.result]" {
+		t.Fatalf("unexpected Invocation stream events: %#v", eventTypes)
 	}
 	var serverState struct {
 		AdmissionAttempts int    `json:"admission_attempts"`
@@ -265,7 +261,7 @@ func (s *memoryResultStore) PutIfAbsent(_ context.Context, _ string, result json
 
 func assertGoError(t *testing.T, client *Client, invocationID string, category ErrorCategory, status int) {
 	t.Helper()
-	_, err := client.Get(context.Background(), invocationID)
+	_, err := client.GetInvocation(context.Background(), invocationID)
 	var typed *Error
 	if !errors.As(err, &typed) || typed.Category != category || typed.Status != status || typed.RequestID == "" {
 		t.Fatalf("typed error %s: %#v", invocationID, err)

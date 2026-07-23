@@ -10,36 +10,42 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/domain"
 )
 
-func TestBudgetPolicyResolvesDefaultsAndExplicitLimits(t *testing.T) {
-	policy := DefaultBudgetPolicy()
+func TestLimitPolicyResolvesDefaultsAndExplicitLimits(t *testing.T) {
+	policy := DefaultLimitPolicy()
 	defaults, err := policy.Resolve(nil)
 	if err != nil {
 		t.Fatalf("resolve defaults: %v", err)
 	}
-	if defaults.WallClockTimeout != 30*time.Minute || defaults.ActiveExecutionTimeout != 30*time.Minute ||
+	if defaults.TotalTimeout != 30*time.Minute || defaults.ActiveTimeout != 30*time.Minute ||
+		defaults.WaitingTimeout != 30*time.Minute ||
 		defaults.MaxIterations != 1 || defaults.MaxOutputTokens != nil || defaults.MaxEstimatedCostMicros != nil {
 		t.Fatalf("resolved defaults = %#v", defaults)
 	}
 
-	wall, active := int64(60), int64(30)
+	total, active, waiting := int64(60), int64(30), int64(15)
 	output, iterations, cost := 4096, 2, 0.125001
-	resolved, err := policy.Resolve(&InvocationBudgetInput{
-		WallClockTimeoutSeconds: &wall, ActiveExecutionTimeoutSeconds: &active,
-		MaxOutputTokens: &output, MaxEstimatedCostUSD: &cost, MaxIterations: &iterations,
+	resolved, err := policy.Resolve(&InvocationLimitInput{
+		TotalTimeoutSeconds:   &total,
+		ActiveTimeoutSeconds:  &active,
+		WaitingTimeoutSeconds: &waiting,
+		MaxOutputTokens:       &output,
+		MaxEstimatedCostUSD:   &cost,
+		MaxIterations:         &iterations,
 	})
 	if err != nil {
-		t.Fatalf("resolve explicit budgets: %v", err)
+		t.Fatalf("resolve explicit limits: %v", err)
 	}
-	if resolved.WallClockTimeout != time.Minute || resolved.ActiveExecutionTimeout != 30*time.Second ||
+	if resolved.TotalTimeout != time.Minute || resolved.ActiveTimeout != 30*time.Second ||
+		resolved.WaitingTimeout != 15*time.Second ||
 		resolved.MaxOutputTokens == nil || *resolved.MaxOutputTokens != output ||
 		resolved.MaxEstimatedCostMicros == nil || *resolved.MaxEstimatedCostMicros != 125001 ||
 		resolved.MaxIterations != iterations {
-		t.Fatalf("resolved explicit budgets = %#v", resolved)
+		t.Fatalf("resolved explicit limits = %#v", resolved)
 	}
 }
 
-func TestBudgetPolicyResolvesStructuredOutputIterationFloor(t *testing.T) {
-	policy := DefaultBudgetPolicy()
+func TestLimitPolicyResolvesStructuredOutputIterationFloor(t *testing.T) {
+	policy := DefaultLimitPolicy()
 	resolved, err := policy.ResolveForOutput(nil, true)
 	if err != nil {
 		t.Fatalf("resolve output defaults: %v", err)
@@ -49,7 +55,7 @@ func TestBudgetPolicyResolvesStructuredOutputIterationFloor(t *testing.T) {
 	}
 
 	explicit := 2
-	resolved, err = policy.ResolveForOutput(&InvocationBudgetInput{
+	resolved, err = policy.ResolveForOutput(&InvocationLimitInput{
 		MaxIterations: &explicit,
 	}, true)
 	if err != nil || resolved.MaxIterations != explicit {
@@ -57,7 +63,7 @@ func TestBudgetPolicyResolvesStructuredOutputIterationFloor(t *testing.T) {
 	}
 
 	explicit = 1
-	if _, err := policy.ResolveForOutput(&InvocationBudgetInput{
+	if _, err := policy.ResolveForOutput(&InvocationLimitInput{
 		MaxIterations: &explicit,
 	}, true); err == nil {
 		t.Fatal("one output iteration was accepted")
@@ -68,17 +74,17 @@ func TestBudgetPolicyResolvesStructuredOutputIterationFloor(t *testing.T) {
 	}
 }
 
-func TestBudgetPolicyResolvesClientToolIterationFloor(t *testing.T) {
-	policy := DefaultBudgetPolicy()
+func TestLimitPolicyResolvesHostToolIterationFloor(t *testing.T) {
+	policy := DefaultLimitPolicy()
 	resolved, err := policy.ResolveForFeatures(nil, false, true)
 	if err != nil || resolved.MaxIterations != 3 {
-		t.Fatalf("client tool default iterations = %d, error = %v", resolved.MaxIterations, err)
+		t.Fatalf("host tool default iterations = %d, error = %v", resolved.MaxIterations, err)
 	}
 	explicit := 1
-	if _, err := policy.ResolveForFeatures(&InvocationBudgetInput{
+	if _, err := policy.ResolveForFeatures(&InvocationLimitInput{
 		MaxIterations: &explicit,
 	}, false, true); err == nil {
-		t.Fatal("one client tool iteration was accepted")
+		t.Fatal("one host tool iteration was accepted")
 	}
 }
 
@@ -88,7 +94,7 @@ func TestBudgetValidationRejectsUnsafeNumbers(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			input := validServiceInput()
-			input.Spec.Budgets = &InvocationBudgetInput{MaxEstimatedCostUSD: &cost}
+			input.Spec.Limits = &InvocationLimitInput{MaxEstimatedCostUSD: &cost}
 			if err := ValidateCreateInvocation(input); err == nil {
 				t.Fatal("invalid cost budget was accepted")
 			}
@@ -96,14 +102,14 @@ func TestBudgetValidationRejectsUnsafeNumbers(t *testing.T) {
 	}
 }
 
-func TestFingerprintV2MakesRequestedBudgetsMaterial(t *testing.T) {
+func TestFingerprintV2MakesRequestedLimitsMaterial(t *testing.T) {
 	input := validServiceInput()
 	omitted, err := InvocationFingerprintV2(input)
 	if err != nil {
 		t.Fatalf("omitted fingerprint: %v", err)
 	}
-	wall := int64(DefaultBudgetPolicy().DefaultWallClockTimeout / time.Second)
-	input.Spec.Budgets = &InvocationBudgetInput{WallClockTimeoutSeconds: &wall}
+	wall := int64(DefaultLimitPolicy().DefaultTotalTimeout / time.Second)
+	input.Spec.Limits = &InvocationLimitInput{TotalTimeoutSeconds: &wall}
 	explicit, err := InvocationFingerprintV2(input)
 	if err != nil {
 		t.Fatalf("explicit fingerprint: %v", err)
@@ -154,7 +160,7 @@ func TestLegacyBudgetlessFingerprintReplayCompatibility(t *testing.T) {
 		t.Fatalf("legacy replay found = %t, error = %v", found, err)
 	}
 	wall := int64(1800)
-	input.Spec.Budgets = &InvocationBudgetInput{WallClockTimeoutSeconds: &wall}
+	input.Spec.Limits = &InvocationLimitInput{TotalTimeoutSeconds: &wall}
 	v2, _ = InvocationFingerprintV2(input)
 	if _, _, err := service.findIdempotent(context.Background(), "account", "partition", "agent", "key", input, input, v2); err == nil {
 		t.Fatal("budget-bearing request matched legacy budgetless fingerprint")
@@ -197,45 +203,45 @@ func TestV2FingerprintReplayRejectsAddedStructuredOutput(t *testing.T) {
 	}
 }
 
-func TestFingerprintV4CanonicalizesClientToolSchemasAndPreservesToolOrder(t *testing.T) {
+func TestFingerprintV4CanonicalizesHostToolSchemasAndPreservesToolOrder(t *testing.T) {
 	input := validServiceInput()
-	input.Spec.Tools = []ClientToolSpec{
+	input.Spec.Tools = []HostToolSpec{
 		{
 			Name:        "first",
 			Description: "First tool",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"count":{"type":"number","minimum":1}}}`),
 		},
 		{
 			Name:        "second",
 			Description: "Second tool",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 	}
 	first, err := InvocationFingerprintV4(input)
 	if err != nil {
-		t.Fatalf("first client tool fingerprint: %v", err)
+		t.Fatalf("first host tool fingerprint: %v", err)
 	}
 	input.Spec.Tools[0].InputSchema = json.RawMessage(`{"properties":{"count":{"minimum":1.0,"type":"number"}},"type":"object"}`)
 	equivalent, err := InvocationFingerprintV4(input)
 	if err != nil {
-		t.Fatalf("equivalent client tool fingerprint: %v", err)
+		t.Fatalf("equivalent host tool fingerprint: %v", err)
 	}
 	if first != equivalent {
-		t.Fatal("semantically equal client tool schemas produced different fingerprints")
+		t.Fatal("semantically equal host tool schemas produced different fingerprints")
 	}
 	input.Spec.Tools[0], input.Spec.Tools[1] = input.Spec.Tools[1], input.Spec.Tools[0]
 	reordered, err := InvocationFingerprintV4(input)
 	if err != nil {
-		t.Fatalf("reordered client tool fingerprint: %v", err)
+		t.Fatalf("reordered host tool fingerprint: %v", err)
 	}
 	if first == reordered {
-		t.Fatal("reordered client tools produced the same fingerprint")
+		t.Fatal("reordered host tools produced the same fingerprint")
 	}
 }
 
-func TestV3FingerprintReplayRejectsAddedClientTools(t *testing.T) {
+func TestV3FingerprintReplayRejectsAddedHostTools(t *testing.T) {
 	input := validServiceInput()
 	v3, err := InvocationFingerprintV3(input)
 	if err != nil {
@@ -250,11 +256,11 @@ func TestV3FingerprintReplayRejectsAddedClientTools(t *testing.T) {
 	service := &RuntimeService{
 		store: store,
 	}
-	input.Spec.Tools = []ClientToolSpec{
+	input.Spec.Tools = []HostToolSpec{
 		{
 			Name:        "lookup",
 			Description: "Look up data",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 	}
@@ -276,19 +282,19 @@ func TestV3FingerprintReplayRejectsAddedClientTools(t *testing.T) {
 	}
 }
 
-func TestExecutionDeadlineUsesRemainingActiveAndWallBudgets(t *testing.T) {
+func TestExecutionDeadlineUsesRemainingActiveAndWallLimits(t *testing.T) {
 	started := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 	invocation := domain.Invocation{
 		ActiveTimeoutMS: 10_000, ActiveExecutionMS: 7_000,
-		WallClockDeadlineAt: started.Add(time.Hour),
+		DeadlineAt: started.Add(time.Hour),
 	}
 	deadline, scope, err := executionDeadline(invocation, started, 5*time.Second)
 	if err != nil || scope != "active_execution" || !deadline.Equal(started.Add(3*time.Second)) {
 		t.Fatalf("active deadline = %s %q, error = %v", deadline, scope, err)
 	}
-	invocation.WallClockDeadlineAt = started.Add(2 * time.Second)
+	invocation.DeadlineAt = started.Add(2 * time.Second)
 	deadline, scope, err = executionDeadline(invocation, started, 5*time.Second)
-	if err != nil || scope != "wall_clock" || !deadline.Equal(invocation.WallClockDeadlineAt) {
+	if err != nil || scope != "total" || !deadline.Equal(invocation.DeadlineAt) {
 		t.Fatalf("wall deadline = %s %q, error = %v", deadline, scope, err)
 	}
 	invocation.ActiveExecutionMS = invocation.ActiveTimeoutMS

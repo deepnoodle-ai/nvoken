@@ -75,16 +75,26 @@ func TestTranscriptStreamProjectsDurableCursorAndQueryPrecedesHeader(t *testing.
 		snapshots: []services.TranscriptSnapshot{
 			{
 				Messages: []domain.SessionMessage{{
-					ID: "smsg_019b0a12-0000-7000-8000-000000000005", SessionID: testSessionID,
-					AgentID: testAgentID, InvocationID: testInvocationID, Sequence: 1,
-					Role: domain.MessageRoleAssistant, Content: json.RawMessage(`[{"type":"text","text":"done"}]`), CreatedAt: now,
+					ID:           "smsg_019b0a12-0000-7000-8000-000000000005",
+					SessionID:    testSessionID,
+					AgentID:      testAgentID,
+					InvocationID: testInvocationID,
+					Sequence:     1,
+					Role:         domain.MessageRoleAssistant,
+					Content:      json.RawMessage(`[{"type":"text","text":"done"}]`),
+					CreatedAt:    now,
 				}},
-				HasMore: true, ResumeCursor: "cursor-message", NextPageToken: streamStringPointer("page-lifecycle"),
+				HasMore:       true,
+				ResumeCursor:  "cursor-message",
+				NextPageToken: streamStringPointer("page-lifecycle"),
 			},
 			{
 				InvocationChanges: []domain.InvocationLifecycleChange{{InvocationState: domain.InvocationState{
-					InvocationID: testInvocationID, Revision: 2, Status: domain.InvocationCompleted,
-					ThroughMessageSequence: int64Pointer(1), CreatedAt: now,
+					InvocationID:           testInvocationID,
+					Revision:               2,
+					Status:                 domain.InvocationCompleted,
+					ThroughMessageSequence: int64Pointer(1),
+					CreatedAt:              now,
 				}}},
 				ResumeCursor: "cursor-final",
 			},
@@ -113,7 +123,7 @@ func TestTranscriptStreamProjectsDurableCursorAndQueryPrecedesHeader(t *testing.
 	}
 	text := string(body)
 	for _, fragment := range []string{
-		"id: cursor-message", "id: cursor-final", "event: transcript.snapshot", `"text":"done"`, `"status":"completed"`,
+		"id: cursor-message", "id: cursor-final", "event: transcript.update", `"text":"done"`, `"status":"completed"`,
 		"event: stream.end", `"reason":"terminal"`,
 	} {
 		if !strings.Contains(text, fragment) {
@@ -144,7 +154,7 @@ func TestTranscriptStreamProjectsDurableCursorAndQueryPrecedesHeader(t *testing.
 	}
 	reconnectedBody, _ := io.ReadAll(reconnected.Body)
 	_ = reconnected.Body.Close()
-	if strings.Contains(string(reconnectedBody), "event: transcript.snapshot") {
+	if strings.Contains(string(reconnectedBody), "event: transcript.update") {
 		t.Fatalf("reconnect duplicated durable snapshot: %s", reconnectedBody)
 	}
 	runtime.mu.Lock()
@@ -155,22 +165,107 @@ func TestTranscriptStreamProjectsDurableCursorAndQueryPrecedesHeader(t *testing.
 	}
 }
 
+func TestCompletedInvocationReplayStreamsAcceptedResultAndEnd(t *testing.T) {
+	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	terminal := services.InvocationRead{
+		ID:         testInvocationID,
+		AgentID:    testAgentID,
+		SessionID:  testSessionID,
+		Status:     domain.InvocationCompleted,
+		DeadlineAt: now.Add(5 * time.Minute),
+		CreatedAt:  now,
+		UpdatedAt:  now.Add(time.Second),
+		EndedAt:    streamTimePointer(now.Add(time.Second)),
+	}
+	runtime := &scriptedStreamRuntime{
+		fakeRuntime: &fakeRuntime{
+			ack: services.InvocationAcknowledgement{
+				AgentID:      testAgentID,
+				SessionID:    testSessionID,
+				InvocationID: testInvocationID,
+				Status:       domain.InvocationCompleted,
+				Deduplicated: true,
+				DeadlineAt:   now.Add(5 * time.Minute),
+			},
+			invocationResult: services.InvocationResultRead{
+				Invocation: terminal,
+				Messages:   []domain.SessionMessage{},
+			},
+		},
+		snapshots: []services.TranscriptSnapshot{{ResumeCursor: "cursor-final"}},
+		states:    []bool{false},
+	}
+	server := newStreamTestServer(t, runtime, nil, StreamConfig{})
+	request, err := http.NewRequest(
+		http.MethodPost,
+		server.URL+"/v1/invocations",
+		strings.NewReader(`{
+			"agent_key":"support",
+			"idempotency_key":"replay-1",
+			"input":"hello",
+			"spec":{"model":{"provider":"anthropic","id":"test-model"}}
+		}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "text/event-stream")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("open stream: %v", err)
+	}
+	body, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatalf("read stream: %v", err)
+	}
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("stream status = %d: %s", response.StatusCode, body)
+	}
+	var eventTypes []string
+	for _, frame := range strings.Split(string(body), "\n\n") {
+		for _, line := range strings.Split(frame, "\n") {
+			if value, found := strings.CutPrefix(line, "event: "); found {
+				eventTypes = append(eventTypes, value)
+			}
+		}
+	}
+	if strings.Join(eventTypes, ",") != "invocation.accepted,invocation.result,stream.end" {
+		t.Fatalf("event types = %#v, stream = %s", eventTypes, body)
+	}
+	if !strings.Contains(string(body), `"deduplicated":true`) ||
+		!strings.Contains(string(body), `"type":"invocation.result"`) {
+		t.Fatalf("completed replay payload = %s", body)
+	}
+}
+
 func TestTranscriptStreamForwardsLiveDeltaThenReconcilesTerminalState(t *testing.T) {
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 	firstDrain := make(chan struct{})
 	runtime := &scriptedStreamRuntime{
-		fakeRuntime: &fakeRuntime{}, firstDrain: firstDrain,
+		fakeRuntime: &fakeRuntime{},
+		firstDrain:  firstDrain,
 		snapshots: []services.TranscriptSnapshot{
 			{Messages: []domain.SessionMessage{}, InvocationChanges: []domain.InvocationLifecycleChange{}, ResumeCursor: "cursor-0"},
 			{
 				Messages: []domain.SessionMessage{{
-					ID: "smsg_019b0a12-0000-7000-8000-000000000006", SessionID: testSessionID,
-					AgentID: testAgentID, InvocationID: testInvocationID, Sequence: 2,
-					Role: domain.MessageRoleAssistant, Content: json.RawMessage(`[{"type":"text","text":"hello"}]`), CreatedAt: now,
+					ID:           "smsg_019b0a12-0000-7000-8000-000000000006",
+					SessionID:    testSessionID,
+					AgentID:      testAgentID,
+					InvocationID: testInvocationID,
+					Sequence:     2,
+					Role:         domain.MessageRoleAssistant,
+					Content:      json.RawMessage(`[{"type":"text","text":"hello"}]`),
+					CreatedAt:    now,
 				}},
 				InvocationChanges: []domain.InvocationLifecycleChange{{InvocationState: domain.InvocationState{
-					InvocationID: testInvocationID, Revision: 3, Status: domain.InvocationCompleted,
-					ThroughMessageSequence: int64Pointer(2), CreatedAt: now,
+					InvocationID:           testInvocationID,
+					Revision:               3,
+					Status:                 domain.InvocationCompleted,
+					ThroughMessageSequence: int64Pointer(2),
+					CreatedAt:              now,
 				}}},
 				ResumeCursor: "cursor-1",
 			},
@@ -180,35 +275,46 @@ func TestTranscriptStreamForwardsLiveDeltaThenReconcilesTerminalState(t *testing
 	}
 	bus := liveevents.NewInProcess(8)
 	server := newStreamTestServer(t, runtime, bus, StreamConfig{
-		PollInterval: 25 * time.Millisecond, KeepaliveInterval: time.Second,
-		MaxLifetime: time.Second, WriteTimeout: 100 * time.Millisecond,
+		PollInterval:      25 * time.Millisecond,
+		KeepaliveInterval: time.Second,
+		MaxLifetime:       time.Second,
+		WriteTimeout:      100 * time.Millisecond,
 	})
 	result := make(chan string, 1)
 	go func() { result <- readAuthenticatedStream(t, server.URL) }()
 	<-firstDrain
 	payload, _ := json.Marshal(domain.GenerationDeltaEvent{
-		EventType: domain.LiveEventGenerationDelta, SessionID: testSessionID, InvocationID: testInvocationID,
-		LeaseAttempt: 1, DeltaSequence: 1,
-		Delta: domain.GenerationDelta{ContentIndex: 0, Type: "text", Text: "hel"}, EmittedAt: now,
+		Type:         domain.LiveEventOutputTextDelta,
+		SessionID:    testSessionID,
+		InvocationID: testInvocationID,
+		Attempt:      1,
+		Iteration:    1,
+		ContentIndex: 0,
+		Text:         "hel",
+		EmittedAt:    now,
 	})
 	bus.Publish(context.Background(), ports.LiveEvent{
-		Type: domain.LiveEventGenerationDelta, AccountID: testAccountID, SessionID: testSessionID, Payload: payload,
+		Type:      domain.LiveEventOutputTextDelta,
+		AccountID: testAccountID,
+		SessionID: testSessionID,
+		Payload:   payload,
 	})
 	text := <-result
 	for _, fragment := range []string{
-		"event: generation.delta", `"text":"hel"`, "id: cursor-1", `"text":"hello"`, `"reason":"terminal"`,
+		"event: output_text.delta", `"text":"hel"`, "id: cursor-1", `"text":"hello"`, `"reason":"terminal"`,
 	} {
 		if !strings.Contains(text, fragment) {
 			t.Errorf("stream lacks %q: %s", fragment, text)
 		}
 	}
-	assertNoIDOnEvent(t, text, domain.LiveEventGenerationDelta)
+	assertNoIDOnEvent(t, text, domain.LiveEventOutputTextDelta)
 }
 
 func TestTranscriptStreamSignalsOverflowAndRotates(t *testing.T) {
 	firstDrain := make(chan struct{})
 	runtime := &scriptedStreamRuntime{
-		fakeRuntime: &fakeRuntime{}, firstDrain: firstDrain,
+		fakeRuntime: &fakeRuntime{},
+		firstDrain:  firstDrain,
 		snapshots: []services.TranscriptSnapshot{{
 			Messages: []domain.SessionMessage{}, InvocationChanges: []domain.InvocationLifecycleChange{}, ResumeCursor: "cursor-0",
 		}},
@@ -216,21 +322,30 @@ func TestTranscriptStreamSignalsOverflowAndRotates(t *testing.T) {
 	}
 	bus := liveevents.NewInProcess(1)
 	server := newStreamTestServer(t, runtime, bus, StreamConfig{
-		PollInterval: 20 * time.Millisecond, KeepaliveInterval: 10 * time.Millisecond,
-		MaxLifetime: 80 * time.Millisecond, WriteTimeout: 50 * time.Millisecond,
+		PollInterval:      20 * time.Millisecond,
+		KeepaliveInterval: 10 * time.Millisecond,
+		MaxLifetime:       80 * time.Millisecond,
+		WriteTimeout:      50 * time.Millisecond,
 	})
 	result := make(chan string, 1)
 	go func() { result <- readAuthenticatedStream(t, server.URL) }()
 	<-firstDrain
 	for index := range 3 {
 		payload, _ := json.Marshal(domain.GenerationDeltaEvent{
-			EventType: domain.LiveEventGenerationDelta, SessionID: testSessionID, InvocationID: testInvocationID,
-			LeaseAttempt: 1, DeltaSequence: int64(index + 1),
-			Delta:     domain.GenerationDelta{ContentIndex: 0, Type: "text", Text: "x"},
-			EmittedAt: time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+			Type:         domain.LiveEventOutputTextDelta,
+			SessionID:    testSessionID,
+			InvocationID: testInvocationID,
+			Attempt:      1,
+			Iteration:    1,
+			ContentIndex: index,
+			Text:         "x",
+			EmittedAt:    time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
 		})
 		bus.Publish(context.Background(), ports.LiveEvent{
-			Type: domain.LiveEventGenerationDelta, AccountID: testAccountID, SessionID: testSessionID, Payload: payload,
+			Type:      domain.LiveEventOutputTextDelta,
+			AccountID: testAccountID,
+			SessionID: testSessionID,
+			Payload:   payload,
 		})
 	}
 	text := <-result
@@ -246,14 +361,17 @@ func TestTranscriptStreamSignalsOverflowAndRotates(t *testing.T) {
 func TestTranscriptStreamShutdownRotatesWithoutCancellingRequest(t *testing.T) {
 	firstDrain := make(chan struct{})
 	runtime := &scriptedStreamRuntime{
-		fakeRuntime: &fakeRuntime{}, firstDrain: firstDrain,
-		snapshots: []services.TranscriptSnapshot{{ResumeCursor: "cursor-0"}},
-		states:    []bool{true},
+		fakeRuntime: &fakeRuntime{},
+		firstDrain:  firstDrain,
+		snapshots:   []services.TranscriptSnapshot{{ResumeCursor: "cursor-0"}},
+		states:      []bool{true},
 	}
 	shutdown, cancelShutdown := context.WithCancel(context.Background())
 	server := newStreamTestServerWithShutdown(t, runtime, liveevents.NewInProcess(1), StreamConfig{
-		PollInterval: time.Second, KeepaliveInterval: time.Second,
-		MaxLifetime: time.Minute, WriteTimeout: 100 * time.Millisecond,
+		PollInterval:      time.Second,
+		KeepaliveInterval: time.Second,
+		MaxLifetime:       time.Minute,
+		WriteTimeout:      100 * time.Millisecond,
 	}, shutdown)
 	result := make(chan string, 1)
 	go func() { result <- readAuthenticatedStream(t, server.URL) }()
@@ -269,22 +387,32 @@ func TestTranscriptStreamPollsTerminalSettlementDuringRedisOutage(t *testing.T) 
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 	firstDrain := make(chan struct{})
 	runtime := &scriptedStreamRuntime{
-		fakeRuntime: &fakeRuntime{}, firstDrain: firstDrain,
+		fakeRuntime: &fakeRuntime{},
+		firstDrain:  firstDrain,
 		snapshots: []services.TranscriptSnapshot{
 			{ResumeCursor: "cursor-0"},
 			{
 				Messages: []domain.SessionMessage{{
-					ID: "smsg_019b0a12-0000-7000-8000-000000000007", SessionID: testSessionID,
-					AgentID: testAgentID, InvocationID: testInvocationID, Sequence: 1,
-					Role: domain.MessageRoleAssistant, Content: json.RawMessage(`[{"type":"text","text":"from-postgres"}]`),
-					CreatedAt: now,
+					ID:           "smsg_019b0a12-0000-7000-8000-000000000007",
+					SessionID:    testSessionID,
+					AgentID:      testAgentID,
+					InvocationID: testInvocationID,
+					Sequence:     1,
+					Role:         domain.MessageRoleAssistant,
+					Content:      json.RawMessage(`[{"type":"text","text":"from-postgres"}]`),
+					CreatedAt:    now,
 				}},
-				HasMore: true, ResumeCursor: "cursor-message", NextPageToken: streamStringPointer("lifecycle"),
+				HasMore:       true,
+				ResumeCursor:  "cursor-message",
+				NextPageToken: streamStringPointer("lifecycle"),
 			},
 			{
 				InvocationChanges: []domain.InvocationLifecycleChange{{InvocationState: domain.InvocationState{
-					InvocationID: testInvocationID, Revision: 2, Status: domain.InvocationCompleted,
-					ThroughMessageSequence: int64Pointer(1), CreatedAt: now,
+					InvocationID:           testInvocationID,
+					Revision:               2,
+					Status:                 domain.InvocationCompleted,
+					ThroughMessageSequence: int64Pointer(1),
+					CreatedAt:              now,
 				}}},
 				ResumeCursor: "cursor-final",
 			},
@@ -297,8 +425,10 @@ func TestTranscriptStreamPollsTerminalSettlementDuringRedisOutage(t *testing.T) 
 	bus := liveevents.NewRedis(redis.NewClient(&redis.Options{Addr: redisServer.Addr()}), 2, logger)
 	t.Cleanup(func() { _ = bus.Close() })
 	server := newStreamTestServer(t, runtime, bus, StreamConfig{
-		PollInterval: 25 * time.Millisecond, KeepaliveInterval: time.Second,
-		MaxLifetime: time.Second, WriteTimeout: 100 * time.Millisecond,
+		PollInterval:      25 * time.Millisecond,
+		KeepaliveInterval: time.Second,
+		MaxLifetime:       time.Second,
+		WriteTimeout:      100 * time.Millisecond,
 	})
 	result := make(chan string, 1)
 	go func() { result <- readAuthenticatedStream(t, server.URL) }()
@@ -357,15 +487,20 @@ func TestStreamWriteStopsAtConfiguredDeadline(t *testing.T) {
 
 func TestGenerationDeltaValidationBindsPayloadToStream(t *testing.T) {
 	valid := domain.GenerationDeltaEvent{
-		EventType: domain.LiveEventGenerationDelta, SessionID: testSessionID, InvocationID: testInvocationID,
-		LeaseAttempt: 2, DeltaSequence: 3, Delta: domain.GenerationDelta{ContentIndex: 0, Type: "text", Text: "ok"},
-		EmittedAt: time.Now().UTC(),
+		Type:         domain.LiveEventOutputTextDelta,
+		SessionID:    testSessionID,
+		InvocationID: testInvocationID,
+		Attempt:      2,
+		Iteration:    3,
+		ContentIndex: 0,
+		Text:         "ok",
+		EmittedAt:    time.Now().UTC(),
 	}
-	if !validGenerationDeltaEvent(valid, testSessionID) {
+	if !validGenerationDeltaEvent(valid, testSessionID, testInvocationID) {
 		t.Fatal("valid generation delta was rejected")
 	}
 	valid.SessionID = "sesn_019b0a12-0000-7000-8000-000000000099"
-	if validGenerationDeltaEvent(valid, testSessionID) {
+	if validGenerationDeltaEvent(valid, testSessionID, testInvocationID) {
 		t.Fatal("cross-Session generation delta was accepted")
 	}
 }
@@ -405,12 +540,18 @@ func newStreamTestServerWithShutdown(
 	authenticator := &fakeAuthenticator{auth: domain.RuntimeAuthContext{
 		AccountID: testAccountID,
 		Operations: map[domain.RuntimeOperation]struct{}{
-			domain.OperationGetTranscript: {},
+			domain.OperationCreateInvocation: {},
+			domain.OperationGetInvocation:    {},
+			domain.OperationGetTranscript:    {},
 		},
 	}}
 	handler := newHandler(handlerConfig{
-		authenticator: authenticator, runtime: runtime, liveEvents: bus, stream: config,
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)), streamShutdown: shutdown,
+		authenticator:  authenticator,
+		runtime:        runtime,
+		liveEvents:     bus,
+		stream:         config,
+		logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		streamShutdown: shutdown,
 	})
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
@@ -447,4 +588,5 @@ func assertNoIDOnEvent(t *testing.T, stream, event string) {
 	}
 }
 
-func streamStringPointer(value string) *string { return &value }
+func streamStringPointer(value string) *string     { return &value }
+func streamTimePointer(value time.Time) *time.Time { return &value }

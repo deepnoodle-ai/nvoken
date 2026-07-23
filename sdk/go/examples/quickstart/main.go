@@ -15,14 +15,13 @@ func main() {
 		log.Fatal(err)
 	}
 	handle, err := client.Invoke(context.Background(), nvoken.InvokeRequest{
-		AgentRef:       "support",
-		IdempotencyKey: "ticket-42:message-1",
-		Input:          "Why was I charged twice?",
+		AgentKey: "support",
+		Input:    "Why was I charged twice?",
 		Spec: nvoken.ExecutionSpec{
 			Instructions: "Help the customer with billing questions.",
 			Model: nvoken.Model{
 				Provider: "anthropic",
-				Name:     "claude-sonnet-5",
+				ID:       "claude-sonnet-5",
 			},
 		},
 	})

@@ -119,7 +119,7 @@ func TestDurableToolCallCheckpointFlow(t *testing.T) {
 	ctx := context.Background()
 	input := runtimeInput()
 	maxIterations := 2
-	input.Spec.Budgets = &services.InvocationBudgetInput{
+	input.Spec.Limits = &services.InvocationLimitInput{
 		MaxIterations: &maxIterations,
 	}
 	ack, err := runtime.Admit(ctx, auth, input)
@@ -262,21 +262,21 @@ func TestDurableToolCallCheckpointFlow(t *testing.T) {
 	assertToolEvidenceIsImmutable(t, pool, ack.InvocationID, stableCallID, running.Attempt.ID)
 }
 
-func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
+func TestDurableHostToolResultsResumeOnAnotherEngine(t *testing.T) {
 	pool, runtime, store, auth := newRuntimeFixture(t)
 	ctx := context.Background()
 	input := runtimeInputWithTwoIterations()
-	input.Spec.Tools = []services.ClientToolSpec{
+	input.Spec.Tools = []services.HostToolSpec{
 		{
 			Name:        "lookup_order",
 			Description: "Look up an order",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"order_id":{"type":"string"}},"additionalProperties":false}`),
 		},
 		{
 			Name:        "notify_user",
 			Description: "Notify a user",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"message":{"type":"string"}},"additionalProperties":false}`),
 		},
 	}
@@ -288,7 +288,7 @@ func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
 	ids := identity.NewUUIDv7Generator(clock)
 	txm := NewTransactionManager(pool)
 	ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
-	claim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "client-tool-owner-a", time.Minute)
+	claim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "host-tool-owner-a", time.Minute)
 	if err != nil || disposition != services.Claimed {
 		t.Fatalf("claim disposition = %q, error = %v", disposition, err)
 	}
@@ -312,13 +312,13 @@ func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
 			{
 				ProviderCallID: "provider-lookup",
 				Name:           "lookup_order",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{"order_id":"order-1"}`),
 			},
 			{
 				ProviderCallID: "provider-notify",
 				Name:           "notify_user",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{"message":"ready"}`),
 			},
 		},
@@ -337,7 +337,7 @@ func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
 		Usage:                &usage,
 		Provenance:           pointerModelProvenance(testModelProvenance()),
 	}); err != nil {
-		t.Fatalf("park client tool Invocation: %v", err)
+		t.Fatalf("park host tool Invocation: %v", err)
 	}
 
 	parked, err := store.GetInvocation(ctx, ack.InvocationID)
@@ -351,21 +351,21 @@ func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
 	if err != nil || len(read.PendingToolCalls) != 2 ||
 		read.PendingToolCalls[0].ID != recorded.ToolCalls[0].ID ||
 		read.PendingToolCalls[1].ID != recorded.ToolCalls[1].ID {
-		t.Fatalf("pending client tools = %#v, error = %v", read.PendingToolCalls, err)
+		t.Fatalf("pending host tools = %#v, error = %v", read.PendingToolCalls, err)
 	}
 	sessionRead, err := runtime.GetSession(ctx, auth, ack.SessionID)
 	if err != nil || len(sessionRead.PendingToolCalls) != 2 ||
 		sessionRead.ActiveInvocationStatus == nil ||
 		*sessionRead.ActiveInvocationStatus != domain.InvocationWaiting {
-		t.Fatalf("Session pending client tools = %#v, error = %v", sessionRead, err)
+		t.Fatalf("Session pending host tools = %#v, error = %v", sessionRead, err)
 	}
 
-	firstResult := services.ClientToolResultInput{
+	firstResult := services.HostToolResultInput{
 		ToolCallID: recorded.ToolCalls[1].ID,
 		Content:    json.RawMessage(`{"notified":true}`),
 	}
 	type concurrentSubmission struct {
-		result services.SubmitClientToolResultsResult
+		result services.SubmitHostToolResultsResult
 		err    error
 	}
 	const submitters = 12
@@ -377,12 +377,12 @@ func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
 		go func() {
 			defer group.Done()
 			<-start
-			result, submitErr := runtime.SubmitClientToolResults(
+			result, submitErr := runtime.SubmitHostToolResults(
 				ctx,
 				auth,
 				ack.InvocationID,
-				services.SubmitClientToolResultsInput{
-					Results: []services.ClientToolResultInput{firstResult},
+				services.SubmitHostToolResultsInput{
+					Results: []services.HostToolResultInput{firstResult},
 				},
 			)
 			submissions <- concurrentSubmission{
@@ -412,25 +412,25 @@ func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
 		stillParked.ActiveExecutionMS != parkedActiveExecutionMS {
 		t.Fatalf("partially settled Invocation = %#v, error = %v", stillParked, err)
 	}
-	deduplicated, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
-		Results: []services.ClientToolResultInput{firstResult},
+	deduplicated, err := runtime.SubmitHostToolResults(ctx, auth, ack.InvocationID, services.SubmitHostToolResultsInput{
+		Results: []services.HostToolResultInput{firstResult},
 	})
 	if err != nil || len(deduplicated.Results) != 1 || !deduplicated.Results[0].Deduplicated {
 		t.Fatalf("equal partial replay = %#v, error = %v", deduplicated, err)
 	}
 	changed := firstResult
 	changed.Content = json.RawMessage(`{"notified":false}`)
-	if _, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
-		Results: []services.ClientToolResultInput{changed},
+	if _, err := runtime.SubmitHostToolResults(ctx, auth, ack.InvocationID, services.SubmitHostToolResultsInput{
+		Results: []services.HostToolResultInput{changed},
 	}); !publicErrorHasCode(err, services.CodeToolResultConflict) {
 		t.Fatalf("changed partial replay error = %v", err)
 	}
-	secondResult := services.ClientToolResultInput{
+	secondResult := services.HostToolResultInput{
 		ToolCallID: recorded.ToolCalls[0].ID,
 		Content:    json.RawMessage(`{"state":"ready"}`),
 	}
-	resumed, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
-		Results: []services.ClientToolResultInput{
+	resumed, err := runtime.SubmitHostToolResults(ctx, auth, ack.InvocationID, services.SubmitHostToolResultsInput{
+		Results: []services.HostToolResultInput{
 			firstResult,
 			secondResult,
 		},
@@ -444,7 +444,7 @@ func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
 		t.Fatalf("partial result transcript = %#v, error = %v", messages, err)
 	}
 
-	secondClaim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "client-tool-owner-b", time.Minute)
+	secondClaim, disposition, err := ownership.ClaimExact(ctx, ack.InvocationID, "host-tool-owner-b", time.Minute)
 	if err != nil || disposition != services.Claimed || secondClaim.Attempt != claim.Attempt+1 {
 		t.Fatalf("resume claim = %#v, disposition = %q, error = %v", secondClaim, disposition, err)
 	}
@@ -467,8 +467,8 @@ func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
 		completed.CurrentIteration != 2 || completed.CurrentCheckpointSequence != 4 {
 		t.Fatalf("completed resumed Invocation = %#v, error = %v", completed, err)
 	}
-	replay, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
-		Results: []services.ClientToolResultInput{
+	replay, err := runtime.SubmitHostToolResults(ctx, auth, ack.InvocationID, services.SubmitHostToolResultsInput{
+		Results: []services.HostToolResultInput{
 			secondResult,
 			firstResult,
 		},
@@ -479,15 +479,15 @@ func TestDurableClientToolResultsResumeOnAnotherEngine(t *testing.T) {
 	}
 }
 
-func TestExpiredLeaseParksCommittedClientToolWithoutProviderReplay(t *testing.T) {
+func TestExpiredLeaseParksCommittedHostToolWithoutProviderReplay(t *testing.T) {
 	pool, runtime, store, auth := newRuntimeFixture(t)
 	ctx := context.Background()
 	input := runtimeInputWithTwoIterations()
-	input.Spec.Tools = []services.ClientToolSpec{
+	input.Spec.Tools = []services.HostToolSpec{
 		{
 			Name:        "lookup_order",
 			Description: "Look up an order",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 	}
@@ -525,7 +525,7 @@ func TestExpiredLeaseParksCommittedClientToolWithoutProviderReplay(t *testing.T)
 			{
 				ProviderCallID: "provider-lookup",
 				Name:           "lookup_order",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{"order_id":"order-1"}`),
 			},
 		},
@@ -574,11 +574,11 @@ func TestClientWaitClosesPendingBuiltinSiblings(t *testing.T) {
 	pool, runtime, store, auth := newRuntimeFixture(t)
 	ctx := context.Background()
 	input := runtimeInputWithTwoIterations()
-	input.Spec.Tools = []services.ClientToolSpec{
+	input.Spec.Tools = []services.HostToolSpec{
 		{
 			Name:        "lookup_order",
 			Description: "Look up an order",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 	}
@@ -614,7 +614,7 @@ func TestClientWaitClosesPendingBuiltinSiblings(t *testing.T) {
 			{
 				ProviderCallID: "provider-client",
 				Name:           "lookup_order",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{}`),
 			},
 			{
@@ -674,7 +674,7 @@ func TestClientWaitClosesPendingBuiltinSiblings(t *testing.T) {
 	}
 }
 
-func TestClientToolResultsRejectSystemSettledCalls(t *testing.T) {
+func TestHostToolResultsRejectSystemSettledCalls(t *testing.T) {
 	t.Run("cancellation", func(t *testing.T) {
 		pool, runtime, store, auth := newRuntimeFixture(t)
 		ctx := context.Background()
@@ -683,7 +683,7 @@ func TestClientToolResultsRejectSystemSettledCalls(t *testing.T) {
 		txm := NewTransactionManager(pool)
 		ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
 		coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
-		ack, call := admitAndParkSingleClientTool(
+		ack, call := admitAndParkSingleHostTool(
 			t,
 			ctx,
 			runtime,
@@ -700,12 +700,12 @@ func TestClientToolResultsRejectSystemSettledCalls(t *testing.T) {
 			*settled.ResultOrigin != domain.ToolCallResultSystem {
 			t.Fatalf("cancelled client call = %#v, error = %v", settled, err)
 		}
-		_, err = runtime.SubmitClientToolResults(
+		_, err = runtime.SubmitHostToolResults(
 			ctx,
 			auth,
 			ack.InvocationID,
-			services.SubmitClientToolResultsInput{
-				Results: []services.ClientToolResultInput{
+			services.SubmitHostToolResultsInput{
+				Results: []services.HostToolResultInput{
 					{
 						ToolCallID: call.ID,
 						Content:    json.RawMessage(`{"late":true}`),
@@ -733,7 +733,7 @@ func TestClientToolResultsRejectSystemSettledCalls(t *testing.T) {
 		runtime := services.NewRuntimeService(store, txm, clock, ids)
 		ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
 		coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
-		ack, call := admitAndParkSingleClientTool(
+		ack, call := admitAndParkSingleHostTool(
 			t,
 			ctx,
 			runtime,
@@ -752,12 +752,12 @@ func TestClientToolResultsRejectSystemSettledCalls(t *testing.T) {
 			*settled.ResultOrigin != domain.ToolCallResultSystem {
 			t.Fatalf("deadline-settled client call = %#v, error = %v", settled, err)
 		}
-		_, err = runtime.SubmitClientToolResults(
+		_, err = runtime.SubmitHostToolResults(
 			ctx,
 			auth,
 			ack.InvocationID,
-			services.SubmitClientToolResultsInput{
-				Results: []services.ClientToolResultInput{
+			services.SubmitHostToolResultsInput{
+				Results: []services.HostToolResultInput{
 					{
 						ToolCallID: call.ID,
 						Content:    json.RawMessage(`{"late":true}`),
@@ -771,7 +771,7 @@ func TestClientToolResultsRejectSystemSettledCalls(t *testing.T) {
 	})
 }
 
-func admitAndParkSingleClientTool(
+func admitAndParkSingleHostTool(
 	t *testing.T,
 	ctx context.Context,
 	runtime *services.RuntimeService,
@@ -782,11 +782,11 @@ func admitAndParkSingleClientTool(
 ) (services.InvocationAcknowledgement, domain.ToolCall) {
 	t.Helper()
 	input := runtimeInputWithTwoIterations()
-	input.Spec.Tools = []services.ClientToolSpec{
+	input.Spec.Tools = []services.HostToolSpec{
 		{
 			Name:        "lookup_order",
 			Description: "Look up an order",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 	}
@@ -814,7 +814,7 @@ func admitAndParkSingleClientTool(
 			{
 				ProviderCallID: "provider-lookup",
 				Name:           "lookup_order",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{}`),
 			},
 		},
@@ -843,7 +843,7 @@ func publicErrorHasCode(err error, code services.ErrorCode) bool {
 	return errors.As(err, &public) && public.Code == code
 }
 
-func TestClientToolFinalResultCreatesSuccessorDispatch(t *testing.T) {
+func TestHostToolFinalResultCreatesSuccessorDispatch(t *testing.T) {
 	pool, _ := testDatabase(t, true)
 	ctx := context.Background()
 	store := NewStore(pool)
@@ -865,11 +865,11 @@ func TestClientToolFinalResultCreatesSuccessorDispatch(t *testing.T) {
 		),
 	)
 	input := runtimeInputWithTwoIterations()
-	input.Spec.Tools = []services.ClientToolSpec{
+	input.Spec.Tools = []services.HostToolSpec{
 		{
 			Name:        "lookup_order",
 			Description: "Look up an order",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 	}
@@ -901,7 +901,7 @@ func TestClientToolFinalResultCreatesSuccessorDispatch(t *testing.T) {
 			{
 				ProviderCallID: "provider-call",
 				Name:           "lookup_order",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{}`),
 			},
 		},
@@ -926,8 +926,8 @@ func TestClientToolFinalResultCreatesSuccessorDispatch(t *testing.T) {
 	if err != nil || settledInitial.Status != domain.ExecutionDispatchSettled {
 		t.Fatalf("settled initial dispatch = %#v, error = %v", settledInitial, err)
 	}
-	result, err := runtime.SubmitClientToolResults(ctx, auth, ack.InvocationID, services.SubmitClientToolResultsInput{
-		Results: []services.ClientToolResultInput{
+	result, err := runtime.SubmitHostToolResults(ctx, auth, ack.InvocationID, services.SubmitHostToolResultsInput{
+		Results: []services.HostToolResultInput{
 			{
 				ToolCallID: recorded.ToolCalls[0].ID,
 				Content:    json.RawMessage(`{"state":"ready"}`),
@@ -1061,7 +1061,7 @@ func TestToolCoordinatorRunsThroughEmbeddedAndExactDispatchExecution(t *testing.
 	})
 }
 
-func TestCallbackAndClientToolCallsRemainInert(t *testing.T) {
+func TestCallbackAndHostToolCallsRemainInert(t *testing.T) {
 	pool, runtime, store, auth := newRuntimeFixture(t)
 	ctx := context.Background()
 	ack, err := runtime.Admit(ctx, auth, runtimeInput())
@@ -1103,7 +1103,7 @@ func TestCallbackAndClientToolCallsRemainInert(t *testing.T) {
 			{
 				ProviderCallID: "client-provider-call",
 				Name:           "client_prompt",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{"value":2}`),
 			},
 		},
@@ -1187,10 +1187,10 @@ func TestCallbackDeliveryParksClaimsAndResumes(t *testing.T) {
 	input.IdempotencyKey = "callback-delivery"
 	input.SessionKey = pointerString("callback-delivery")
 	maxIterations := 3
-	input.Spec.Budgets = &services.InvocationBudgetInput{
+	input.Spec.Limits = &services.InvocationLimitInput{
 		MaxIterations: &maxIterations,
 	}
-	input.Spec.Tools = []services.ClientToolSpec{
+	input.Spec.Tools = []services.HostToolSpec{
 		{
 			Name:        "lookup_callback",
 			Description: "Look up a value through the host callback",
@@ -1203,7 +1203,7 @@ func TestCallbackDeliveryParksClaimsAndResumes(t *testing.T) {
 		{
 			Name:        "confirm_client",
 			Description: "Confirm the callback result in the host client",
-			Mode:        string(domain.ToolCallModeClient),
+			Mode:        string(domain.ToolCallModeHost),
 			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
 		},
 	}
@@ -1249,7 +1249,7 @@ func TestCallbackDeliveryParksClaimsAndResumes(t *testing.T) {
 			{
 				ProviderCallID: "provider-client",
 				Name:           "confirm_client",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{"accepted":true}`),
 			},
 		},
@@ -1380,14 +1380,14 @@ func TestCallbackDeliveryParksClaimsAndResumes(t *testing.T) {
 		`"schema_version":1`,
 		`"delivery_id":"` + deliveryID + `"`,
 		`"tool_call_id":"` + recorded.ToolCalls[0].ID + `"`,
-		`"agent_ref":"support"`,
+		`"agent_key":"support"`,
 		`"input":{"key":"value"}`,
 	} {
 		if !strings.Contains(callbackBody, expected) {
 			t.Fatalf("callback body omitted %q: %s", expected, callbackBody)
 		}
 	}
-	if strings.Contains(callbackBody, `"actor"`) || strings.Contains(callbackBody, `"tenant_ref"`) {
+	if strings.Contains(callbackBody, `"actor"`) || strings.Contains(callbackBody, `"tenant_key"`) {
 		t.Fatalf("callback body included unowned optional identity: %s", callbackBody)
 	}
 	if len(retryTransport.requests) != 1 ||
@@ -1405,12 +1405,12 @@ func TestCallbackDeliveryParksClaimsAndResumes(t *testing.T) {
 		pending.PendingToolCalls[0].ID != recorded.ToolCalls[1].ID {
 		t.Fatalf("callback-hidden client projection = %#v, %v", pending.PendingToolCalls, err)
 	}
-	clientResult, err := runtime.SubmitClientToolResults(
+	clientResult, err := runtime.SubmitHostToolResults(
 		ctx,
 		auth,
 		ack.InvocationID,
-		services.SubmitClientToolResultsInput{
-			Results: []services.ClientToolResultInput{
+		services.SubmitHostToolResultsInput{
+			Results: []services.HostToolResultInput{
 				{
 					ToolCallID: recorded.ToolCalls[1].ID,
 					Content:    json.RawMessage(`{"confirmed":true}`),
@@ -1608,7 +1608,7 @@ func TestCallbackDeliveryParksClaimsAndResumes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read deadline callback Invocation: %v", err)
 	}
-	clock.Advance(deadlineInvocation.WallClockDeadlineAt.Sub(clock.Now()) + time.Millisecond)
+	clock.Advance(deadlineInvocation.DeadlineAt.Sub(clock.Now()) + time.Millisecond)
 	if _, found, err := deliveryService.ClaimNext(ctx, "late-callback-worker"); err != nil || found {
 		t.Fatalf("deadline callback claim found = %t, error = %v", found, err)
 	}
@@ -1644,11 +1644,11 @@ func TestCallbackDeliveryRetentionPrunesOnlyTransportRows(t *testing.T) {
 	input.IdempotencyKey = "callback-retention"
 	input.SessionKey = pointerString("callback-retention")
 	maxIterations := 2
-	input.Spec.Budgets = &services.InvocationBudgetInput{
+	input.Spec.Limits = &services.InvocationLimitInput{
 		MaxIterations: &maxIterations,
 	}
 	for _, name := range []string{"retention_callback_a", "retention_callback_b", "retention_callback_c"} {
-		input.Spec.Tools = append(input.Spec.Tools, services.ClientToolSpec{
+		input.Spec.Tools = append(input.Spec.Tools, services.HostToolSpec{
 			Name:        name,
 			Description: "Produce retained callback evidence",
 			Mode:        string(domain.ToolCallModeCallback),
@@ -1852,8 +1852,8 @@ func TestTerminalInvocationClosesOpenToolCalls(t *testing.T) {
 			input := runtimeInput()
 			if test.name == "deadline" {
 				wallClockSeconds := int64(1)
-				input.Spec.Budgets = &services.InvocationBudgetInput{
-					WallClockTimeoutSeconds: &wallClockSeconds,
+				input.Spec.Limits = &services.InvocationLimitInput{
+					TotalTimeoutSeconds: &wallClockSeconds,
 				}
 			}
 			ack, err := runtime.Admit(ctx, auth, input)
@@ -2111,7 +2111,7 @@ func TestExpiredLeaseContinuesAfterCommittedToolResultWithoutRerun(t *testing.T)
 	ctx := context.Background()
 	input := runtimeInput()
 	maxIterations := 3
-	input.Spec.Budgets = &services.InvocationBudgetInput{
+	input.Spec.Limits = &services.InvocationLimitInput{
 		MaxIterations: &maxIterations,
 	}
 	ack, err := runtime.Admit(ctx, auth, input)
@@ -2300,7 +2300,7 @@ func modelToolCheckpoint(providerCallID string, inputTokens, outputTokens int) d
 func runtimeInputWithTwoIterations() services.CreateInvocationInput {
 	input := runtimeInput()
 	maxIterations := 2
-	input.Spec.Budgets = &services.InvocationBudgetInput{
+	input.Spec.Limits = &services.InvocationLimitInput{
 		MaxIterations: &maxIterations,
 	}
 	return input

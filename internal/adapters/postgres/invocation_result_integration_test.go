@@ -75,18 +75,18 @@ func TestInvocationResultComposedRead(t *testing.T) {
 }
 
 // TestInvocationResultAtWaitingComposesPendingToolCalls proves the one
-// status whose composition needs extra reads: a parked client-tool turn
+// status whose composition needs extra reads: a parked host-tool turn
 // recovers its pending calls and their stored inputs inside the same
 // read-only snapshot that serves the Invocation and message rows.
 func TestInvocationResultAtWaitingComposesPendingToolCalls(t *testing.T) {
 	pool, runtime, store, auth := newRuntimeFixture(t)
 	ctx := context.Background()
 	input := runtimeInputWithTwoIterations()
-	input.Spec.Tools = []services.ClientToolSpec{
+	input.Spec.Tools = []services.HostToolSpec{
 		{
 			Name:        "lookup_order",
 			Description: "Look up an order",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"order_id":{"type":"string"}},"additionalProperties":false}`),
 		},
 	}
@@ -119,7 +119,7 @@ func TestInvocationResultAtWaitingComposesPendingToolCalls(t *testing.T) {
 			{
 				ProviderCallID: "provider-lookup",
 				Name:           "lookup_order",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{"order_id":"order-1"}`),
 			},
 		},
@@ -138,7 +138,7 @@ func TestInvocationResultAtWaitingComposesPendingToolCalls(t *testing.T) {
 		Usage:                &usage,
 		Provenance:           pointerModelProvenance(testModelProvenance()),
 	}); err != nil {
-		t.Fatalf("park client tool Invocation: %v", err)
+		t.Fatalf("park host tool Invocation: %v", err)
 	}
 
 	waiting, err := runtime.GetInvocationResult(ctx, auth, ack.InvocationID)

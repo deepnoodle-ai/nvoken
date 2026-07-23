@@ -11,7 +11,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -111,7 +110,7 @@ func (e *GenerationExecutor) Execute(
 	request := domain.GenerationRequest{
 		Instructions:    spec.Instructions,
 		Provider:        strings.ToLower(spec.Model.Provider),
-		Model:           spec.Model.Name,
+		Model:           spec.Model.ID,
 		MaxOutputTokens: claim.Invocation.MaxOutputTokens,
 		MaxIterations:   claim.Invocation.MaxIterations,
 		Claim:           &claim,
@@ -121,7 +120,7 @@ func (e *GenerationExecutor) Execute(
 		if tool.Callback != nil {
 			callbackURL = tool.Callback.URL
 		}
-		request.ClientTools = append(request.ClientTools, domain.ClientToolDefinition{
+		request.HostTools = append(request.HostTools, domain.HostToolDefinition{
 			Name:        tool.Name,
 			Description: tool.Description,
 			InputSchema: append(json.RawMessage(nil), tool.InputSchema...),
@@ -132,7 +131,7 @@ func (e *GenerationExecutor) Execute(
 	if spec.Output != nil {
 		digest, err := structuredOutputSchemaDigest(spec.Output.Schema)
 		if err != nil || !bytes.Equal(digest, claim.Invocation.OutputSchemaDigest) {
-			e.logExecutionFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.Name)
+			e.logExecutionFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.ID)
 			return internalGenerationFailure(), nil
 		}
 		request.StructuredOutput = &domain.StructuredOutputRequest{
@@ -140,7 +139,7 @@ func (e *GenerationExecutor) Execute(
 			SchemaDigest: append([]byte(nil), digest...),
 		}
 	} else if len(claim.Invocation.OutputSchemaDigest) != 0 {
-		e.logExecutionFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.Name)
+		e.logExecutionFailure(claim, "invalid_output_contract", spec.Model.Provider, spec.Model.ID)
 		return internalGenerationFailure(), nil
 	}
 	var recovery generationRecovery
@@ -150,7 +149,7 @@ func (e *GenerationExecutor) Execute(
 			if e.claimLost(ctx, claim) {
 				return domain.InvocationExecutionResult{}, ports.ErrLeaseLost
 			}
-			e.logExecutionFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.Name)
+			e.logExecutionFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.ID)
 			return internalGenerationFailure(), nil
 		}
 		recovery, err = loadGenerationRecovery(
@@ -165,7 +164,7 @@ func (e *GenerationExecutor) Execute(
 				if e.claimLost(ctx, claim) {
 					return domain.InvocationExecutionResult{}, ports.ErrLeaseLost
 				}
-				e.logExecutionFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.Name)
+				e.logExecutionFailure(claim, "recovery_invalid", spec.Model.Provider, spec.Model.ID)
 				return internalGenerationFailure(), nil
 			}
 			return domain.InvocationExecutionResult{}, fmt.Errorf("load generation recovery: %w", err)
@@ -196,7 +195,7 @@ func (e *GenerationExecutor) Execute(
 		if claim.Invocation.CurrentCheckpointSequence > 0 {
 			class = "recovery_invalid"
 		}
-		e.logExecutionFailure(claim, class, spec.Model.Provider, spec.Model.Name)
+		e.logExecutionFailure(claim, class, spec.Model.Provider, spec.Model.ID)
 		return internalGenerationFailure(), nil
 	}
 	request.Messages = messages
@@ -434,26 +433,34 @@ func (e *GenerationExecutor) generate(
 	if !ok {
 		return e.generator.Generate(ctx, request)
 	}
-	var sequence atomic.Int64
 	emit := func(delta domain.GenerationDelta) {
 		if e.events == nil {
 			return
 		}
+		if delta.Iteration < 1 {
+			delta.Iteration = claim.Invocation.CurrentIteration + 1
+		}
+		eventType := domain.LiveEventOutputTextDelta
+		if delta.Type == "thinking" {
+			eventType = domain.LiveEventThinkingDelta
+		}
 		payload, err := json.Marshal(domain.GenerationDeltaEvent{
-			EventType:     domain.LiveEventGenerationDelta,
-			SessionID:     claim.Invocation.SessionID,
-			InvocationID:  claim.Invocation.ID,
-			LeaseAttempt:  claim.Attempt,
-			DeltaSequence: sequence.Add(1),
-			Delta:         delta,
-			EmittedAt:     time.Now().UTC(),
+			Type:         eventType,
+			SessionID:    claim.Invocation.SessionID,
+			InvocationID: claim.Invocation.ID,
+			Attempt:      claim.Attempt,
+			Iteration:    delta.Iteration,
+			ContentIndex: delta.ContentIndex,
+			Text:         delta.Text,
+			Thinking:     delta.Thinking,
+			EmittedAt:    time.Now().UTC(),
 		})
 		if err != nil {
 			e.logger.Warn("generation delta encode failed", "invocation_id", claim.Invocation.ID)
 			return
 		}
 		e.events.Publish(ctx, ports.LiveEvent{
-			Type:      domain.LiveEventGenerationDelta,
+			Type:      eventType,
 			AccountID: claim.Invocation.AccountID,
 			SessionID: claim.Invocation.SessionID,
 			Payload:   payload,
@@ -560,14 +567,15 @@ func decodeInlineSpec(payload []byte) (InlineExecutionSpec, error) {
 		return InlineExecutionSpec{}, err
 	}
 	if err := ValidateCreateInvocation(CreateInvocationInput{
-		AgentRef: "validation", IdempotencyKey: "validation",
-		Input: InvocationInput{Content: []TextInputBlock{{Type: "text", Text: "validation"}}},
-		Spec:  spec,
+		AgentKey:       "validation",
+		IdempotencyKey: "validation",
+		Input:          InvocationInput{Content: []TextInputBlock{{Type: "text", Text: "validation"}}},
+		Spec:           spec,
 	}); err != nil {
 		return InlineExecutionSpec{}, err
 	}
 	if spec.Model.Provider != strings.TrimSpace(spec.Model.Provider) ||
-		spec.Model.Name != strings.TrimSpace(spec.Model.Name) {
+		spec.Model.ID != strings.TrimSpace(spec.Model.ID) {
 		return InlineExecutionSpec{}, fmt.Errorf("model provider and name cannot have surrounding whitespace")
 	}
 	return spec, nil

@@ -694,7 +694,7 @@ func TestValidResultAcceptsCheckpointedCompletion(t *testing.T) {
 		Usage:                &usage,
 		Provenance:           &provenance,
 	}) {
-		t.Fatal("checkpointed client-tool wait was rejected")
+		t.Fatal("checkpointed host-tool wait was rejected")
 	}
 	if validResult(domain.InvocationExecutionResult{
 		Status: domain.InvocationCompleted,

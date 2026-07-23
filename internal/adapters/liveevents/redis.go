@@ -219,10 +219,16 @@ func (r *Redis) recordPublishGap(event ports.LiveEvent) {
 	key := liveScope(event.AccountID, event.SessionID)
 	_, alreadyPending := r.gaps[key]
 	payload, _ := json.Marshal(domain.StreamResyncEvent{
-		EventType: domain.LiveEventStreamResync, SessionID: event.SessionID, Reason: "live_delivery_gap",
+		Type:         domain.LiveEventStreamResync,
+		SessionID:    event.SessionID,
+		InvocationID: nil,
+		Reason:       "live_delivery_gap",
 	})
 	r.gaps[key] = ports.LiveEvent{
-		Type: domain.LiveEventStreamResync, AccountID: event.AccountID, SessionID: event.SessionID, Payload: payload,
+		Type:      domain.LiveEventStreamResync,
+		AccountID: event.AccountID,
+		SessionID: event.SessionID,
+		Payload:   payload,
 	}
 	r.gapsMu.Unlock()
 	if !alreadyPending {

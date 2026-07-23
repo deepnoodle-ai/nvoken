@@ -204,7 +204,8 @@ func (s *CallbackDeliveryService) ProcessClaim(
 		)
 	}
 	now := s.clock.Now().UTC()
-	if !call.DeadlineAt.After(now) || !invocation.WallClockDeadlineAt.After(now) {
+	if !call.DeadlineAt.After(now) || !invocation.DeadlineAt.After(now) ||
+		effectiveWaitingExecutionMS(invocation, now) >= invocation.WaitingTimeoutMS {
 		return s.abandonClaim(ctx, claim, "deadline_exceeded")
 	}
 	body, err := s.callbackRequestBody(ctx, claim, call, invocation)
@@ -227,7 +228,8 @@ func (s *CallbackDeliveryService) ProcessClaim(
 		s.logStaleClaim(claim, "lease_expired_before_send")
 		return ports.ErrCallbackDeliveryLeaseLost
 	}
-	if !call.DeadlineAt.After(sendAt) || !invocation.WallClockDeadlineAt.After(sendAt) {
+	if !call.DeadlineAt.After(sendAt) || !invocation.DeadlineAt.After(sendAt) ||
+		effectiveWaitingExecutionMS(invocation, sendAt) >= invocation.WaitingTimeoutMS {
 		return s.abandonClaim(ctx, claim, "deadline_exceeded")
 	}
 	result := transport.Send(ctx, ports.CallbackTransportRequest{
@@ -300,8 +302,8 @@ type callbackRequestContext struct {
 	ToolCallID    string                `json:"tool_call_id"`
 	InvocationID  string                `json:"invocation_id"`
 	SessionID     string                `json:"session_id"`
-	AgentRef      string                `json:"agent_ref"`
-	TenantRef     *string               `json:"tenant_ref,omitempty"`
+	AgentKey      string                `json:"agent_key"`
+	TenantKey     *string               `json:"tenant_key,omitempty"`
 	Actor         *callbackRequestActor `json:"actor,omitempty"`
 }
 
@@ -350,8 +352,8 @@ func (s *CallbackDeliveryService) callbackRequestBody(
 			ToolCallID:    call.ID,
 			InvocationID:  invocation.ID,
 			SessionID:     invocation.SessionID,
-			AgentRef:      agent.AgentRef,
-			TenantRef:     partition.TenantRef,
+			AgentKey:      agent.AgentKey,
+			TenantKey:     partition.TenantKey,
 		},
 		Input: input,
 	})
@@ -551,7 +553,8 @@ func (s *CallbackDeliveryService) settleClaim(
 			call.Iteration != invocation.CurrentIteration {
 			return ports.ErrToolCallNotRunnable
 		}
-		if !call.DeadlineAt.After(now) || !invocation.WallClockDeadlineAt.After(now) {
+		if !call.DeadlineAt.After(now) || !invocation.DeadlineAt.After(now) ||
+			effectiveWaitingExecutionMS(invocation, now) >= invocation.WaitingTimeoutMS {
 			_, err := s.store.SettleCallbackDelivery(
 				txCtx,
 				delivery.ID,
@@ -662,7 +665,7 @@ func (s *CallbackDeliveryService) settleClaim(
 			return err
 		}
 		for _, openCall := range open {
-			if (openCall.Mode != domain.ToolCallModeClient && openCall.Mode != domain.ToolCallModeCallback) ||
+			if (openCall.Mode != domain.ToolCallModeHost && openCall.Mode != domain.ToolCallModeCallback) ||
 				openCall.Iteration != invocation.CurrentIteration ||
 				openCall.Status != domain.ToolCallPending {
 				return ports.ErrExecutionResultInvalid
@@ -875,7 +878,7 @@ func validateToolResultContent(content json.RawMessage) error {
 	if len(content) == 0 || len(content) > 256<<10 || !json.Valid(content) {
 		return fmt.Errorf("tool result content must be bounded valid JSON")
 	}
-	depth, err := clientToolJSONDepth(content)
+	depth, err := hostToolJSONDepth(content)
 	if err != nil || depth > 32 {
 		return fmt.Errorf("tool result content exceeds the maximum depth")
 	}

@@ -318,7 +318,7 @@ type CreateCredentialRequest struct {
 	Operations *[]Operation `json:"operations,omitempty"`
 	Profile    Profile      `json:"profile"`
 	SessionId  *string      `json:"session_id,omitempty"`
-	TenantRef  *string      `json:"tenant_ref,omitempty"`
+	TenantKey  *string      `json:"tenant_key,omitempty"`
 }
 
 // Credential defines model for Credential.
@@ -341,7 +341,7 @@ type Credential struct {
 	RotationOverlapEndsAt *time.Time         `json:"rotation_overlap_ends_at,omitempty"`
 	SessionId             *string            `json:"session_id,omitempty"`
 	Status                CredentialStatus   `json:"status"`
-	TenantRef             *string            `json:"tenant_ref,omitempty"`
+	TenantKey             *string            `json:"tenant_key,omitempty"`
 	UpdatedAt             time.Time          `json:"updated_at"`
 }
 
@@ -372,7 +372,7 @@ type CurrentAccount struct {
 		Method           CurrentAccountAuthenticationMethod         `json:"method"`
 		Operations       []Operation                                `json:"operations"`
 		SessionId        *string                                    `json:"session_id,omitempty"`
-		TenantRef        *string                                    `json:"tenant_ref,omitempty"`
+		TenantKey        *string                                    `json:"tenant_key,omitempty"`
 	} `json:"authentication"`
 	CreatedAt time.Time `json:"created_at"`
 	Id        string    `json:"id"`
@@ -397,7 +397,7 @@ type DeviceCodeRequest struct {
 	DeviceLabel string                    `json:"device_label"`
 	RoleCap     *DeviceCodeRequestRoleCap `json:"role_cap,omitempty"`
 	SessionId   *string                   `json:"session_id,omitempty"`
-	TenantRef   *string                   `json:"tenant_ref,omitempty"`
+	TenantKey   *string                   `json:"tenant_key,omitempty"`
 }
 
 // DeviceCodeRequestRoleCap defines model for DeviceCodeRequest.RoleCap.

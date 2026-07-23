@@ -30,7 +30,7 @@ to run unattended:
 - **Guardrails.** An iteration limit and a response timeout bound every run,
   and on the last allowed iteration tools are disabled and the model is
   instructed to answer, so a turn never strands mid tool call.
-- **Budgets.** Token, cost, iteration, and wall-clock ceilings from the
+- **Limits.** Token, cost, iteration, and wall-clock ceilings from the
   execution spec, enforced while the turn runs.
 - **Parallel and background execution.** Batches of tool calls run
   concurrently, with sequential fallback when a tool declares it must run
@@ -45,7 +45,7 @@ to run unattended:
 Tools are where the agent touches the world:
 
 - **Execution modes.** Builtin tools execute service-side, callback tools are
-  signed calls to your endpoints, and client tools are recoverable through
+  signed calls to your endpoints, and host tools are recoverable through
   reads and the stream for your application to execute. The exchange is
   durable: stable tool call IDs, deadlines, and exactly one accepted result
   per call.
@@ -117,7 +117,7 @@ One contract across model vendors:
   representation, including multimodal input.
 - **Round-trip state.** Thinking signatures, tool call IDs, and tool result
   formats are normalized, so a Session is not welded to one vendor.
-- **Common model settings.** Reasoning effort, thinking budgets, and tool
+- **Common model settings.** Reasoning effort, thinking limits, and tool
   choice configured one way and normalized per model, so switching providers
   does not mean relearning knobs.
 - **Structured output.** Final output produced against a schema you provide.

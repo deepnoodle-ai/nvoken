@@ -51,6 +51,10 @@ func TestInvocationFingerprintV6DesignVectors(t *testing.T) {
 	testFingerprintDesignVectors(t, "admission-fingerprint-v6.json", 6)
 }
 
+func TestInvocationFingerprintV7DesignVectors(t *testing.T) {
+	testFingerprintDesignVectors(t, "admission-fingerprint-v7.json", 7)
+}
+
 func TestInvocationFingerprintV6PreservesLiteralSourceWithoutSecretMaterial(t *testing.T) {
 	input := validServiceInput()
 	omitted, err := InvocationFingerprintV6(input)
@@ -138,9 +142,12 @@ func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
 			} else if version == 5 {
 				canonical, err = invocationFingerprintBytesV5(input)
 				fingerprint, _ = InvocationFingerprintV5(input)
-			} else {
+			} else if version == 6 {
 				canonical, err = invocationFingerprintBytesV6(input)
 				fingerprint, _ = InvocationFingerprintV6(input)
+			} else {
+				canonical, err = invocationFingerprintBytesV7(input)
+				fingerprint, _ = InvocationFingerprintV7(input)
 			}
 			if err != nil {
 				t.Fatalf("canonicalize: %v", err)
@@ -196,7 +203,7 @@ func TestFingerprintUsesMinimalUTF8JSONStringEncoding(t *testing.T) {
 
 func TestValidateCreateInvocationLimits(t *testing.T) {
 	tests := map[string]func(*CreateInvocationInput){
-		"agent ref too long": func(input *CreateInvocationInput) { input.AgentRef = strings.Repeat("a", MaxReferenceCharacters+1) },
+		"agent key too long": func(input *CreateInvocationInput) { input.AgentKey = strings.Repeat("a", MaxReferenceCharacters+1) },
 		"blank key":          func(input *CreateInvocationInput) { input.IdempotencyKey = "   " },
 		"two selectors": func(input *CreateInvocationInput) {
 			input.SessionID = stringPointer("sesn_019b0a12-0000-7000-8000-000000000003")
@@ -207,11 +214,11 @@ func TestValidateCreateInvocationLimits(t *testing.T) {
 				input.Input.Content[index] = TextInputBlock{Type: "text", Text: "x"}
 			}
 		},
-		"deferred block":     func(input *CreateInvocationInput) { input.Input.Content[0].Type = "tool" },
-		"blank text":         func(input *CreateInvocationInput) { input.Input.Content[0].Text = "\t" },
-		"blank instructions": func(input *CreateInvocationInput) { input.Spec.Instructions = "" },
+		"deferred block":              func(input *CreateInvocationInput) { input.Input.Content[0].Type = "tool" },
+		"blank text":                  func(input *CreateInvocationInput) { input.Input.Content[0].Text = "\t" },
+		"blank supplied instructions": func(input *CreateInvocationInput) { input.Spec.Instructions = "   " },
 		"model too long": func(input *CreateInvocationInput) {
-			input.Spec.Model.Name = strings.Repeat("m", MaxReferenceCharacters+1)
+			input.Spec.Model.ID = strings.Repeat("m", MaxReferenceCharacters+1)
 		},
 	}
 	for name, mutate := range tests {
@@ -226,15 +233,20 @@ func TestValidateCreateInvocationLimits(t *testing.T) {
 	if err := ValidateCreateInvocation(validServiceInput()); err != nil {
 		t.Fatalf("valid request: %v", err)
 	}
+	withoutInstructions := validServiceInput()
+	withoutInstructions.Spec.Instructions = ""
+	if err := ValidateCreateInvocation(withoutInstructions); err != nil {
+		t.Fatalf("instruction-free request: %v", err)
+	}
 }
 
 func TestValidateCreateInvocationUnicodeAndBlockBoundaries(t *testing.T) {
 	setters := map[string]func(*CreateInvocationInput, string){
-		"agent_ref":       func(input *CreateInvocationInput, value string) { input.AgentRef = value },
-		"tenant_ref":      func(input *CreateInvocationInput, value string) { input.TenantRef = stringPointer(value) },
+		"agent_key":       func(input *CreateInvocationInput, value string) { input.AgentKey = value },
+		"tenant_key":      func(input *CreateInvocationInput, value string) { input.TenantKey = stringPointer(value) },
 		"session_key":     func(input *CreateInvocationInput, value string) { input.SessionKey = stringPointer(value) },
 		"idempotency_key": func(input *CreateInvocationInput, value string) { input.IdempotencyKey = value },
-		"spec.model.name": func(input *CreateInvocationInput, value string) { input.Spec.Model.Name = value },
+		"spec.model.id":   func(input *CreateInvocationInput, value string) { input.Spec.Model.ID = value },
 	}
 	for field, set := range setters {
 		t.Run(field, func(t *testing.T) {
@@ -281,21 +293,21 @@ func TestValidateCreateInvocationStructuredSchemaSizeBoundary(t *testing.T) {
 	}
 }
 
-func TestValidateCreateInvocationClientToolBoundaries(t *testing.T) {
-	validTool := ClientToolSpec{
+func TestValidateCreateInvocationHostToolBoundaries(t *testing.T) {
+	validTool := HostToolSpec{
 		Name:        "lookup_order",
 		Description: "Look up an order",
-		Mode:        "client",
+		Mode:        "host",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"order_id":{"type":"string"}},"additionalProperties":false}`),
 	}
 	input := validServiceInput()
-	input.Spec.Tools = make([]ClientToolSpec, MaxClientTools)
+	input.Spec.Tools = make([]HostToolSpec, MaxHostTools)
 	for index := range input.Spec.Tools {
 		input.Spec.Tools[index] = validTool
 		input.Spec.Tools[index].Name = fmt.Sprintf("tool_%d", index)
 	}
 	if err := ValidateCreateInvocation(input); err != nil {
-		t.Fatalf("maximum client tools rejected: %v", err)
+		t.Fatalf("maximum host tools rejected: %v", err)
 	}
 
 	tests := map[string]func(*CreateInvocationInput){
@@ -321,10 +333,10 @@ func TestValidateCreateInvocationClientToolBoundaries(t *testing.T) {
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
 			candidate := input
-			candidate.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
+			candidate.Spec.Tools = append([]HostToolSpec(nil), input.Spec.Tools...)
 			mutate(&candidate)
 			if err := ValidateCreateInvocation(candidate); err == nil {
-				t.Fatal("invalid client tools were accepted")
+				t.Fatal("invalid host tools were accepted")
 			}
 		})
 	}
@@ -332,7 +344,7 @@ func TestValidateCreateInvocationClientToolBoundaries(t *testing.T) {
 
 func TestValidateCreateInvocationCallbackToolBoundaries(t *testing.T) {
 	callbackURLPrefix := "https://callbacks.example.test/"
-	callback := ClientToolSpec{
+	callback := HostToolSpec{
 		Name:        "lookup_callback",
 		Description: "Look up a value through a callback",
 		Mode:        "callback",
@@ -342,12 +354,12 @@ func TestValidateCreateInvocationCallbackToolBoundaries(t *testing.T) {
 		},
 	}
 	input := validServiceInput()
-	input.Spec.Tools = []ClientToolSpec{callback}
+	input.Spec.Tools = []HostToolSpec{callback}
 	if err := ValidateCreateInvocation(input); err != nil {
 		t.Fatalf("valid callback tool rejected: %v", err)
 	}
 	maximum := input
-	maximum.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
+	maximum.Spec.Tools = append([]HostToolSpec(nil), input.Spec.Tools...)
 	maximumTarget := *callback.Callback
 	maximumTarget.URL = callbackURLPrefix + strings.Repeat("x", MaxCallbackURLBytes-len(callbackURLPrefix))
 	maximum.Spec.Tools[0].Callback = &maximumTarget
@@ -363,7 +375,7 @@ func TestValidateCreateInvocationCallbackToolBoundaries(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := input
-			candidate.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
+			candidate.Spec.Tools = append([]HostToolSpec(nil), input.Spec.Tools...)
 			target := *callback.Callback
 			target.URL = url
 			candidate.Spec.Tools[0].Callback = &target
@@ -373,39 +385,47 @@ func TestValidateCreateInvocationCallbackToolBoundaries(t *testing.T) {
 		})
 	}
 	missing := input
-	missing.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
+	missing.Spec.Tools = append([]HostToolSpec(nil), input.Spec.Tools...)
 	missing.Spec.Tools[0].Callback = nil
 	if err := ValidateCreateInvocation(missing); err == nil {
 		t.Fatal("callback mode without callback target accepted")
 	}
-	clientWithCallback := input
-	clientWithCallback.Spec.Tools = append([]ClientToolSpec(nil), input.Spec.Tools...)
-	clientWithCallback.Spec.Tools[0].Mode = "client"
-	if err := ValidateCreateInvocation(clientWithCallback); err == nil {
-		t.Fatal("client mode with callback target accepted")
+	hostWithCallback := input
+	hostWithCallback.Spec.Tools = append([]HostToolSpec(nil), input.Spec.Tools...)
+	hostWithCallback.Spec.Tools[0].Mode = "host"
+	if err := ValidateCreateInvocation(hostWithCallback); err == nil {
+		t.Fatal("host mode with callback target accepted")
 	}
-	var clientWithNull ClientToolSpec
+	var hostWithNull HostToolSpec
 	if err := json.Unmarshal([]byte(`{
-		"name":"lookup_client",
-		"description":"Look up a value through the client",
-		"mode":"client",
+		"name":"lookup_host",
+		"description":"Look up a value through the host",
+		"mode":"host",
 		"input_schema":{"type":"object"},
 		"callback":null
-	}`), &clientWithNull); err != nil {
-		t.Fatalf("decode client callback null: %v", err)
+	}`), &hostWithNull); err != nil {
+		t.Fatalf("decode host callback null: %v", err)
 	}
 	nullInput := validServiceInput()
-	nullInput.Spec.Tools = []ClientToolSpec{clientWithNull}
+	nullInput.Spec.Tools = []HostToolSpec{hostWithNull}
 	if err := ValidateCreateInvocation(nullInput); err == nil {
-		t.Fatal("client mode with explicit null callback accepted")
+		t.Fatal("host mode with explicit null callback accepted")
 	}
 }
 
 func validServiceInput() CreateInvocationInput {
 	return CreateInvocationInput{
-		AgentRef: "support", SessionKey: stringPointer("ticket-1"), IdempotencyKey: "request-1",
-		Input: InvocationInput{Content: []TextInputBlock{{Type: "text", Text: "first"}, {Type: "text", Text: "second"}}},
-		Spec:  InlineExecutionSpec{Instructions: "help", Model: ModelSelection{Provider: "anthropic", Name: "test-model"}},
+		AgentKey:       "support",
+		SessionKey:     stringPointer("ticket-1"),
+		IdempotencyKey: "request-1",
+		Input:          InvocationInput{Content: []TextInputBlock{{Type: "text", Text: "first"}, {Type: "text", Text: "second"}}},
+		Spec: InlineExecutionSpec{
+			Instructions: "help",
+			Model: ModelSelection{
+				Provider: "anthropic",
+				ID:       "test-model",
+			},
+		},
 	}
 }
 

@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -13,13 +13,6 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { InvocationBudgetRequest } from './InvocationBudgetRequest.js';
-import {
-    InvocationBudgetRequestFromJSON,
-    InvocationBudgetRequestFromJSONTyped,
-    InvocationBudgetRequestToJSON,
-    InvocationBudgetRequestToJSONTyped,
-} from './InvocationBudgetRequest.js';
 import type { ModelSelection } from './ModelSelection.js';
 import {
     ModelSelectionFromJSON,
@@ -41,6 +34,13 @@ import {
     StructuredOutputSpecToJSON,
     StructuredOutputSpecToJSONTyped,
 } from './StructuredOutputSpec.js';
+import type { InvocationLimitRequest } from './InvocationLimitRequest.js';
+import {
+    InvocationLimitRequestFromJSON,
+    InvocationLimitRequestFromJSONTyped,
+    InvocationLimitRequestToJSON,
+    InvocationLimitRequestToJSONTyped,
+} from './InvocationLimitRequest.js';
 
 /**
  * Immutable launch snapshot. Unknown or deferred fields, including spec
@@ -54,11 +54,11 @@ import {
  */
 export interface InlineExecutionSpec {
     /**
-     *
+     * Optional model instructions. Omission adds no hidden default.
      * @type {string}
      * @memberof InlineExecutionSpec
      */
-    instructions: string;
+    instructions?: string;
     /**
      *
      * @type {ModelSelection}
@@ -67,10 +67,10 @@ export interface InlineExecutionSpec {
     model: ModelSelection;
     /**
      *
-     * @type {InvocationBudgetRequest}
+     * @type {InvocationLimitRequest}
      * @memberof InlineExecutionSpec
      */
-    budgets?: InvocationBudgetRequest;
+    limits?: InvocationLimitRequest;
     /**
      *
      * @type {StructuredOutputSpec}
@@ -89,7 +89,6 @@ export interface InlineExecutionSpec {
  * Check if a given object implements the InlineExecutionSpec interface.
  */
 export function instanceOfInlineExecutionSpec(value: object): value is InlineExecutionSpec {
-    if (!('instructions' in value) || value['instructions'] === undefined) return false;
     if (!('model' in value) || value['model'] === undefined) return false;
     return true;
 }
@@ -104,9 +103,9 @@ export function InlineExecutionSpecFromJSONTyped(json: any, ignoreDiscriminator:
     }
     return {
 
-        'instructions': json['instructions'],
+        'instructions': json['instructions'] == null ? undefined : json['instructions'],
         'model': ModelSelectionFromJSON(json['model']),
-        'budgets': json['budgets'] == null ? undefined : InvocationBudgetRequestFromJSON(json['budgets']),
+        'limits': json['limits'] == null ? undefined : InvocationLimitRequestFromJSON(json['limits']),
         'output': json['output'] == null ? undefined : StructuredOutputSpecFromJSON(json['output']),
         'tools': json['tools'] == null ? undefined : ((json['tools'] as Array<any>).map(ToolSpecFromJSON)),
     };
@@ -125,7 +124,7 @@ export function InlineExecutionSpecToJSONTyped(value?: InlineExecutionSpec | nul
 
         'instructions': value['instructions'],
         'model': ModelSelectionToJSON(value['model']),
-        'budgets': InvocationBudgetRequestToJSON(value['budgets']),
+        'limits': InvocationLimitRequestToJSON(value['limits']),
         'output': StructuredOutputSpecToJSON(value['output']),
         'tools': value['tools'] == null ? undefined : ((value['tools'] as Array<any>).map(ToolSpecToJSON)),
     };

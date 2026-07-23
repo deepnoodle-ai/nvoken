@@ -13,8 +13,8 @@ type InvocationResult = generated.InvocationResult
 type InvocationStatus = generated.InvocationStatus
 type Session = generated.Session
 type SessionMessage = generated.SessionMessage
-type PendingClientToolCall = generated.PendingClientToolCall
-type ToolResultResponse = generated.SubmitClientToolResultsResponse
+type PendingHostToolCall = generated.PendingHostToolCall
+type ToolResultResponse = generated.SubmitHostToolResultsResponse
 type ModelProvider = generated.ModelProvider
 type ModelPricingCapability = generated.ModelPricingCapability
 type ProviderCredential = generated.ProviderCredential
@@ -39,15 +39,16 @@ const (
 
 type Model struct {
 	Provider string `json:"provider"`
-	Name     string `json:"name"`
+	ID       string `json:"id"`
 }
 
-type Budgets struct {
-	WallClockTimeoutSeconds       *int     `json:"wall_clock_timeout_seconds,omitempty"`
-	ActiveExecutionTimeoutSeconds *int     `json:"active_execution_timeout_seconds,omitempty"`
-	MaxOutputTokens               *int     `json:"max_output_tokens,omitempty"`
-	MaxEstimatedCostUSD           *float32 `json:"max_estimated_cost_usd,omitempty"`
-	MaxIterations                 *int     `json:"max_iterations,omitempty"`
+type Limits struct {
+	TotalTimeoutSeconds   *int     `json:"total_timeout_seconds,omitempty"`
+	ActiveTimeoutSeconds  *int     `json:"active_timeout_seconds,omitempty"`
+	WaitingTimeoutSeconds *int     `json:"waiting_timeout_seconds,omitempty"`
+	MaxOutputTokens       *int     `json:"max_output_tokens,omitempty"`
+	MaxEstimatedCostUSD   *float32 `json:"max_estimated_cost_usd,omitempty"`
+	MaxIterations         *int     `json:"max_iterations,omitempty"`
 }
 
 type Tool struct {
@@ -65,14 +66,14 @@ type CallbackTarget struct {
 type ExecutionSpec struct {
 	Instructions string         `json:"instructions"`
 	Model        Model          `json:"model"`
-	Budgets      *Budgets       `json:"budgets,omitempty"`
+	Limits       *Limits        `json:"limits,omitempty"`
 	Tools        []Tool         `json:"tools,omitempty"`
 	OutputSchema map[string]any `json:"-"`
 }
 
 type InvokeRequest struct {
-	AgentRef       string
-	TenantRef      *string
+	AgentKey       string
+	TenantKey      *string
 	SessionID      *string
 	SessionKey     *string
 	IdempotencyKey string
@@ -84,14 +85,14 @@ type ListProviderCredentialsOptions struct {
 	Provider  *ModelProvider
 	Scope     *ProviderCredentialScope
 	Status    *ProviderCredentialStatus
-	TenantRef *string
+	TenantKey *string
 	Limit     *int
 }
 
 type CreateProviderCredentialInput struct {
 	Provider       ModelProvider
 	Scope          ProviderCredentialScope
-	TenantRef      *string
+	TenantKey      *string
 	APIKey         string
 	ExpiresAt      *time.Time
 	IdempotencyKey string
@@ -111,7 +112,7 @@ type ToolResult struct {
 }
 
 type ListInvocationsOptions struct {
-	TenantRef     *string
+	TenantKey     *string
 	DefaultTenant *bool
 	SessionID     *string
 	AgentID       *string
@@ -121,9 +122,10 @@ type ListInvocationsOptions struct {
 }
 
 type ListSessionsOptions struct {
-	TenantRef     *string
+	TenantKey     *string
 	DefaultTenant *bool
 	AgentID       *string
+	SessionKey    *string
 	Cursor        *string
 	Limit         *int
 }
@@ -140,36 +142,36 @@ type TranscriptOptions struct {
 }
 
 type WaitOptions struct {
-	MinimumDelay time.Duration
-	MaximumDelay time.Duration
+	MinPollInterval time.Duration
+	MaxPollInterval time.Duration
 }
 
 func (o WaitOptions) normalized() WaitOptions {
-	if o.MinimumDelay <= 0 {
-		o.MinimumDelay = 100 * time.Millisecond
+	if o.MinPollInterval <= 0 {
+		o.MinPollInterval = 100 * time.Millisecond
 	}
-	if o.MaximumDelay <= 0 {
-		o.MaximumDelay = 2 * time.Second
+	if o.MaxPollInterval <= 0 {
+		o.MaxPollInterval = 2 * time.Second
 	}
-	if o.MaximumDelay < o.MinimumDelay {
-		o.MaximumDelay = o.MinimumDelay
+	if o.MaxPollInterval < o.MinPollInterval {
+		o.MaxPollInterval = o.MinPollInterval
 	}
 	return o
 }
 
 func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
-	if r.AgentRef == "" || r.IdempotencyKey == "" {
-		return generated.CreateInvocationRequest{}, fmt.Errorf("agent reference and idempotency key are required")
+	if r.AgentKey == "" {
+		return generated.CreateInvocationRequest{}, fmt.Errorf("agent key is required")
 	}
 	if r.Input == "" {
 		return generated.CreateInvocationRequest{}, fmt.Errorf("input is required")
 	}
-	spec := map[string]any{
-		"instructions": r.Spec.Instructions,
-		"model":        r.Spec.Model,
+	spec := map[string]any{"model": r.Spec.Model}
+	if r.Spec.Instructions != "" {
+		spec["instructions"] = r.Spec.Instructions
 	}
-	if r.Spec.Budgets != nil {
-		spec["budgets"] = r.Spec.Budgets
+	if r.Spec.Limits != nil {
+		spec["limits"] = r.Spec.Limits
 	}
 	if len(r.Spec.Tools) > 0 {
 		spec["tools"] = r.Spec.Tools
@@ -178,15 +180,13 @@ func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
 		spec["output"] = map[string]any{"schema": r.Spec.OutputSchema}
 	}
 	wire := map[string]any{
-		"agent_ref":       r.AgentRef,
+		"agent_key":       r.AgentKey,
 		"idempotency_key": r.IdempotencyKey,
-		"input": map[string]any{
-			"content": []map[string]any{{"type": "text", "text": r.Input}},
-		},
-		"spec": spec,
+		"input":           r.Input,
+		"spec":            spec,
 	}
-	if r.TenantRef != nil {
-		wire["tenant_ref"] = *r.TenantRef
+	if r.TenantKey != nil {
+		wire["tenant_key"] = *r.TenantKey
 	}
 	if r.SessionID != nil {
 		wire["session_id"] = *r.SessionID
@@ -205,7 +205,7 @@ func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
 	return request, nil
 }
 
-func generatedToolResults(results []ToolResult) (generated.SubmitClientToolResultsRequest, error) {
+func generatedToolResults(results []ToolResult) (generated.SubmitHostToolResultsRequest, error) {
 	wire := struct {
 		Results []map[string]any `json:"results"`
 	}{Results: make([]map[string]any, 0, len(results))}
@@ -221,11 +221,11 @@ func generatedToolResults(results []ToolResult) (generated.SubmitClientToolResul
 	}
 	encoded, err := json.Marshal(wire)
 	if err != nil {
-		return generated.SubmitClientToolResultsRequest{}, fmt.Errorf("encode tool results: %w", err)
+		return generated.SubmitHostToolResultsRequest{}, fmt.Errorf("encode tool results: %w", err)
 	}
-	var request generated.SubmitClientToolResultsRequest
+	var request generated.SubmitHostToolResultsRequest
 	if err := json.Unmarshal(encoded, &request); err != nil {
-		return generated.SubmitClientToolResultsRequest{}, fmt.Errorf("convert tool results to generated transport: %w", err)
+		return generated.SubmitHostToolResultsRequest{}, fmt.Errorf("convert tool results to generated transport: %w", err)
 	}
 	return request, nil
 }

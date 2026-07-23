@@ -6,7 +6,7 @@
 > structured-output, or ToolCall semantics.
 
 The self-contained Runtime durably admits, executes, and reads Invocations,
-including structured output and host-executed client tools. Admission still
+including structured output and host-executed host tools. Admission still
 returns before model generation begins.
 
 This guide explains the runtime, not a production-readiness claim. The exact
@@ -39,7 +39,7 @@ export PROVIDER_CREDENTIAL_ENCRYPTION_KEYS="{\"v1\":\"$(openssl rand -base64 32)
 Provider credential lifecycle authority comes from the durable credential
 profile described in [Credentials and CLI authentication](credentials-and-cli-auth.md).
 An Operator credential can manage Account and tenant credentials. A Runtime
-credential can manage tenant credentials only when its `tenant_ref` constraint
+credential can manage tenant credentials only when its `tenant_key` constraint
 matches that exact tenant; it cannot manage Account BYOK. A Viewer credential
 can list and read secret-free Account and tenant credential metadata but cannot
 create, rotate, or revoke credentials. The configured `RUNTIME_API_KEY` is
@@ -64,7 +64,7 @@ curl --fail-with-body http://localhost:8080/v1/provider-credentials \
   --data '{
     "provider": "anthropic",
     "scope": "tenant",
-    "tenant_ref": "customer-482",
+    "tenant_key": "customer-482",
     "credential": {"api_key": "replace-with-an-Anthropic-key"},
     "idempotency_key": "customer-482-anthropic-v1"
   }'
@@ -90,7 +90,7 @@ spec provider. Reusable selections contain no secret:
 }]
 ```
 
-Tenant BYOK uses `tenant_byok`; the effective `tenant_ref` must match. A
+Tenant BYOK uses `tenant_byok`; the effective `tenant_key` must match. A
 one-Invocation secret uses `caller_ephemeral` and is encrypted in its durable
 binding:
 
@@ -108,7 +108,7 @@ resolved reusable version. Therefore an equal retry with a changed supplied
 secret returns the original Invocation and binding rather than replacing it.
 Caller ciphertext remains available through the Invocation wall-clock deadline
 plus `PROVIDER_CREDENTIAL_CLEANUP_GRACE` (default five minutes), including while
-the Invocation is waiting for client tools. Terminal settlement clears live
+the Invocation is waiting for host tools. Terminal settlement clears live
 ciphertext in the same database transaction, and the reaper clears expired
 material. Retained backups can still contain encrypted bytes until normal
 backup expiration; cleanup does not claim immediate physical erasure there.
@@ -143,8 +143,8 @@ Memorystore and Secret Manager. `LIVE_EVENT_BUFFER`,
 rotation, and slow clients. Redis carries previews only. A Redis failure cannot
 change execution or committed recovery state.
 
-`INVOCATION_DEFAULT_WALL_CLOCK_TIMEOUT`,
-`INVOCATION_DEFAULT_ACTIVE_EXECUTION_TIMEOUT`, and
+`INVOCATION_DEFAULT_TOTAL_TIMEOUT`,
+`INVOCATION_DEFAULT_ACTIVE_TIMEOUT`, and
 `INVOCATION_DEFAULT_MAX_ITERATIONS` supply omitted limits. The corresponding
 `INVOCATION_MAX_*` settings reject requests above installation policy; output
 tokens and estimated cost have no default and remain unlimited unless the host
@@ -198,7 +198,7 @@ terminal settlement commits the final object and provenance together.
 On its first start, nvoken serializes creation of one installation Account, its
 default tenant partition, the local bootstrap Owner membership, and one durable
 `Runtime` machine credential derived from `RUNTIME_API_KEY`.
-`RUNTIME_TENANT_REF` optionally confines that imported credential to one tenant
+`RUNTIME_TENANT_KEY` optionally confines that imported credential to one tenant
 partition. Later starts resolve the import marker rather than configuration, so
 changing the environment cannot create a second credential and revocation is
 never undone. Keep the configured value only for the documented rollback
@@ -212,16 +212,16 @@ curl --fail-with-body http://localhost:8080/v1/invocations \
   -H "Authorization: Bearer $RUNTIME_API_KEY" \
   -H 'Content-Type: application/json' \
   --data '{
-    "agent_ref": "support-triage",
+    "agent_key": "support-triage",
     "session_key": "ticket-483",
     "idempotency_key": "ticket-483:first-reply",
     "input": {"content": [{"type": "text", "text": "Why was I charged twice?"}]},
     "spec": {
       "instructions": "You are a concise billing support agent.",
-      "model": {"provider": "anthropic", "name": "claude-sonnet-5"},
-      "budgets": {
-        "wall_clock_timeout_seconds": 600,
-        "active_execution_timeout_seconds": 300,
+      "model": {"provider": "anthropic", "id": "claude-sonnet-5"},
+      "limits": {
+        "total_timeout_seconds": 600,
+        "active_timeout_seconds": 300,
         "max_output_tokens": 4096,
         "max_iterations": 1
       }
@@ -253,8 +253,8 @@ Accepted builtin outcomes likewise commit one canonical tool-role result and a
 fenced checkpoint. ToolCall rows contain lifecycle and message references, not
 a second copy of content.
 
-Declare a client tool inside `spec.tools` with `name`, `description`,
-`mode: "client"`, and a bounded object `input_schema`. When the model selects
+Declare a host tool inside `spec.tools` with `name`, `description`,
+`mode: "host"`, and a bounded object `input_schema`. When the model selects
 it, Invocation and Session reads expose the stable pending call after the
 Invocation parks in `waiting`; no engine lease or request stays alive. Submit a
 result with the returned ID. Tools require at least two model iterations;
@@ -301,18 +301,16 @@ deadlines remain terminal and close prepared calls with a synthetic result.
 There is still no public retry-in-place operation for terminal Invocations.
 
 Public reads and streams may observe `running → queued → running` during this
-recovery. Use lifecycle revision/cursors to order observations. Retained
-`execution_lost` rows are historical outcomes from the earlier policy; current
-recoverable lease expiry does not write that code. An internal recovery failure
-means the stored transcript/checkpoint evidence was inconsistent and is exposed
-only as the bounded public `internal` failure.
+recovery. Use lifecycle revision/cursors to order observations. An internal
+recovery failure means the stored transcript/checkpoint evidence was
+inconsistent and is exposed only as the bounded public `internal` failure.
 
 The execution-segment ceiling reserves time for a live owner to settle, not a
 hard terminal boundary after ownership is gone. A live owner or deadline reaper
 observing the cutoff before lease expiry writes the segment-scoped deadline
 failure. If no settlement lands and the lease itself later expires, recovery
 wins because a replacement cannot distinguish a crashed owner from a delayed
-settle. Wall-clock and active-execution budgets remain hard limits across that
+settle. Wall-clock and active-execution limits remain hard limits across that
 continuation; operators should keep the reaper cadence well below the lease
 duration for prompt outcomes.
 
@@ -337,7 +335,7 @@ curl --fail-with-body \
 ```
 
 The Invocation read includes terminal `error`, normalized aggregate `usage`,
-model `provenance`, resolved `budgets`, accrued `active_execution_ms`, and its
+model `provenance`, resolved `limits`, accrued `active_execution_ms`, and its
 wall-clock deadline. It also always includes nullable `structured_output` and
 `structured_output_provenance`. A successful schema-bearing Invocation returns
 the validated object and its reserved ToolCall ID/schema digest; failed,
@@ -377,13 +375,26 @@ curl --fail-with-body \
 
 curl --fail-with-body \
   -H "Authorization: Bearer $RUNTIME_API_KEY" \
-  'http://localhost:8080/v1/sessions?tenant_ref=customer-482'
+  'http://localhost:8080/v1/sessions?tenant_key=customer-482'
 ```
 
-Read the sole durable transcript directly, use the incremental JSON snapshot,
-or tail that same snapshot model with ephemeral live deltas:
+Follow one Invocation directly by adding `Accept: text/event-stream` to its
+admission, reconnect to an admitted Invocation by ID, or follow every turn in a
+Session:
 
 ```bash
+curl --no-buffer -X POST \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @invocation.json \
+  http://localhost:8080/v1/invocations
+
+curl --no-buffer \
+  -H "Authorization: Bearer $RUNTIME_API_KEY" \
+  -H 'Accept: text/event-stream' \
+  http://localhost:8080/v1/invocations/invk_…/stream
+
 curl --fail-with-body \
   -H "Authorization: Bearer $RUNTIME_API_KEY" \
   'http://localhost:8080/v1/sessions/sesn_…/messages?limit=100'
@@ -406,15 +417,20 @@ response order cannot expose terminal completion before its committed assistant
 messages. Cursors and page tokens are scoped to their Account, Session, and
 filters and grant no authority of their own.
 
-The stream accepts that `resume_cursor` as `?cursor=...`, or as
-`Last-Event-ID` when the query parameter is absent. Only
-`transcript.snapshot` frames carry an SSE ID. `generation.delta` frames are
-live-only text or thinking previews, and `stream.resync` means discard the
-preview and wait for canonical state. `stream.end` reason `rotate` requests a
-normal reconnect with the last ID; reason `terminal` is emitted only after the
-final Postgres reconciliation. Closing or losing the stream never cancels the
-Invocation. Use a streaming HTTP client that can set the bearer header; the
-browser's bare `EventSource` constructor cannot.
+The minimal Invocation-stream consumer prints `output_text.delta` and finishes
+on `invocation.result`. `invocation.accepted` is the normal acknowledgement as
+the first admission frame; `invocation.update` carries incremental durable
+state. Session streams use the same delta names and `transcript.update` for
+durable batches. Every payload carries `type` plus its scope IDs.
+
+Durable update and result frames carry an SSE ID; ephemeral
+`output_text.delta` and `thinking.delta` previews never do. Streams accept a
+durable cursor as `?cursor=...`, or as `Last-Event-ID` when the query parameter
+is absent. On `stream.resync`, discard buffered previews and wait for durable
+state. `stream.end` reason `rotate` means reconnect with the last durable ID;
+reason `terminal` follows final Postgres reconciliation. Closing or losing a
+stream never cancels the Invocation. Use a streaming HTTP client that can set
+the bearer header; the browser's bare `EventSource` constructor cannot.
 
 Admission bodies are limited to 1 MiB, 64 JSON nesting levels, and 64 text
 blocks. Unknown fields, callback tools, malformed IDs, duplicate JSON member

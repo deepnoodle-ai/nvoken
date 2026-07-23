@@ -32,39 +32,6 @@ func (e CallbackToolSpecMode) Valid() bool {
 	}
 }
 
-// Defines values for ClientToolResultAcceptanceStatus.
-const (
-	ClientToolResultAcceptanceStatusCompleted ClientToolResultAcceptanceStatus = "completed"
-	ClientToolResultAcceptanceStatusFailed    ClientToolResultAcceptanceStatus = "failed"
-)
-
-// Valid indicates whether the value is a known member of the ClientToolResultAcceptanceStatus enum.
-func (e ClientToolResultAcceptanceStatus) Valid() bool {
-	switch e {
-	case ClientToolResultAcceptanceStatusCompleted:
-		return true
-	case ClientToolResultAcceptanceStatusFailed:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientToolSpecMode.
-const (
-	ModeClient ClientToolSpecMode = "client"
-)
-
-// Valid indicates whether the value is a known member of the ClientToolSpecMode enum.
-func (e ClientToolSpecMode) Valid() bool {
-	switch e {
-	case ModeClient:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ErrorCode.
 const (
 	ErrorCodeForbidden                  ErrorCode = "forbidden"
@@ -116,45 +83,48 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
-// Defines values for GenerationDeltaEventEventType.
+// Defines values for HostToolResultAcceptanceStatus.
 const (
-	EventGenerationDelta GenerationDeltaEventEventType = "generation.delta"
+	HostToolResultAcceptanceStatusCompleted HostToolResultAcceptanceStatus = "completed"
+	HostToolResultAcceptanceStatusFailed    HostToolResultAcceptanceStatus = "failed"
 )
 
-// Valid indicates whether the value is a known member of the GenerationDeltaEventEventType enum.
-func (e GenerationDeltaEventEventType) Valid() bool {
+// Valid indicates whether the value is a known member of the HostToolResultAcceptanceStatus enum.
+func (e HostToolResultAcceptanceStatus) Valid() bool {
 	switch e {
-	case EventGenerationDelta:
+	case HostToolResultAcceptanceStatusCompleted:
+		return true
+	case HostToolResultAcceptanceStatusFailed:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for GenerationTextDeltaType.
+// Defines values for HostToolSpecMode.
 const (
-	DeltaTypeText GenerationTextDeltaType = "text"
+	ModeHost HostToolSpecMode = "host"
 )
 
-// Valid indicates whether the value is a known member of the GenerationTextDeltaType enum.
-func (e GenerationTextDeltaType) Valid() bool {
+// Valid indicates whether the value is a known member of the HostToolSpecMode enum.
+func (e HostToolSpecMode) Valid() bool {
 	switch e {
-	case DeltaTypeText:
+	case ModeHost:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for GenerationThinkingDeltaType.
+// Defines values for InvocationAcceptedEventType.
 const (
-	DeltaTypeThinking GenerationThinkingDeltaType = "thinking"
+	EventInvocationAccepted InvocationAcceptedEventType = "invocation.accepted"
 )
 
-// Valid indicates whether the value is a known member of the GenerationThinkingDeltaType enum.
-func (e GenerationThinkingDeltaType) Valid() bool {
+// Valid indicates whether the value is a known member of the InvocationAcceptedEventType enum.
+func (e InvocationAcceptedEventType) Valid() bool {
 	switch e {
-	case DeltaTypeThinking:
+	case EventInvocationAccepted:
 		return true
 	default:
 		return false
@@ -166,7 +136,6 @@ const (
 	InvocationFailureCodeBudgetExceeded              InvocationFailureCode = "budget_exceeded"
 	InvocationFailureCodeCredentialUnavailable       InvocationFailureCode = "credential_unavailable"
 	InvocationFailureCodeDeadlineExceeded            InvocationFailureCode = "deadline_exceeded"
-	InvocationFailureCodeExecutionLost               InvocationFailureCode = "execution_lost"
 	InvocationFailureCodeInternal                    InvocationFailureCode = "internal"
 	InvocationFailureCodeProviderError               InvocationFailureCode = "provider_error"
 	InvocationFailureCodeStructuredOutputUnsatisfied InvocationFailureCode = "structured_output_unsatisfied"
@@ -180,8 +149,6 @@ func (e InvocationFailureCode) Valid() bool {
 	case InvocationFailureCodeCredentialUnavailable:
 		return true
 	case InvocationFailureCodeDeadlineExceeded:
-		return true
-	case InvocationFailureCodeExecutionLost:
 		return true
 	case InvocationFailureCodeInternal:
 		return true
@@ -230,6 +197,21 @@ func (e InvocationProviderCredentialSelection1Source) Valid() bool {
 	}
 }
 
+// Defines values for InvocationResultEventType.
+const (
+	EventInvocationResult InvocationResultEventType = "invocation.result"
+)
+
+// Valid indicates whether the value is a known member of the InvocationResultEventType enum.
+func (e InvocationResultEventType) Valid() bool {
+	switch e {
+	case EventInvocationResult:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvocationStatus.
 const (
 	InvocationStatusCancelled InvocationStatus = "cancelled"
@@ -254,6 +236,21 @@ func (e InvocationStatus) Valid() bool {
 	case InvocationStatusRunning:
 		return true
 	case InvocationStatusWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvocationUpdateEventType.
+const (
+	EventInvocationUpdate InvocationUpdateEventType = "invocation.update"
+)
+
+// Valid indicates whether the value is a known member of the InvocationUpdateEventType enum.
+func (e InvocationUpdateEventType) Valid() bool {
+	switch e {
+	case EventInvocationUpdate:
 		return true
 	default:
 		return false
@@ -320,6 +317,21 @@ func (e ModelProvider) Valid() bool {
 	case Anthropic:
 		return true
 	case Openai:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OutputTextDeltaEventType.
+const (
+	EventOutputTextDelta OutputTextDeltaEventType = "output_text.delta"
+)
+
+// Valid indicates whether the value is a known member of the OutputTextDeltaEventType enum.
+func (e OutputTextDeltaEventType) Valid() bool {
+	switch e {
+	case EventOutputTextDelta:
 		return true
 	default:
 		return false
@@ -428,21 +440,6 @@ func (e SessionMessageRole) Valid() bool {
 	}
 }
 
-// Defines values for StreamEndEventEventType.
-const (
-	EventStreamEnd StreamEndEventEventType = "stream.end"
-)
-
-// Valid indicates whether the value is a known member of the StreamEndEventEventType enum.
-func (e StreamEndEventEventType) Valid() bool {
-	switch e {
-	case EventStreamEnd:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for StreamEndEventReason.
 const (
 	Rotate   StreamEndEventReason = "rotate"
@@ -461,15 +458,15 @@ func (e StreamEndEventReason) Valid() bool {
 	}
 }
 
-// Defines values for StreamResyncEventEventType.
+// Defines values for StreamEndEventType.
 const (
-	EventStreamResync StreamResyncEventEventType = "stream.resync"
+	EventStreamEnd StreamEndEventType = "stream.end"
 )
 
-// Valid indicates whether the value is a known member of the StreamResyncEventEventType enum.
-func (e StreamResyncEventEventType) Valid() bool {
+// Valid indicates whether the value is a known member of the StreamEndEventType enum.
+func (e StreamEndEventType) Valid() bool {
 	switch e {
-	case EventStreamResync:
+	case EventStreamEnd:
 		return true
 	default:
 		return false
@@ -485,6 +482,21 @@ const (
 func (e StreamResyncEventReason) Valid() bool {
 	switch e {
 	case ReasonLiveDeliveryGap:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StreamResyncEventType.
+const (
+	EventStreamResync StreamResyncEventType = "stream.resync"
+)
+
+// Valid indicates whether the value is a known member of the StreamResyncEventType enum.
+func (e StreamResyncEventType) Valid() bool {
+	switch e {
+	case EventStreamResync:
 		return true
 	default:
 		return false
@@ -515,6 +527,36 @@ const (
 func (e TextInputBlockType) Valid() bool {
 	switch e {
 	case InputTypeText:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ThinkingDeltaEventType.
+const (
+	EventThinkingDelta ThinkingDeltaEventType = "thinking.delta"
+)
+
+// Valid indicates whether the value is a known member of the ThinkingDeltaEventType enum.
+func (e ThinkingDeltaEventType) Valid() bool {
+	switch e {
+	case EventThinkingDelta:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TranscriptUpdateType.
+const (
+	EventTranscriptUpdate TranscriptUpdateType = "transcript.update"
+)
+
+// Valid indicates whether the value is a known member of the TranscriptUpdateType enum.
+func (e TranscriptUpdateType) Valid() bool {
+	switch e {
+	case EventTranscriptUpdate:
 		return true
 	default:
 		return false
@@ -567,52 +609,31 @@ type CallbackToolSpec struct {
 // CallbackToolSpecMode defines model for CallbackToolSpec.Mode.
 type CallbackToolSpecMode string
 
-// ClientToolResultAcceptance defines model for ClientToolResultAcceptance.
-type ClientToolResultAcceptance struct {
-	Deduplicated bool                             `json:"deduplicated"`
-	Status       ClientToolResultAcceptanceStatus `json:"status"`
-	ToolCallID   ToolCallID                       `json:"tool_call_id"`
-}
-
-// ClientToolResultAcceptanceStatus defines model for ClientToolResultAcceptance.Status.
-type ClientToolResultAcceptanceStatus string
-
-// ClientToolSpec defines model for ClientToolSpec.
-type ClientToolSpec struct {
-	Description string `json:"description"`
-
-	// InputSchema Object-root JSON Schema using the same bounded, self-contained
-	// subset as structured output. Compact canonical JSON is limited to
-	// 32 KiB.
-	InputSchema map[string]interface{} `json:"input_schema"`
-	Mode        ClientToolSpecMode     `json:"mode"`
-
-	// Name Unique within the spec; the `nvoken_` prefix is reserved.
-	Name string `json:"name"`
-}
-
-// ClientToolSpecMode defines model for ClientToolSpec.Mode.
-type ClientToolSpecMode string
-
 // CreateInvocationRequest defines model for CreateInvocationRequest.
 type CreateInvocationRequest struct {
-	// AgentRef Stable caller-controlled Agent reference, unique within the
+	// AgentKey Stable caller-controlled Agent key, unique within the
 	// authenticated Account. The resulting Agent anchor stores identity
 	// only and is shared across tenant partitions.
-	AgentRef string `json:"agent_ref"`
+	AgentKey string `json:"agent_key"`
 
 	// IdempotencyKey Stable admission identity scoped to (Account, effective tenant
-	// partition, agent_ref). Reuse an unchanged request after any 5xx,
+	// partition, agent_key). Reuse an unchanged request after any 5xx,
 	// timeout, disconnect, or missing acknowledgement. Deduplication is
 	// guaranteed while the original Invocation is retained.
-	IdempotencyKey string          `json:"idempotency_key"`
-	Input          InvocationInput `json:"input"`
+	IdempotencyKey string `json:"idempotency_key"`
+
+	// Input A plain string is shorthand for one text block. Use the object form
+	// for ordered multi-block input; the launch contract supports text only.
+	Input InvocationInput `json:"input"`
 
 	// ProviderCredentials Explicit nonsecret source selection for the spec model provider.
 	// Omission selects the deployment's configured default. The
 	// selection is stored outside the execution spec; only
 	// caller_ephemeral accepts secret material. Equal idempotent replay
-	// never replaces the original encrypted credential.
+	// never replaces the original encrypted credential. The field is
+	// deliberately plural even though this contract currently permits
+	// one entry: future routed invocations may select credentials for
+	// more than one model provider.
 	ProviderCredentials *[]InvocationProviderCredentialSelection `json:"provider_credentials,omitempty"`
 
 	// SessionID Existing Session to continue. Mutually exclusive with session_key.
@@ -629,11 +650,11 @@ type CreateInvocationRequest struct {
 	// or the lower installation maximum.
 	Spec InlineExecutionSpec `json:"spec"`
 
-	// TenantRef Optional tenant partition. For Session-key resolution or a new
+	// TenantKey Optional tenant partition. For Session-key resolution or a new
 	// Session, precedence is credential constraint, this explicit value,
 	// then the Account's default partition. For Session-ID resolution, an
 	// Account-wide caller may omit it and use the stored partition.
-	TenantRef *string `json:"tenant_ref,omitempty"`
+	TenantKey *string `json:"tenant_key,omitempty"`
 }
 
 // CreateProviderCredentialRequest defines model for CreateProviderCredentialRequest.
@@ -644,8 +665,8 @@ type CreateProviderCredentialRequest struct {
 	Provider       ModelProvider            `json:"provider"`
 	Scope          ProviderCredentialScope  `json:"scope"`
 
-	// TenantRef Required for tenant scope and forbidden for Account scope.
-	TenantRef *string `json:"tenant_ref,omitempty"`
+	// TenantKey Required for tenant scope and forbidden for Account scope.
+	TenantKey *string `json:"tenant_key,omitempty"`
 }
 
 // ErrorCode defines model for ErrorCode.
@@ -659,52 +680,32 @@ type ErrorResponse struct {
 	RequestID string                  `json:"request_id"`
 }
 
-// GenerationDeltaEvent defines model for GenerationDeltaEvent.
-type GenerationDeltaEvent struct {
-	Delta GenerationDeltaEvent_Delta `json:"delta"`
-
-	// DeltaSequence Attempt-local live ordering hint; never a replay cursor.
-	DeltaSequence int64                         `json:"delta_sequence"`
-	EmittedAt     time.Time                     `json:"emitted_at"`
-	EventType     GenerationDeltaEventEventType `json:"event_type"`
-
-	// InvocationID UUIDv7 with the public `invk_` prefix.
-	InvocationID InvocationID `json:"invocation_id"`
-
-	// LeaseAttempt Fenced execution attempt that emitted this live preview.
-	LeaseAttempt int64 `json:"lease_attempt"`
-
-	// SessionID UUIDv7 with the public `sesn_` prefix.
-	SessionID SessionID `json:"session_id"`
+// HostToolResultAcceptance defines model for HostToolResultAcceptance.
+type HostToolResultAcceptance struct {
+	Deduplicated bool                           `json:"deduplicated"`
+	Status       HostToolResultAcceptanceStatus `json:"status"`
+	ToolCallID   ToolCallID                     `json:"tool_call_id"`
 }
 
-// GenerationDeltaEvent_Delta defines model for GenerationDeltaEvent.Delta.
-type GenerationDeltaEvent_Delta struct {
-	union json.RawMessage
+// HostToolResultAcceptanceStatus defines model for HostToolResultAcceptance.Status.
+type HostToolResultAcceptanceStatus string
+
+// HostToolSpec defines model for HostToolSpec.
+type HostToolSpec struct {
+	Description string `json:"description"`
+
+	// InputSchema Object-root JSON Schema using the same bounded, self-contained
+	// subset as structured output. Compact canonical JSON is limited to
+	// 32 KiB.
+	InputSchema map[string]interface{} `json:"input_schema"`
+	Mode        HostToolSpecMode       `json:"mode"`
+
+	// Name Unique within the spec; the `nvoken_` prefix is reserved.
+	Name string `json:"name"`
 }
 
-// GenerationDeltaEventEventType defines model for GenerationDeltaEvent.EventType.
-type GenerationDeltaEventEventType string
-
-// GenerationTextDelta defines model for GenerationTextDelta.
-type GenerationTextDelta struct {
-	ContentIndex int                     `json:"content_index"`
-	Text         string                  `json:"text"`
-	Type         GenerationTextDeltaType `json:"type"`
-}
-
-// GenerationTextDeltaType defines model for GenerationTextDelta.Type.
-type GenerationTextDeltaType string
-
-// GenerationThinkingDelta defines model for GenerationThinkingDelta.
-type GenerationThinkingDelta struct {
-	ContentIndex int                         `json:"content_index"`
-	Thinking     string                      `json:"thinking"`
-	Type         GenerationThinkingDeltaType `json:"type"`
-}
-
-// GenerationThinkingDeltaType defines model for GenerationThinkingDelta.Type.
-type GenerationThinkingDeltaType string
+// HostToolSpecMode defines model for HostToolSpec.Mode.
+type HostToolSpecMode string
 
 // InlineExecutionSpec Immutable launch snapshot. Unknown or deferred fields, including spec
 // references, are rejected rather than ignored. Callback declarations
@@ -712,14 +713,17 @@ type GenerationThinkingDeltaType string
 // spec requires at least two model iterations; omission resolves to three
 // or the lower installation maximum.
 type InlineExecutionSpec struct {
-	// Budgets Optional requested limits. Installation defaults supply wall-clock,
-	// active-execution, and iteration limits. Output-token and estimated-cost
-	// limits are unlimited when omitted. Installation maxima may be lower
-	// than the schema's numeric range. A requested estimated-cost limit
-	// requires known USD pricing metadata and fails closed when unavailable.
-	Budgets      *InvocationBudgetRequest `json:"budgets,omitempty"`
-	Instructions string                   `json:"instructions"`
-	Model        ModelSelection           `json:"model"`
+	// Instructions Optional model instructions. Omission adds no hidden default.
+	Instructions *string `json:"instructions,omitempty"`
+
+	// Limits Optional requested limits. Total time bounds the entire turn, active
+	// time bounds model and tool execution, and waiting time bounds the
+	// cumulative time parked for host or callback tool results. Installation
+	// defaults supply all three time limits and the iteration limit.
+	// Output-token and estimated-cost limits are unlimited when omitted.
+	// Installation maxima may be lower than the schema's numeric range.
+	Limits *InvocationLimitRequest `json:"limits,omitempty"`
+	Model  ModelSelection          `json:"model"`
 
 	// Output Optional per-Invocation structured-output contract. nvoken exposes a
 	// reserved durable submit tool and publishes only a server-validated
@@ -733,25 +737,26 @@ type Invocation struct {
 	ActiveExecutionMs int `json:"active_execution_ms"`
 
 	// AgentID UUIDv7 with the public `agnt_` prefix.
-	AgentID     AgentID            `json:"agent_id"`
-	Budgets     InvocationBudgets  `json:"budgets"`
-	CompletedAt *time.Time         `json:"completed_at"`
-	CreatedAt   time.Time          `json:"created_at"`
-	Error       *InvocationFailure `json:"error"`
+	AgentID    AgentID            `json:"agent_id"`
+	CreatedAt  time.Time          `json:"created_at"`
+	DeadlineAt time.Time          `json:"deadline_at"`
+	EndedAt    *time.Time         `json:"ended_at"`
+	Error      *InvocationFailure `json:"error"`
 
 	// ID UUIDv7 with the public `invk_` prefix.
-	ID InvocationID `json:"id"`
+	ID     InvocationID     `json:"id"`
+	Limits InvocationLimits `json:"limits"`
 
-	// PendingToolCalls Present for a waiting Invocation with unresolved client calls.
-	PendingToolCalls *[]PendingClientToolCall `json:"pending_tool_calls,omitempty"`
-	Provenance       *ModelProvenance         `json:"provenance"`
+	// PendingToolCalls Present for a waiting Invocation with unresolved host calls.
+	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
+	Provenance       *ModelProvenance       `json:"provenance"`
 
 	// SessionID UUIDv7 with the public `sesn_` prefix.
 	SessionID SessionID `json:"session_id"`
 
 	// Status `completed`, `failed`, and `cancelled` are terminal and immutable.
 	// Deadline or budget exhaustion settles as `failed`. `waiting` means the
-	// Invocation has durable pending client ToolCalls and owns no execution
+	// Invocation has durable pending host ToolCalls and owns no execution
 	// lease. Final result acceptance moves it back to `queued`. Checkpoint
 	// recovery may also move `running` back to `queued`; lifecycle revision
 	// orders every transition.
@@ -765,15 +770,15 @@ type Invocation struct {
 	UpdatedAt                  time.Time                   `json:"updated_at"`
 
 	// Usage One normalized terminal aggregate, not a billing ledger.
-	Usage               *ModelUsage `json:"usage"`
-	WallClockDeadlineAt time.Time   `json:"wall_clock_deadline_at"`
+	Usage *ModelUsage `json:"usage"`
 }
 
-// InvocationAcknowledgement defines model for InvocationAcknowledgement.
-type InvocationAcknowledgement struct {
+// InvocationAcceptedEvent defines model for InvocationAcceptedEvent.
+type InvocationAcceptedEvent struct {
 	// AgentID UUIDv7 with the public `agnt_` prefix.
-	AgentID      AgentID `json:"agent_id"`
-	Deduplicated bool    `json:"deduplicated"`
+	AgentID      AgentID   `json:"agent_id"`
+	DeadlineAt   time.Time `json:"deadline_at"`
+	Deduplicated bool      `json:"deduplicated"`
 
 	// InvocationID UUIDv7 with the public `invk_` prefix.
 	InvocationID InvocationID `json:"invocation_id"`
@@ -783,42 +788,37 @@ type InvocationAcknowledgement struct {
 
 	// Status `completed`, `failed`, and `cancelled` are terminal and immutable.
 	// Deadline or budget exhaustion settles as `failed`. `waiting` means the
-	// Invocation has durable pending client ToolCalls and owns no execution
+	// Invocation has durable pending host ToolCalls and owns no execution
+	// lease. Final result acceptance moves it back to `queued`. Checkpoint
+	// recovery may also move `running` back to `queued`; lifecycle revision
+	// orders every transition.
+	Status InvocationStatus            `json:"status"`
+	Type   InvocationAcceptedEventType `json:"type"`
+}
+
+// InvocationAcceptedEventType defines model for InvocationAcceptedEvent.Type.
+type InvocationAcceptedEventType string
+
+// InvocationAcknowledgement defines model for InvocationAcknowledgement.
+type InvocationAcknowledgement struct {
+	// AgentID UUIDv7 with the public `agnt_` prefix.
+	AgentID      AgentID   `json:"agent_id"`
+	DeadlineAt   time.Time `json:"deadline_at"`
+	Deduplicated bool      `json:"deduplicated"`
+
+	// InvocationID UUIDv7 with the public `invk_` prefix.
+	InvocationID InvocationID `json:"invocation_id"`
+
+	// SessionID UUIDv7 with the public `sesn_` prefix.
+	SessionID SessionID `json:"session_id"`
+
+	// Status `completed`, `failed`, and `cancelled` are terminal and immutable.
+	// Deadline or budget exhaustion settles as `failed`. `waiting` means the
+	// Invocation has durable pending host ToolCalls and owns no execution
 	// lease. Final result acceptance moves it back to `queued`. Checkpoint
 	// recovery may also move `running` back to `queued`; lifecycle revision
 	// orders every transition.
 	Status InvocationStatus `json:"status"`
-}
-
-// InvocationBudgetRequest Optional requested limits. Installation defaults supply wall-clock,
-// active-execution, and iteration limits. Output-token and estimated-cost
-// limits are unlimited when omitted. Installation maxima may be lower
-// than the schema's numeric range. A requested estimated-cost limit
-// requires known USD pricing metadata and fails closed when unavailable.
-type InvocationBudgetRequest struct {
-	ActiveExecutionTimeoutSeconds *int `json:"active_execution_timeout_seconds,omitempty"`
-
-	// MaxEstimatedCostUsd Dive list-price guardrail, not preauthorization or a billing
-	// ledger. Requires known USD pricing for the selected model and
-	// otherwise fails closed with `budget_exceeded` and
-	// `details.kind = estimated_cost_unavailable`. When pricing absence
-	// is knowable before execution, nvoken rejects before a provider call.
-	MaxEstimatedCostUsd     *float32 `json:"max_estimated_cost_usd,omitempty"`
-	MaxIterations           *int     `json:"max_iterations,omitempty"`
-	MaxOutputTokens         *int     `json:"max_output_tokens,omitempty"`
-	WallClockTimeoutSeconds *int     `json:"wall_clock_timeout_seconds,omitempty"`
-}
-
-// InvocationBudgets defines model for InvocationBudgets.
-type InvocationBudgets struct {
-	ActiveExecutionTimeoutSeconds int `json:"active_execution_timeout_seconds"`
-
-	// MaxEstimatedCostUsd Resolved USD list-price guardrail. It is present only when the host
-	// requested a cost limit; unknown price metadata fails closed.
-	MaxEstimatedCostUsd     *float32 `json:"max_estimated_cost_usd,omitempty"`
-	MaxIterations           int      `json:"max_iterations"`
-	MaxOutputTokens         *int     `json:"max_output_tokens,omitempty"`
-	WallClockTimeoutSeconds int      `json:"wall_clock_timeout_seconds"`
 }
 
 // InvocationChange defines model for InvocationChange.
@@ -833,7 +833,7 @@ type InvocationChange struct {
 
 	// Status `completed`, `failed`, and `cancelled` are terminal and immutable.
 	// Deadline or budget exhaustion settles as `failed`. `waiting` means the
-	// Invocation has durable pending client ToolCalls and owns no execution
+	// Invocation has durable pending host ToolCalls and owns no execution
 	// lease. Final result acceptance moves it back to `queued`. Checkpoint
 	// recovery may also move `running` back to `queued`; lifecycle revision
 	// orders every transition.
@@ -845,11 +845,8 @@ type InvocationChange struct {
 }
 
 // InvocationFailure Failed Invocations may carry paired usage and provenance when a model
-// response produced safe normalized evidence before deadline or budget
+// response produced safe normalized evidence before deadline or limit
 // settlement. Cancellation and pre-response failures carry neither.
-// `execution_lost` is retained for historical rows written before
-// checkpoint recovery; recoverable lease expiry now requeues the same
-// Invocation and does not write that failure.
 type InvocationFailure struct {
 	Code    InvocationFailureCode   `json:"code"`
 	Details *map[string]interface{} `json:"details,omitempty"`
@@ -862,10 +859,53 @@ type InvocationFailureCode string
 // InvocationID UUIDv7 with the public `invk_` prefix.
 type InvocationID = string
 
-// InvocationInput defines model for InvocationInput.
+// InvocationInput A plain string is shorthand for one text block. Use the object form
+// for ordered multi-block input; the launch contract supports text only.
 type InvocationInput struct {
-	// Content Ordered caller-input blocks. The launch contract supports text only.
+	union json.RawMessage
+}
+
+// InvocationInput0 defines model for InvocationInput.0.
+type InvocationInput0 = string
+
+// InvocationInputBlocks defines model for InvocationInputBlocks.
+type InvocationInputBlocks struct {
+	// Content Ordered caller-input blocks.
 	Content []TextInputBlock `json:"content"`
+}
+
+// InvocationLimitRequest Optional requested limits. Total time bounds the entire turn, active
+// time bounds model and tool execution, and waiting time bounds the
+// cumulative time parked for host or callback tool results. Installation
+// defaults supply all three time limits and the iteration limit.
+// Output-token and estimated-cost limits are unlimited when omitted.
+// Installation maxima may be lower than the schema's numeric range.
+type InvocationLimitRequest struct {
+	ActiveTimeoutSeconds *int `json:"active_timeout_seconds,omitempty"`
+
+	// MaxEstimatedCostUsd Dive list-price guardrail, not preauthorization or a billing
+	// ledger. Requires known USD pricing for the selected model and
+	// otherwise fails closed with `budget_exceeded` and
+	// `details.kind = estimated_cost_unavailable`. When pricing absence
+	// is knowable before execution, nvoken rejects before a provider call.
+	MaxEstimatedCostUsd   *float32 `json:"max_estimated_cost_usd,omitempty"`
+	MaxIterations         *int     `json:"max_iterations,omitempty"`
+	MaxOutputTokens       *int     `json:"max_output_tokens,omitempty"`
+	TotalTimeoutSeconds   *int     `json:"total_timeout_seconds,omitempty"`
+	WaitingTimeoutSeconds *int     `json:"waiting_timeout_seconds,omitempty"`
+}
+
+// InvocationLimits defines model for InvocationLimits.
+type InvocationLimits struct {
+	ActiveTimeoutSeconds int `json:"active_timeout_seconds"`
+
+	// MaxEstimatedCostUsd Resolved USD list-price guardrail. It is present only when the host
+	// requested a cost limit; unknown price metadata fails closed.
+	MaxEstimatedCostUsd   *float32 `json:"max_estimated_cost_usd,omitempty"`
+	MaxIterations         int      `json:"max_iterations"`
+	MaxOutputTokens       *int     `json:"max_output_tokens,omitempty"`
+	TotalTimeoutSeconds   int      `json:"total_timeout_seconds"`
+	WaitingTimeoutSeconds int      `json:"waiting_timeout_seconds"`
 }
 
 // InvocationList defines model for InvocationList.
@@ -917,13 +957,49 @@ type InvocationResult struct {
 	OutputText *string `json:"output_text"`
 }
 
+// InvocationResultEvent defines model for InvocationResultEvent.
+type InvocationResultEvent struct {
+	// InvocationID UUIDv7 with the public `invk_` prefix.
+	InvocationID InvocationID     `json:"invocation_id"`
+	Result       InvocationResult `json:"result"`
+
+	// SessionID UUIDv7 with the public `sesn_` prefix.
+	SessionID SessionID                 `json:"session_id"`
+	Type      InvocationResultEventType `json:"type"`
+}
+
+// InvocationResultEventType defines model for InvocationResultEvent.Type.
+type InvocationResultEventType string
+
 // InvocationStatus `completed`, `failed`, and `cancelled` are terminal and immutable.
 // Deadline or budget exhaustion settles as `failed`. `waiting` means the
-// Invocation has durable pending client ToolCalls and owns no execution
+// Invocation has durable pending host ToolCalls and owns no execution
 // lease. Final result acceptance moves it back to `queued`. Checkpoint
 // recovery may also move `running` back to `queued`; lifecycle revision
 // orders every transition.
 type InvocationStatus string
+
+// InvocationStreamEvent Typed event from one Invocation stream. A minimal consumer prints
+// `output_text.delta` and finishes on `invocation.result`.
+type InvocationStreamEvent struct {
+	union json.RawMessage
+}
+
+// InvocationUpdateEvent defines model for InvocationUpdateEvent.
+type InvocationUpdateEvent struct {
+	Invocation Invocation `json:"invocation"`
+
+	// InvocationID UUIDv7 with the public `invk_` prefix.
+	InvocationID InvocationID     `json:"invocation_id"`
+	NewMessages  []SessionMessage `json:"new_messages"`
+
+	// SessionID UUIDv7 with the public `sesn_` prefix.
+	SessionID SessionID                 `json:"session_id"`
+	Type      InvocationUpdateEventType `json:"type"`
+}
+
+// InvocationUpdateEventType defines model for InvocationUpdateEvent.Type.
+type InvocationUpdateEventType string
 
 // ModelCost defines model for ModelCost.
 type ModelCost struct {
@@ -975,7 +1051,7 @@ type ModelProvider string
 
 // ModelSelection defines model for ModelSelection.
 type ModelSelection struct {
-	Name     string        `json:"name"`
+	ID       string        `json:"id"`
 	Provider ModelProvider `json:"provider"`
 }
 
@@ -992,8 +1068,31 @@ type ModelUsage struct {
 	ReasoningTokens *int `json:"reasoning_tokens,omitempty"`
 }
 
-// PendingClientToolCall defines model for PendingClientToolCall.
-type PendingClientToolCall struct {
+// OutputTextDeltaEvent defines model for OutputTextDeltaEvent.
+type OutputTextDeltaEvent struct {
+	// Attempt Execution attempt that emitted this preview. Discard provisional
+	// output from earlier attempts when this value increases.
+	Attempt      int64     `json:"attempt"`
+	ContentIndex int       `json:"content_index"`
+	EmittedAt    time.Time `json:"emitted_at"`
+
+	// InvocationID UUIDv7 with the public `invk_` prefix.
+	InvocationID InvocationID `json:"invocation_id"`
+
+	// Iteration Model iteration that owns the assistant message.
+	Iteration int `json:"iteration"`
+
+	// SessionID UUIDv7 with the public `sesn_` prefix.
+	SessionID SessionID                `json:"session_id"`
+	Text      string                   `json:"text"`
+	Type      OutputTextDeltaEventType `json:"type"`
+}
+
+// OutputTextDeltaEventType defines model for OutputTextDeltaEvent.Type.
+type OutputTextDeltaEventType string
+
+// PendingHostToolCall defines model for PendingHostToolCall.
+type PendingHostToolCall struct {
 	DeadlineAt time.Time   `json:"deadline_at"`
 	ID         ToolCallID  `json:"id"`
 	Input      interface{} `json:"input"`
@@ -1016,7 +1115,7 @@ type ProviderCredential struct {
 
 	// Status Active roots remain rotatable and revocable even when their current version has expired.
 	Status    ProviderCredentialStatus `json:"status"`
-	TenantRef *string                  `json:"tenant_ref"`
+	TenantKey *string                  `json:"tenant_key"`
 	UpdatedAt time.Time                `json:"updated_at"`
 	Version   int                      `json:"version"`
 
@@ -1076,12 +1175,12 @@ type Session struct {
 	// ID UUIDv7 with the public `sesn_` prefix.
 	ID SessionID `json:"id"`
 
-	// PendingToolCalls Pending client calls for the active waiting Invocation.
-	PendingToolCalls *[]PendingClientToolCall `json:"pending_tool_calls,omitempty"`
-	SessionKey       *string                  `json:"session_key"`
+	// PendingToolCalls Pending host calls for the active waiting Invocation.
+	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
+	SessionKey       *string                `json:"session_key"`
 
-	// TenantRef Immutable effective tenant partition reference.
-	TenantRef *string   `json:"tenant_ref"`
+	// TenantKey Immutable effective tenant partition reference.
+	TenantKey *string   `json:"tenant_key"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
@@ -1133,34 +1232,42 @@ type SessionMessageRole string
 
 // StreamEndEvent defines model for StreamEndEvent.
 type StreamEndEvent struct {
-	EventType    StreamEndEventEventType `json:"event_type"`
-	Reason       StreamEndEventReason    `json:"reason"`
-	ResumeCursor string                  `json:"resume_cursor"`
+	InvocationID *InvocationID `json:"invocation_id"`
+
+	// Reason `rotate` means reconnect with `resume_cursor`. `terminal` means
+	// the scoped Invocation settled, or the Session became idle for a
+	// Session-scoped stream.
+	Reason       StreamEndEventReason `json:"reason"`
+	ResumeCursor string               `json:"resume_cursor"`
 
 	// SessionID UUIDv7 with the public `sesn_` prefix.
-	SessionID SessionID `json:"session_id"`
+	SessionID SessionID          `json:"session_id"`
+	Type      StreamEndEventType `json:"type"`
 }
 
-// StreamEndEventEventType defines model for StreamEndEvent.EventType.
-type StreamEndEventEventType string
-
-// StreamEndEventReason defines model for StreamEndEvent.Reason.
+// StreamEndEventReason `rotate` means reconnect with `resume_cursor`. `terminal` means
+// the scoped Invocation settled, or the Session became idle for a
+// Session-scoped stream.
 type StreamEndEventReason string
+
+// StreamEndEventType defines model for StreamEndEvent.Type.
+type StreamEndEventType string
 
 // StreamResyncEvent defines model for StreamResyncEvent.
 type StreamResyncEvent struct {
-	EventType StreamResyncEventEventType `json:"event_type"`
-	Reason    StreamResyncEventReason    `json:"reason"`
+	InvocationID *InvocationID           `json:"invocation_id"`
+	Reason       StreamResyncEventReason `json:"reason"`
 
 	// SessionID UUIDv7 with the public `sesn_` prefix.
-	SessionID SessionID `json:"session_id"`
+	SessionID SessionID             `json:"session_id"`
+	Type      StreamResyncEventType `json:"type"`
 }
-
-// StreamResyncEventEventType defines model for StreamResyncEvent.EventType.
-type StreamResyncEventEventType string
 
 // StreamResyncEventReason defines model for StreamResyncEvent.Reason.
 type StreamResyncEventReason string
+
+// StreamResyncEventType defines model for StreamResyncEvent.Type.
+type StreamResyncEventType string
 
 // StructuredOutputProvenance Immutable proof that output equals the request of the accepted
 // reserved durable ToolCall under the admitted schema digest.
@@ -1187,8 +1294,8 @@ type StructuredOutputSpec struct {
 	Schema map[string]interface{} `json:"schema"`
 }
 
-// SubmitClientToolResultsRequest defines model for SubmitClientToolResultsRequest.
-type SubmitClientToolResultsRequest struct {
+// SubmitHostToolResultsRequest defines model for SubmitHostToolResultsRequest.
+type SubmitHostToolResultsRequest struct {
 	Results []struct {
 		Content    interface{} `json:"content"`
 		IsError    *bool       `json:"is_error,omitempty"`
@@ -1196,19 +1303,19 @@ type SubmitClientToolResultsRequest struct {
 	} `json:"results"`
 }
 
-// SubmitClientToolResultsResponse defines model for SubmitClientToolResultsResponse.
-type SubmitClientToolResultsResponse struct {
+// SubmitHostToolResultsResponse defines model for SubmitHostToolResultsResponse.
+type SubmitHostToolResultsResponse struct {
 	// InvocationID UUIDv7 with the public `invk_` prefix.
-	InvocationID     InvocationID                 `json:"invocation_id"`
-	PendingToolCalls []PendingClientToolCall      `json:"pending_tool_calls"`
-	Results          []ClientToolResultAcceptance `json:"results"`
+	InvocationID     InvocationID               `json:"invocation_id"`
+	PendingToolCalls []PendingHostToolCall      `json:"pending_tool_calls"`
+	Results          []HostToolResultAcceptance `json:"results"`
 
 	// SessionID UUIDv7 with the public `sesn_` prefix.
 	SessionID SessionID `json:"session_id"`
 
 	// Status `completed`, `failed`, and `cancelled` are terminal and immutable.
 	// Deadline or budget exhaustion settles as `failed`. `waiting` means the
-	// Invocation has durable pending client ToolCalls and owns no execution
+	// Invocation has durable pending host ToolCalls and owns no execution
 	// lease. Final result acceptance moves it back to `queued`. Checkpoint
 	// recovery may also move `running` back to `queued`; lifecycle revision
 	// orders every transition.
@@ -1223,6 +1330,29 @@ type TextInputBlock struct {
 
 // TextInputBlockType defines model for TextInputBlock.Type.
 type TextInputBlockType string
+
+// ThinkingDeltaEvent defines model for ThinkingDeltaEvent.
+type ThinkingDeltaEvent struct {
+	// Attempt Execution attempt that emitted this preview. Discard provisional
+	// output from earlier attempts when this value increases.
+	Attempt      int64     `json:"attempt"`
+	ContentIndex int       `json:"content_index"`
+	EmittedAt    time.Time `json:"emitted_at"`
+
+	// InvocationID UUIDv7 with the public `invk_` prefix.
+	InvocationID InvocationID `json:"invocation_id"`
+
+	// Iteration Model iteration that owns the assistant message.
+	Iteration int `json:"iteration"`
+
+	// SessionID UUIDv7 with the public `sesn_` prefix.
+	SessionID SessionID              `json:"session_id"`
+	Thinking  string                 `json:"thinking"`
+	Type      ThinkingDeltaEventType `json:"type"`
+}
+
+// ThinkingDeltaEventType defines model for ThinkingDeltaEvent.Type.
+type ThinkingDeltaEventType string
 
 // ToolCallID defines model for ToolCallID.
 type ToolCallID = string
@@ -1243,11 +1373,28 @@ type TranscriptSnapshot struct {
 	ResumeCursor string `json:"resume_cursor"`
 }
 
-// TranscriptStreamEvent The JSON value carried by one SSE `data:` field. SSE framing supplies
-// the event name and, for `TranscriptSnapshot` only, the durable ID.
+// TranscriptStreamEvent The JSON value carried by one Session-stream SSE `data:` field.
+// Durable `transcript.update` frames carry the resume cursor as both
+// payload data and SSE `id`; preview and control frames never carry IDs.
 type TranscriptStreamEvent struct {
 	union json.RawMessage
 }
+
+// TranscriptUpdate defines model for TranscriptUpdate.
+type TranscriptUpdate struct {
+	InvocationChanges []InvocationChange `json:"invocation_changes"`
+	Messages          []SessionMessage   `json:"messages"`
+
+	// ResumeCursor Delivered composite message-sequence and lifecycle-revision watermark.
+	ResumeCursor string `json:"resume_cursor"`
+
+	// SessionID UUIDv7 with the public `sesn_` prefix.
+	SessionID SessionID            `json:"session_id"`
+	Type      TranscriptUpdateType `json:"type"`
+}
+
+// TranscriptUpdateType defines model for TranscriptUpdate.Type.
+type TranscriptUpdateType string
 
 // Cursor defines model for Cursor.
 type Cursor = string
@@ -1258,8 +1405,8 @@ type DefaultTenantFilter = bool
 // Limit defines model for Limit.
 type Limit = int
 
-// TenantRefFilter defines model for TenantRefFilter.
-type TenantRefFilter = string
+// TenantKeyFilter defines model for TenantKeyFilter.
+type TenantKeyFilter = string
 
 // Forbidden defines model for Forbidden.
 type Forbidden = ErrorResponse
@@ -1284,10 +1431,10 @@ type Unavailable = ErrorResponse
 
 // ListInvocationsParams defines parameters for ListInvocations.
 type ListInvocationsParams struct {
-	// TenantRef Exact non-default tenant partition reference.
-	TenantRef *TenantRefFilter `form:"tenant_ref,omitempty" json:"tenant_ref,omitempty"`
+	// TenantKey Exact non-default tenant partition reference.
+	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
-	// DefaultTenant Select only the default tenant partition. Mutually exclusive with tenant_ref.
+	// DefaultTenant Select only the default tenant partition. Mutually exclusive with tenant_key.
 	DefaultTenant *DefaultTenantFilter `form:"default_tenant,omitempty" json:"default_tenant,omitempty"`
 	SessionID     *SessionID           `form:"session_id,omitempty" json:"session_id,omitempty"`
 	AgentID       *AgentID             `form:"agent_id,omitempty" json:"agent_id,omitempty"`
@@ -1298,6 +1445,15 @@ type ListInvocationsParams struct {
 
 	// Limit Maximum items in this page. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// StreamInvocationParams defines parameters for StreamInvocation.
+type StreamInvocationParams struct {
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// LastEventID Opaque cursor from the last durable frame; ignored when `cursor` is supplied.
+	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
 // GetModelPricingCapabilityParams defines parameters for GetModelPricingCapability.
@@ -1311,7 +1467,7 @@ type ListProviderCredentialsParams struct {
 	Provider  *ModelProvider                       `form:"provider,omitempty" json:"provider,omitempty"`
 	Scope     *ProviderCredentialScope             `form:"scope,omitempty" json:"scope,omitempty"`
 	Status    *ListProviderCredentialsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
-	TenantRef *string                              `form:"tenant_ref,omitempty" json:"tenant_ref,omitempty"`
+	TenantKey *string                              `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 	Limit     *int                                 `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
@@ -1320,10 +1476,10 @@ type ListProviderCredentialsParamsStatus string
 
 // ListSessionsParams defines parameters for ListSessions.
 type ListSessionsParams struct {
-	// TenantRef Exact non-default tenant partition reference.
-	TenantRef *TenantRefFilter `form:"tenant_ref,omitempty" json:"tenant_ref,omitempty"`
+	// TenantKey Exact non-default tenant partition reference.
+	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
-	// DefaultTenant Select only the default tenant partition. Mutually exclusive with tenant_ref.
+	// DefaultTenant Select only the default tenant partition. Mutually exclusive with tenant_key.
 	DefaultTenant *DefaultTenantFilter `form:"default_tenant,omitempty" json:"default_tenant,omitempty"`
 	AgentID       *AgentID             `form:"agent_id,omitempty" json:"agent_id,omitempty"`
 	SessionKey    *string              `form:"session_key,omitempty" json:"session_key,omitempty"`
@@ -1361,15 +1517,15 @@ type StreamSessionTranscriptParams struct {
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// LastEventID Opaque `resume_cursor` from the last cursor-bearing snapshot frame; ignored when `cursor` is supplied.
+	// LastEventID Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
 // CreateInvocationJSONRequestBody defines body for CreateInvocation for application/json ContentType.
 type CreateInvocationJSONRequestBody = CreateInvocationRequest
 
-// SubmitClientToolResultsJSONRequestBody defines body for SubmitClientToolResults for application/json ContentType.
-type SubmitClientToolResultsJSONRequestBody = SubmitClientToolResultsRequest
+// SubmitHostToolResultsJSONRequestBody defines body for SubmitHostToolResults for application/json ContentType.
+type SubmitHostToolResultsJSONRequestBody = SubmitHostToolResultsRequest
 
 // CreateProviderCredentialJSONRequestBody defines body for CreateProviderCredential for application/json ContentType.
 type CreateProviderCredentialJSONRequestBody = CreateProviderCredentialRequest
@@ -1443,22 +1599,22 @@ func (a SessionContentBlock) MarshalJSON() ([]byte, error) {
 	return json.Marshal(object)
 }
 
-// AsGenerationTextDelta returns the union data inside the GenerationDeltaEvent_Delta as a GenerationTextDelta
-func (t GenerationDeltaEvent_Delta) AsGenerationTextDelta() (GenerationTextDelta, error) {
-	var body GenerationTextDelta
+// AsInvocationInput0 returns the union data inside the InvocationInput as a InvocationInput0
+func (t InvocationInput) AsInvocationInput0() (InvocationInput0, error) {
+	var body InvocationInput0
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromGenerationTextDelta overwrites any union data inside the GenerationDeltaEvent_Delta as the provided GenerationTextDelta
-func (t *GenerationDeltaEvent_Delta) FromGenerationTextDelta(v GenerationTextDelta) error {
+// FromInvocationInput0 overwrites any union data inside the InvocationInput as the provided InvocationInput0
+func (t *InvocationInput) FromInvocationInput0(v InvocationInput0) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeGenerationTextDelta performs a merge with any union data inside the GenerationDeltaEvent_Delta, using the provided GenerationTextDelta
-func (t *GenerationDeltaEvent_Delta) MergeGenerationTextDelta(v GenerationTextDelta) error {
+// MergeInvocationInput0 performs a merge with any union data inside the InvocationInput, using the provided InvocationInput0
+func (t *InvocationInput) MergeInvocationInput0(v InvocationInput0) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1469,22 +1625,22 @@ func (t *GenerationDeltaEvent_Delta) MergeGenerationTextDelta(v GenerationTextDe
 	return err
 }
 
-// AsGenerationThinkingDelta returns the union data inside the GenerationDeltaEvent_Delta as a GenerationThinkingDelta
-func (t GenerationDeltaEvent_Delta) AsGenerationThinkingDelta() (GenerationThinkingDelta, error) {
-	var body GenerationThinkingDelta
+// AsInvocationInputBlocks returns the union data inside the InvocationInput as a InvocationInputBlocks
+func (t InvocationInput) AsInvocationInputBlocks() (InvocationInputBlocks, error) {
+	var body InvocationInputBlocks
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromGenerationThinkingDelta overwrites any union data inside the GenerationDeltaEvent_Delta as the provided GenerationThinkingDelta
-func (t *GenerationDeltaEvent_Delta) FromGenerationThinkingDelta(v GenerationThinkingDelta) error {
+// FromInvocationInputBlocks overwrites any union data inside the InvocationInput as the provided InvocationInputBlocks
+func (t *InvocationInput) FromInvocationInputBlocks(v InvocationInputBlocks) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeGenerationThinkingDelta performs a merge with any union data inside the GenerationDeltaEvent_Delta, using the provided GenerationThinkingDelta
-func (t *GenerationDeltaEvent_Delta) MergeGenerationThinkingDelta(v GenerationThinkingDelta) error {
+// MergeInvocationInputBlocks performs a merge with any union data inside the InvocationInput, using the provided InvocationInputBlocks
+func (t *InvocationInput) MergeInvocationInputBlocks(v InvocationInputBlocks) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1495,12 +1651,12 @@ func (t *GenerationDeltaEvent_Delta) MergeGenerationThinkingDelta(v GenerationTh
 	return err
 }
 
-func (t GenerationDeltaEvent_Delta) MarshalJSON() ([]byte, error) {
+func (t InvocationInput) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
 	return b, err
 }
 
-func (t *GenerationDeltaEvent_Delta) UnmarshalJSON(b []byte) error {
+func (t *InvocationInput) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -1567,22 +1723,214 @@ func (t *InvocationProviderCredentialSelection) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// AsClientToolSpec returns the union data inside the ToolSpec as a ClientToolSpec
-func (t ToolSpec) AsClientToolSpec() (ClientToolSpec, error) {
-	var body ClientToolSpec
+// AsInvocationAcceptedEvent returns the union data inside the InvocationStreamEvent as a InvocationAcceptedEvent
+func (t InvocationStreamEvent) AsInvocationAcceptedEvent() (InvocationAcceptedEvent, error) {
+	var body InvocationAcceptedEvent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientToolSpec overwrites any union data inside the ToolSpec as the provided ClientToolSpec
-func (t *ToolSpec) FromClientToolSpec(v ClientToolSpec) error {
+// FromInvocationAcceptedEvent overwrites any union data inside the InvocationStreamEvent as the provided InvocationAcceptedEvent
+func (t *InvocationStreamEvent) FromInvocationAcceptedEvent(v InvocationAcceptedEvent) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientToolSpec performs a merge with any union data inside the ToolSpec, using the provided ClientToolSpec
-func (t *ToolSpec) MergeClientToolSpec(v ClientToolSpec) error {
+// MergeInvocationAcceptedEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided InvocationAcceptedEvent
+func (t *InvocationStreamEvent) MergeInvocationAcceptedEvent(v InvocationAcceptedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsOutputTextDeltaEvent returns the union data inside the InvocationStreamEvent as a OutputTextDeltaEvent
+func (t InvocationStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
+	var body OutputTextDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromOutputTextDeltaEvent overwrites any union data inside the InvocationStreamEvent as the provided OutputTextDeltaEvent
+func (t *InvocationStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeOutputTextDeltaEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided OutputTextDeltaEvent
+func (t *InvocationStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsThinkingDeltaEvent returns the union data inside the InvocationStreamEvent as a ThinkingDeltaEvent
+func (t InvocationStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error) {
+	var body ThinkingDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromThinkingDeltaEvent overwrites any union data inside the InvocationStreamEvent as the provided ThinkingDeltaEvent
+func (t *InvocationStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeThinkingDeltaEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided ThinkingDeltaEvent
+func (t *InvocationStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsInvocationUpdateEvent returns the union data inside the InvocationStreamEvent as a InvocationUpdateEvent
+func (t InvocationStreamEvent) AsInvocationUpdateEvent() (InvocationUpdateEvent, error) {
+	var body InvocationUpdateEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInvocationUpdateEvent overwrites any union data inside the InvocationStreamEvent as the provided InvocationUpdateEvent
+func (t *InvocationStreamEvent) FromInvocationUpdateEvent(v InvocationUpdateEvent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInvocationUpdateEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided InvocationUpdateEvent
+func (t *InvocationStreamEvent) MergeInvocationUpdateEvent(v InvocationUpdateEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsInvocationResultEvent returns the union data inside the InvocationStreamEvent as a InvocationResultEvent
+func (t InvocationStreamEvent) AsInvocationResultEvent() (InvocationResultEvent, error) {
+	var body InvocationResultEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInvocationResultEvent overwrites any union data inside the InvocationStreamEvent as the provided InvocationResultEvent
+func (t *InvocationStreamEvent) FromInvocationResultEvent(v InvocationResultEvent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInvocationResultEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided InvocationResultEvent
+func (t *InvocationStreamEvent) MergeInvocationResultEvent(v InvocationResultEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStreamResyncEvent returns the union data inside the InvocationStreamEvent as a StreamResyncEvent
+func (t InvocationStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
+	var body StreamResyncEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStreamResyncEvent overwrites any union data inside the InvocationStreamEvent as the provided StreamResyncEvent
+func (t *InvocationStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeStreamResyncEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided StreamResyncEvent
+func (t *InvocationStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStreamEndEvent returns the union data inside the InvocationStreamEvent as a StreamEndEvent
+func (t InvocationStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
+	var body StreamEndEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStreamEndEvent overwrites any union data inside the InvocationStreamEvent as the provided StreamEndEvent
+func (t *InvocationStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeStreamEndEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided StreamEndEvent
+func (t *InvocationStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t InvocationStreamEvent) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *InvocationStreamEvent) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsHostToolSpec returns the union data inside the ToolSpec as a HostToolSpec
+func (t ToolSpec) AsHostToolSpec() (HostToolSpec, error) {
+	var body HostToolSpec
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHostToolSpec overwrites any union data inside the ToolSpec as the provided HostToolSpec
+func (t *ToolSpec) FromHostToolSpec(v HostToolSpec) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHostToolSpec performs a merge with any union data inside the ToolSpec, using the provided HostToolSpec
+func (t *ToolSpec) MergeHostToolSpec(v HostToolSpec) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1629,22 +1977,22 @@ func (t *ToolSpec) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// AsTranscriptSnapshot returns the union data inside the TranscriptStreamEvent as a TranscriptSnapshot
-func (t TranscriptStreamEvent) AsTranscriptSnapshot() (TranscriptSnapshot, error) {
-	var body TranscriptSnapshot
+// AsTranscriptUpdate returns the union data inside the TranscriptStreamEvent as a TranscriptUpdate
+func (t TranscriptStreamEvent) AsTranscriptUpdate() (TranscriptUpdate, error) {
+	var body TranscriptUpdate
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromTranscriptSnapshot overwrites any union data inside the TranscriptStreamEvent as the provided TranscriptSnapshot
-func (t *TranscriptStreamEvent) FromTranscriptSnapshot(v TranscriptSnapshot) error {
+// FromTranscriptUpdate overwrites any union data inside the TranscriptStreamEvent as the provided TranscriptUpdate
+func (t *TranscriptStreamEvent) FromTranscriptUpdate(v TranscriptUpdate) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeTranscriptSnapshot performs a merge with any union data inside the TranscriptStreamEvent, using the provided TranscriptSnapshot
-func (t *TranscriptStreamEvent) MergeTranscriptSnapshot(v TranscriptSnapshot) error {
+// MergeTranscriptUpdate performs a merge with any union data inside the TranscriptStreamEvent, using the provided TranscriptUpdate
+func (t *TranscriptStreamEvent) MergeTranscriptUpdate(v TranscriptUpdate) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1655,22 +2003,48 @@ func (t *TranscriptStreamEvent) MergeTranscriptSnapshot(v TranscriptSnapshot) er
 	return err
 }
 
-// AsGenerationDeltaEvent returns the union data inside the TranscriptStreamEvent as a GenerationDeltaEvent
-func (t TranscriptStreamEvent) AsGenerationDeltaEvent() (GenerationDeltaEvent, error) {
-	var body GenerationDeltaEvent
+// AsOutputTextDeltaEvent returns the union data inside the TranscriptStreamEvent as a OutputTextDeltaEvent
+func (t TranscriptStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
+	var body OutputTextDeltaEvent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromGenerationDeltaEvent overwrites any union data inside the TranscriptStreamEvent as the provided GenerationDeltaEvent
-func (t *TranscriptStreamEvent) FromGenerationDeltaEvent(v GenerationDeltaEvent) error {
+// FromOutputTextDeltaEvent overwrites any union data inside the TranscriptStreamEvent as the provided OutputTextDeltaEvent
+func (t *TranscriptStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeGenerationDeltaEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided GenerationDeltaEvent
-func (t *TranscriptStreamEvent) MergeGenerationDeltaEvent(v GenerationDeltaEvent) error {
+// MergeOutputTextDeltaEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided OutputTextDeltaEvent
+func (t *TranscriptStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsThinkingDeltaEvent returns the union data inside the TranscriptStreamEvent as a ThinkingDeltaEvent
+func (t TranscriptStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error) {
+	var body ThinkingDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromThinkingDeltaEvent overwrites any union data inside the TranscriptStreamEvent as the provided ThinkingDeltaEvent
+func (t *TranscriptStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeThinkingDeltaEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided ThinkingDeltaEvent
+func (t *TranscriptStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -1821,7 +2195,7 @@ type ClientInterface interface {
 	//
 	// Returns newest-first durable Invocation state. Exact filters combine
 	// with AND. An Account-wide caller may list all tenant partitions, one
-	// named partition with `tenant_ref`, or the default partition with
+	// named partition with `tenant_key`, or the default partition with
 	// `default_tenant=true`. A tenant-constrained credential is always scoped
 	// to its partition. The opaque cursor is bound to the normalized filter
 	// set and credential tenant scope.
@@ -1839,22 +2213,24 @@ type ClientInterface interface {
 	//
 	// `session_id` and `session_key` are mutually exclusive. A Session ID must
 	// belong to the authenticated Account and named Agent. An Account-wide
-	// credential may omit `tenant_ref` and use the Session's stored partition.
+	// credential may omit `tenant_key` and use the Session's stored partition.
 	// A tenant-constrained credential cannot cross its partition; an explicit
 	// mismatch is rejected with `403 forbidden` before resource lookup.
 	//
 	// `idempotency_key` is scoped to the authenticated Account, effective
-	// tenant partition, and `agent_ref`. A same-key replay is checked before
+	// tenant partition, and `agent_key`. A same-key replay is checked before
 	// the Session's one-nonterminal-Invocation rule. It returns the original
 	// records without appending input, even when the Invocation is terminal.
 	// Material equality covers the Session selector kind and value, the inline
-	// spec, and input. Requested budgets are compared before default resolution,
+	// spec, and input. Requested limits are compared before default resolution,
 	// so an explicit default differs from omission. JSON object member
 	// order is ignored, array order is significant, and strings are not
 	// rewritten. A changed material field returns `idempotency_conflict`.
 	//
 	// The encoded JSON request body is limited to 1 MiB. Requests over that
-	// limit are rejected before admission.
+	// limit are rejected before admission. With `Accept: text/event-stream`,
+	// the committed admission is the first `invocation.accepted` frame and
+	// the connection tails that Invocation through `invocation.result`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1871,22 +2247,24 @@ type ClientInterface interface {
 	//
 	// `session_id` and `session_key` are mutually exclusive. A Session ID must
 	// belong to the authenticated Account and named Agent. An Account-wide
-	// credential may omit `tenant_ref` and use the Session's stored partition.
+	// credential may omit `tenant_key` and use the Session's stored partition.
 	// A tenant-constrained credential cannot cross its partition; an explicit
 	// mismatch is rejected with `403 forbidden` before resource lookup.
 	//
 	// `idempotency_key` is scoped to the authenticated Account, effective
-	// tenant partition, and `agent_ref`. A same-key replay is checked before
+	// tenant partition, and `agent_key`. A same-key replay is checked before
 	// the Session's one-nonterminal-Invocation rule. It returns the original
 	// records without appending input, even when the Invocation is terminal.
 	// Material equality covers the Session selector kind and value, the inline
-	// spec, and input. Requested budgets are compared before default resolution,
+	// spec, and input. Requested limits are compared before default resolution,
 	// so an explicit default differs from omission. JSON object member
 	// order is ignored, array order is significant, and strings are not
 	// rewritten. A changed material field returns `idempotency_conflict`.
 	//
 	// The encoded JSON request body is limited to 1 MiB. Requests over that
-	// limit are rejected before admission.
+	// limit are rejected before admission. With `Accept: text/event-stream`,
+	// the committed admission is the first `invocation.accepted` frame and
+	// the connection tails that Invocation through `invocation.result`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1928,7 +2306,22 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
 	GetInvocationResult(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SubmitClientToolResultsWithBody Submit durable results for pending client ToolCalls
+	// StreamInvocation Resume and tail one Invocation over SSE
+	//
+	// Replays durable updates after `cursor`, forwards ephemeral output
+	// previews for this Invocation, and ends only when this Invocation
+	// settles or the connection rotates. Durable frames carry an SSE `id`;
+	// previews and control frames do not. After `stream.resync`, discard
+	// provisional output and wait for durable state.
+	//
+	// The explicit `cursor` query parameter takes precedence over
+	// `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
+	// last durable ID. Disconnecting never cancels the Invocation.
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
+	StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SubmitHostToolResultsWithBody Submit durable results for pending host ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
 	// first committed result for each ToolCall wins. An equal replay is
@@ -1937,17 +2330,17 @@ type ClientInterface interface {
 	// queues the same Invocation and its successor execution dispatch before
 	// returning `202`.
 	//
-	// This command accepts only client-mode calls owned by the path
+	// This command accepts only host-mode calls owned by the path
 	// Invocation and authenticated Account/tenant scope. It is not a generic
 	// Session append endpoint. The body is limited to 1 MiB; each result
 	// content value is valid JSON limited to 256 KiB and 32 nesting levels.
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
-	SubmitClientToolResultsWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
+	SubmitHostToolResultsWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SubmitClientToolResults Submit durable results for pending client ToolCalls
+	// SubmitHostToolResults Submit durable results for pending host ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
 	// first committed result for each ToolCall wins. An equal replay is
@@ -1956,15 +2349,15 @@ type ClientInterface interface {
 	// queues the same Invocation and its successor execution dispatch before
 	// returning `202`.
 	//
-	// This command accepts only client-mode calls owned by the path
+	// This command accepts only host-mode calls owned by the path
 	// Invocation and authenticated Account/tenant scope. It is not a generic
 	// Session append endpoint. The body is limited to 1 MiB; each result
 	// content value is valid JSON limited to 256 KiB and 32 nesting levels.
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
-	SubmitClientToolResults(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
+	SubmitHostToolResults(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetModelPricingCapability Inspect local USD pricing capability for an exact model
 	//
@@ -2094,15 +2487,15 @@ type ClientInterface interface {
 	// bounded poll, and closes after authoritative terminal reconciliation or
 	// deliberate rotation. Disconnecting never cancels the Invocation.
 	//
-	// `transcript.snapshot` data has the `TranscriptSnapshot` shape. Every
-	// nonempty snapshot frame carries `id: <resume_cursor>`; that opaque ID is
-	// the only replay position clients persist. `generation.delta`,
-	// `stream.resync`, and `stream.end` are live/control frames and never carry
-	// an `id`. Token and thinking deltas are ephemeral and may be lost; after
-	// `stream.resync`, discard provisional output and wait for canonical
-	// messages. `stream.end` reason `terminal` means the final Postgres drain
-	// observed no nonterminal Invocation. Reason `rotate` means reconnect with
-	// the last durable ID. An abnormal close has no terminal meaning.
+	// Every nonempty `transcript.update` frame carries
+	// `id: <resume_cursor>`; that opaque ID is the only replay position
+	// clients persist. `output_text.delta`, `thinking.delta`,
+	// `stream.resync`, and `stream.end` never carry an `id`. Deltas are
+	// ephemeral and may be lost; after `stream.resync`, discard provisional
+	// output and wait for canonical messages. `stream.end` reason `terminal`
+	// means the final Postgres drain observed no nonterminal Invocation.
+	// Reason `rotate` means reconnect with the last durable ID. An abnormal
+	// close has no terminal meaning.
 	//
 	// The explicit `cursor` query parameter takes precedence over
 	// `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
@@ -2118,7 +2511,7 @@ type ClientInterface interface {
 //
 // Returns newest-first durable Invocation state. Exact filters combine
 // with AND. An Account-wide caller may list all tenant partitions, one
-// named partition with `tenant_ref`, or the default partition with
+// named partition with `tenant_key`, or the default partition with
 // `default_tenant=true`. A tenant-constrained credential is always scoped
 // to its partition. The opaque cursor is bound to the normalized filter
 // set and credential tenant scope.
@@ -2146,22 +2539,24 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 //
 // `session_id` and `session_key` are mutually exclusive. A Session ID must
 // belong to the authenticated Account and named Agent. An Account-wide
-// credential may omit `tenant_ref` and use the Session's stored partition.
+// credential may omit `tenant_key` and use the Session's stored partition.
 // A tenant-constrained credential cannot cross its partition; an explicit
 // mismatch is rejected with `403 forbidden` before resource lookup.
 //
 // `idempotency_key` is scoped to the authenticated Account, effective
-// tenant partition, and `agent_ref`. A same-key replay is checked before
+// tenant partition, and `agent_key`. A same-key replay is checked before
 // the Session's one-nonterminal-Invocation rule. It returns the original
 // records without appending input, even when the Invocation is terminal.
 // Material equality covers the Session selector kind and value, the inline
-// spec, and input. Requested budgets are compared before default resolution,
+// spec, and input. Requested limits are compared before default resolution,
 // so an explicit default differs from omission. JSON object member
 // order is ignored, array order is significant, and strings are not
 // rewritten. A changed material field returns `idempotency_conflict`.
 //
 // The encoded JSON request body is limited to 1 MiB. Requests over that
-// limit are rejected before admission.
+// limit are rejected before admission. With `Accept: text/event-stream`,
+// the committed admission is the first `invocation.accepted` frame and
+// the connection tails that Invocation through `invocation.result`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2188,22 +2583,24 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, contentType strin
 //
 // `session_id` and `session_key` are mutually exclusive. A Session ID must
 // belong to the authenticated Account and named Agent. An Account-wide
-// credential may omit `tenant_ref` and use the Session's stored partition.
+// credential may omit `tenant_key` and use the Session's stored partition.
 // A tenant-constrained credential cannot cross its partition; an explicit
 // mismatch is rejected with `403 forbidden` before resource lookup.
 //
 // `idempotency_key` is scoped to the authenticated Account, effective
-// tenant partition, and `agent_ref`. A same-key replay is checked before
+// tenant partition, and `agent_key`. A same-key replay is checked before
 // the Session's one-nonterminal-Invocation rule. It returns the original
 // records without appending input, even when the Invocation is terminal.
 // Material equality covers the Session selector kind and value, the inline
-// spec, and input. Requested budgets are compared before default resolution,
+// spec, and input. Requested limits are compared before default resolution,
 // so an explicit default differs from omission. JSON object member
 // order is ignored, array order is significant, and strings are not
 // rewritten. A changed material field returns `idempotency_conflict`.
 //
 // The encoded JSON request body is limited to 1 MiB. Requests over that
-// limit are rejected before admission.
+// limit are rejected before admission. With `Accept: text/event-stream`,
+// the committed admission is the first `invocation.accepted` frame and
+// the connection tails that Invocation through `invocation.result`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2285,25 +2682,21 @@ func (c *Client) GetInvocationResult(ctx context.Context, invocationID Invocatio
 	return c.Client.Do(req)
 }
 
-// SubmitClientToolResultsWithBody Submit durable results for pending client ToolCalls
+// StreamInvocation Resume and tail one Invocation over SSE
 //
-// Atomically accepts one bounded batch for a waiting Invocation. The
-// first committed result for each ToolCall wins. An equal replay is
-// acknowledged as deduplicated; a changed replay conflicts. Partial
-// batches leave the Invocation waiting. Closing the final pending call
-// queues the same Invocation and its successor execution dispatch before
-// returning `202`.
+// Replays durable updates after `cursor`, forwards ephemeral output
+// previews for this Invocation, and ends only when this Invocation
+// settles or the connection rotates. Durable frames carry an SSE `id`;
+// previews and control frames do not. After `stream.resync`, discard
+// provisional output and wait for durable state.
 //
-// This command accepts only client-mode calls owned by the path
-// Invocation and authenticated Account/tenant scope. It is not a generic
-// Session append endpoint. The body is limited to 1 MiB; each result
-// content value is valid JSON limited to 256 KiB and 32 nesting levels.
+// The explicit `cursor` query parameter takes precedence over
+// `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
+// last durable ID. Disconnecting never cancels the Invocation.
 //
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
-func (c *Client) SubmitClientToolResultsWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSubmitClientToolResultsRequestWithBody(c.Server, invocationID, contentType, body)
+// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
+func (c *Client) StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStreamInvocationRequest(c.Server, invocationID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2314,7 +2707,7 @@ func (c *Client) SubmitClientToolResultsWithBody(ctx context.Context, invocation
 	return c.Client.Do(req)
 }
 
-// SubmitClientToolResults Submit durable results for pending client ToolCalls
+// SubmitHostToolResultsWithBody Submit durable results for pending host ToolCalls
 //
 // Atomically accepts one bounded batch for a waiting Invocation. The
 // first committed result for each ToolCall wins. An equal replay is
@@ -2323,16 +2716,45 @@ func (c *Client) SubmitClientToolResultsWithBody(ctx context.Context, invocation
 // queues the same Invocation and its successor execution dispatch before
 // returning `202`.
 //
-// This command accepts only client-mode calls owned by the path
+// This command accepts only host-mode calls owned by the path
+// Invocation and authenticated Account/tenant scope. It is not a generic
+// Session append endpoint. The body is limited to 1 MiB; each result
+// content value is valid JSON limited to 256 KiB and 32 nesting levels.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
+func (c *Client) SubmitHostToolResultsWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubmitHostToolResultsRequestWithBody(c.Server, invocationID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SubmitHostToolResults Submit durable results for pending host ToolCalls
+//
+// Atomically accepts one bounded batch for a waiting Invocation. The
+// first committed result for each ToolCall wins. An equal replay is
+// acknowledged as deduplicated; a changed replay conflicts. Partial
+// batches leave the Invocation waiting. Closing the final pending call
+// queues the same Invocation and its successor execution dispatch before
+// returning `202`.
+//
+// This command accepts only host-mode calls owned by the path
 // Invocation and authenticated Account/tenant scope. It is not a generic
 // Session append endpoint. The body is limited to 1 MiB; each result
 // content value is valid JSON limited to 256 KiB and 32 nesting levels.
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
-func (c *Client) SubmitClientToolResults(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSubmitClientToolResultsRequest(c.Server, invocationID, body)
+// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
+func (c *Client) SubmitHostToolResults(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubmitHostToolResultsRequest(c.Server, invocationID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2591,15 +3013,15 @@ func (c *Client) GetSessionTranscript(ctx context.Context, sessionID SessionID, 
 // bounded poll, and closes after authoritative terminal reconciliation or
 // deliberate rotation. Disconnecting never cancels the Invocation.
 //
-// `transcript.snapshot` data has the `TranscriptSnapshot` shape. Every
-// nonempty snapshot frame carries `id: <resume_cursor>`; that opaque ID is
-// the only replay position clients persist. `generation.delta`,
-// `stream.resync`, and `stream.end` are live/control frames and never carry
-// an `id`. Token and thinking deltas are ephemeral and may be lost; after
-// `stream.resync`, discard provisional output and wait for canonical
-// messages. `stream.end` reason `terminal` means the final Postgres drain
-// observed no nonterminal Invocation. Reason `rotate` means reconnect with
-// the last durable ID. An abnormal close has no terminal meaning.
+// Every nonempty `transcript.update` frame carries
+// `id: <resume_cursor>`; that opaque ID is the only replay position
+// clients persist. `output_text.delta`, `thinking.delta`,
+// `stream.resync`, and `stream.end` never carry an `id`. Deltas are
+// ephemeral and may be lost; after `stream.resync`, discard provisional
+// output and wait for canonical messages. `stream.end` reason `terminal`
+// means the final Postgres drain observed no nonterminal Invocation.
+// Reason `rotate` means reconnect with the last durable ID. An abnormal
+// close has no terminal meaning.
 //
 // The explicit `cursor` query parameter takes precedence over
 // `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
@@ -2648,9 +3070,9 @@ func NewListInvocationsRequest(server string, params *ListInvocationsParams) (*h
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if params.TenantRef != nil {
+		if params.TenantKey != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_ref", *params.TenantRef, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2888,19 +3310,95 @@ func NewGetInvocationResultRequest(server string, invocationID InvocationID) (*h
 	return req, nil
 }
 
-// NewSubmitClientToolResultsRequest calls the generic SubmitClientToolResults builder with application/json body
-func NewSubmitClientToolResultsRequest(server string, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody) (*http.Request, error) {
+// NewStreamInvocationRequest constructs an http.Request for the StreamInvocation method
+func NewStreamInvocationRequest(server string, invocationID InvocationID, params *StreamInvocationParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/invocations/%s/stream", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.LastEventID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Last-Event-ID", *params.LastEventID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Last-Event-ID", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSubmitHostToolResultsRequest calls the generic SubmitHostToolResults builder with application/json body
+func NewSubmitHostToolResultsRequest(server string, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewSubmitClientToolResultsRequestWithBody(server, invocationID, "application/json", bodyReader)
+	return NewSubmitHostToolResultsRequestWithBody(server, invocationID, "application/json", bodyReader)
 }
 
-// NewSubmitClientToolResultsRequestWithBody constructs an http.Request for the SubmitClientToolResults method, with any body, and a specified content type
-func NewSubmitClientToolResultsRequestWithBody(server string, invocationID InvocationID, contentType string, body io.Reader) (*http.Request, error) {
+// NewSubmitHostToolResultsRequestWithBody constructs an http.Request for the SubmitHostToolResults method, with any body, and a specified content type
+func NewSubmitHostToolResultsRequestWithBody(server string, invocationID InvocationID, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -3057,9 +3555,9 @@ func NewListProviderCredentialsRequest(server string, params *ListProviderCreden
 
 		}
 
-		if params.TenantRef != nil {
+		if params.TenantKey != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_ref", *params.TenantRef, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3278,9 +3776,9 @@ func NewListSessionsRequest(server string, params *ListSessionsParams) (*http.Re
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if params.TenantRef != nil {
+		if params.TenantKey != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_ref", *params.TenantRef, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3680,7 +4178,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns newest-first durable Invocation state. Exact filters combine
 	// with AND. An Account-wide caller may list all tenant partitions, one
-	// named partition with `tenant_ref`, or the default partition with
+	// named partition with `tenant_key`, or the default partition with
 	// `default_tenant=true`. A tenant-constrained credential is always scoped
 	// to its partition. The opaque cursor is bound to the normalized filter
 	// set and credential tenant scope.
@@ -3700,22 +4198,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// `session_id` and `session_key` are mutually exclusive. A Session ID must
 	// belong to the authenticated Account and named Agent. An Account-wide
-	// credential may omit `tenant_ref` and use the Session's stored partition.
+	// credential may omit `tenant_key` and use the Session's stored partition.
 	// A tenant-constrained credential cannot cross its partition; an explicit
 	// mismatch is rejected with `403 forbidden` before resource lookup.
 	//
 	// `idempotency_key` is scoped to the authenticated Account, effective
-	// tenant partition, and `agent_ref`. A same-key replay is checked before
+	// tenant partition, and `agent_key`. A same-key replay is checked before
 	// the Session's one-nonterminal-Invocation rule. It returns the original
 	// records without appending input, even when the Invocation is terminal.
 	// Material equality covers the Session selector kind and value, the inline
-	// spec, and input. Requested budgets are compared before default resolution,
+	// spec, and input. Requested limits are compared before default resolution,
 	// so an explicit default differs from omission. JSON object member
 	// order is ignored, array order is significant, and strings are not
 	// rewritten. A changed material field returns `idempotency_conflict`.
 	//
 	// The encoded JSON request body is limited to 1 MiB. Requests over that
-	// limit are rejected before admission.
+	// limit are rejected before admission. With `Accept: text/event-stream`,
+	// the committed admission is the first `invocation.accepted` frame and
+	// the connection tails that Invocation through `invocation.result`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3732,22 +4232,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// `session_id` and `session_key` are mutually exclusive. A Session ID must
 	// belong to the authenticated Account and named Agent. An Account-wide
-	// credential may omit `tenant_ref` and use the Session's stored partition.
+	// credential may omit `tenant_key` and use the Session's stored partition.
 	// A tenant-constrained credential cannot cross its partition; an explicit
 	// mismatch is rejected with `403 forbidden` before resource lookup.
 	//
 	// `idempotency_key` is scoped to the authenticated Account, effective
-	// tenant partition, and `agent_ref`. A same-key replay is checked before
+	// tenant partition, and `agent_key`. A same-key replay is checked before
 	// the Session's one-nonterminal-Invocation rule. It returns the original
 	// records without appending input, even when the Invocation is terminal.
 	// Material equality covers the Session selector kind and value, the inline
-	// spec, and input. Requested budgets are compared before default resolution,
+	// spec, and input. Requested limits are compared before default resolution,
 	// so an explicit default differs from omission. JSON object member
 	// order is ignored, array order is significant, and strings are not
 	// rewritten. A changed material field returns `idempotency_conflict`.
 	//
 	// The encoded JSON request body is limited to 1 MiB. Requests over that
-	// limit are rejected before admission.
+	// limit are rejected before admission. With `Accept: text/event-stream`,
+	// the committed admission is the first `invocation.accepted` frame and
+	// the connection tails that Invocation through `invocation.result`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3795,7 +4297,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
 	GetInvocationResultWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationResultHTTPResponse, error)
 
-	// SubmitClientToolResultsWithBodyWithResponse Submit durable results for pending client ToolCalls
+	// StreamInvocationWithResponse Resume and tail one Invocation over SSE
+	//
+	// Replays durable updates after `cursor`, forwards ephemeral output
+	// previews for this Invocation, and ends only when this Invocation
+	// settles or the connection rotates. Durable frames carry an SSE `id`;
+	// previews and control frames do not. After `stream.resync`, discard
+	// provisional output and wait for durable state.
+	//
+	// The explicit `cursor` query parameter takes precedence over
+	// `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
+	// last durable ID. Disconnecting never cancels the Invocation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
+	StreamInvocationWithResponse(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*StreamInvocationHTTPResponse, error)
+
+	// SubmitHostToolResultsWithBodyWithResponse Submit durable results for pending host ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
 	// first committed result for each ToolCall wins. An equal replay is
@@ -3804,17 +4323,17 @@ type ClientWithResponsesInterface interface {
 	// queues the same Invocation and its successor execution dispatch before
 	// returning `202`.
 	//
-	// This command accepts only client-mode calls owned by the path
+	// This command accepts only host-mode calls owned by the path
 	// Invocation and authenticated Account/tenant scope. It is not a generic
 	// Session append endpoint. The body is limited to 1 MiB; each result
 	// content value is valid JSON limited to 256 KiB and 32 nesting levels.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
-	SubmitClientToolResultsWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitClientToolResultsHTTPResponse, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
+	SubmitHostToolResultsWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitHostToolResultsHTTPResponse, error)
 
-	// SubmitClientToolResultsWithResponse Submit durable results for pending client ToolCalls
+	// SubmitHostToolResultsWithResponse Submit durable results for pending host ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
 	// first committed result for each ToolCall wins. An equal replay is
@@ -3823,15 +4342,15 @@ type ClientWithResponsesInterface interface {
 	// queues the same Invocation and its successor execution dispatch before
 	// returning `202`.
 	//
-	// This command accepts only client-mode calls owned by the path
+	// This command accepts only host-mode calls owned by the path
 	// Invocation and authenticated Account/tenant scope. It is not a generic
 	// Session append endpoint. The body is limited to 1 MiB; each result
 	// content value is valid JSON limited to 256 KiB and 32 nesting levels.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
-	SubmitClientToolResultsWithResponse(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitClientToolResultsHTTPResponse, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
+	SubmitHostToolResultsWithResponse(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitHostToolResultsHTTPResponse, error)
 
 	// GetModelPricingCapabilityWithResponse Inspect local USD pricing capability for an exact model
 	//
@@ -3977,15 +4496,15 @@ type ClientWithResponsesInterface interface {
 	// bounded poll, and closes after authoritative terminal reconciliation or
 	// deliberate rotation. Disconnecting never cancels the Invocation.
 	//
-	// `transcript.snapshot` data has the `TranscriptSnapshot` shape. Every
-	// nonempty snapshot frame carries `id: <resume_cursor>`; that opaque ID is
-	// the only replay position clients persist. `generation.delta`,
-	// `stream.resync`, and `stream.end` are live/control frames and never carry
-	// an `id`. Token and thinking deltas are ephemeral and may be lost; after
-	// `stream.resync`, discard provisional output and wait for canonical
-	// messages. `stream.end` reason `terminal` means the final Postgres drain
-	// observed no nonterminal Invocation. Reason `rotate` means reconnect with
-	// the last durable ID. An abnormal close has no terminal meaning.
+	// Every nonempty `transcript.update` frame carries
+	// `id: <resume_cursor>`; that opaque ID is the only replay position
+	// clients persist. `output_text.delta`, `thinking.delta`,
+	// `stream.resync`, and `stream.end` never carry an `id`. Deltas are
+	// ephemeral and may be lost; after `stream.resync`, discard provisional
+	// output and wait for canonical messages. `stream.end` reason `terminal`
+	// means the final Postgres drain observed no nonterminal Invocation.
+	// Reason `rotate` means reconnect with the last durable ID. An abnormal
+	// close has no terminal meaning.
 	//
 	// The explicit `cursor` query parameter takes precedence over
 	// `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
@@ -4470,11 +4989,101 @@ func (r GetInvocationResultHTTPResponse) ContentType() string {
 	return ""
 }
 
-type SubmitClientToolResultsHTTPResponse struct {
+// StreamInvocationHTTPResponse429Headers the declared response headers of an HTTP 429 response for StreamInvocation
+type StreamInvocationHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type StreamInvocationHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *StreamInvocationHTTPResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r StreamInvocationHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StreamInvocationHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StreamInvocationHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StreamInvocationHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SubmitHostToolResultsHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON202 the response for an HTTP 202 `application/json` response
-	JSON202 *SubmitClientToolResultsResponse
+	JSON202 *SubmitHostToolResultsResponse
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -4492,52 +5101,52 @@ type SubmitClientToolResultsHTTPResponse struct {
 }
 
 // GetJSON202 returns the response for an HTTP 202 `application/json` response
-func (r SubmitClientToolResultsHTTPResponse) GetJSON202() *SubmitClientToolResultsResponse {
+func (r SubmitHostToolResultsHTTPResponse) GetJSON202() *SubmitHostToolResultsResponse {
 	return r.JSON202
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r SubmitClientToolResultsHTTPResponse) GetJSON400() *InvalidRequest {
+func (r SubmitHostToolResultsHTTPResponse) GetJSON400() *InvalidRequest {
 	return r.JSON400
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r SubmitClientToolResultsHTTPResponse) GetJSON401() *Unauthenticated {
+func (r SubmitHostToolResultsHTTPResponse) GetJSON401() *Unauthenticated {
 	return r.JSON401
 }
 
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r SubmitClientToolResultsHTTPResponse) GetJSON403() *Forbidden {
+func (r SubmitHostToolResultsHTTPResponse) GetJSON403() *Forbidden {
 	return r.JSON403
 }
 
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r SubmitClientToolResultsHTTPResponse) GetJSON404() *NotFound {
+func (r SubmitHostToolResultsHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r SubmitClientToolResultsHTTPResponse) GetJSON409() *ErrorResponse {
+func (r SubmitHostToolResultsHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r SubmitClientToolResultsHTTPResponse) GetJSON500() *Internal {
+func (r SubmitHostToolResultsHTTPResponse) GetJSON500() *Internal {
 	return r.JSON500
 }
 
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
-func (r SubmitClientToolResultsHTTPResponse) GetJSON503() *Unavailable {
+func (r SubmitHostToolResultsHTTPResponse) GetJSON503() *Unavailable {
 	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
-func (r SubmitClientToolResultsHTTPResponse) GetBody() []byte {
+func (r SubmitHostToolResultsHTTPResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r SubmitClientToolResultsHTTPResponse) Status() string {
+func (r SubmitHostToolResultsHTTPResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -4545,7 +5154,7 @@ func (r SubmitClientToolResultsHTTPResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r SubmitClientToolResultsHTTPResponse) StatusCode() int {
+func (r SubmitHostToolResultsHTTPResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -4553,7 +5162,7 @@ func (r SubmitClientToolResultsHTTPResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SubmitClientToolResultsHTTPResponse) ContentType() string {
+func (r SubmitHostToolResultsHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5526,7 +6135,7 @@ func (r StreamSessionTranscriptHTTPResponse) ContentType() string {
 //
 // Returns newest-first durable Invocation state. Exact filters combine
 // with AND. An Account-wide caller may list all tenant partitions, one
-// named partition with `tenant_ref`, or the default partition with
+// named partition with `tenant_key`, or the default partition with
 // `default_tenant=true`. A tenant-constrained credential is always scoped
 // to its partition. The opaque cursor is bound to the normalized filter
 // set and credential tenant scope.
@@ -5552,22 +6161,24 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 //
 // `session_id` and `session_key` are mutually exclusive. A Session ID must
 // belong to the authenticated Account and named Agent. An Account-wide
-// credential may omit `tenant_ref` and use the Session's stored partition.
+// credential may omit `tenant_key` and use the Session's stored partition.
 // A tenant-constrained credential cannot cross its partition; an explicit
 // mismatch is rejected with `403 forbidden` before resource lookup.
 //
 // `idempotency_key` is scoped to the authenticated Account, effective
-// tenant partition, and `agent_ref`. A same-key replay is checked before
+// tenant partition, and `agent_key`. A same-key replay is checked before
 // the Session's one-nonterminal-Invocation rule. It returns the original
 // records without appending input, even when the Invocation is terminal.
 // Material equality covers the Session selector kind and value, the inline
-// spec, and input. Requested budgets are compared before default resolution,
+// spec, and input. Requested limits are compared before default resolution,
 // so an explicit default differs from omission. JSON object member
 // order is ignored, array order is significant, and strings are not
 // rewritten. A changed material field returns `idempotency_conflict`.
 //
 // The encoded JSON request body is limited to 1 MiB. Requests over that
-// limit are rejected before admission.
+// limit are rejected before admission. With `Accept: text/event-stream`,
+// the committed admission is the first `invocation.accepted` frame and
+// the connection tails that Invocation through `invocation.result`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5590,22 +6201,24 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 //
 // `session_id` and `session_key` are mutually exclusive. A Session ID must
 // belong to the authenticated Account and named Agent. An Account-wide
-// credential may omit `tenant_ref` and use the Session's stored partition.
+// credential may omit `tenant_key` and use the Session's stored partition.
 // A tenant-constrained credential cannot cross its partition; an explicit
 // mismatch is rejected with `403 forbidden` before resource lookup.
 //
 // `idempotency_key` is scoped to the authenticated Account, effective
-// tenant partition, and `agent_ref`. A same-key replay is checked before
+// tenant partition, and `agent_key`. A same-key replay is checked before
 // the Session's one-nonterminal-Invocation rule. It returns the original
 // records without appending input, even when the Invocation is terminal.
 // Material equality covers the Session selector kind and value, the inline
-// spec, and input. Requested budgets are compared before default resolution,
+// spec, and input. Requested limits are compared before default resolution,
 // so an explicit default differs from omission. JSON object member
 // order is ignored, array order is significant, and strings are not
 // rewritten. A changed material field returns `idempotency_conflict`.
 //
 // The encoded JSON request body is limited to 1 MiB. Requests over that
-// limit are rejected before admission.
+// limit are rejected before admission. With `Accept: text/event-stream`,
+// the committed admission is the first `invocation.accepted` frame and
+// the connection tails that Invocation through `invocation.result`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5677,7 +6290,30 @@ func (c *ClientWithResponses) GetInvocationResultWithResponse(ctx context.Contex
 	return ParseGetInvocationResultHTTPResponse(rsp)
 }
 
-// SubmitClientToolResultsWithBodyWithResponse Submit durable results for pending client ToolCalls
+// StreamInvocationWithResponse Resume and tail one Invocation over SSE
+//
+// Replays durable updates after `cursor`, forwards ephemeral output
+// previews for this Invocation, and ends only when this Invocation
+// settles or the connection rotates. Durable frames carry an SSE `id`;
+// previews and control frames do not. After `stream.resync`, discard
+// provisional output and wait for durable state.
+//
+// The explicit `cursor` query parameter takes precedence over
+// `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
+// last durable ID. Disconnecting never cancels the Invocation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
+func (c *ClientWithResponses) StreamInvocationWithResponse(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*StreamInvocationHTTPResponse, error) {
+	rsp, err := c.StreamInvocation(ctx, invocationID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStreamInvocationHTTPResponse(rsp)
+}
+
+// SubmitHostToolResultsWithBodyWithResponse Submit durable results for pending host ToolCalls
 //
 // Atomically accepts one bounded batch for a waiting Invocation. The
 // first committed result for each ToolCall wins. An equal replay is
@@ -5686,23 +6322,23 @@ func (c *ClientWithResponses) GetInvocationResultWithResponse(ctx context.Contex
 // queues the same Invocation and its successor execution dispatch before
 // returning `202`.
 //
-// This command accepts only client-mode calls owned by the path
+// This command accepts only host-mode calls owned by the path
 // Invocation and authenticated Account/tenant scope. It is not a generic
 // Session append endpoint. The body is limited to 1 MiB; each result
 // content value is valid JSON limited to 256 KiB and 32 nesting levels.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
-func (c *ClientWithResponses) SubmitClientToolResultsWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitClientToolResultsHTTPResponse, error) {
-	rsp, err := c.SubmitClientToolResultsWithBody(ctx, invocationID, contentType, body, reqEditors...)
+// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
+func (c *ClientWithResponses) SubmitHostToolResultsWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitHostToolResultsHTTPResponse, error) {
+	rsp, err := c.SubmitHostToolResultsWithBody(ctx, invocationID, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSubmitClientToolResultsHTTPResponse(rsp)
+	return ParseSubmitHostToolResultsHTTPResponse(rsp)
 }
 
-// SubmitClientToolResultsWithResponse Submit durable results for pending client ToolCalls
+// SubmitHostToolResultsWithResponse Submit durable results for pending host ToolCalls
 //
 // Atomically accepts one bounded batch for a waiting Invocation. The
 // first committed result for each ToolCall wins. An equal replay is
@@ -5711,20 +6347,20 @@ func (c *ClientWithResponses) SubmitClientToolResultsWithBodyWithResponse(ctx co
 // queues the same Invocation and its successor execution dispatch before
 // returning `202`.
 //
-// This command accepts only client-mode calls owned by the path
+// This command accepts only host-mode calls owned by the path
 // Invocation and authenticated Account/tenant scope. It is not a generic
 // Session append endpoint. The body is limited to 1 MiB; each result
 // content value is valid JSON limited to 256 KiB and 32 nesting levels.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitClientToolResults` operationId).
-func (c *ClientWithResponses) SubmitClientToolResultsWithResponse(ctx context.Context, invocationID InvocationID, body SubmitClientToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitClientToolResultsHTTPResponse, error) {
-	rsp, err := c.SubmitClientToolResults(ctx, invocationID, body, reqEditors...)
+// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
+func (c *ClientWithResponses) SubmitHostToolResultsWithResponse(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitHostToolResultsHTTPResponse, error) {
+	rsp, err := c.SubmitHostToolResults(ctx, invocationID, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSubmitClientToolResultsHTTPResponse(rsp)
+	return ParseSubmitHostToolResultsHTTPResponse(rsp)
 }
 
 // GetModelPricingCapabilityWithResponse Inspect local USD pricing capability for an exact model
@@ -5943,15 +6579,15 @@ func (c *ClientWithResponses) GetSessionTranscriptWithResponse(ctx context.Conte
 // bounded poll, and closes after authoritative terminal reconciliation or
 // deliberate rotation. Disconnecting never cancels the Invocation.
 //
-// `transcript.snapshot` data has the `TranscriptSnapshot` shape. Every
-// nonempty snapshot frame carries `id: <resume_cursor>`; that opaque ID is
-// the only replay position clients persist. `generation.delta`,
-// `stream.resync`, and `stream.end` are live/control frames and never carry
-// an `id`. Token and thinking deltas are ephemeral and may be lost; after
-// `stream.resync`, discard provisional output and wait for canonical
-// messages. `stream.end` reason `terminal` means the final Postgres drain
-// observed no nonterminal Invocation. Reason `rotate` means reconnect with
-// the last durable ID. An abnormal close has no terminal meaning.
+// Every nonempty `transcript.update` frame carries
+// `id: <resume_cursor>`; that opaque ID is the only replay position
+// clients persist. `output_text.delta`, `thinking.delta`,
+// `stream.resync`, and `stream.end` never carry an `id`. Deltas are
+// ephemeral and may be lost; after `stream.resync`, discard provisional
+// output and wait for canonical messages. `stream.end` reason `terminal`
+// means the final Postgres drain observed no nonterminal Invocation.
+// Reason `rotate` means reconnect with the last durable ID. An abnormal
+// close has no terminal meaning.
 //
 // The explicit `cursor` query parameter takes precedence over
 // `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
@@ -6127,6 +6763,9 @@ func ParseCreateInvocationHTTPResponse(rsp *http.Response) (*CreateInvocationHTT
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	case rsp.StatusCode == 202:
+		// Content-type (text/event-stream) unsupported
 
 	}
 
@@ -6390,22 +7029,103 @@ func ParseGetInvocationResultHTTPResponse(rsp *http.Response) (*GetInvocationRes
 	return response, nil
 }
 
-// ParseSubmitClientToolResultsHTTPResponse parses an HTTP response from a SubmitClientToolResultsWithResponse call
-func ParseSubmitClientToolResultsHTTPResponse(rsp *http.Response) (*SubmitClientToolResultsHTTPResponse, error) {
+// ParseStreamInvocationHTTPResponse parses an HTTP response from a StreamInvocationWithResponse call
+func ParseStreamInvocationHTTPResponse(rsp *http.Response) (*StreamInvocationHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &SubmitClientToolResultsHTTPResponse{
+	response := &StreamInvocationHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers StreamInvocationHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseSubmitHostToolResultsHTTPResponse parses an HTTP response from a SubmitHostToolResultsWithResponse call
+func ParseSubmitHostToolResultsHTTPResponse(rsp *http.Response) (*SubmitHostToolResultsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SubmitHostToolResultsHTTPResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
-		var dest SubmitClientToolResultsResponse
+		var dest SubmitHostToolResultsResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

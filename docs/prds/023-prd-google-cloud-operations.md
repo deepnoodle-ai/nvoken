@@ -15,7 +15,7 @@
 The paved Google deployment should tell an operator when its main paths are
 unhealthy and where to look first. This slice adds one practical dashboard, a
 small high-signal alert set, and short runbooks. It does not build a full SRE
-program, formal error budgets, or an operator console.
+program, formal error limits, or an operator console.
 
 ## Why
 

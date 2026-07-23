@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -49,15 +49,20 @@ import {
     InvocationStatusToJSON,
 } from '../models/InvocationStatus.js';
 import {
-    type SubmitClientToolResultsRequest,
-    SubmitClientToolResultsRequestFromJSON,
-    SubmitClientToolResultsRequestToJSON,
-} from '../models/SubmitClientToolResultsRequest.js';
+    type InvocationStreamEvent,
+    InvocationStreamEventFromJSON,
+    InvocationStreamEventToJSON,
+} from '../models/InvocationStreamEvent.js';
 import {
-    type SubmitClientToolResultsResponse,
-    SubmitClientToolResultsResponseFromJSON,
-    SubmitClientToolResultsResponseToJSON,
-} from '../models/SubmitClientToolResultsResponse.js';
+    type SubmitHostToolResultsRequest,
+    SubmitHostToolResultsRequestFromJSON,
+    SubmitHostToolResultsRequestToJSON,
+} from '../models/SubmitHostToolResultsRequest.js';
+import {
+    type SubmitHostToolResultsResponse,
+    SubmitHostToolResultsResponseFromJSON,
+    SubmitHostToolResultsResponseToJSON,
+} from '../models/SubmitHostToolResultsResponse.js';
 
 export interface CancelInvocationRequest {
     invocationId: string;
@@ -76,7 +81,7 @@ export interface GetInvocationResultRequest {
 }
 
 export interface ListInvocationsRequest {
-    tenantRef?: string;
+    tenantKey?: string;
     defaultTenant?: boolean;
     sessionId?: string;
     agentId?: string;
@@ -85,9 +90,15 @@ export interface ListInvocationsRequest {
     limit?: number;
 }
 
-export interface SubmitClientToolResultsOperationRequest {
+export interface StreamInvocationRequest {
     invocationId: string;
-    submitClientToolResultsRequest: SubmitClientToolResultsRequest;
+    cursor?: string;
+    lastEventID?: string;
+}
+
+export interface SubmitHostToolResultsOperationRequest {
+    invocationId: string;
+    submitHostToolResultsRequest: SubmitHostToolResultsRequest;
 }
 
 /**
@@ -188,7 +199,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Resolves or creates the Account-wide Agent identity anchor, resolves or creates a Session, snapshots the inline execution spec, appends exactly one caller-input message, and creates one queued Invocation in a single transaction. The response is sent only after that transaction commits; the request handler never executes the model.  `session_id` and `session_key` are mutually exclusive. A Session ID must belong to the authenticated Account and named Agent. An Account-wide credential may omit `tenant_ref` and use the Session\'s stored partition. A tenant-constrained credential cannot cross its partition; an explicit mismatch is rejected with `403 forbidden` before resource lookup.  `idempotency_key` is scoped to the authenticated Account, effective tenant partition, and `agent_ref`. A same-key replay is checked before the Session\'s one-nonterminal-Invocation rule. It returns the original records without appending input, even when the Invocation is terminal. Material equality covers the Session selector kind and value, the inline spec, and input. Requested budgets are compared before default resolution, so an explicit default differs from omission. JSON object member order is ignored, array order is significant, and strings are not rewritten. A changed material field returns `idempotency_conflict`.  The encoded JSON request body is limited to 1 MiB. Requests over that limit are rejected before admission.
+     * Resolves or creates the Account-wide Agent identity anchor, resolves or creates a Session, snapshots the inline execution spec, appends exactly one caller-input message, and creates one queued Invocation in a single transaction. The response is sent only after that transaction commits; the request handler never executes the model.  `session_id` and `session_key` are mutually exclusive. A Session ID must belong to the authenticated Account and named Agent. An Account-wide credential may omit `tenant_key` and use the Session\'s stored partition. A tenant-constrained credential cannot cross its partition; an explicit mismatch is rejected with `403 forbidden` before resource lookup.  `idempotency_key` is scoped to the authenticated Account, effective tenant partition, and `agent_key`. A same-key replay is checked before the Session\'s one-nonterminal-Invocation rule. It returns the original records without appending input, even when the Invocation is terminal. Material equality covers the Session selector kind and value, the inline spec, and input. Requested limits are compared before default resolution, so an explicit default differs from omission. JSON object member order is ignored, array order is significant, and strings are not rewritten. A changed material field returns `idempotency_conflict`.  The encoded JSON request body is limited to 1 MiB. Requests over that limit are rejected before admission. With `Accept: text/event-stream`, the committed admission is the first `invocation.accepted` frame and the connection tails that Invocation through `invocation.result`.
      * Durably admit one background agent turn
      */
     async createInvocationRaw(requestParameters: CreateInvocationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<InvocationAcknowledgement>> {
@@ -199,7 +210,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Resolves or creates the Account-wide Agent identity anchor, resolves or creates a Session, snapshots the inline execution spec, appends exactly one caller-input message, and creates one queued Invocation in a single transaction. The response is sent only after that transaction commits; the request handler never executes the model.  `session_id` and `session_key` are mutually exclusive. A Session ID must belong to the authenticated Account and named Agent. An Account-wide credential may omit `tenant_ref` and use the Session\'s stored partition. A tenant-constrained credential cannot cross its partition; an explicit mismatch is rejected with `403 forbidden` before resource lookup.  `idempotency_key` is scoped to the authenticated Account, effective tenant partition, and `agent_ref`. A same-key replay is checked before the Session\'s one-nonterminal-Invocation rule. It returns the original records without appending input, even when the Invocation is terminal. Material equality covers the Session selector kind and value, the inline spec, and input. Requested budgets are compared before default resolution, so an explicit default differs from omission. JSON object member order is ignored, array order is significant, and strings are not rewritten. A changed material field returns `idempotency_conflict`.  The encoded JSON request body is limited to 1 MiB. Requests over that limit are rejected before admission.
+     * Resolves or creates the Account-wide Agent identity anchor, resolves or creates a Session, snapshots the inline execution spec, appends exactly one caller-input message, and creates one queued Invocation in a single transaction. The response is sent only after that transaction commits; the request handler never executes the model.  `session_id` and `session_key` are mutually exclusive. A Session ID must belong to the authenticated Account and named Agent. An Account-wide credential may omit `tenant_key` and use the Session\'s stored partition. A tenant-constrained credential cannot cross its partition; an explicit mismatch is rejected with `403 forbidden` before resource lookup.  `idempotency_key` is scoped to the authenticated Account, effective tenant partition, and `agent_key`. A same-key replay is checked before the Session\'s one-nonterminal-Invocation rule. It returns the original records without appending input, even when the Invocation is terminal. Material equality covers the Session selector kind and value, the inline spec, and input. Requested limits are compared before default resolution, so an explicit default differs from omission. JSON object member order is ignored, array order is significant, and strings are not rewritten. A changed material field returns `idempotency_conflict`.  The encoded JSON request body is limited to 1 MiB. Requests over that limit are rejected before admission. With `Accept: text/event-stream`, the committed admission is the first `invocation.accepted` frame and the connection tails that Invocation through `invocation.result`.
      * Durably admit one background agent turn
      */
     async createInvocation(requestParameters: CreateInvocationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<InvocationAcknowledgement> {
@@ -323,8 +334,8 @@ export class InvocationsApi extends runtime.BaseAPI {
     async listInvocationsRequestOpts(requestParameters: ListInvocationsRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
 
-        if (requestParameters['tenantRef'] != null) {
-            queryParameters['tenant_ref'] = requestParameters['tenantRef'];
+        if (requestParameters['tenantKey'] != null) {
+            queryParameters['tenant_key'] = requestParameters['tenantKey'];
         }
 
         if (requestParameters['defaultTenant'] != null) {
@@ -373,7 +384,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns newest-first durable Invocation state. Exact filters combine with AND. An Account-wide caller may list all tenant partitions, one named partition with `tenant_ref`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope.
+     * Returns newest-first durable Invocation state. Exact filters combine with AND. An Account-wide caller may list all tenant partitions, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope.
      * List authoritative Invocations
      */
     async listInvocationsRaw(requestParameters: ListInvocationsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<InvocationList>> {
@@ -384,7 +395,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns newest-first durable Invocation state. Exact filters combine with AND. An Account-wide caller may list all tenant partitions, one named partition with `tenant_ref`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope.
+     * Returns newest-first durable Invocation state. Exact filters combine with AND. An Account-wide caller may list all tenant partitions, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope.
      * List authoritative Invocations
      */
     async listInvocations(requestParameters: ListInvocationsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<InvocationList> {
@@ -393,20 +404,83 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Creates request options for submitClientToolResults without sending the request
+     * Creates request options for streamInvocation without sending the request
      */
-    async submitClientToolResultsRequestOpts(requestParameters: SubmitClientToolResultsOperationRequest): Promise<runtime.RequestOpts> {
+    async streamInvocationRequestOpts(requestParameters: StreamInvocationRequest): Promise<runtime.RequestOpts> {
         if (requestParameters['invocationId'] == null) {
             throw new runtime.RequiredError(
                 'invocationId',
-                'Required parameter "invocationId" was null or undefined when calling submitClientToolResults().'
+                'Required parameter "invocationId" was null or undefined when calling streamInvocation().'
             );
         }
 
-        if (requestParameters['submitClientToolResultsRequest'] == null) {
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['lastEventID'] != null) {
+            headerParameters['Last-Event-ID'] = String(requestParameters['lastEventID']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/invocations/{invocation_id}/stream`;
+        urlPath = urlPath.replace('{invocation_id}', encodeURIComponent(String(requestParameters['invocationId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Replays durable updates after `cursor`, forwards ephemeral output previews for this Invocation, and ends only when this Invocation settles or the connection rotates. Durable frames carry an SSE `id`; previews and control frames do not. After `stream.resync`, discard provisional output and wait for durable state.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the last durable ID. Disconnecting never cancels the Invocation.
+     * Resume and tail one Invocation over SSE
+     */
+    async streamInvocationRaw(requestParameters: StreamInvocationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<InvocationStreamEvent>> {
+        const requestOptions = await this.streamInvocationRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => InvocationStreamEventFromJSON(jsonValue));
+    }
+
+    /**
+     * Replays durable updates after `cursor`, forwards ephemeral output previews for this Invocation, and ends only when this Invocation settles or the connection rotates. Durable frames carry an SSE `id`; previews and control frames do not. After `stream.resync`, discard provisional output and wait for durable state.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the last durable ID. Disconnecting never cancels the Invocation.
+     * Resume and tail one Invocation over SSE
+     */
+    async streamInvocation(requestParameters: StreamInvocationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<InvocationStreamEvent> {
+        const response = await this.streamInvocationRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for submitHostToolResults without sending the request
+     */
+    async submitHostToolResultsRequestOpts(requestParameters: SubmitHostToolResultsOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['invocationId'] == null) {
             throw new runtime.RequiredError(
-                'submitClientToolResultsRequest',
-                'Required parameter "submitClientToolResultsRequest" was null or undefined when calling submitClientToolResults().'
+                'invocationId',
+                'Required parameter "invocationId" was null or undefined when calling submitHostToolResults().'
+            );
+        }
+
+        if (requestParameters['submitHostToolResultsRequest'] == null) {
+            throw new runtime.RequiredError(
+                'submitHostToolResultsRequest',
+                'Required parameter "submitHostToolResultsRequest" was null or undefined when calling submitHostToolResults().'
             );
         }
 
@@ -433,27 +507,27 @@ export class InvocationsApi extends runtime.BaseAPI {
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: SubmitClientToolResultsRequestToJSON(requestParameters['submitClientToolResultsRequest']),
+            body: SubmitHostToolResultsRequestToJSON(requestParameters['submitHostToolResultsRequest']),
         };
     }
 
     /**
-     * Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor execution dispatch before returning `202`.  This command accepts only client-mode calls owned by the path Invocation and authenticated Account/tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.
-     * Submit durable results for pending client ToolCalls
+     * Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor execution dispatch before returning `202`.  This command accepts only host-mode calls owned by the path Invocation and authenticated Account/tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.
+     * Submit durable results for pending host ToolCalls
      */
-    async submitClientToolResultsRaw(requestParameters: SubmitClientToolResultsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SubmitClientToolResultsResponse>> {
-        const requestOptions = await this.submitClientToolResultsRequestOpts(requestParameters);
+    async submitHostToolResultsRaw(requestParameters: SubmitHostToolResultsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SubmitHostToolResultsResponse>> {
+        const requestOptions = await this.submitHostToolResultsRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => SubmitClientToolResultsResponseFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => SubmitHostToolResultsResponseFromJSON(jsonValue));
     }
 
     /**
-     * Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor execution dispatch before returning `202`.  This command accepts only client-mode calls owned by the path Invocation and authenticated Account/tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.
-     * Submit durable results for pending client ToolCalls
+     * Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor execution dispatch before returning `202`.  This command accepts only host-mode calls owned by the path Invocation and authenticated Account/tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.
+     * Submit durable results for pending host ToolCalls
      */
-    async submitClientToolResults(requestParameters: SubmitClientToolResultsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SubmitClientToolResultsResponse> {
-        const response = await this.submitClientToolResultsRaw(requestParameters, initOverrides);
+    async submitHostToolResults(requestParameters: SubmitHostToolResultsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SubmitHostToolResultsResponse> {
+        const response = await this.submitHostToolResultsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

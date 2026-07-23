@@ -4,7 +4,7 @@
     "selector": { "kind": "none", "value": "" },
     "spec": {
       "instructions": "help",
-      "model": { "provider": "anthropic", "name": "test-model" }
+      "model": { "provider": "anthropic", "id": "test-model" }
     },
     "input": { "content": [{ "type": "text", "text": "hello" }] },
     "canonical": "{\"version\":3,\"session_selector\":{\"kind\":\"none\",\"value\":\"\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"name\":\"test-model\"},\"budgets\":null,\"output\":null},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
@@ -15,8 +15,8 @@
     "selector": { "kind": "key", "value": "ticket-1" },
     "spec": {
       "instructions": "classify",
-      "model": { "provider": "openai", "name": "gpt-test" },
-      "budgets": { "max_iterations": 3 },
+      "model": { "provider": "openai", "id": "gpt-test" },
+      "limits": { "max_iterations": 3 },
       "output": {
         "schema": {
           "required": ["status"],

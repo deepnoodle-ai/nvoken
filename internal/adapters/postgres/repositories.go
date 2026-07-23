@@ -293,27 +293,33 @@ func (s *Store) LockInstallationBootstrap(ctx context.Context) error {
 
 func (s *Store) CreateTenantPartition(ctx context.Context, partition domain.TenantPartition) error {
 	return s.q(ctx).CreateTenantPartition(ctx, postgresdb.CreateTenantPartitionParams{
-		ID: partition.ID, AccountID: partition.AccountID,
-		TenantRef: partition.TenantRef, CreatedAt: partition.CreatedAt,
+		ID:        partition.ID,
+		AccountID: partition.AccountID,
+		TenantKey: partition.TenantKey,
+		CreatedAt: partition.CreatedAt,
 	})
 }
 
 func (s *Store) ResolveTenantPartition(ctx context.Context, partition domain.TenantPartition) (domain.TenantPartition, error) {
-	if partition.TenantRef == nil {
+	if partition.TenantKey == nil {
 		if err := s.q(ctx).CreateDefaultTenantPartitionIfAbsent(ctx, postgresdb.CreateDefaultTenantPartitionIfAbsentParams{
-			ID: partition.ID, AccountID: partition.AccountID, CreatedAt: partition.CreatedAt,
+			ID:        partition.ID,
+			AccountID: partition.AccountID,
+			CreatedAt: partition.CreatedAt,
 		}); err != nil {
 			return domain.TenantPartition{}, err
 		}
 		return s.GetDefaultTenantPartition(ctx, partition.AccountID)
 	}
 	if err := s.q(ctx).CreateTenantPartitionByRefIfAbsent(ctx, postgresdb.CreateTenantPartitionByRefIfAbsentParams{
-		ID: partition.ID, AccountID: partition.AccountID,
-		TenantRef: partition.TenantRef, CreatedAt: partition.CreatedAt,
+		ID:        partition.ID,
+		AccountID: partition.AccountID,
+		TenantKey: partition.TenantKey,
+		CreatedAt: partition.CreatedAt,
 	}); err != nil {
 		return domain.TenantPartition{}, err
 	}
-	return s.GetTenantPartitionByRef(ctx, partition.AccountID, *partition.TenantRef)
+	return s.GetTenantPartitionByRef(ctx, partition.AccountID, *partition.TenantKey)
 }
 
 func (s *Store) GetTenantPartition(ctx context.Context, id string) (domain.TenantPartition, error) {
@@ -332,9 +338,10 @@ func (s *Store) GetDefaultTenantPartition(ctx context.Context, accountID string)
 	return tenantPartitionFromRow(row), nil
 }
 
-func (s *Store) GetTenantPartitionByRef(ctx context.Context, accountID, tenantRef string) (domain.TenantPartition, error) {
+func (s *Store) GetTenantPartitionByRef(ctx context.Context, accountID, tenantKey string) (domain.TenantPartition, error) {
 	row, err := s.q(ctx).GetTenantPartitionByRef(ctx, postgresdb.GetTenantPartitionByRefParams{
-		AccountID: accountID, TenantRef: tenantRef,
+		AccountID: accountID,
+		TenantKey: tenantKey,
 	})
 	if err != nil {
 		return domain.TenantPartition{}, normalizeNotFound(err)
@@ -344,34 +351,47 @@ func (s *Store) GetTenantPartitionByRef(ctx context.Context, accountID, tenantRe
 
 func tenantPartitionFromRow(row postgresdb.TenantPartition) domain.TenantPartition {
 	return domain.TenantPartition{
-		ID: row.ID, AccountID: row.AccountID, TenantRef: row.TenantRef, CreatedAt: row.CreatedAt,
+		ID:        row.ID,
+		AccountID: row.AccountID,
+		TenantKey: row.TenantKey,
+		CreatedAt: row.CreatedAt,
 	}
 }
 
 func (s *Store) CreateAgent(ctx context.Context, agent domain.Agent) error {
 	return s.q(ctx).CreateAgent(ctx, postgresdb.CreateAgentParams{
-		ID: agent.ID, AccountID: agent.AccountID, AgentRef: agent.AgentRef, CreatedAt: agent.CreatedAt,
+		ID:        agent.ID,
+		AccountID: agent.AccountID,
+		AgentKey:  agent.AgentKey,
+		CreatedAt: agent.CreatedAt,
 	})
 }
 
 func (s *Store) ResolveAgent(ctx context.Context, agent domain.Agent) (domain.Agent, error) {
 	if err := s.q(ctx).CreateAgentIfAbsent(ctx, postgresdb.CreateAgentIfAbsentParams{
-		ID: agent.ID, AccountID: agent.AccountID, AgentRef: agent.AgentRef, CreatedAt: agent.CreatedAt,
+		ID:        agent.ID,
+		AccountID: agent.AccountID,
+		AgentKey:  agent.AgentKey,
+		CreatedAt: agent.CreatedAt,
 	}); err != nil {
 		return domain.Agent{}, err
 	}
-	return s.GetAgentByRef(ctx, agent.AccountID, agent.AgentRef)
+	return s.GetAgentByRef(ctx, agent.AccountID, agent.AgentKey)
 }
 
-func (s *Store) GetAgentByRef(ctx context.Context, accountID, agentRef string) (domain.Agent, error) {
+func (s *Store) GetAgentByRef(ctx context.Context, accountID, agentKey string) (domain.Agent, error) {
 	row, err := s.q(ctx).GetAgentByRef(ctx, postgresdb.GetAgentByRefParams{
-		AccountID: accountID, AgentRef: agentRef,
+		AccountID: accountID,
+		AgentKey:  agentKey,
 	})
 	if err != nil {
 		return domain.Agent{}, normalizeNotFound(err)
 	}
 	return domain.Agent{
-		ID: row.ID, AccountID: row.AccountID, AgentRef: row.AgentRef, CreatedAt: row.CreatedAt,
+		ID:        row.ID,
+		AccountID: row.AccountID,
+		AgentKey:  row.AgentKey,
+		CreatedAt: row.CreatedAt,
 	}, nil
 }
 
@@ -383,7 +403,7 @@ func (s *Store) GetAgentByID(ctx context.Context, id string) (domain.Agent, erro
 	return domain.Agent{
 		ID:        row.ID,
 		AccountID: row.AccountID,
-		AgentRef:  row.AgentRef,
+		AgentKey:  row.AgentKey,
 		CreatedAt: row.CreatedAt,
 	}, nil
 }
@@ -496,13 +516,15 @@ func (s *Store) CreateInvocation(ctx context.Context, invocation domain.Invocati
 		RequestFingerprintVersion: int16(invocation.FingerprintVersion),
 		CurrentStateRevision:      invocation.CurrentStateRevision,
 		ErrorPayload:              invocation.Error,
-		WallClockTimeoutMs:        invocation.WallClockTimeoutMS,
-		ActiveExecutionTimeoutMs:  invocation.ActiveTimeoutMS,
+		TotalTimeoutMs:            invocation.TotalTimeoutMS,
+		ActiveTimeoutMs:           invocation.ActiveTimeoutMS,
+		WaitingTimeoutMs:          invocation.WaitingTimeoutMS,
 		MaxOutputTokens:           maxOutputTokens,
 		MaxEstimatedCostMicrousd:  invocation.MaxEstimatedCostMicros,
 		MaxIterations:             int32(invocation.MaxIterations),
 		ActiveExecutionMs:         invocation.ActiveExecutionMS,
-		WallClockDeadlineAt:       invocation.WallClockDeadlineAt,
+		WaitingExecutionMs:        invocation.WaitingExecutionMS,
+		DeadlineAt:                invocation.DeadlineAt,
 		OutputSchemaDigest:        invocation.OutputSchemaDigest,
 		CreatedAt:                 invocation.CreatedAt,
 		UpdatedAt:                 invocation.UpdatedAt,
@@ -635,14 +657,17 @@ func invocationFromRow(row postgresdb.Invocation) domain.Invocation {
 		LeaseOwner:                row.LeaseOwner,
 		LeaseExpiresAt:            row.LeaseExpiresAt,
 		LeaseAttempt:              row.LeaseAttempt,
-		WallClockTimeoutMS:        row.WallClockTimeoutMs,
-		ActiveTimeoutMS:           row.ActiveExecutionTimeoutMs,
+		TotalTimeoutMS:            row.TotalTimeoutMs,
+		ActiveTimeoutMS:           row.ActiveTimeoutMs,
+		WaitingTimeoutMS:          row.WaitingTimeoutMs,
 		MaxOutputTokens:           maxOutputTokens,
 		MaxEstimatedCostMicros:    row.MaxEstimatedCostMicrousd,
 		MaxIterations:             int(row.MaxIterations),
 		ActiveExecutionMS:         row.ActiveExecutionMs,
-		WallClockDeadlineAt:       row.WallClockDeadlineAt,
+		WaitingExecutionMS:        row.WaitingExecutionMs,
+		DeadlineAt:                row.DeadlineAt,
 		ActiveSegmentStartedAt:    row.ActiveSegmentStartedAt,
+		WaitingSegmentStartedAt:   row.WaitingSegmentStartedAt,
 		ExecutionDeadlineAt:       row.ExecutionDeadlineAt,
 		ExecutionDeadlineScope:    row.ExecutionDeadlineScope,
 		CurrentCheckpointSequence: row.CurrentCheckpointSequence,
@@ -753,18 +778,18 @@ func (s *Store) SettleInvocation(
 	return invocationFromRow(row), nil
 }
 
-func (s *Store) ParkInvocationForClientTools(
+func (s *Store) ParkInvocationForHostTools(
 	ctx context.Context,
 	id, owner string,
 	attempt, stateRevision int64,
 	observedAt time.Time,
 ) (domain.Invocation, error) {
-	row, err := s.q(ctx).ParkInvocationForClientTools(ctx, postgresdb.ParkInvocationForClientToolsParams{
+	row, err := s.q(ctx).ParkInvocationForHostTools(ctx, postgresdb.ParkInvocationForHostToolsParams{
 		ID:            id,
 		LeaseOwner:    &owner,
 		LeaseAttempt:  attempt,
 		StateRevision: stateRevision,
-		ObservedAt:    observedAt,
+		ObservedAt:    &observedAt,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Invocation{}, ports.ErrLeaseLost
@@ -969,7 +994,7 @@ func (s *Store) ListSessions(ctx context.Context, query ports.SessionListQuery) 
 				NextMessageSequence: row.NextMessageSequence, NextLifecycleRevision: row.NextLifecycleRevision,
 				CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 			},
-			TenantRef: row.TenantRef,
+			TenantKey: row.TenantKey,
 		}
 		if row.ActiveInvocationID != "" {
 			status := domain.InvocationStatus(row.ActiveInvocationStatus)

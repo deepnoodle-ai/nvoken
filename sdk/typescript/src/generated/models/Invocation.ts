@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { InvocationLimits } from './InvocationLimits.js';
+import {
+    InvocationLimitsFromJSON,
+    InvocationLimitsFromJSONTyped,
+    InvocationLimitsToJSON,
+    InvocationLimitsToJSONTyped,
+} from './InvocationLimits.js';
 import type { InvocationFailure } from './InvocationFailure.js';
 import {
     InvocationFailureFromJSON,
@@ -41,13 +48,13 @@ import {
     ModelProvenanceToJSON,
     ModelProvenanceToJSONTyped,
 } from './ModelProvenance.js';
-import type { InvocationBudgets } from './InvocationBudgets.js';
+import type { PendingHostToolCall } from './PendingHostToolCall.js';
 import {
-    InvocationBudgetsFromJSON,
-    InvocationBudgetsFromJSONTyped,
-    InvocationBudgetsToJSON,
-    InvocationBudgetsToJSONTyped,
-} from './InvocationBudgets.js';
+    PendingHostToolCallFromJSON,
+    PendingHostToolCallFromJSONTyped,
+    PendingHostToolCallToJSON,
+    PendingHostToolCallToJSONTyped,
+} from './PendingHostToolCall.js';
 import type { StructuredOutputProvenance } from './StructuredOutputProvenance.js';
 import {
     StructuredOutputProvenanceFromJSON,
@@ -55,13 +62,6 @@ import {
     StructuredOutputProvenanceToJSON,
     StructuredOutputProvenanceToJSONTyped,
 } from './StructuredOutputProvenance.js';
-import type { PendingClientToolCall } from './PendingClientToolCall.js';
-import {
-    PendingClientToolCallFromJSON,
-    PendingClientToolCallFromJSONTyped,
-    PendingClientToolCallToJSON,
-    PendingClientToolCallToJSONTyped,
-} from './PendingClientToolCall.js';
 
 /**
  *
@@ -128,10 +128,10 @@ export interface Invocation {
     structuredOutputProvenance: StructuredOutputProvenance | null;
     /**
      *
-     * @type {InvocationBudgets}
+     * @type {InvocationLimits}
      * @memberof Invocation
      */
-    budgets: InvocationBudgets;
+    limits: InvocationLimits;
     /**
      *
      * @type {number}
@@ -143,7 +143,7 @@ export interface Invocation {
      * @type {Date}
      * @memberof Invocation
      */
-    wallClockDeadlineAt: Date;
+    deadlineAt: Date;
     /**
      *
      * @type {Date}
@@ -161,13 +161,13 @@ export interface Invocation {
      * @type {Date}
      * @memberof Invocation
      */
-    completedAt: Date | null;
+    endedAt: Date | null;
     /**
-     * Present for a waiting Invocation with unresolved client calls.
-     * @type {Array<PendingClientToolCall>}
+     * Present for a waiting Invocation with unresolved host calls.
+     * @type {Array<PendingHostToolCall>}
      * @memberof Invocation
      */
-    pendingToolCalls?: Array<PendingClientToolCall>;
+    pendingToolCalls?: Array<PendingHostToolCall>;
 }
 
 
@@ -185,12 +185,12 @@ export function instanceOfInvocation(value: object): value is Invocation {
     if (!('provenance' in value) || value['provenance'] === undefined) return false;
     if (!('structuredOutput' in value) || value['structuredOutput'] === undefined) return false;
     if (!('structuredOutputProvenance' in value) || value['structuredOutputProvenance'] === undefined) return false;
-    if (!('budgets' in value) || value['budgets'] === undefined) return false;
+    if (!('limits' in value) || value['limits'] === undefined) return false;
     if (!('activeExecutionMs' in value) || value['activeExecutionMs'] === undefined) return false;
-    if (!('wallClockDeadlineAt' in value) || value['wallClockDeadlineAt'] === undefined) return false;
+    if (!('deadlineAt' in value) || value['deadlineAt'] === undefined) return false;
     if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
     if (!('updatedAt' in value) || value['updatedAt'] === undefined) return false;
-    if (!('completedAt' in value) || value['completedAt'] === undefined) return false;
+    if (!('endedAt' in value) || value['endedAt'] === undefined) return false;
     return true;
 }
 
@@ -213,13 +213,13 @@ export function InvocationFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'provenance': ModelProvenanceFromJSON(json['provenance']),
         'structuredOutput': json['structured_output'],
         'structuredOutputProvenance': StructuredOutputProvenanceFromJSON(json['structured_output_provenance']),
-        'budgets': InvocationBudgetsFromJSON(json['budgets']),
+        'limits': InvocationLimitsFromJSON(json['limits']),
         'activeExecutionMs': json['active_execution_ms'],
-        'wallClockDeadlineAt': (new Date(json['wall_clock_deadline_at'])),
+        'deadlineAt': (new Date(json['deadline_at'])),
         'createdAt': (new Date(json['created_at'])),
         'updatedAt': (new Date(json['updated_at'])),
-        'completedAt': (json['completed_at'] == null ? null : new Date(json['completed_at'])),
-        'pendingToolCalls': json['pending_tool_calls'] == null ? undefined : ((json['pending_tool_calls'] as Array<any>).map(PendingClientToolCallFromJSON)),
+        'endedAt': (json['ended_at'] == null ? null : new Date(json['ended_at'])),
+        'pendingToolCalls': json['pending_tool_calls'] == null ? undefined : ((json['pending_tool_calls'] as Array<any>).map(PendingHostToolCallFromJSON)),
     };
 }
 
@@ -243,12 +243,12 @@ export function InvocationToJSONTyped(value?: Invocation | null, ignoreDiscrimin
         'provenance': ModelProvenanceToJSON(value['provenance']),
         'structured_output': value['structuredOutput'],
         'structured_output_provenance': StructuredOutputProvenanceToJSON(value['structuredOutputProvenance']),
-        'budgets': InvocationBudgetsToJSON(value['budgets']),
+        'limits': InvocationLimitsToJSON(value['limits']),
         'active_execution_ms': value['activeExecutionMs'],
-        'wall_clock_deadline_at': value['wallClockDeadlineAt'].toISOString(),
+        'deadline_at': value['deadlineAt'].toISOString(),
         'created_at': value['createdAt'].toISOString(),
         'updated_at': value['updatedAt'].toISOString(),
-        'completed_at': value['completedAt'] == null ? value['completedAt'] : value['completedAt'].toISOString(),
-        'pending_tool_calls': value['pendingToolCalls'] == null ? undefined : ((value['pendingToolCalls'] as Array<any>).map(PendingClientToolCallToJSON)),
+        'ended_at': value['endedAt'] == null ? value['endedAt'] : value['endedAt'].toISOString(),
+        'pending_tool_calls': value['pendingToolCalls'] == null ? undefined : ((value['pendingToolCalls'] as Array<any>).map(PendingHostToolCallToJSON)),
     };
 }

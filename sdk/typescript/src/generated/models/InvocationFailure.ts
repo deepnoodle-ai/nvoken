@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -15,11 +15,8 @@
 import { mapValues } from '../runtime.js';
 /**
  * Failed Invocations may carry paired usage and provenance when a model
- * response produced safe normalized evidence before deadline or budget
+ * response produced safe normalized evidence before deadline or limit
  * settlement. Cancellation and pre-response failures carry neither.
- * `execution_lost` is retained for historical rows written before
- * checkpoint recovery; recoverable lease expiry now requeues the same
- * Invocation and does not write that failure.
  *
  * @export
  * @interface InvocationFailure
@@ -52,7 +49,6 @@ export interface InvocationFailure {
 export const InvocationFailureCodeEnum = {
     DeadlineExceeded: 'deadline_exceeded',
     BudgetExceeded: 'budget_exceeded',
-    ExecutionLost: 'execution_lost',
     CredentialUnavailable: 'credential_unavailable',
     ProviderError: 'provider_error',
     StructuredOutputUnsatisfied: 'structured_output_unsatisfied',

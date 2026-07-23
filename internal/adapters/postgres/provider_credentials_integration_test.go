@@ -54,7 +54,7 @@ func TestProviderCredentialAdmissionResolutionAndCleanupIntegration(t *testing.T
 		}, keyring, 5*time.Minute),
 	)
 	omittedInput := runtimeInput()
-	omittedInput.AgentRef = "omitted-default"
+	omittedInput.AgentKey = "omitted-default"
 	omittedInput.SessionKey = pointerString("omitted-default")
 	omittedInput.IdempotencyKey = "omitted-default"
 	omittedAck, err := runtime.Admit(ctx, auth, omittedInput)
@@ -160,7 +160,7 @@ func TestProviderCredentialAdmissionResolutionAndCleanupIntegration(t *testing.T
 	}
 
 	accountInput := runtimeInput()
-	accountInput.AgentRef = "openai-support"
+	accountInput.AgentKey = "openai-support"
 	accountInput.SessionKey = pointerString("openai-ticket")
 	accountInput.IdempotencyKey = "account-openai-invocation"
 	accountInput.Spec.Model.Provider = "openai"
@@ -208,7 +208,7 @@ func TestProviderCredentialAdmissionResolutionAndCleanupIntegration(t *testing.T
 		created, err := lifecycle.Create(ctx, auth, services.CreateProviderCredentialInput{
 			Provider:  "anthropic",
 			Scope:     domain.ProviderCredentialScopeTenant,
-			TenantRef: &tenant.ref,
+			TenantKey: &tenant.ref,
 			Credential: services.ProviderStaticCredentialInput{
 				APIKey: tenant.secret,
 			},
@@ -218,8 +218,8 @@ func TestProviderCredentialAdmissionResolutionAndCleanupIntegration(t *testing.T
 			t.Fatalf("create %s BYOK: %v", tenant.ref, err)
 		}
 		input := runtimeInput()
-		input.AgentRef = "tenant-support-" + tenant.ref
-		input.TenantRef = &tenant.ref
+		input.AgentKey = "tenant-support-" + tenant.ref
+		input.TenantKey = &tenant.ref
 		input.SessionKey = pointerString("tenant-ticket")
 		input.IdempotencyKey = "tenant-invocation-" + tenant.ref
 		input.ProviderCredentials = []services.ProviderCredentialSelection{
@@ -252,7 +252,7 @@ func TestProviderCredentialAdmissionResolutionAndCleanupIntegration(t *testing.T
 	tenantRuntimeCredential, err := lifecycle.Create(ctx, tenantRuntimeAuth, services.CreateProviderCredentialInput{
 		Provider:  "openai",
 		Scope:     domain.ProviderCredentialScopeTenant,
-		TenantRef: &tenantConstraint,
+		TenantKey: &tenantConstraint,
 		Credential: services.ProviderStaticCredentialInput{
 			APIKey: "tenant-runtime-secret",
 		},
@@ -268,7 +268,7 @@ func TestProviderCredentialAdmissionResolutionAndCleanupIntegration(t *testing.T
 	_, err = lifecycle.Create(ctx, tenantRuntimeAuth, services.CreateProviderCredentialInput{
 		Provider:  "openai",
 		Scope:     domain.ProviderCredentialScopeTenant,
-		TenantRef: &otherTenant,
+		TenantKey: &otherTenant,
 		Credential: services.ProviderStaticCredentialInput{
 			APIKey: "wrong-tenant-secret",
 		},

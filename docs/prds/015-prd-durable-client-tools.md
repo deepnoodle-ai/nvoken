@@ -1,9 +1,9 @@
-# Park Invocations for durable client tools
+# Park Invocations for durable host tools
 
 **Status:** Implemented
 **Sequence:** 015
 **Depends on:** `007-prd-recovery-and-transcript-reads.md`,
-`008-prd-invocation-controls-and-budgets.md`,
+`008-prd-invocation-controls-and-limits.md`,
 `010-prd-cloud-tasks-invocation-execution.md`,
 `011-prd-resumable-streaming.md`,
 `012-prd-durable-toolcall-and-checkpoint-model.md`, and
@@ -41,7 +41,7 @@ engine.
 
 ## Scope
 
-**In:** inline client-tool definitions; admission validation and fingerprinting;
+**In:** inline host-tool definitions; admission validation and fingerprinting;
 Anthropic/OpenAI projection through Dive; fenced parking; authoritative pending
 ToolCall reads; `POST /v1/invocations/{invocation_id}/tool-results`; atomic,
 partial, and idempotent batch acceptance; wall deadlines and cancellation;
@@ -55,9 +55,9 @@ per-tool deadlines; public retry/resume; SDK generation; cloud staging proof.
 
 ## Requirements
 
-- **R1 — Immutable client-tool declarations.** `spec.tools` may contain at most
+- **R1 — Immutable host-tool declarations.** `spec.tools` may contain at most
   32 ordered definitions with exactly `name`, `description`, `input_schema`,
-  and `mode: "client"`. Names must be unique, contain 1–64 ASCII letters,
+  and `mode: "host"`. Names must be unique, contain 1–64 ASCII letters,
   digits, underscores, or hyphens, and may not use the `nvoken_` reserved
   prefix. Descriptions are required and bounded to 4,096 Unicode characters.
   Each input schema must be a nonempty object-root schema no larger than 32 KiB
@@ -77,7 +77,7 @@ per-tool deadlines; public retry/resume; SDK generation; cloud staging proof.
   snapshot, not mutable Agent configuration, drives every segment. The
   compatibility vectors live in `docs/design/admission-fingerprint-v4.json`.
 
-- **R3 — Persist before park or exposure.** A selected client tool must pass
+- **R3 — Persist before park or exposure.** A selected host tool must pass
   through the existing model-checkpoint transaction: canonical assistant
   `tool_use` content, at most 32 stable nvoken ToolCall IDs in one model batch,
   request digests, usage receipt, and checkpoint commit under the current
@@ -161,7 +161,7 @@ per-tool deadlines; public retry/resume; SDK generation; cloud staging proof.
 
 ## Acceptance
 
-- [x] **A1 (R1, R2):** Strict admission tests accept 32 unique client tools at
+- [x] **A1 (R1, R2):** Strict admission tests accept 32 unique host tools at
   every stated boundary and reject the next count/size/depth, reserved or
   duplicate names, callback mode, unknown fields, invalid schemas, and a
   one-iteration tools request without writes. Omitted iterations resolve to
@@ -169,7 +169,7 @@ per-tool deadlines; public retry/resume; SDK generation; cloud staging proof.
   canonicalization, ordered-tool materiality, equal replay, changed replay
   conflict, and v1–v3 compatibility.
 
-- [x] **A2 (R3–R5):** A scripted model requests two client tools. Postgres and
+- [x] **A2 (R3–R5):** A scripted model requests two host tools. Postgres and
   transcript/SSE reads expose both stable nvoken IDs and inputs before a
   `waiting` revision; the Invocation then has no lease, owner, execution
   deadline, active segment, running goroutine, or active dispatch. Restarting
@@ -194,8 +194,8 @@ per-tool deadlines; public retry/resume; SDK generation; cloud staging proof.
 
 - [x] **A5 (R3, R7, R8):** After the final result, a different engine process
   reconstructs the provider-valid transcript, continues with cumulative usage
-  and iteration budgets, and either completes or parks on another client batch.
-  A crash after a committed client-tool model checkpoint but before parking
+  and iteration limits, and either completes or parks on another client batch.
+  A crash after a committed host-tool model checkpoint but before parking
   parks on the replacement owner without another provider call. Crashes after
   result message, call settlement, lifecycle, dispatch creation, and
   acknowledgement converge without duplicate model-visible results or a lost
@@ -213,7 +213,7 @@ per-tool deadlines; public retry/resume; SDK generation; cloud staging proof.
   examples describe the declarations, pending projection, result command,
   status transitions, errors, deadline semantics, and transcript authority.
   `docs/design/decisions.md` records the declaration, fingerprint-v4, and
-  command decisions. Logs contain no client-tool schema, input, or result
+  command decisions. Logs contain no host-tool schema, input, or result
   payloads.
 
 ## Risks and open decisions

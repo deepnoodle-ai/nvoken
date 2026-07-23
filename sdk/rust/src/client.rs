@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 
 use crate::apis;
 use crate::models;
-use crate::stream::{stream_handle, ReducedSnapshot, StreamEvent};
+use crate::stream::{stream_handle, StreamEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCategory {
@@ -43,17 +43,17 @@ pub struct NvokenError {
 
 #[derive(Debug, Clone)]
 pub struct RetryPolicy {
-    pub maximum_attempts: u32,
-    pub minimum_delay: Duration,
-    pub maximum_delay: Duration,
+    pub max_attempts: u32,
+    pub min_delay: Duration,
+    pub max_delay: Duration,
 }
 
 impl Default for RetryPolicy {
     fn default() -> Self {
         Self {
-            maximum_attempts: 4,
-            minimum_delay: Duration::from_millis(100),
-            maximum_delay: Duration::from_secs(2),
+            max_attempts: 4,
+            min_delay: Duration::from_millis(100),
+            max_delay: Duration::from_secs(2),
         }
     }
 }
@@ -125,7 +125,7 @@ impl Middleware for ReplaySafeRetry {
                 Err(MiddlewareError::Reqwest(_)) => true,
                 Err(MiddlewareError::Middleware(_)) => false,
             };
-            if !retry || attempt >= self.policy.maximum_attempts {
+            if !retry || attempt >= self.policy.max_attempts {
                 return result;
             }
             let retry_after = result
@@ -136,12 +136,12 @@ impl Middleware for ReplaySafeRetry {
                 .and_then(parse_retry_after);
             let exponential = self
                 .policy
-                .minimum_delay
+                .min_delay
                 .saturating_mul(1_u32 << (attempt - 1))
-                .min(self.policy.maximum_delay);
+                .min(self.policy.max_delay);
             let delay = retry_after
                 .unwrap_or_else(|| jitter(exponential))
-                .min(self.policy.maximum_delay);
+                .min(self.policy.max_delay);
             tokio::time::sleep(delay).await;
             attempt += 1;
         }
@@ -172,7 +172,7 @@ fn retryable_status(status: StatusCode) -> bool {
 #[derive(Debug, Clone, Serialize)]
 pub struct Model {
     pub provider: String,
-    pub name: String,
+    pub id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -185,16 +185,18 @@ pub struct Tool {
 
 #[derive(Debug, Clone)]
 pub enum ToolMode {
-    Client,
+    Host,
     Callback { url: String },
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
-pub struct Budgets {
+pub struct Limits {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub wall_clock_timeout_seconds: Option<u32>,
+    pub total_timeout_seconds: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub active_execution_timeout_seconds: Option<u32>,
+    pub active_timeout_seconds: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub waiting_timeout_seconds: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -205,22 +207,42 @@ pub struct Budgets {
 
 #[derive(Debug, Clone)]
 pub struct ExecutionSpec {
-    pub instructions: String,
+    pub instructions: Option<String>,
     pub model: Model,
-    pub budgets: Option<Budgets>,
+    pub limits: Option<Limits>,
     pub tools: Vec<Tool>,
     pub output_schema: Option<HashMap<String, Value>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct InvokeRequest {
-    pub agent_ref: String,
-    pub tenant_ref: Option<String>,
+    pub agent_key: String,
+    pub tenant_key: Option<String>,
     pub session_id: Option<String>,
     pub session_key: Option<String>,
-    pub idempotency_key: String,
+    pub idempotency_key: Option<String>,
     pub input: String,
     pub spec: ExecutionSpec,
+}
+
+impl InvokeRequest {
+    pub fn new(agent_key: impl Into<String>, input: impl Into<String>, model: Model) -> Self {
+        Self {
+            agent_key: agent_key.into(),
+            tenant_key: None,
+            session_id: None,
+            session_key: None,
+            idempotency_key: None,
+            input: input.into(),
+            spec: ExecutionSpec {
+                instructions: None,
+                model,
+                limits: None,
+                tools: Vec::new(),
+                output_schema: None,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -232,7 +254,7 @@ pub struct ToolResult {
 
 #[derive(Debug, Clone, Default)]
 pub struct ListInvocationsOptions {
-    pub tenant_ref: Option<String>,
+    pub tenant_key: Option<String>,
     pub default_tenant: Option<bool>,
     pub session_id: Option<String>,
     pub agent_id: Option<String>,
@@ -243,7 +265,7 @@ pub struct ListInvocationsOptions {
 
 #[derive(Debug, Clone, Default)]
 pub struct ListSessionsOptions {
-    pub tenant_ref: Option<String>,
+    pub tenant_key: Option<String>,
     pub default_tenant: Option<bool>,
     pub agent_id: Option<String>,
     pub session_key: Option<String>,
@@ -313,14 +335,9 @@ impl Client {
         &self.configuration
     }
 
-    pub async fn invoke(&self, request: InvokeRequest) -> Result<Handle, NvokenError> {
-        if request.agent_ref.is_empty()
-            || request.idempotency_key.is_empty()
-            || request.input.is_empty()
-        {
-            return Err(NvokenError::validation(
-                "agent reference, idempotency key, and input are required",
-            ));
+    pub async fn invoke(&self, request: InvokeRequest) -> Result<InvocationHandle, NvokenError> {
+        if request.agent_key.is_empty() || request.input.is_empty() {
+            return Err(NvokenError::validation("agent key and input are required"));
         }
         let provider = match request.spec.model.provider.as_str() {
             "anthropic" => models::ModelProvider::Anthropic,
@@ -331,11 +348,12 @@ impl Client {
                 ))
             }
         };
-        let model = models::ModelSelection::new(provider, request.spec.model.name);
-        let mut spec = models::InlineExecutionSpec::new(request.spec.instructions, model);
-        spec.budgets = request
+        let model = models::ModelSelection::new(provider, request.spec.model.id);
+        let mut spec = models::InlineExecutionSpec::new(model);
+        spec.instructions = request.spec.instructions;
+        spec.limits = request
             .spec
-            .budgets
+            .limits
             .map(|value| serde_json::from_value(json!(value)))
             .transpose()
             .map_err(|error| NvokenError::validation(error.to_string()))?
@@ -348,11 +366,11 @@ impl Client {
         let mut tools = Vec::with_capacity(request.spec.tools.len());
         for tool in request.spec.tools {
             let mode = match tool.mode {
-                ToolMode::Client => {
-                    models::ToolSpec::ClientToolSpec(Box::new(models::ClientToolSpec::new(
+                ToolMode::Host => {
+                    models::ToolSpec::HostToolSpec(Box::new(models::HostToolSpec::new(
                         tool.name,
                         tool.description,
-                        models::client_tool_spec::Mode::ModeClient,
+                        models::host_tool_spec::Mode::ModeHost,
                         tool.input_schema,
                     )))
                 }
@@ -369,48 +387,57 @@ impl Client {
             tools.push(mode);
         }
         spec.tools = (!tools.is_empty()).then_some(tools);
-        let input = models::InvocationInput::new(vec![models::TextInputBlock::new(
-            models::text_input_block::Type::InputTypeText,
-            request.input,
-        )]);
+        let input = models::InvocationInput::String(request.input);
+        let idempotency_key = request
+            .idempotency_key
+            .unwrap_or_else(generated_idempotency_key);
         let mut body = models::CreateInvocationRequest::new(
-            request.agent_ref,
-            request.idempotency_key,
+            request.agent_key,
+            idempotency_key.clone(),
             input,
             spec,
         );
-        body.tenant_ref = request.tenant_ref;
+        body.tenant_key = request.tenant_key;
         body.session_id = request.session_id;
         body.session_key = request.session_key;
         let acknowledgement = apis::invocations_api::create_invocation(&self.configuration, body)
             .await
             .map_err(|error| self.normalize_generated_error(error))?;
-        Ok(Handle {
+        Ok(InvocationHandle {
             client: self.clone(),
             invocation_id: acknowledgement.invocation_id,
-            session_id: acknowledgement.session_id,
-            status: acknowledgement.status,
+            idempotency_key: Some(idempotency_key),
+            session_id: Some(acknowledgement.session_id),
+            agent_id: Some(acknowledgement.agent_id),
+            status: Some(acknowledgement.status),
+            deduplicated: Some(acknowledgement.deduplicated),
+            deadline_at: Some(acknowledgement.deadline_at),
         })
     }
 
-    pub async fn resume(&self, invocation_id: impl Into<String>) -> Result<Handle, NvokenError> {
-        let invocation_id = invocation_id.into();
-        let invocation = self.get(&invocation_id).await?;
-        Ok(Handle {
+    pub fn invocation(&self, invocation_id: impl Into<String>) -> InvocationHandle {
+        InvocationHandle {
             client: self.clone(),
-            invocation_id: invocation.id,
-            session_id: invocation.session_id,
-            status: invocation.status,
-        })
+            invocation_id: invocation_id.into(),
+            idempotency_key: None,
+            session_id: None,
+            agent_id: None,
+            status: None,
+            deduplicated: None,
+            deadline_at: None,
+        }
     }
 
-    pub async fn get(&self, invocation_id: &str) -> Result<models::Invocation, NvokenError> {
+    pub async fn get_invocation(
+        &self,
+        invocation_id: &str,
+    ) -> Result<models::Invocation, NvokenError> {
         apis::invocations_api::get_invocation(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
     }
 
-    pub async fn get_result(
+    pub async fn get_invocation_result(
         &self,
         invocation_id: &str,
     ) -> Result<models::InvocationResult, NvokenError> {
@@ -419,7 +446,10 @@ impl Client {
             .map_err(|error| self.normalize_generated_error(error))
     }
 
-    pub async fn cancel(&self, invocation_id: &str) -> Result<models::Invocation, NvokenError> {
+    pub async fn cancel_invocation(
+        &self,
+        invocation_id: &str,
+    ) -> Result<models::Invocation, NvokenError> {
         apis::invocations_api::cancel_invocation(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
@@ -429,12 +459,12 @@ impl Client {
         &self,
         invocation_id: &str,
         results: Vec<ToolResult>,
-    ) -> Result<models::SubmitClientToolResultsResponse, NvokenError> {
-        let request = models::SubmitClientToolResultsRequest::new(
+    ) -> Result<models::SubmitHostToolResultsResponse, NvokenError> {
+        let request = models::SubmitHostToolResultsRequest::new(
             results
                 .into_iter()
                 .map(|result| {
-                    let mut value = models::SubmitClientToolResultsRequestResultsInner::new(
+                    let mut value = models::SubmitHostToolResultsRequestResultsInner::new(
                         result.tool_call_id,
                         Some(result.content),
                     );
@@ -443,13 +473,9 @@ impl Client {
                 })
                 .collect(),
         );
-        apis::invocations_api::submit_client_tool_results(
-            &self.configuration,
-            invocation_id,
-            request,
-        )
-        .await
-        .map_err(|error| self.normalize_generated_error(error))
+        apis::invocations_api::submit_host_tool_results(&self.configuration, invocation_id, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn list_invocations(
@@ -458,7 +484,7 @@ impl Client {
     ) -> Result<models::InvocationList, NvokenError> {
         apis::invocations_api::list_invocations(
             &self.configuration,
-            options.tenant_ref.as_deref(),
+            options.tenant_key.as_deref(),
             options.default_tenant,
             options.session_id.as_deref(),
             options.agent_id.as_deref(),
@@ -482,7 +508,7 @@ impl Client {
     ) -> Result<models::SessionList, NvokenError> {
         apis::sessions_api::list_sessions(
             &self.configuration,
-            options.tenant_ref.as_deref(),
+            options.tenant_key.as_deref(),
             options.default_tenant,
             options.agent_id.as_deref(),
             options.session_key.as_deref(),
@@ -525,18 +551,29 @@ impl Client {
 }
 
 #[derive(Clone)]
-pub struct Handle {
+pub struct InvocationHandle {
     pub(crate) client: Client,
     pub invocation_id: String,
-    pub session_id: String,
-    pub status: models::InvocationStatus,
+    pub idempotency_key: Option<String>,
+    pub session_id: Option<String>,
+    pub agent_id: Option<String>,
+    pub status: Option<models::InvocationStatus>,
+    pub deduplicated: Option<bool>,
+    pub deadline_at: Option<chrono::DateTime<chrono::FixedOffset>>,
 }
 
-impl Handle {
+impl InvocationHandle {
     pub async fn refresh(&mut self) -> Result<models::Invocation, NvokenError> {
-        let invocation = self.client.get(&self.invocation_id).await?;
-        self.status = invocation.status;
+        let invocation = self.client.get_invocation(&self.invocation_id).await?;
+        self.apply(&invocation);
         Ok(invocation)
+    }
+
+    fn apply(&mut self, invocation: &models::Invocation) {
+        self.session_id = Some(invocation.session_id.clone());
+        self.agent_id = Some(invocation.agent_id.clone());
+        self.status = Some(invocation.status);
+        self.deadline_at = Some(invocation.deadline_at);
     }
 
     pub async fn wait(
@@ -566,8 +603,11 @@ impl Handle {
     /// Invocation, this Invocation's canonical messages, and the output_text
     /// projection.
     pub async fn result(&mut self) -> Result<models::InvocationResult, NvokenError> {
-        let result = self.client.get_result(&self.invocation_id).await?;
-        self.status = result.invocation.status;
+        let result = self
+            .client
+            .get_invocation_result(&self.invocation_id)
+            .await?;
+        self.apply(&result.invocation);
         Ok(result)
     }
 
@@ -594,29 +634,84 @@ impl Handle {
     }
 
     pub async fn cancel(&mut self) -> Result<models::Invocation, NvokenError> {
-        let invocation = self.client.cancel(&self.invocation_id).await?;
-        self.status = invocation.status;
+        let invocation = self.client.cancel_invocation(&self.invocation_id).await?;
+        self.apply(&invocation);
         Ok(invocation)
     }
 
     pub async fn submit_tool_results(
         &mut self,
         results: Vec<ToolResult>,
-    ) -> Result<models::SubmitClientToolResultsResponse, NvokenError> {
+    ) -> Result<models::SubmitHostToolResultsResponse, NvokenError> {
         let response = self
             .client
             .submit_tool_results(&self.invocation_id, results)
             .await?;
-        self.status = response.status;
+        self.session_id = Some(response.session_id.clone());
+        self.status = Some(response.status);
         Ok(response)
+    }
+
+    pub async fn wait_for_action(
+        &mut self,
+        timeout: Option<Duration>,
+    ) -> Result<models::Invocation, NvokenError> {
+        let future = async {
+            let mut delay = Duration::from_millis(100);
+            loop {
+                let invocation = self.refresh().await?;
+                if invocation.status == models::InvocationStatus::Waiting
+                    || terminal(invocation.status)
+                {
+                    return Ok(invocation);
+                }
+                tokio::time::sleep(delay).await;
+                delay = delay.saturating_mul(2).min(Duration::from_secs(2));
+            }
+        };
+        match timeout {
+            Some(timeout) => tokio::time::timeout(timeout, future)
+                .await
+                .map_err(|_| NvokenError::timeout("local wait timed out"))?,
+            None => future.await,
+        }
+    }
+
+    pub async fn wait_for_result(
+        &mut self,
+        timeout: Option<Duration>,
+    ) -> Result<models::InvocationResult, NvokenError> {
+        let invocation = self.wait(timeout).await?;
+        if invocation.status != models::InvocationStatus::Completed {
+            return Err(NvokenError::response(
+                StatusCode::CONFLICT,
+                json!({
+                    "code": invocation.error.as_ref().map(|value| value.code.clone()),
+                    "message": format!(
+                        "Invocation {} ended with status {}",
+                        self.invocation_id,
+                        invocation.status
+                    ),
+                    "details": invocation.error.as_ref().and_then(|value| value.details.clone()),
+                }),
+            ));
+        }
+        self.result().await
     }
 
     pub fn stream(
         &self,
-    ) -> impl futures_core::Stream<Item = Result<(StreamEvent, ReducedSnapshot), NvokenError>> + '_
-    {
+    ) -> impl futures_core::Stream<Item = Result<StreamEvent, NvokenError>> + '_ {
         stream_handle(self)
     }
+}
+
+fn generated_idempotency_key() -> String {
+    format!(
+        "nvoken-{:016x}{:016x}",
+        fastrand::u64(..),
+        fastrand::u64(..)
+    )
 }
 
 fn terminal(status: models::InvocationStatus) -> bool {

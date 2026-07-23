@@ -13,7 +13,7 @@ Thesis, product law, and the public nouns — Agent, Session, Invocation,
 ToolCall — are canonical in `vision.md`. The design is organized around:
 
 ```text
-invoke(execution_spec, input, optional_session, optional_tenant_ref)
+invoke(execution_spec, input, optional_session, optional_tenant_key)
   -> durable invocation
 ```
 
@@ -23,7 +23,7 @@ Architectural consequences:
   execution specification on every Invocation. Agents exist only as
   lightweight identity anchors, auto-created on first Invocation.
 - Project is not a provisioning resource; the host supplies an optional
-  `tenant_ref` and nvoken partitions internal state automatically.
+  `tenant_key` and nvoken partitions internal state automatically.
 - Registry, Release, deployment-track, integration, OAuth, skill, toolkit,
   and general secret APIs are not part of Runtime; hosts may register named
   custom tool definitions, opt into agent-memory storage, and supply or select
@@ -45,7 +45,7 @@ runtime is listed in `api.md` ("Explicitly absent from the Runtime API").
    and execution-owner loss. A replacement resumes the same Invocation from
    its last committed checkpoint under a new fence.
 3. A Session preserves transcript across Invocations.
-4. Client tools return like generation tool calls; a durable result
+4. Host tools return like generation tool calls; a durable result
    submission resumes the parked turn.
 5. Callback tools retain signed, durable server-to-server delivery.
 6. The host remains source of truth for definitions, versions, integrations,
@@ -68,9 +68,9 @@ runtime is listed in `api.md` ("Explicitly absent from the Runtime API").
 | Session state       | Canonical transcript, retention, one nonterminal Invocation, host key, tenant partition, indexed metadata |
 | Invocation state    | Admission, status, structured output, errors, spec snapshot/digest, usage, provenance               |
 | Turn execution      | Model calls, tool selection, checkpointing, continuation, cancellation, settlement                  |
-| Tool exchange       | Durable ToolCalls across builtin, callback, and client modes                                        |
+| Tool exchange       | Durable ToolCalls across builtin, callback, and host modes                                        |
 | Recovery            | Leases, fencing, checkpoints, replay cursors, retry policy, stale-engine rejection                  |
-| Trust boundary      | Runtime credentials, signed callbacks, model gateway, budgets, normalized metering                  |
+| Trust boundary      | Runtime credentials, signed callbacks, model gateway, limits, normalized metering                  |
 | Opt-in conveniences | Agent memory, named custom tool definitions, narrowly scoped model-provider credentials            |
 
 ### The host application owns
@@ -96,7 +96,7 @@ with the Runtime without becoming Runtime resources.
 ### Agent
 
 An Account-wide lightweight identity anchor, auto-created when an Invocation
-first names its caller-controlled `agent_ref` — there is no agent provisioning
+first names its caller-controlled `agent_key` — there is no agent provisioning
 call. The reference is unique within the Account. The anchor groups Sessions
 and Invocations across tenant partitions for lookup and observability and
 stores neither execution configuration nor tenant data.
@@ -120,7 +120,7 @@ public state is exactly `queued`, `running`,
 `waiting`, `completed`, `failed`, or `cancelled`; the last three are terminal
 and immutable, and the first valid terminal settlement wins. Deadline and
 budget exhaustion are typed failures, not additional lifecycle states.
-`waiting` means durable client ToolCalls are pending while the Invocation owns
+`waiting` means durable host ToolCalls are pending while the Invocation owns
 no engine lease or active segment. The Invocation owns caller
 context; resolved spec bytes and digest; attempts, leases, and checkpoints;
 model requests and normalized usage; ToolCalls and results; output — including
@@ -138,7 +138,7 @@ A new turn is a new Invocation.
 | --- | :---: | --- |
 | `queued` | No | Durably admitted and available for a future execution claim. |
 | `running` | No | A fenced engine owns the current execution segment. |
-| `waiting` | No | Durable client ToolCalls are pending; no execution owner or engine is held. |
+| `waiting` | No | Durable host ToolCalls are pending; no execution owner or engine is held. |
 | `completed` | Yes | The turn settled successfully. |
 | `failed` | Yes | The turn settled unsuccessfully, including deadline, budget, or temporary pre-recovery engine-loss outcomes. |
 | `cancelled` | Yes | Cancellation won terminal settlement. |
@@ -176,7 +176,7 @@ Every tool declares one mode:
   identity until admission owns such a claim. URLs satisfy public-only
   dial-time egress policy. The first implementation uses one installation HMAC
   secret with explicit key ID/version; JWKS signing remains a later scheme.
-- **`client`** — the ToolCall is persisted in the canonical transcript before
+- **`host`** — the ToolCall is persisted in the canonical transcript before
   projection through Invocation and Session reads. The Invocation parks in
   `waiting` until the host submits a bounded batch through
   `POST /v1/invocations/{invocation_id}/tool-results`. The first result per
@@ -288,18 +288,18 @@ bounded synthetic error result, closes the calls and running attempts, advances
 checkpoints, and publishes a lifecycle watermark covering the result. Lease
 recovery deliberately leaves open calls intact.
 
-Client ToolCall result submission uses Session, Invocation, then ToolCall lock
+Host ToolCall result submission uses Session, Invocation, then ToolCall lock
 order. A partial batch appends one tool-role message and one checkpoint per new
 result while leaving the Invocation waiting. The final batch also appends a
 queued lifecycle revision through that message. Durable result messages retain
 host submission order; before the next provider call the engine coalesces the
 batch and projects blocks in the original model ToolCall order. Wall-clock time
 continues while parked, active-execution time does not. Each terminal ToolCall
-also records whether its result came from a client, builtin, or nvoken system
+also records whether its result came from a host, builtin, or nvoken system
 settlement so late host submissions never compare against cancellation or
 deadline evidence.
 
-After owner loss or a client-tool resume, a replacement validates the
+After owner loss or a host-tool resume, a replacement validates the
 append-only transcript, checkpoints, receipts, and ToolCalls before new work. A
 committed final model checkpoint settles without another provider call; a
 pending or abandoned
@@ -329,14 +329,14 @@ The pillars:
   contract.
 - API credentials are one resource with two kinds. A machine credential
   carries one fixed profile — Operator, Viewer, or Runtime — plus
-  constraints that only narrow (Account, `tenant_ref`, Session, operation
+  constraints that only narrow (Account, `tenant_key`, Session, operation
   subset, expiry). A user credential is issued through device authorization
   and resolves its effective role at authentication time — the owner's
   current membership role intersected with an optional Operator/Viewer cap.
   Raw secrets are returned once; revoked records are retained for
   attribution.
 - The host backend uses a Runtime-profile credential, Account-wide or
-  pinned to one `tenant_ref`. `tenant_ref` partitions and attributes within
+  pinned to one `tenant_key`. `tenant_key` partitions and attributes within
   the Account and becomes an authorization boundary only when a credential
   is constrained to it. A delegated actor reference is attribution only,
   never an authorization input.
@@ -379,7 +379,7 @@ Tasks requests are ephemeral delivery mechanisms, not retention stores. The
 operator policy, defaults, and storage-growth queries are documented in the
 [data-retention guide](../guides/data-retention.md).
 
-Runtime is not a general credential vault: hosts use client tools, callback
+Runtime is not a general credential vault: hosts use host tools, callback
 tools, or a credential-broker tool for integrations and business credentials,
 and custom-tool registration stores tool contracts, never secrets. The narrow
 exception is model-provider access. Each provider used by an Invocation binds
@@ -399,10 +399,10 @@ carry over; the mapping below records how its concepts land in nvoken.
 
 | Predecessor concept     | nvoken equivalent                                                    |
 | ----------------------- | -------------------------------------------------------------------- |
-| Project                 | Host `tenant_ref`                                                    |
+| Project                 | Host `tenant_key`                                                    |
 | Agent config            | Serialize resolved behavior into an execution specification          |
 | Session + turn          | Session + Invocation                                                 |
-| Custom action           | Callback or client tool                                              |
+| Custom action           | Callback or host tool                                              |
 | Integration             | Host-owned tool implementation or credential broker                  |
 | Worker action/model job | Engine work claim or host-owned callback tool                        |
 | Environment             | Host-owned sandbox exposed as a host-executed tool                   |
@@ -418,7 +418,7 @@ carry over; the mapping below records how its concepts land in nvoken.
   specs and implicit agent/Session creation; drain-deployed engine; status,
   canonical transcript, cancellation, usage; SDK `invoke()` golden path.
 - **Phase 2 — durable tool exchange:** ToolCall normalization; callback and
-  client modes over the canonical transcript and narrow result commands;
+  host modes over the canonical transcript and narrow result commands;
   idempotency, deadline, and
   cancellation hardening.
 - **Phase 3 — engine durability:** hardened dispatch seam;
@@ -440,7 +440,7 @@ carry over; the mapping below records how its concepts land in nvoken.
 4. How many metadata items are indexed per request, and what query surface
    do they get?
 5. What are the agent-memory data model and scoping (per agent, per
-   `tenant_ref`, per Session)?
+   `tenant_key`, per Session)?
 6. How long are idempotency records retained?
 7. Do portable operators need multi-Account selection, or is single-Account
    operation sufficient outside nvoken Cloud?

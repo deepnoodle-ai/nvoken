@@ -301,7 +301,7 @@ demonstrated by the example added during this exercise.
   record and reuse the same key and exact request after an uncertain
   acknowledgement. The example's random in-memory key is appropriate only for
   the bounded demo and now says so explicitly.
-- **DX-17 — Keep starter budgets safe.** A first-run example may include output
+- **DX-17 — Keep starter limits safe.** A first-run example may include output
   and iteration limits, but should omit estimated-cost limits unless price
   availability for the selected model is known and the unknown-price behavior
   is clearly explained.
@@ -413,7 +413,7 @@ the table below records what this implementation intended to close.
 | --- | --- |
 | DX-01–DX-04 | Corrected the package to `@deepnoodle/nvoken`, completed public package metadata and a tag-driven release workflow, published 0.1.0 from the exact reviewed `main` artifact, and added packed-artifact plus post-publish registry verification. |
 | DX-05–DX-10 | Added a linked laptop guide, localhost-only PostgreSQL 17 Compose project, secret-free template, mode-0600 configurator, migration/start/health flow, one-provider setup, and explicit production boundary. |
-| DX-11–DX-18 | Replaced the quickstart with configurable two-turn output and actionable nonzero failures; the chat example now uses the facade helper and documents Session resume, durable idempotency, safe budgets, prerequisites, and cleanup. |
+| DX-11–DX-18 | Replaced the quickstart with configurable two-turn output and actionable nonzero failures; the chat example now uses the facade helper and documents Session resume, durable idempotency, safe limits, prerequisites, and cleanup. |
 | DX-19–DX-23 | Documented fail-closed estimated-cost semantics, added the public `estimated_cost_unavailable` detail, rejects known-unpriced capped work before the provider call, and keeps failed output canonical but out of later model context with service and Postgres regressions. |
 | DX-24–DX-28 | Added `Handle.listMessages()`, `Handle.text()`, and `isTextContentBlock`; all read canonical history, and the README distinguishes durable wait/retry behavior and Node 20 runtime support from the Node 24 development baseline. |
 | DX-29–DX-33 | Added a CI newcomer gate that migrates/starts the daemon, verifies startup identity, packs and inspects the SDK, installs it into an empty strict TypeScript project, runs success/resume/failure UX against a deterministic double, tests the local file-linked example, and checks the documented artifacts and cleanup command. |

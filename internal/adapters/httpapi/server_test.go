@@ -34,12 +34,12 @@ func (a fakeAuthenticator) Authenticate(context.Context, string) (domain.Runtime
 
 type fakeRuntime struct {
 	admitInput       services.CreateInvocationInput
-	toolResultsInput services.SubmitClientToolResultsInput
+	toolResultsInput services.SubmitHostToolResultsInput
 	admitCalls       int
 	cancelCalls      int
 	toolResultCalls  int
 	ack              services.InvocationAcknowledgement
-	toolResults      services.SubmitClientToolResultsResult
+	toolResults      services.SubmitHostToolResultsResult
 	invocation       services.InvocationRead
 	invocationResult services.InvocationResultRead
 	session          services.SessionRead
@@ -124,12 +124,12 @@ func (f *fakeRuntime) CancelInvocation(context.Context, domain.RuntimeAuthContex
 	return f.invocation, f.err
 }
 
-func (f *fakeRuntime) SubmitClientToolResults(
+func (f *fakeRuntime) SubmitHostToolResults(
 	_ context.Context,
 	_ domain.RuntimeAuthContext,
 	_ string,
-	input services.SubmitClientToolResultsInput,
-) (services.SubmitClientToolResultsResult, error) {
+	input services.SubmitHostToolResultsInput,
+) (services.SubmitHostToolResultsResult, error) {
 	f.toolResultCalls++
 	f.toolResultsInput = input
 	return f.toolResults, f.err
@@ -240,10 +240,16 @@ func TestGetModelPricingCapabilityValidatesAuthenticationAndQuery(t *testing.T) 
 
 func TestCancelInvocationRequiresEmptyBodyAndReturnsAuthoritativeRow(t *testing.T) {
 	runtime := &fakeRuntime{invocation: services.InvocationRead{
-		ID: testInvocationID, AgentID: testAgentID, SessionID: testSessionID,
-		Status: domain.InvocationCancelled, Budgets: services.InvocationBudgetRead{
-			WallClockTimeoutSeconds: 1800, ActiveExecutionTimeoutSeconds: 1800, MaxIterations: 1,
-		}, WallClockDeadlineAt: time.Date(2026, 7, 21, 12, 30, 0, 0, time.UTC),
+		ID:        testInvocationID,
+		AgentID:   testAgentID,
+		SessionID: testSessionID,
+		Status:    domain.InvocationCancelled,
+		Limits: services.InvocationLimitRead{
+			TotalTimeoutSeconds:  1800,
+			ActiveTimeoutSeconds: 1800,
+			MaxIterations:        1,
+		},
+		DeadlineAt: time.Date(2026, 7, 21, 12, 30, 0, 0, time.UTC),
 	}}
 	handler := testHandler(runtime, nil, io.Discard)
 	recorder := httptest.NewRecorder()
@@ -328,11 +334,41 @@ func TestCreateInvocationReturnsDurableAcknowledgement(t *testing.T) {
 	if response.InvocationID != testInvocationID || response.Status != domain.InvocationQueued || runtime.admitCalls != 1 {
 		t.Fatalf("response = %#v, calls = %d", response, runtime.admitCalls)
 	}
-	if runtime.admitInput.AgentRef != "support" || runtime.admitInput.Spec.Model.Provider != "anthropic" {
+	if runtime.admitInput.AgentKey != "support" || runtime.admitInput.Spec.Model.Provider != "anthropic" {
 		t.Fatalf("decoded input = %#v", runtime.admitInput)
 	}
 	if recorder.Header().Get("X-Request-ID") == "" {
 		t.Fatal("missing X-Request-ID")
+	}
+}
+
+func TestCreateInvocationAcceptsStringInputAndOmittedInstructions(t *testing.T) {
+	runtime := &fakeRuntime{ack: services.InvocationAcknowledgement{
+		AgentID:      testAgentID,
+		SessionID:    testSessionID,
+		InvocationID: testInvocationID,
+		Status:       domain.InvocationQueued,
+	}}
+	body := []byte(`{
+		"agent_key":"support",
+		"idempotency_key":"request-1",
+		"input":"private caller text",
+		"spec":{"model":{"provider":"anthropic","id":"test-model"}}
+	}`)
+	recorder := httptest.NewRecorder()
+
+	testHandler(runtime, nil, io.Discard).ServeHTTP(
+		recorder,
+		authenticatedRequest(http.MethodPost, "/v1/invocations", body),
+	)
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("POST status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if len(runtime.admitInput.Input.Content) != 1 ||
+		runtime.admitInput.Input.Content[0].Text != "private caller text" ||
+		runtime.admitInput.Spec.Instructions != "" {
+		t.Fatalf("normalized input = %#v", runtime.admitInput)
 	}
 }
 
@@ -343,7 +379,7 @@ func TestCreateInvocationDecodesCredentialSelectionAndRejectsNull(t *testing.T) 
 		InvocationID: testInvocationID,
 		Status:       domain.InvocationQueued,
 	}}
-	body := []byte(`{"agent_ref":"support","idempotency_key":"request-1","input":{"content":[{"type":"text","text":"hello"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","name":"test-model"}},"provider_credentials":[{"provider":"anthropic","source":"caller_ephemeral","credential":{"api_key":"caller-secret"}}]}`)
+	body := []byte(`{"agent_key":"support","idempotency_key":"request-1","input":{"content":[{"type":"text","text":"hello"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","id":"test-model"}},"provider_credentials":[{"provider":"anthropic","source":"caller_ephemeral","credential":{"api_key":"caller-secret"}}]}`)
 	recorder := httptest.NewRecorder()
 	testHandler(runtime, nil, io.Discard).ServeHTTP(
 		recorder,
@@ -365,7 +401,7 @@ func TestCreateInvocationDecodesCredentialSelectionAndRejectsNull(t *testing.T) 
 		t.Fatalf("null provider_credentials = %d %s, calls = %d", recorder.Code, recorder.Body.String(), runtime.admitCalls)
 	}
 
-	unusedNull := []byte(`{"agent_ref":"support","idempotency_key":"request-2","input":{"content":[{"type":"text","text":"hello"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","name":"test-model"}},"provider_credentials":[{"provider":"anthropic","source":"account_byok","credential":null}]}`)
+	unusedNull := []byte(`{"agent_key":"support","idempotency_key":"request-2","input":{"content":[{"type":"text","text":"hello"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","id":"test-model"}},"provider_credentials":[{"provider":"anthropic","source":"account_byok","credential":null}]}`)
 	recorder = httptest.NewRecorder()
 	testHandler(runtime, nil, io.Discard).ServeHTTP(
 		recorder,
@@ -432,7 +468,7 @@ func TestCreateInvocationDecodesStructuredOutputContract(t *testing.T) {
 	}
 }
 
-func TestCreateInvocationDecodesClientToolContract(t *testing.T) {
+func TestCreateInvocationDecodesHostToolContract(t *testing.T) {
 	runtime := &fakeRuntime{
 		ack: services.InvocationAcknowledgement{
 			AgentID:      testAgentID,
@@ -442,16 +478,16 @@ func TestCreateInvocationDecodesClientToolContract(t *testing.T) {
 		},
 	}
 	body := []byte(`{
-		"agent_ref":"support",
+		"agent_key":"support",
 		"idempotency_key":"request-1",
 		"input":{"content":[{"type":"text","text":"look it up"}]},
 		"spec":{
 			"instructions":"help",
-			"model":{"provider":"anthropic","name":"test-model"},
+			"model":{"provider":"anthropic","id":"test-model"},
 			"tools":[{
 				"name":"lookup_order",
 				"description":"Look up an order",
-				"mode":"client",
+				"mode":"host",
 				"input_schema":{"type":"object","properties":{"order_id":{"type":"string"}},"additionalProperties":false}
 			}]
 		}
@@ -462,28 +498,28 @@ func TestCreateInvocationDecodesClientToolContract(t *testing.T) {
 	testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusAccepted || runtime.admitCalls != 1 {
-		t.Fatalf("client tool admission = %d, calls = %d, body = %s", recorder.Code, runtime.admitCalls, recorder.Body.String())
+		t.Fatalf("host tool admission = %d, calls = %d, body = %s", recorder.Code, runtime.admitCalls, recorder.Body.String())
 	}
 	if len(runtime.admitInput.Spec.Tools) != 1 || runtime.admitInput.Spec.Tools[0].Name != "lookup_order" {
-		t.Fatalf("decoded client tools = %#v", runtime.admitInput.Spec.Tools)
+		t.Fatalf("decoded host tools = %#v", runtime.admitInput.Spec.Tools)
 	}
 }
 
-func TestSubmitClientToolResultsReturnsDurableAcknowledgement(t *testing.T) {
+func TestSubmitHostToolResultsReturnsDurableAcknowledgement(t *testing.T) {
 	deadline := time.Date(2026, 7, 21, 12, 30, 0, 0, time.UTC)
 	toolCallID := "tcal_019f84a5-7838-7b57-a180-000000000001"
 	runtime := &fakeRuntime{
-		toolResults: services.SubmitClientToolResultsResult{
+		toolResults: services.SubmitHostToolResultsResult{
 			InvocationID: testInvocationID,
 			SessionID:    testSessionID,
 			Status:       domain.InvocationWaiting,
-			Results: []services.ClientToolResultAcceptance{
+			Results: []services.HostToolResultAcceptance{
 				{
 					ToolCallID: toolCallID,
 					Status:     domain.ToolCallCompleted,
 				},
 			},
-			PendingToolCalls: []services.PendingClientToolCall{
+			PendingToolCalls: []services.PendingHostToolCall{
 				{
 					ID:         "tcal_019f84a5-7838-7b57-a180-000000000002",
 					Name:       "notify_user",
@@ -516,7 +552,7 @@ func TestSubmitClientToolResultsReturnsDurableAcknowledgement(t *testing.T) {
 	}
 }
 
-func TestSubmitClientToolResultsRejectsMalformedJSONBeforeService(t *testing.T) {
+func TestSubmitHostToolResultsRejectsMalformedJSONBeforeService(t *testing.T) {
 	toolCallID := "tcal_019f84a5-7838-7b57-a180-000000000001"
 	tests := map[string][]byte{
 		"unknown field":    []byte(`{"results":[{"tool_call_id":"` + toolCallID + `","content":{},"unknown":true}]}`),
@@ -559,15 +595,15 @@ func TestInvocationReadAndTranscriptProjectStructuredOutput(t *testing.T) {
 			Status:           domain.InvocationCompleted,
 			Output:           output,
 			OutputProvenance: provenance,
-			Budgets: services.InvocationBudgetRead{
-				WallClockTimeoutSeconds:       1800,
-				ActiveExecutionTimeoutSeconds: 1800,
-				MaxIterations:                 3,
+			Limits: services.InvocationLimitRead{
+				TotalTimeoutSeconds:  1800,
+				ActiveTimeoutSeconds: 1800,
+				MaxIterations:        3,
 			},
-			WallClockDeadlineAt: now.Add(time.Hour),
-			CreatedAt:           now,
-			UpdatedAt:           now,
-			CompletedAt:         &now,
+			DeadlineAt: now.Add(time.Hour),
+			CreatedAt:  now,
+			UpdatedAt:  now,
+			EndedAt:    &now,
 		},
 		transcript: services.TranscriptSnapshot{
 			InvocationChanges: []domain.InvocationLifecycleChange{
@@ -642,13 +678,13 @@ func TestInvocationResultUsesContractShape(t *testing.T) {
 	runtime := &fakeRuntime{
 		invocationResult: services.InvocationResultRead{
 			Invocation: services.InvocationRead{
-				ID:          testInvocationID,
-				AgentID:     testAgentID,
-				SessionID:   testSessionID,
-				Status:      domain.InvocationCompleted,
-				CreatedAt:   now,
-				UpdatedAt:   now,
-				CompletedAt: &now,
+				ID:        testInvocationID,
+				AgentID:   testAgentID,
+				SessionID: testSessionID,
+				Status:    domain.InvocationCompleted,
+				CreatedAt: now,
+				UpdatedAt: now,
+				EndedAt:   &now,
 			},
 			Messages: []domain.SessionMessage{
 				{
@@ -740,7 +776,7 @@ func TestInvocationResultMapsServiceErrors(t *testing.T) {
 
 func TestInvocationRequestRejectsInvalidJSONBeforeService(t *testing.T) {
 	valid := validInvocationJSON()
-	oversized := `{"agent_ref":"` + strings.Repeat("a", services.MaxInvocationBodyBytes) + `"}`
+	oversized := `{"agent_key":"` + strings.Repeat("a", services.MaxInvocationBodyBytes) + `"}`
 	cases := map[string][]byte{
 		"unknown field": bytes.Replace(valid, []byte(`"spec":{`), []byte(`"unknown":true,"spec":{`), 1),
 		"callback missing target": bytes.Replace(
@@ -758,7 +794,7 @@ func TestInvocationRequestRejectsInvalidJSONBeforeService(t *testing.T) {
 		"client callback null": bytes.Replace(
 			valid,
 			[]byte(`"instructions":"help",`),
-			[]byte(`"instructions":"help","tools":[{"name":"lookup","description":"Look up","mode":"client","input_schema":{"type":"object"},"callback":null}],`),
+			[]byte(`"instructions":"help","tools":[{"name":"lookup","description":"Look up","mode":"host","input_schema":{"type":"object"},"callback":null}],`),
 			1,
 		),
 		"duplicate key": bytes.Replace(valid, []byte(`"provider":"anthropic"`), []byte(`"provider":"anthropic","provider":"openai"`), 1),
@@ -769,7 +805,7 @@ func TestInvocationRequestRejectsInvalidJSONBeforeService(t *testing.T) {
 			1,
 		),
 		"trailing value": append(append([]byte{}, valid...), []byte(` {}`)...),
-		"null optional":  bytes.Replace(valid, []byte(`"agent_ref":"support",`), []byte(`"agent_ref":"support","tenant_ref":null,`), 1),
+		"null optional":  bytes.Replace(valid, []byte(`"agent_key":"support",`), []byte(`"agent_key":"support","tenant_key":null,`), 1),
 		"two selectors":  bytes.Replace(valid, []byte(`"idempotency_key":`), []byte(`"session_id":"`+testSessionID+`","session_key":"ticket","idempotency_key":`), 1),
 		"lone surrogate": bytes.Replace(valid, []byte("private caller text"), append([]byte("private "), []byte{92, 'u', 'd', '8', '0', '0'}...), 1),
 		"invalid utf8":   append(append([]byte{}, valid[:len(valid)-1]...), 0xff, '}'),
@@ -902,21 +938,30 @@ func TestAuthoritativeReadsUseContractShapes(t *testing.T) {
 	tenant, key, active := "tenant-a", "ticket-1", testInvocationID
 	runtime := &fakeRuntime{
 		invocation: services.InvocationRead{
-			ID: testInvocationID, AgentID: testAgentID, SessionID: testSessionID,
+			ID:         testInvocationID,
+			AgentID:    testAgentID,
+			SessionID:  testSessionID,
 			Status:     domain.InvocationCompleted,
 			Usage:      json.RawMessage(`{"input_tokens":2,"output_tokens":1}`),
 			Provenance: json.RawMessage(`{"provider":"anthropic","requested_model":"requested","served_model":"served","credential_source":"installation_byok"}`),
-			CreatedAt:  now, UpdatedAt: now, CompletedAt: &now,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+			EndedAt:    &now,
 		},
 		session: services.SessionRead{
-			ID: testSessionID, AgentID: testAgentID, TenantRef: &tenant, SessionKey: &key,
-			ActiveInvocationID: &active, ActiveInvocationStatus: statusPointer(domain.InvocationRunning),
-			CreatedAt: now, UpdatedAt: now,
+			ID:                     testSessionID,
+			AgentID:                testAgentID,
+			TenantKey:              &tenant,
+			SessionKey:             &key,
+			ActiveInvocationID:     &active,
+			ActiveInvocationStatus: statusPointer(domain.InvocationRunning),
+			CreatedAt:              now,
+			UpdatedAt:              now,
 		},
 	}
 	for path, required := range map[string][]string{
 		"/v1/invocations/" + testInvocationID: {`"id":"` + testInvocationID + `"`, `"input_tokens":2`, `"provider":"anthropic"`},
-		"/v1/sessions/" + testSessionID:       {`"tenant_ref":"tenant-a"`, `"active_invocation_id":"` + testInvocationID + `"`, `"active_invocation_status":"running"`},
+		"/v1/sessions/" + testSessionID:       {`"tenant_key":"tenant-a"`, `"active_invocation_id":"` + testInvocationID + `"`, `"active_invocation_status":"running"`},
 	} {
 		recorder := httptest.NewRecorder()
 		testHandler(runtime, nil, io.Discard).ServeHTTP(recorder, authenticatedRequest(http.MethodGet, path, nil))
@@ -937,26 +982,45 @@ func TestRecoveryCollectionAndTranscriptShapes(t *testing.T) {
 	runtime := &fakeRuntime{
 		invocations: services.InvocationList{
 			Items: []services.InvocationRead{{
-				ID: testInvocationID, AgentID: testAgentID, SessionID: testSessionID,
-				Status: domain.InvocationQueued, CreatedAt: now, UpdatedAt: now,
-			}}, HasMore: true, NextCursor: &next,
+				ID:        testInvocationID,
+				AgentID:   testAgentID,
+				SessionID: testSessionID,
+				Status:    domain.InvocationQueued,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}},
+			HasMore:    true,
+			NextCursor: &next,
 		},
 		sessions: services.SessionList{Items: []services.SessionRead{{
-			ID: testSessionID, AgentID: testAgentID, TenantRef: &tenant, SessionKey: &key,
-			ActiveInvocationID: &active, ActiveInvocationStatus: statusPointer(domain.InvocationQueued),
-			CreatedAt: now, UpdatedAt: now,
+			ID:                     testSessionID,
+			AgentID:                testAgentID,
+			TenantKey:              &tenant,
+			SessionKey:             &key,
+			ActiveInvocationID:     &active,
+			ActiveInvocationStatus: statusPointer(domain.InvocationQueued),
+			CreatedAt:              now,
+			UpdatedAt:              now,
 		}}},
 		messages: services.SessionMessageList{Items: []domain.SessionMessage{{
-			ID: "smsg_019b0a12-0000-7000-8000-000000000005", SessionID: testSessionID,
-			AgentID: testAgentID, InvocationID: testInvocationID, Sequence: 1,
-			Role: domain.MessageRoleUser, Content: json.RawMessage(`[{"type":"text","text":"hello"}]`), CreatedAt: now,
+			ID:           "smsg_019b0a12-0000-7000-8000-000000000005",
+			SessionID:    testSessionID,
+			AgentID:      testAgentID,
+			InvocationID: testInvocationID,
+			Sequence:     1,
+			Role:         domain.MessageRoleUser,
+			Content:      json.RawMessage(`[{"type":"text","text":"hello"}]`),
+			CreatedAt:    now,
 		}}},
 		transcript: services.TranscriptSnapshot{
 			Messages: []domain.SessionMessage{},
 			InvocationChanges: []domain.InvocationLifecycleChange{{
 				InvocationState: domain.InvocationState{
-					InvocationID: testInvocationID, Revision: 2, Status: domain.InvocationCompleted,
-					ThroughMessageSequence: int64Pointer(1), CreatedAt: now,
+					InvocationID:           testInvocationID,
+					Revision:               2,
+					Status:                 domain.InvocationCompleted,
+					ThroughMessageSequence: int64Pointer(1),
+					CreatedAt:              now,
 				},
 				Usage: json.RawMessage(`{"input_tokens":2,"output_tokens":1}`),
 			}},
@@ -965,7 +1029,7 @@ func TestRecoveryCollectionAndTranscriptShapes(t *testing.T) {
 	}
 
 	tests := map[string][]string{
-		"/v1/invocations?limit=1&tenant_ref=tenant-a":   {`"items":[{"id":"` + testInvocationID + `"`, `"has_more":true`, `"next_cursor":"opaque-next"`},
+		"/v1/invocations?limit=1&tenant_key=tenant-a":   {`"items":[{"id":"` + testInvocationID + `"`, `"has_more":true`, `"next_cursor":"opaque-next"`},
 		"/v1/sessions?default_tenant=false":             {`"active_invocation_status":"queued"`, `"has_more":false`},
 		"/v1/sessions/" + testSessionID + "/messages":   {`"sequence":1`, `"text":"hello"`, `"next_cursor":null`},
 		"/v1/sessions/" + testSessionID + "/transcript": {`"messages":[]`, `"revision":2`, `"input_tokens":2`, `"resume_cursor":"opaque-resume"`},
@@ -1007,7 +1071,10 @@ func TestRecoveryRoutesRejectAmbiguousQueriesBeforeService(t *testing.T) {
 func TestLogsDoNotContainCredentialsOrRequestContent(t *testing.T) {
 	var logs bytes.Buffer
 	runtime := &fakeRuntime{ack: services.InvocationAcknowledgement{
-		AgentID: testAgentID, SessionID: testSessionID, InvocationID: testInvocationID, Status: domain.InvocationQueued,
+		AgentID:      testAgentID,
+		SessionID:    testSessionID,
+		InvocationID: testInvocationID,
+		Status:       domain.InvocationQueued,
 	}}
 	request := authenticatedRequest(http.MethodPost, "/v1/invocations", validInvocationJSON())
 	testHandler(runtime, nil, &logs).ServeHTTP(httptest.NewRecorder(), request)
@@ -1060,11 +1127,11 @@ func authenticatedRequest(method, target string, body []byte) *http.Request {
 }
 
 func validInvocationJSON() []byte {
-	return []byte(`{"agent_ref":"support","idempotency_key":"request-1","input":{"content":[{"type":"text","text":"private caller text"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","name":"test-model"}}}`)
+	return []byte(`{"agent_key":"support","idempotency_key":"request-1","input":{"content":[{"type":"text","text":"private caller text"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","id":"test-model"}}}`)
 }
 
 func structuredInvocationJSON() []byte {
-	return []byte(`{"agent_ref":"support","idempotency_key":"request-1","input":{"content":[{"type":"text","text":"private caller text"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","name":"test-model"},"output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}}}}`)
+	return []byte(`{"agent_key":"support","idempotency_key":"request-1","input":{"content":[{"type":"text","text":"private caller text"}]},"spec":{"instructions":"help","model":{"provider":"anthropic","id":"test-model"},"output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}}}}`)
 }
 
 func assertErrorEnvelope(t *testing.T, body []byte, code string) {

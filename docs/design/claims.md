@@ -69,14 +69,14 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
   modes. Builtin tools are invoked directly by nvoken on the server side.
   Callback tools are defined by the host app, and when these are invoked
   nvoken makes a signed HTTP request to a remote endpoint to execute the
-  call. Client tool calls are durably exposed to the client (the host app)
+  call. Host tool calls are durably exposed to the client (the host app)
   through Invocation/Session reads and the Session stream so they can be
   executed there and their output returned idempotently to nvoken.
 
 ## API
 
 - The primary operation is one call:
-  `invoke(execution_spec, input, optional_session, optional_tenant_ref) -> durable invocation`
+  `invoke(execution_spec, input, optional_session, optional_tenant_key) -> durable invocation`
 - No provisioning call precedes the first Invocation. The agent and session
   are looked up and automatically created if not found.
 - The runtime OpenAPI has a deliberately small number of operations.
@@ -118,7 +118,7 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 
 - nvoken never executes host or end-user code; every tool with side effects executes on the host's side of the boundary.
 - In a future version of nvoken, an Environment concept may be introduced, which is a secure, isolated sandbox for code execution. This is deferred for now.
-- Tools execute in exactly three modes: builtin (server-side), signed callback, and client.
+- Tools execute in exactly three modes: builtin (server-side), signed callback, and host.
 - The model receives tool capability, not ambient credentials.
 - Embedded end-users never authenticate to nvoken directly. The host app makes requests to nvoken on behalf of the end-users behind the scenes.
 - In a future version of nvoken, host app end-users may be able to make direct requests to nvoken using a new form of credentials. This is deferred for now.
@@ -159,7 +159,7 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 ## Contract semantics
 
 - Agent identity anchors are Account-wide, unique by caller-controlled
-  `agent_ref`, and store no mutable execution configuration or tenant data.
+  `agent_key`, and store no mutable execution configuration or tenant data.
 - Invocation creates or resolves Sessions; there is no separate Session
   provisioning. A host session key resolves uniquely within `(account_id,
   tenant_partition, agent_id, session_key)`. The Session's Agent and tenant
@@ -179,7 +179,7 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
   message, and one queued Invocation. No execution owner can claim work before
   all related records are visible.
 - Admission idempotency is scoped to Account, effective tenant partition,
-  Agent reference, and caller key. An equal replay returns the original work
+  Agent key, and caller key. An equal replay returns the original work
   before the Session concurrency check; a materially changed replay conflicts.
 - Invocation supports structured output, in which a tool call internally is made against the provided output schema and this JSON is returned to the client as `structured_output`.
 - One composed result read returns the authoritative Invocation, the turn's
@@ -195,8 +195,7 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 - A turn segment executes entirely on one harness version. Request-bound split
   executors drain on deploy; if either execution topology loses an owner, the
   lease reaper makes the same Invocation queued and a replacement continues
-  from its last validated checkpoint. Retained `execution_lost` failures are
-  historical records, not the current recoverable-lease policy.
+  from its last validated checkpoint.
 - nvoken supports the same public admission and read semantics in two execution
   topologies: a self-contained engine in `nvokend`, or a separate Cloud Tasks to
   Cloud Run executor. Delivery is only a wake-up mechanism; Postgres claims,
@@ -207,7 +206,7 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 - Tool callback requests first use a versioned HMAC secret shared between one
   nvoken installation and its host receivers. Headers carry a nonsecret key ID
   and version; JWKS/public-key signing is a later scheme, not a current claim.
-- The Account is the hard security boundary; `tenant_ref` narrows authorization only when a credential is constrained to it.
-- A Session's `tenant_ref` is immutable after creation.
+- The Account is the hard security boundary; `tenant_key` narrows authorization only when a credential is constrained to it.
+- A Session's `tenant_key` is immutable after creation.
 - Human operator roles are fixed (Owner, Operator, Viewer); Owner is human-only and never assignable to an API credential.
 - API credentials are one resource with two kinds: machine credentials carry one fixed profile (Operator, Viewer, or Runtime) with constraints that only narrow; user credentials are issued through device authorization and resolve their effective role at authentication time from the owner's current membership role intersected with an optional cap.

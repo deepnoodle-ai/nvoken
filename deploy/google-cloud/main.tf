@@ -860,16 +860,16 @@ resource "google_cloud_run_v2_service" "runtime" {
     }
     precondition {
       condition = (
-        var.invocation_default_wall_clock_timeout_seconds >= 1 &&
-        var.invocation_default_wall_clock_timeout_seconds == floor(var.invocation_default_wall_clock_timeout_seconds) &&
-        var.invocation_default_wall_clock_timeout_seconds <= var.invocation_max_wall_clock_timeout_seconds &&
-        var.invocation_max_wall_clock_timeout_seconds <= 604800 &&
-        var.invocation_max_wall_clock_timeout_seconds == floor(var.invocation_max_wall_clock_timeout_seconds) &&
-        var.invocation_default_active_execution_timeout_seconds >= 1 &&
-        var.invocation_default_active_execution_timeout_seconds == floor(var.invocation_default_active_execution_timeout_seconds) &&
-        var.invocation_default_active_execution_timeout_seconds <= var.invocation_max_active_execution_timeout_seconds &&
-        var.invocation_max_active_execution_timeout_seconds <= 604800
-        && var.invocation_max_active_execution_timeout_seconds == floor(var.invocation_max_active_execution_timeout_seconds)
+        var.invocation_default_total_timeout_seconds >= 1 &&
+        var.invocation_default_total_timeout_seconds == floor(var.invocation_default_total_timeout_seconds) &&
+        var.invocation_default_total_timeout_seconds <= var.invocation_max_total_timeout_seconds &&
+        var.invocation_max_total_timeout_seconds <= 604800 &&
+        var.invocation_max_total_timeout_seconds == floor(var.invocation_max_total_timeout_seconds) &&
+        var.invocation_default_active_timeout_seconds >= 1 &&
+        var.invocation_default_active_timeout_seconds == floor(var.invocation_default_active_timeout_seconds) &&
+        var.invocation_default_active_timeout_seconds <= var.invocation_max_active_timeout_seconds &&
+        var.invocation_max_active_timeout_seconds <= 604800
+        && var.invocation_max_active_timeout_seconds == floor(var.invocation_max_active_timeout_seconds)
       )
       error_message = "Invocation time defaults must be positive, no greater than their maxima, and maxima cannot exceed seven days."
     }
@@ -1042,10 +1042,10 @@ resource "google_cloud_run_v2_service" "runtime" {
       }
 
       dynamic "env" {
-        for_each = var.runtime_tenant_ref == null ? [] : [var.runtime_tenant_ref]
+        for_each = var.runtime_tenant_key == null ? [] : [var.runtime_tenant_key]
 
         content {
-          name  = "RUNTIME_TENANT_REF"
+          name  = "RUNTIME_TENANT_KEY"
           value = env.value
         }
       }
@@ -1151,13 +1151,18 @@ resource "google_cloud_run_v2_service" "runtime" {
       }
 
       env {
-        name  = "INVOCATION_DEFAULT_WALL_CLOCK_TIMEOUT"
-        value = "${var.invocation_default_wall_clock_timeout_seconds}s"
+        name  = "INVOCATION_DEFAULT_TOTAL_TIMEOUT"
+        value = "${var.invocation_default_total_timeout_seconds}s"
       }
 
       env {
-        name  = "INVOCATION_DEFAULT_ACTIVE_EXECUTION_TIMEOUT"
-        value = "${var.invocation_default_active_execution_timeout_seconds}s"
+        name  = "INVOCATION_DEFAULT_ACTIVE_TIMEOUT"
+        value = "${var.invocation_default_active_timeout_seconds}s"
+      }
+
+      env {
+        name  = "INVOCATION_DEFAULT_WAITING_TIMEOUT"
+        value = "${var.invocation_default_waiting_timeout_seconds}s"
       }
 
       env {
@@ -1166,13 +1171,18 @@ resource "google_cloud_run_v2_service" "runtime" {
       }
 
       env {
-        name  = "INVOCATION_MAX_WALL_CLOCK_TIMEOUT"
-        value = "${var.invocation_max_wall_clock_timeout_seconds}s"
+        name  = "INVOCATION_MAX_TOTAL_TIMEOUT"
+        value = "${var.invocation_max_total_timeout_seconds}s"
       }
 
       env {
-        name  = "INVOCATION_MAX_ACTIVE_EXECUTION_TIMEOUT"
-        value = "${var.invocation_max_active_execution_timeout_seconds}s"
+        name  = "INVOCATION_MAX_ACTIVE_TIMEOUT"
+        value = "${var.invocation_max_active_timeout_seconds}s"
+      }
+
+      env {
+        name  = "INVOCATION_MAX_WAITING_TIMEOUT"
+        value = "${var.invocation_max_waiting_timeout_seconds}s"
       }
 
       env {

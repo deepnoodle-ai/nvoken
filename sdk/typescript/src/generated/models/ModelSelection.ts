@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -38,7 +38,7 @@ export interface ModelSelection {
      * @type {string}
      * @memberof ModelSelection
      */
-    name: string;
+    id: string;
 }
 
 
@@ -48,7 +48,7 @@ export interface ModelSelection {
  */
 export function instanceOfModelSelection(value: object): value is ModelSelection {
     if (!('provider' in value) || value['provider'] === undefined) return false;
-    if (!('name' in value) || value['name'] === undefined) return false;
+    if (!('id' in value) || value['id'] === undefined) return false;
     return true;
 }
 
@@ -63,7 +63,7 @@ export function ModelSelectionFromJSONTyped(json: any, ignoreDiscriminator: bool
     return {
 
         'provider': ModelProviderFromJSON(json['provider']),
-        'name': json['name'],
+        'id': json['id'],
     };
 }
 
@@ -79,6 +79,6 @@ export function ModelSelectionToJSONTyped(value?: ModelSelection | null, ignoreD
     return {
 
         'provider': ModelProviderToJSON(value['provider']),
-        'name': value['name'],
+        'id': value['id'],
     };
 }

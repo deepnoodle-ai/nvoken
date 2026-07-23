@@ -10,7 +10,7 @@ type ToolCallMode string
 const (
 	ToolCallModeBuiltin  ToolCallMode = "builtin"
 	ToolCallModeCallback ToolCallMode = "callback"
-	ToolCallModeClient   ToolCallMode = "client"
+	ToolCallModeHost     ToolCallMode = "host"
 )
 
 type ToolCallStatus string
@@ -32,7 +32,7 @@ type ToolCallResultOrigin string
 const (
 	ToolCallResultBuiltin  ToolCallResultOrigin = "builtin"
 	ToolCallResultCallback ToolCallResultOrigin = "callback"
-	ToolCallResultClient   ToolCallResultOrigin = "client"
+	ToolCallResultHost     ToolCallResultOrigin = "host"
 	ToolCallResultSystem   ToolCallResultOrigin = "system"
 )
 

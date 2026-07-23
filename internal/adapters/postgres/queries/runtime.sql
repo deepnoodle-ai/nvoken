@@ -181,53 +181,53 @@ SELECT * FROM browser_sessions WHERE token_hash = $1;
 DELETE FROM browser_sessions WHERE id = $1;
 
 -- name: CreateTenantPartition :exec
-INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+INSERT INTO tenant_partitions (id, account_id, tenant_key, created_at)
 VALUES ($1, $2, $3, $4);
 
 -- name: CreateDefaultTenantPartitionIfAbsent :exec
-INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+INSERT INTO tenant_partitions (id, account_id, tenant_key, created_at)
 VALUES ($1, $2, NULL, $3)
-ON CONFLICT (account_id) WHERE tenant_ref IS NULL
+ON CONFLICT (account_id) WHERE tenant_key IS NULL
 DO NOTHING;
 
 -- name: CreateTenantPartitionByRefIfAbsent :exec
-INSERT INTO tenant_partitions (id, account_id, tenant_ref, created_at)
+INSERT INTO tenant_partitions (id, account_id, tenant_key, created_at)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (account_id, tenant_ref) WHERE tenant_ref IS NOT NULL
+ON CONFLICT (account_id, tenant_key) WHERE tenant_key IS NOT NULL
 DO NOTHING;
 
 -- name: GetTenantPartition :one
-SELECT id, account_id, tenant_ref, created_at
+SELECT id, account_id, tenant_key, created_at
 FROM tenant_partitions
 WHERE id = $1;
 
 -- name: GetDefaultTenantPartition :one
-SELECT id, account_id, tenant_ref, created_at
+SELECT id, account_id, tenant_key, created_at
 FROM tenant_partitions
-WHERE account_id = $1 AND tenant_ref IS NULL;
+WHERE account_id = $1 AND tenant_key IS NULL;
 
 -- name: GetTenantPartitionByRef :one
-SELECT id, account_id, tenant_ref, created_at
+SELECT id, account_id, tenant_key, created_at
 FROM tenant_partitions
 WHERE account_id = sqlc.arg(account_id)
-  AND tenant_ref = sqlc.arg(tenant_ref)::text;
+  AND tenant_key = sqlc.arg(tenant_key)::text;
 
 -- name: CreateAgent :exec
-INSERT INTO agents (id, account_id, agent_ref, created_at)
+INSERT INTO agents (id, account_id, agent_key, created_at)
 VALUES ($1, $2, $3, $4);
 
 -- name: CreateAgentIfAbsent :exec
-INSERT INTO agents (id, account_id, agent_ref, created_at)
+INSERT INTO agents (id, account_id, agent_key, created_at)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (account_id, agent_ref) DO NOTHING;
+ON CONFLICT (account_id, agent_key) DO NOTHING;
 
 -- name: GetAgentByRef :one
-SELECT id, account_id, agent_ref, created_at
+SELECT id, account_id, agent_key, created_at
 FROM agents
-WHERE account_id = $1 AND agent_ref = $2;
+WHERE account_id = $1 AND agent_key = $2;
 
 -- name: GetAgentByID :one
-SELECT id, account_id, agent_ref, created_at
+SELECT id, account_id, agent_key, created_at
 FROM agents
 WHERE id = $1;
 
@@ -296,9 +296,9 @@ INSERT INTO invocations (
     id, session_id, account_id, tenant_partition_id, agent_id,
     spec_snapshot_id, idempotency_key, request_fingerprint, status,
     request_fingerprint_version, current_state_revision, error,
-    wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens,
+    total_timeout_ms, active_timeout_ms, waiting_timeout_ms, max_output_tokens,
     max_estimated_cost_microusd, max_iterations, active_execution_ms,
-    wall_clock_deadline_at, output_schema_digest,
+    waiting_execution_ms, deadline_at, output_schema_digest,
     created_at, updated_at, completed_at
 ) VALUES (
     sqlc.arg(id), sqlc.arg(session_id), sqlc.arg(account_id),
@@ -306,10 +306,11 @@ INSERT INTO invocations (
     sqlc.arg(spec_snapshot_id), sqlc.arg(idempotency_key),
     sqlc.arg(request_fingerprint), sqlc.arg(status), sqlc.arg(request_fingerprint_version),
     sqlc.arg(current_state_revision), sqlc.narg(error_payload),
-    sqlc.arg(wall_clock_timeout_ms), sqlc.arg(active_execution_timeout_ms),
+    sqlc.arg(total_timeout_ms), sqlc.arg(active_timeout_ms), sqlc.arg(waiting_timeout_ms),
     sqlc.narg(max_output_tokens), sqlc.narg(max_estimated_cost_microusd),
     sqlc.arg(max_iterations), sqlc.arg(active_execution_ms),
-    sqlc.arg(wall_clock_deadline_at), sqlc.narg(output_schema_digest),
+    sqlc.arg(waiting_execution_ms),
+    sqlc.arg(deadline_at), sqlc.narg(output_schema_digest),
     sqlc.arg(created_at), sqlc.arg(updated_at), sqlc.narg(completed_at)
 );
 
@@ -329,8 +330,9 @@ SELECT i.*
 FROM invocations AS i
 JOIN sessions AS s ON s.id = i.session_id
 WHERE i.status = 'queued'
-  AND i.wall_clock_deadline_at > sqlc.arg(observed_at)
-  AND i.active_execution_ms < i.active_execution_timeout_ms
+  AND i.deadline_at > sqlc.arg(observed_at)
+  AND i.active_execution_ms < i.active_timeout_ms
+  AND i.waiting_execution_ms < i.waiting_timeout_ms
 ORDER BY i.created_at, i.id
 FOR UPDATE OF s SKIP LOCKED
 LIMIT 1;
@@ -348,8 +350,14 @@ SELECT *
 FROM invocations
 WHERE status IN ('queued', 'running', 'waiting')
   AND (
-      wall_clock_deadline_at <= sqlc.arg(observed_at)
-      OR active_execution_ms >= active_execution_timeout_ms
+      deadline_at <= sqlc.arg(observed_at)
+      OR active_execution_ms >= active_timeout_ms
+      OR waiting_execution_ms >= waiting_timeout_ms
+      OR (
+          status = 'waiting'
+          AND waiting_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+              (sqlc.arg(observed_at)::timestamptz - waiting_segment_started_at)) * 1000)::bigint) >= waiting_timeout_ms
+      )
       OR (
           status = 'running'
           AND active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
@@ -357,7 +365,7 @@ WHERE status IN ('queued', 'running', 'waiting')
                   lease_expires_at,
                   execution_deadline_at,
                   sqlc.arg(observed_at)::timestamptz
-              ) - active_segment_started_at)) * 1000)::bigint) >= active_execution_timeout_ms
+              ) - active_segment_started_at)) * 1000)::bigint) >= active_timeout_ms
       )
       OR (
           status = 'running'
@@ -368,7 +376,7 @@ WHERE status IN ('queued', 'running', 'waiting')
           )
       )
   )
-ORDER BY LEAST(wall_clock_deadline_at, COALESCE(execution_deadline_at, wall_clock_deadline_at)), id
+ORDER BY LEAST(deadline_at, COALESCE(execution_deadline_at, deadline_at)), id
 LIMIT sqlc.arg(batch_limit);
 
 -- name: GetInvocationByIdempotencyKey :one
@@ -399,10 +407,11 @@ SET status = 'running',
     active_segment_started_at = sqlc.arg(observed_at),
     execution_deadline_at = sqlc.arg(execution_deadline_at),
     execution_deadline_scope = sqlc.arg(execution_deadline_scope),
+    waiting_segment_started_at = NULL,
     updated_at = sqlc.arg(observed_at)
 WHERE id = sqlc.arg(id)
   AND status = 'queued'
-  AND wall_clock_deadline_at > sqlc.arg(observed_at)
+  AND deadline_at > sqlc.arg(observed_at)
 RETURNING *;
 
 -- name: RenewInvocationLease :one
@@ -424,11 +433,12 @@ SET status = sqlc.arg(status),
     lease_owner = NULL,
     lease_expires_at = NULL,
     active_execution_ms = LEAST(
-        active_execution_timeout_ms,
+        active_timeout_ms,
         active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
             (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
     ),
     active_segment_started_at = NULL,
+    waiting_segment_started_at = NULL,
     execution_deadline_at = NULL,
     execution_deadline_scope = NULL,
     error = sqlc.narg(error_payload),
@@ -446,18 +456,19 @@ WHERE id = sqlc.arg(id)
   AND execution_deadline_at > sqlc.arg(observed_at)
 RETURNING *;
 
--- name: ParkInvocationForClientTools :one
+-- name: ParkInvocationForHostTools :one
 UPDATE invocations
 SET status = 'waiting',
     current_state_revision = sqlc.arg(state_revision),
     lease_owner = NULL,
     lease_expires_at = NULL,
     active_execution_ms = LEAST(
-        active_execution_timeout_ms,
+        active_timeout_ms,
         active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
             (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
     ),
     active_segment_started_at = NULL,
+    waiting_segment_started_at = sqlc.arg(observed_at),
     execution_deadline_at = NULL,
     execution_deadline_scope = NULL,
     updated_at = sqlc.arg(observed_at)
@@ -467,17 +478,26 @@ WHERE id = sqlc.arg(id)
   AND lease_attempt = sqlc.arg(lease_attempt)
   AND lease_expires_at > sqlc.arg(observed_at)
   AND execution_deadline_at > sqlc.arg(observed_at)
-  AND wall_clock_deadline_at > sqlc.arg(observed_at)
+  AND deadline_at > sqlc.arg(observed_at)
+  AND waiting_execution_ms < waiting_timeout_ms
 RETURNING *;
 
 -- name: QueueWaitingInvocation :one
 UPDATE invocations
 SET status = 'queued',
     current_state_revision = sqlc.arg(state_revision),
+    waiting_execution_ms = LEAST(
+        waiting_timeout_ms,
+        waiting_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+            (sqlc.arg(observed_at)::timestamptz - waiting_segment_started_at)) * 1000)::bigint)
+    ),
+    waiting_segment_started_at = NULL,
     updated_at = sqlc.arg(observed_at)
 WHERE id = sqlc.arg(id)
   AND status = 'waiting'
-  AND wall_clock_deadline_at > sqlc.arg(observed_at)
+  AND deadline_at > sqlc.arg(observed_at)
+  AND waiting_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+      (sqlc.arg(observed_at)::timestamptz - waiting_segment_started_at)) * 1000)::bigint) < waiting_timeout_ms
 RETURNING *;
 
 -- name: RecoverInvocationLease :one
@@ -487,7 +507,7 @@ SET status = 'queued',
     lease_owner = NULL,
     lease_expires_at = NULL,
     active_execution_ms = LEAST(
-        active_execution_timeout_ms,
+        active_timeout_ms,
         active_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
             (LEAST(
                 lease_expires_at,
@@ -496,6 +516,7 @@ SET status = 'queued',
             ) - active_segment_started_at)) * 1000)::bigint)
     ),
     active_segment_started_at = NULL,
+    waiting_segment_started_at = NULL,
     execution_deadline_at = NULL,
     execution_deadline_scope = NULL,
     updated_at = sqlc.arg(observed_at)
@@ -512,13 +533,21 @@ SET status = 'cancelled',
     lease_owner = NULL,
     lease_expires_at = NULL,
     active_execution_ms = LEAST(
-        active_execution_timeout_ms,
+        active_timeout_ms,
         active_execution_ms + CASE WHEN active_segment_started_at IS NULL THEN 0 ELSE
             GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
                 (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
         END
     ),
     active_segment_started_at = NULL,
+    waiting_execution_ms = LEAST(
+        waiting_timeout_ms,
+        waiting_execution_ms + CASE WHEN waiting_segment_started_at IS NULL THEN 0 ELSE
+            GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+                (sqlc.arg(observed_at)::timestamptz - waiting_segment_started_at)) * 1000)::bigint)
+        END
+    ),
+    waiting_segment_started_at = NULL,
     execution_deadline_at = NULL,
     execution_deadline_scope = NULL,
     error = NULL,
@@ -537,13 +566,21 @@ SET status = 'failed',
     lease_owner = NULL,
     lease_expires_at = NULL,
     active_execution_ms = LEAST(
-        active_execution_timeout_ms,
+        active_timeout_ms,
         active_execution_ms + CASE WHEN active_segment_started_at IS NULL THEN 0 ELSE
             GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
                 (sqlc.arg(observed_at)::timestamptz - active_segment_started_at)) * 1000)::bigint)
         END
     ),
     active_segment_started_at = NULL,
+    waiting_execution_ms = LEAST(
+        waiting_timeout_ms,
+        waiting_execution_ms + CASE WHEN waiting_segment_started_at IS NULL THEN 0 ELSE
+            GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+                (sqlc.arg(observed_at)::timestamptz - waiting_segment_started_at)) * 1000)::bigint)
+        END
+    ),
+    waiting_segment_started_at = NULL,
     execution_deadline_at = NULL,
     execution_deadline_scope = NULL,
     error = sqlc.arg(error_payload),
@@ -554,8 +591,14 @@ SET status = 'failed',
 WHERE id = sqlc.arg(id)
   AND status IN ('queued', 'running', 'waiting')
   AND (
-      wall_clock_deadline_at <= sqlc.arg(observed_at)
-      OR active_execution_ms >= active_execution_timeout_ms
+      deadline_at <= sqlc.arg(observed_at)
+      OR active_execution_ms >= active_timeout_ms
+      OR waiting_execution_ms >= waiting_timeout_ms
+      OR (
+          status = 'waiting'
+          AND waiting_execution_ms + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+              (sqlc.arg(observed_at)::timestamptz - waiting_segment_started_at)) * 1000)::bigint) >= waiting_timeout_ms
+      )
       OR (status = 'running' AND execution_deadline_at <= sqlc.arg(observed_at))
   )
 RETURNING *;
@@ -766,7 +809,7 @@ SELECT i.*
 FROM invocations AS i
 JOIN sessions AS s ON s.id = i.session_id
 WHERE i.status = 'queued'
-  AND i.wall_clock_deadline_at > sqlc.arg(observed_at)
+  AND i.deadline_at > sqlc.arg(observed_at)
   AND NOT EXISTS (
       SELECT 1
       FROM execution_dispatches AS d
@@ -809,7 +852,7 @@ LIMIT sqlc.arg(batch_limit);
 -- name: ListSessionsForRecovery :many
 SELECT s.id, s.account_id, s.tenant_partition_id, s.agent_id, s.session_key,
        s.next_message_sequence, s.next_lifecycle_revision, s.created_at, s.updated_at,
-       tp.tenant_ref,
+       tp.tenant_key,
        COALESCE(active.id, '') AS active_invocation_id,
        COALESCE(active.status, '') AS active_invocation_status
 FROM sessions AS s
@@ -1070,7 +1113,7 @@ WITH candidate AS (
       AND call.deadline_at > sqlc.arg(observed_at)
       AND invocation.status = 'waiting'
       AND invocation.current_iteration = call.iteration
-      AND invocation.wall_clock_deadline_at > sqlc.arg(observed_at)
+      AND invocation.deadline_at > sqlc.arg(observed_at)
     ORDER BY delivery.available_at, delivery.created_at, delivery.id
     FOR UPDATE OF delivery SKIP LOCKED
     LIMIT 1

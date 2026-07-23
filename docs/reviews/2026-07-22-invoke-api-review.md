@@ -70,7 +70,7 @@ Top recommendations, in priority order:
 | R5 | Busy-session posture: document the pattern now; queueing requires staged input and transcript promotion | P1 |
 | R6 | Per-tool deadlines and an explicit `waiting_timeout_seconds` | P1 |
 | R7 | Land spec-by-digest caching to complete the inline-spec story | P1 |
-| R8 | Naming sweep before freeze: `budgets`, `session_key`, pricing path, `structured_output` | P2 |
+| R8 | Naming sweep before freeze: `limits`, `session_key`, pricing path, `structured_output` | P2 |
 
 Priorities: P0 = before more external adopters see the contract. P1 = next
 design cycle. P2 = polish before any GA freeze. P3 = roadmap.
@@ -213,9 +213,9 @@ Two subtleties make the naive designs wrong:
    the host must act immediately on pending ToolCalls, until the tool
    deadline kills the turn. The wait must wake on actionable change.
 2. The lifecycle revision alone is not a complete change signal. Partial
-   client tool-result batches append tool-result messages and advance the
+   host tool-result batches append tool-result messages and advance the
    checkpoint without reserving a lifecycle revision; only closing the final
-   open call does (`internal/services/client_tools.go:284`). A revision-only
+   open call does (`internal/services/host_tools.go:284`). A revision-only
    wait would miss real changes to the result representation.
 
 The durable ordering that captures both already exists at Session scope: the
@@ -360,7 +360,7 @@ whole-conversation replay model to watch one turn.
 
 ### 4.4 The request-shape floor (P1, R4)
 
-**Observation.** The minimal valid request requires `agent_ref`,
+**Observation.** The minimal valid request requires `agent_key`,
 `idempotency_key`, an `input.content` array of typed text blocks, and a `spec`
 with `instructions` and `model`. Mistral's floor is `model` plus a bare string.
 CMA's floor, after setup, is one `user.message` event.
@@ -462,10 +462,10 @@ Three constraints shape the design:
   infrastructure CMA does not expose. Steering input inherits the same
   staging-then-promotion discipline as queued input.
 
-### 4.6 Client tools and human-in-the-loop deadlines (P1, R6)
+### 4.6 Host tools and human-in-the-loop deadlines (P1, R6)
 
-**Observation.** Pending client ToolCalls expose `deadline_at`, but the spec
-offers no way to set it: `ClientToolSpec` carries only name, description,
+**Observation.** Pending host ToolCalls expose `deadline_at`, but the spec
+offers no way to set it: `HostToolSpec` carries only name, description,
 mode, and schema. The deadline is an installation default. Meanwhile
 wall-clock time keeps accruing while an Invocation is parked
 (`architecture.md`, "Wall-clock time continues while parked"), and the
@@ -522,14 +522,14 @@ Do this once, before freeze; all are breaking renames later.
 
 - **`output` → `structured_output`.** Covered as R1b; listed here because it
   belongs in the same coordinated sweep.
-- **`budgets` → `limits`.** The object mixes timeouts, token ceilings, cost
+- **`limits` → `limits`.** The object mixes timeouts, token ceilings, cost
   caps, and iteration caps. Only cost is a budget in the ordinary sense.
   `limits` covers all five members honestly, and `waiting_timeout_seconds`
   (R6b) joins them naturally. Field names inside are good.
-- **`session_key` vs `agent_ref`.** Both are host-owned names with
+- **`session_key` vs `agent_key`.** Both are host-owned names with
   resolve-or-create semantics, but one is a `_key` and the other a `_ref`.
   Pick one suffix for "host-owned name that resolves or creates" and use it
-  for both (`session_ref` is the smaller change). `tenant_ref` already
+  for both (`session_ref` is the smaller change). `tenant_key` already
   matches.
 - **`/v1/model-pricing-capabilities`.** The name is a mouthful and the shape
   is a capability lookup. Fold it under the existing capabilities surface,
@@ -609,7 +609,7 @@ Not launch work. Recorded so the contract avoids foreclosing them.
   natural. Valuable for regeneration UX, evals, and A/B of specs.
 - **Indexed request metadata.** Already an open question (architecture
   question 4). Hosts will want to find Sessions and Invocations by host IDs
-  beyond `tenant_ref` and `session_key`. This is the main missing lookup
+  beyond `tenant_key` and `session_key`. This is the main missing lookup
   affordance for embedded apps.
 - **Model routing and fallback.** The vision promises per-step routing across
   providers. `ModelSelection` as an object leaves room to add `fallbacks` or
@@ -633,7 +633,7 @@ invites overcorrection:
   second representation survives.
 - Required wire-level idempotency with versioned canonical fingerprints. Six
   fingerprint versions in the log show the mechanism absorbs change safely.
-- The tenancy model: `tenant_ref` partitioning with credential constraint,
+- The tenancy model: `tenant_key` partitioning with credential constraint,
   no Tenant resource, no per-tenant provisioning.
 - No stored agent configuration. Both competitors' escape hatches back toward
   per-call config validate the bet. R7 completes it rather than reversing it.

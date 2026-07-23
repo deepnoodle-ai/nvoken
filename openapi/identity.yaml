@@ -311,7 +311,7 @@ components:
           type: [string, "null"]
         creator_credential_id:
           type: [string, "null"]
-        tenant_ref:
+        tenant_key:
           type: [string, "null"]
         session_id:
           type: [string, "null"]
@@ -350,7 +350,7 @@ components:
           maxLength: 100
         profile:
           $ref: "#/components/schemas/Profile"
-        tenant_ref:
+        tenant_key:
           type: string
           minLength: 1
           maxLength: 255
@@ -408,7 +408,7 @@ components:
               enum: [machine, user]
             effective_profile:
               $ref: "#/components/schemas/Profile"
-            tenant_ref:
+            tenant_key:
               type: [string, "null"]
             session_id:
               type: [string, "null"]
@@ -435,7 +435,7 @@ components:
           type: string
           enum: [Viewer, Operator]
           default: Operator
-        tenant_ref:
+        tenant_key:
           type: string
           minLength: 1
           maxLength: 255

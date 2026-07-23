@@ -18,7 +18,7 @@ transcripts, callback bodies, credentials, and database URLs out of evidence.
 | --- | --- | --- |
 | Termination during execution | After `invocation_claimed`, force-stop only the disposable daemon, then restart after the stored lease can expire. | The same Invocation remains authoritative, requeues from its committed checkpoint under a newer fence, and settles at most once. Work completed outside Postgres in the uncertainty window may repeat. |
 | Queued work across restart | With `ENGINE_CONCURRENCY` lower than a bounded batch, admit enough independent Sessions to leave queued work; gracefully stop and restart. | Every acknowledgement remains queryable. Queued work is later claimed or remains durably queued; none disappears. |
-| Waiting client ToolCall | Admit a client-tool smoke until `waiting`, stop and restart before submitting its result, then submit the same result twice. | The call remains parked without an owner, the first result is accepted, the equal replay deduplicates, and the Invocation continues once. |
+| Waiting host ToolCall | Admit a host-tool smoke until `waiting`, stop and restart before submitting its result, then submit the same result twice. | The call remains parked without an owner, the first result is accepted, the equal replay deduplicates, and the Invocation continues once. |
 | Postgres unavailable | After one acknowledgement, temporarily stop or isolate the disposable Postgres service without changing data. | `/health` retains its liveness meaning, `diagnose` and dependent requests fail safely, no false settlement appears, and the same acknowledgement is readable after recovery. |
 | Provider failure | Select a deliberately invalid model in one bounded disposable Invocation or use an operator-controlled provider failure account. | The Invocation settles durably as `failed` with `provider_error` and a bounded outcome class; no alternate provider or credential source is selected. |
 | Callback failure | Use an idempotent receiver that records stable IDs and returns a retryable failure through the configured maximum. | Retries preserve delivery and ToolCall IDs; exhaustion becomes one durable model-visible result, with no duplicated accepted receiver effect. |
@@ -44,8 +44,8 @@ transcripts, callback bodies, credentials, and database URLs out of evidence.
    cleanup responsibility for the disposable database, state file, callback
    receiver data, and logs.
 
-The waiting-work drill may use the `client-tool-admit` and
-`client-tool-resume` actions in `smoke.py`, with a dedicated `--state-file`.
+The waiting-work drill may use the `host-tool-admit` and
+`host-tool-resume` actions in `smoke.py`, with a dedicated `--state-file`.
 The termination drill should use a provider/model or controlled test condition
 long enough to observe `invocation_claimed`; do not infer the boundary from a
 sleep.

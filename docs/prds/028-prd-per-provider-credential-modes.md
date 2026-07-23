@@ -3,7 +3,7 @@
 **Status:** Implemented
 **Sequence:** 028
 **Depends on:** `003-prd-durable-invocation-admission.md`,
-`008-prd-invocation-controls-and-budgets.md`,
+`008-prd-invocation-controls-and-limits.md`,
 `014-prd-checkpoint-crash-recovery.md`, and
 `027-prd-machine-credentials-and-cli-device-auth.md`
 
@@ -66,7 +66,7 @@ appropriate source on each Invocation. The provider-scoped binding key allows
 a future multi-provider spec without adding that behavior in this PRD.
 
 Account BYOK belongs to nvoken's customer, the host application. Tenant BYOK is
-a reusable model credential the host manages on behalf of one `tenant_ref`; it
+a reusable model credential the host manages on behalf of one `tenant_key`; it
 does not make the host's end-user an nvoken principal. Caller-ephemeral is
 supplied for one Invocation. Platform and installation secrets remain outside
 Postgres in deployment or Cloud control-plane secret storage. Self-hosted

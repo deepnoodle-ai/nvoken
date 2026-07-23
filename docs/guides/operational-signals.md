@@ -92,7 +92,7 @@ such as database connectivity, made the dependent verdict impossible.
 | `dispatch_attempt_retry` / `dispatch_attempt_decided` / `dispatch_attempt_settled` | A private executor delivery needs transport retry, converged to a durable decision, or settled its Invocation. | Correlate `dispatch_id` and `invocation_id`; check `retry_reason`, executor IAM, and the Invocation fence. |
 | `live_event_publish_failed` / `live_event_subscribe_failed` / `live_event_decode_failed` | Ephemeral Redis fan-out degraded. | Check `error_class`, Redis diagnosis, and reconnect clients from a durable cursor; do not infer lost durable output. |
 | `live_event_stream_resync` / `live_event_stream_closed` | An SSE client must resync or the bounded stream ended. | Use `reason`, fetch the transcript snapshot with the resume cursor, then reconnect. |
-| `client_tool_result_partial` / `client_tool_resume_queued` / `client_tool_result_deduplicated` | Host-submitted client tool results were accepted, resumed work, or converged as duplicates. | Correlate `invocation_id`; read pending ToolCalls and authoritative Invocation status. |
+| `host_tool_result_partial` / `host_tool_resume_queued` / `host_tool_result_deduplicated` | Host-submitted host tool results were accepted, resumed work, or converged as duplicates. | Correlate `invocation_id`; read pending ToolCalls and authoritative Invocation status. |
 | `restore_verification` | One isolated restore check passed or failed without reading content into logs. | Use `component` and `error_class`; keep the target isolated and follow the backup/restore diagnosis before any daemon start. |
 
 Google Cloud log queries, alert policies, and alert-specific actions remain in

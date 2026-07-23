@@ -26,7 +26,7 @@ invoke(execution_spec, input, optional_session) -> durable invocation
 
 No provisioning first. Your application sends the agent specification with
 the request: instructions, model preferences, tool schemas, output
-contract, budgets. nvoken resolves or creates the Session, runs the turn
+contract, limits. nvoken resolves or creates the Session, runs the turn
 durably, and streams output and tool calls back.
 
 An agent turn may take seconds or tens of minutes, progressing through many
@@ -45,7 +45,7 @@ product data. Agent behavior arrives with each request as the execution
 spec; nothing is provisioned or registered first.
 
 Every tool with side effects executes on your side of the boundary, either as
-a client tool call recoverable through reads and the stream or as a signed
+a host tool call recoverable through reads and the stream or as a signed
 callback to your endpoints.
 
 ## Deployment

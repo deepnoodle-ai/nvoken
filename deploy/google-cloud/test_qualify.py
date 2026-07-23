@@ -61,7 +61,7 @@ class RuntimeHandler(http.server.BaseHTTPRequestHandler):
         if self.path.endswith("/transcript/stream"):
             body = (
                 b"retry: 1000\n\n"
-                b"event: transcript.snapshot\n"
+                b"event: transcript.update\n"
                 b"id: cursor-1\n"
                 b'data: {"messages":[],"invocation_changes":[]}\n\n'
                 b"event: stream.end\n"
@@ -355,7 +355,7 @@ class RuntimeClientTests(unittest.TestCase):
             response = client.request("GET", "/json")
             self.assertEqual(response.json()["status"], "completed")
             frames = list(client.stream("sesn_test"))
-        self.assertEqual(frames[0][0:2], ("transcript.snapshot", "cursor-1"))
+        self.assertEqual(frames[0][0:2], ("transcript.update", "cursor-1"))
         self.assertEqual(frames[1][0], "stream.end")
 
 

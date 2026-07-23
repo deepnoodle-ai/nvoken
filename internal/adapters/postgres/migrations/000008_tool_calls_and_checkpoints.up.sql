@@ -259,8 +259,8 @@ BEGIN
        OR NEW.idempotency_key <> OLD.idempotency_key
        OR NEW.request_fingerprint <> OLD.request_fingerprint
        OR NEW.request_fingerprint_version <> OLD.request_fingerprint_version
-       OR NEW.wall_clock_timeout_ms <> OLD.wall_clock_timeout_ms
-       OR NEW.active_execution_timeout_ms <> OLD.active_execution_timeout_ms
+       OR NEW.total_timeout_ms <> OLD.total_timeout_ms
+       OR NEW.active_timeout_ms <> OLD.active_timeout_ms
        OR NEW.max_output_tokens IS DISTINCT FROM OLD.max_output_tokens
        OR NEW.max_estimated_cost_microusd IS DISTINCT FROM OLD.max_estimated_cost_microusd
        OR NEW.max_iterations <> OLD.max_iterations THEN

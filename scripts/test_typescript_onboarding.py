@@ -262,7 +262,7 @@ def check_empty_consumer(work: Path, artifact: Path, base_url: str) -> None:
         """import { Client, isTextContentBlock } from "@deepnoodle/nvoken";
 const client = new Client({ baseUrl: process.env.NVOKEN_BASE_URL!, apiKey: "test-key" });
 const handle = await client.invoke({
-  agentRef: "packed-consumer",
+  agentKey: "packed-consumer",
   sessionKey: "packed-consumer",
   idempotencyKey: "packed-consumer:message-1",
   input: "hello",

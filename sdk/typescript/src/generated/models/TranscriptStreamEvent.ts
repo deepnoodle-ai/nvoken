@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -12,13 +12,13 @@
  * Do not edit the class manually.
  */
 
-import type { GenerationDeltaEvent } from './GenerationDeltaEvent.js';
+import type { OutputTextDeltaEvent } from './OutputTextDeltaEvent.js';
 import {
-    instanceOfGenerationDeltaEvent,
-    GenerationDeltaEventFromJSON,
-    GenerationDeltaEventFromJSONTyped,
-    GenerationDeltaEventToJSON,
-} from './GenerationDeltaEvent.js';
+    instanceOfOutputTextDeltaEvent,
+    OutputTextDeltaEventFromJSON,
+    OutputTextDeltaEventFromJSONTyped,
+    OutputTextDeltaEventToJSON,
+} from './OutputTextDeltaEvent.js';
 import type { StreamEndEvent } from './StreamEndEvent.js';
 import {
     instanceOfStreamEndEvent,
@@ -33,22 +33,30 @@ import {
     StreamResyncEventFromJSONTyped,
     StreamResyncEventToJSON,
 } from './StreamResyncEvent.js';
-import type { TranscriptSnapshot } from './TranscriptSnapshot.js';
+import type { ThinkingDeltaEvent } from './ThinkingDeltaEvent.js';
 import {
-    instanceOfTranscriptSnapshot,
-    TranscriptSnapshotFromJSON,
-    TranscriptSnapshotFromJSONTyped,
-    TranscriptSnapshotToJSON,
-} from './TranscriptSnapshot.js';
+    instanceOfThinkingDeltaEvent,
+    ThinkingDeltaEventFromJSON,
+    ThinkingDeltaEventFromJSONTyped,
+    ThinkingDeltaEventToJSON,
+} from './ThinkingDeltaEvent.js';
+import type { TranscriptUpdate } from './TranscriptUpdate.js';
+import {
+    instanceOfTranscriptUpdate,
+    TranscriptUpdateFromJSON,
+    TranscriptUpdateFromJSONTyped,
+    TranscriptUpdateToJSON,
+} from './TranscriptUpdate.js';
 
 /**
  * @type TranscriptStreamEvent
- * The JSON value carried by one SSE `data:` field. SSE framing supplies
- * the event name and, for `TranscriptSnapshot` only, the durable ID.
+ * The JSON value carried by one Session-stream SSE `data:` field.
+ * Durable `transcript.update` frames carry the resume cursor as both
+ * payload data and SSE `id`; preview and control frames never carry IDs.
  *
  * @export
  */
-export type TranscriptStreamEvent = GenerationDeltaEvent | StreamEndEvent | StreamResyncEvent | TranscriptSnapshot;
+export type TranscriptStreamEvent = OutputTextDeltaEvent | StreamEndEvent | StreamResyncEvent | ThinkingDeltaEvent | TranscriptUpdate;
 
 export function TranscriptStreamEventFromJSON(json: any): TranscriptStreamEvent {
     return TranscriptStreamEventFromJSONTyped(json, false);
@@ -61,8 +69,8 @@ export function TranscriptStreamEventFromJSONTyped(json: any, ignoreDiscriminato
     if (typeof json !== 'object') {
         return json;
     }
-    if (instanceOfGenerationDeltaEvent(json)) {
-        return GenerationDeltaEventFromJSONTyped(json, true);
+    if (instanceOfOutputTextDeltaEvent(json)) {
+        return OutputTextDeltaEventFromJSONTyped(json, true);
     }
     if (instanceOfStreamEndEvent(json)) {
         return StreamEndEventFromJSONTyped(json, true);
@@ -70,8 +78,11 @@ export function TranscriptStreamEventFromJSONTyped(json: any, ignoreDiscriminato
     if (instanceOfStreamResyncEvent(json)) {
         return StreamResyncEventFromJSONTyped(json, true);
     }
-    if (instanceOfTranscriptSnapshot(json)) {
-        return TranscriptSnapshotFromJSONTyped(json, true);
+    if (instanceOfThinkingDeltaEvent(json)) {
+        return ThinkingDeltaEventFromJSONTyped(json, true);
+    }
+    if (instanceOfTranscriptUpdate(json)) {
+        return TranscriptUpdateFromJSONTyped(json, true);
     }
     return {} as any;
 }
@@ -87,8 +98,8 @@ export function TranscriptStreamEventToJSONTyped(value?: TranscriptStreamEvent |
     if (typeof value !== 'object') {
         return value;
     }
-    if (instanceOfGenerationDeltaEvent(value)) {
-        return GenerationDeltaEventToJSON(value as GenerationDeltaEvent);
+    if (instanceOfOutputTextDeltaEvent(value)) {
+        return OutputTextDeltaEventToJSON(value as OutputTextDeltaEvent);
     }
     if (instanceOfStreamEndEvent(value)) {
         return StreamEndEventToJSON(value as StreamEndEvent);
@@ -96,8 +107,11 @@ export function TranscriptStreamEventToJSONTyped(value?: TranscriptStreamEvent |
     if (instanceOfStreamResyncEvent(value)) {
         return StreamResyncEventToJSON(value as StreamResyncEvent);
     }
-    if (instanceOfTranscriptSnapshot(value)) {
-        return TranscriptSnapshotToJSON(value as TranscriptSnapshot);
+    if (instanceOfThinkingDeltaEvent(value)) {
+        return ThinkingDeltaEventToJSON(value as ThinkingDeltaEvent);
+    }
+    if (instanceOfTranscriptUpdate(value)) {
+        return TranscriptUpdateToJSON(value as TranscriptUpdate);
     }
     return {};
 }

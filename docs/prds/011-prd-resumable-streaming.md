@@ -6,7 +6,7 @@
 
 **Depends on:** `005-prd-generation-only-turns.md`,
 `007-prd-recovery-and-transcript-reads.md`,
-`008-prd-invocation-controls-and-budgets.md`,
+`008-prd-invocation-controls-and-limits.md`,
 `010-prd-cloud-tasks-invocation-execution.md`
 
 ## ELI5
@@ -70,7 +70,7 @@ durability claim for Redis Pub/Sub.
 - **R2 — Durable frames project the recovery model.**
   Before tailing live work, and after every durable wake or polling interval,
   the server must completely drain PRD 007 fixed-cut pages from its last
-  delivered cursor. Each nonempty `transcript.snapshot` frame contains the
+  delivered cursor. Each nonempty `transcript.update` frame contains the
   canonical messages and Invocation changes from one JSON snapshot page and
   carries `id: <resume_cursor>`. Messages therefore precede terminal lifecycle
   evidence, and reconnecting with the last ID may replay no committed row or
@@ -83,7 +83,7 @@ durability claim for Redis Pub/Sub.
   embedded and private-executor generation use this seam for every supported
   streaming provider, whether or not a subscriber is currently present. While
   Dive streams a response, nvoken may publish
-  provider-neutral `generation.delta` frames containing Session and Invocation
+  provider-neutral `output_text.delta` frames containing Session and Invocation
   identity, the fenced lease attempt, an attempt-local delta sequence,
   content-block index, emitted time, and supported text or thinking content.
   These frames carry no SSE `id`, are never written to Postgres, never advance
@@ -159,7 +159,7 @@ durability claim for Redis Pub/Sub.
 
 - [x] **A2 (R2, R3):** A streaming fake model emits several deltas and then a
   completed assistant message. The client sees ordered id-less
-  `generation.delta` frames, followed by a cursor-bearing snapshot containing
+  `output_text.delta` frames, followed by a cursor-bearing snapshot containing
   the exact canonical message and terminal change. Restarting the server and
   reconnecting from the cursor reconstructs the same terminal state without
   any delta store. A mid-stream provider failure and a blocking-provider

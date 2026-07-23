@@ -37,8 +37,9 @@ var operationCommands = map[string]string{
 	"listSessions":              "session list",
 	"revokeProviderCredential":  "provider-credential revoke",
 	"rotateProviderCredential":  "provider-credential rotate",
+	"streamInvocation":          "invocation stream",
 	"streamSessionTranscript":   "session stream",
-	"submitClientToolResults":   "tool-result submit",
+	"submitHostToolResults":     "tool-result submit",
 }
 
 type runtimeConfig struct {
@@ -50,11 +51,11 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Durably admit an agent turn").
 		Args("input").
 		Flags(
-			cli.String("agent", "a").Required().Help("Stable Agent reference"),
-			cli.String("idempotency-key", "i").Required().Help("Stable admission identity"),
-			cli.String("instructions").Required().Help("Agent instructions"),
+			cli.String("agent", "a").Required().Help("Stable Agent key"),
+			cli.String("idempotency-key", "i").Help("Stable admission identity; generated when omitted"),
+			cli.String("instructions").Help("Agent instructions"),
 			cli.String("provider").Required().Help("Model provider"),
-			cli.String("model", "m").Required().Help("Model name"),
+			cli.String("model", "m").Required().Help("Exact model ID"),
 			cli.String("tenant").Help("Tenant partition"),
 			cli.String("session-id").Help("Existing Session ID"),
 			cli.String("session-key").Help("Caller Session key"),
@@ -71,6 +72,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Args("invocation-id").
 		Flags(cli.Int("timeout").Help("Local wait timeout in seconds; zero waits indefinitely")).
 		Run(runInvocationWait)
+	invocations.Command("stream").Args("invocation-id").Run(runInvocationStream)
 	invocations.Command("cancel").Args("invocation-id").Run(runInvocationCancel)
 	invocations.Command("list").
 		Flags(
@@ -115,7 +117,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runSessionTranscript)
 	sessions.Command("stream").Args("session-id").Run(runSessionStream)
 
-	tools := app.Group("tool-result").Description("Submit durable client ToolCall results")
+	tools := app.Group("tool-result").Description("Submit durable host ToolCall results")
 	tools.Command("submit").
 		Args("invocation-id", "content").
 		Flags(
@@ -157,18 +159,18 @@ func runInvoke(command *cli.Context) error {
 		return err
 	}
 	request := nvoken.InvokeRequest{
-		AgentRef:       command.String("agent"),
+		AgentKey:       command.String("agent"),
 		IdempotencyKey: command.String("idempotency-key"),
 		Input:          command.Arg(0),
 		Spec: nvoken.ExecutionSpec{
 			Instructions: command.String("instructions"),
 			Model: nvoken.Model{
 				Provider: command.String("provider"),
-				Name:     command.String("model"),
+				ID:       command.String("model"),
 			},
 		},
 	}
-	request.TenantRef = optionalString(command.String("tenant"))
+	request.TenantKey = optionalString(command.String("tenant"))
 	request.SessionID = optionalString(command.String("session-id"))
 	request.SessionKey = optionalString(command.String("session-key"))
 	handle, err := client.Invoke(command.Context(), request)
@@ -186,7 +188,7 @@ func runInvocationGet(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	invocation, err := client.Get(command.Context(), command.Arg(0))
+	invocation, err := client.GetInvocation(command.Context(), command.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -198,7 +200,7 @@ func runInvocationResult(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := client.GetResult(command.Context(), command.Arg(0))
+	result, err := client.GetInvocationResult(command.Context(), command.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -220,10 +222,7 @@ func runInvocationWait(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	handle, err := client.Resume(command.Context(), command.Arg(0))
-	if err != nil {
-		return err
-	}
+	handle := client.Invocation(command.Arg(0))
 	ctx := command.Context()
 	if seconds := command.Int("timeout"); seconds > 0 {
 		var cancel context.CancelFunc
@@ -237,12 +236,32 @@ func runInvocationWait(command *cli.Context) error {
 	return writeInvocation(command, invocation)
 }
 
+func runInvocationStream(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	handle := client.Invocation(command.Arg(0))
+	return handle.Stream(command.Context(), func(event nvoken.StreamEvent) error {
+		if jsonOutput(command) {
+			return json.NewEncoder(command.Stdout()).Encode(map[string]any{
+				"id":       event.ID,
+				"type":     event.Type,
+				"data":     event.Data,
+				"retry_ms": event.Retry.Milliseconds(),
+			})
+		}
+		_, err := fmt.Fprintf(command.Stdout(), "%s\t%s\n", event.Type, event.ID)
+		return err
+	})
+}
+
 func runInvocationCancel(command *cli.Context) error {
 	client, err := runtimeClient(command)
 	if err != nil {
 		return err
 	}
-	invocation, err := client.Cancel(command.Context(), command.Arg(0))
+	invocation, err := client.CancelInvocation(command.Context(), command.Arg(0))
 	if err != nil {
 		return err
 	}

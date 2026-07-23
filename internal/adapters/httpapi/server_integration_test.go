@@ -170,7 +170,7 @@ func TestTranscriptStreamEndToEndSurvivesHandlerRestart(t *testing.T) {
 	}
 	body := string(streamBody)
 	for _, fragment := range []string{
-		"event: generation.delta", `"text":"hel"`, `"text":"hello"`, `"status":"completed"`,
+		"event: output_text.delta", `"text":"hel"`, `"text":"hello"`, `"status":"completed"`,
 		"event: stream.end", `"reason":"terminal"`,
 	} {
 		if !strings.Contains(body, fragment) {
@@ -209,7 +209,7 @@ func TestTranscriptStreamEndToEndSurvivesHandlerRestart(t *testing.T) {
 	}
 	reconnectedBody, _ := io.ReadAll(reconnected.Body)
 	_ = reconnected.Body.Close()
-	if strings.Contains(string(reconnectedBody), "event: transcript.snapshot") ||
+	if strings.Contains(string(reconnectedBody), "event: transcript.update") ||
 		!strings.Contains(string(reconnectedBody), `"reason":"terminal"`) {
 		t.Fatalf("restart replay = %s", reconnectedBody)
 	}
@@ -273,7 +273,7 @@ func lastSSEID(stream string) string {
 }
 
 func reorderedInvocationJSON() []byte {
-	return []byte(`{"spec":{"model":{"name":"test-model","provider":"anthropic"},"instructions":"help"},"input":{"content":[{"text":"private caller text","type":"text"}]},"idempotency_key":"request-1","agent_ref":"support"}`)
+	return []byte(`{"spec":{"model":{"id":"test-model","provider":"anthropic"},"instructions":"help"},"input":{"content":[{"text":"private caller text","type":"text"}]},"idempotency_key":"request-1","agent_key":"support"}`)
 }
 
 func openRuntimeHTTP(t *testing.T, databaseURL string) (*pgxpool.Pool, http.Handler) {

@@ -15,40 +15,40 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
-type PendingClientToolCall struct {
+type PendingHostToolCall struct {
 	ID         string
 	Name       string
 	Input      json.RawMessage
 	DeadlineAt time.Time
 }
 
-type ClientToolResultInput struct {
+type HostToolResultInput struct {
 	ToolCallID string          `json:"tool_call_id"`
 	Content    json.RawMessage `json:"content"`
 	IsError    bool            `json:"is_error,omitempty"`
 }
 
-type SubmitClientToolResultsInput struct {
-	Results []ClientToolResultInput `json:"results"`
+type SubmitHostToolResultsInput struct {
+	Results []HostToolResultInput `json:"results"`
 }
 
-type ClientToolResultAcceptance struct {
+type HostToolResultAcceptance struct {
 	ToolCallID   string
 	Status       domain.ToolCallStatus
 	Deduplicated bool
 }
 
-type SubmitClientToolResultsResult struct {
+type SubmitHostToolResultsResult struct {
 	InvocationID     string
 	SessionID        string
 	Status           domain.InvocationStatus
-	Results          []ClientToolResultAcceptance
-	PendingToolCalls []PendingClientToolCall
+	Results          []HostToolResultAcceptance
+	PendingToolCalls []PendingHostToolCall
 }
 
-func ValidateSubmitClientToolResults(input SubmitClientToolResultsInput) error {
-	if len(input.Results) == 0 || len(input.Results) > MaxClientTools {
-		return invalidRequest(fmt.Sprintf("results must contain between 1 and %d items.", MaxClientTools))
+func ValidateSubmitHostToolResults(input SubmitHostToolResultsInput) error {
+	if len(input.Results) == 0 || len(input.Results) > MaxHostTools {
+		return invalidRequest(fmt.Sprintf("results must contain between 1 and %d items.", MaxHostTools))
 	}
 	seen := make(map[string]struct{}, len(input.Results))
 	for index, result := range input.Results {
@@ -66,37 +66,37 @@ func ValidateSubmitClientToolResults(input SubmitClientToolResultsInput) error {
 	return nil
 }
 
-func (s *RuntimeService) SubmitClientToolResults(
+func (s *RuntimeService) SubmitHostToolResults(
 	ctx context.Context,
 	auth domain.RuntimeAuthContext,
 	invocationID string,
-	input SubmitClientToolResultsInput,
-) (SubmitClientToolResultsResult, error) {
+	input SubmitHostToolResultsInput,
+) (SubmitHostToolResultsResult, error) {
 	if err := s.ready(); err != nil {
-		return SubmitClientToolResultsResult{}, err
+		return SubmitHostToolResultsResult{}, err
 	}
 	if err := authorize(auth, domain.OperationSubmitToolResults); err != nil {
-		return SubmitClientToolResultsResult{}, err
+		return SubmitHostToolResultsResult{}, err
 	}
 	if !domain.ValidStableID(invocationID, domain.PrefixInvocation) {
-		return SubmitClientToolResultsResult{}, invalidRequest("invocation_id is invalid.")
+		return SubmitHostToolResultsResult{}, invalidRequest("invocation_id is invalid.")
 	}
-	if err := ValidateSubmitClientToolResults(input); err != nil {
-		return SubmitClientToolResultsResult{}, err
+	if err := ValidateSubmitHostToolResults(input); err != nil {
+		return SubmitHostToolResultsResult{}, err
 	}
 	observed, err := s.store.GetInvocation(ctx, invocationID)
 	if errors.Is(err, ports.ErrNotFound) {
-		return SubmitClientToolResultsResult{}, notFound()
+		return SubmitHostToolResultsResult{}, notFound()
 	}
 	if err != nil {
-		return SubmitClientToolResultsResult{}, err
+		return SubmitHostToolResultsResult{}, err
 	}
 	if err := s.authorizeInvocationScope(ctx, auth, observed); err != nil {
-		return SubmitClientToolResultsResult{}, err
+		return SubmitHostToolResultsResult{}, err
 	}
 
 	queued := false
-	var result SubmitClientToolResultsResult
+	var result SubmitHostToolResultsResult
 	err = s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
 		if _, err := s.store.GetSessionForUpdate(txCtx, observed.SessionID); err != nil {
 			return err
@@ -129,32 +129,32 @@ func (s *RuntimeService) SubmitClientToolResults(
 				call.AccountID != invocation.AccountID ||
 				call.TenantPartitionID != invocation.TenantPartitionID ||
 				call.AgentID != invocation.AgentID ||
-				call.Mode != domain.ToolCallModeClient {
+				call.Mode != domain.ToolCallModeHost {
 				return notFound()
 			}
 			calls[callID] = call
 		}
 
-		acceptances := make([]ClientToolResultAcceptance, len(input.Results))
-		newItems := make([]ClientToolResultInput, 0, len(input.Results))
+		acceptances := make([]HostToolResultAcceptance, len(input.Results))
+		newItems := make([]HostToolResultInput, 0, len(input.Results))
 		for index, item := range input.Results {
 			call := calls[item.ToolCallID]
 			status := domain.ToolCallCompleted
 			if item.IsError {
 				status = domain.ToolCallFailed
 			}
-			acceptances[index] = ClientToolResultAcceptance{
+			acceptances[index] = HostToolResultAcceptance{
 				ToolCallID: item.ToolCallID,
 				Status:     status,
 			}
 			if call.Status.Terminal() {
-				if call.ResultOrigin == nil || *call.ResultOrigin != domain.ToolCallResultClient {
-					if clientToolResultDeadlineExpired(invocation, now) {
+				if call.ResultOrigin == nil || *call.ResultOrigin != domain.ToolCallResultHost {
+					if hostToolResultDeadlineExpired(invocation, now) {
 						return toolResultExpired()
 					}
 					return invocationNotWaiting()
 				}
-				equal, err := equalStoredClientToolResult(txCtx, s.store, call, item)
+				equal, err := equalStoredHostToolResult(txCtx, s.store, call, item)
 				if err != nil {
 					return err
 				}
@@ -168,7 +168,7 @@ func (s *RuntimeService) SubmitClientToolResults(
 				acceptances[index].Deduplicated = true
 				continue
 			}
-			if clientToolResultDeadlineExpired(invocation, now) {
+			if hostToolResultDeadlineExpired(invocation, now) {
 				return toolResultExpired()
 			}
 			if invocation.Status != domain.InvocationWaiting ||
@@ -192,7 +192,7 @@ func (s *RuntimeService) SubmitClientToolResults(
 			if err != nil {
 				return err
 			}
-			payload, err := clientToolResultPayload(newItems)
+			payload, err := hostToolResultPayload(newItems)
 			if err != nil {
 				return err
 			}
@@ -222,7 +222,7 @@ func (s *RuntimeService) SubmitClientToolResults(
 					txCtx,
 					call.ID,
 					status,
-					domain.ToolCallResultClient,
+					domain.ToolCallResultHost,
 					messageID,
 					sequence,
 					now,
@@ -271,7 +271,7 @@ func (s *RuntimeService) SubmitClientToolResults(
 			return err
 		}
 		for _, call := range open {
-			if (call.Mode != domain.ToolCallModeClient && call.Mode != domain.ToolCallModeCallback) ||
+			if (call.Mode != domain.ToolCallModeHost && call.Mode != domain.ToolCallModeCallback) ||
 				call.Iteration != invocation.CurrentIteration {
 				return fmt.Errorf("waiting Invocation has an unsupported open ToolCall")
 			}
@@ -333,11 +333,11 @@ func (s *RuntimeService) SubmitClientToolResults(
 			queued = true
 		}
 
-		pending, err := s.pendingClientToolCalls(txCtx, invocation)
+		pending, err := s.pendingHostToolCalls(txCtx, invocation)
 		if err != nil {
 			return err
 		}
-		result = SubmitClientToolResultsResult{
+		result = SubmitHostToolResultsResult{
 			InvocationID:     invocation.ID,
 			SessionID:        invocation.SessionID,
 			Status:           invocation.Status,
@@ -347,7 +347,7 @@ func (s *RuntimeService) SubmitClientToolResults(
 		return nil
 	})
 	if err != nil {
-		return SubmitClientToolResultsResult{}, err
+		return SubmitHostToolResultsResult{}, err
 	}
 	if queued && s.executionMode == InvocationExecutionEmbedded && s.signaller != nil {
 		s.signaller.Notify(ctx, ports.InvocationExecutionQueue)
@@ -358,14 +358,14 @@ func (s *RuntimeService) SubmitClientToolResults(
 			deduplicated++
 		}
 	}
-	event := observability.EventClientToolResultPartial
+	event := observability.EventHostToolResultPartial
 	if result.Status == domain.InvocationQueued {
-		event = observability.EventClientToolResumeQueued
+		event = observability.EventHostToolResumeQueued
 	} else if deduplicated == len(result.Results) {
-		event = observability.EventClientToolResultDeduplicated
+		event = observability.EventHostToolResultDeduplicated
 	}
 	s.logger.Info(
-		"Client tool results accepted",
+		"Host tool results accepted",
 		"event",
 		event,
 		"invocation_id",
@@ -392,7 +392,7 @@ func (s *RuntimeService) authorizeInvocationScope(
 	}
 	partition, err := s.store.GetTenantPartition(ctx, invocation.TenantPartitionID)
 	if err != nil || partition.AccountID != auth.AccountID ||
-		!tenantMatches(auth.TenantConstraint, partition.TenantRef) {
+		!tenantMatches(auth.TenantConstraint, partition.TenantKey) {
 		if errors.Is(err, ports.ErrNotFound) || err == nil {
 			return notFound()
 		}
@@ -401,27 +401,27 @@ func (s *RuntimeService) authorizeInvocationScope(
 	return nil
 }
 
-func (s *RuntimeService) pendingClientToolCalls(
+func (s *RuntimeService) pendingHostToolCalls(
 	ctx context.Context,
 	invocation domain.Invocation,
-) ([]PendingClientToolCall, error) {
+) ([]PendingHostToolCall, error) {
 	if invocation.Status != domain.InvocationWaiting {
-		return []PendingClientToolCall{}, nil
+		return []PendingHostToolCall{}, nil
 	}
 	calls, err := s.store.ListToolCallsByInvocation(ctx, invocation.ID)
 	if err != nil {
 		return nil, err
 	}
-	pending := make([]PendingClientToolCall, 0, len(calls))
+	pending := make([]PendingHostToolCall, 0, len(calls))
 	for _, call := range calls {
-		if call.Mode != domain.ToolCallModeClient || call.Status.Terminal() {
+		if call.Mode != domain.ToolCallModeHost || call.Status.Terminal() {
 			continue
 		}
 		input, err := storedToolCallInput(ctx, s.store, call)
 		if err != nil {
 			return nil, err
 		}
-		pending = append(pending, PendingClientToolCall{
+		pending = append(pending, PendingHostToolCall{
 			ID:         call.ID,
 			Name:       call.Name,
 			Input:      input,
@@ -434,19 +434,20 @@ func (s *RuntimeService) pendingClientToolCalls(
 func invocationNotWaiting() error {
 	return &PublicError{
 		Code:    CodeInvocationNotWaiting,
-		Message: "The Invocation is not waiting for this client tool result.",
+		Message: "The Invocation is not waiting for this host tool result.",
 	}
 }
 
 func toolResultExpired() error {
 	return &PublicError{
 		Code:    CodeToolResultExpired,
-		Message: "The client tool result deadline has expired.",
+		Message: "The host tool result deadline has expired.",
 	}
 }
 
-func clientToolResultDeadlineExpired(invocation domain.Invocation, now time.Time) bool {
-	if !invocation.WallClockDeadlineAt.After(now) {
+func hostToolResultDeadlineExpired(invocation domain.Invocation, now time.Time) bool {
+	if !invocation.DeadlineAt.After(now) ||
+		effectiveWaitingExecutionMS(invocation, now) >= invocation.WaitingTimeoutMS {
 		return true
 	}
 	if invocation.Status != domain.InvocationFailed || len(invocation.Error) == 0 {
@@ -458,7 +459,7 @@ func clientToolResultDeadlineExpired(invocation domain.Invocation, now time.Time
 	return json.Unmarshal(invocation.Error, &failure) == nil && failure.Code == "deadline_exceeded"
 }
 
-func clientToolResultPayload(items []ClientToolResultInput) (json.RawMessage, error) {
+func hostToolResultPayload(items []HostToolResultInput) (json.RawMessage, error) {
 	type block struct {
 		Type      string          `json:"type"`
 		ToolUseID string          `json:"tool_use_id"`
@@ -477,11 +478,11 @@ func clientToolResultPayload(items []ClientToolResultInput) (json.RawMessage, er
 	return json.Marshal(blocks)
 }
 
-func equalStoredClientToolResult(
+func equalStoredHostToolResult(
 	ctx context.Context,
 	store ports.SessionMessageRepository,
 	call domain.ToolCall,
-	want ClientToolResultInput,
+	want HostToolResultInput,
 ) (bool, error) {
 	if call.ResultMessageID == nil {
 		return false, fmt.Errorf("terminal ToolCall has no result message")
@@ -513,31 +514,31 @@ func equalStoredClientToolResult(
 	return false, fmt.Errorf("terminal ToolCall result block is missing")
 }
 
-func clientToolJSONDepth(raw json.RawMessage) (int, error) {
+func hostToolJSONDepth(raw json.RawMessage) (int, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	var value any
 	if err := decoder.Decode(&value); err != nil {
 		return 0, err
 	}
-	if err := requireClientToolJSONEOF(decoder); err != nil {
+	if err := requireHostToolJSONEOF(decoder); err != nil {
 		return 0, err
 	}
-	return clientToolValueDepth(value), nil
+	return hostToolValueDepth(value), nil
 }
 
-func clientToolValueDepth(value any) int {
+func hostToolValueDepth(value any) int {
 	switch typed := value.(type) {
 	case []any:
 		depth := 1
 		for _, item := range typed {
-			depth = max(depth, 1+clientToolValueDepth(item))
+			depth = max(depth, 1+hostToolValueDepth(item))
 		}
 		return depth
 	case map[string]any:
 		depth := 1
 		for _, item := range typed {
-			depth = max(depth, 1+clientToolValueDepth(item))
+			depth = max(depth, 1+hostToolValueDepth(item))
 		}
 		return depth
 	default:
@@ -545,7 +546,7 @@ func clientToolValueDepth(value any) int {
 	}
 }
 
-func requireClientToolJSONEOF(decoder *json.Decoder) error {
+func requireHostToolJSONEOF(decoder *json.Decoder) error {
 	var extra any
 	if err := decoder.Decode(&extra); err == nil {
 		return fmt.Errorf("unexpected trailing JSON value")

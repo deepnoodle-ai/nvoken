@@ -1,20 +1,24 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
   Client,
+  SessionBusyError,
   NvokenError,
   Reducer,
   deduplicateCallbackResult,
-  defineClientTool,
+  defineHostTool,
   defineJsonSchema,
   formatInvocationFailure,
   formatNvokenError,
   toolInput,
   verifyCallback,
-  type ClientTool,
+  type HostTool,
   type Tool,
+  type StandardJSONSchemaV1,
 } from "../index.js";
 
 const agentId = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
@@ -80,9 +84,9 @@ test("shared fault server semantics", async (context) => {
   const client = new Client({
     baseUrl,
     apiKey: "test-key",
-    retry: { maximumAttempts: 3, minimumDelayMs: 1, maximumDelayMs: 5 },
+    retry: { maxAttempts: 3, minDelayMs: 1, maxDelayMs: 5 },
   });
-  const pricing = await client.pricingCapability({ provider: "openai", name: "gpt-test" });
+  const pricing = await client.pricingCapability({ provider: "openai", id: "gpt-test" });
   assert.deepEqual(pricing, {
     provider: "openai",
     model: "gpt-test",
@@ -90,12 +94,12 @@ test("shared fault server semantics", async (context) => {
     registryVersion: "conformance-v1",
   });
   const handle = await client.invoke({
-    agentRef: "support",
+    agentKey: "support",
     idempotencyKey: "typescript-lost-ack",
     input: "hello",
     spec: {
       instructions: "help",
-      model: { provider: "openai", name: "gpt-test" },
+      model: { provider: "openai", id: "gpt-test" },
       outputSchema: defineJsonSchema<Answer>({
         type: "object",
         properties: { answer: { type: "string" } },
@@ -109,16 +113,17 @@ test("shared fault server semantics", async (context) => {
   assert.equal(handle.agentId, agentId);
   assert.equal(handle.deduplicated, true);
 
-  const resumed = await client.resume(invocationId);
+  const resumed = client.invocation(invocationId);
+  assert.equal(resumed.status, undefined);
+  await resumed.refresh();
   assert.equal(resumed.status, "completed");
   assert.equal(resumed.agentId, agentId);
   assert.equal(resumed.deduplicated, undefined);
 
-  const waiting = await client.resume(waitId);
-  const actionable = await waiting.wait({
-    until: "actionable",
-    minimumDelayMs: 1,
-    maximumDelayMs: 2,
+  const waiting = client.invocation(waitId);
+  const actionable = await waiting.waitForAction({
+    minPollIntervalMs: 1,
+    maxPollIntervalMs: 2,
   });
   assert.equal(actionable.status, "waiting");
   assert.equal(actionable.pendingToolCalls?.[0]?.id, toolCallId);
@@ -126,7 +131,7 @@ test("shared fault server semantics", async (context) => {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 10);
   await assert.rejects(
-    waiting.wait({ signal: controller.signal, minimumDelayMs: 1, maximumDelayMs: 2 }),
+    waiting.wait({ signal: controller.signal, minPollIntervalMs: 1, maxPollIntervalMs: 2 }),
     (error: unknown) => error instanceof NvokenError && error.category === "timeout",
   );
 
@@ -145,7 +150,7 @@ test("shared fault server semantics", async (context) => {
 
   const traversedSessions = [];
   for await (const session of client.sessionPages({
-    tenantRef: "acme",
+    tenantKey: "acme",
     agentId,
     sessionKey: "ticket-A-42",
     limit: 1,
@@ -156,7 +161,7 @@ test("shared fault server semantics", async (context) => {
   assert.equal(traversedSessions[0]?.id, sessionId);
 
   const exactSession = await client.getSessionByKey("ticket-A-42", {
-    tenantRef: "acme",
+    tenantKey: "acme",
     agentId,
   });
   assert.equal(exactSession.id, sessionId);
@@ -183,34 +188,42 @@ test("shared fault server semantics", async (context) => {
   assert.equal((await handle.cancel()).status, "cancelled");
 
   await assert.rejects(
-    client.get("conflict"),
+    client.getInvocation("conflict"),
     (error: unknown) => error instanceof NvokenError
       && error.category === "conflict"
       && error.status === 409
       && Boolean(error.requestId),
   );
-  assert.equal((await client.get("rate-limit")).status, "completed");
+  assert.equal((await client.getInvocation("rate-limit")).status, "completed");
   await assert.rejects(
-    client.get("rate-limit-always"),
+    client.getInvocation("rate-limit-always"),
     (error: unknown) => error instanceof NvokenError
       && error.category === "rate_limit"
       && error.status === 429
       && error.retryAfterMs === 1_000,
   );
   await assert.rejects(
-    client.get("server-error"),
+    client.getInvocation("server-error"),
     (error: unknown) => error instanceof NvokenError
       && error.category === "server"
       && error.status === 503,
   );
 
-  let reduced: { messages: unknown[]; invocationChanges: unknown[]; resumeCursor?: string } | undefined;
-  await (await client.resume(invocationId)).stream((_event, snapshot) => {
-    reduced = snapshot;
-  });
-  assert.equal(reduced?.messages.length, 2);
-  assert.equal(reduced?.invocationChanges.length, 2);
-  assert.equal(reduced?.resumeCursor, "cursor-2");
+  const eventTypes: string[] = [];
+  let streamedText: string | null = null;
+  for await (const event of client.invocation(invocationId).stream()) {
+    eventTypes.push(event.type);
+    if (event.type === "invocation.result") {
+      streamedText = event.result.outputText;
+    }
+  }
+  assert.deepEqual(eventTypes, [
+    "invocation.update",
+    "stream.end",
+    "invocation.update",
+    "invocation.result",
+  ]);
+  assert.equal(streamedText, "world");
   const state = await fetch(`${baseUrl}/__test/state`).then((response) => response.json()) as {
     admission_attempts: number;
     result_attempts: number;
@@ -232,8 +245,8 @@ test("schema-bound tool helpers preserve application types", () => {
     orderId: string;
   }
 
-  const lookupOrder = defineClientTool<LookupOrderInput>({
-    mode: "client",
+  const lookupOrder = defineHostTool<LookupOrderInput>({
+    mode: "host",
     name: "lookup_order",
     description: "Look up one order.",
     inputSchema: defineJsonSchema<LookupOrderInput>({
@@ -269,15 +282,422 @@ test("schema-bound tool helpers preserve application types", () => {
   };
   void invalidCallback;
 
-  const invalidClient: ClientTool = {
-    mode: "client",
+  const invalidHost: HostTool = {
+    mode: "host",
     name: "lookup",
     description: "Lookup",
     inputSchema: {},
-    // @ts-expect-error client tools cannot carry callback configuration.
+    // @ts-expect-error host tools cannot carry callback configuration.
     callback: { url: "https://example.com/callback" },
   };
-  void invalidClient;
+  void invalidHost;
+});
+
+test("agent run converts standard schemas, retries one admission, and dispatches host tools", async () => {
+  interface LookupInput {
+    orderId: string;
+  }
+  interface StructuredAnswer {
+    answer: string;
+  }
+
+  const standardSchema = <Input extends object, Output extends object>(
+    schema: Record<string, unknown>,
+  ): StandardJSONSchemaV1<Input, Output> => ({
+    "~standard": {
+      version: 1,
+      vendor: "nvoken-test",
+      jsonSchema: {
+        input: () => ({ $schema: "https://json-schema.org/draft/2020-12/schema", ...schema }),
+        output: () => ({ $schema: "https://json-schema.org/draft/2020-12/schema", ...schema }),
+      },
+    },
+  });
+  const inputSchema = standardSchema<LookupInput, LookupInput>({
+    type: "object",
+    properties: { orderId: { type: "string" } },
+    required: ["orderId"],
+    additionalProperties: false,
+  });
+  const outputSchema = standardSchema<StructuredAnswer, StructuredAnswer>({
+    type: "object",
+    properties: { answer: { type: "string" } },
+    required: ["answer"],
+    additionalProperties: false,
+  });
+
+  let admissions = 0;
+  let submitted = false;
+  const admissionBodies: Array<Record<string, unknown>> = [];
+  const json = (status: number, value: unknown) => new Response(JSON.stringify(value), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+  const invocation = (status: "waiting" | "completed") => ({
+    id: invocationId,
+    agent_id: agentId,
+    session_id: sessionId,
+    status,
+    error: null,
+    usage: null,
+    provenance: null,
+    structured_output: status === "completed" ? { answer: "ready" } : null,
+    structured_output_provenance: null,
+    limits: {
+      total_timeout_seconds: 300,
+      active_timeout_seconds: 120,
+      waiting_timeout_seconds: 180,
+      max_iterations: 3,
+    },
+    active_execution_ms: 0,
+    deadline_at: "2026-07-21T12:05:00Z",
+    created_at: "2026-07-21T12:00:00Z",
+    updated_at: "2026-07-21T12:00:01Z",
+    ended_at: status === "completed" ? "2026-07-21T12:00:01Z" : null,
+    pending_tool_calls: status === "waiting" ? [{
+      id: toolCallId,
+      name: "lookup_order",
+      input: { orderId: "order-42" },
+      deadline_at: "2026-07-21T12:05:00Z",
+    }] : [],
+  });
+  const fetchMock: typeof fetch = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input : input.url);
+    if (url.pathname === "/v1/invocations" && init?.method === "POST") {
+      admissions += 1;
+      admissionBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      if (admissions === 1) {
+        return json(503, { code: "unavailable", message: "retry" });
+      }
+      return json(202, {
+        agent_id: agentId,
+        session_id: sessionId,
+        invocation_id: invocationId,
+        status: "queued",
+        deduplicated: true,
+      });
+    }
+    if (url.pathname.endsWith("/tool-results") && init?.method === "POST") {
+      submitted = true;
+      return json(202, {
+        invocation_id: invocationId,
+        session_id: sessionId,
+        status: "queued",
+        results: [{ tool_call_id: toolCallId, status: "completed", deduplicated: false }],
+        pending_tool_calls: [],
+      });
+    }
+    if (url.pathname.endsWith("/result")) {
+      return json(200, {
+        invocation: invocation("completed"),
+        messages: [],
+        output_text: "ready",
+      });
+    }
+    if (url.pathname === `/v1/invocations/${invocationId}`) {
+      return json(200, invocation(submitted ? "completed" : "waiting"));
+    }
+    throw new Error(`unexpected request ${init?.method} ${url.pathname}`);
+  };
+
+  const client = new Client({
+    baseUrl: "http://nvoken.test",
+    apiKey: "test-key",
+    model: { provider: "openai", id: "gpt-test" },
+    fetch: fetchMock,
+    retry: { maxAttempts: 2, minDelayMs: 1, maxDelayMs: 1 },
+  });
+  const lookup = defineHostTool({
+    name: "lookup_order",
+    description: "Look up an order.",
+    inputSchema,
+    handler: async (input) => ({ state: input.orderId === "order-42" ? "ready" : "missing" }),
+  });
+  const result = await client.agent({
+    agentKey: "support",
+    instructions: "Help the customer.",
+    tools: [lookup],
+    outputSchema,
+  }).run("Where is my order?");
+
+  assert.equal(result.text, "ready");
+  assert.deepEqual(result.structuredOutput, { answer: "ready" });
+  assert.equal(result.deduplicated, true);
+  assert.equal(admissions, 2);
+  assert.equal(
+    admissionBodies[0]?.idempotency_key,
+    admissionBodies[1]?.idempotency_key,
+  );
+  assert.match(String(admissionBodies[0]?.idempotency_key), /^nvoken-/);
+  const admittedSpec = admissionBodies[0]?.spec as {
+    model: { id: string };
+    tools: Array<{ mode: string; input_schema: Record<string, unknown> }>;
+    output: { schema: Record<string, unknown> };
+  };
+  assert.equal(admittedSpec.model.id, "gpt-test");
+  assert.equal(admittedSpec.tools[0]?.mode, "host");
+  assert.equal(admittedSpec.tools[0]?.input_schema.$schema, undefined);
+  assert.equal(admittedSpec.output.schema.$schema, undefined);
+});
+
+test("client reads only marked quickstart env files and explicit options win", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "nvoken-client-"));
+  const marked = join(directory, ".env");
+  const unmarked = join(directory, "unmarked.env");
+  try {
+    await writeFile(marked, [
+      "# Generated by nvokend quickstart. Disposable local use only.",
+      "NVOKEN_API_KEY=file-key",
+      "NVOKEN_BASE_URL=http://file.test:8080",
+      "NVOKEN_PROVIDER=openai",
+      "NVOKEN_MODEL=gpt-file",
+      "",
+    ].join("\n"));
+    await writeFile(unmarked, "NVOKEN_API_KEY=ignored\n");
+    const fromFile = new Client({ envFile: marked });
+    assert.equal(fromFile.configuration.basePath, "http://file.test:8080");
+    assert.deepEqual(fromFile.defaultModel, { provider: "openai", id: "gpt-file" });
+
+    const explicit = new Client({
+      envFile: marked,
+      baseUrl: "http://explicit.test",
+      apiKey: "explicit-key",
+      model: { provider: "anthropic", id: "claude-explicit" },
+    });
+    assert.equal(explicit.configuration.basePath, "http://explicit.test");
+    assert.deepEqual(explicit.defaultModel, {
+      provider: "anthropic",
+      id: "claude-explicit",
+    });
+    assert.throws(
+      () => new Client({ envFile: unmarked }),
+      (error: unknown) => error instanceof NvokenError && error.category === "validation",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("session conflicts normalize to SessionBusyError with active work", async () => {
+  const client = new Client({
+    baseUrl: "http://nvoken.test",
+    apiKey: "test-key",
+    fetch: async () => new Response(JSON.stringify({
+      code: "session_invocation_active",
+      message: "This Session already has a nonterminal Invocation.",
+      request_id: "req_busy",
+      details: { invocation_id: invocationId, status: "waiting" },
+    }), {
+      status: 409,
+      headers: { "content-type": "application/json" },
+    }),
+    retry: { maxAttempts: 1 },
+  });
+  await assert.rejects(
+    client.invoke({
+      agentKey: "support",
+      input: "hello",
+      spec: {
+        instructions: "help",
+        model: { provider: "openai", id: "gpt-test" },
+      },
+    }),
+    (error: unknown) => error instanceof SessionBusyError
+      && error.activeInvocationId === invocationId
+      && error.activeInvocationStatus === "waiting",
+  );
+});
+
+test("agent stream exposes the two-event consumer without a reducer", async () => {
+  const frames = [
+    {
+      event: "invocation.accepted",
+      data: {
+        type: "invocation.accepted",
+        agent_id: agentId,
+        session_id: sessionId,
+        invocation_id: invocationId,
+        status: "queued",
+        deduplicated: false,
+        deadline_at: "2026-07-21T12:05:00Z",
+      },
+    },
+    {
+      event: "output_text.delta",
+      data: {
+        type: "output_text.delta",
+        session_id: sessionId,
+        invocation_id: invocationId,
+        attempt: 1,
+        iteration: 1,
+        content_index: 0,
+        text: "hello",
+        emitted_at: "2026-07-21T12:00:00Z",
+      },
+    },
+    {
+      event: "invocation.result",
+      id: "cursor-2",
+      data: {
+        type: "invocation.result",
+        session_id: sessionId,
+        invocation_id: invocationId,
+        result: {
+          invocation: {
+            id: invocationId,
+            agent_id: agentId,
+            session_id: sessionId,
+            status: "completed",
+            error: null,
+            usage: null,
+            provenance: null,
+            structured_output: null,
+            structured_output_provenance: null,
+            limits: {
+              total_timeout_seconds: 300,
+              active_timeout_seconds: 120,
+              waiting_timeout_seconds: 180,
+              max_iterations: 1,
+            },
+            active_execution_ms: 5,
+            deadline_at: "2026-07-21T12:05:00Z",
+            created_at: "2026-07-21T12:00:00Z",
+            updated_at: "2026-07-21T12:00:01Z",
+            ended_at: "2026-07-21T12:00:01Z",
+            pending_tool_calls: [],
+          },
+          messages: [],
+          output_text: "hello",
+        },
+      },
+    },
+    {
+      event: "stream.end",
+      data: {
+        type: "stream.end",
+        session_id: sessionId,
+        invocation_id: invocationId,
+        reason: "terminal",
+        resume_cursor: "cursor-2",
+      },
+    },
+  ];
+  const sse = frames.map((frame) =>
+    `${frame.id ? `id: ${frame.id}\n` : ""}event: ${frame.event}\n`
+    + `data: ${JSON.stringify(frame.data)}\n\n`
+  ).join("");
+  const requestBodies: string[] = [];
+  let attempts = 0;
+  const client = new Client({
+    baseUrl: "http://nvoken.test",
+    apiKey: "test-key",
+    model: { provider: "openai", id: "gpt-test" },
+    fetch: async (_input, init) => {
+      attempts += 1;
+      requestBodies.push(String(init?.body));
+      if (attempts === 1) {
+        return Response.json(
+          { code: "unavailable", message: "retry", request_id: "req_stream_retry" },
+          { status: 503 },
+        );
+      }
+      return new Response(sse, {
+        status: 202,
+        headers: { "content-type": "text/event-stream" },
+      });
+    },
+    retry: { maxAttempts: 2, minDelayMs: 1, maxDelayMs: 1 },
+  });
+
+  let text = "";
+  let output = "";
+  for await (const event of client.agent({ agentKey: "support" }).stream("hello")) {
+    if (event.type === "output_text.delta") text += event.text;
+    if (event.type === "invocation.result") output = event.result.outputText ?? "";
+  }
+
+  assert.equal(text, "hello");
+  assert.equal(output, "hello");
+  assert.equal(attempts, 2);
+  assert.equal(requestBodies[0], requestBodies[1]);
+  assert.equal((JSON.parse(requestBodies[0]!) as { input: string }).input, "hello");
+});
+
+test("bound session serializes invoke admission until the prior turn ends", async () => {
+  const secondInvocationId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb329";
+  let admissions = 0;
+  let finishFirst!: () => void;
+  const firstFinished = new Promise<void>((resolvePromise) => {
+    finishFirst = resolvePromise;
+  });
+  const completedInvocation = (id: string) => ({
+    id,
+    agent_id: agentId,
+    session_id: sessionId,
+    status: "completed",
+    error: null,
+    usage: null,
+    provenance: null,
+    structured_output: null,
+    structured_output_provenance: null,
+    limits: {
+      total_timeout_seconds: 300,
+      active_timeout_seconds: 120,
+      waiting_timeout_seconds: 180,
+      max_iterations: 1,
+    },
+    active_execution_ms: 1,
+    deadline_at: "2026-07-21T12:05:00Z",
+    created_at: "2026-07-21T12:00:00Z",
+    updated_at: "2026-07-21T12:00:01Z",
+    ended_at: "2026-07-21T12:00:01Z",
+    pending_tool_calls: [],
+  });
+  const client = new Client({
+    baseUrl: "http://nvoken.test",
+    apiKey: "test-key",
+    model: { provider: "openai", id: "gpt-test" },
+    fetch: async (input, init) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input : input.url,
+      );
+      if (url.pathname === "/v1/invocations" && init?.method === "POST") {
+        admissions += 1;
+        const id = admissions === 1 ? invocationId : secondInvocationId;
+        return new Response(JSON.stringify({
+          agent_id: agentId,
+          session_id: sessionId,
+          invocation_id: id,
+          status: "queued",
+          deduplicated: false,
+          deadline_at: "2026-07-21T12:05:00Z",
+        }), {
+          status: 202,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.pathname === `/v1/invocations/${invocationId}`) {
+        await firstFinished;
+        return Response.json(completedInvocation(invocationId));
+      }
+      if (url.pathname === `/v1/invocations/${secondInvocationId}`) {
+        return Response.json(completedInvocation(secondInvocationId));
+      }
+      throw new Error(`unexpected request ${init?.method} ${url.pathname}`);
+    },
+  });
+  const chat = client.agent({ agentKey: "support" }).session({ sessionKey: "ticket-42" });
+
+  const first = await chat.invoke("first");
+  const secondPromise = chat.invoke("second");
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 0));
+  assert.equal(admissions, 1);
+
+  finishFirst();
+  const second = await secondPromise;
+  assert.equal(first.invocationId, invocationId);
+  assert.equal(second.invocationId, secondInvocationId);
+  assert.equal(admissions, 2);
 });
 
 test("shared reducer vector", async () => {

@@ -38,7 +38,7 @@ responsibility boundaries; minimum readiness dimensions; evidence status and
 documentation ownership.
 
 **Out:** new metrics or commands; dashboards; deployment changes; numeric
-availability promises or error budgets; a certification service; nvoken Cloud;
+availability promises or error limits; a certification service; nvoken Cloud;
 Kubernetes, AWS, or portable multi-daemon profiles.
 
 ## Requirements
@@ -66,7 +66,7 @@ Kubernetes, AWS, or portable multi-daemon profiles.
   diagnosis, capacity, retention, and secret handling. Each dimension records
   its observable proof, evidence mode (`automated` or `manual`), readiness state
   (`proven` or `pending`), and evidence freshness (`current`, `stale`, or
-  `missing`). Formal percentages and error budgets are follow-up work;
+  `missing`). Formal percentages and error limits are follow-up work;
   this slice requires measurable events and bounds only where the implementation
   already supplies or needs one.
 

@@ -24,7 +24,7 @@ those invariants without importing Mobius waits, jobs, or turn/run records.
 ## Outcome and scope
 
 Hosts can call `POST /v1/invocations/{invocation_id}/cancel`, and an inline
-execution spec may carry optional `budgets` for wall-clock time, active
+execution spec may carry optional `limits` for wall-clock time, active
 execution time, output tokens, estimated model cost, and model iterations.
 Reads expose resolved limits, committed active time, and the wall deadline.
 The same semantics hold in embedded and future split execution.
@@ -49,8 +49,8 @@ synchronous guarantee that the provider has stopped when cancellation returns.
   no authority and may be lost; renew and settle still reject the terminal row.
   A repeated cancellation may republish the wake without changing state.
 
-- **R3 — Explicit, validated budget contract.** `spec.budgets` may specify
-  positive `wall_clock_timeout_seconds`, `active_execution_timeout_seconds`,
+- **R3 — Explicit, validated budget contract.** `spec.limits` may specify
+  positive `total_timeout_seconds`, `active_timeout_seconds`,
   `max_output_tokens`, `max_estimated_cost_usd`, and `max_iterations`.
   Defaults bound time and iterations; token and cost limits are absent unless
   requested. Resolved values persist at admission, while reads omit absent
@@ -74,7 +74,7 @@ synchronous guarantee that the provider has stopped when cancellation returns.
   segment exhaustion is terminal. The reaper provides the crash fallback;
   lease-only expiry remains `execution_lost`.
 
-- **R6 — Enforce generation budgets without false guarantees.** The output-token
+- **R6 — Enforce generation limits without false guarantees.** The output-token
   limit must reach Dive before the call. Each model request consumes an
   iteration, and none may start after its time or iteration limit. Before
   assistant commit, normalized usage must satisfy token and estimated-cost
@@ -94,13 +94,13 @@ synchronous guarantee that the provider has stopped when cancellation returns.
   nothing; rollback restores the prior durable state.
 
 - **R8 — Recovery and operational evidence.** Invocation get/list and OpenAPI
-  must expose public budgets, accrued active milliseconds, wall deadline,
+  must expose public limits, accrued active milliseconds, wall deadline,
   terminal evidence, and typed error—not lease or internal segment fields.
   Bounded logs must distinguish cancellation request/wake, deadline scope, and
   budget kind without request content or credentials.
 
 - **R9 — Contract artifacts move together.** The implementation must update
-  OpenAPI, API design, and decisions for cancellation, budgets, failure
+  OpenAPI, API design, and decisions for cancellation, limits, failure
   evidence, and fingerprint evolution. Language-neutral v2 fixtures must add a
   budget case while preserving every v1 digest.
 
@@ -118,10 +118,10 @@ synchronous guarantee that the provider has stopped when cancellation returns.
   Invocation remains cancelled. Cross-Account and conflicting tenant
   credentials receive `404` without signalling the target.
 
-- [x] **A3 (R3, R4):** Omitted budgets resolve to documented installation
-  defaults; valid lower budgets persist and appear on get/list after restart;
+- [x] **A3 (R3, R4):** Omitted limits resolve to documented installation
+  defaults; valid lower limits persist and appear on get/list after restart;
   zero, negative, non-finite, over-precision, or excessive values are rejected
-  before admission. Equal retries deduplicate, changed budgets conflict, and a
+  before admission. Equal retries deduplicate, changed limits conflict, and a
   legacy budgetless fingerprint still deduplicates only a budgetless replay.
 
 - [x] **A4 (R4, R5):** Controlled-clock tests prove queued time consumes only

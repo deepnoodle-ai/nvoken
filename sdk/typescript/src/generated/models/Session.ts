@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -13,13 +13,13 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { PendingClientToolCall } from './PendingClientToolCall.js';
+import type { PendingHostToolCall } from './PendingHostToolCall.js';
 import {
-    PendingClientToolCallFromJSON,
-    PendingClientToolCallFromJSONTyped,
-    PendingClientToolCallToJSON,
-    PendingClientToolCallToJSONTyped,
-} from './PendingClientToolCall.js';
+    PendingHostToolCallFromJSON,
+    PendingHostToolCallFromJSONTyped,
+    PendingHostToolCallToJSON,
+    PendingHostToolCallToJSONTyped,
+} from './PendingHostToolCall.js';
 
 /**
  *
@@ -44,7 +44,7 @@ export interface Session {
      * @type {string}
      * @memberof Session
      */
-    tenantRef: string | null;
+    tenantKey: string | null;
     /**
      *
      * @type {string}
@@ -76,11 +76,11 @@ export interface Session {
      */
     updatedAt: Date;
     /**
-     * Pending client calls for the active waiting Invocation.
-     * @type {Array<PendingClientToolCall>}
+     * Pending host calls for the active waiting Invocation.
+     * @type {Array<PendingHostToolCall>}
      * @memberof Session
      */
-    pendingToolCalls?: Array<PendingClientToolCall>;
+    pendingToolCalls?: Array<PendingHostToolCall>;
 }
 
 
@@ -101,7 +101,7 @@ export type SessionActiveInvocationStatusEnum = typeof SessionActiveInvocationSt
 export function instanceOfSession(value: object): value is Session {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('agentId' in value) || value['agentId'] === undefined) return false;
-    if (!('tenantRef' in value) || value['tenantRef'] === undefined) return false;
+    if (!('tenantKey' in value) || value['tenantKey'] === undefined) return false;
     if (!('sessionKey' in value) || value['sessionKey'] === undefined) return false;
     if (!('activeInvocationId' in value) || value['activeInvocationId'] === undefined) return false;
     if (!('activeInvocationStatus' in value) || value['activeInvocationStatus'] === undefined) return false;
@@ -122,13 +122,13 @@ export function SessionFromJSONTyped(json: any, ignoreDiscriminator: boolean): S
 
         'id': json['id'],
         'agentId': json['agent_id'],
-        'tenantRef': json['tenant_ref'],
+        'tenantKey': json['tenant_key'],
         'sessionKey': json['session_key'],
         'activeInvocationId': json['active_invocation_id'],
         'activeInvocationStatus': json['active_invocation_status'],
         'createdAt': (new Date(json['created_at'])),
         'updatedAt': (new Date(json['updated_at'])),
-        'pendingToolCalls': json['pending_tool_calls'] == null ? undefined : ((json['pending_tool_calls'] as Array<any>).map(PendingClientToolCallFromJSON)),
+        'pendingToolCalls': json['pending_tool_calls'] == null ? undefined : ((json['pending_tool_calls'] as Array<any>).map(PendingHostToolCallFromJSON)),
     };
 }
 
@@ -145,12 +145,12 @@ export function SessionToJSONTyped(value?: Session | null, ignoreDiscriminator: 
 
         'id': value['id'],
         'agent_id': value['agentId'],
-        'tenant_ref': value['tenantRef'],
+        'tenant_key': value['tenantKey'],
         'session_key': value['sessionKey'],
         'active_invocation_id': value['activeInvocationId'],
         'active_invocation_status': value['activeInvocationStatus'],
         'created_at': value['createdAt'].toISOString(),
         'updated_at': value['updatedAt'].toISOString(),
-        'pending_tool_calls': value['pendingToolCalls'] == null ? undefined : ((value['pendingToolCalls'] as Array<any>).map(PendingClientToolCallToJSON)),
+        'pending_tool_calls': value['pendingToolCalls'] == null ? undefined : ((value['pendingToolCalls'] as Array<any>).map(PendingHostToolCallToJSON)),
     };
 }

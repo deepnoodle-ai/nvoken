@@ -150,9 +150,9 @@ func TestVerifyRestoreRejectsUnsafeFixtures(t *testing.T) {
 						id, session_id, account_id, tenant_partition_id, agent_id,
 						spec_snapshot_id, idempotency_key, request_fingerprint, status,
 						request_fingerprint_version, current_state_revision, error,
-						wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens,
+						total_timeout_ms, active_timeout_ms, max_output_tokens,
 						max_estimated_cost_microusd, max_iterations, active_execution_ms,
-						wall_clock_deadline_at, output_schema_digest,
+						deadline_at, output_schema_digest,
 						created_at, updated_at, completed_at
 					)
 					SELECT
@@ -160,9 +160,9 @@ func TestVerifyRestoreRejectsUnsafeFixtures(t *testing.T) {
 						session_id, account_id, tenant_partition_id, agent_id,
 						spec_snapshot_id, 'restore-conflict', request_fingerprint, status,
 						request_fingerprint_version, current_state_revision, error,
-						wall_clock_timeout_ms, active_execution_timeout_ms, max_output_tokens,
+						total_timeout_ms, active_timeout_ms, max_output_tokens,
 						max_estimated_cost_microusd, max_iterations, active_execution_ms,
-						wall_clock_deadline_at, output_schema_digest,
+						deadline_at, output_schema_digest,
 						created_at, updated_at, completed_at
 					FROM invocations
 					WHERE id = $1
@@ -425,11 +425,11 @@ func seedRestoreFixture(t *testing.T, pool *pgxpool.Pool) restoreFixtureIDs {
 	waitingInput := runtimeInputWithTwoIterations()
 	waitingInput.SessionKey = pointerString("restore-waiting")
 	waitingInput.IdempotencyKey = "restore-waiting"
-	waitingInput.Spec.Tools = []services.ClientToolSpec{
+	waitingInput.Spec.Tools = []services.HostToolSpec{
 		{
 			Name:        "restore_lookup",
 			Description: "Read a restore fixture",
-			Mode:        "client",
+			Mode:        "host",
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 	}
@@ -456,7 +456,7 @@ func seedRestoreFixture(t *testing.T, pool *pgxpool.Pool) restoreFixtureIDs {
 			{
 				ProviderCallID: "restore-provider-call",
 				Name:           "restore_lookup",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{}`),
 			},
 		},

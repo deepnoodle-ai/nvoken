@@ -53,7 +53,7 @@ The package contains:
 | Artifact | Purpose |
 | --- | --- |
 | [`nvoken.env.example`](nvoken.env.example) | Secret-free, machine-checked canonical configuration. |
-| [`smoke.py`](smoke.py) | Normal, restart, client ToolCall, and optional callback smoke paths. |
+| [`smoke.py`](smoke.py) | Normal, restart, host ToolCall, and optional callback smoke paths. |
 | [`load.py`](load.py) | Bounded admissions, reads, stream, queue, memory, and connection recorder. |
 | [`failure-drills.md`](failure-drills.md) | Disposable process and dependency failure procedure. |
 | [`runbooks.md`](runbooks.md) | First checks, safe actions, and recovery signals for profile incidents. |
@@ -203,10 +203,10 @@ same immutable build, rerun `diagnose`, and verify Postgres readback:
 python3 deploy/single-daemon/smoke.py verify-restart
 ```
 
-Exercise a durable client ToolCall, including equal result replay:
+Exercise a durable host ToolCall, including equal result replay:
 
 ```bash
-python3 deploy/single-daemon/smoke.py client-tool
+python3 deploy/single-daemon/smoke.py host-tool
 ```
 
 When callbacks are enabled, point the smoke at a public HTTPS receiver that
@@ -233,7 +233,7 @@ to stop its named unit. Do not use broad `pkill` patterns. The daemon stops
 admitting work, drains owned execution and callback work within the configured
 graces, releases claims, and exits inside `SHUTDOWN_TIMEOUT`. After restart,
 Postgres polling and the reaper make retained queued or expired-lease work
-eligible; a waiting client ToolCall remains parked without a goroutine.
+eligible; a waiting host ToolCall remains parked without a goroutine.
 
 There is intentionally no API for deleting authoritative Sessions or
 Invocations. Put smoke and drill data in a dedicated disposable installation or
@@ -265,7 +265,7 @@ local files, and any future delivery adapter are not restore authorities.
 Provider, callback, identity, and encryption secrets remain configuration
 recovery concerns and are not part of the logical database dump.
 
-Use PostgreSQL 17 client tools and credential-safe `PGSERVICE` entries. For the
+Use PostgreSQL 17 host tools and credential-safe `PGSERVICE` entries. For the
 initial drill, gracefully stop the daemon so no external effect or claim can
 advance while the recovery point is taken:
 

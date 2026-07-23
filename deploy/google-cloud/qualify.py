@@ -670,7 +670,7 @@ class Qualification:
         dispatch_id = task_path.rsplit("/", 1)[-1]
         cursor, durable_keys, saw_delta = self.read_initial_stream(session_id, invocation_id)
         if not saw_delta:
-            raise QualificationError("baseline stream did not observe a live generation.delta")
+            raise QualificationError("baseline stream did not observe a live output_text.delta")
         terminal_change = self.resume_stream(
             session_id, invocation_id, cursor, durable_keys, require_delta=False
         )
@@ -1032,7 +1032,7 @@ class Qualification:
             prompt = "Reply with one short sentence."
         spec: dict[str, Any] = {
             "instructions": "You are a concise staging qualification agent.",
-            "model": {"provider": self.config.provider, "name": self.config.model},
+            "model": {"provider": self.config.provider, "id": self.config.model},
         }
         if callback_url:
             spec["tools"] = [
@@ -1052,12 +1052,12 @@ class Qualification:
             "POST",
             "/v1/invocations",
             body={
-                "agent_ref": "google-cloud-qualification",
+                "agent_key": "google-cloud-qualification",
                 "session_key": correlation,
                 "idempotency_key": correlation,
                 "input": {"content": [{"type": "text", "text": prompt}]},
                 "spec": spec,
-                "budgets": {"max_iterations": expected_provider_calls},
+                "limits": {"max_iterations": expected_provider_calls},
             },
             expected=(202,),
         )
@@ -1145,12 +1145,12 @@ class Qualification:
         for event, event_id, payload in self.runtime_client.stream(session_id):
             if time.monotonic() >= end:
                 break
-            if event == "transcript.snapshot":
+            if event == "transcript.update":
                 if not event_id:
-                    raise QualificationError("transcript snapshot omitted its durable SSE ID")
+                    raise QualificationError("transcript update omitted its durable SSE ID")
                 cursor = event_id
                 durable_keys.update(snapshot_keys(payload))
-            elif event == "generation.delta" and payload.get("invocation_id") == invocation_id:
+            elif event == "output_text.delta" and payload.get("invocation_id") == invocation_id:
                 saw_delta = True
             elif event == "stream.end" and payload.get("reason") == "terminal":
                 break
@@ -1174,7 +1174,7 @@ class Qualification:
         for event, _, payload in self.runtime_client.stream(
             session_id, last_event_id=cursor
         ):
-            if event == "transcript.snapshot":
+            if event == "transcript.update":
                 repeated = prior_keys & snapshot_keys(payload)
                 if repeated:
                     raise QualificationError(
@@ -1187,7 +1187,7 @@ class Qualification:
                         and change.get("status") in TERMINAL_STATUSES
                     ):
                         terminal_change = change
-            elif event == "generation.delta" and payload.get("invocation_id") == invocation_id:
+            elif event == "output_text.delta" and payload.get("invocation_id") == invocation_id:
                 saw_delta = True
             elif event == "stream.end" and payload.get("reason") == "terminal":
                 break
@@ -1205,7 +1205,7 @@ class Qualification:
     ) -> dict[str, Any]:
         terminal: dict[str, Any] | None = None
         for event, _, payload in self.runtime_client.stream(session_id):
-            if event == "transcript.snapshot":
+            if event == "transcript.update":
                 for change in payload.get("invocation_changes", []):
                     if (
                         isinstance(change, dict)

@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -184,14 +184,14 @@ pub async fn list_provider_credentials(
     provider: Option<models::ModelProvider>,
     scope: Option<models::ProviderCredentialScope>,
     status: Option<&str>,
-    tenant_ref: Option<&str>,
+    tenant_key: Option<&str>,
     limit: Option<u32>,
 ) -> Result<models::ProviderCredentialList, Error<ListProviderCredentialsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_query_provider = provider;
     let p_query_scope = scope;
     let p_query_status = status;
-    let p_query_tenant_ref = tenant_ref;
+    let p_query_tenant_key = tenant_key;
     let p_query_limit = limit;
 
     let uri_str = format!("{}/v1/provider-credentials", configuration.base_path);
@@ -206,8 +206,8 @@ pub async fn list_provider_credentials(
     if let Some(ref param_value) = p_query_status {
         req_builder = req_builder.query(&[("status", &param_value.to_string())]);
     }
-    if let Some(ref param_value) = p_query_tenant_ref {
-        req_builder = req_builder.query(&[("tenant_ref", &param_value.to_string())]);
+    if let Some(ref param_value) = p_query_tenant_key {
+        req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_limit {
         req_builder = req_builder.query(&[("limit", &param_value.to_string())]);

@@ -111,12 +111,12 @@ func TestRetainedWorkSurvivesCompatibleUpgradeAndRollback(t *testing.T) {
 		t.Fatalf("duplicate callback claim found = %t, error = %v", found, err)
 	}
 
-	clientResult := services.ClientToolResultInput{
+	clientResult := services.HostToolResultInput{
 		ToolCallID: clientCallID,
 		Content:    json.RawMessage(`{"accepted":true}`),
 	}
-	resumed, err := runtime.SubmitClientToolResults(ctx, auth, waitingAck.InvocationID, services.SubmitClientToolResultsInput{
-		Results: []services.ClientToolResultInput{clientResult},
+	resumed, err := runtime.SubmitHostToolResults(ctx, auth, waitingAck.InvocationID, services.SubmitHostToolResultsInput{
+		Results: []services.HostToolResultInput{clientResult},
 	})
 	if err != nil || resumed.Status != domain.InvocationQueued {
 		t.Fatalf("resume retained waiting work = %#v, %v", resumed, err)
@@ -128,8 +128,8 @@ func TestRetainedWorkSurvivesCompatibleUpgradeAndRollback(t *testing.T) {
 	if err != nil || rollbackStatus.State != SchemaCompatibleNewer {
 		t.Fatalf("rollback schema status = %#v, %v", rollbackStatus, err)
 	}
-	replay, err := runtime.SubmitClientToolResults(ctx, auth, waitingAck.InvocationID, services.SubmitClientToolResultsInput{
-		Results: []services.ClientToolResultInput{clientResult},
+	replay, err := runtime.SubmitHostToolResults(ctx, auth, waitingAck.InvocationID, services.SubmitHostToolResultsInput{
+		Results: []services.HostToolResultInput{clientResult},
 	})
 	if err != nil || len(replay.Results) != 1 || !replay.Results[0].Deduplicated {
 		t.Fatalf("rollback client result replay = %#v, %v", replay, err)
@@ -200,7 +200,7 @@ func seedWaitingCallbackWork(
 	input := runtimeInputWithTwoIterations()
 	input.SessionKey = pointerString("upgrade-waiting")
 	input.IdempotencyKey = "upgrade-waiting"
-	input.Spec.Tools = []services.ClientToolSpec{
+	input.Spec.Tools = []services.HostToolSpec{
 		{
 			Name:        "upgrade_callback",
 			Description: "Exercise retained callback delivery",
@@ -213,7 +213,7 @@ func seedWaitingCallbackWork(
 		{
 			Name:        "upgrade_client",
 			Description: "Exercise retained client delivery",
-			Mode:        string(domain.ToolCallModeClient),
+			Mode:        string(domain.ToolCallModeHost),
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		},
 	}
@@ -253,7 +253,7 @@ func seedWaitingCallbackWork(
 			{
 				ProviderCallID: "provider-client",
 				Name:           "upgrade_client",
-				Mode:           domain.ToolCallModeClient,
+				Mode:           domain.ToolCallModeHost,
 				Input:          json.RawMessage(`{}`),
 			},
 		},

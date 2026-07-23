@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -26,6 +26,8 @@ pub struct InvocationAcknowledgement {
     pub status: models::InvocationStatus,
     #[serde(rename = "deduplicated")]
     pub deduplicated: bool,
+    #[serde(rename = "deadline_at")]
+    pub deadline_at: chrono::DateTime<chrono::FixedOffset>,
 }
 
 impl InvocationAcknowledgement {
@@ -35,6 +37,7 @@ impl InvocationAcknowledgement {
         invocation_id: String,
         status: models::InvocationStatus,
         deduplicated: bool,
+        deadline_at: chrono::DateTime<chrono::FixedOffset>,
     ) -> InvocationAcknowledgement {
         InvocationAcknowledgement {
             agent_id,
@@ -42,6 +45,7 @@ impl InvocationAcknowledgement {
             invocation_id,
             status,
             deduplicated,
+            deadline_at,
         }
     }
 }

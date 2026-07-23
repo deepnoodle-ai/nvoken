@@ -63,7 +63,7 @@ type Config struct {
 	ProcessRole             ProcessRole
 	InvocationExecutionMode services.InvocationExecutionMode
 	Engine                  engine.Config
-	Budgets                 services.BudgetPolicy
+	Limits                  services.LimitPolicy
 	Dispatch                services.DispatchConfig
 	DispatchController      dispatchruntime.ControllerConfig
 	CloudTasks              cloudtasks.Config
@@ -293,7 +293,7 @@ func Run(ctx context.Context, cfg Config) error {
 	cancellations := worksignal.NewPostgresCancellation(pool)
 	runtime := services.NewRuntimeService(store, txm, clock, ids,
 		services.WithWorkSignaller(signaller), services.WithCancellationSignaller(cancellations),
-		services.WithBudgetPolicy(cfg.Budgets), services.WithRuntimeLogger(slog.Default()),
+		services.WithLimitPolicy(cfg.Limits), services.WithRuntimeLogger(slog.Default()),
 		services.WithInvocationExecutionMode(cfg.InvocationExecutionMode, cfg.Dispatch.Queue),
 		services.WithCallbackTools(cfg.CallbackSigningKey != ""),
 		services.WithProviderCredentialPolicy(cfg.CredentialPolicy, cfg.CredentialCipher, cfg.CredentialCleanupGrace))

@@ -4,7 +4,7 @@
 **Sequence:** 030
 **Depends on:** `007-prd-recovery-and-transcript-reads.md`,
 `013-prd-structured-output.md`,
-`015-prd-durable-client-tools.md`, and
+`015-prd-durable-host-tools.md`, and
 `026-prd-multi-language-sdks-and-go-cli.md`
 **Source review:**
 [`2026-07-22-invoke-api-review.md`](../reviews/2026-07-22-invoke-api-review.md)
@@ -187,7 +187,7 @@ sweep); queueing and busy-session changes.
 
 - **Response size.** `messages` is complete and unpaginated. A tool-heavy
   turn with large bounded tool results can make the payload multiple MiB.
-  Accepted for now: turns are bounded by iteration caps, token budgets, and
+  Accepted for now: turns are bounded by iteration caps, token limits, and
   per-result size caps, and the paginated Session transcript remains the
   bulk read. Revisit with an opt-out parameter or size guard only on
   evidence, and before the watermark PRD makes this the polled read.

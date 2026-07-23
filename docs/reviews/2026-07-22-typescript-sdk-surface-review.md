@@ -19,7 +19,7 @@ and [TypeScript onboarding design](../design/typescript-onboarding.md).
 nvoken's current TypeScript SDK exposes its durable machinery before it
 delivers the first answer. A new developer must understand environment
 validation, model selection, pricing capability, Agent identity, Session
-identity, idempotency, execution specs, budgets, asynchronous lifecycle
+identity, idempotency, execution specs, limits, asynchronous lifecycle
 states, failure formatting, and result composition to print one short reply.
 
 Those concepts are important, but they should not all be prerequisites.
@@ -119,18 +119,18 @@ async function main() {
     baseUrl: process.env.NVOKEN_BASE_URL ?? "http://localhost:8080",
     apiKey,
   });
-  const pricing = await client.pricingCapability({ provider, name: model });
+  const pricing = await client.pricingCapability({ provider, id: model });
   console.log(`pricing=${pricing.status} registry=${pricing.registryVersion}`);
 
   const handle = await client.invoke({
-    agentRef: "typescript-package-quickstart",
+    agentKey: "typescript-package-quickstart",
     sessionKey: `typescript-package-${randomUUID()}`,
     idempotencyKey: `typescript-package-message-${randomUUID()}`,
     input: "Reply with a short hello.",
     spec: {
       instructions: "Be concise.",
-      model: { provider, name: model },
-      budgets: { maxOutputTokens: 100, maxIterations: 1 },
+      model: { provider, id: model },
+      limits: { maxOutputTokens: 100, maxIterations: 1 },
     },
   });
   const invocation = await handle.wait();
@@ -152,7 +152,7 @@ Before seeing an answer, the developer encounters:
 | Random Session key | Forces a new Session | A one-shot invocation can let the Runtime create the Session |
 | Random idempotency key | Satisfies the wire contract | The SDK can generate and reuse one for process-local retries |
 | Inline execution spec | The wire request is a complete immutable snapshot | A bound Agent can capture repeated configuration once |
-| Explicit budgets | Demonstrates controls | Runtime defaults already make them optional |
+| Explicit limits | Demonstrates controls | Runtime defaults already make them optional |
 | Handle polling | Execution is asynchronous | A high-level method can compose admission, waiting, and result read |
 | Terminal-state branch | `wait()` returns every terminal state | A high-level method can throw a typed Invocation failure |
 | Error formatters | The example tries to be production-complete | Normal SDK errors should already be actionable |
@@ -353,7 +353,7 @@ await jobs.put({
 path for:
 
 - background work;
-- client tool calls;
+- host tool calls;
 - custom waiting;
 - cancellation;
 - streaming;
@@ -466,14 +466,14 @@ Before:
 ```ts
 const client = new Client({ baseUrl, apiKey });
 const handle = await client.invoke({
-  agentRef: "support",
+  agentKey: "support",
   sessionKey: randomUUID(),
   idempotencyKey: randomUUID(),
   input: "Hello.",
   spec: {
     instructions: "Be concise.",
-    model: { provider, name: model },
-    budgets: { maxOutputTokens: 100, maxIterations: 1 },
+    model: { provider, id: model },
+    limits: { maxOutputTokens: 100, maxIterations: 1 },
   },
 });
 const invocation = await handle.wait();
@@ -500,15 +500,15 @@ Before:
 
 ```ts
 const handle = await client.invoke({
-  agentRef: "support",
-  tenantRef: customer.id,
+  agentKey: "support",
+  tenantKey: customer.id,
   sessionKey: conversation.id,
   idempotencyKey: message.id,
   input: message.text,
   spec: {
     instructions: supportInstructions,
     model: supportModel,
-    budgets: supportBudgets,
+    limits: supportLimits,
   },
 });
 await handle.wait();
@@ -562,9 +562,9 @@ const { output } = await classifier.run("I was charged twice.");
 The output type is established where the Agent is defined and flows through
 every run without casts.
 
-### 4.4 Client tools
+### 4.4 Host tools
 
-Client tools need the asynchronous level unless the SDK also accepts tool
+Host tools need the asynchronous level unless the SDK also accepts tool
 handlers:
 
 ```ts
@@ -583,10 +583,10 @@ for (const call of invocation.pendingToolCalls) {
 const result = await handle.waitForResult();
 ```
 
-Whether `run()` should execute registered client-tool handlers automatically
+Whether `run()` should execute registered host-tool handlers automatically
 is a separate design decision. It should not silently hang when an Invocation
 needs caller action. Until handlers exist, `run()` should reject an Agent with
-client tools or throw an actionable error that includes its handle.
+host tools or throw an actionable error that includes its handle.
 
 ## 5. Defaults: what the SDK should and should not decide
 
@@ -617,7 +617,7 @@ configuration time. It should not be prerequisite to the first generation.
 ### 6.1 Governing identity vocabulary
 
 The current `ref` suffix is vague. A new developer cannot tell whether
-`agentRef` is nvoken's Agent ID, an object reference, a display name, or an
+`agentKey` is nvoken's Agent ID, an object reference, a display name, or an
 external identifier.
 
 Adopt this rule:
@@ -639,9 +639,9 @@ lookup identity.
 
 | Current TypeScript | Proposed TypeScript | Current wire | Proposed wire | Reason |
 | --- | --- | --- | --- | --- |
-| `agentRef` | `agentKey` | `agent_ref` | `agent_key` | Caller-owned stable identity, not a generic reference |
-| `tenantRef` | `tenantKey` | `tenant_ref` | `tenant_key` | Same identity rule |
-| `model.name` | `model.id` | `model.name` | `model.id` | Provider-defined model identifier, not display name |
+| `agentKey` | `agentKey` | `agent_key` | `agent_key` | Caller-owned stable identity, not a generic reference |
+| `tenantKey` | `tenantKey` | `tenant_key` | `tenant_key` | Same identity rule |
+| `model.id` | `model.id` | `model.id` | `model.id` | Provider-defined model identifier, not display name |
 | `Handle` | `InvocationHandle` | — | — | Self-documenting exported type |
 | `Client.get()` | `getInvocation()` | — | — | Clear at the call site |
 | `Client.resume()` | `getInvocationHandle()` | — | — | Does not imply a remote state transition |
@@ -649,17 +649,17 @@ lookup identity.
 
 The identity names should change in OpenAPI, callbacks, errors, examples, and
 generated clients together. Exposing `agentKey` in the handwritten SDK while
-curl and generated users see `agent_ref` creates a bilingual API and moves the
+curl and generated users see `agent_key` creates a bilingual API and moves the
 confusion into documentation.
 
 ### 6.3 Replace invalid boolean combinations with selectors
 
-List APIs currently accept mutually exclusive `tenantRef` and
+List APIs currently accept mutually exclusive `tenantKey` and
 `defaultTenant`. A plain object can represent an invalid request:
 
 ```ts
 client.listSessions({
-  tenantRef: "acme",
+  tenantKey: "acme",
   defaultTenant: true,
 });
 ```
@@ -689,7 +689,7 @@ partition.
 | Current | Proposed | Confidence | Reason |
 | --- | --- | --- | --- |
 | `spec` | `execution` | Medium | Makes the immutable launch configuration apparent at the field |
-| `budgets` | `limits` | High | The object contains time, token, cost, and iteration ceilings |
+| `limits` | `limits` | High | The object contains time, token, cost, and iteration ceilings |
 | `wallClockTimeoutSeconds` | `totalTimeoutSeconds` | High | Avoids systems jargon |
 | `activeExecutionTimeoutSeconds` | `activeTimeoutSeconds` | Medium | Shorter while preserving the active/parked distinction |
 | `maximumAttempts` | `maxAttempts` | High, facade only | Conventional TypeScript and consistent with other `max*` fields |
@@ -707,7 +707,7 @@ explicit compromise if `execution` feels too resource-like.
 
 ### 6.5 Status and tool vocabulary
 
-`waiting` currently means that the Invocation is waiting for client tool
+`waiting` currently means that the Invocation is waiting for host tool
 results. If that remains its only meaning, `waiting_for_tool_results` is more
 descriptive:
 
@@ -729,7 +729,7 @@ await handle.waitForResult();
 ```
 
 They are clearer than requiring a newcomer to learn
-`wait({ until: "actionable" })` before their first client tool.
+`wait({ until: "actionable" })` before their first host tool.
 
 The tool mode name `client` also deserves scrutiny. In a server-side SDK,
 “client” can mean the SDK, the host, a browser, or the end user's device.
@@ -793,10 +793,10 @@ Not every ergonomic improvement requires a breaking REST change.
 
 ### Changes that should be coordinated through OpenAPI
 
-- `agent_ref` to `agent_key`;
-- `tenant_ref` to `tenant_key`;
+- `agent_key` to `agent_key`;
+- `tenant_key` to `tenant_key`;
 - model `name` to `id`;
-- `budgets` to `limits`;
+- `limits` to `limits`;
 - `spec` to `execution`, if adopted;
 - `waiting` to `waiting_for_tool_results`, if adopted;
 - provider credential singularity, if adopted.
@@ -907,7 +907,7 @@ real provider:
 - production caller-controlled key survives exact replay;
 - two-turn Session context;
 - typed structured output;
-- client tool waiting and result submission;
+- host tool waiting and result submission;
 - actionable errors for invalid environment and terminal failure;
 - raw generated API remains available.
 
@@ -920,9 +920,9 @@ real provider:
 | Background method | Keep `agent.invoke()` returning `InvocationHandle` |
 | Simple-example idempotency | Generate in the SDK and omit from hello world |
 | Durable idempotency | Accept caller keys on the same methods and document in the production step |
-| Agent identity name | Rename `agentRef` / `agent_ref` to `agentKey` / `agent_key` |
-| Tenant identity name | Rename `tenantRef` / `tenant_ref` to `tenantKey` / `tenant_key` |
-| Model identifier | Rename `model.name` to `model.id` |
+| Agent identity name | Rename `agentKey` / `agent_key` to `agentKey` / `agent_key` |
+| Tenant identity name | Rename `tenantKey` / `tenant_key` to `tenantKey` / `tenant_key` |
+| Model identifier | Rename `model.id` to `model.id` |
 | Static Agent configuration | Bind once with `client.agent()` and serialize on every Invocation |
 | One-shot Session behavior | Omit selectors and use the returned Runtime Session ID |
 | Multi-turn behavior | Bind with `agent.session()` |

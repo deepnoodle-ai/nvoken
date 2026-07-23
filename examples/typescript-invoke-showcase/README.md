@@ -5,11 +5,12 @@ quickstart. It makes real provider requests and verifies:
 
 - two turns sharing one durable Session;
 - exact idempotent admission replay and changed-request conflict;
-- client ToolCall parking, Session visibility, result submission, and replay;
-- schema-bound client-tool input and structured output;
+- host ToolCall parking, Session visibility, result submission, and replay;
+- schema-bound host-tool input and structured output;
 - actionable waiting plus admission acknowledgement metadata;
-- `agent_ref` identity and `tenant_ref` Session partitioning;
-- exact Session-key lookup, facade pagination, transcript draining, and SSE.
+- `agent_key` identity and `tenant_key` Session partitioning;
+- exact Session-key lookup, facade pagination, transcript draining, and
+  Invocation-scoped SSE.
 
 The app intentionally uses only the supported `Client` facade. Its build is
 part of `make sdk-check`, so the advanced examples fail CI if the public SDK
@@ -30,7 +31,7 @@ set +a
 npm run check --prefix examples/typescript-invoke-showcase
 ```
 
-The example uses a unique tenant, Agent reference, Session key, and idempotency
+The example uses a unique tenant, Agent key, Session key, and idempotency
 key namespace on every run. It prints identifiers and assertion results but
 never prints credentials. Expect seven small model requests. They may be billed
 by the configured provider.

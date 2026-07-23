@@ -29,7 +29,7 @@ type ProviderStaticCredentialInput struct {
 type CreateProviderCredentialInput struct {
 	Provider       string                         `json:"provider"`
 	Scope          domain.ProviderCredentialScope `json:"scope"`
-	TenantRef      *string                        `json:"tenant_ref,omitempty"`
+	TenantKey      *string                        `json:"tenant_key,omitempty"`
 	Credential     ProviderStaticCredentialInput  `json:"credential"`
 	ExpiresAt      *time.Time                     `json:"expires_at,omitempty"`
 	IdempotencyKey string                         `json:"idempotency_key"`
@@ -46,7 +46,7 @@ type ProviderCredentialListInput struct {
 	Provider  *string
 	Scope     *domain.ProviderCredentialScope
 	Status    *domain.ProviderCredentialStatus
-	TenantRef *string
+	TenantKey *string
 	Limit     int
 }
 
@@ -54,7 +54,7 @@ type ProviderCredentialRead struct {
 	ID                string                                 `json:"id"`
 	Provider          string                                 `json:"provider"`
 	Scope             domain.ProviderCredentialScope         `json:"scope"`
-	TenantRef         *string                                `json:"tenant_ref"`
+	TenantKey         *string                                `json:"tenant_key"`
 	Status            domain.ProviderCredentialStatus        `json:"status"`
 	Version           int                                    `json:"version"`
 	VersionID         string                                 `json:"version_id"`
@@ -164,7 +164,7 @@ func (s *ProviderCredentialService) Create(
 				return err
 			}
 
-			partition, err := s.resolveCredentialPartition(txCtx, auth, input.Scope, input.TenantRef)
+			partition, err := s.resolveCredentialPartition(txCtx, auth, input.Scope, input.TenantKey)
 			if err != nil {
 				return err
 			}
@@ -235,7 +235,7 @@ func (s *ProviderCredentialService) Create(
 			if err := s.store.CreateProviderCredentialVersion(txCtx, version); err != nil {
 				return err
 			}
-			result = providerCredentialRead(credential, version, input.TenantRef)
+			result = providerCredentialRead(credential, version, input.TenantKey)
 			return nil
 		})
 		if err == nil {
@@ -428,11 +428,11 @@ func (s *ProviderCredentialService) Rotate(
 			if err != nil {
 				return err
 			}
-			tenantRef, err := s.tenantRefForCredential(txCtx, updated)
+			tenantKey, err := s.tenantKeyForCredential(txCtx, updated)
 			if err != nil {
 				return err
 			}
-			result = providerCredentialRead(updated, version, tenantRef)
+			result = providerCredentialRead(updated, version, tenantKey)
 			return nil
 		})
 		if err == nil {
@@ -499,14 +499,14 @@ func validateCreateProviderCredential(input CreateProviderCredentialInput, now t
 	if input.Scope != domain.ProviderCredentialScopeAccount && input.Scope != domain.ProviderCredentialScopeTenant {
 		return "", invalidRequest("scope must be account or tenant.")
 	}
-	if input.Scope == domain.ProviderCredentialScopeAccount && input.TenantRef != nil {
-		return "", invalidRequest("tenant_ref is valid only for tenant scope.")
+	if input.Scope == domain.ProviderCredentialScopeAccount && input.TenantKey != nil {
+		return "", invalidRequest("tenant_key is valid only for tenant scope.")
 	}
 	if input.Scope == domain.ProviderCredentialScopeTenant {
-		if input.TenantRef == nil {
-			return "", invalidRequest("tenant_ref is required for tenant scope.")
+		if input.TenantKey == nil {
+			return "", invalidRequest("tenant_key is required for tenant scope.")
 		}
-		if err := validateBoundedString("tenant_ref", *input.TenantRef, MaxReferenceCharacters); err != nil {
+		if err := validateBoundedString("tenant_key", *input.TenantKey, MaxReferenceCharacters); err != nil {
 			return "", err
 		}
 	}
@@ -552,7 +552,7 @@ func (s *ProviderCredentialService) resolveCredentialPartition(
 	ctx context.Context,
 	auth domain.RuntimeAuthContext,
 	scope domain.ProviderCredentialScope,
-	tenantRef *string,
+	tenantKey *string,
 ) (*domain.TenantPartition, error) {
 	if scope == domain.ProviderCredentialScopeAccount {
 		if effectiveCredentialProfile(auth) != domain.CredentialProfileOperator {
@@ -563,15 +563,15 @@ func (s *ProviderCredentialService) resolveCredentialPartition(
 		}
 		return nil, nil
 	}
-	if auth.TenantConstraint != nil && (tenantRef == nil || *auth.TenantConstraint != *tenantRef) {
-		return nil, forbidden("The requested tenant_ref conflicts with the credential constraint.")
+	if auth.TenantConstraint != nil && (tenantKey == nil || *auth.TenantConstraint != *tenantKey) {
+		return nil, forbidden("The requested tenant_key conflicts with the credential constraint.")
 	}
 	profile := effectiveCredentialProfile(auth)
 	if profile != domain.CredentialProfileOperator && profile != domain.CredentialProfileRuntime {
 		return nil, forbidden("The authenticated profile cannot manage tenant provider credentials.")
 	}
 	if profile == domain.CredentialProfileRuntime && auth.TenantConstraint == nil {
-		return nil, forbidden("A Runtime credential must be constrained to the requested tenant_ref.")
+		return nil, forbidden("A Runtime credential must be constrained to the requested tenant_key.")
 	}
 	id, err := s.ids.NewID(domain.PrefixTenantPartition)
 	if err != nil {
@@ -580,7 +580,7 @@ func (s *ProviderCredentialService) resolveCredentialPartition(
 	partition, err := s.store.ResolveTenantPartition(ctx, domain.TenantPartition{
 		ID:        id,
 		AccountID: auth.AccountID,
-		TenantRef: cloneString(tenantRef),
+		TenantKey: cloneString(tenantKey),
 		CreatedAt: s.clock.Now().UTC(),
 	})
 	if err != nil {
@@ -622,7 +622,7 @@ func (s *ProviderCredentialService) authorizeProviderCredential(
 		if err != nil {
 			return err
 		}
-		if partition.AccountID != auth.AccountID || partition.TenantRef == nil || *partition.TenantRef != *auth.TenantConstraint {
+		if partition.AccountID != auth.AccountID || partition.TenantKey == nil || *partition.TenantKey != *auth.TenantConstraint {
 			return notFound()
 		}
 	}
@@ -650,10 +650,10 @@ func (s *ProviderCredentialService) providerCredentialListQuery(
 		provider = &canonical
 	}
 	var partitionID *string
-	effectiveTenant := input.TenantRef
+	effectiveTenant := input.TenantKey
 	if auth.TenantConstraint != nil {
-		if input.TenantRef != nil && *input.TenantRef != *auth.TenantConstraint {
-			return ports.ProviderCredentialListQuery{}, forbidden("The requested tenant_ref conflicts with the credential constraint.")
+		if input.TenantKey != nil && *input.TenantKey != *auth.TenantConstraint {
+			return ports.ProviderCredentialListQuery{}, forbidden("The requested tenant_key conflicts with the credential constraint.")
 		}
 		effectiveTenant = auth.TenantConstraint
 	}
@@ -705,14 +705,14 @@ func (s *ProviderCredentialService) readCredential(
 		version.Provider != credential.Provider || !sameOptionalString(version.TenantPartitionID, credential.TenantPartitionID) {
 		return ProviderCredentialRead{}, fmt.Errorf("provider credential version scope mismatch")
 	}
-	tenantRef, err := s.tenantRefForCredential(ctx, credential)
+	tenantKey, err := s.tenantKeyForCredential(ctx, credential)
 	if err != nil {
 		return ProviderCredentialRead{}, err
 	}
-	return providerCredentialRead(credential, version, tenantRef), nil
+	return providerCredentialRead(credential, version, tenantKey), nil
 }
 
-func (s *ProviderCredentialService) tenantRefForCredential(
+func (s *ProviderCredentialService) tenantKeyForCredential(
 	ctx context.Context,
 	credential domain.ProviderCredential,
 ) (*string, error) {
@@ -723,22 +723,22 @@ func (s *ProviderCredentialService) tenantRefForCredential(
 	if err != nil {
 		return nil, err
 	}
-	if partition.AccountID != credential.AccountID || partition.TenantRef == nil {
+	if partition.AccountID != credential.AccountID || partition.TenantKey == nil {
 		return nil, fmt.Errorf("provider credential tenant partition is invalid")
 	}
-	return cloneString(partition.TenantRef), nil
+	return cloneString(partition.TenantKey), nil
 }
 
 func providerCredentialRead(
 	credential domain.ProviderCredential,
 	version domain.ProviderCredentialVersion,
-	tenantRef *string,
+	tenantKey *string,
 ) ProviderCredentialRead {
 	return ProviderCredentialRead{
 		ID:                credential.ID,
 		Provider:          credential.Provider,
 		Scope:             credential.Scope,
-		TenantRef:         cloneString(tenantRef),
+		TenantKey:         cloneString(tenantKey),
 		Status:            credential.Status,
 		Version:           version.Version,
 		VersionID:         version.ID,
@@ -754,7 +754,7 @@ func providerCredentialRead(
 }
 
 func createProviderCredentialFingerprint(input CreateProviderCredentialInput) [sha256.Size]byte {
-	value := input.Provider + "\x00" + string(input.Scope) + "\x00" + stringValue(input.TenantRef) + "\x00" + timeValue(input.ExpiresAt)
+	value := input.Provider + "\x00" + string(input.Scope) + "\x00" + stringValue(input.TenantKey) + "\x00" + timeValue(input.ExpiresAt)
 	return sha256.Sum256([]byte(value))
 }
 

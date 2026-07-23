@@ -4,16 +4,16 @@ import { randomUUID } from "node:crypto";
 import {
   Client,
   NvokenError,
-  defineClientTool,
+  defineHostTool,
   defineJsonSchema,
   formatInvocationFailure,
   formatNvokenError,
   toolInput,
-  type Handle,
+  type InvocationHandle,
   type InvokeRequest,
 } from "@deepnoodle/nvoken";
 
-type Invocation = Awaited<ReturnType<Client["get"]>>;
+type Invocation = Awaited<ReturnType<Client["getInvocation"]>>;
 
 interface LookupOrderInput {
   order_id: string;
@@ -34,11 +34,11 @@ const client = new Client({ baseUrl, apiKey });
 const runId = `typescript-showcase-${randomUUID()}`;
 const tenantA = `${runId}-tenant-a`;
 const tenantB = `${runId}-tenant-b`;
-const primaryAgentRef = `${runId}-support`;
-const alternateAgentRef = `${runId}-alternate`;
+const primaryAgentKey = `${runId}-support`;
+const alternateAgentKey = `${runId}-alternate`;
 const sharedSessionKey = `${runId}-shared-session`;
-const lookupOrder = defineClientTool<LookupOrderInput>({
-  mode: "client",
+const lookupOrder = defineHostTool<LookupOrderInput>({
+  mode: "host",
   name: "lookup_order",
   description: "Look up an order by its order ID.",
   inputSchema: defineJsonSchema<LookupOrderInput>({
@@ -72,12 +72,12 @@ async function main(): Promise<void> {
   console.log(`nvoken=${baseUrl}`);
   console.log(`run_id=${runId}`);
 
-  const pricing = await client.pricingCapability({ provider, name: model });
+  const pricing = await client.pricingCapability({ provider, id: model });
   console.log(`PASS pricing preflight: ${pricing.status} (${pricing.registryVersion})`);
 
   const firstRequest: InvokeRequest = {
-    agentRef: primaryAgentRef,
-    tenantRef: tenantA,
+    agentKey: primaryAgentKey,
+    tenantKey: tenantA,
     sessionKey: sharedSessionKey,
     idempotencyKey: `${runId}:turn-1`,
     input: "Remember that my confirmation code is ORCHID-724. Reply only with remembered.",
@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   assert.equal(first.handle.deduplicated, false);
 
   const firstTranscript = await client.drainTranscript(
-    first.handle.sessionId,
+    first.handle.sessionId!,
     { pageSize: 1 },
   );
   assert.deepEqual(
@@ -111,17 +111,17 @@ async function main(): Promise<void> {
   console.log(`PASS changed idempotency replay: ${idempotencyConflict.code}`);
 
   const second = await completed({
-    agentRef: primaryAgentRef,
-    sessionId: first.handle.sessionId,
+    agentKey: primaryAgentKey,
+    sessionId: first.handle.sessionId!,
     idempotencyKey: `${runId}:turn-2`,
     input: "What is my confirmation code? Reply only with the code.",
     spec: chatSpec(),
   });
   assert.match(second.text, /ORCHID-724/i);
   assert.equal(second.handle.sessionId, first.handle.sessionId);
-  console.log("PASS two-turn Session memory using sessionId without tenantRef");
+  console.log("PASS two-turn Session memory using sessionId without tenantKey");
 
-  const secondDelta = await client.drainTranscript(first.handle.sessionId, {
+  const secondDelta = await client.drainTranscript(first.handle.sessionId!, {
     cursor: firstTranscript.resumeCursor,
     pageSize: 1,
   });
@@ -131,13 +131,13 @@ async function main(): Promise<void> {
   );
   console.log("PASS incremental transcript cursor contains only the second turn");
 
-  const session = await client.getSession(first.handle.sessionId);
-  assert.equal(session.tenantRef, tenantA);
+  const session = await client.getSession(first.handle.sessionId!);
+  assert.equal(session.tenantKey, tenantA);
   assert.equal(session.sessionKey, sharedSessionKey);
   assert.equal(session.activeInvocationId, null);
 
   const tenantSessions = await client.listSessions({
-    tenantRef: tenantA,
+    tenantKey: tenantA,
     agentId: session.agentId,
     limit: 100,
   });
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
 
   const exactSessionLookup = await client.getSessionByKey(sharedSessionKey, {
     agentId: session.agentId,
-    tenantRef: tenantA,
+    tenantKey: tenantA,
   });
   assert.equal(exactSessionLookup.id, session.id);
 
@@ -172,27 +172,27 @@ async function main(): Promise<void> {
   console.log("PASS Session get/filter/exact lookup, message pages, and Invocation pages");
 
   const tenantBResult = await completed({
-    agentRef: primaryAgentRef,
-    tenantRef: tenantB,
+    agentKey: primaryAgentKey,
+    tenantKey: tenantB,
     sessionKey: sharedSessionKey,
     idempotencyKey: firstRequest.idempotencyKey,
     input: "Reply only with beta.",
     spec: chatSpec(),
   });
-  const tenantBSession = await client.getSession(tenantBResult.handle.sessionId);
+  const tenantBSession = await client.getSession(tenantBResult.handle.sessionId!);
   assert.equal(tenantBSession.agentId, session.agentId);
   assert.notEqual(tenantBSession.id, session.id);
-  assert.equal(tenantBSession.tenantRef, tenantB);
+  assert.equal(tenantBSession.tenantKey, tenantB);
 
   const alternateResult = await completed({
-    agentRef: alternateAgentRef,
-    tenantRef: tenantA,
+    agentKey: alternateAgentKey,
+    tenantKey: tenantA,
     sessionKey: sharedSessionKey,
     idempotencyKey: firstRequest.idempotencyKey,
     input: "Reply only with alternate.",
     spec: chatSpec(),
   });
-  const alternateSession = await client.getSession(alternateResult.handle.sessionId);
+  const alternateSession = await client.getSession(alternateResult.handle.sessionId!);
   assert.notEqual(alternateSession.agentId, session.agentId);
   assert.notEqual(alternateSession.id, session.id);
 
@@ -200,11 +200,11 @@ async function main(): Promise<void> {
   assert.ok(!defaultSessions.items.some((item) => (
     item.id === session.id || item.id === tenantBSession.id || item.id === alternateSession.id
   )));
-  console.log("PASS tenantRef and agentRef scope Sessions and idempotency; Agent identity spans tenants");
+  console.log("PASS tenantKey and agentKey scope Sessions and idempotency; Agent identity spans tenants");
 
   const agentMismatch = await expectNvokenError(
     () => client.invoke({
-      agentRef: alternateAgentRef,
+      agentKey: alternateAgentKey,
       sessionId: session.id,
       idempotencyKey: `${runId}:agent-mismatch`,
       input: "This should not be admitted.",
@@ -214,8 +214,8 @@ async function main(): Promise<void> {
   );
   const tenantMismatch = await expectNvokenError(
     () => client.invoke({
-      agentRef: primaryAgentRef,
-      tenantRef: tenantB,
+      agentKey: primaryAgentKey,
+      tenantKey: tenantB,
       sessionId: session.id,
       idempotencyKey: `${runId}:tenant-mismatch`,
       input: "This should not be admitted.",
@@ -226,15 +226,15 @@ async function main(): Promise<void> {
   console.log(`PASS Session scope mismatch is nondisclosing: ${agentMismatch.code}, ${tenantMismatch.code}`);
 
   const toolHandle = await client.invoke({
-    agentRef: primaryAgentRef,
-    tenantRef: tenantA,
+    agentKey: primaryAgentKey,
+    tenantKey: tenantA,
     sessionKey: `${runId}-tool-session`,
     idempotencyKey: `${runId}:tool`,
     input: "Check order order-42 and tell me its current state. You must use lookup_order first.",
     spec: {
       instructions: "Always call lookup_order exactly once before answering an order-status question. Never invent tool results.",
-      model: { provider, name: model },
-      budgets: {
+      model: { provider, id: model },
+      limits: {
         maxOutputTokens: 200,
         maxIterations: 3,
       },
@@ -249,15 +249,15 @@ async function main(): Promise<void> {
   assert.ok(toolCall);
   assert.equal(toolInput(lookupOrder, toolCall).order_id, "order-42");
 
-  const waitingSession = await client.getSession(toolHandle.sessionId);
+  const waitingSession = await client.getSession(toolHandle.sessionId!);
   assert.equal(waitingSession.activeInvocationId, toolHandle.invocationId);
   assert.equal(waitingSession.activeInvocationStatus, "waiting");
   assert.equal(waitingSession.pendingToolCalls?.[0]?.id, toolCall.id);
 
   const busySession = await expectNvokenError(
     () => client.invoke({
-      agentRef: primaryAgentRef,
-      sessionId: toolHandle.sessionId,
+      agentKey: primaryAgentKey,
+      sessionId: toolHandle.sessionId!,
       idempotencyKey: `${runId}:busy-session`,
       input: "This turn should not be admitted while the tool call is waiting.",
       spec: chatSpec(),
@@ -296,28 +296,28 @@ async function main(): Promise<void> {
     "tool",
     "assistant",
   ]);
-  console.log(`PASS client ToolCall wait/Session visibility/busy guard/result replay: ${busySession.code}, ${changedToolResult.code}`);
+  console.log(`PASS host ToolCall wait/Session visibility/busy guard/result replay: ${busySession.code}, ${changedToolResult.code}`);
 
   const toolFollowup = await completed({
-    agentRef: primaryAgentRef,
-    sessionId: toolHandle.sessionId,
+    agentKey: primaryAgentKey,
+    sessionId: toolHandle.sessionId!,
     idempotencyKey: `${runId}:tool-followup`,
     input: "Based on our previous order lookup, when is the estimated delivery? Reply only with the answer.",
     spec: chatSpec(),
   });
   assert.match(toolFollowup.text, /tomorrow/i);
-  console.log("PASS a later Invocation receives the successful client-tool transcript as Session context");
+  console.log("PASS a later Invocation receives the successful host-tool transcript as Session context");
 
   const structuredHandle = await client.invoke({
-    agentRef: primaryAgentRef,
-    tenantRef: tenantA,
+    agentKey: primaryAgentKey,
+    tenantKey: tenantA,
     sessionKey: `${runId}-structured-session`,
     idempotencyKey: `${runId}:structured`,
     input: "Classify this request: I was billed twice and need a human to review it today.",
     spec: {
       instructions: "Submit the requested structured classification, then give one short confirmation sentence.",
-      model: { provider, name: model },
-      budgets: {
+      model: { provider, id: model },
+      limits: {
         maxOutputTokens: 200,
         maxIterations: 3,
       },
@@ -329,10 +329,20 @@ async function main(): Promise<void> {
   let streamedMessages = 0;
   const streamController = new AbortController();
   const streamTimer = setTimeout(() => streamController.abort(), 60_000);
-  const stream = structuredHandle.stream((event, snapshot) => {
-    streamEvents.add(event.type);
-    streamedMessages = Math.max(streamedMessages, snapshot.messages.length);
-  }, streamController.signal);
+  const stream = (async () => {
+    for await (const event of structuredHandle.stream(streamController.signal)) {
+      streamEvents.add(event.type);
+      if (event.type === "output_text.delta") {
+        process.stdout.write(event.text);
+      }
+      if (event.type === "invocation.update") {
+        streamedMessages += event.newMessages.length;
+      }
+      if (event.type === "invocation.result") {
+        streamedMessages = Math.max(streamedMessages, event.result.messages.length);
+      }
+    }
+  })();
   const [structuredInvocation] = await Promise.all([
     structuredHandle.wait(),
     stream,
@@ -355,10 +365,10 @@ async function main(): Promise<void> {
   assert.ok(structuredInvocation.structuredOutputProvenance?.toolCallId.startsWith("tcal_"));
   assert.ok(structuredInvocation.structuredOutputProvenance?.schemaSha256);
   assert.ok((await structuredHandle.text()).length > 0);
-  assert.ok(streamEvents.has("transcript.snapshot"));
+  assert.ok(streamEvents.has("invocation.result"));
   assert.ok(streamEvents.has("stream.end"));
   assert.ok(streamedMessages >= 3);
-  console.log("PASS structured output, provenance, composed text, and resumable Session SSE");
+  console.log("PASS structured output, provenance, composed text, and resumable Invocation SSE");
 
   console.log("\nAll TypeScript invoke showcase checks passed.");
   console.log(JSON.stringify({
@@ -377,8 +387,8 @@ async function main(): Promise<void> {
 function chatSpec(): InvokeRequest["spec"] {
   return {
     instructions: "You are a concise support assistant. Remember relevant facts from earlier turns in this Session.",
-    model: { provider, name: model },
-    budgets: {
+    model: { provider, id: model },
+    limits: {
       maxOutputTokens: 100,
       maxIterations: 1,
     },
@@ -386,7 +396,7 @@ function chatSpec(): InvokeRequest["spec"] {
 }
 
 async function completed(request: InvokeRequest): Promise<{
-  handle: Handle;
+  handle: InvocationHandle;
   invocation: Invocation;
   text: string;
 }> {
@@ -415,7 +425,7 @@ async function expectNvokenError(
 }
 
 function failure<TOutput extends object>(
-  handle: Handle<TOutput>,
+  handle: InvocationHandle<TOutput>,
   invocation: Pick<Invocation, "status" | "error">,
 ): string {
   return formatInvocationFailure(handle.invocationId, invocation, provider, {

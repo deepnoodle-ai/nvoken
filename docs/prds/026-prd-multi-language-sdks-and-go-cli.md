@@ -3,7 +3,7 @@
 **Status:** Implemented
 **Sequence:** 026
 **Depends on:** `007-prd-recovery-and-transcript-reads.md`,
-`011-prd-resumable-streaming.md`, `015-prd-durable-client-tools.md`, and
+`011-prd-resumable-streaming.md`, `015-prd-durable-host-tools.md`, and
 `016-prd-durable-callback-tools.md`
 
 ## ELI5
@@ -89,7 +89,7 @@ long-term versioning policy.
 
 - **R6 — Durable handles hide polling mechanics.** `invoke` returns a durable
   handle containing Invocation and Session identity. The handle can refresh,
-  wait to a terminal state, stream, submit pending client-tool results, cancel,
+  wait to a terminal state, stream, submit pending host-tool results, cancel,
   or be reconstructed later. Polling uses bounded backoff and server hints.
   List iterators preserve opaque cursors.
 

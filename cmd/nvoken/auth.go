@@ -51,7 +51,7 @@ func runAuthLogin(ctx *cli.Context) error {
 	roleCap := identityclient.DeviceCodeRequestRoleCap(ctx.String("role-cap"))
 	body := identityclient.DeviceCodeRequest{DeviceLabel: label, RoleCap: &roleCap}
 	if value := strings.TrimSpace(ctx.String("tenant-ref")); value != "" {
-		body.TenantRef = &value
+		body.TenantKey = &value
 	}
 	if value := strings.TrimSpace(ctx.String("session-id")); value != "" {
 		body.SessionId = &value

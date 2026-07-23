@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -20,8 +20,8 @@ pub struct Session {
     #[serde(rename = "agent_id")]
     pub agent_id: String,
     /// Immutable effective tenant partition reference.
-    #[serde(rename = "tenant_ref", deserialize_with = "Option::deserialize")]
-    pub tenant_ref: Option<String>,
+    #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
+    pub tenant_key: Option<String>,
     #[serde(rename = "session_key", deserialize_with = "Option::deserialize")]
     pub session_key: Option<String>,
     /// The queued, running, or waiting Invocation, if one exists.
@@ -40,16 +40,16 @@ pub struct Session {
     pub created_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "updated_at")]
     pub updated_at: chrono::DateTime<chrono::FixedOffset>,
-    /// Pending client calls for the active waiting Invocation.
+    /// Pending host calls for the active waiting Invocation.
     #[serde(rename = "pending_tool_calls", skip_serializing_if = "Option::is_none")]
-    pub pending_tool_calls: Option<Vec<models::PendingClientToolCall>>,
+    pub pending_tool_calls: Option<Vec<models::PendingHostToolCall>>,
 }
 
 impl Session {
     pub fn new(
         id: String,
         agent_id: String,
-        tenant_ref: Option<String>,
+        tenant_key: Option<String>,
         session_key: Option<String>,
         active_invocation_id: Option<String>,
         active_invocation_status: Option<ActiveInvocationStatus>,
@@ -59,7 +59,7 @@ impl Session {
         Session {
             id,
             agent_id,
-            tenant_ref,
+            tenant_key,
             session_key,
             active_invocation_id,
             active_invocation_status,

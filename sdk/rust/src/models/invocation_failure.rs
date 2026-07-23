@@ -1,7 +1,7 @@
 /*
  * nvoken Runtime API
  *
- * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback client tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
+ * This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion, compaction, or retention-control operation. Authoritative records exposed by this contract are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, and reusable model provider credential lifecycle are included. Spec references and general administrative APIs remain outside this version.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// InvocationFailure : Failed Invocations may carry paired usage and provenance when a model response produced safe normalized evidence before deadline or budget settlement. Cancellation and pre-response failures carry neither. `execution_lost` is retained for historical rows written before checkpoint recovery; recoverable lease expiry now requeues the same Invocation and does not write that failure.
+/// InvocationFailure : Failed Invocations may carry paired usage and provenance when a model response produced safe normalized evidence before deadline or limit settlement. Cancellation and pre-response failures carry neither.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InvocationFailure {
     #[serde(rename = "code")]
@@ -23,7 +23,7 @@ pub struct InvocationFailure {
 }
 
 impl InvocationFailure {
-    /// Failed Invocations may carry paired usage and provenance when a model response produced safe normalized evidence before deadline or budget settlement. Cancellation and pre-response failures carry neither. `execution_lost` is retained for historical rows written before checkpoint recovery; recoverable lease expiry now requeues the same Invocation and does not write that failure.
+    /// Failed Invocations may carry paired usage and provenance when a model response produced safe normalized evidence before deadline or limit settlement. Cancellation and pre-response failures carry neither.
     pub fn new(code: Code, message: String) -> InvocationFailure {
         InvocationFailure {
             code,
@@ -39,8 +39,6 @@ pub enum Code {
     DeadlineExceeded,
     #[serde(rename = "budget_exceeded")]
     BudgetExceeded,
-    #[serde(rename = "execution_lost")]
-    ExecutionLost,
     #[serde(rename = "credential_unavailable")]
     CredentialUnavailable,
     #[serde(rename = "provider_error")]

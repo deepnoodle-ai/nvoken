@@ -7,7 +7,7 @@
 **Depends on:** `002-prd-postgres-runtime-spine.md`,
 `004-prd-engine-claims-and-fencing.md`,
 `005-prd-generation-only-turns.md`, and
-`008-prd-invocation-controls-and-budgets.md`
+`008-prd-invocation-controls-and-limits.md`
 
 ## ELI5
 
@@ -43,7 +43,7 @@ engine may continue, without yet reclaiming a lost engine.
 ## Scope
 
 **In:** ToolCall, attempt, model-usage-receipt, and Invocation-checkpoint
-records; stable IDs and immutable scope; builtin/callback/client mode values;
+records; stable IDs and immutable scope; builtin/callback/host mode values;
 canonical transcript references; persist-before-builtin execution; first
 accepted result/error; iteration and checkpoint cursors; fenced checkpoint
 writes; one deterministic test builtin; replay-safe transcript reconstruction;
@@ -174,7 +174,7 @@ uncertain external side effect.
 
 - [x] **A6 (R1, R4, R7):** Unit tests prove equal provider-call replay resolves
   the stored ToolCall, changed reuse conflicts, the builtin cannot start before
-  its request checkpoint, and neither callback nor client mode executes.
+  its request checkpoint, and neither callback nor host mode executes.
   Public JSON validation and OpenAPI still reject `spec.tools`; the production
   daemon registers no test builtin. The same coordinator is exercised through
   embedded claim execution and the exact Cloud Tasks attempt handler.
@@ -199,4 +199,4 @@ uncertain external side effect.
   recovery require their own proof before production builtins use it.
 - PRD 013 uses this boundary for structured output without an external side
   effect. PRD 014 consumes these records for engine replacement. PRD 015 adds
-  public client ToolCalls and the narrow result command.
+  public host ToolCalls and the narrow result command.

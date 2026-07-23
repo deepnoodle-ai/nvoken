@@ -22,8 +22,8 @@ type CallbackEnvelope struct {
 		ToolCallID    string  `json:"tool_call_id"`
 		InvocationID  string  `json:"invocation_id"`
 		SessionID     string  `json:"session_id"`
-		AgentRef      string  `json:"agent_ref"`
-		TenantRef     *string `json:"tenant_ref,omitempty"`
+		AgentKey      string  `json:"agent_key"`
+		TenantKey     *string `json:"tenant_key,omitempty"`
 	} `json:"nvoken"`
 	Input json.RawMessage `json:"input"`
 }

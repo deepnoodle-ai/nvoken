@@ -19,7 +19,7 @@ The authorization matrix is intentionally small:
 | `Viewer` | Reads, lists, transcript, and stream | `GET /v1/account`; a user credential may get and revoke itself |
 | `Operator` | All Runtime operations | `GET /v1/account`; list, create, get, rotate, and revoke credentials |
 
-`tenant_ref`, Session, operation, and expiry constraints only narrow that
+`tenant_key`, Session, operation, and expiry constraints only narrow that
 matrix. Operation constraints can remove Runtime or identity lifecycle
 operations from a machine credential; they never add an operation outside its
 profile. A request outside an Account, tenant, or Session constraint follows
