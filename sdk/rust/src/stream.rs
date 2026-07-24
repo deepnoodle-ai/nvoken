@@ -51,7 +51,15 @@ impl Reducer {
             self.changes
                 .insert((change.invocation_id.clone(), change.revision), change);
         }
-        self.cursor = event.id.clone().or(Some(update.resume_cursor));
+        let cursor = event
+            .id
+            .as_ref()
+            .filter(|value| !value.is_empty())
+            .cloned()
+            .or_else(|| (!update.resume_cursor.is_empty()).then_some(update.resume_cursor));
+        if cursor.is_some() {
+            self.cursor = cursor;
+        }
         Ok(())
     }
 

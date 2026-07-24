@@ -1,4 +1,11 @@
-# The Harness
+# Harness capability map
+
+> **Product direction, not the current Runtime contract.** This page catalogs
+> the capability space nvoken may cover. The implemented surface is the
+> [Runtime contract](../guides/runtime-admission.md) and the checked
+> [OpenAPI](../../openapi/runtime.yaml). Remote MCP, general-purpose builtin
+> tools, steering, approvals, and most rich-result capabilities below are not
+> implemented today.
 
 An agent harness equips an AI agent with tools, connects it to its environment,
 and manages the loop that lets it do real work. The harness is where an agentic
@@ -8,7 +15,7 @@ demo and that experience is a long list of features that teams normally discover
 one feature request and one incident at a time.
 
 This page catalogs that list: what a harness has to cover to make an agentic
-app genuinely pleasant to use, and how nvoken covers it.
+app genuinely pleasant to use, and the product direction nvoken is evaluating.
 
 ## Two layers
 
@@ -56,7 +63,7 @@ Tools are where the agent touches the world:
 - **Live output and rich results.** A running tool can stream text and publish
   structured progress for your UI, and results carry text, image, or audio
   content, an optional display variant, and error status.
-- **Ready-made capability.** A toolkit of file, shell, web, and interaction
+- **Planned ready-made capability.** A toolkit of file, shell, web, and interaction
   tools aligned with Claude Code's tool shapes, MCP servers adapted into
   tools, provider server-side tools where offered, and subagents with their
   own prompt, tool policy, and model routing.

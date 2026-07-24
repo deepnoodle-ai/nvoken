@@ -12,11 +12,12 @@ from .client import (
     InvokeRequest,
     Model,
     NvokenError,
+    ProviderCredentialSelection,
     RetryPolicy,
     Tool,
     ToolResult,
 )
-from .stream import Reducer, ReducedSnapshot, StreamEvent
+from .stream import Reducer, ReducedSnapshot, StreamEvent, stream_session
 from nvoken_generated import *  # noqa: F403
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "InvokeRequest",
     "Model",
     "NvokenError",
+    "ProviderCredentialSelection",
     "ReducedSnapshot",
     "Reducer",
     "RetryPolicy",
@@ -37,4 +39,5 @@ __all__ = [
     "VerifiedCallback",
     "deduplicate_callback_result",
     "verify_callback",
+    "stream_session",
 ]

@@ -13,9 +13,11 @@ import pytest
 from nvoken import (
     Client,
     ExecutionSpec,
+    InvocationHandle,
     InvokeRequest,
     Model,
     NvokenError,
+    ProviderCredentialSelection,
     RetryPolicy,
     Reducer,
     StreamEvent,
@@ -61,6 +63,13 @@ async def test_shared_fault_server_semantics() -> None:
                 instructions="help",
                 model=Model(provider="openai", id="gpt-test"),
             ),
+            provider_credentials=(
+                ProviderCredentialSelection(
+                    provider="openai",
+                    source="caller_ephemeral",
+                    api_key="conformance-secret",
+                ),
+            ),
         ))
         assert handle.invocation_id == INVOCATION_ID
         assert handle.session_id == SESSION_ID
@@ -70,12 +79,12 @@ async def test_shared_fault_server_semantics() -> None:
         assert resumed.status == "completed"
 
         waiting = client.invocation(WAIT_ID)
-        with pytest.raises(NvokenError) as timeout:
+        with pytest.raises(TimeoutError) as timeout:
             await asyncio.wait_for(
                 waiting.wait(min_poll_interval=0.001, max_poll_interval=0.002),
                 timeout=0.01,
             )
-        assert timeout.value.category == "timeout"
+        assert not isinstance(timeout.value, NvokenError)
 
         first_page = await client.list_invocations()
         assert first_page.has_more is True
@@ -134,6 +143,7 @@ async def test_shared_fault_server_semantics() -> None:
         state = (await inspect.get(f"{base_url}/__test/state")).json()
     assert state == {
         "admission_attempts": 2,
+        "credential_admissions": 2,
         "result_attempts": 2,
         "cancel_attempts": 1,
         "stream_attempts": 3,
@@ -201,3 +211,154 @@ def test_shared_reducer_vector() -> None:
     assert [message.sequence for message in snapshot.messages] == fixture["expected"]["message_sequences"]
     assert [change.revision for change in snapshot.invocation_changes] == fixture["expected"]["invocation_revisions"]
     assert snapshot.resume_cursor == fixture["expected"]["resume_cursor"]
+
+
+@pytest.mark.asyncio
+async def test_cancellation_propagates_through_replay_and_waits() -> None:
+    async def assert_cancelled(awaitable: Any) -> None:
+        task = asyncio.create_task(awaitable)
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    async with Client("http://nvoken.test", "test-key") as client:
+        blocked = asyncio.Event()
+        await assert_cancelled(client._replay_safe(blocked.wait))
+
+    class BlockingClient:
+        async def get_invocation(self, _invocation_id: str) -> Any:
+            await asyncio.Event().wait()
+
+    await assert_cancelled(
+        InvocationHandle(BlockingClient(), INVOCATION_ID).wait()
+    )
+    await assert_cancelled(
+        InvocationHandle(BlockingClient(), INVOCATION_ID).wait_for_action()
+    )
+
+
+@pytest.mark.asyncio
+async def test_session_stream_uses_public_operation_and_follows_later_turns() -> None:
+    path = Path(__file__).parents[2] / "conformance/fixtures/reducer.json"
+    events = json.loads(path.read_text())["events"]
+    later_invocation_id = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb399"
+    later_event = json.loads(json.dumps(events[1]))
+    for message in later_event["data"]["messages"]:
+        message["invocation_id"] = later_invocation_id
+    for change in later_event["data"]["invocation_changes"]:
+        change["invocation_id"] = later_invocation_id
+
+    def sse(event: dict[str, Any], *, terminal: bool = False) -> str:
+        frame = (
+            "retry: 1\n"
+            f"id: {event['id']}\n"
+            f"event: {event['event']}\n"
+            f"data: {json.dumps(event['data'])}\n\n"
+        )
+        if terminal:
+            frame += (
+                "event: stream.end\n"
+                f"data: {json.dumps({'type': 'stream.end', 'session_id': SESSION_ID, 'invocation_id': None, 'reason': 'terminal', 'resume_cursor': event['id']})}\n\n"
+            )
+        return frame
+
+    class StreamOperations:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str | None]] = []
+            self.responses = [
+                httpx.Response(200, text=sse(events[0], terminal=True)),
+                httpx.Response(200, text=sse(later_event)),
+            ]
+
+        async def stream_session_transcript_without_preload_content(
+            self,
+            session_id: str,
+            *,
+            cursor: str | None,
+            last_event_id: str | None,
+        ) -> httpx.Response:
+            assert cursor is None
+            self.calls.append((session_id, last_event_id))
+            return self.responses.pop(0)
+
+    operations = StreamOperations()
+
+    class StreamClient:
+        stream_sessions = operations
+
+    seen_updates = 0
+
+    async def consume(event: StreamEvent, _snapshot: Any) -> None:
+        nonlocal seen_updates
+        if event.type == "transcript.update":
+            seen_updates += 1
+        if seen_updates == 2:
+            raise asyncio.CancelledError
+
+    reducer = Reducer()
+    with pytest.raises(asyncio.CancelledError):
+        from nvoken import stream_session
+        await stream_session(StreamClient(), SESSION_ID, reducer, consume)
+
+    assert operations.calls == [
+        (SESSION_ID, None),
+        (SESSION_ID, "cursor-1"),
+    ]
+    assert reducer.snapshot().resume_cursor == "cursor-2"
+    assert later_invocation_id in {
+        change.invocation_id for change in reducer.snapshot().invocation_changes
+    }
+
+
+@pytest.mark.asyncio
+async def test_invoke_maps_ephemeral_and_stored_provider_credentials() -> None:
+    async with Client("http://nvoken.test", "test-key") as client:
+        captured: list[Any] = []
+
+        async def create(body: Any) -> Any:
+            captured.append(body)
+            return type("Ack", (), {
+                "invocation_id": INVOCATION_ID,
+                "session_id": SESSION_ID,
+                "agent_id": "agnt_test",
+                "status": "queued",
+                "deduplicated": False,
+                "deadline_at": None,
+            })()
+
+        client.invocations.create_invocation = create
+        base = {
+            "agent_key": "support",
+            "input": "hello",
+            "spec": ExecutionSpec(model=Model(provider="openai", id="gpt-test")),
+        }
+        await client.invoke(InvokeRequest(
+            **base,
+            provider_credentials=(
+                ProviderCredentialSelection(
+                    provider="openai",
+                    source="caller_ephemeral",
+                    api_key="secret",
+                ),
+            ),
+        ))
+        await client.invoke(InvokeRequest(
+            **base,
+            provider_credentials=(
+                ProviderCredentialSelection(
+                    provider="openai",
+                    source="account_byok",
+                ),
+            ),
+        ))
+
+    assert captured[0].provider_credentials[0].to_dict() == {
+        "provider": "openai",
+        "source": "caller_ephemeral",
+        "credential": {"api_key": "secret"},
+    }
+    assert captured[1].provider_credentials[0].to_dict() == {
+        "provider": "openai",
+        "source": "account_byok",
+    }

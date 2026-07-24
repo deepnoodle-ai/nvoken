@@ -26,12 +26,22 @@ from nvoken_generated.models.invocation import Invocation
 from nvoken_generated.models.invocation_limit_request import InvocationLimitRequest
 from nvoken_generated.models.invocation_input import InvocationInput
 from nvoken_generated.models.invocation_list import InvocationList
+from nvoken_generated.models.invocation_provider_credential_selection import (
+    InvocationProviderCredentialSelection,
+)
+from nvoken_generated.models.invocation_provider_credential_selection_one_of import (
+    InvocationProviderCredentialSelectionOneOf,
+)
+from nvoken_generated.models.invocation_provider_credential_selection_one_of1 import (
+    InvocationProviderCredentialSelectionOneOf1,
+)
 from nvoken_generated.models.invocation_result import InvocationResult
 from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.model_selection import ModelSelection
 from nvoken_generated.models.model_descriptor import ModelDescriptor
 from nvoken_generated.models.model_list import ModelList
 from nvoken_generated.models.model_provider import ModelProvider
+from nvoken_generated.models.provider_static_credential import ProviderStaticCredential
 from nvoken_generated.models.session import Session
 from nvoken_generated.models.session_list import SessionList
 from nvoken_generated.models.session_message import SessionMessage
@@ -44,7 +54,7 @@ from nvoken_generated.models.submit_host_tool_results_request_results_inner impo
 from nvoken_generated.models.submit_host_tool_results_response import SubmitHostToolResultsResponse
 from nvoken_generated.models.tool_spec import ToolSpec as GeneratedToolSpec
 
-from .stream import StreamEvent, stream_invocation
+from .stream import ReducedSnapshot, Reducer, StreamEvent, stream_invocation, stream_session
 
 ErrorCategory = Literal[
     "authentication",
@@ -115,6 +125,13 @@ class ExecutionSpec:
 
 
 @dataclass(frozen=True)
+class ProviderCredentialSelection:
+    provider: str
+    source: Literal["caller_ephemeral", "account_byok", "tenant_byok", "platform"]
+    api_key: str | None = None
+
+
+@dataclass(frozen=True)
 class InvokeRequest:
     agent_key: str
     input: str
@@ -123,6 +140,7 @@ class InvokeRequest:
     tenant_key: str | None = None
     session_id: str | None = None
     session_key: str | None = None
+    provider_credentials: tuple[ProviderCredentialSelection, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -137,6 +155,18 @@ class RetryPolicy:
     max_attempts: int = 4
     min_delay: float = 0.1
     max_delay: float = 2.0
+
+
+class _StreamingPoolManager:
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        self.client = client
+
+    async def request(self, **kwargs: Any) -> httpx.Response:
+        request = self.client.build_request(**kwargs)
+        return await self.client.send(request, stream=True)
+
+    async def aclose(self) -> None:
+        await self.client.aclose()
 
 
 class Client:
@@ -165,6 +195,14 @@ class Client:
             transport=transport,
             timeout=None,
         )
+        stream_configuration = Configuration(host=self.base_url, access_token=api_key)
+        stream_configuration.discard_unknown_keys = False
+        self.stream_api_client = ApiClient(stream_configuration)
+        self.stream_api_client.rest_client.pool_manager = _StreamingPoolManager(
+            self.stream_client
+        )
+        self.stream_invocations = InvocationsApi(self.stream_api_client)
+        self.stream_sessions = SessionsApi(self.stream_api_client)
 
     async def __aenter__(self) -> Client:
         return self
@@ -174,7 +212,7 @@ class Client:
 
     async def close(self) -> None:
         await self.api_client.close()
-        await self.stream_client.aclose()
+        await self.stream_api_client.close()
 
     def raw(self) -> tuple[InvocationsApi, ModelsApi, SessionsApi]:
         return self.invocations, self.models, self.sessions
@@ -237,6 +275,10 @@ class Client:
                 tools=tools or None,
                 output=StructuredOutputSpec(schema=request.spec.output_schema) if request.spec.output_schema else None,
             ),
+            provider_credentials=[
+                _provider_credential_selection(selection)
+                for selection in request.provider_credentials
+            ] or None,
         )
         acknowledgement = await self._replay_safe(lambda: self.invocations.create_invocation(body))
         return InvocationHandle(
@@ -366,13 +408,21 @@ class Client:
             )
         )
 
+    async def stream_session(
+        self,
+        session_id: str,
+        reducer: Reducer,
+        consume: Callable[[StreamEvent, ReducedSnapshot], Awaitable[None] | None],
+    ) -> None:
+        await stream_session(self, session_id, reducer, consume)
+
     async def _replay_safe(self, operation: Callable[[], Awaitable[Any]]) -> Any:
         last_error: NvokenError | None = None
         for attempt in range(1, self.retry.max_attempts + 1):
             try:
                 return await operation()
             except asyncio.CancelledError:
-                raise NvokenError("timeout", "local wait or request was cancelled")
+                raise
             except (ApiException, httpx.HTTPError) as error:
                 last_error = normalize_error(error)
                 if attempt == self.retry.max_attempts or not retryable(last_error):
@@ -396,6 +446,36 @@ def _model_provider(provider: str) -> ModelProvider:
             "validation",
             "model provider must be anthropic or openai",
         ) from error
+
+
+def _provider_credential_selection(
+    selection: ProviderCredentialSelection,
+) -> InvocationProviderCredentialSelection:
+    provider = _model_provider(selection.provider)
+    if selection.source == "caller_ephemeral":
+        if not selection.api_key:
+            raise NvokenError(
+                "validation",
+                "caller_ephemeral provider credentials require api_key",
+            )
+        return InvocationProviderCredentialSelection(
+            InvocationProviderCredentialSelectionOneOf(
+                provider=provider,
+                source="caller_ephemeral",
+                credential=ProviderStaticCredential(api_key=selection.api_key),
+            )
+        )
+    if selection.api_key is not None:
+        raise NvokenError(
+            "validation",
+            f"{selection.source} provider credentials cannot include api_key",
+        )
+    return InvocationProviderCredentialSelection(
+        InvocationProviderCredentialSelectionOneOf1(
+            provider=provider,
+            source=selection.source,
+        )
+    )
 
 
 @dataclass
@@ -431,8 +511,10 @@ class InvocationHandle:
                     return invocation
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, max_poll_interval)
-        except (asyncio.CancelledError, TimeoutError) as error:
-            raise NvokenError("timeout", "local wait timed out or was cancelled") from error
+        except asyncio.CancelledError:
+            raise
+        except TimeoutError as error:
+            raise NvokenError("timeout", "local wait timed out") from error
 
     async def result(self) -> InvocationResult:
         """Read the composed InvocationResult at any status: the
@@ -495,8 +577,10 @@ class InvocationHandle:
                     return invocation
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, max_poll_interval)
-        except (asyncio.CancelledError, TimeoutError) as error:
-            raise NvokenError("timeout", "local wait timed out or was cancelled") from error
+        except asyncio.CancelledError:
+            raise
+        except TimeoutError as error:
+            raise NvokenError("timeout", "local wait timed out") from error
 
     async def wait_for_result(
         self,
@@ -563,6 +647,7 @@ def normalize_error(error: ApiException | httpx.HTTPError) -> NvokenError:
 async def normalize_httpx_response(response: httpx.Response) -> NvokenError:
     body: dict[str, Any] = {}
     try:
+        await response.aread()
         body = response.json()
     except (json.JSONDecodeError, UnicodeDecodeError):
         pass

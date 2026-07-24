@@ -65,12 +65,47 @@ struct ReplaySafeRetry {
 
 #[derive(Clone)]
 struct ResponseMetadataObserver {
-    metadata: Arc<Mutex<HashMap<String, ResponseMetadata>>>,
+    metadata: ResponseMetadataStore,
 }
 
 #[derive(Debug, Clone)]
 struct ResponseMetadata {
     retry_after: Option<Duration>,
+}
+
+#[derive(Clone, Default)]
+struct ResponseMetadataStore {
+    metadata: Arc<Mutex<HashMap<String, ResponseMetadata>>>,
+}
+
+impl ResponseMetadataStore {
+    fn observe(&self, status: StatusCode, headers: &reqwest::header::HeaderMap) {
+        let request_id = headers
+            .get("x-request-id")
+            .and_then(|value| value.to_str().ok());
+        let Some(request_id) = request_id else {
+            return;
+        };
+        let Ok(mut metadata) = self.metadata.lock() else {
+            return;
+        };
+        if status.is_client_error() || status.is_server_error() {
+            let retry_after = headers
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .and_then(parse_retry_after);
+            metadata.insert(request_id.to_owned(), ResponseMetadata { retry_after });
+        } else {
+            metadata.remove(request_id);
+        }
+    }
+
+    fn take(&self, request_id: &str) -> Option<ResponseMetadata> {
+        self.metadata
+            .lock()
+            .ok()
+            .and_then(|mut metadata| metadata.remove(request_id))
+    }
 }
 
 #[async_trait::async_trait]
@@ -83,22 +118,7 @@ impl Middleware for ResponseMetadataObserver {
     ) -> reqwest_middleware::Result<Response> {
         let result = next.run(request, extensions).await;
         if let Ok(response) = &result {
-            if response.status().is_client_error() || response.status().is_server_error() {
-                let request_id = response
-                    .headers()
-                    .get("x-request-id")
-                    .and_then(|value| value.to_str().ok());
-                if let Some(request_id) = request_id {
-                    let retry_after = response
-                        .headers()
-                        .get(reqwest::header::RETRY_AFTER)
-                        .and_then(|value| value.to_str().ok())
-                        .and_then(parse_retry_after);
-                    if let Ok(mut metadata) = self.metadata.lock() {
-                        metadata.insert(request_id.to_owned(), ResponseMetadata { retry_after });
-                    }
-                }
-            }
+            self.metadata.observe(response.status(), response.headers());
         }
         result
     }
@@ -223,6 +243,7 @@ pub struct InvokeRequest {
     pub idempotency_key: Option<String>,
     pub input: String,
     pub spec: ExecutionSpec,
+    pub provider_credentials: Vec<ProviderCredentialSelection>,
 }
 
 impl InvokeRequest {
@@ -241,8 +262,23 @@ impl InvokeRequest {
                 tools: Vec::new(),
                 output_schema: None,
             },
+            provider_credentials: Vec::new(),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProviderCredentialSelection {
+    pub provider: String,
+    pub source: ProviderCredentialSource,
+}
+
+#[derive(Debug, Clone)]
+pub enum ProviderCredentialSource {
+    CallerEphemeral { api_key: String },
+    AccountByok,
+    TenantByok,
+    Platform,
 }
 
 #[derive(Debug, Clone)]
@@ -289,7 +325,7 @@ pub struct MessageListOptions {
 pub struct Client {
     pub(crate) configuration: Arc<apis::configuration::Configuration>,
     pub(crate) stream_client: reqwest::Client,
-    response_metadata: Arc<Mutex<HashMap<String, ResponseMetadata>>>,
+    response_metadata: ResponseMetadataStore,
 }
 
 impl Client {
@@ -314,7 +350,7 @@ impl Client {
             .user_agent("nvoken-rust/0.1.0")
             .build()
             .map_err(|error| NvokenError::transport(error.to_string()))?;
-        let response_metadata = Arc::new(Mutex::new(HashMap::new()));
+        let response_metadata = ResponseMetadataStore::default();
         let middleware = MiddlewareClientBuilder::new(transport.clone())
             .with(ResponseMetadataObserver {
                 metadata: response_metadata.clone(),
@@ -398,6 +434,22 @@ impl Client {
         body.tenant_key = request.tenant_key;
         body.session_id = request.session_id;
         body.session_key = request.session_key;
+        if request.provider_credentials.len() > 1 {
+            return Err(NvokenError::validation(
+                "at most one provider credential selection is supported",
+            ));
+        }
+        body.provider_credentials = if request.provider_credentials.is_empty() {
+            None
+        } else {
+            Some(
+                request
+                    .provider_credentials
+                    .into_iter()
+                    .map(provider_credential_selection)
+                    .collect::<Result<Vec<_>, _>>()?,
+            )
+        };
         let acknowledgement = apis::invocations_api::create_invocation(&self.configuration, body)
             .await
             .map_err(|error| self.normalize_generated_error(error))?;
@@ -571,13 +623,56 @@ impl Client {
     {
         let mut normalized = normalize_generated_error(error);
         if let Some(request_id) = normalized.request_id.as_ref() {
-            if let Ok(mut metadata) = self.response_metadata.lock() {
-                if let Some(observed) = metadata.remove(request_id) {
-                    normalized.retry_after = observed.retry_after;
-                }
+            if let Some(observed) = self.response_metadata.take(request_id) {
+                normalized.retry_after = observed.retry_after;
             }
         }
         normalized
+    }
+}
+
+fn provider_credential_selection(
+    selection: ProviderCredentialSelection,
+) -> Result<models::InvocationProviderCredentialSelection, NvokenError> {
+    let provider = model_provider(&selection.provider)?;
+    match selection.source {
+        ProviderCredentialSource::CallerEphemeral { api_key } => {
+            if api_key.is_empty() {
+                return Err(NvokenError::validation(
+                    "caller-ephemeral provider credentials require an API key",
+                ));
+            }
+            Ok(
+                models::InvocationProviderCredentialSelection::InvocationProviderCredentialSelectionOneOf(
+                    Box::new(models::InvocationProviderCredentialSelectionOneOf::new(
+                        provider,
+                        models::invocation_provider_credential_selection_one_of::Source::SourceCallerEphemeral,
+                        models::ProviderStaticCredential::new(api_key),
+                    )),
+                ),
+            )
+        }
+        source => {
+            let source = match source {
+                ProviderCredentialSource::AccountByok => {
+                    models::invocation_provider_credential_selection_one_of_1::Source::AccountByok
+                }
+                ProviderCredentialSource::TenantByok => {
+                    models::invocation_provider_credential_selection_one_of_1::Source::TenantByok
+                }
+                ProviderCredentialSource::Platform => {
+                    models::invocation_provider_credential_selection_one_of_1::Source::Platform
+                }
+                ProviderCredentialSource::CallerEphemeral { .. } => unreachable!(),
+            };
+            Ok(
+                models::InvocationProviderCredentialSelection::InvocationProviderCredentialSelectionOneOf1(
+                    Box::new(models::InvocationProviderCredentialSelectionOneOf1::new(
+                        provider, source,
+                    )),
+                ),
+            )
+        }
     }
 }
 
@@ -724,18 +819,24 @@ impl InvocationHandle {
     ) -> Result<models::InvocationResult, NvokenError> {
         let invocation = self.wait(timeout).await?;
         if invocation.status != models::InvocationStatus::Completed {
-            return Err(NvokenError::response(
-                StatusCode::CONFLICT,
-                json!({
-                    "code": invocation.error.as_ref().map(|value| value.code.clone()),
-                    "message": format!(
-                        "Invocation {} ended with status {}",
-                        self.invocation_id,
-                        invocation.status
-                    ),
-                    "details": invocation.error.as_ref().and_then(|value| value.details.clone()),
-                }),
-            ));
+            let mut error = NvokenError::new(
+                ErrorCategory::Conflict,
+                format!(
+                    "Invocation {} ended with status {}",
+                    self.invocation_id, invocation.status
+                ),
+            );
+            error.code = invocation
+                .error
+                .as_ref()
+                .and_then(|value| serde_json::to_value(value.code).ok())
+                .and_then(|value| value.as_str().map(str::to_owned));
+            error.details = invocation
+                .error
+                .as_ref()
+                .and_then(|value| value.details.clone())
+                .map(|value| json!(value));
+            return Err(error);
         }
         self.result().await
     }
@@ -854,5 +955,63 @@ impl NvokenError {
             retry_after: None,
             details: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::header::{HeaderMap, HeaderValue, RETRY_AFTER};
+
+    #[test]
+    fn response_metadata_is_bounded_after_success_and_error_handling() {
+        let metadata = ResponseMetadataStore::default();
+        for index in 0..1_000 {
+            let request_id = format!("req_{index}");
+            let mut headers = HeaderMap::new();
+            headers.insert("x-request-id", HeaderValue::from_str(&request_id).unwrap());
+            headers.insert(RETRY_AFTER, HeaderValue::from_static("1"));
+            metadata.observe(StatusCode::TOO_MANY_REQUESTS, &headers);
+            assert_eq!(
+                metadata.take(&request_id).unwrap().retry_after,
+                Some(Duration::from_secs(1))
+            );
+        }
+        assert!(metadata.metadata.lock().unwrap().is_empty());
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-request-id", HeaderValue::from_static("req_retry"));
+        metadata.observe(StatusCode::TOO_MANY_REQUESTS, &headers);
+        metadata.observe(StatusCode::OK, &headers);
+        assert!(metadata.metadata.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn provider_credentials_map_ephemeral_and_stored_sources() {
+        let ephemeral = provider_credential_selection(ProviderCredentialSelection {
+            provider: "openai".to_owned(),
+            source: ProviderCredentialSource::CallerEphemeral {
+                api_key: "secret".to_owned(),
+            },
+        })
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(ephemeral).unwrap(),
+            json!({
+                "provider": "openai",
+                "source": "caller_ephemeral",
+                "credential": {"api_key": "secret"},
+            })
+        );
+
+        let stored = provider_credential_selection(ProviderCredentialSelection {
+            provider: "openai".to_owned(),
+            source: ProviderCredentialSource::AccountByok,
+        })
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(stored).unwrap(),
+            json!({"provider": "openai", "source": "account_byok"})
+        );
     }
 }

@@ -41,8 +41,7 @@ SDKs and the `nvoken` CLI.
   admission and execution ownership, request-bound Cloud Tasks executors,
   durable ToolCall checkpoints, and resume-from-checkpoint recovery.
 - Resumable Session streaming with durable transcript reads.
-- Validated structured output, durable client and callback tools, and remote
-  MCP server tool execution during Invocations.
+- Validated structured output and durable host and callback tools.
 - Multi-language SDKs (Go, TypeScript, Python, Rust) and the `nvoken` CLI.
 - Durable credentials and CLI device auth, with per-provider credential modes.
 - Production readiness profiles (single-daemon and Google Cloud), a readiness

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -89,6 +90,57 @@ func TestProviderCredentialLifecycleMethods(t *testing.T) {
 	}
 	if secretRequests != 2 {
 		t.Fatalf("secret requests = %d, want 2", secretRequests)
+	}
+}
+
+func TestInvokeProviderCredentialSelections(t *testing.T) {
+	base := InvokeRequest{
+		AgentKey:       "support",
+		IdempotencyKey: "credential-selection",
+		Input:          "hello",
+		Spec: ExecutionSpec{
+			Model: Model{Provider: "openai", ID: "gpt-test"},
+		},
+	}
+
+	for _, test := range []struct {
+		name      string
+		selection ProviderCredentialSelection
+		want      string
+	}{
+		{
+			name: "caller ephemeral",
+			selection: ProviderCredentialSelection{
+				Provider: "openai",
+				Source:   ProviderCredentialCallerEphemeral,
+				APIKey:   "secret",
+			},
+			want: `"provider_credentials":[{"credential":{"api_key":"secret"},"provider":"openai","source":"caller_ephemeral"}]`,
+		},
+		{
+			name: "stored account BYOK",
+			selection: ProviderCredentialSelection{
+				Provider: "openai",
+				Source:   ProviderCredentialAccountBYOK,
+			},
+			want: `"provider_credentials":[{"provider":"openai","source":"account_byok"}]`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := base
+			request.ProviderCredentials = []ProviderCredentialSelection{test.selection}
+			generatedRequest, err := request.generated()
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal(generatedRequest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(encoded), test.want) {
+				t.Fatalf("generated request = %s, want fragment %s", encoded, test.want)
+			}
+		})
 	}
 }
 

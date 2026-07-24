@@ -14,6 +14,20 @@ NVOKEN_BASE_URL=http://localhost:8080 NVOKEN_API_KEY=... \
 The SDK is a separate Go module and does not bring the daemon's database,
 provider, or deployment dependencies into host applications.
 
+Select a stored or one-turn credential source without dropping to generated
+types:
+
+```go
+request.ProviderCredentials = []nvoken.ProviderCredentialSelection{{
+	Provider: "openai",
+	Source:   nvoken.ProviderCredentialCallerEphemeral,
+	APIKey:   providerKey,
+}}
+```
+
+Use `ProviderCredentialAccountBYOK`, `ProviderCredentialTenantBYOK`, or
+`ProviderCredentialPlatform` for nonsecret stored selections.
+
 Discover models through the same facade:
 
 ```go

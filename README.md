@@ -19,9 +19,9 @@
 
 nvoken is a lightweight, open-source agent harness-as-a-service and AI gateway.
 Your app sends an agent spec and the input; nvoken runs the whole agent turn.
-The design covers foundational harness features including streaming,
-checkpoints, durable waits, steering, human-in-the-loop interactions, and more;
-the repository is still implementing its first durable slice.
+The current Runtime implements durable turns, streaming, checkpoints, durable
+waits, and host and callback tools. Remote MCP tools, steering, and broader
+human-in-the-loop workflows remain deferred.
 
 Building a complete agentic experience in your app's UI is non-trivial. nvoken
 allows you to focus on the application-specific portions of that problem, rather
@@ -69,8 +69,10 @@ the local evaluation path.
 > generation deltas. Durable builtin checkpoints and crash continuation resume
 > a lost execution owner from its last committed boundary, and durable host
 > and signed callback tools can safely continue parked work. Generated Go,
-> TypeScript, Python, and Rust SDKs wrap that surface with workflow helpers;
-> the Go `nvoken` client CLI uses the same SDK contract.
+> TypeScript, Python, and Rust clients expose the complete transport surface.
+> Handwritten facades add durable handles and reliability helpers in all four;
+> the high-level Agent workflow and bound Session API are TypeScript-only
+> today. The Go `nvoken` client CLI uses the same SDK contract.
 > A reproducible [Google Cloud Run paved deployment](deploy/google-cloud/README.md)
 > packages this slice with private Cloud SQL, Secret Manager, and an explicit
 > migration job.

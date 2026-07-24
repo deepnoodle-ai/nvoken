@@ -74,14 +74,30 @@ type ExecutionSpec struct {
 }
 
 type InvokeRequest struct {
-	AgentKey       string
-	TenantKey      *string
-	SessionID      *string
-	SessionKey     *string
-	IdempotencyKey string
-	Input          string
-	Spec           ExecutionSpec
+	AgentKey            string
+	TenantKey           *string
+	SessionID           *string
+	SessionKey          *string
+	IdempotencyKey      string
+	Input               string
+	Spec                ExecutionSpec
+	ProviderCredentials []ProviderCredentialSelection
 }
+
+type ProviderCredentialSelection struct {
+	Provider string
+	Source   ProviderCredentialSource
+	APIKey   string
+}
+
+type ProviderCredentialSource string
+
+const (
+	ProviderCredentialCallerEphemeral ProviderCredentialSource = "caller_ephemeral"
+	ProviderCredentialAccountBYOK     ProviderCredentialSource = "account_byok"
+	ProviderCredentialTenantBYOK      ProviderCredentialSource = "tenant_byok"
+	ProviderCredentialPlatform        ProviderCredentialSource = "platform"
+)
 
 type ListProviderCredentialsOptions struct {
 	Provider  *ModelProvider
@@ -200,6 +216,45 @@ func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
 	}
 	if r.SessionKey != nil {
 		wire["session_key"] = *r.SessionKey
+	}
+	if len(r.ProviderCredentials) > 1 {
+		return generated.CreateInvocationRequest{}, fmt.Errorf(
+			"at most one provider credential selection is supported",
+		)
+	}
+	if len(r.ProviderCredentials) == 1 {
+		selection := r.ProviderCredentials[0]
+		if selection.Provider == "" {
+			return generated.CreateInvocationRequest{}, fmt.Errorf(
+				"provider credential selection provider is required",
+			)
+		}
+		item := map[string]any{
+			"provider": selection.Provider,
+			"source":   selection.Source,
+		}
+		switch selection.Source {
+		case ProviderCredentialCallerEphemeral:
+			if selection.APIKey == "" {
+				return generated.CreateInvocationRequest{}, fmt.Errorf(
+					"caller-ephemeral provider credentials require an API key",
+				)
+			}
+			item["credential"] = map[string]any{"api_key": selection.APIKey}
+		case ProviderCredentialAccountBYOK, ProviderCredentialTenantBYOK, ProviderCredentialPlatform:
+			if selection.APIKey != "" {
+				return generated.CreateInvocationRequest{}, fmt.Errorf(
+					"%s provider credentials cannot include an API key",
+					selection.Source,
+				)
+			}
+		default:
+			return generated.CreateInvocationRequest{}, fmt.Errorf(
+				"unsupported provider credential source %q",
+				selection.Source,
+			)
+		}
+		wire["provider_credentials"] = []map[string]any{item}
 	}
 	encoded, err := json.Marshal(wire)
 	if err != nil {

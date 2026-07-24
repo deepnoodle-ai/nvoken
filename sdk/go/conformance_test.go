@@ -64,6 +64,11 @@ func TestConformance(t *testing.T) {
 				ID:       "gpt-test",
 			},
 		},
+		ProviderCredentials: []ProviderCredentialSelection{{
+			Provider: "openai",
+			Source:   ProviderCredentialCallerEphemeral,
+			APIKey:   "conformance-secret",
+		}},
 	}
 	handle, err := client.Invoke(context.Background(), request)
 	if err != nil {
@@ -161,15 +166,33 @@ func TestConformance(t *testing.T) {
 		t.Fatalf("unexpected Invocation stream events: %#v", eventTypes)
 	}
 	var serverState struct {
-		AdmissionAttempts int    `json:"admission_attempts"`
-		ResultAttempts    int    `json:"result_attempts"`
-		CancelAttempts    int    `json:"cancel_attempts"`
-		StreamAttempts    int    `json:"stream_attempts"`
-		LastEventID       string `json:"last_event_id"`
+		AdmissionAttempts    int    `json:"admission_attempts"`
+		CredentialAdmissions int    `json:"credential_admissions"`
+		ResultAttempts       int    `json:"result_attempts"`
+		CancelAttempts       int    `json:"cancel_attempts"`
+		StreamAttempts       int    `json:"stream_attempts"`
+		LastEventID          string `json:"last_event_id"`
 	}
 	readJSON(t, baseURL+"/__test/state", &serverState)
-	if serverState.AdmissionAttempts != 2 || serverState.ResultAttempts != 2 || serverState.CancelAttempts != 1 || serverState.StreamAttempts != 3 || serverState.LastEventID != "cursor-1" {
+	if serverState.AdmissionAttempts != 2 || serverState.CredentialAdmissions != 2 || serverState.ResultAttempts != 2 || serverState.CancelAttempts != 1 || serverState.StreamAttempts != 3 || serverState.LastEventID != "cursor-1" {
 		t.Fatalf("fault server did not observe replay semantics: %#v", serverState)
+	}
+}
+
+func TestTransportErrorDistinguishesCancellationAndDeadline(t *testing.T) {
+	cancelledContext, cancel := context.WithCancel(context.Background())
+	cancel()
+	var cancelled *Error
+	if err := transportError(cancelledContext.Err()); !errors.As(err, &cancelled) || cancelled.Category != ErrorCancelled {
+		t.Fatalf("context cancellation category = %#v, want %q", err, ErrorCancelled)
+	}
+
+	deadlineContext, stop := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer stop()
+	<-deadlineContext.Done()
+	var timeout *Error
+	if err := transportError(deadlineContext.Err()); !errors.As(err, &timeout) || timeout.Category != ErrorTimeout {
+		t.Fatalf("context deadline category = %#v, want %q", err, ErrorTimeout)
 	}
 }
 

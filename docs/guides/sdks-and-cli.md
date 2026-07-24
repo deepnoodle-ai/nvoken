@@ -4,29 +4,34 @@ For the fastest TypeScript proof, use the packaged command in
 [Run nvoken locally](run-locally.md). This page is the package, CLI, generation,
 and release reference for integrators and contributors.
 
-nvoken ships supported workflow facades for Go, TypeScript, Python, and Rust.
-They are generated from `openapi/runtime.yaml`, then wrapped with the durable
-semantics an ordinary host needs: exact-request admission replay, typed errors,
-bounded polling, cursor pagination, resumable Session SSE, host ToolCall
-result replay, callback verification, and model discovery.
+nvoken generates complete Runtime clients for Go, TypeScript, Python, and Rust
+from `openapi/runtime.yaml`, then adds handwritten reliability helpers. The
+common baseline is exact-request admission replay, durable Invocation handles,
+typed errors, bounded polling, Invocation SSE, host ToolCall result replay,
+callback verification, model discovery, and a raw generated-client escape
+hatch. Higher-level workflow coverage is intentionally uneven today.
 
-| Package | Supported facade | Raw generated client |
-| --- | --- | --- |
-| Go | `sdk/go` package `nvoken` | `Client.Raw()` |
-| TypeScript | `Client` from `@deepnoodle/nvoken` | `client.raw()` |
-| Python | `nvoken.Client` | `nvoken_generated` |
-| Rust | `nvoken::Client` | `nvoken::apis` |
+| Package | Supported handwritten level | Session stream | Raw generated client |
+| --- | --- | --- | --- |
+| Go | `Client` + `InvocationHandle` | `Client.StreamSession` | `Client.Raw()` |
+| TypeScript | `Client` + high-level `Agent` and bound Session | `streamSession` | `client.raw()` |
+| Python | async `Client` + `InvocationHandle` | `Client.stream_session` | `nvoken_generated` |
+| Rust | `Client` + `InvocationHandle` | Generated operation only | `nvoken::apis` |
 
 Each package directory contains an executable facade-only quickstart. A local
 wait timeout or a dropped stream stops only the caller; use explicit
 `cancel` to change durable Invocation state. Keep the same idempotency key and
 request after an uncertain admission response.
 
-All four handwritten facades follow the
+All four handwritten facades follow the baseline parts of the
 [cross-language SDK surface convention](../codebase/sdk-and-cli.md#cross-language-public-convention):
 lazy Invocation handles, generated idempotency for ordinary calls, actionable
-and terminal waits, direct Invocation event streams, symmetric collection
-helpers, typed errors, and an explicit raw generated-client escape hatch.
+and terminal waits, direct Invocation event streams, typed errors, per-turn
+provider-credential selection, and an explicit raw generated-client escape
+hatch. TypeScript is currently the only high-level Agent reference facade;
+Phase 2A of the
+[API and SDK excellence proposal](../proposals/2026-07-24-api-sdk-excellence.md#phase-2a--sdk-and-cli-foundation)
+owns parity work rather than implying it already exists.
 
 The [TypeScript SDK guide](../../sdk/typescript/README.md) also covers
 actionable host-tool waits, schema-bound tool and structured-output types,

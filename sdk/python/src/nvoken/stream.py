@@ -7,7 +7,6 @@ from typing import Any, AsyncIterator, Awaitable, Callable, TYPE_CHECKING
 
 from nvoken_generated.models.invocation_change import InvocationChange
 from nvoken_generated.models.session_message import SessionMessage
-from nvoken_generated.models.stream_end_event import StreamEndEvent
 from nvoken_generated.models.transcript_update import TranscriptUpdate
 
 if TYPE_CHECKING:
@@ -59,43 +58,28 @@ class Reducer:
 
 async def stream_session(
     client: Client,
-    handle: InvocationHandle,
+    session_id: str,
     reducer: Reducer,
     consume: Callable[[StreamEvent, ReducedSnapshot], Awaitable[None] | None],
 ) -> None:
     retry = 1.0
-    if handle.session_id is None:
-        await handle.refresh()
-    if handle.session_id is None:
-        from .client import NvokenError
-        raise NvokenError("unexpected_response", "Invocation did not resolve to a Session")
     while True:
-        serialized = client.sessions._stream_session_transcript_serialize(
-            session_id=handle.session_id,
+        response = await client.stream_sessions.stream_session_transcript_without_preload_content(
+            session_id,
             cursor=None,
             last_event_id=reducer.snapshot().resume_cursor,
-            _request_auth=None,
-            _content_type=None,
-            _headers=None,
-            _host_index=0,
         )
-        method, url, headers, _, _ = serialized
-        terminal_end = False
         try:
-            async with client.stream_client.stream(method, url, headers=headers) as response:
-                if response.is_error:
-                    from .client import normalize_httpx_response
-                    raise await normalize_httpx_response(response)
-                async for event in parse_sse(response.aiter_lines()):
-                    if event.retry is not None:
-                        retry = min(event.retry, 30.0)
-                    reducer.apply(event)
-                    consumed = consume(event, reducer.snapshot())
-                    if consumed is not None:
-                        await consumed
-                    if event.type == "stream.end":
-                        end = StreamEndEvent.from_dict(event.data)
-                        terminal_end = bool(end and end.reason == "terminal")
+            if response.is_error:
+                from .client import normalize_httpx_response
+                raise await normalize_httpx_response(response)
+            async for event in parse_sse(response.aiter_lines()):
+                if event.retry is not None:
+                    retry = min(event.retry, 30.0)
+                reducer.apply(event)
+                consumed = consume(event, reducer.snapshot())
+                if consumed is not None:
+                    await consumed
         except asyncio.CancelledError:
             raise
         except Exception as error:
@@ -104,10 +88,8 @@ async def stream_session(
                 raise
             await asyncio.sleep(retry)
             continue
-        if terminal_end:
-            invocation = await handle.refresh()
-            if invocation.status in {"completed", "failed", "cancelled"}:
-                return
+        finally:
+            await response.aclose()
         await asyncio.sleep(retry)
 
 
@@ -119,37 +101,33 @@ async def stream_invocation(
     retry = 1.0
     cursor: str | None = None
     while True:
-        serialized = client.invocations._stream_invocation_serialize(
-            invocation_id=handle.invocation_id,
+        response = await client.stream_invocations.stream_invocation_without_preload_content(
+            handle.invocation_id,
             cursor=None,
             last_event_id=cursor,
-            _request_auth=None,
-            _content_type=None,
-            _headers=None,
-            _host_index=0,
         )
-        method, url, headers, _, _ = serialized
         try:
-            async with client.stream_client.stream(method, url, headers=headers) as response:
-                if response.is_error:
-                    from .client import normalize_httpx_response
-                    raise await normalize_httpx_response(response)
-                async for event in parse_sse(response.aiter_lines()):
-                    if event.retry is not None:
-                        retry = min(event.retry, 30.0)
-                    if event.id:
-                        cursor = event.id
-                    consumed = consume(event)
-                    if consumed is not None:
-                        await consumed
-                    if event.type == "invocation.result":
-                        return
+            if response.is_error:
+                from .client import normalize_httpx_response
+                raise await normalize_httpx_response(response)
+            async for event in parse_sse(response.aiter_lines()):
+                if event.retry is not None:
+                    retry = min(event.retry, 30.0)
+                if event.id:
+                    cursor = event.id
+                consumed = consume(event)
+                if consumed is not None:
+                    await consumed
+                if event.type == "invocation.result":
+                    return
         except asyncio.CancelledError:
             raise
         except Exception as error:
             from .client import NvokenError
             if isinstance(error, NvokenError):
                 raise
+        finally:
+            await response.aclose()
         await asyncio.sleep(retry)
 
 

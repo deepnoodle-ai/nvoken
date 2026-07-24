@@ -151,6 +151,11 @@ test("shared fault server semantics", async (context) => {
         additionalProperties: false,
       }),
     },
+    providerCredentials: [{
+      provider: "openai",
+      source: "caller_ephemeral",
+      credential: { apiKey: "conformance-secret" },
+    }],
   });
   assert.equal(handle.invocationId, invocationId);
   assert.equal(handle.sessionId, sessionId);
@@ -270,6 +275,7 @@ test("shared fault server semantics", async (context) => {
   assert.equal(streamedText, "world");
   const state = await fetch(`${baseUrl}/__test/state`).then((response) => response.json()) as {
     admission_attempts: number;
+    credential_admissions: number;
     result_attempts: number;
     cancel_attempts: number;
     stream_attempts: number;
@@ -277,6 +283,7 @@ test("shared fault server semantics", async (context) => {
   };
   assert.deepEqual(state, {
     admission_attempts: 2,
+    credential_admissions: 2,
     result_attempts: 2,
     cancel_attempts: 1,
     stream_attempts: 3,

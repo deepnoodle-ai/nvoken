@@ -22,14 +22,15 @@ const (
 )
 
 type state struct {
-	mu                sync.Mutex
-	admissionAttempts int
-	resultAttempts    int
-	cancelAttempts    int
-	rateLimitAttempts int
-	streamAttempts    int
-	lastEventID       string
-	onboarding        *onboardingState
+	mu                   sync.Mutex
+	admissionAttempts    int
+	resultAttempts       int
+	cancelAttempts       int
+	credentialAdmissions int
+	rateLimitAttempts    int
+	streamAttempts       int
+	lastEventID          string
+	onboarding           *onboardingState
 }
 
 func main() {
@@ -61,6 +62,7 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		s.admissionAttempts = 0
 		s.resultAttempts = 0
 		s.cancelAttempts = 0
+		s.credentialAdmissions = 0
 		s.rateLimitAttempts = 0
 		s.streamAttempts = 0
 		s.lastEventID = ""
@@ -72,11 +74,12 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		writeJSON(response, http.StatusOK, map[string]any{
-			"admission_attempts": s.admissionAttempts,
-			"result_attempts":    s.resultAttempts,
-			"cancel_attempts":    s.cancelAttempts,
-			"stream_attempts":    s.streamAttempts,
-			"last_event_id":      s.lastEventID,
+			"admission_attempts":    s.admissionAttempts,
+			"result_attempts":       s.resultAttempts,
+			"cancel_attempts":       s.cancelAttempts,
+			"credential_admissions": s.credentialAdmissions,
+			"stream_attempts":       s.streamAttempts,
+			"last_event_id":         s.lastEventID,
 		})
 		return
 	}
@@ -185,8 +188,33 @@ func catalogModel(provider, modelID, displayName string) map[string]any {
 }
 
 func (s *state) createInvocation(response http.ResponseWriter, request *http.Request) {
+	var body struct {
+		ProviderCredentials []struct {
+			Provider   string `json:"provider"`
+			Source     string `json:"source"`
+			Credential struct {
+				APIKey string `json:"api_key"`
+			} `json:"credential"`
+		} `json:"provider_credentials"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+		writeError(response, http.StatusBadRequest, "invalid_request", "invalid conformance admission")
+		return
+	}
+	if len(body.ProviderCredentials) > 0 {
+		if len(body.ProviderCredentials) != 1 ||
+			body.ProviderCredentials[0].Provider != "openai" ||
+			body.ProviderCredentials[0].Source != "caller_ephemeral" ||
+			body.ProviderCredentials[0].Credential.APIKey != "conformance-secret" {
+			writeError(response, http.StatusBadRequest, "invalid_request", "provider credentials did not round-trip")
+			return
+		}
+	}
 	s.mu.Lock()
 	s.admissionAttempts++
+	if len(body.ProviderCredentials) == 1 {
+		s.credentialAdmissions++
+	}
 	attempt := s.admissionAttempts
 	s.mu.Unlock()
 	if attempt == 1 && disconnect(response) {
@@ -256,6 +284,8 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 	switch remainder {
 	case "conflict":
 		writeError(response, http.StatusConflict, "idempotency_conflict", "request conflicts with durable state")
+	case "failed":
+		writeJSON(response, http.StatusOK, invocationWithID("failed", "failed"))
 	case "rate-limit":
 		s.mu.Lock()
 		s.rateLimitAttempts++

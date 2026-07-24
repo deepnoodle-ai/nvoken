@@ -117,6 +117,22 @@ and key on ambiguous retries. The key is exposed as `handle.idempotencyKey`.
 Supply `idempotencyKey` yourself only when the application needs to reproduce
 the same logical admission across a process boundary.
 
+Choose a per-turn provider credential on the Agent or an individual invoke.
+Only `caller_ephemeral` carries secret material:
+
+```ts
+const agent = client.agent({
+  agentKey: "support",
+  providerCredentials: [{
+    provider: "openai",
+    source: "caller_ephemeral",
+    credential: { apiKey: providerKey },
+  }],
+});
+```
+
+Stored nonsecret selections use `account_byok`, `tenant_byok`, or `platform`.
+
 ## Multiple turns
 
 Bind a Session once and use it like a chat:

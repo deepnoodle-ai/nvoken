@@ -83,7 +83,8 @@ export class Reducer {
     for (const change of update.invocationChanges) {
       this.changes.set(`${change.invocationId}:${change.revision}`, change);
     }
-    this.cursor = event.id ?? update.resumeCursor ?? this.cursor;
+    const cursor = event.id || update.resumeCursor;
+    if (cursor) this.cursor = cursor;
   }
 
   snapshot(): ReducedSnapshot {

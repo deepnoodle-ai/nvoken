@@ -7,7 +7,8 @@ use http::HeaderMap;
 use nvoken::{
     deduplicate_callback_result, verify_callback, CallbackResultStore, Client, ErrorCategory,
     ExecutionSpec, InvokeRequest, ListInvocationsOptions, ListModelsOptions, MessageListOptions,
-    Model, Reducer, RetryPolicy, StreamEvent, ToolResult,
+    Model, ProviderCredentialSelection, ProviderCredentialSource, Reducer, RetryPolicy,
+    StreamEvent, ToolResult,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -83,6 +84,12 @@ async fn shared_fault_server_semantics() {
                 tools: Vec::new(),
                 output_schema: None,
             },
+            provider_credentials: vec![ProviderCredentialSelection {
+                provider: "openai".to_owned(),
+                source: ProviderCredentialSource::CallerEphemeral {
+                    api_key: "conformance-secret".to_owned(),
+                },
+            }],
         })
         .await
         .unwrap();
@@ -174,6 +181,10 @@ async fn shared_fault_server_semantics() {
     );
     assert_error(&client, "rate-limit-always", ErrorCategory::RateLimit, 429).await;
     assert_error(&client, "server-error", ErrorCategory::Server, 503).await;
+    let mut failed = client.invocation("failed");
+    let local_error = failed.wait_for_result(None).await.unwrap_err();
+    assert_eq!(local_error.category, ErrorCategory::Conflict);
+    assert_eq!(local_error.status, None);
 
     let stream_handle = client.invocation(INVOCATION_ID);
     let stream = stream_handle.stream();
@@ -199,6 +210,7 @@ async fn shared_fault_server_semantics() {
         .await
         .unwrap();
     assert_eq!(state.admission_attempts, 2);
+    assert_eq!(state.credential_admissions, 2);
     assert_eq!(state.result_attempts, 2);
     assert_eq!(state.cancel_attempts, 1);
     assert_eq!(state.stream_attempts, 3);
@@ -278,6 +290,7 @@ async fn assert_error(client: &Client, id: &str, category: ErrorCategory, status
 #[derive(Deserialize)]
 struct ServerState {
     admission_attempts: u32,
+    credential_admissions: u32,
     result_attempts: u32,
     cancel_attempts: u32,
     stream_attempts: u32,

@@ -20,6 +20,7 @@ const (
 	ErrorRateLimit          ErrorCategory = "rate_limit"
 	ErrorServer             ErrorCategory = "server"
 	ErrorTransport          ErrorCategory = "transport"
+	ErrorCancelled          ErrorCategory = "cancelled"
 	ErrorTimeout            ErrorCategory = "timeout"
 	ErrorUnexpectedResponse ErrorCategory = "unexpected_response"
 )
@@ -97,7 +98,7 @@ func transportError(err error) error {
 		return &Error{Category: ErrorTimeout, Message: "local wait or request timed out", Cause: err}
 	}
 	if errors.Is(err, context.Canceled) {
-		return &Error{Category: ErrorTimeout, Message: "local wait or request was cancelled", Cause: err}
+		return &Error{Category: ErrorCancelled, Message: "local wait or request was cancelled", Cause: err}
 	}
 	return &Error{Category: ErrorTransport, Message: "nvoken transport failed", Cause: err}
 }

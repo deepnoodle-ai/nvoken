@@ -13,6 +13,7 @@ pub use callback::{
 pub use client::{
     Client, ErrorCategory, ExecutionSpec, InvocationHandle, InvokeRequest, Limits,
     ListInvocationsOptions, ListModelsOptions, ListSessionsOptions, MessageListOptions, Model,
-    NvokenError, RetryPolicy, Tool, ToolMode, ToolResult,
+    NvokenError, ProviderCredentialSelection, ProviderCredentialSource, RetryPolicy, Tool,
+    ToolMode, ToolResult,
 };
 pub use stream::{ReducedSnapshot, Reducer, StreamEvent};

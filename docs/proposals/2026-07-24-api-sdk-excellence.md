@@ -1141,29 +1141,37 @@ behavior that exists in the released repository.
 
 **Acceptance gate:**
 
-- [ ] **AC-0.1 (`EX-0.1`):** Cancelling Python `_replay_safe`, `wait`, or
+- [x] **AC-0.1 (`EX-0.1`):** Cancelling Python `_replay_safe`, `wait`, or
   `wait_for_action` propagates `asyncio.CancelledError`; it is never converted
   to an SDK timeout, and a conformance test proves the behavior.
-- [ ] **AC-0.2 (`EX-0.1`):** Python Session streaming accepts a Session ID,
+- [x] **AC-0.2 (`EX-0.1`):** Python Session streaming accepts a Session ID,
   follows the Session beyond one Invocation, uses a supported public generated
   operation seam, and retains only durable non-empty resume cursors.
-- [ ] **AC-0.3 (`EX-0.2`):** Rust reducer fixtures prove an empty or ephemeral
+- [x] **AC-0.3 (`EX-0.2`):** Rust reducer fixtures prove an empty or ephemeral
   event ID cannot overwrite the last durable cursor, including after reconnect.
-- [ ] **AC-0.4 (`EX-0.2`):** Rust response metadata is removed after both
+- [x] **AC-0.4 (`EX-0.2`):** Rust response metadata is removed after both
   matched success and error handling, and a bounded repeated-error test shows
   the observer does not grow one retained entry per request.
-- [ ] **AC-0.5 (`EX-0.2`):** A locally detected Rust terminal-state error has no
+- [x] **AC-0.5 (`EX-0.2`):** A locally detected Rust terminal-state error has no
   fabricated HTTP status; callers can distinguish it from a wire `409`.
-- [ ] **AC-0.6 (`EX-0.3`):** Go `context.Canceled` maps to `cancelled`, while an
+- [x] **AC-0.6 (`EX-0.3`):** Go `context.Canceled` maps to `cancelled`, while an
   actual deadline maps to `timeout`, with tests covering both.
-- [ ] **AC-0.7 (`EX-0.3`):** Equivalent Go, Python, Rust, and TypeScript facade
+- [x] **AC-0.7 (`EX-0.3`):** Equivalent Go, Python, Rust, and TypeScript facade
   admissions can select caller-ephemeral or stored per-turn provider
   credentials without using a generated transport escape hatch.
-- [ ] **AC-0.8 (`EX-0.4`):** No README, guide, release note, or comparison table
+- [x] **AC-0.8 (`EX-0.4`):** No README, guide, release note, or comparison table
   says nvoken executes remote MCP tools until Phase 2B is complete; historical
   release notes state what those releases actually contained.
-- [ ] **AC-0.9 (`EX-0.5`):** `make check` and `make sdk-check` pass with the new
+- [x] **AC-0.9 (`EX-0.5`):** `make check` and `make sdk-check` pass with the new
   cancellation, cursor, metadata, local-error, and credential fixtures.
+
+**Completion evidence (2026-07-24):** `make check` and `make sdk-check` pass.
+The shared conformance server asserts credential-bearing admissions in every
+SDK; `sdk/conformance/fixtures/reducer.json` covers empty and ephemeral cursor
+IDs; focused Python, Go, and Rust tests cover cancellation, Session continuity,
+metadata retention, and locally created terminal errors. README, guides, SDK
+READMEs, roadmap, product-direction labeling, and historical release notes were
+reconciled against the implemented surface.
 
 ### Phase 1 — pre-1.0 contract stabilization
 
