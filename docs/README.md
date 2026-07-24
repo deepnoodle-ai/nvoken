@@ -23,6 +23,7 @@ The rest of this directory is organized by document type:
 - [product/](product/) — high level product definition and overview
 - [design/](design/) — the governing design packet: claims register, vision, architecture, API contract, decision log
 - [prds/](prds/) — product requirement documents
+- [proposals/](proposals/) — decision-ready proposals for contract, SDK, and product changes
 - [../openapi/runtime.yaml](../openapi/runtime.yaml) and [../openapi/identity.yaml](../openapi/identity.yaml) — focused Runtime and identity contracts
 - [guides/](guides/README.md) — task-oriented paths grouped into Try,
   Integrate, and Operate
@@ -37,5 +38,5 @@ The rest of this directory is organized by document type:
 
 Conventions:
 
-- Date-stamp research and review documents: `YYYY-MM-DD-title.md`.
+- Date-stamp research, review, and proposal documents: `YYYY-MM-DD-title.md`.
 - The repo root `README.md` stays a crisp distillation; depth belongs here.
