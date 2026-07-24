@@ -14,16 +14,21 @@ import httpx
 
 from nvoken_generated.api.invocations_api import InvocationsApi
 from nvoken_generated.api.models_api import ModelsApi
+from nvoken_generated.api.provider_credentials_api import ProviderCredentialsApi
 from nvoken_generated.api.sessions_api import SessionsApi
 from nvoken_generated.api_client import ApiClient
 from nvoken_generated.configuration import Configuration
 from nvoken_generated.exceptions import ApiException
-from nvoken_generated.models.callback_target import CallbackTarget
+from nvoken_generated.models.callback_target import CallbackTarget as GeneratedCallbackTarget
 from nvoken_generated.models.callback_tool_spec import CallbackToolSpec
+from nvoken_generated.models.create_provider_credential_request import (
+    CreateProviderCredentialRequest,
+)
 from nvoken_generated.models.host_tool_spec import HostToolSpec
 from nvoken_generated.models.create_invocation_request import CreateInvocationRequest
 from nvoken_generated.models.inline_execution_spec import InlineExecutionSpec
 from nvoken_generated.models.invocation import Invocation
+from nvoken_generated.models.invocation_change import InvocationChange
 from nvoken_generated.models.invocation_limit_request import InvocationLimitRequest
 from nvoken_generated.models.invocation_input import InvocationInput
 from nvoken_generated.models.invocation_list import InvocationList
@@ -41,7 +46,13 @@ from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.model_selection import ModelSelection
 from nvoken_generated.models.model_descriptor import ModelDescriptor
 from nvoken_generated.models.model_list import ModelList
+from nvoken_generated.models.provider_credential import ProviderCredential
+from nvoken_generated.models.provider_credential_list import ProviderCredentialList
+from nvoken_generated.models.provider_credential_scope import ProviderCredentialScope
 from nvoken_generated.models.provider_static_credential import ProviderStaticCredential
+from nvoken_generated.models.rotate_provider_credential_request import (
+    RotateProviderCredentialRequest,
+)
 from nvoken_generated.models.session import Session
 from nvoken_generated.models.session_list import SessionList
 from nvoken_generated.models.session_message import SessionMessage
@@ -53,8 +64,16 @@ from nvoken_generated.models.submit_host_tool_results_request_results_inner impo
 )
 from nvoken_generated.models.submit_host_tool_results_response import SubmitHostToolResultsResponse
 from nvoken_generated.models.tool_spec import ToolSpec as GeneratedToolSpec
+from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot
 
-from .stream import ReducedSnapshot, Reducer, StreamEvent, stream_invocation, stream_session
+from .stream import (
+    ReducedSnapshot,
+    Reducer,
+    StreamEvent,
+    iter_invocation,
+    stream_invocation,
+    stream_session,
+)
 
 ErrorCategory = Literal[
     "authentication",
@@ -105,6 +124,11 @@ class Tool:
     description: str
     input_schema: dict[str, Any]
     callback_url: str | None = None
+    handler: Callable[[Any], Awaitable[Any] | Any] | None = field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
 
 
 @dataclass(frozen=True)
@@ -159,6 +183,13 @@ class RetryPolicy:
     max_delay: float = 2.0
 
 
+@dataclass(frozen=True)
+class TranscriptDrain:
+    messages: list[SessionMessage]
+    invocation_changes: list[InvocationChange]
+    resume_cursor: str
+
+
 class _StreamingPoolManager:
     def __init__(self, client: httpx.AsyncClient) -> None:
         self.client = client
@@ -185,11 +216,14 @@ class Client:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.retry = retry
+        self._session_locks: dict[str, asyncio.Lock] = {}
+        self._background_tasks: set[asyncio.Task[Any]] = set()
         configuration = Configuration(host=self.base_url, access_token=api_key)
         configuration.discard_unknown_keys = False
         self.api_client = ApiClient(configuration)
         self.invocations = InvocationsApi(self.api_client)
         self.models = ModelsApi(self.api_client)
+        self.provider_credentials = ProviderCredentialsApi(self.api_client)
         self.sessions = SessionsApi(self.api_client)
         self.stream_client = httpx.AsyncClient(
             base_url=self.base_url,
@@ -216,8 +250,20 @@ class Client:
         await self.api_client.close()
         await self.stream_api_client.close()
 
-    def raw(self) -> tuple[InvocationsApi, ModelsApi, SessionsApi]:
-        return self.invocations, self.models, self.sessions
+    def raw(
+        self,
+    ) -> tuple[InvocationsApi, ModelsApi, ProviderCredentialsApi, SessionsApi]:
+        return (
+            self.invocations,
+            self.models,
+            self.provider_credentials,
+            self.sessions,
+        )
+
+    def agent(self, options: AgentOptions) -> Agent:
+        from .agent import Agent
+
+        return Agent(self, options)
 
     async def list_models(
         self,
@@ -240,48 +286,9 @@ class Client:
         ))
 
     async def invoke(self, request: InvokeRequest) -> InvocationHandle:
-        if not request.agent_key or not request.input:
-            raise NvokenError("validation", "agent_key and input are required")
-        idempotency_key = request.idempotency_key or f"nvoken-{uuid.uuid4()}"
+        body = self._invocation_body(request)
+        idempotency_key = body.idempotency_key
         tools: list[GeneratedToolSpec] = []
-        for tool in request.spec.tools:
-            if tool.mode == "host":
-                tools.append(GeneratedToolSpec(HostToolSpec(
-                    mode="host",
-                    name=tool.name,
-                    description=tool.description,
-                    input_schema=tool.input_schema,
-                )))
-            else:
-                if not tool.callback_url:
-                    raise NvokenError("validation", f"callback tool {tool.name} requires callback_url")
-                tools.append(GeneratedToolSpec(CallbackToolSpec(
-                    mode="callback",
-                    name=tool.name,
-                    description=tool.description,
-                    input_schema=tool.input_schema,
-                    callback=CallbackTarget(url=tool.callback_url),
-                )))
-        limits = request.spec.limits
-        body = CreateInvocationRequest(
-            agent_key=request.agent_key,
-            tenant_key=request.tenant_key,
-            session_id=request.session_id,
-            session_key=request.session_key,
-            idempotency_key=idempotency_key,
-            input=InvocationInput(request.input),
-            spec=InlineExecutionSpec(
-                instructions=request.spec.instructions,
-                model=ModelSelection(provider=request.spec.model.provider, id=request.spec.model.id),
-                limits=InvocationLimitRequest(**vars(limits)) if limits else None,
-                tools=tools or None,
-                output=StructuredOutputSpec(schema=request.spec.output_schema) if request.spec.output_schema else None,
-            ),
-            provider_credentials=[
-                _provider_credential_selection(selection)
-                for selection in request.provider_credentials
-            ] or None,
-        )
         acknowledgement = await self._replay_safe(lambda: self.invocations.create_invocation(body))
         return InvocationHandle(
             self,
@@ -292,6 +299,68 @@ class Client:
             status=acknowledgement.status,
             deduplicated=acknowledgement.deduplicated,
             deadline_at=acknowledgement.deadline_at,
+        )
+
+    def _invocation_body(self, request: InvokeRequest) -> CreateInvocationRequest:
+        if not request.agent_key or not request.input:
+            raise NvokenError("validation", "agent_key and input are required")
+        idempotency_key = request.idempotency_key or f"nvoken-{uuid.uuid4()}"
+        tools: list[GeneratedToolSpec] = []
+        for tool in request.spec.tools:
+            if tool.mode == "host":
+                if tool.callback_url:
+                    raise NvokenError(
+                        "validation",
+                        f"host tool {tool.name} cannot include callback_url",
+                    )
+                tools.append(GeneratedToolSpec(HostToolSpec(
+                    mode="host",
+                    name=tool.name,
+                    description=tool.description,
+                    input_schema=tool.input_schema,
+                )))
+            else:
+                if not tool.callback_url:
+                    raise NvokenError(
+                        "validation",
+                        f"callback tool {tool.name} requires callback_url",
+                    )
+                if tool.handler is not None:
+                    raise NvokenError(
+                        "validation",
+                        f"callback tool {tool.name} cannot include a local handler",
+                    )
+                tools.append(GeneratedToolSpec(CallbackToolSpec(
+                    mode="callback",
+                    name=tool.name,
+                    description=tool.description,
+                    input_schema=tool.input_schema,
+                    callback=GeneratedCallbackTarget(url=tool.callback_url),
+                )))
+        limits = request.spec.limits
+        return CreateInvocationRequest(
+            agent_key=request.agent_key,
+            tenant_key=request.tenant_key,
+            session_id=request.session_id,
+            session_key=request.session_key,
+            idempotency_key=idempotency_key,
+            input=InvocationInput(request.input),
+            spec=InlineExecutionSpec(
+                instructions=request.spec.instructions,
+                model=ModelSelection(
+                    provider=request.spec.model.provider,
+                    id=request.spec.model.id,
+                ),
+                limits=InvocationLimitRequest(**vars(limits)) if limits else None,
+                tools=tools or None,
+                output=StructuredOutputSpec(schema=request.spec.output_schema)
+                if request.spec.output_schema
+                else None,
+            ),
+            provider_credentials=[
+                _provider_credential_selection(selection)
+                for selection in request.provider_credentials
+            ] or None,
         )
 
     def invocation(self, invocation_id: str) -> InvocationHandle:
@@ -392,8 +461,60 @@ class Client:
             limit=limit,
         ))
 
+    async def session_items(
+        self,
+        *,
+        tenant_key: str | None = None,
+        default_tenant: bool | None = None,
+        agent_id: str | None = None,
+        session_key: str | None = None,
+        limit: int | None = None,
+    ) -> AsyncIterator[Session]:
+        cursor: str | None = None
+        while True:
+            page = await self.list_sessions(
+                tenant_key=tenant_key,
+                default_tenant=default_tenant,
+                agent_id=agent_id,
+                session_key=session_key,
+                cursor=cursor,
+                limit=limit,
+            )
+            for item in page.items:
+                yield item
+            cursor = page.next_cursor
+            if not cursor:
+                return
+
     async def get_session(self, session_id: str) -> Session:
         return await self._replay_safe(lambda: self.sessions.get_session(session_id))
+
+    async def get_session_by_key(
+        self,
+        session_key: str,
+        *,
+        tenant_key: str | None = None,
+        default_tenant: bool | None = None,
+        agent_id: str | None = None,
+    ) -> Session:
+        page = await self.list_sessions(
+            tenant_key=tenant_key,
+            default_tenant=default_tenant,
+            agent_id=agent_id,
+            session_key=session_key,
+            limit=2,
+        )
+        if not page.items:
+            raise NvokenError(
+                "not_found",
+                f"Session key {session_key!r} was not found",
+            )
+        if len(page.items) > 1:
+            raise NvokenError(
+                "conflict",
+                f"Session key {session_key!r} matched more than one Session",
+            )
+        return page.items[0]
 
     async def list_session_messages(
         self,
@@ -407,6 +528,191 @@ class Client:
                 session_id,
                 cursor=cursor,
                 limit=limit,
+            )
+        )
+
+    async def session_message_items(
+        self,
+        session_id: str,
+        *,
+        limit: int | None = None,
+    ) -> AsyncIterator[SessionMessage]:
+        cursor: str | None = None
+        while True:
+            page = await self.list_session_messages(
+                session_id,
+                cursor=cursor,
+                limit=limit,
+            )
+            for item in page.items:
+                yield item
+            cursor = page.next_cursor
+            if not cursor:
+                return
+
+    async def get_transcript_page(
+        self,
+        session_id: str,
+        *,
+        cursor: str | None = None,
+        page_token: str | None = None,
+        limit: int | None = None,
+    ) -> TranscriptSnapshot:
+        return await self._replay_safe(
+            lambda: self.sessions.get_session_transcript(
+                session_id,
+                cursor=cursor,
+                page_token=page_token,
+                limit=limit,
+            )
+        )
+
+    async def drain_transcript(
+        self,
+        session_id: str,
+        *,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> TranscriptDrain:
+        messages: list[SessionMessage] = []
+        changes: list[InvocationChange] = []
+        page_token: str | None = None
+        resume_cursor: str | None = None
+        while True:
+            page = await self.get_transcript_page(
+                session_id,
+                cursor=cursor if page_token is None else None,
+                page_token=page_token,
+                limit=limit,
+            )
+            messages.extend(page.messages)
+            changes.extend(page.invocation_changes)
+            resume_cursor = page.resume_cursor
+            page_token = page.next_page_token
+            if not page.has_more:
+                if not resume_cursor:
+                    raise NvokenError(
+                        "unexpected_response",
+                        "Transcript drain did not return a resume cursor",
+                    )
+                return TranscriptDrain(
+                    messages=messages,
+                    invocation_changes=changes,
+                    resume_cursor=resume_cursor,
+                )
+            if not page_token:
+                raise NvokenError(
+                    "unexpected_response",
+                    "Transcript page has_more without next_page_token",
+                )
+
+    async def create_provider_credential(
+        self,
+        *,
+        provider: str,
+        scope: Literal["account", "tenant"],
+        api_key: str,
+        tenant_key: str | None = None,
+        expires_at: datetime | None = None,
+        idempotency_key: str | None = None,
+    ) -> ProviderCredential:
+        body = CreateProviderCredentialRequest(
+            provider=_model_provider(provider),
+            scope=ProviderCredentialScope(scope),
+            tenant_key=tenant_key,
+            credential=ProviderStaticCredential(api_key=api_key),
+            expires_at=expires_at,
+            idempotency_key=idempotency_key or f"nvoken-{uuid.uuid4()}",
+        )
+        return await self._replay_safe(
+            lambda: self.provider_credentials.create_provider_credential(body)
+        )
+
+    async def get_provider_credential(
+        self,
+        provider_credential_id: str,
+    ) -> ProviderCredential:
+        return await self._replay_safe(
+            lambda: self.provider_credentials.get_provider_credential(
+                provider_credential_id
+            )
+        )
+
+    async def list_provider_credentials(
+        self,
+        *,
+        provider: str | None = None,
+        scope: Literal["account", "tenant"] | None = None,
+        status: str | None = None,
+        tenant_key: str | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> ProviderCredentialList:
+        return await self._replay_safe(
+            lambda: self.provider_credentials.list_provider_credentials(
+                provider=_model_provider(provider) if provider is not None else None,
+                scope=ProviderCredentialScope(scope) if scope is not None else None,
+                status=status,
+                tenant_key=tenant_key,
+                cursor=cursor,
+                limit=limit,
+            )
+        )
+
+    async def provider_credential_items(
+        self,
+        *,
+        provider: str | None = None,
+        scope: Literal["account", "tenant"] | None = None,
+        status: str | None = None,
+        tenant_key: str | None = None,
+        limit: int | None = None,
+    ) -> AsyncIterator[ProviderCredential]:
+        cursor: str | None = None
+        while True:
+            page = await self.list_provider_credentials(
+                provider=provider,
+                scope=scope,
+                status=status,
+                tenant_key=tenant_key,
+                cursor=cursor,
+                limit=limit,
+            )
+            for item in page.items:
+                yield item
+            cursor = page.next_cursor
+            if not cursor:
+                return
+
+    async def rotate_provider_credential(
+        self,
+        provider_credential_id: str,
+        *,
+        api_key: str,
+        expires_at: datetime | None = None,
+        overlap_seconds: int = 0,
+        idempotency_key: str | None = None,
+    ) -> ProviderCredential:
+        body = RotateProviderCredentialRequest(
+            credential=ProviderStaticCredential(api_key=api_key),
+            expires_at=expires_at,
+            overlap_seconds=overlap_seconds,
+            idempotency_key=idempotency_key or f"nvoken-{uuid.uuid4()}",
+        )
+        return await self._replay_safe(
+            lambda: self.provider_credentials.rotate_provider_credential(
+                provider_credential_id,
+                body,
+            )
+        )
+
+    async def revoke_provider_credential(
+        self,
+        provider_credential_id: str,
+    ) -> ProviderCredential:
+        return await self._replay_safe(
+            lambda: self.provider_credentials.revoke_provider_credential(
+                provider_credential_id
             )
         )
 
@@ -501,21 +807,34 @@ class InvocationHandle:
     async def wait(
         self,
         *,
+        until: Literal["terminal", "actionable"] | set[InvocationStatus] = "terminal",
+        timeout: float | None = None,
         min_poll_interval: float = 0.1,
         max_poll_interval: float = 2.0,
     ) -> Invocation:
+        if min_poll_interval <= 0 or max_poll_interval < min_poll_interval:
+            raise NvokenError("validation", "invalid polling interval")
+        if timeout is not None and timeout <= 0:
+            raise NvokenError("validation", "timeout must be greater than zero")
         delay = min_poll_interval
+        started_at = asyncio.get_running_loop().time()
         try:
             while True:
                 invocation = await self.refresh()
-                if invocation.status in {"completed", "failed", "cancelled"}:
+                if _wait_satisfied(invocation.status, until):
                     return invocation
+                if (
+                    timeout is not None
+                    and asyncio.get_running_loop().time() - started_at >= timeout
+                ):
+                    raise NvokenError(
+                        "timeout",
+                        f"Local wait for Invocation {self.invocation_id} timed out",
+                    )
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, max_poll_interval)
         except asyncio.CancelledError:
             raise
-        except TimeoutError as error:
-            raise NvokenError("timeout", "local wait timed out") from error
 
     async def result(self) -> InvocationResult:
         """Read the composed InvocationResult at any status: the
@@ -565,31 +884,26 @@ class InvocationHandle:
     async def wait_for_action(
         self,
         *,
+        timeout: float | None = None,
         min_poll_interval: float = 0.1,
         max_poll_interval: float = 2.0,
     ) -> Invocation:
-        delay = min_poll_interval
-        try:
-            while True:
-                invocation = await self.refresh()
-                if invocation.status == "waiting" or invocation.status in {
-                    "completed", "failed", "cancelled",
-                }:
-                    return invocation
-                await asyncio.sleep(delay)
-                delay = min(delay * 2, max_poll_interval)
-        except asyncio.CancelledError:
-            raise
-        except TimeoutError as error:
-            raise NvokenError("timeout", "local wait timed out") from error
+        return await self.wait(
+            until="actionable",
+            timeout=timeout,
+            min_poll_interval=min_poll_interval,
+            max_poll_interval=max_poll_interval,
+        )
 
     async def wait_for_result(
         self,
         *,
+        timeout: float | None = None,
         min_poll_interval: float = 0.1,
         max_poll_interval: float = 2.0,
     ) -> InvocationResult:
         invocation = await self.wait(
+            timeout=timeout,
             min_poll_interval=min_poll_interval,
             max_poll_interval=max_poll_interval,
         )
@@ -607,6 +921,20 @@ class InvocationHandle:
         consume: Callable[[StreamEvent], Awaitable[None] | None],
     ) -> None:
         await stream_invocation(self.client, self, consume)
+
+    def events(self) -> AsyncIterator[StreamEvent]:
+        return iter_invocation(self.client, self)
+
+
+def _wait_satisfied(
+    status: InvocationStatus,
+    until: Literal["terminal", "actionable"] | set[InvocationStatus],
+) -> bool:
+    if until == "terminal":
+        return status in {"completed", "failed", "cancelled"}
+    if until == "actionable":
+        return status in {"waiting", "completed", "failed", "cancelled"}
+    return status in until
 
 
 def normalize_error(error: ApiException | httpx.HTTPError) -> NvokenError:

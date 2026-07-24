@@ -5,6 +5,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -398,3 +399,187 @@ async def test_invoke_maps_ephemeral_and_stored_provider_credentials() -> None:
         "provider": "openai",
         "source": "account_byok",
     }
+
+
+@pytest.mark.asyncio
+async def test_collection_transcript_and_provider_credential_operations() -> None:
+    async with Client("http://nvoken.test", "test-key") as client:
+        session_calls: list[str | None] = []
+
+        async def list_sessions(**kwargs: Any) -> Any:
+            cursor = kwargs.get("cursor")
+            session_calls.append(cursor)
+            if cursor is None:
+                return SimpleNamespace(
+                    items=["session-1"],
+                    next_cursor="sessions-2",
+                )
+            return SimpleNamespace(items=["session-2"], next_cursor=None)
+
+        message_calls: list[str | None] = []
+
+        async def list_messages(
+            _session_id: str,
+            **kwargs: Any,
+        ) -> Any:
+            cursor = kwargs.get("cursor")
+            message_calls.append(cursor)
+            if cursor is None:
+                return SimpleNamespace(
+                    items=["message-1"],
+                    next_cursor="messages-2",
+                )
+            return SimpleNamespace(items=["message-2"], next_cursor=None)
+
+        transcript_calls: list[tuple[str | None, str | None]] = []
+
+        async def transcript(
+            _session_id: str,
+            **kwargs: Any,
+        ) -> Any:
+            cursor = kwargs.get("cursor")
+            page_token = kwargs.get("page_token")
+            transcript_calls.append((cursor, page_token))
+            if page_token is None:
+                return SimpleNamespace(
+                    messages=["message-1"],
+                    invocation_changes=[],
+                    has_more=True,
+                    resume_cursor="resume-1",
+                    next_page_token="transcript-2",
+                )
+            return SimpleNamespace(
+                messages=["message-2"],
+                invocation_changes=["change-1"],
+                has_more=False,
+                resume_cursor="resume-2",
+                next_page_token=None,
+            )
+
+        client.sessions.list_sessions = list_sessions
+        client.sessions.list_session_messages = list_messages
+        client.sessions.get_session_transcript = transcript
+
+        assert [item async for item in client.session_items()] == [
+            "session-1",
+            "session-2",
+        ]
+        assert [item async for item in client.session_message_items(SESSION_ID)] == [
+            "message-1",
+            "message-2",
+        ]
+        drained = await client.drain_transcript(SESSION_ID, cursor="resume-0")
+        assert drained.messages == ["message-1", "message-2"]
+        assert drained.invocation_changes == ["change-1"]
+        assert drained.resume_cursor == "resume-2"
+        assert session_calls == [None, "sessions-2"]
+        assert message_calls == [None, "messages-2"]
+        assert transcript_calls == [
+            ("resume-0", None),
+            (None, "transcript-2"),
+        ]
+
+        credential_calls: list[tuple[str, Any]] = []
+
+        async def create_credential(body: Any) -> Any:
+            credential_calls.append(("create", body))
+            return "created"
+
+        async def get_credential(credential_id: str) -> Any:
+            credential_calls.append(("get", credential_id))
+            return "read"
+
+        async def list_credentials(**kwargs: Any) -> Any:
+            credential_calls.append(("list", kwargs))
+            cursor = kwargs.get("cursor")
+            return SimpleNamespace(
+                items=["credential-1"] if cursor is None else ["credential-2"],
+                next_cursor="credentials-2" if cursor is None else None,
+            )
+
+        async def rotate_credential(credential_id: str, body: Any) -> Any:
+            credential_calls.append(("rotate", (credential_id, body)))
+            return "rotated"
+
+        async def revoke_credential(credential_id: str) -> Any:
+            credential_calls.append(("revoke", credential_id))
+            return "revoked"
+
+        client.provider_credentials.create_provider_credential = create_credential
+        client.provider_credentials.get_provider_credential = get_credential
+        client.provider_credentials.list_provider_credentials = list_credentials
+        client.provider_credentials.rotate_provider_credential = rotate_credential
+        client.provider_credentials.revoke_provider_credential = revoke_credential
+
+        assert await client.create_provider_credential(
+            provider="openai",
+            scope="tenant",
+            tenant_key="tenant-1",
+            api_key="secret",
+            idempotency_key="create-key",
+        ) == "created"
+        assert await client.get_provider_credential("pcrd_test") == "read"
+        assert [
+            item
+            async for item in client.provider_credential_items(provider="openai")
+        ] == ["credential-1", "credential-2"]
+        assert await client.rotate_provider_credential(
+            "pcrd_test",
+            api_key="rotated-secret",
+            idempotency_key="rotate-key",
+        ) == "rotated"
+        assert await client.revoke_provider_credential("pcrd_test") == "revoked"
+
+    create_body = credential_calls[0][1]
+    assert create_body.provider == "openai"
+    assert create_body.scope == "tenant"
+    assert create_body.tenant_key == "tenant-1"
+    assert create_body.credential.api_key == "secret"
+    assert create_body.idempotency_key == "create-key"
+    rotate_body = next(
+        value[1]
+        for operation, value in credential_calls
+        if operation == "rotate"
+    )
+    assert rotate_body.credential.api_key == "rotated-secret"
+    assert rotate_body.idempotency_key == "rotate-key"
+
+
+@pytest.mark.asyncio
+async def test_wait_controls_support_actionable_statuses_and_local_timeout() -> None:
+    class StatusClient:
+        def __init__(self, statuses: list[str]) -> None:
+            self.statuses = statuses
+
+        async def get_invocation(self, _invocation_id: str) -> Any:
+            status = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
+            return SimpleNamespace(
+                session_id=SESSION_ID,
+                agent_id="agnt_test",
+                status=status,
+                deadline_at=None,
+            )
+
+    actionable = InvocationHandle(
+        StatusClient(["queued", "waiting"]),  # type: ignore[arg-type]
+        INVOCATION_ID,
+    )
+    assert (
+        await actionable.wait(
+            until="actionable",
+            min_poll_interval=0.001,
+            max_poll_interval=0.001,
+        )
+    ).status == "waiting"
+
+    blocked = InvocationHandle(
+        StatusClient(["queued"]),  # type: ignore[arg-type]
+        INVOCATION_ID,
+    )
+    with pytest.raises(NvokenError) as timeout:
+        await blocked.wait(
+            timeout=0.001,
+            min_poll_interval=0.001,
+            max_poll_interval=0.001,
+        )
+    assert timeout.value.category == "timeout"

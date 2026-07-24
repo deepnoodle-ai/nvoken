@@ -1,7 +1,7 @@
 import asyncio
 import os
 
-from nvoken import Client, ExecutionSpec, InvokeRequest, Model
+from nvoken import AgentOptions, Client, ExecutionSpec, Model
 
 
 async def main() -> None:
@@ -9,19 +9,14 @@ async def main() -> None:
         os.getenv("NVOKEN_BASE_URL", "http://localhost:8080"),
         os.environ["NVOKEN_API_KEY"],
     ) as client:
-        handle = await client.invoke(InvokeRequest(
+        agent = client.agent(AgentOptions(
             agent_key="support",
-            input="Why was I charged twice?",
             spec=ExecutionSpec(
                 instructions="Help the customer with billing questions.",
                 model=Model(provider="anthropic", id="claude-sonnet-5"),
             ),
         ))
-        invocation = await handle.wait()
-        result = await handle.result()
-        print(invocation.id, invocation.status)
-        if result.output_text is not None:
-            print(f"agent> {result.output_text}")
+        print(f"agent> {await agent.text('Why was I charged twice?')}")
 
 
 asyncio.run(main())

@@ -4,6 +4,16 @@ from .callback import (
     deduplicate_callback_result,
     verify_callback,
 )
+from .agent import (
+    Agent,
+    AgentOptions,
+    AgentResult,
+    AgentStreamEvent,
+    BoundSession,
+    InvocationOptions,
+    MissingToolHandlerError,
+    NoOutputTextError,
+)
 from .client import (
     Limits,
     Client,
@@ -16,19 +26,28 @@ from .client import (
     RetryPolicy,
     Tool,
     ToolResult,
+    TranscriptDrain,
 )
 from .stream import Reducer, ReducedSnapshot, StreamEvent, StreamPreview, stream_session
 from nvoken_generated import *  # noqa: F403
 
 __all__ = [
     "Limits",
+    "Agent",
+    "AgentOptions",
+    "AgentResult",
+    "AgentStreamEvent",
+    "BoundSession",
     "CallbackResultStore",
     "Client",
     "ExecutionSpec",
     "InvocationHandle",
+    "InvocationOptions",
     "InvokeRequest",
+    "MissingToolHandlerError",
     "Model",
     "NvokenError",
+    "NoOutputTextError",
     "ProviderCredentialSelection",
     "ReducedSnapshot",
     "Reducer",
@@ -37,6 +56,7 @@ __all__ = [
     "StreamPreview",
     "Tool",
     "ToolResult",
+    "TranscriptDrain",
     "VerifiedCallback",
     "deduplicate_callback_result",
     "verify_callback",

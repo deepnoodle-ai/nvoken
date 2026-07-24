@@ -182,6 +182,16 @@ async def stream_invocation(
     handle: InvocationHandle,
     consume: Callable[[StreamEvent], Awaitable[None] | None],
 ) -> None:
+    async for event in iter_invocation(client, handle):
+        consumed = consume(event)
+        if consumed is not None:
+            await consumed
+
+
+async def iter_invocation(
+    client: Client,
+    handle: InvocationHandle,
+) -> AsyncIterator[StreamEvent]:
     retry = 1.0
     cursor: str | None = None
     while True:
@@ -199,9 +209,7 @@ async def stream_invocation(
                     retry = min(event.retry, 30.0)
                 if event.id:
                     cursor = event.id
-                consumed = consume(event)
-                if consumed is not None:
-                    await consumed
+                yield event
                 if event.type == "invocation.result":
                     return
         except asyncio.CancelledError:
