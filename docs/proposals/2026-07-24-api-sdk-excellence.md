@@ -1324,24 +1324,24 @@ usable SDK and CLI surface.
   encrypted-binding cleanup, stable discovery projection, allowlist handling,
   and stateless discovery pass PRD 029’s normal and failure-path acceptance
   fixtures.
-- [ ] **AC-2B.3 (`EX-2B.3`):** ToolCall evidence and a checkpoint exist before
+- [x] **AC-2B.3 (`EX-2B.3`):** ToolCall evidence and a checkpoint exist before
   every egress attempt; cancellation, deadlines, lease loss, duplicate
   delivery, stale owners, and unknown non-idempotent outcomes settle exactly
   as PRD 029 specifies in embedded and external execution modes.
-- [ ] **AC-2B.4 (`EX-2B.3`):** Logs and every read, stream, error, and
+- [x] **AC-2B.4 (`EX-2B.3`):** Logs and every read, stream, error, and
   transcript surface remain credential-free under success, protocol error,
   oversized result, guarded-egress rejection, and crash recovery.
-- [ ] **AC-2B.5 (`EX-2B.4`):** Every SDK can declare MCP servers and invoke
+- [x] **AC-2B.5 (`EX-2B.4`):** Every SDK can declare MCP servers and invoke
   stateless tool discovery without hand-built HTTP; TypeScript also exposes the
   documented ergonomic helper.
-- [ ] **AC-2B.6 (`EX-2B.4`):** `nvoken mcp list-tools` returns the same projected
+- [x] **AC-2B.6 (`EX-2B.4`):** `nvoken mcp list-tools` returns the same projected
   catalog as execution-time discovery for an identical server declaration.
-- [ ] **AC-2B.7 (phase gate):** One documented example discovers a scripted
+- [x] **AC-2B.7 (phase gate):** One documented example discovers a scripted
   remote server, completes a durable MCP tool turn, survives a fault-injected
   engine replacement, and is recoverable through the authoritative result and
   transcript reads.
 
-**Progress evidence (2026-07-24):** PRD 029 is Ready with fingerprint v8 over
+**Progress evidence (2026-07-24):** PRD 029 is Implemented with fingerprint v8 over
 the retained v1–v7 lineage, the actual client-tool dependency, the complete
 SDK/CLI/example surface, and one verified Claude Fable 5 review. All sound
 findings were incorporated; no blocking finding remains.
@@ -1351,6 +1351,15 @@ gates: admission and fingerprint fixtures, encrypted binding cleanup and
 sweeping, stable ordered discovery projection, allowlist and collision
 failures, guarded stateless discovery, and fenced one-catalog persistence all
 pass without durable or observable credential material.
+
+`EX-2B.3` and `EX-2B.4` are complete. The fenced coordinator and Dive adapter
+commit ToolCall, attempt, usage, and checkpoint evidence before egress; safe
+uncertain calls retry once and unsafe calls settle unknown without egress.
+Every generated and handwritten SDK surface plus the CLI probe passes the
+shared conformance server. The R9-led guide and runnable scripted recovery
+example cover discovery, process replacement, authoritative result recovery,
+and fixed-cut transcript recovery. `make check`, `make test-postgres`, and
+`make sdk-check` pass.
 
 ### Phase 3 — additive contract completeness
 

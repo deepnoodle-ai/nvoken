@@ -8,7 +8,7 @@
   source checkout.
 - **Integrate:** use the
   [TypeScript SDK](../sdk/typescript/README.md) for first response, Sessions,
-  host tools, structured output, and streaming.
+  host and remote MCP tools, structured output, and streaming.
 - **Deploy:** operate the [single-daemon](../deploy/single-daemon/README.md) or
   [Google Cloud](../deploy/google-cloud/README.md) production profile.
 

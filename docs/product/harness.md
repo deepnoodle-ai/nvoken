@@ -3,9 +3,9 @@
 > **Product direction, not the current Runtime contract.** This page catalogs
 > the capability space nvoken may cover. The implemented surface is the
 > [Runtime contract](../guides/runtime-admission.md) and the checked
-> [OpenAPI](../../openapi/runtime.yaml). Remote MCP, general-purpose builtin
-> tools, steering, approvals, and most rich-result capabilities below are not
-> implemented today.
+> [OpenAPI](../../openapi/runtime.yaml). Remote streamable-HTTP MCP is
+> implemented; general-purpose builtin tools, steering, approvals, and most
+> rich-result capabilities below are not implemented today.
 
 An agent harness equips an AI agent with tools, connects it to its environment,
 and manages the loop that lets it do real work. The harness is where an agentic
@@ -52,10 +52,11 @@ to run unattended:
 Tools are where the agent touches the world:
 
 - **Execution modes.** Builtin tools execute service-side, callback tools are
-  signed calls to your endpoints, and host tools are recoverable through
-  reads and the stream for your application to execute. The exchange is
-  durable: stable tool call IDs, deadlines, and exactly one accepted result
-  per call.
+  signed calls to your endpoints, host tools are recoverable through reads and
+  the stream for your application to execute, and remote MCP tools execute
+  through guarded public-only egress from a durable discovery snapshot. The
+  exchange is durable: stable tool call IDs, deadlines, fenced attempts, and
+  exactly one accepted result per call.
 - **Annotations and previews.** Read-only, destructive, idempotent, and
   open-world hints drive permission decisions, and a tool can render a
   human-readable summary of what a call will do before it runs, which is what
@@ -63,10 +64,11 @@ Tools are where the agent touches the world:
 - **Live output and rich results.** A running tool can stream text and publish
   structured progress for your UI, and results carry text, image, or audio
   content, an optional display variant, and error status.
-- **Planned ready-made capability.** A toolkit of file, shell, web, and interaction
-  tools aligned with Claude Code's tool shapes, MCP servers adapted into
-  tools, provider server-side tools where offered, and subagents with their
-  own prompt, tool policy, and model routing.
+- **Planned ready-made capability.** A toolkit of file, shell, web, and
+  interaction tools aligned with Claude Code's tool shapes, provider
+  server-side tools where offered, and subagents with their own prompt, tool
+  policy, and model routing. Remote MCP servers are already adapted into
+  ordinary durable tool definitions.
 
 ## Control and human-in-the-loop
 
@@ -151,7 +153,8 @@ All of this capability is only worth having if it supports your product
 instead of constraining it. A harness that installs its own persona, policy, or
 data model gets in the way of the application it is meant to serve. nvoken is
 carefully designed the other way: agent behavior arrives with each request as
-the execution spec, tools with side effects run on your side of the boundary,
-and approval policy, memory, and product state remain yours to shape. The
+the execution spec, application side effects normally run on your side of the
+boundary, and remote MCP is an explicit host-supplied exception. Approval
+policy, memory, and product state remain yours to shape. The
 harness supplies the machinery; your application keeps the voice, the rules,
 and the data.

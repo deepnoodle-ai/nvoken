@@ -1,6 +1,6 @@
 # Execute remote MCP server tools during Invocations
 
-**Status:** Ready
+**Status:** Implemented
 **Sequence:** 029
 **Depends on:** `012-prd-durable-toolcall-and-checkpoint-model.md`,
 `014-prd-checkpoint-crash-recovery.md`,
@@ -265,7 +265,7 @@ discovery deadline, and at most 64 projected tools.
 
 ## Acceptance
 
-- [ ] **A1 (R1, R2):** Strict admission tests accept 8 servers at every stated
+- [x] **A1 (R1, R2):** Strict admission tests accept 8 servers at every stated
   boundary and reject the ninth, bad names, the `nvoken` prefix, non-HTTPS or
   userinfo URLs, token-invalid, oversized, hop-by-hop, routing, framing,
   proxy, cookie, and MCP session headers, timeout violations, unknown fields
@@ -274,13 +274,13 @@ discovery deadline, and at most 64 projected tools.
   prove ordering materiality, secret exclusion, equal replay across differing
   headers, changed non-secret conflict, and v1–v7 compatibility.
 
-- [ ] **A2 (R3):** Credential bindings are unreadable from raw storage,
+- [x] **A2 (R3):** Credential bindings are unreadable from raw storage,
   absent from every read, stream, error, and log surface, usable by the
   execution path across process restart, and destroyed in the terminal
   transaction, with the extended sweeper proven against the distinct MCP
   binding table over an injected crash window.
 
-- [ ] **A3 (R4):** Against a scripted MCP server, the discovery snapshot
+- [x] **A3 (R4):** Against a scripted MCP server, the discovery snapshot
   commits before the first model call; a missing allowlisted tool settles
   `mcp_discovery_failed` with no provider call; without an allowlist,
   non-projectable tools are excluded with recorded reasons; a declared tool
@@ -296,25 +296,25 @@ discovery deadline, and at most 64 projected tools.
   active execution, and fail before provider egress when that deadline is
   exhausted.
 
-- [ ] **A4 (R5, R6):** An end-to-end turn proves `tool_use`, ToolCall row,
+- [x] **A4 (R5, R6):** An end-to-end turn proves `tool_use`, ToolCall row,
   and checkpoint precede egress; one fresh session per call; in-bounds
   results settle with origin `mcp`; `is_error` passthrough lets the model
   continue; oversized, unsupported-content, timeout, redirect, private-IP,
   and plain-HTTP cases settle as documented without leaking payloads; and a
   mixed batch parks for a client sibling only after the MCP sibling settles.
 
-- [ ] **A5 (R7):** Killing the engine at pre-dispatch, mid-call,
+- [x] **A5 (R7):** Killing the engine at pre-dispatch, mid-call,
   post-response, and post-settle boundaries in both execution modes proves a
   read-only tool re-executes at most once more, a non-idempotent tool settles
   unknown-outcome without a second server hit (asserted by scripted server
   counts), and stale engines cannot append or settle.
 
-- [ ] **A6 (R5, R8):** Cancellation and wall-deadline races against an active
+- [x] **A6 (R5, R8):** Cancellation and wall-deadline races against an active
   MCP call yield one winner; MCP time accrues to active execution and
   limits; ToolCall reads and SSE expose mode and origin; logs contain IDs,
   counts, and codes only.
 
-- [ ] **A7 (R9):** For the same declaration against the scripted server, the
+- [x] **A7 (R9):** For the same declaration against the scripted server, the
   discovery endpoint returns a projection identical to the execution-time
   snapshot, including exclusions; it commits no rows and retains no
   credential material; malformed shapes return `invalid_request`; and
@@ -322,20 +322,41 @@ discovery deadline, and at most 64 projected tools.
   `mcp_discovery_failed` with credential-free detail and nothing logged
   beyond IDs, counts, and codes.
 
-- [ ] **A8 (R1–R9):** `make check` and the full Postgres suite pass. OpenAPI,
+- [x] **A8 (R1–R9):** `make check` and the full Postgres suite pass. OpenAPI,
   `docs/design/api.md`, `architecture.md`, `claims.md`, the fingerprint
   fixtures, `docs/product/overview.md`, and `harness.md` describe the
   declaration, discovery endpoint, execution, recovery, and error semantics,
   and `docs/design/decisions.md` records the boundary amendment and the
   client library choice.
 
-- [ ] **A9 (R9, R10):** Go, TypeScript, Python, and Rust tests construct an
+- [x] **A9 (R9, R10):** Go, TypeScript, Python, and Rust tests construct an
   MCP-bearing spec and call stateless discovery through their documented
   facades; TypeScript proves the ergonomic helper; CLI integration proves
   repeated secret headers reach discovery but never output; and the scripted
   example survives engine replacement, then recovers the settled tool result
   through the composed result and fixed-cut transcript. `make sdk-check`
   compiles and exercises those surfaces at each package's documented level.
+
+## Implementation evidence
+
+Completed on 2026-07-24. Boundary and fingerprint fixtures live in
+`internal/services/mcp_specs_test.go` and
+`docs/design/admission-fingerprint-v8.json`. The disposable-Postgres cases in
+`internal/adapters/postgres/mcp_integration_test.go` and
+`toolcalls_integration_test.go` prove encrypted binding cleanup, fenced
+catalog creation, safe retry, unsafe unknown-outcome settlement, and stale
+owner rejection. `internal/services/mcp_execution_test.go`,
+`internal/adapters/divegen/mcp_tool_test.go`, the official-client scripted
+server tests, HTTP API tests, and the shared SDK conformance server cover
+projection, egress ordering, bounds, stable errors, and credential-free
+surfaces.
+
+`make check`, `make test-postgres`, and `make sdk-check` pass. The latter
+constructs MCP-bearing requests and stateless discovery through Go,
+TypeScript, Python, Rust, and the CLI. The runnable
+`sdk/go/examples/mcp-recovery` exercise supplies the delayed authenticated
+server, process-loss injection point, Invocation-ID resume, composed result,
+and fixed-cut transcript proof used by the recovery walkthrough.
 
 ## Risks and open decisions
 

@@ -44,9 +44,13 @@ users and tenants, integrations and credentials, orchestration, and
 product data. Agent behavior arrives with each request as the execution
 spec; nothing is provisioned or registered first.
 
-Every tool with side effects executes on your side of the boundary, either as
-a host tool call recoverable through reads and the stream or as a signed
-callback to your endpoints.
+Your application normally owns side effects, either as a host tool call
+recoverable through reads and the stream or as a signed callback to your
+endpoint. Remote MCP is the explicit host-opt-in exception: your request
+supplies a public streamable-HTTP server and one-turn credentials, and nvoken
+executes its projected tools through guarded egress, durable checkpoints, and
+annotation-gated crash recovery. There is no connector registry or stored MCP
+credential resource.
 
 ## Deployment
 

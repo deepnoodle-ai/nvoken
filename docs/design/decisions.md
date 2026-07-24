@@ -403,3 +403,17 @@ authentication (`401`) from permission (`403`), cancellation from deadline
 expiry, Invocation `outputText` reads from Agent `text` runs, and
 Invocation-scoped from Session-scoped message reads. These pre-1.0 renames have
 no compatibility aliases.
+
+37. Remote MCP is the narrow host-opt-in server-side side-effect exception
+(2026-07-24): Invocation specs may carry bounded public streamable-HTTP server
+descriptors and ephemeral headers without registering a connector. nvoken
+uses the official `modelcontextprotocol/go-sdk` behind its own port, projects
+discovered MCP tools into Dive as ordinary tools, and does not use Dive's
+experimental MCP integration. One fenced discovery snapshot pins the
+model-visible catalog. Every selected call commits ToolCall/checkpoint/attempt
+evidence before guarded egress; annotation-gated recovery retries only a
+positively read-only or idempotent, non-destructive uncertain call. MCP headers
+use a distinct encrypted per-Invocation binding and are destroyed at terminal
+settlement. This amends the normal host-side-effects boundary without adding
+stored MCP resources, OAuth brokerage, stdio processes, or persistent MCP
+sessions.

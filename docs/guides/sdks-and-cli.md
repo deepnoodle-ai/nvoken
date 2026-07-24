@@ -12,6 +12,13 @@ callback verification, model discovery, and a raw generated-client escape
 hatch. Agent workflows are implemented in TypeScript, Python, and Go; Rust's
 documented floor is transport plus durable handle.
 
+All four handwritten facades accept remote MCP server declarations and expose
+stateless tool discovery; TypeScript additionally provides `mcpServer(...)`.
+Before integrating, run `nvoken mcp list-tools --url ...` to inspect the exact
+execution-time projection. The
+[remote MCP guide](remote-mcp-tools.md) covers secret handling, projection, and
+crash recovery.
+
 An Invocation is one durable agent turn. The host owns `agent_key`, optional
 `tenant_key`, `session_key`, and `idempotency_key`; the spec travels with each
 Invocation. Across facades, handle `outputText` reads `output_text`,

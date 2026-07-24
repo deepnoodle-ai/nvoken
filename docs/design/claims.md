@@ -65,13 +65,15 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
   storage of this information. This is often relevant for showing dropdown
   selectors in the app UI, for example.
 - As with LLM generation APIs, tool definitions are provided per invocation
-  request. When the agent chooses to invoke a tool, there are three execution
+  request. When the agent chooses to invoke a tool, there are four execution
   modes. Builtin tools are invoked directly by nvoken on the server side.
   Callback tools are defined by the host app, and when these are invoked
   nvoken makes a signed HTTP request to a remote endpoint to execute the
   call. Host tool calls are durably exposed to the client (the host app)
   through Invocation/Session reads and the Session stream so they can be
-  executed there and their output returned idempotently to nvoken.
+  executed there and their output returned idempotently to nvoken. Remote MCP
+  tools come from a host-supplied public streamable-HTTP server, are pinned in
+  one durable discovery catalog, and execute through fenced guarded egress.
 
 ## API
 
@@ -116,9 +118,12 @@ Supplementary documents (`vision.md` narrative, `architecture.md`,
 
 ## Trust and security
 
-- nvoken never executes host or end-user code; every tool with side effects executes on the host's side of the boundary.
+- nvoken never executes host or end-user code. Application side effects
+  normally execute on the host's side of the boundary; a host may explicitly
+  opt a remote MCP server into guarded nvoken-side execution.
 - In a future version of nvoken, an Environment concept may be introduced, which is a secure, isolated sandbox for code execution. This is deferred for now.
-- Tools execute in exactly three modes: builtin (server-side), signed callback, and host.
+- Tools execute in exactly four modes: builtin (server-side), signed callback,
+  host, and remote MCP.
 - The model receives tool capability, not ambient credentials.
 - Embedded end-users never authenticate to nvoken directly. The host app makes requests to nvoken on behalf of the end-users behind the scenes.
 - In a future version of nvoken, host app end-users may be able to make direct requests to nvoken using a new form of credentials. This is deferred for now.

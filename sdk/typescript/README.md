@@ -145,6 +145,34 @@ const agent = client.agent({
 
 Stored nonsecret selections use `account_byok`, `tenant_byok`, or `platform`.
 
+## Remote MCP tools
+
+Probe the projected catalog, then attach the same declaration to an Agent:
+
+```ts
+import { Client, mcpServer } from "@deepnoodle/nvoken";
+
+const server = mcpServer({
+  name: "support",
+  url: "https://mcp.example.com/rpc",
+  allowedTools: ["lookup_order"],
+  headers: { Authorization: `Bearer ${mcpToken}` },
+  timeouts: { discoverySeconds: 10, callSeconds: 30 },
+});
+
+console.log((await client.listMcpTools(server)).tools);
+
+const support = client.agent({
+  agentKey: "support",
+  instructions: "Use support tools when needed.",
+  mcpServers: [server],
+});
+```
+
+The helper copies headers and allowlists into generated wire types. Headers are
+one-Invocation secret material and are absent from durable specs, responses,
+streams, transcripts, errors, and logs.
+
 ## Multiple turns
 
 Bind a Session once and use it like a chat:

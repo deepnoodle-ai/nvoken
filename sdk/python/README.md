@@ -89,3 +89,26 @@ print(selected.cataloged, selected.pricing.status)
 
 The list is curated discovery metadata, not proof of provider-account access.
 Exact inspection also accepts uncataloged IDs.
+
+## Remote MCP tools
+
+Use the handwritten declaration for discovery and Invocation admission:
+
+```python
+server = MCPServer(
+    name="support",
+    url="https://mcp.example.com/rpc",
+    allowed_tools=("lookup_order",),
+    headers={"Authorization": f"Bearer {mcp_token}"},
+    timeouts=MCPTimeouts(discovery_seconds=10, call_seconds=30),
+)
+
+catalog = await client.list_mcp_tools(server)
+spec = ExecutionSpec(
+    model=Model(provider="anthropic", id="claude-sonnet-5"),
+    mcp_servers=(server,),
+)
+```
+
+Headers are hidden from dataclass representation and are one-Invocation secret
+material. They never appear in durable specs or public recovery surfaces.

@@ -28,6 +28,8 @@ order.
   credentials, device login, scope, and rotation
 - [Callback receivers](callback-receivers.md) — safely receive at-least-once
   host tool calls
+- [Remote MCP tools](remote-mcp-tools.md) — probe, declare, execute, and
+  recover guarded streamable-HTTP tools
 
 ## Operate a deployment
 

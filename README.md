@@ -25,8 +25,8 @@ Your app sends an agent spec and the input; nvoken runs the whole agent turn.
 (conversation identity), and `idempotency_key` (turn retry identity); the
 instructions, model, and tools travel inline on each Invocation.
 The current Runtime implements durable turns, streaming, checkpoints, durable
-waits, and host and callback tools. Remote MCP tools, steering, and broader
-human-in-the-loop workflows remain deferred.
+waits, host and callback tools, and guarded remote streamable-HTTP MCP tools.
+Steering and broader human-in-the-loop workflows remain deferred.
 
 Building a complete agentic experience in your app's UI is non-trivial. nvoken
 allows you to focus on the application-specific portions of that problem, rather
@@ -73,11 +73,13 @@ the local evaluation path.
 > snapshots or tail the same state over resumable SSE with ephemeral live
 > generation deltas. Durable builtin checkpoints and crash continuation resume
 > a lost execution owner from its last committed boundary, and durable host
-> and signed callback tools can safely continue parked work. Generated Go,
+> signed callback tools can safely continue parked work, and remote MCP tools
+> execute through durable discovery snapshots and fenced attempts. Generated Go,
 > TypeScript, Python, and Rust clients expose the complete transport surface.
-> Handwritten facades add durable handles and reliability helpers in all four;
-> the high-level Agent workflow and bound Session API are TypeScript-only
-> today. The Go `nvoken` client CLI uses the same SDK contract.
+> Handwritten facades add durable handles, MCP discovery, and reliability
+> helpers in all four; TypeScript, Python, and Go also provide high-level Agent
+> workflows, while Rust deliberately provides the durable-handle floor. The Go
+> `nvoken` client CLI uses the same SDK contract.
 > A reproducible [Google Cloud Run paved deployment](deploy/google-cloud/README.md)
 > packages this slice with private Cloud SQL, Secret Manager, and an explicit
 > migration job.
@@ -133,8 +135,25 @@ host tool parks that Invocation without holding compute; the host can recover
 the pending call by ID, submit its result idempotently, and let any engine
 continue it. A callback tool instead lets nvoken deliver the same durable call
 to a public host HTTPS endpoint with a stable ToolCall idempotency key and a
-versioned HMAC signature. The exact surface is in
+versioned HMAC signature. A remote MCP declaration lets nvoken discover and
+durably execute tools from any public streamable-HTTP MCP server without
+registering a connector. The exact surface is in
 [openapi/runtime.yaml](openapi/runtime.yaml).
+
+Probe an MCP server before writing application code:
+
+```bash
+export MCP_HEADERS='{"Authorization":"Bearer ..."}'
+nvoken mcp list-tools \
+  --name support \
+  --url https://mcp.example.com/rpc \
+  --header-env MCP_HEADERS
+```
+
+The same declaration can travel as `spec.mcp_servers`. Secret headers are
+encrypted only for the Invocation, excluded from identity and public reads,
+and destroyed at terminal settlement. See
+[Remote MCP tools](docs/guides/remote-mcp-tools.md).
 
 A Session runs one turn at a time: at most one nonterminal Invocation. An equal
 idempotent replay returns the original durable record; a distinct concurrent

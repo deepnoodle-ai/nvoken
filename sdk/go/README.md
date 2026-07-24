@@ -72,6 +72,32 @@ request.ProviderCredentials = []nvoken.ProviderCredentialSelection{{
 Use `ProviderCredentialAccountBYOK`, `ProviderCredentialTenantBYOK`, or
 `ProviderCredentialPlatform` for nonsecret stored selections.
 
+## Remote MCP tools
+
+Probe the exact projected catalog, then reuse the same declaration on an
+Invocation:
+
+```go
+server := nvoken.MCPServer{
+	Name:         "support",
+	URL:          "https://mcp.example.com/rpc",
+	AllowedTools: []string{"lookup_order"},
+	Headers: map[string]string{
+		"Authorization": "Bearer " + mcpToken,
+	},
+}
+catalog, err := client.ListMCPTools(ctx, server)
+
+request.Spec.MCPServers = []nvoken.MCPServer{server}
+handle, err := client.Invoke(ctx, request)
+```
+
+Headers are one-Invocation secret material and never appear in durable specs or
+public reads. The
+[recovery example](examples/mcp-recovery/README.md) exercises discovery,
+executor replacement, composed result recovery, and fixed-cut transcript
+recovery.
+
 Discover models through the same facade:
 
 ```go

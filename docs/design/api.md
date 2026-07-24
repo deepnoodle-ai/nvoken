@@ -189,12 +189,32 @@ The spec may declare up to 32 ordered host or callback tools with a unique
 name, description, mode, and the same bounded schema subset for input. A
 callback additionally supplies exactly one public HTTPS URL and is admitted
 only when installation callback signing is configured.
+It may also declare up to eight ordered `mcp_servers`. Each descriptor has a
+unique name, public HTTPS streamable-HTTP URL, optional ordered allowlist,
+bounded discovery/call timeouts, and optional secret request headers.
+Nonsecret descriptor fields enter admission identity; headers do not. Headers
+are sealed in a separate per-Invocation binding and never appear in the
+immutable spec snapshot or any public read.
 Tools-bearing requests require at least two model iterations; omission resolves
 to three or the lower installation maximum, as with structured output.
 Unknown and deferred fields — including spec references, retention, indexed
 metadata, delegated actor,
 and delivery mode — are rejected rather than ignored. The admitted spec is an
 immutable Invocation snapshot, never mutable Agent configuration.
+
+### Stateless remote MCP discovery
+
+| Method | Endpoint             | Purpose |
+| ------ | -------------------- | ------- |
+| `POST` | `/v1/mcp/list-tools` | Open one guarded short-lived MCP session and return the exact projected tools and exclusions an identical Invocation declaration would snapshot. |
+
+The authenticated request accepts exactly one MCP server descriptor and writes
+no durable state. Discovery initializes one fresh session, drains paginated
+`tools/list`, applies allowlist and stable `{server}__{tool}` projection, then
+closes the session. Malformed descriptors return `400 invalid_request`;
+unreachable, guard-rejected, timed-out, protocol-failed, or allowlist-missing
+servers return `502 mcp_discovery_failed`. Supplied headers are used once and
+are absent from response and logs.
 
 The background response is always `202 Accepted` after commit for both new
 admission and equal replay. It returns `agent_id`, `session_id`,
@@ -268,8 +288,8 @@ future steering use narrow commands defined with those features.
 
 ## 4. ToolCalls
 
-`ToolCall` is the universal durable trace resource for the three modes
-(`builtin`, `callback`, `host` — semantics in `architecture.md`). Tool
+`ToolCall` is the universal durable trace resource for the four modes
+(`builtin`, `callback`, `host`, `mcp` — semantics in `architecture.md`). Tool
 definitions travel in the execution specification or reference named custom
 tool definitions (section 5); there is no integration connection or OAuth
 resource.
@@ -308,8 +328,18 @@ owns result settlement. Requests use the v1 HMAC protocol described in
 optional actor context is reserved but omitted until admission owns a delegated
 actor claim. JWKS and per-tool signing-key CRUD remain deferred.
 
+Remote MCP discovery commits one ordered catalog under the current Invocation
+fence before any provider call. A model-selected MCP request commits its
+assistant `tool_use`, stable ToolCall ID, usage receipt, checkpoint, and
+dispatched attempt before egress. One fresh session performs the pinned
+`tools/call`; result and next tool checkpoint settle together under the fence.
+After ownership loss, only explicitly read-only or idempotent and
+non-destructive calls can be attempted once more. Other uncertain calls settle
+with system-origin unknown-outcome evidence and no second dispatch.
+
 The runtime stores no host integrations or business credentials; hosts use
-host tools, callback tools, or a credential broker.
+host tools, callback tools, one-Invocation remote MCP bindings, or a credential
+broker.
 
 ## 5. Custom tools
 

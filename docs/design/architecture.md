@@ -29,8 +29,10 @@ Architectural consequences:
   custom tool definitions, opt into agent-memory storage, and supply or select
   narrowly scoped model-provider credentials.
 - nvoken hosts no execution environments and executes no host or end-user
-  code; every tool with side effects executes host-side. An Environment
-  sandbox concept is deferred to a possible future version.
+  code. Application side effects normally execute host-side. A host-supplied
+  remote MCP server is the narrow opt-in exception and is reached only through
+  guarded public-only egress. An Environment sandbox concept is deferred to a
+  possible future version.
 - Identity/admin and internal surfaces are separate from the Runtime API.
 
 State is admitted when durable execution requires it, plus a small set of
@@ -68,7 +70,7 @@ runtime is listed in `api.md` ("Explicitly absent from the Runtime API").
 | Session state       | Canonical transcript, retention, one nonterminal Invocation, host key, tenant partition, indexed metadata |
 | Invocation state    | Admission, status, structured output, errors, spec snapshot/digest, usage, provenance               |
 | turn execution      | Model calls, tool selection, checkpointing, continuation, cancellation, settlement                  |
-| Tool exchange       | Durable ToolCalls across builtin, callback, and host modes                                        |
+| Tool exchange       | Durable ToolCalls across builtin, callback, host, and remote MCP modes                            |
 | Recovery            | Leases, fencing, checkpoints, replay cursors, retry policy, stale-engine rejection                  |
 | Trust boundary      | Runtime credentials, signed callbacks, model gateway, limits, normalized metering                  |
 | Opt-in conveniences | Agent memory, named custom tool definitions, narrowly scoped model-provider credentials            |
@@ -184,6 +186,13 @@ Every tool declares one mode:
   ToolCall ID wins; equal duplicates return the recorded outcome, and the
   transaction that closes the last call queues the same Invocation and its
   successor external dispatch when configured.
+- **`mcp`** — the host supplies a public streamable-HTTP server descriptor and
+  optional one-Invocation headers. Concurrent bounded discovery commits one
+  ordered projected catalog before the first provider call. Each selected call
+  commits its ToolCall, checkpoint, and attempt before guarded egress; result
+  acceptance is fenced. After owner loss, only an explicitly read-only or
+  idempotent, non-destructive call may run once more. Other uncertain calls
+  settle with a canonical unknown-outcome result and no second dispatch.
 
 ### Two roles, two runtime modes
 
@@ -306,8 +315,10 @@ After owner loss or a host-tool resume, a replacement validates the
 append-only transcript, checkpoints, receipts, and ToolCalls before new work. A
 committed final model checkpoint settles without another provider call; a
 pending or abandoned
-builtin continues under the same ToolCall ID and a new attempt. Inconsistent
-evidence fails with the bounded public `internal` error. This is crash recovery,
+builtin or safely retryable MCP work continues under the same ToolCall ID and
+a new attempt. An uncertain possibly mutating MCP call settles as an unknown
+outcome without egress. Inconsistent evidence fails with the bounded public
+`internal` error. This is crash recovery,
 not a public retry API, arbitrary process snapshots, external-effect safety, or
 intentional checkpoint-and-chain at the segment ceiling.
 
@@ -383,7 +394,7 @@ operator policy, defaults, and storage-growth queries are documented in the
 [data-retention guide](../guides/data-retention.md).
 
 Runtime is not a general credential vault: hosts use host tools, callback
-tools, or a credential-broker tool for integrations and business credentials,
+tools, remote MCP, or a credential-broker tool for integrations and business credentials,
 and custom-tool registration stores tool contracts, never secrets. The narrow
 exception is model-provider access. Each provider used by an Invocation binds
 exactly one source: an Invocation-supplied ephemeral credential, reusable
@@ -391,6 +402,9 @@ Account BYOK, reusable tenant BYOK, or a platform-funded credential. Existing
 self-hosted installation BYOK remains deployment configuration. Durable
 bindings make the selected source available to any fenced execution owner;
 there is no silent fallback to another source.
+Remote MCP headers form a separate per-Invocation encrypted binding. They are
+excluded from fingerprints, specs, logs, reads, streams, and errors, and are
+destroyed in the terminal transaction or by the expiry sweeper.
 
 ## Heritage
 
@@ -405,8 +419,8 @@ carry over; the mapping below records how its concepts land in nvoken.
 | Project                 | Host `tenant_key`                                                    |
 | Agent config            | Serialize resolved behavior into an execution specification          |
 | Session + turn          | Session + Invocation                                                 |
-| Custom action           | Callback or host tool                                              |
-| Integration             | Host-owned tool implementation or credential broker                  |
+| Custom action           | Callback, host, or remote MCP tool                                  |
+| Integration             | Host-owned implementation, remote MCP server, or credential broker  |
 | Worker action/model job | Engine work claim or host-owned callback tool                        |
 | Environment             | Host-owned sandbox exposed as a host tool                            |
 | Loop                    | Not recreated; hosts bring their own scheduler                       |

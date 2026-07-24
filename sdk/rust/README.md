@@ -65,3 +65,21 @@ let selected = client
 
 The list is curated discovery metadata, not proof of provider-account access.
 Exact inspection also accepts uncataloged IDs.
+
+## Remote MCP tools
+
+The durable-handle facade also covers server declarations and stateless
+discovery:
+
+```rust
+let server = McpServer::new("support", "https://mcp.example.com/rpc")
+    .allowed_tool("lookup_order")
+    .header("Authorization", format!("Bearer {mcp_token}"));
+
+let catalog = client.list_mcp_tools(&server).await?;
+let spec = ExecutionSpec::new(Model::new("anthropic", "claude-sonnet-5"))
+    .mcp_server(server);
+```
+
+Headers are one-Invocation secret material and never appear in durable specs or
+public recovery surfaces.
