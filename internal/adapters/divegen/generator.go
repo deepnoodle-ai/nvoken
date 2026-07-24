@@ -44,6 +44,8 @@ type Generator struct {
 	clock              ports.Clock
 	logger             *slog.Logger
 	credentialResolver ports.ProviderCredentialResolver
+	mcpClient          ports.MCPClient
+	mcpCredentials     ports.MCPServerCredentialResolver
 }
 
 type Option func(*Generator)
@@ -87,6 +89,16 @@ func WithLogger(logger *slog.Logger) Option {
 func WithCredentialResolver(resolver ports.ProviderCredentialResolver) Option {
 	return func(generator *Generator) {
 		generator.credentialResolver = resolver
+	}
+}
+
+func WithMCP(
+	client ports.MCPClient,
+	credentials ports.MCPServerCredentialResolver,
+) Option {
+	return func(generator *Generator) {
+		generator.mcpClient = client
+		generator.mcpCredentials = credentials
 	}
 }
 
@@ -247,6 +259,34 @@ func (g *Generator) generate(
 			description: definition.Description,
 			schema:      &toolSchema,
 		})
+	}
+	if len(request.MCPTools) != 0 {
+		coordinator, ok := g.toolCoordinator.(ports.MCPToolCallCoordinator)
+		if request.Claim == nil || !ok || g.mcpClient == nil || g.mcpCredentials == nil {
+			return domain.GenerationResponse{}, fmt.Errorf("durable MCP execution is not configured")
+		}
+		for _, definition := range request.MCPTools {
+			var toolSchema dive.Schema
+			if err := json.Unmarshal(definition.InputSchema, &toolSchema); err != nil {
+				return domain.GenerationResponse{}, fmt.Errorf("%w: project MCP tool schema", ports.ErrGenerationInputInvalid)
+			}
+			externalTools[definition.Name] = domain.HostToolDefinition{
+				Name:        definition.Name,
+				Description: definition.Description,
+				InputSchema: append(json.RawMessage(nil), definition.InputSchema...),
+				Mode:        domain.ToolCallModeMCP,
+			}
+			tools = append(tools, newMCPTool(
+				g.mcpClient,
+				g.mcpCredentials,
+				coordinator,
+				*request.Claim,
+				checkpointState,
+				definition,
+				&toolSchema,
+				g.logger,
+			))
+		}
 	}
 	var outputCapture *structuredOutputCapture
 	if request.StructuredOutput != nil {

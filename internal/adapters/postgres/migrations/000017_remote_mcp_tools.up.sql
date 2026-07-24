@@ -4,6 +4,17 @@
 
 BEGIN;
 
+ALTER TABLE tool_calls
+    DROP CONSTRAINT tool_calls_mode,
+    ADD CONSTRAINT tool_calls_mode CHECK (
+        mode IN ('builtin', 'callback', 'client', 'host', 'mcp')
+    ),
+    DROP CONSTRAINT tool_calls_result_origin,
+    ADD CONSTRAINT tool_calls_result_origin CHECK (
+        result_origin IS NULL
+        OR result_origin IN ('builtin', 'callback', 'client', 'host', 'mcp', 'system')
+    );
+
 CREATE TABLE invocation_mcp_server_bindings (
     id text PRIMARY KEY,
     invocation_id text NOT NULL REFERENCES invocations(id) ON DELETE RESTRICT,
@@ -101,8 +112,7 @@ $$;
 
 UPDATE nvoken_schema_compatibility
 SET schema_version = 17,
-    minimum_binary_schema_version = 14,
-    updated_at = now()
+    minimum_binary_schema_version = 14
 WHERE singleton = true;
 
 COMMIT;

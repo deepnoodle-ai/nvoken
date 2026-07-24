@@ -183,7 +183,7 @@ func loadGenerationRecovery(
 			externalToolsPending = true
 			continue
 		}
-		if call.Mode != domain.ToolCallModeBuiltin {
+		if call.Mode != domain.ToolCallModeBuiltin && call.Mode != domain.ToolCallModeMCP {
 			return generationRecovery{}, errRecoveryInvalid
 		}
 		input, err := storedToolCallInput(ctx, store, call)

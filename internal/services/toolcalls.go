@@ -393,6 +393,319 @@ func (s *ToolCheckpointService) AcceptBuiltinToolResult(ctx context.Context, cla
 	return settled, err
 }
 
+func (s *ToolCheckpointService) StartMCPToolCall(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	iteration int,
+	providerCallID string,
+	retrySafe bool,
+) (domain.MCPToolCallStart, error) {
+	if err := s.ready(); err != nil {
+		return domain.MCPToolCallStart{}, err
+	}
+	var started domain.MCPToolCallStart
+	err := s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
+		if _, err := s.store.GetSessionForUpdate(txCtx, claim.Invocation.SessionID); err != nil {
+			return err
+		}
+		invocation, err := s.store.GetInvocationForUpdate(txCtx, claim.Invocation.ID)
+		if err != nil {
+			return err
+		}
+		now := s.clock.Now().UTC()
+		if !claimOwns(invocation, claim, now) {
+			return ports.ErrLeaseLost
+		}
+		call, err := s.store.GetToolCallByProviderIdentityForUpdate(
+			txCtx,
+			invocation.ID,
+			iteration,
+			providerCallID,
+		)
+		if err != nil {
+			return err
+		}
+		if call.Mode != domain.ToolCallModeMCP {
+			return ports.ErrToolCallNotRunnable
+		}
+		switch call.Status {
+		case domain.ToolCallPending:
+			call, err = s.store.StartToolCallAttempt(txCtx, call.ID, now)
+		case domain.ToolCallRunning:
+			currentAttempt, attemptErr := s.store.GetCurrentToolCallAttemptForUpdate(
+				txCtx,
+				call.ID,
+				call.CurrentAttempt,
+			)
+			if attemptErr != nil {
+				return attemptErr
+			}
+			if currentAttempt.ToolCallID != call.ID ||
+				currentAttempt.InvocationID != invocation.ID ||
+				currentAttempt.SessionID != invocation.SessionID ||
+				currentAttempt.AccountID != invocation.AccountID ||
+				currentAttempt.TenantPartitionID != invocation.TenantPartitionID ||
+				currentAttempt.AgentID != invocation.AgentID ||
+				currentAttempt.Attempt != call.CurrentAttempt ||
+				currentAttempt.Status != domain.ToolCallRunning ||
+				currentAttempt.InvocationLeaseAttempt >= claim.Attempt {
+				return ports.ErrToolCallNotRunnable
+			}
+			if _, attemptErr := s.store.SettleToolCallAttempt(
+				txCtx,
+				currentAttempt.ID,
+				domain.ToolCallFailed,
+				now,
+			); attemptErr != nil {
+				return attemptErr
+			}
+			if !retrySafe {
+				content := json.RawMessage(`"The remote tool may have completed before execution was interrupted. Its outcome is unknown, so nvoken did not retry it."`)
+				if err := s.settleMCPUnknownOutcome(
+					txCtx,
+					claim,
+					invocation,
+					call,
+					content,
+					now,
+				); err != nil {
+					return err
+				}
+				started.RecoveredContent = content
+				started.RecoveredIsError = true
+				return nil
+			}
+			call, err = s.store.RestartToolCallAttempt(txCtx, call.ID, now)
+		default:
+			return ports.ErrToolCallNotRunnable
+		}
+		if err != nil {
+			return err
+		}
+		attemptID, err := s.ids.NewID(domain.PrefixToolCallAttempt)
+		if err != nil {
+			return err
+		}
+		attempt := domain.ToolCallAttempt{
+			ID:                     attemptID,
+			ToolCallID:             call.ID,
+			InvocationID:           call.InvocationID,
+			SessionID:              call.SessionID,
+			AccountID:              call.AccountID,
+			TenantPartitionID:      call.TenantPartitionID,
+			AgentID:                call.AgentID,
+			Attempt:                call.CurrentAttempt,
+			InvocationLeaseAttempt: claim.Attempt,
+			Status:                 domain.ToolCallRunning,
+			StartedAt:              now,
+		}
+		if err := s.store.CreateToolCallAttempt(txCtx, attempt); err != nil {
+			return err
+		}
+		execution := domain.ToolCallExecution{
+			Call:    call,
+			Attempt: attempt,
+		}
+		started.Execution = &execution
+		return nil
+	})
+	return started, err
+}
+
+func (s *ToolCheckpointService) AcceptMCPToolResult(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	execution domain.ToolCallExecution,
+	content json.RawMessage,
+	isError bool,
+) (domain.ToolCall, error) {
+	if err := s.ready(); err != nil {
+		return domain.ToolCall{}, err
+	}
+	if len(content) == 0 || !json.Valid(content) {
+		return domain.ToolCall{}, fmt.Errorf("tool result content must be valid JSON")
+	}
+	var settled domain.ToolCall
+	err := s.txm.WithTransaction(ctx, func(txCtx context.Context) error {
+		if _, err := s.store.GetSessionForUpdate(txCtx, claim.Invocation.SessionID); err != nil {
+			return err
+		}
+		invocation, err := s.store.GetInvocationForUpdate(txCtx, claim.Invocation.ID)
+		if err != nil {
+			return err
+		}
+		now := s.clock.Now().UTC()
+		if !claimOwns(invocation, claim, now) {
+			return ports.ErrLeaseLost
+		}
+		call, err := s.store.GetToolCallForUpdate(txCtx, execution.Call.ID)
+		if err != nil {
+			return err
+		}
+		if call.InvocationID != invocation.ID || call.Mode != domain.ToolCallModeMCP {
+			return ports.ErrToolCallConflict
+		}
+		payload, err := toolResultPayload(call.ID, content, isError)
+		if err != nil {
+			return err
+		}
+		if call.Status.Terminal() {
+			if equal, err := s.equalStoredToolResult(txCtx, call, payload); err != nil {
+				return err
+			} else if !equal {
+				return ports.ErrToolCallConflict
+			}
+			settled = call
+			return nil
+		}
+		if call.Status != domain.ToolCallRunning ||
+			call.CurrentAttempt != execution.Attempt.Attempt ||
+			execution.Attempt.InvocationLeaseAttempt != claim.Attempt ||
+			!call.DeadlineAt.After(now) {
+			return ports.ErrToolCallNotRunnable
+		}
+		messageID, err := s.ids.NewID(domain.PrefixSessionMessage)
+		if err != nil {
+			return err
+		}
+		sequence, err := s.store.ReserveMessageSequence(txCtx, invocation.SessionID)
+		if err != nil {
+			return err
+		}
+		if err := s.store.AppendSessionMessage(txCtx, domain.SessionMessage{
+			ID:                messageID,
+			InvocationID:      invocation.ID,
+			SessionID:         invocation.SessionID,
+			AccountID:         invocation.AccountID,
+			TenantPartitionID: invocation.TenantPartitionID,
+			AgentID:           invocation.AgentID,
+			Sequence:          sequence,
+			Role:              domain.MessageRoleTool,
+			Content:           payload,
+			CreatedAt:         now,
+		}); err != nil {
+			return err
+		}
+		status := domain.ToolCallCompleted
+		if isError {
+			status = domain.ToolCallFailed
+		}
+		settled, err = s.store.SettleToolCall(
+			txCtx,
+			call.ID,
+			status,
+			domain.ToolCallResultMCP,
+			messageID,
+			sequence,
+			now,
+		)
+		if err != nil {
+			return err
+		}
+		if _, err := s.store.SettleToolCallAttempt(
+			txCtx,
+			execution.Attempt.ID,
+			status,
+			now,
+		); err != nil {
+			return err
+		}
+		return s.appendToolCheckpoint(txCtx, claim, invocation, call, sequence, now)
+	})
+	return settled, err
+}
+
+func (s *ToolCheckpointService) settleMCPUnknownOutcome(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	invocation domain.Invocation,
+	call domain.ToolCall,
+	content json.RawMessage,
+	now time.Time,
+) error {
+	payload, err := toolResultPayload(call.ID, content, true)
+	if err != nil {
+		return err
+	}
+	messageID, err := s.ids.NewID(domain.PrefixSessionMessage)
+	if err != nil {
+		return err
+	}
+	sequence, err := s.store.ReserveMessageSequence(ctx, invocation.SessionID)
+	if err != nil {
+		return err
+	}
+	if err := s.store.AppendSessionMessage(ctx, domain.SessionMessage{
+		ID:                messageID,
+		InvocationID:      invocation.ID,
+		SessionID:         invocation.SessionID,
+		AccountID:         invocation.AccountID,
+		TenantPartitionID: invocation.TenantPartitionID,
+		AgentID:           invocation.AgentID,
+		Sequence:          sequence,
+		Role:              domain.MessageRoleTool,
+		Content:           payload,
+		CreatedAt:         now,
+	}); err != nil {
+		return err
+	}
+	if _, err := s.store.SettleToolCall(
+		ctx,
+		call.ID,
+		domain.ToolCallFailed,
+		domain.ToolCallResultSystem,
+		messageID,
+		sequence,
+		now,
+	); err != nil {
+		return err
+	}
+	return s.appendToolCheckpoint(ctx, claim, invocation, call, sequence, now)
+}
+
+func (s *ToolCheckpointService) appendToolCheckpoint(
+	ctx context.Context,
+	claim domain.InvocationClaim,
+	invocation domain.Invocation,
+	call domain.ToolCall,
+	throughMessageSequence int64,
+	now time.Time,
+) error {
+	checkpointID, err := s.ids.NewID(domain.PrefixInvocationCheckpoint)
+	if err != nil {
+		return err
+	}
+	toolCallID := call.ID
+	checkpoint := domain.InvocationCheckpoint{
+		ID:                     checkpointID,
+		InvocationID:           invocation.ID,
+		SessionID:              invocation.SessionID,
+		AccountID:              invocation.AccountID,
+		TenantPartitionID:      invocation.TenantPartitionID,
+		AgentID:                invocation.AgentID,
+		Sequence:               invocation.CurrentCheckpointSequence + 1,
+		Iteration:              call.Iteration,
+		Kind:                   domain.InvocationCheckpointTool,
+		LeaseAttempt:           claim.Attempt,
+		ThroughMessageSequence: throughMessageSequence,
+		ToolCallID:             &toolCallID,
+		CreatedAt:              now,
+	}
+	if err := s.store.CreateInvocationCheckpoint(ctx, checkpoint); err != nil {
+		return err
+	}
+	_, err = s.store.AdvanceInvocationCheckpoint(
+		ctx,
+		invocation.ID,
+		claim.Owner,
+		claim.Attempt,
+		now,
+		checkpoint.Sequence,
+		invocation.CurrentIteration,
+	)
+	return err
+}
+
 func (s *ToolCheckpointService) prepareToolCalls(
 	invocation domain.Invocation,
 	input domain.ModelCheckpointInput,
@@ -400,7 +713,7 @@ func (s *ToolCheckpointService) prepareToolCalls(
 	sequence int64,
 	now time.Time,
 ) ([]domain.ToolCall, []domain.CallbackDelivery, json.RawMessage, error) {
-	if len(input.ToolCalls) > MaxHostTools {
+	if len(input.ToolCalls) > MaxHostTools+MaxMCPProjectedTools {
 		return nil, nil, nil, fmt.Errorf("model checkpoint exceeds the maximum ToolCall batch size")
 	}
 	var blocks []map[string]json.RawMessage
@@ -800,6 +1113,7 @@ func syntheticToolResultPayload(calls []domain.ToolCall, reason string) (json.Ra
 }
 
 var _ ports.ToolCallCoordinator = (*ToolCheckpointService)(nil)
+var _ ports.MCPToolCallCoordinator = (*ToolCheckpointService)(nil)
 
 type terminalToolStore interface {
 	ports.SessionRepository

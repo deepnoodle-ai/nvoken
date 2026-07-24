@@ -11,6 +11,7 @@ const (
 	ToolCallModeBuiltin  ToolCallMode = "builtin"
 	ToolCallModeCallback ToolCallMode = "callback"
 	ToolCallModeHost     ToolCallMode = "host"
+	ToolCallModeMCP      ToolCallMode = "mcp"
 )
 
 type ToolCallStatus string
@@ -33,6 +34,7 @@ const (
 	ToolCallResultBuiltin  ToolCallResultOrigin = "builtin"
 	ToolCallResultCallback ToolCallResultOrigin = "callback"
 	ToolCallResultHost     ToolCallResultOrigin = "host"
+	ToolCallResultMCP      ToolCallResultOrigin = "mcp"
 	ToolCallResultSystem   ToolCallResultOrigin = "system"
 )
 
@@ -185,4 +187,10 @@ type ModelCheckpointResult struct {
 type ToolCallExecution struct {
 	Call    ToolCall
 	Attempt ToolCallAttempt
+}
+
+type MCPToolCallStart struct {
+	Execution        *ToolCallExecution
+	RecoveredContent json.RawMessage
+	RecoveredIsError bool
 }

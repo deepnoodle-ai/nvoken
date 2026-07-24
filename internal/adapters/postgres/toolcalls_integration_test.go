@@ -2027,6 +2027,144 @@ func TestExpiredLeasePreservesAndRestartsOpenBuiltin(t *testing.T) {
 	}
 }
 
+func TestMCPToolCallSettlementAndUncertaintyRecovery(t *testing.T) {
+	for _, test := range []struct {
+		name               string
+		retrySafe          bool
+		wantRecovered      bool
+		wantOrigin         domain.ToolCallResultOrigin
+		wantCurrentAttempt int
+	}{
+		{
+			name:               "read-only call retries once",
+			retrySafe:          true,
+			wantOrigin:         domain.ToolCallResultMCP,
+			wantCurrentAttempt: 2,
+		},
+		{
+			name:               "mutating call settles unknown without retry",
+			retrySafe:          false,
+			wantRecovered:      true,
+			wantOrigin:         domain.ToolCallResultSystem,
+			wantCurrentAttempt: 1,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			pool, runtime, store, auth := newRuntimeFixture(t)
+			ctx := context.Background()
+			input := runtimeInputWithTwoIterations()
+			input.IdempotencyKey = "mcp-" + strings.ReplaceAll(test.name, " ", "-")
+			ack, err := runtime.Admit(ctx, auth, input)
+			if err != nil {
+				t.Fatalf("admit: %v", err)
+			}
+			clock := newMutableClock(time.Now().UTC())
+			ids := identity.NewUUIDv7Generator(clock)
+			txm := NewTransactionManager(pool)
+			ownership := services.NewInvocationExecutionService(store, txm, clock, ids)
+			firstClaim, disposition, err := ownership.ClaimExact(
+				ctx,
+				ack.InvocationID,
+				"mcp-owner-one",
+				time.Minute,
+			)
+			if err != nil || disposition != services.Claimed {
+				t.Fatalf("first claim = %q, %v", disposition, err)
+			}
+			coordinator := services.NewToolCheckpointService(store, txm, clock, ids)
+			recorded, err := coordinator.RecordModelCheckpoint(ctx, firstClaim, domain.ModelCheckpointInput{
+				Iteration: 1,
+				Message: domain.GenerationMessage{
+					Role: domain.MessageRoleAssistant,
+					Content: json.RawMessage(
+						`[{"type":"tool_use","id":"provider-mcp","name":"calendar__write","input":{"value":"one"}}]`,
+					),
+				},
+				Usage: domain.ModelUsage{
+					InputTokens:  3,
+					OutputTokens: 1,
+					Iterations:   1,
+				},
+				Provenance: testModelProvenance(),
+				ToolCalls: []domain.ToolCallRequest{{
+					ProviderCallID: "provider-mcp",
+					Name:           "calendar__write",
+					Mode:           domain.ToolCallModeMCP,
+					Input:          json.RawMessage(`{"value":"one"}`),
+				}},
+			})
+			if err != nil || len(recorded.ToolCalls) != 1 {
+				t.Fatalf("record MCP checkpoint = %#v, %v", recorded, err)
+			}
+			firstStart, err := coordinator.StartMCPToolCall(
+				ctx,
+				firstClaim,
+				1,
+				"provider-mcp",
+				test.retrySafe,
+			)
+			if err != nil || firstStart.Execution == nil {
+				t.Fatalf("first MCP start = %#v, %v", firstStart, err)
+			}
+
+			clock.Advance(time.Minute + time.Nanosecond)
+			if recovered, err := ownership.ReapExpired(ctx, 10); err != nil || len(recovered) != 1 {
+				t.Fatalf("reap MCP owner = %#v, %v", recovered, err)
+			}
+			secondClaim, disposition, err := ownership.ClaimExact(
+				ctx,
+				ack.InvocationID,
+				"mcp-owner-two",
+				time.Minute,
+			)
+			if err != nil || disposition != services.Claimed {
+				t.Fatalf("second claim = %q, %v", disposition, err)
+			}
+			secondStart, err := coordinator.StartMCPToolCall(
+				ctx,
+				secondClaim,
+				1,
+				"provider-mcp",
+				test.retrySafe,
+			)
+			if err != nil {
+				t.Fatalf("second MCP start: %v", err)
+			}
+			if test.wantRecovered {
+				if secondStart.Execution != nil || !secondStart.RecoveredIsError ||
+					len(secondStart.RecoveredContent) == 0 {
+					t.Fatalf("unknown outcome start = %#v", secondStart)
+				}
+			} else {
+				if secondStart.Execution == nil {
+					t.Fatalf("safe retry start = %#v", secondStart)
+				}
+				if _, err := coordinator.AcceptMCPToolResult(
+					ctx,
+					secondClaim,
+					*secondStart.Execution,
+					json.RawMessage(`{"content":["ok"]}`),
+					false,
+				); err != nil {
+					t.Fatalf("accept MCP result: %v", err)
+				}
+			}
+			call, err := store.GetToolCall(ctx, recorded.ToolCalls[0].ID)
+			if err != nil || call.Status == domain.ToolCallRunning ||
+				call.ResultOrigin == nil || *call.ResultOrigin != test.wantOrigin ||
+				call.CurrentAttempt != test.wantCurrentAttempt {
+				t.Fatalf("settled MCP call = %#v, %v", call, err)
+			}
+			checkpoints, err := store.ListInvocationCheckpoints(ctx, ack.InvocationID)
+			if err != nil || len(checkpoints) != 2 ||
+				checkpoints[1].ToolCallID == nil ||
+				*checkpoints[1].ToolCallID != call.ID {
+				t.Fatalf("MCP checkpoints = %#v, %v", checkpoints, err)
+			}
+		})
+	}
+}
+
 func TestExpiredLeaseReplaysCommittedFinalCheckpointWithoutProviderCall(t *testing.T) {
 	pool, runtime, store, auth := newRuntimeFixture(t)
 	ctx := context.Background()

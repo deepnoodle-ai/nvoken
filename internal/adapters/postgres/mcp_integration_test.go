@@ -96,14 +96,14 @@ func TestMCPAdmissionBindingsCleanupAndDiscoveryFenceIntegration(t *testing.T) {
 		bytes.Contains(snapshot.Spec, []byte(`"headers"`)) {
 		t.Fatalf("durable spec contains MCP headers: %s", snapshot.Spec)
 	}
-	for _, expected := range [][]byte{
-		[]byte(`"transport":"streamable_http"`),
-		[]byte(`"discovery_seconds":10`),
-		[]byte(`"call_seconds":30`),
-	} {
-		if !bytes.Contains(snapshot.Spec, expected) {
-			t.Fatalf("durable spec lacks %s: %s", expected, snapshot.Spec)
-		}
+	var durableSpec services.InlineExecutionSpec
+	if err := json.Unmarshal(snapshot.Spec, &durableSpec); err != nil ||
+		len(durableSpec.MCPServers) != 1 ||
+		durableSpec.MCPServers[0].Transport != services.MCPTransportStreamableHTTP ||
+		durableSpec.MCPServers[0].Timeouts == nil ||
+		durableSpec.MCPServers[0].Timeouts.DiscoverySeconds != services.DefaultMCPDiscoverySeconds ||
+		durableSpec.MCPServers[0].Timeouts.CallSeconds != services.DefaultMCPCallSeconds {
+		t.Fatalf("durable spec defaults = %#v, error = %v", durableSpec, err)
 	}
 
 	replayInput := input
@@ -196,7 +196,7 @@ func TestMCPAdmissionBindingsCleanupAndDiscoveryFenceIntegration(t *testing.T) {
 		t.Fatalf("create fenced discovery = %#v, %v", created, err)
 	}
 	loaded, err := store.GetInvocationMCPDiscovery(ctx, claim.Invocation.ID)
-	if err != nil || !bytes.Equal(loaded.Catalog, catalog) {
+	if err != nil || !jsonObjectEqual(loaded.Catalog, catalog) {
 		t.Fatalf("load fenced discovery = %#v, %v", loaded, err)
 	}
 }

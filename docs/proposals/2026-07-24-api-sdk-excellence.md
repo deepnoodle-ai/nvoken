@@ -1320,7 +1320,7 @@ usable SDK and CLI surface.
   names the actual PRD 015 dependency, includes or explicitly companions the
   required SDK/CLI surface, receives its independent review once, and has no
   unresolved blocking finding.
-- [ ] **AC-2B.2 (`EX-2B.2`):** Strict admission, secret exclusion,
+- [x] **AC-2B.2 (`EX-2B.2`):** Strict admission, secret exclusion,
   encrypted-binding cleanup, stable discovery projection, allowlist handling,
   and stateless discovery pass PRD 029’s normal and failure-path acceptance
   fixtures.
@@ -1345,6 +1345,12 @@ usable SDK and CLI surface.
 the retained v1–v7 lineage, the actual client-tool dependency, the complete
 SDK/CLI/example surface, and one verified Claude Fable 5 review. All sound
 findings were incorporated; no blocking finding remains.
+
+`EX-2B.2` is implemented and proven by the normal and disposable-Postgres
+gates: admission and fingerprint fixtures, encrypted binding cleanup and
+sweeping, stable ordered discovery projection, allowlist and collision
+failures, guarded stateless discovery, and fenced one-catalog persistence all
+pass without durable or observable credential material.
 
 ### Phase 3 — additive contract completeness
 

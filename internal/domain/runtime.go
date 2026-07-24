@@ -182,6 +182,7 @@ type GenerationRequest struct {
 	Model            string
 	Messages         []GenerationMessage
 	HostTools        []HostToolDefinition
+	MCPTools         []MCPToolDefinition
 	MaxOutputTokens  *int
 	MaxIterations    int
 	Claim            *InvocationClaim

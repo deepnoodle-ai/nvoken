@@ -151,6 +151,8 @@ func TestUpgradePreflightAndPinnedSchemaCompatibility(t *testing.T) {
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx, `
 		DROP INDEX session_messages_by_invocation;
+		DROP TABLE invocation_mcp_discoveries;
+		DROP TABLE invocation_mcp_server_bindings;
 		DROP TABLE nvoken_schema_compatibility;
 		UPDATE nvoken_schema_migrations SET version = 13, dirty = false
 	`); err != nil {
@@ -163,7 +165,7 @@ func TestUpgradePreflightAndPinnedSchemaCompatibility(t *testing.T) {
 	request := UpgradePreflightRequest{
 		CurrentBuildVersion:        "build-13",
 		CurrentBinarySchemaVersion: 13,
-		TargetBuildVersion:         "build-16",
+		TargetBuildVersion:         "build-17",
 		Mode:                       UpgradeOrdinary,
 	}
 	if _, err := PreflightUpgrade(ctx, pool, request); err == nil || !strings.Contains(err.Error(), "must land on schema 000014") {
@@ -187,6 +189,8 @@ func TestUpgradePreflightAndPinnedSchemaCompatibility(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx, `
 		DROP INDEX session_messages_by_invocation;
+		DROP TABLE invocation_mcp_discoveries;
+		DROP TABLE invocation_mcp_server_bindings;
 		UPDATE nvoken_schema_migrations SET version = 14;
 		UPDATE nvoken_schema_compatibility
 		SET schema_version = 14, minimum_binary_schema_version = 14
@@ -213,7 +217,7 @@ func TestUpgradePreflightAndPinnedSchemaCompatibility(t *testing.T) {
 	request.CurrentBinarySchemaVersion = 14
 	ordinary, err := PreflightUpgrade(ctx, pool, request)
 	if err != nil || !ordinary.OrdinaryCompatibilityWindow ||
-		ordinary.CurrentDatabaseSchemaVersion != 14 || ordinary.TargetSchemaVersion != 16 ||
+		ordinary.CurrentDatabaseSchemaVersion != 14 || ordinary.TargetSchemaVersion != 17 ||
 		ordinary.TargetMinimumBinarySchemaVersion != 14 || ordinary.TargetClassification != MigrationOrdinary {
 		t.Fatalf("ordinary post-transition preflight = %#v, %v", ordinary, err)
 	}
@@ -1090,6 +1094,7 @@ func setTestInvocationControls(invocation *domain.Invocation, createdAt time.Tim
 	invocation.FingerprintVersion = 1
 	invocation.TotalTimeoutMS = int64((30 * time.Minute) / time.Millisecond)
 	invocation.ActiveTimeoutMS = int64((30 * time.Minute) / time.Millisecond)
+	invocation.WaitingTimeoutMS = int64((30 * time.Minute) / time.Millisecond)
 	invocation.MaxIterations = 1
 	invocation.DeadlineAt = createdAt.Add(30 * time.Minute)
 }

@@ -196,6 +196,12 @@ func Run(ctx context.Context, cfg Config) error {
 		},
 		funding.StaticGate{Allowed: cfg.PlatformFundingEnabled},
 	)
+	mcp := mcpclient.New(mcpclient.Config{})
+	mcpCredentialResolver := services.NewMCPServerCredentialResolver(
+		store,
+		cfg.CredentialCipher,
+		clock,
+	)
 	var liveBus interface {
 		ports.LiveEventBus
 		Close() error
@@ -232,6 +238,7 @@ func Run(ctx context.Context, cfg Config) error {
 			divegen.WithToolCoordinator(toolCoordinator),
 			divegen.WithLogger(slog.Default()),
 			divegen.WithCredentialResolver(credentialResolver),
+			divegen.WithMCP(mcp, mcpCredentialResolver),
 		)
 		invocationExecutor := services.NewGenerationExecutor(
 			store,
@@ -239,6 +246,7 @@ func Run(ctx context.Context, cfg Config) error {
 			slog.Default(),
 			services.WithGenerationLiveEvents(liveBus),
 			services.WithGenerationClock(clock),
+			services.WithGenerationMCP(mcp, mcpCredentialResolver, ids),
 		)
 		ownership := services.NewInvocationExecutionService(store, txm, clock, ids,
 			services.WithExecutionSegmentCeiling(cfg.Engine.ExecutionSegmentCeiling))
@@ -292,7 +300,6 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	signaller := worksignal.NewInProcess()
 	cancellations := worksignal.NewPostgresCancellation(pool)
-	mcp := mcpclient.New(mcpclient.Config{})
 	runtime := services.NewRuntimeService(store, txm, clock, ids,
 		services.WithWorkSignaller(signaller), services.WithCancellationSignaller(cancellations),
 		services.WithLimitPolicy(cfg.Limits), services.WithRuntimeLogger(slog.Default()),
@@ -327,6 +334,7 @@ func Run(ctx context.Context, cfg Config) error {
 			divegen.WithToolCoordinator(toolCoordinator),
 			divegen.WithLogger(slog.Default()),
 			divegen.WithCredentialResolver(credentialResolver),
+			divegen.WithMCP(mcp, mcpCredentialResolver),
 		)
 		executor := services.NewGenerationExecutor(
 			store,
@@ -334,6 +342,7 @@ func Run(ctx context.Context, cfg Config) error {
 			slog.Default(),
 			services.WithGenerationLiveEvents(liveBus),
 			services.WithGenerationClock(clock),
+			services.WithGenerationMCP(mcp, mcpCredentialResolver, ids),
 		)
 		owner, err := executionOwner()
 		if err != nil {

@@ -34,11 +34,14 @@ type generationInvocationReader interface {
 // returns a desired terminal result; InvocationExecutionService alone owns the
 // fenced transaction that publishes that result.
 type GenerationExecutor struct {
-	store     generationStore
-	generator ports.ModelGenerator
-	events    ports.LiveEventPublisher
-	clock     ports.Clock
-	logger    *slog.Logger
+	store          generationStore
+	generator      ports.ModelGenerator
+	events         ports.LiveEventPublisher
+	clock          ports.Clock
+	ids            ports.IDGenerator
+	mcpClient      ports.MCPClient
+	mcpCredentials ports.MCPServerCredentialResolver
+	logger         *slog.Logger
 }
 
 type GenerationExecutorOption func(*GenerationExecutor)
@@ -52,6 +55,18 @@ func WithGenerationClock(clock ports.Clock) GenerationExecutorOption {
 		if clock != nil {
 			executor.clock = clock
 		}
+	}
+}
+
+func WithGenerationMCP(
+	client ports.MCPClient,
+	credentials ports.MCPServerCredentialResolver,
+	ids ports.IDGenerator,
+) GenerationExecutorOption {
+	return func(executor *GenerationExecutor) {
+		executor.mcpClient = client
+		executor.mcpCredentials = credentials
+		executor.ids = ids
 	}
 }
 
@@ -102,6 +117,13 @@ func (e *GenerationExecutor) Execute(
 		e.logExecutionFailure(claim, "invalid_spec", "", "")
 		return internalGenerationFailure(), nil
 	}
+	mcpTools, mcpFailure, err := e.prepareMCPGenerationTools(ctx, claim, spec)
+	if err != nil {
+		return domain.InvocationExecutionResult{}, err
+	}
+	if mcpFailure != nil {
+		return *mcpFailure, nil
+	}
 
 	stored, err := e.store.ListSessionMessagesForGeneration(ctx, claim.Invocation.SessionID)
 	if err != nil {
@@ -114,6 +136,7 @@ func (e *GenerationExecutor) Execute(
 		MaxOutputTokens: claim.Invocation.MaxOutputTokens,
 		MaxIterations:   claim.Invocation.MaxIterations,
 		Claim:           &claim,
+		MCPTools:        mcpTools,
 	}
 	for _, tool := range spec.Tools {
 		callbackURL := ""

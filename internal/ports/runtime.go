@@ -362,6 +362,11 @@ type ToolCallCoordinator interface {
 	AcceptBuiltinToolResult(context.Context, domain.InvocationClaim, domain.ToolCallExecution, json.RawMessage, bool) (domain.ToolCall, error)
 }
 
+type MCPToolCallCoordinator interface {
+	StartMCPToolCall(context.Context, domain.InvocationClaim, int, string, bool) (domain.MCPToolCallStart, error)
+	AcceptMCPToolResult(context.Context, domain.InvocationClaim, domain.ToolCallExecution, json.RawMessage, bool) (domain.ToolCall, error)
+}
+
 type ExecutionDispatchRepository interface {
 	CreateSyntheticDispatchWork(context.Context, domain.SyntheticDispatchWork) error
 	GetSyntheticDispatchWork(context.Context, string) (domain.SyntheticDispatchWork, error)

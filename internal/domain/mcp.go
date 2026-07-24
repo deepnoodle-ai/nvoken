@@ -68,6 +68,17 @@ type MCPCallResult struct {
 	IsError           bool
 }
 
+type MCPToolDefinition struct {
+	ServerName  string
+	URL         string
+	RemoteName  string
+	Name        string
+	Description string
+	InputSchema json.RawMessage
+	Annotations MCPToolAnnotations
+	CallTimeout time.Duration
+}
+
 type InvocationMCPDiscovery struct {
 	ID                string
 	InvocationID      string
