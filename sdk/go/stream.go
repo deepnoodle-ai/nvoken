@@ -28,20 +28,88 @@ var errInvocationStreamSettled = errors.New("Invocation stream settled")
 type ReducedSnapshot struct {
 	Messages          []SessionMessage             `json:"messages"`
 	InvocationChanges []generated.InvocationChange `json:"invocation_changes"`
+	Previews          []StreamPreview              `json:"previews"`
 	ResumeCursor      string                       `json:"resume_cursor,omitempty"`
 }
 
+type StreamPreview struct {
+	InvocationID string `json:"invocation_id"`
+	Attempt      int64  `json:"attempt"`
+	Iteration    int    `json:"iteration"`
+	ContentIndex int    `json:"content_index"`
+	OutputText   string `json:"output_text"`
+	Thinking     string `json:"thinking"`
+}
+
+type streamPreviewKey struct {
+	invocationID string
+	attempt      int64
+	iteration    int
+	contentIndex int
+}
+
 type Reducer struct {
-	messages map[int64]SessionMessage
-	changes  map[string]generated.InvocationChange
-	cursor   string
+	messages            map[int64]SessionMessage
+	changes             map[string]generated.InvocationChange
+	previews            map[streamPreviewKey]StreamPreview
+	latestAttempts      map[string]int64
+	terminalInvocations map[string]struct{}
+	cursor              string
 }
 
 func NewReducer() *Reducer {
-	return &Reducer{messages: make(map[int64]SessionMessage), changes: make(map[string]generated.InvocationChange)}
+	return &Reducer{
+		messages:            make(map[int64]SessionMessage),
+		changes:             make(map[string]generated.InvocationChange),
+		previews:            make(map[streamPreviewKey]StreamPreview),
+		latestAttempts:      make(map[string]int64),
+		terminalInvocations: make(map[string]struct{}),
+	}
 }
 
 func (r *Reducer) Apply(event StreamEvent) error {
+	switch event.Type {
+	case "output_text.delta":
+		var delta generated.OutputTextDeltaEvent
+		if err := json.Unmarshal(event.Data, &delta); err != nil {
+			return fmt.Errorf("decode output text delta: %w", err)
+		}
+		r.appendPreview(
+			delta.InvocationID,
+			delta.Attempt,
+			delta.Iteration,
+			delta.ContentIndex,
+			delta.Text,
+			"",
+		)
+		return nil
+	case "thinking.delta":
+		var delta generated.ThinkingDeltaEvent
+		if err := json.Unmarshal(event.Data, &delta); err != nil {
+			return fmt.Errorf("decode thinking delta: %w", err)
+		}
+		r.appendPreview(
+			delta.InvocationID,
+			delta.Attempt,
+			delta.Iteration,
+			delta.ContentIndex,
+			"",
+			delta.Thinking,
+		)
+		return nil
+	case "stream.resync":
+		var resync generated.StreamResyncEvent
+		if err := json.Unmarshal(event.Data, &resync); err != nil {
+			return fmt.Errorf("decode stream resync: %w", err)
+		}
+		if resync.InvocationID == nil {
+			clear(r.previews)
+			clear(r.latestAttempts)
+		} else {
+			r.discardPreviews(*resync.InvocationID)
+		}
+		return nil
+	}
 	if event.Type != "transcript.update" {
 		return nil
 	}
@@ -51,10 +119,20 @@ func (r *Reducer) Apply(event StreamEvent) error {
 	}
 	for _, message := range update.Messages {
 		r.messages[message.Sequence] = message
+		if message.Role == generated.Assistant {
+			r.discardPreviews(message.InvocationID)
+		}
 	}
 	for _, change := range update.InvocationChanges {
 		key := fmt.Sprintf("%s:%d", change.InvocationID, change.Revision)
 		r.changes[key] = change
+		switch change.Status {
+		case generated.InvocationStatusCompleted,
+			generated.InvocationStatusFailed,
+			generated.InvocationStatusCancelled:
+			r.terminalInvocations[change.InvocationID] = struct{}{}
+			r.discardPreviews(change.InvocationID)
+		}
 	}
 	if event.ID != "" {
 		r.cursor = event.ID
@@ -80,7 +158,73 @@ func (r *Reducer) Snapshot() ReducedSnapshot {
 		}
 		return changes[i].InvocationID < changes[j].InvocationID
 	})
-	return ReducedSnapshot{Messages: messages, InvocationChanges: changes, ResumeCursor: r.cursor}
+	previews := make([]StreamPreview, 0, len(r.previews))
+	for _, preview := range r.previews {
+		previews = append(previews, preview)
+	}
+	sort.Slice(previews, func(i, j int) bool {
+		if previews[i].InvocationID != previews[j].InvocationID {
+			return previews[i].InvocationID < previews[j].InvocationID
+		}
+		if previews[i].Attempt != previews[j].Attempt {
+			return previews[i].Attempt < previews[j].Attempt
+		}
+		if previews[i].Iteration != previews[j].Iteration {
+			return previews[i].Iteration < previews[j].Iteration
+		}
+		return previews[i].ContentIndex < previews[j].ContentIndex
+	})
+	return ReducedSnapshot{
+		Messages:          messages,
+		InvocationChanges: changes,
+		Previews:          previews,
+		ResumeCursor:      r.cursor,
+	}
+}
+
+func (r *Reducer) appendPreview(
+	invocationID string,
+	attempt int64,
+	iteration int,
+	contentIndex int,
+	outputText string,
+	thinking string,
+) {
+	if _, terminal := r.terminalInvocations[invocationID]; terminal {
+		return
+	}
+	if latest, ok := r.latestAttempts[invocationID]; ok {
+		if attempt < latest {
+			return
+		}
+		if attempt > latest {
+			r.discardPreviews(invocationID)
+		}
+	}
+	r.latestAttempts[invocationID] = attempt
+	key := streamPreviewKey{
+		invocationID: invocationID,
+		attempt:      attempt,
+		iteration:    iteration,
+		contentIndex: contentIndex,
+	}
+	preview := r.previews[key]
+	preview.InvocationID = invocationID
+	preview.Attempt = attempt
+	preview.Iteration = iteration
+	preview.ContentIndex = contentIndex
+	preview.OutputText += outputText
+	preview.Thinking += thinking
+	r.previews[key] = preview
+}
+
+func (r *Reducer) discardPreviews(invocationID string) {
+	for key := range r.previews {
+		if key.invocationID == invocationID {
+			delete(r.previews, key)
+		}
+	}
+	delete(r.latestAttempts, invocationID)
 }
 
 func (h *InvocationHandle) Stream(ctx context.Context, consume func(StreamEvent) error) error {

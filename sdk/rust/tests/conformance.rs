@@ -8,7 +8,7 @@ use nvoken::{
     deduplicate_callback_result, verify_callback, CallbackResultStore, Client, ErrorCategory,
     ExecutionSpec, InvokeRequest, ListInvocationsOptions, ListModelsOptions, MessageListOptions,
     Model, ProviderCredentialSelection, ProviderCredentialSource, Reducer, RetryPolicy,
-    StreamEvent, ToolResult,
+    StreamEvent, StreamPreview, ToolResult,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -243,12 +243,12 @@ fn shared_reducer_vector() {
     )
     .unwrap();
     let mut reducer = Reducer::default();
-    for event in fixture.events {
+    for event in &fixture.events {
         reducer
             .apply(&StreamEvent {
-                id: Some(event.id),
-                event_type: event.event,
-                data: event.data,
+                id: Some(event.id.clone()),
+                event_type: event.event.clone(),
+                data: event.data.clone(),
                 retry: None,
             })
             .unwrap();
@@ -274,12 +274,40 @@ fn shared_reducer_vector() {
         snapshot.resume_cursor.as_deref(),
         Some(fixture.expected.resume_cursor.as_str())
     );
+    assert_eq!(snapshot.previews, fixture.expected.previews);
+    for preview_case in fixture.preview_cases {
+        let mut preview_reducer = Reducer::default();
+        for event in preview_case.events {
+            preview_reducer
+                .apply(&StreamEvent {
+                    id: Some(event.id),
+                    event_type: event.event,
+                    data: event.data,
+                    retry: None,
+                })
+                .unwrap();
+        }
+        assert_eq!(
+            preview_reducer.snapshot().previews,
+            preview_case.expected_previews,
+            "{}",
+            preview_case.name
+        );
+    }
 }
 
 #[derive(Deserialize)]
 struct ReducerFixture {
     events: Vec<ReducerEvent>,
+    preview_cases: Vec<ReducerPreviewCase>,
     expected: ReducerExpected,
+}
+
+#[derive(Deserialize)]
+struct ReducerPreviewCase {
+    name: String,
+    events: Vec<ReducerEvent>,
+    expected_previews: Vec<StreamPreview>,
 }
 
 #[derive(Deserialize)]
@@ -294,6 +322,7 @@ struct ReducerExpected {
     message_sequences: Vec<u64>,
     invocation_revisions: Vec<u64>,
     resume_cursor: String,
+    previews: Vec<StreamPreview>,
 }
 
 async fn assert_error(client: &Client, id: &str, category: ErrorCategory, status: u16) {

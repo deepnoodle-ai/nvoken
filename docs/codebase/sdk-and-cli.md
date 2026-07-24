@@ -104,6 +104,36 @@ iteration syntax differs:
 - The generated transport remains an explicit raw escape hatch and owns
   one-to-one operation coverage.
 
+### Checked public mappings
+
+This document is the single normative home for the handwritten SDK design.
+`make sdk-check` holds the mappings below against shared fixtures and each
+package's documented level. Generated names may shift with regeneration; the
+facade names and meanings in this table are the supported contract.
+
+| Concept | Shared meaning | TypeScript | Python | Go | Rust |
+| --- | --- | --- | --- | --- | --- |
+| Supported level | Never infer Agent parity from generated operation coverage. | Agent + bound Session + durable handle | Agent + bound Session + durable handle | Agent + bound Session + durable handle | Transport + durable handle; no Agent facade |
+| Wait | Stop locally when `until` matches, the overall timeout expires, or the caller cancels. Poll bounds affect cadence only; no local stop cancels the Invocation. | `WaitOptions { until, timeoutMs, minPollIntervalMs, maxPollIntervalMs, signal }` | `WaitOptions(until, timeout, min_poll_interval, max_poll_interval)` plus native task cancellation | `WaitOptions{Until, Timeout, MinPollInterval, MaxPollInterval}` plus `context.Context` | `WaitOptions { until, timeout, min_poll_interval, max_poll_interval }` |
+| Cancellation | Explicit handle cancellation is remote. Caller cancellation is local and never a timeout. | `AbortSignal`; SDK `cancelled` error | native `asyncio.CancelledError` | `context.Canceled`; SDK `ErrorCancelled` | SDK `Cancelled` when wrapped |
+| Pagination | Opaque cursors are forwarded unchanged; iterators stop only when `has_more` is false and never invent cursors. | async generators for Invocations, Sessions, messages | async iterators for the same collections | iterator callbacks for the same collections | explicit page reads at the documented handle level |
+| Callback tool | One nested wire-aligned callback target and no local handler. | `{ mode: "callback", callback: { url } }` | `CallbackTool(..., callback=CallbackTarget(url=...))` | `Tool{Mode: ToolModeCallback, Callback: &CallbackTarget{URL: ...}}` | `ToolMode::Callback { callback: CallbackTarget { url } }` |
+| Errors | Preserve category, machine code, status when received from HTTP, request ID, retry delay, and safe details. | `NvokenError` | `NvokenError` | `nvoken.Error` | `NvokenError` |
+| Raw access | Generated and intentionally less stable than the facade. | `raw` package namespace and `client.raw()` APIs | `client.raw()` generated API group | `client.Raw()` generated client | `client.raw()` generated configuration/APIs |
+| Per-turn credentials | A facade admission selects one stored source or caller-ephemeral key; secret material never enters logs or results. | `InvokeRequest.providerCredentials` | `InvokeRequest.provider_credentials` | `InvokeRequest.ProviderCredentials` | `InvokeRequest::provider_credentials` |
+| Bound Session | Serialize local admission until the preceding Invocation is terminal; the server remains authoritative across processes. | promise chain in `AgentSession` | `asyncio.Lock` | `sync.Mutex` | Not available without an Agent facade |
+| Missing host handler | Cancel the parked Invocation before the typed error by default; an explicit opt-out leaves it waiting for another process. | `MissingToolHandlerError` | `MissingToolHandlerError` | `MissingToolHandlerError` | Manual handle workflow; no automatic dispatch |
+| Text-only result | `text` requires assistant text. A typed no-output error identifies structured-only or tool-only completion and points to `run`. | `NoOutputTextError` | `NoOutputTextError` | `NoOutputTextError` | No Agent `text` verb |
+| Stream preview | Provisional only; key by `(invocation_id, attempt, iteration, content_index)`, concatenate matching deltas, discard older attempts and resync gaps, and remove when canonical assistant state arrives. It never advances a durable cursor. | `ReducedSnapshot.previews` | `ReducedSnapshot.previews` | `ReducedSnapshot.Previews` | `ReducedSnapshot::previews` |
+
+The shared `sdk/conformance/fixtures/reducer.json` vector proves durable cursor
+retention separately from preview accumulation, attempt replacement, resync
+discard, canonical-message replacement, and rejection of late deltas after a
+terminal revision. The conformance server proves wait conditions and
+park → submit → resume → settle behavior. TypeScript, Python, and Go perform
+the dispatch loop automatically; Rust proves the same durable state changes
+through wait-for-action and manual ToolCall result submission.
+
 The ergonomic Agent layer is specified as five verbs: `text`, `run`, `invoke`,
 `stream`, and `session`. A bound Session serializes turn admission in-process;
 the server remains authoritative across bindings and processes. Schema-capable

@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use async_stream::try_stream;
 use futures_util::StreamExt;
 use reqwest::header::{HeaderName, ACCEPT, AUTHORIZATION};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::client::{InvocationHandle, NvokenError};
@@ -22,18 +23,87 @@ pub struct StreamEvent {
 pub struct ReducedSnapshot {
     pub messages: Vec<models::SessionMessage>,
     pub invocation_changes: Vec<models::InvocationChange>,
+    pub previews: Vec<StreamPreview>,
     pub resume_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct StreamPreview {
+    pub invocation_id: String,
+    pub attempt: u64,
+    pub iteration: u32,
+    pub content_index: u32,
+    pub output_text: String,
+    pub thinking: String,
 }
 
 #[derive(Debug, Default)]
 pub struct Reducer {
     messages: BTreeMap<u64, models::SessionMessage>,
     changes: BTreeMap<(String, u64), models::InvocationChange>,
+    previews: BTreeMap<(String, u64, u32, u32), StreamPreview>,
+    latest_attempts: BTreeMap<String, u64>,
+    terminal_invocations: BTreeSet<String>,
     cursor: Option<String>,
 }
 
 impl Reducer {
     pub fn apply(&mut self, event: &StreamEvent) -> Result<(), NvokenError> {
+        match event.event_type.as_str() {
+            "output_text.delta" => {
+                let delta: models::OutputTextDeltaEvent =
+                    serde_json::from_value(event.data.clone()).map_err(|error| {
+                        NvokenError::unexpected(format!(
+                            "decode {} event payload: {error}",
+                            event.event_type
+                        ))
+                    })?;
+                self.append_preview(
+                    delta.invocation_id,
+                    delta.attempt,
+                    delta.iteration,
+                    delta.content_index,
+                    delta.text,
+                    String::new(),
+                );
+                return Ok(());
+            }
+            "thinking.delta" => {
+                let delta: models::ThinkingDeltaEvent = serde_json::from_value(event.data.clone())
+                    .map_err(|error| {
+                        NvokenError::unexpected(format!(
+                            "decode {} event payload: {error}",
+                            event.event_type
+                        ))
+                    })?;
+                self.append_preview(
+                    delta.invocation_id,
+                    delta.attempt,
+                    delta.iteration,
+                    delta.content_index,
+                    String::new(),
+                    delta.thinking,
+                );
+                return Ok(());
+            }
+            "stream.resync" => {
+                let resync: models::StreamResyncEvent = serde_json::from_value(event.data.clone())
+                    .map_err(|error| {
+                        NvokenError::unexpected(format!(
+                            "decode {} event payload: {error}",
+                            event.event_type
+                        ))
+                    })?;
+                if let Some(invocation_id) = resync.invocation_id {
+                    self.discard_previews(&invocation_id);
+                } else {
+                    self.previews.clear();
+                    self.latest_attempts.clear();
+                }
+                return Ok(());
+            }
+            _ => {}
+        }
         if event.event_type != "transcript.update" {
             return Ok(());
         }
@@ -45,9 +115,22 @@ impl Reducer {
                 ))
             })?;
         for message in update.messages {
+            if message.role == models::SessionMessageRole::Assistant {
+                self.discard_previews(&message.invocation_id);
+            }
             self.messages.insert(message.sequence, message);
         }
         for change in update.invocation_changes {
+            if matches!(
+                change.status,
+                models::InvocationStatus::Completed
+                    | models::InvocationStatus::Failed
+                    | models::InvocationStatus::Cancelled
+            ) {
+                self.terminal_invocations
+                    .insert(change.invocation_id.clone());
+                self.discard_previews(&change.invocation_id);
+            }
             self.changes
                 .insert((change.invocation_id.clone(), change.revision), change);
         }
@@ -67,8 +150,48 @@ impl Reducer {
         ReducedSnapshot {
             messages: self.messages.values().cloned().collect(),
             invocation_changes: self.changes.values().cloned().collect(),
+            previews: self.previews.values().cloned().collect(),
             resume_cursor: self.cursor.clone(),
         }
+    }
+
+    fn append_preview(
+        &mut self,
+        invocation_id: String,
+        attempt: u64,
+        iteration: u32,
+        content_index: u32,
+        output_text: String,
+        thinking: String,
+    ) {
+        if self.terminal_invocations.contains(&invocation_id) {
+            return;
+        }
+        if let Some(latest) = self.latest_attempts.get(&invocation_id).copied() {
+            if attempt < latest {
+                return;
+            }
+            if attempt > latest {
+                self.discard_previews(&invocation_id);
+            }
+        }
+        self.latest_attempts.insert(invocation_id.clone(), attempt);
+        let key = (invocation_id.clone(), attempt, iteration, content_index);
+        let preview = self.previews.entry(key).or_insert_with(|| StreamPreview {
+            invocation_id,
+            attempt,
+            iteration,
+            content_index,
+            ..StreamPreview::default()
+        });
+        preview.output_text.push_str(&output_text);
+        preview.thinking.push_str(&thinking);
+    }
+
+    fn discard_previews(&mut self, invocation_id: &str) {
+        self.previews
+            .retain(|(candidate, _, _, _), _| candidate != invocation_id);
+        self.latest_attempts.remove(invocation_id);
     }
 }
 

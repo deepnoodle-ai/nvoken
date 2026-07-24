@@ -17,7 +17,7 @@ from .client import (
     Tool,
     ToolResult,
 )
-from .stream import Reducer, ReducedSnapshot, StreamEvent, stream_session
+from .stream import Reducer, ReducedSnapshot, StreamEvent, StreamPreview, stream_session
 from nvoken_generated import *  # noqa: F403
 
 __all__ = [
@@ -34,6 +34,7 @@ __all__ = [
     "Reducer",
     "RetryPolicy",
     "StreamEvent",
+    "StreamPreview",
     "Tool",
     "ToolResult",
     "VerifiedCallback",

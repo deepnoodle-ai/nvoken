@@ -16,4 +16,4 @@ pub use client::{
     NvokenError, ProviderCredentialSelection, ProviderCredentialSource, RetryPolicy, Tool,
     ToolMode, ToolResult,
 };
-pub use stream::{ReducedSnapshot, Reducer, StreamEvent};
+pub use stream::{ReducedSnapshot, Reducer, StreamEvent, StreamPreview};

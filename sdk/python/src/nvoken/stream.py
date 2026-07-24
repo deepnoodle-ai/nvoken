@@ -25,24 +25,62 @@ class StreamEvent:
 class ReducedSnapshot:
     messages: list[SessionMessage]
     invocation_changes: list[InvocationChange]
+    previews: list[StreamPreview]
     resume_cursor: str | None
+
+
+@dataclass(frozen=True)
+class StreamPreview:
+    invocation_id: str
+    attempt: int
+    iteration: int
+    content_index: int
+    output_text: str
+    thinking: str
 
 
 class Reducer:
     def __init__(self) -> None:
         self._messages: dict[int, SessionMessage] = {}
         self._changes: dict[tuple[str, int], InvocationChange] = {}
+        self._previews: dict[tuple[str, int, int, int], StreamPreview] = {}
+        self._latest_attempts: dict[str, int] = {}
+        self._terminal_invocations: set[str] = set()
         self._cursor: str | None = None
 
     def apply(self, event: StreamEvent) -> None:
+        if event.type in {"output_text.delta", "thinking.delta"}:
+            data = event.data
+            self._append_preview(
+                invocation_id=data["invocation_id"],
+                attempt=data["attempt"],
+                iteration=data["iteration"],
+                content_index=data["content_index"],
+                output_text=data.get("text", ""),
+                thinking=data.get("thinking", ""),
+            )
+            return
+        if event.type == "stream.resync":
+            invocation_id = event.data.get("invocation_id")
+            if invocation_id is None:
+                self._previews.clear()
+                self._latest_attempts.clear()
+            else:
+                self._discard_previews(invocation_id)
+            return
         if event.type != "transcript.update":
             return
         update = TranscriptUpdate.from_dict(event.data)
         assert update is not None
         for message in update.messages:
             self._messages[message.sequence] = message
+            if message.role.value == "assistant":
+                self._discard_previews(message.invocation_id)
         for change in update.invocation_changes:
             self._changes[(change.invocation_id, change.revision)] = change
+            if change.status.value in {"completed", "failed", "cancelled"}:
+                self._terminal_invocations.add(change.invocation_id)
+                self._discard_previews(change.invocation_id)
         self._cursor = event.id or update.resume_cursor or self._cursor
 
     def snapshot(self) -> ReducedSnapshot:
@@ -52,8 +90,54 @@ class Reducer:
                 self._changes.values(),
                 key=lambda change: (change.invocation_id, change.revision),
             ),
+            previews=sorted(
+                self._previews.values(),
+                key=lambda preview: (
+                    preview.invocation_id,
+                    preview.attempt,
+                    preview.iteration,
+                    preview.content_index,
+                ),
+            ),
             resume_cursor=self._cursor,
         )
+
+    def _append_preview(
+        self,
+        *,
+        invocation_id: str,
+        attempt: int,
+        iteration: int,
+        content_index: int,
+        output_text: str,
+        thinking: str,
+    ) -> None:
+        if invocation_id in self._terminal_invocations:
+            return
+        latest = self._latest_attempts.get(invocation_id)
+        if latest is not None and attempt < latest:
+            return
+        if latest is None or attempt > latest:
+            self._discard_previews(invocation_id)
+            self._latest_attempts[invocation_id] = attempt
+        key = (invocation_id, attempt, iteration, content_index)
+        current = self._previews.get(key)
+        self._previews[key] = StreamPreview(
+            invocation_id=invocation_id,
+            attempt=attempt,
+            iteration=iteration,
+            content_index=content_index,
+            output_text=(current.output_text if current else "") + output_text,
+            thinking=(current.thinking if current else "") + thinking,
+        )
+
+    def _discard_previews(self, invocation_id: str) -> None:
+        self._previews = {
+            key: preview
+            for key, preview in self._previews.items()
+            if preview.invocation_id != invocation_id
+        }
+        self._latest_attempts.pop(invocation_id, None)
 
 
 async def stream_session(

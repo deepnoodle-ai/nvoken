@@ -34,7 +34,17 @@ export interface StreamEvent {
 export interface ReducedSnapshot {
   messages: SessionMessage[];
   invocationChanges: InvocationChange[];
+  previews: StreamPreview[];
   resumeCursor?: string;
+}
+
+export interface StreamPreview {
+  invocationId: string;
+  attempt: number;
+  iteration: number;
+  contentIndex: number;
+  outputText: string;
+  thinking: string;
 }
 
 export interface StreamUpdate {
@@ -74,14 +84,58 @@ export type InvocationStreamEvent<TOutput extends object = JsonObject> = StreamM
 export class Reducer {
   private readonly messages = new Map<number, SessionMessage>();
   private readonly changes = new Map<string, InvocationChange>();
+  private readonly previews = new Map<string, StreamPreview>();
+  private readonly latestAttempts = new Map<string, number>();
+  private readonly terminalInvocations = new Set<string>();
   private cursor?: string;
 
   apply(event: StreamEvent): void {
+    if (event.type === "output_text.delta") {
+      const delta = OutputTextDeltaEventFromJSON(event.data);
+      this.appendPreview(
+        delta.invocationId,
+        delta.attempt,
+        delta.iteration,
+        delta.contentIndex,
+        delta.text,
+        "",
+      );
+      return;
+    }
+    if (event.type === "thinking.delta") {
+      const delta = ThinkingDeltaEventFromJSON(event.data);
+      this.appendPreview(
+        delta.invocationId,
+        delta.attempt,
+        delta.iteration,
+        delta.contentIndex,
+        "",
+        delta.thinking,
+      );
+      return;
+    }
+    if (event.type === "stream.resync") {
+      const resync = StreamResyncEventFromJSON(event.data);
+      if (resync.invocationId) {
+        this.discardPreviews(resync.invocationId);
+      } else {
+        this.previews.clear();
+        this.latestAttempts.clear();
+      }
+      return;
+    }
     if (event.type !== "transcript.update") return;
     const update = TranscriptUpdateFromJSON(event.data);
-    for (const message of update.messages) this.messages.set(message.sequence, message);
+    for (const message of update.messages) {
+      this.messages.set(message.sequence, message);
+      if (message.role === "assistant") this.discardPreviews(message.invocationId);
+    }
     for (const change of update.invocationChanges) {
       this.changes.set(`${change.invocationId}:${change.revision}`, change);
+      if (["completed", "failed", "cancelled"].includes(change.status)) {
+        this.terminalInvocations.add(change.invocationId);
+        this.discardPreviews(change.invocationId);
+      }
     }
     const cursor = event.id || update.resumeCursor;
     if (cursor) this.cursor = cursor;
@@ -94,8 +148,51 @@ export class Reducer {
         const invocationOrder = left.invocationId.localeCompare(right.invocationId);
         return invocationOrder || left.revision - right.revision;
       }),
+      previews: [...this.previews.values()]
+        .map((preview) => ({ ...preview }))
+        .sort((left, right) =>
+          left.invocationId.localeCompare(right.invocationId)
+          || left.attempt - right.attempt
+          || left.iteration - right.iteration
+          || left.contentIndex - right.contentIndex),
       resumeCursor: this.cursor,
     };
+  }
+
+  private appendPreview(
+    invocationId: string,
+    attempt: number,
+    iteration: number,
+    contentIndex: number,
+    outputText: string,
+    thinking: string,
+  ): void {
+    if (this.terminalInvocations.has(invocationId)) return;
+    const latestAttempt = this.latestAttempts.get(invocationId);
+    if (latestAttempt !== undefined && attempt < latestAttempt) return;
+    if (latestAttempt === undefined || attempt > latestAttempt) {
+      this.discardPreviews(invocationId);
+      this.latestAttempts.set(invocationId, attempt);
+    }
+    const key = `${invocationId}:${attempt}:${iteration}:${contentIndex}`;
+    const preview = this.previews.get(key) ?? {
+      invocationId,
+      attempt,
+      iteration,
+      contentIndex,
+      outputText: "",
+      thinking: "",
+    };
+    preview.outputText += outputText;
+    preview.thinking += thinking;
+    this.previews.set(key, preview);
+  }
+
+  private discardPreviews(invocationId: string): void {
+    for (const [key, preview] of this.previews) {
+      if (preview.invocationId === invocationId) this.previews.delete(key);
+    }
+    this.latestAttempts.delete(invocationId);
   }
 }
 

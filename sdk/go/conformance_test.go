@@ -265,10 +265,20 @@ func TestSharedReducerVector(t *testing.T) {
 			Event string          `json:"event"`
 			Data  json.RawMessage `json:"data"`
 		} `json:"events"`
+		PreviewCases []struct {
+			Name   string `json:"name"`
+			Events []struct {
+				ID    string          `json:"id"`
+				Event string          `json:"event"`
+				Data  json.RawMessage `json:"data"`
+			} `json:"events"`
+			ExpectedPreviews []StreamPreview `json:"expected_previews"`
+		} `json:"preview_cases"`
 		Expected struct {
-			MessageSequences    []int64 `json:"message_sequences"`
-			InvocationRevisions []int64 `json:"invocation_revisions"`
-			ResumeCursor        string  `json:"resume_cursor"`
+			MessageSequences    []int64         `json:"message_sequences"`
+			InvocationRevisions []int64         `json:"invocation_revisions"`
+			ResumeCursor        string          `json:"resume_cursor"`
+			Previews            []StreamPreview `json:"previews"`
 		} `json:"expected"`
 	}
 	decodeFile(t, "../conformance/fixtures/reducer.json", &fixture)
@@ -298,6 +308,32 @@ func TestSharedReducerVector(t *testing.T) {
 	}
 	if snapshot.ResumeCursor != fixture.Expected.ResumeCursor {
 		t.Fatalf("resume cursor = %q, want %q", snapshot.ResumeCursor, fixture.Expected.ResumeCursor)
+	}
+	if len(snapshot.Previews) != len(fixture.Expected.Previews) {
+		t.Fatalf("previews = %#v, want %#v", snapshot.Previews, fixture.Expected.Previews)
+	}
+	for _, previewCase := range fixture.PreviewCases {
+		t.Run(previewCase.Name, func(t *testing.T) {
+			previewReducer := NewReducer()
+			for _, event := range previewCase.Events {
+				if err := previewReducer.Apply(StreamEvent{
+					ID:   event.ID,
+					Type: event.Event,
+					Data: event.Data,
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			actual := previewReducer.Snapshot().Previews
+			if len(actual) != len(previewCase.ExpectedPreviews) {
+				t.Fatalf("previews = %#v, want %#v", actual, previewCase.ExpectedPreviews)
+			}
+			for index := range actual {
+				if actual[index] != previewCase.ExpectedPreviews[index] {
+					t.Fatalf("preview %d = %#v, want %#v", index, actual[index], previewCase.ExpectedPreviews[index])
+				}
+			}
+		})
 	}
 }
 

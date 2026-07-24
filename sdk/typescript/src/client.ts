@@ -111,17 +111,53 @@ export class MissingToolHandlerError<TOutput extends object = JsonObject> extend
   constructor(
     public readonly handle: InvocationHandle<TOutput>,
     public readonly toolCall: PendingHostToolCall,
+    public readonly invocationCancelled: boolean,
+    options?: ErrorOptions,
   ) {
     super(
       "validation",
-      `Host tool ${toolCall.name} needs a handler before Invocation ${handle.invocationId} can continue`,
+      invocationCancelled
+        ? `Invocation ${handle.invocationId} was cancelled because host tool ${toolCall.name} has no local handler`
+        : `Invocation ${handle.invocationId} remains waiting because host tool ${toolCall.name} has no local handler`,
       undefined,
       "missing_tool_handler",
       undefined,
       undefined,
-      { invocation_id: handle.invocationId, tool_call_id: toolCall.id, tool_name: toolCall.name },
+      {
+        invocation_id: handle.invocationId,
+        tool_call_id: toolCall.id,
+        tool_name: toolCall.name,
+        invocation_cancelled: invocationCancelled,
+      },
+      options,
     );
     this.name = "MissingToolHandlerError";
+  }
+}
+
+export class NoOutputTextError<TOutput extends object = JsonObject> extends NvokenError {
+  constructor(public readonly result: AgentResult<TOutput>) {
+    const producedStructuredOutput = result.structuredOutput !== null;
+    const producedToolOutput = result.messages.some((message) => message.role === "tool");
+    const produced = producedStructuredOutput
+      ? "structured output"
+      : producedToolOutput
+        ? "tool output"
+        : "no canonical assistant text";
+    super(
+      "unexpected_response",
+      `Invocation ${result.invocation.id} completed with ${produced}; call run() and inspect the full result`,
+      undefined,
+      "no_output_text",
+      undefined,
+      undefined,
+      {
+        invocation_id: result.invocation.id,
+        produced_structured_output: producedStructuredOutput,
+        produced_tool_output: producedToolOutput,
+      },
+    );
+    this.name = "NoOutputTextError";
   }
 }
 
@@ -352,6 +388,8 @@ export interface InvocationOptions {
   sessionId?: string;
   sessionKey?: string;
   idempotencyKey?: string;
+  timeoutMs?: number;
+  leaveWaitingOnMissingHandler?: boolean;
   signal?: AbortSignal;
 }
 
@@ -371,7 +409,7 @@ export type SessionBinding = SessionBindingByID | SessionBindingByKey;
 export type BoundInvocationOptions = Omit<InvocationOptions, "sessionId" | "sessionKey" | "tenantKey">;
 
 export interface AgentResult<TOutput extends object = JsonObject> {
-  handle: InvocationHandle<TOutput>;
+  handle: SettledInvocationHandle<TOutput>;
   invocation: TypedInvocation<TOutput>;
   messages: SessionMessage[];
   text: string | null;
@@ -381,6 +419,15 @@ export interface AgentResult<TOutput extends object = JsonObject> {
   sessionId: string;
   deduplicated: boolean;
 }
+
+export type SettledInvocationHandle<TOutput extends object = JsonObject> =
+  InvocationHandle<TOutput> & {
+    readonly idempotencyKey: string;
+    readonly deduplicated: boolean;
+    sessionId: string;
+    agentId: string;
+    status: "completed";
+  };
 
 export type AgentStreamEvent<TOutput extends object = JsonObject> =
   InvocationStreamEvent<TOutput> & { handle: InvocationHandle<TOutput> };
@@ -445,6 +492,7 @@ export interface TranscriptDrain {
 
 export interface WaitOptions {
   signal?: AbortSignal;
+  timeoutMs?: number;
   minPollIntervalMs?: number;
   maxPollIntervalMs?: number;
   until?: "terminal" | "actionable" | readonly InvocationStatus[];
@@ -878,19 +926,32 @@ export class Agent<TOutput extends object = JsonObject> {
   }
 
   async text(input: InvokeInput, options: InvocationOptions = {}): Promise<string> {
-    const result = await this.run(input, options);
-    if (!result.text) {
-      throw new NvokenError(
-        "unexpected_response",
-        `Invocation ${result.invocation.id} completed without assistant text`,
-      );
-    }
-    return result.text;
+    return outputTextOrThrow(await this.run(input, options));
   }
 
   async *stream(
     input: InvokeInput,
     options: InvocationOptions = {},
+  ): AsyncGenerator<AgentStreamEvent<TOutput>> {
+    const scope = localAbortScope(options.signal, options.timeoutMs);
+    try {
+      yield* this.streamLoop(input, options, scope.signal);
+    } catch (error) {
+      if (scope.timedOut()) {
+        throw new NvokenError("timeout", "local stream timed out", undefined, undefined, undefined, undefined, undefined, {
+          cause: error,
+        });
+      }
+      throw error;
+    } finally {
+      scope.dispose();
+    }
+  }
+
+  private async *streamLoop(
+    input: InvokeInput,
+    options: InvocationOptions,
+    signal?: AbortSignal,
   ): AsyncGenerator<AgentStreamEvent<TOutput>> {
     const idempotencyKey = options.idempotencyKey ?? `nvoken-${randomUUID()}`;
     const request = invocationRequestToWire(
@@ -902,7 +963,7 @@ export class Agent<TOutput extends object = JsonObject> {
     for await (const event of streamInvocationEvents<TOutput>(
       this.client,
       request,
-      options.signal,
+      signal,
     )) {
       if (event.type === "invocation.accepted") {
         handle = new InvocationHandle(
@@ -932,7 +993,7 @@ export class Agent<TOutput extends object = JsonObject> {
         event.type === "invocation.update"
         && event.invocation.status === "waiting"
       ) {
-        await this.dispatchTools(handle, event.invocation, options.signal, dispatched);
+        await this.dispatchTools(handle, event.invocation, options, signal, dispatched);
       }
     }
   }
@@ -941,32 +1002,71 @@ export class Agent<TOutput extends object = JsonObject> {
     input: InvokeInput,
     options: InvocationOptions = {},
   ): Promise<AgentResult<TOutput>> {
-    const handle = await this.invoke(input, options);
-    for (;;) {
-      const invocation = await handle.waitForAction({
-        signal: options.signal,
-      });
-      if (invocation.status !== "waiting") break;
-      await this.dispatchTools(handle, invocation, options.signal);
+    const scope = localAbortScope(options.signal, options.timeoutMs);
+    let handle: InvocationHandle<TOutput> | undefined;
+    try {
+      try {
+        for await (const event of this.streamLoop(input, options, scope.signal)) {
+          handle = event.handle;
+          if (event.type === "invocation.result") {
+            return this.agentResult(handle, event.result);
+          }
+        }
+      } catch (error) {
+        if (scope.timedOut()) {
+          throw new NvokenError("timeout", "local Agent run timed out", undefined, undefined, undefined, undefined, undefined, {
+            cause: error,
+          });
+        }
+        if (!handle || !streamFallbackAllowed(error)) throw error;
+      }
+      if (!handle) {
+        throw new NvokenError(
+          "unexpected_response",
+          "Invocation stream ended before acknowledgement",
+        );
+      }
+      for (;;) {
+        const invocation = await handle.waitForAction({ signal: scope.signal });
+        if (invocation.status !== "waiting") {
+          if (invocation.status !== "completed") {
+            throw new InvocationError(handle, invocation);
+          }
+          break;
+        }
+        await this.dispatchTools(handle, invocation, options, scope.signal);
+      }
+      const result = await handle.result(scope.signal);
+      return this.agentResult(handle, result);
+    } finally {
+      scope.dispose();
     }
-    const result = await handle.waitForResult({ signal: options.signal });
+  }
+
+  private agentResult(
+    handle: InvocationHandle<TOutput>,
+    result: TypedInvocationResult<TOutput>,
+  ): AgentResult<TOutput> {
     const { invocation } = result;
+    handle.applyInvocation(invocation);
+    const settledHandle = asSettledHandle(handle);
     return {
-      handle,
+      handle: settledHandle,
       invocation,
       messages: result.messages,
       text: result.outputText,
       structuredOutput: invocation.structuredOutput,
-      idempotencyKey: handle.idempotencyKey!,
+      idempotencyKey: settledHandle.idempotencyKey,
       agentId: invocation.agentId,
       sessionId: invocation.sessionId,
-      deduplicated: handle.deduplicated ?? false,
+      deduplicated: settledHandle.deduplicated,
     };
   }
 
   private async dispatchTools(
     handle: InvocationHandle<TOutput>,
     invocation: TypedInvocation<TOutput>,
+    options: InvocationOptions,
     signal?: AbortSignal,
     dispatched?: Set<string>,
   ): Promise<void> {
@@ -976,7 +1076,15 @@ export class Agent<TOutput extends object = JsonObject> {
       if (dispatched?.has(call.id)) continue;
       const tool = this.hostTools.get(call.name);
       if (!tool?.handler) {
-        throw new MissingToolHandlerError(handle, call);
+        if (options.leaveWaitingOnMissingHandler) {
+          throw new MissingToolHandlerError(handle, call, false);
+        }
+        try {
+          await handle.cancel(signal);
+        } catch (error) {
+          throw new MissingToolHandlerError(handle, call, false, { cause: error });
+        }
+        throw new MissingToolHandlerError(handle, call, true);
       }
       const context: ToolHandlerContext<TOutput> = {
         invocationId: handle.invocationId,
@@ -1053,14 +1161,7 @@ export class AgentSession<TOutput extends object = JsonObject> {
   }
 
   async text(input: InvokeInput, options: BoundInvocationOptions = {}): Promise<string> {
-    const result = await this.run(input, options);
-    if (!result.text) {
-      throw new NvokenError(
-        "unexpected_response",
-        `Invocation ${result.invocation.id} completed without assistant text`,
-      );
-    }
-    return result.text;
+    return outputTextOrThrow(await this.run(input, options));
   }
 
   async *stream(
@@ -1152,11 +1253,23 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     if (Array.isArray(until) && until.length === 0) {
       throw new NvokenError("validation", "wait until status list cannot be empty");
     }
-    for (;;) {
-      const invocation = await this.refresh(options.signal);
-      if (waitSatisfied(invocation.status, until)) return invocation;
-      await sleep(delay, options.signal);
-      delay = Math.min(delay * 2, maximum);
+    const scope = localAbortScope(options.signal, options.timeoutMs);
+    try {
+      for (;;) {
+        const invocation = await this.refresh(scope.signal);
+        if (waitSatisfied(invocation.status, until)) return invocation;
+        await sleep(delay, scope.signal);
+        delay = Math.min(delay * 2, maximum);
+      }
+    } catch (error) {
+      if (scope.timedOut()) {
+        throw new NvokenError("timeout", "local wait timed out", undefined, undefined, undefined, undefined, undefined, {
+          cause: error,
+        });
+      }
+      throw error;
+    } finally {
+      scope.dispose();
     }
   }
 
@@ -1263,6 +1376,34 @@ function invocationRequestToWire<TOutput extends object>(
 
 function terminal(status: InvocationStatus): boolean {
   return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+function outputTextOrThrow<TOutput extends object>(result: AgentResult<TOutput>): string {
+  if (!result.text) throw new NoOutputTextError(result);
+  return result.text;
+}
+
+function asSettledHandle<TOutput extends object>(
+  handle: InvocationHandle<TOutput>,
+): SettledInvocationHandle<TOutput> {
+  if (
+    !handle.idempotencyKey
+    || !handle.sessionId
+    || !handle.agentId
+    || handle.deduplicated === undefined
+    || handle.status !== "completed"
+  ) {
+    throw new NvokenError(
+      "unexpected_response",
+      `Invocation ${handle.invocationId} completed without settled handle identity`,
+    );
+  }
+  return handle as SettledInvocationHandle<TOutput>;
+}
+
+function streamFallbackAllowed(error: unknown): boolean {
+  return error instanceof NvokenError
+    && ["transport", "server", "rate_limit", "unexpected_response"].includes(error.category);
 }
 
 function waitSatisfied(
@@ -1522,4 +1663,39 @@ function sleep(milliseconds: number, signal?: AbortSignal): Promise<void> {
     }, milliseconds);
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+interface LocalAbortScope {
+  signal?: AbortSignal;
+  timedOut(): boolean;
+  dispose(): void;
+}
+
+function localAbortScope(signal: AbortSignal | undefined, timeoutMs: number | undefined): LocalAbortScope {
+  if (timeoutMs === undefined) {
+    return { signal, timedOut: () => false, dispose: () => undefined };
+  }
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new NvokenError("validation", "timeoutMs must be a positive finite number");
+  }
+  const controller = new AbortController();
+  let timeoutElapsed = false;
+  const abortFromCaller = () => controller.abort(signal?.reason);
+  if (signal?.aborted) {
+    abortFromCaller();
+  } else {
+    signal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
+  const timer = setTimeout(() => {
+    timeoutElapsed = true;
+    controller.abort();
+  }, timeoutMs);
+  return {
+    signal: controller.signal,
+    timedOut: () => timeoutElapsed,
+    dispose: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abortFromCaller);
+    },
+  };
 }

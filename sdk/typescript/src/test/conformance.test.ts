@@ -7,6 +7,8 @@ import test from "node:test";
 import {
   Client,
   InvocationError,
+  MissingToolHandlerError,
+  NoOutputTextError,
   SessionBusyError,
   NvokenError,
   Reducer,
@@ -18,6 +20,12 @@ import {
   toolInput,
   verifyCallback,
   type HostTool,
+  type Invocation,
+  type InvocationResult,
+  type ModelDescriptor,
+  type PendingHostToolCall,
+  type Session,
+  type SessionMessage,
   type Tool,
   type StandardJSONSchemaV1,
   type TypedInvocation,
@@ -32,6 +40,60 @@ const exactModelId = "experimental/model?variant=雪%#1";
 
 interface Answer {
   answer: string;
+}
+
+type ExportedRuntimeNouns = [
+  Invocation,
+  InvocationResult,
+  Session,
+  SessionMessage,
+  PendingHostToolCall,
+  ModelDescriptor,
+];
+const exportedRuntimeNounsCompileCheck: ExportedRuntimeNouns | undefined = undefined;
+void exportedRuntimeNounsCompileCheck;
+
+function wireInvocation(
+  status: "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled",
+  options: {
+    structuredOutput?: Record<string, unknown> | null;
+    pendingToolCalls?: Array<Record<string, unknown>>;
+  } = {},
+): Record<string, unknown> {
+  return {
+    id: invocationId,
+    agent_id: agentId,
+    session_id: sessionId,
+    status,
+    error: null,
+    usage: null,
+    provenance: null,
+    structured_output: options.structuredOutput ?? null,
+    structured_output_provenance: null,
+    limits: {
+      total_timeout_seconds: 300,
+      active_timeout_seconds: 120,
+      waiting_timeout_seconds: 180,
+      max_iterations: 3,
+    },
+    active_execution_ms: 1,
+    deadline_at: "2026-07-21T12:05:00Z",
+    created_at: "2026-07-21T12:00:00Z",
+    updated_at: "2026-07-21T12:00:01Z",
+    ended_at: ["completed", "failed", "cancelled"].includes(status)
+      ? "2026-07-21T12:00:01Z"
+      : null,
+    pending_tool_calls: options.pendingToolCalls ?? [],
+  };
+}
+
+function sseResponse(frames: Array<{ event: string; data: unknown }>): Response {
+  return new Response(
+    frames.map((frame) =>
+      `event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`
+    ).join(""),
+    { status: 202, headers: { "content-type": "text/event-stream" } },
+  );
 }
 
 test("public diagnostics stay concise and provider-aware", () => {
@@ -434,6 +496,45 @@ test("agent run converts standard schemas, retries one admission, and dispatches
       deadline_at: "2026-07-21T12:05:00Z",
     }] : [],
   });
+  const streamBody = [
+    {
+      event: "invocation.accepted",
+      data: {
+        type: "invocation.accepted",
+        agent_id: agentId,
+        session_id: sessionId,
+        invocation_id: invocationId,
+        status: "queued",
+        deduplicated: true,
+        deadline_at: "2026-07-21T12:05:00Z",
+      },
+    },
+    {
+      event: "invocation.update",
+      data: {
+        type: "invocation.update",
+        session_id: sessionId,
+        invocation_id: invocationId,
+        invocation: invocation("waiting"),
+        new_messages: [],
+      },
+    },
+    {
+      event: "invocation.result",
+      data: {
+        type: "invocation.result",
+        session_id: sessionId,
+        invocation_id: invocationId,
+        result: {
+          invocation: invocation("completed"),
+          messages: [],
+          output_text: "ready",
+        },
+      },
+    },
+  ].map((frame) =>
+    `event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`
+  ).join("");
   const fetchMock: typeof fetch = async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     if (url.pathname === "/v1/invocations" && init?.method === "POST") {
@@ -442,12 +543,9 @@ test("agent run converts standard schemas, retries one admission, and dispatches
       if (admissions === 1) {
         return json(503, { code: "unavailable", message: "retry" });
       }
-      return json(202, {
-        agent_id: agentId,
-        session_id: sessionId,
-        invocation_id: invocationId,
-        status: "queued",
-        deduplicated: true,
+      return new Response(streamBody, {
+        status: 202,
+        headers: { "content-type": "text/event-stream" },
       });
     }
     if (url.pathname.endsWith("/tool-results") && init?.method === "POST") {
@@ -511,6 +609,200 @@ test("agent run converts standard schemas, retries one admission, and dispatches
   assert.equal(admittedSpec.tools[0]?.mode, "host");
   assert.equal(admittedSpec.tools[0]?.input_schema.$schema, undefined);
   assert.equal(admittedSpec.output.schema.$schema, undefined);
+});
+
+test("agent run falls back from a broken stream to authoritative reads", async () => {
+  let invocationReads = 0;
+  let resultReads = 0;
+  const client = new Client({
+    baseUrl: "http://nvoken.test",
+    apiKey: "test-key",
+    model: { provider: "openai", id: "gpt-test" },
+    fetch: async (input, init) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input : input.url,
+      );
+      if (url.pathname === "/v1/invocations" && init?.method === "POST") {
+        return sseResponse([
+          {
+            event: "invocation.accepted",
+            data: {
+              type: "invocation.accepted",
+              agent_id: agentId,
+              session_id: sessionId,
+              invocation_id: invocationId,
+              status: "queued",
+              deduplicated: false,
+              deadline_at: "2026-07-21T12:05:00Z",
+            },
+          },
+          { event: "broken.event", data: { type: "broken.event" } },
+        ]);
+      }
+      if (url.pathname === `/v1/invocations/${invocationId}`) {
+        invocationReads += 1;
+        return Response.json(wireInvocation("completed"));
+      }
+      if (url.pathname === `/v1/invocations/${invocationId}/result`) {
+        resultReads += 1;
+        return Response.json({
+          invocation: wireInvocation("completed"),
+          messages: [],
+          output_text: "authoritative",
+        });
+      }
+      throw new Error(`unexpected request ${init?.method} ${url.pathname}`);
+    },
+    retry: { maxAttempts: 1 },
+  });
+
+  const result = await client.agent({ agentKey: "support" }).run("hello");
+  assert.equal(result.text, "authoritative");
+  assert.equal(result.handle.sessionId, sessionId);
+  assert.equal(result.handle.agentId, agentId);
+  assert.equal(result.handle.status, "completed");
+  assert.equal(invocationReads, 1);
+  assert.equal(resultReads, 1);
+});
+
+test("missing handlers cancel by default and support explicit handoff", async () => {
+  const missingTool = defineHostTool({
+    name: "lookup_order",
+    description: "Look up an order.",
+    inputSchema: defineJsonSchema({
+      type: "object",
+      additionalProperties: false,
+    }),
+  });
+  const waitingFrames = () => sseResponse([
+    {
+      event: "invocation.accepted",
+      data: {
+        type: "invocation.accepted",
+        agent_id: agentId,
+        session_id: sessionId,
+        invocation_id: invocationId,
+        status: "queued",
+        deduplicated: false,
+        deadline_at: "2026-07-21T12:05:00Z",
+      },
+    },
+    {
+      event: "invocation.update",
+      data: {
+        type: "invocation.update",
+        session_id: sessionId,
+        invocation_id: invocationId,
+        invocation: wireInvocation("waiting", {
+          pendingToolCalls: [{
+            id: toolCallId,
+            name: "lookup_order",
+            input: {},
+            deadline_at: "2026-07-21T12:05:00Z",
+          }],
+        }),
+        new_messages: [],
+      },
+    },
+  ]);
+  let cancellations = 0;
+  const makeClient = () => new Client({
+    baseUrl: "http://nvoken.test",
+    apiKey: "test-key",
+    model: { provider: "openai", id: "gpt-test" },
+    fetch: async (input) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input : input.url,
+      );
+      if (url.pathname === "/v1/invocations") return waitingFrames();
+      if (url.pathname.endsWith("/cancel")) {
+        cancellations += 1;
+        return Response.json(wireInvocation("cancelled"));
+      }
+      throw new Error(`unexpected request ${url.pathname}`);
+    },
+    retry: { maxAttempts: 1 },
+  });
+
+  await assert.rejects(
+    makeClient().agent({ agentKey: "support", tools: [missingTool] }).run("hello"),
+    (error: unknown) => error instanceof MissingToolHandlerError
+      && error.invocationCancelled,
+  );
+  assert.equal(cancellations, 1);
+
+  await assert.rejects(
+    makeClient().agent({ agentKey: "support", tools: [missingTool] }).run("hello", {
+      leaveWaitingOnMissingHandler: true,
+    }),
+    (error: unknown) => error instanceof MissingToolHandlerError
+      && !error.invocationCancelled,
+  );
+  assert.equal(cancellations, 1);
+});
+
+test("text reports structured-only completion and stream timeout distinctly", async () => {
+  const resultFrames = () => sseResponse([
+    {
+      event: "invocation.accepted",
+      data: {
+        type: "invocation.accepted",
+        agent_id: agentId,
+        session_id: sessionId,
+        invocation_id: invocationId,
+        status: "queued",
+        deduplicated: false,
+        deadline_at: "2026-07-21T12:05:00Z",
+      },
+    },
+    {
+      event: "invocation.result",
+      data: {
+        type: "invocation.result",
+        session_id: sessionId,
+        invocation_id: invocationId,
+        result: {
+          invocation: wireInvocation("completed", {
+            structuredOutput: { answer: "ready" },
+          }),
+          messages: [],
+          output_text: null,
+        },
+      },
+    },
+  ]);
+  const structuredClient = new Client({
+    baseUrl: "http://nvoken.test",
+    apiKey: "test-key",
+    model: { provider: "openai", id: "gpt-test" },
+    fetch: async () => resultFrames(),
+    retry: { maxAttempts: 1 },
+  });
+  await assert.rejects(
+    structuredClient.agent<Answer>({ agentKey: "support" }).text("hello"),
+    (error: unknown) => error instanceof NoOutputTextError
+      && error.code === "no_output_text"
+      && /structured output/.test(error.message),
+  );
+
+  const blockedClient = new Client({
+    baseUrl: "http://nvoken.test",
+    apiKey: "test-key",
+    model: { provider: "openai", id: "gpt-test" },
+    fetch: async (_input, init) => new Promise<Response>((_resolve, reject) => {
+      const abort = () => reject(new DOMException("aborted", "AbortError"));
+      if (init?.signal?.aborted) abort();
+      else init?.signal?.addEventListener("abort", abort, { once: true });
+    }),
+    retry: { maxAttempts: 1 },
+  });
+  const iterator = blockedClient.agent({ agentKey: "support" }).stream("hello", {
+    timeoutMs: 5,
+  });
+  await assert.rejects(
+    iterator.next(),
+    (error: unknown) => error instanceof NvokenError && error.category === "timeout",
+  );
 });
 
 test("client reads only marked quickstart env files and explicit options win", async () => {
@@ -779,10 +1071,23 @@ test("shared reducer vector", async () => {
     "utf8",
   )) as {
     events: Array<{ id: string; event: string; data: unknown }>;
+    preview_cases: Array<{
+      name: string;
+      events: Array<{ id: string; event: string; data: unknown }>;
+      expected_previews: Array<{
+        invocation_id: string;
+        attempt: number;
+        iteration: number;
+        content_index: number;
+        output_text: string;
+        thinking: string;
+      }>;
+    }>;
     expected: {
       message_sequences: number[];
       invocation_revisions: number[];
       resume_cursor: string;
+      previews: unknown[];
     };
   };
   const reducer = new Reducer();
@@ -793,6 +1098,25 @@ test("shared reducer vector", async () => {
   assert.deepEqual(snapshot.messages.map((message) => message.sequence), fixture.expected.message_sequences);
   assert.deepEqual(snapshot.invocationChanges.map((change) => change.revision), fixture.expected.invocation_revisions);
   assert.equal(snapshot.resumeCursor, fixture.expected.resume_cursor);
+  assert.deepEqual(snapshot.previews, fixture.expected.previews);
+  for (const previewCase of fixture.preview_cases) {
+    const previewReducer = new Reducer();
+    for (const event of previewCase.events) {
+      previewReducer.apply({ id: event.id, type: event.event, data: event.data });
+    }
+    assert.deepEqual(
+      previewReducer.snapshot().previews.map((preview) => ({
+        invocation_id: preview.invocationId,
+        attempt: preview.attempt,
+        iteration: preview.iteration,
+        content_index: preview.contentIndex,
+        output_text: preview.outputText,
+        thinking: preview.thinking,
+      })),
+      previewCase.expected_previews,
+      previewCase.name,
+    );
+  }
 });
 
 test("shared callback signing and deduplication vector", async () => {

@@ -227,6 +227,26 @@ def test_shared_reducer_vector() -> None:
     assert [message.sequence for message in snapshot.messages] == fixture["expected"]["message_sequences"]
     assert [change.revision for change in snapshot.invocation_changes] == fixture["expected"]["invocation_revisions"]
     assert snapshot.resume_cursor == fixture["expected"]["resume_cursor"]
+    assert snapshot.previews == fixture["expected"]["previews"]
+    for preview_case in fixture["preview_cases"]:
+        preview_reducer = Reducer()
+        for event in preview_case["events"]:
+            preview_reducer.apply(StreamEvent(
+                id=event["id"],
+                type=event["event"],
+                data=event["data"],
+            ))
+        assert [
+            {
+                "invocation_id": preview.invocation_id,
+                "attempt": preview.attempt,
+                "iteration": preview.iteration,
+                "content_index": preview.content_index,
+                "output_text": preview.output_text,
+                "thinking": preview.thinking,
+            }
+            for preview in preview_reducer.snapshot().previews
+        ] == preview_case["expected_previews"], preview_case["name"]
 
 
 @pytest.mark.asyncio
