@@ -6,7 +6,14 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
-if ! command -v claude >/dev/null 2>&1; then
+claude_bin="${NVOKEN_CLAUDE_BIN:-}"
+if [[ -z "$claude_bin" && -x "$HOME/.local/bin/claude" ]]; then
+  claude_bin="$HOME/.local/bin/claude"
+fi
+if [[ -z "$claude_bin" ]]; then
+  claude_bin="$(command -v claude || true)"
+fi
+if [[ -z "$claude_bin" ]]; then
   echo "claude: command not found" >&2
   exit 127
 fi
@@ -40,7 +47,7 @@ review_prompt="Review the PRD at $prd_path. Start by reading $repo_root/CLAUDE.m
 review_schema='{"type":"object","properties":{"verdict":{"type":"string","enum":["approve","revise"]},"summary":{"type":"string"},"findings":{"type":"array","items":{"type":"object","properties":{"severity":{"type":"string","enum":["blocking","important","suggestion"]},"title":{"type":"string"},"evidence":{"type":"string"},"recommendation":{"type":"string"},"requirement_refs":{"type":"array","items":{"type":"string"}}},"required":["severity","title","evidence","recommendation","requirement_refs"],"additionalProperties":false}},"open_questions":{"type":"array","items":{"type":"string"}}},"required":["verdict","summary","findings","open_questions"],"additionalProperties":false}'
 
 cd -- "$repo_root"
-exec env -u ANTHROPIC_API_KEY claude -p \
+exec env -u ANTHROPIC_API_KEY "$claude_bin" -p \
   --safe-mode \
   --system-prompt "$system_prompt" \
   --model fable \

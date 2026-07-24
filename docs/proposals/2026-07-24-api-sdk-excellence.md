@@ -1316,7 +1316,7 @@ usable SDK and CLI surface.
 
 **Acceptance gate:**
 
-- [ ] **AC-2B.1 (`EX-2B.1`):** PRD 029 uses the approved fingerprint policy,
+- [x] **AC-2B.1 (`EX-2B.1`):** PRD 029 uses the approved fingerprint policy,
   names the actual PRD 015 dependency, includes or explicitly companions the
   required SDK/CLI surface, receives its independent review once, and has no
   unresolved blocking finding.
@@ -1340,6 +1340,11 @@ usable SDK and CLI surface.
   remote server, completes a durable MCP tool turn, survives a fault-injected
   engine replacement, and is recoverable through the authoritative result and
   transcript reads.
+
+**Progress evidence (2026-07-24):** PRD 029 is Ready with fingerprint v8 over
+the retained v1–v7 lineage, the actual client-tool dependency, the complete
+SDK/CLI/example surface, and one verified Claude Fable 5 review. All sound
+findings were incorporated; no blocking finding remains.
 
 ### Phase 3 — additive contract completeness
 
