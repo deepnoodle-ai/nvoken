@@ -1189,16 +1189,17 @@ capability work expands it.
 
 **Acceptance gate:**
 
-- [ ] **AC-1.1 (`EX-1.1`):** PRD 033 states one stabilization outcome, maps
+- [x] **AC-1.1 (`EX-1.1`):** PRD 033 states one stabilization outcome, maps
   every binding requirement to an observable acceptance proof, receives the
   required independent review once, and has no unresolved blocking finding.
 - [ ] **AC-1.2 (`EX-1.2`):** `docs/design/decisions.md` defines “An Invocation
   is one durable agent turn,” the conceptual/resource naming rule, and the
   reason `Invocation` remains the public noun.
 - [ ] **AC-1.3 (`EX-1.2`):** Existing v1–v7 durable rows remain replay
-  comparable, new material admissions use v8, and fixtures prove both legacy
-  equality and v8 conflict behavior. Any alternative reset has an approved
-  retained-data migration and rollback proof before replacing this criterion.
+  comparable, unchanged admissions continue to use v7, and the next material
+  admission shape uses v8 with fixtures proving legacy equality and v8
+  conflict behavior. Any alternative reset has an approved retained-data
+  migration and rollback proof before replacing this criterion.
 - [ ] **AC-1.4 (`EX-1.3`):** The wire and server map `401` to
   `authentication`, `403` to `permission`, local cancellation to `cancelled`,
   and actual deadline expiry to `timeout`.
