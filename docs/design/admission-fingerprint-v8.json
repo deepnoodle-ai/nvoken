@@ -1,0 +1,62 @@
+[
+  {
+    "name": "omitted-mcp-servers",
+    "selector": { "kind": "none", "value": "" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "anthropic", "id": "test-model" }
+    },
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":8,\"session_selector\":{\"kind\":\"none\",\"value\":\"\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"id\":\"test-model\"},\"limits\":null,\"output\":null,\"tools\":[],\"mcp_servers\":[],\"provider_credentials\":null},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "7627069d3eaa6662d2aa468da6b0423fa4350c389978d901fa9fc4955ba8bea4"
+  },
+  {
+    "name": "defaulted-server-with-excluded-headers",
+    "selector": { "kind": "key", "value": "ticket-1" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "openai", "id": "gpt-test" },
+      "mcp_servers": [
+        {
+          "name": "calendar",
+          "url": "https://mcp.example.test/v1",
+          "headers": { "Authorization": "Bearer first-secret" }
+        }
+      ]
+    },
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":8,\"session_selector\":{\"kind\":\"key\",\"value\":\"ticket-1\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"openai\",\"id\":\"gpt-test\"},\"limits\":null,\"output\":null,\"tools\":[],\"mcp_servers\":[{\"name\":\"calendar\",\"url\":\"https://mcp.example.test/v1\",\"transport\":\"streamable_http\",\"allowed_tools\":null,\"timeouts\":{\"discovery_seconds\":10,\"call_seconds\":30}}],\"provider_credentials\":null},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "199ef016b1191d321d7080518c6ddf5a88c818232f172df9aa114d4f4bdbe397"
+  },
+  {
+    "name": "allowlist-explicit-timeouts-and-caller-credential",
+    "selector": { "kind": "key", "value": "ticket-2" },
+    "spec": {
+      "instructions": "help",
+      "model": { "provider": "anthropic", "id": "claude-test" },
+      "mcp_servers": [
+        {
+          "name": "support",
+          "url": "https://support.example.test/mcp",
+          "transport": "streamable_http",
+          "allowed_tools": ["lookup", "update"],
+          "headers": { "X-API-Key": "second-secret" },
+          "timeouts": {
+            "discovery_seconds": 5,
+            "call_seconds": 60
+          }
+        }
+      ]
+    },
+    "provider_credentials": [
+      {
+        "provider": "anthropic",
+        "source": "caller_ephemeral",
+        "credential": { "api_key": "provider-secret" }
+      }
+    ],
+    "input": { "content": [{ "type": "text", "text": "hello" }] },
+    "canonical": "{\"version\":8,\"session_selector\":{\"kind\":\"key\",\"value\":\"ticket-2\"},\"spec\":{\"instructions\":\"help\",\"model\":{\"provider\":\"anthropic\",\"id\":\"claude-test\"},\"limits\":null,\"output\":null,\"tools\":[],\"mcp_servers\":[{\"name\":\"support\",\"url\":\"https://support.example.test/mcp\",\"transport\":\"streamable_http\",\"allowed_tools\":[\"lookup\",\"update\"],\"timeouts\":{\"discovery_seconds\":5,\"call_seconds\":60}}],\"provider_credentials\":[{\"provider\":\"anthropic\",\"source\":\"caller_ephemeral\"}]},\"input\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}",
+    "sha256": "a61458cac76b80a500af9f51a1954664cd30c29ad4e0217b9ca3a30d41b59542"
+  }
+]

@@ -224,7 +224,7 @@ func TestUpgradePreflightAndPinnedSchemaCompatibility(t *testing.T) {
 	// Every post-transition migration in this tree is ordinary with minimum
 	// binary schema 14, so the transition release binary stays serveable.
 	migrated, err := InspectSchema(ctx, pool)
-	if err != nil || migrated.State != SchemaCompatible || migrated.Current != 16 ||
+	if err != nil || migrated.State != SchemaCompatible || migrated.Current != 17 ||
 		migrated.MinimumBinarySchemaVersion != 14 {
 		t.Fatalf("migrated schema = %#v, %v", migrated, err)
 	}
@@ -232,7 +232,7 @@ func TestUpgradePreflightAndPinnedSchemaCompatibility(t *testing.T) {
 	if err != nil || previous.State != SchemaCompatibleNewer {
 		t.Fatalf("previous binary compatibility = %#v, %v", previous, err)
 	}
-	head, err := InspectSchemaForVersion(ctx, pool, 16)
+	head, err := InspectSchemaForVersion(ctx, pool, 17)
 	if err != nil || head.State != SchemaCompatible {
 		t.Fatalf("head binary compatibility = %#v, %v", head, err)
 	}
@@ -243,17 +243,17 @@ func TestUpgradePreflightAndPinnedSchemaCompatibility(t *testing.T) {
 
 	// A hypothetical next ordinary migration keeps this release serveable.
 	if _, err := pool.Exec(ctx, `
-		UPDATE nvoken_schema_migrations SET version = 17;
+		UPDATE nvoken_schema_migrations SET version = 18;
 		UPDATE nvoken_schema_compatibility
-		SET schema_version = 17, minimum_binary_schema_version = 16
+		SET schema_version = 18, minimum_binary_schema_version = 17
 	`); err != nil {
 		t.Fatalf("prepare compatible next schema: %v", err)
 	}
-	futurePrevious, err := InspectSchemaForVersion(ctx, pool, 16)
+	futurePrevious, err := InspectSchemaForVersion(ctx, pool, 17)
 	if err != nil || futurePrevious.State != SchemaCompatibleNewer {
 		t.Fatalf("future previous binary compatibility = %#v, %v", futurePrevious, err)
 	}
-	futureNext, err := InspectSchemaForVersion(ctx, pool, 17)
+	futureNext, err := InspectSchemaForVersion(ctx, pool, 18)
 	if err != nil || futureNext.State != SchemaCompatible {
 		t.Fatalf("future next binary compatibility = %#v, %v", futureNext, err)
 	}
@@ -261,11 +261,11 @@ func TestUpgradePreflightAndPinnedSchemaCompatibility(t *testing.T) {
 	// A breaking one would strand it instead, and the pin says so.
 	if _, err := pool.Exec(ctx, `
 		UPDATE nvoken_schema_compatibility
-		SET minimum_binary_schema_version = 17
+		SET minimum_binary_schema_version = 18
 	`); err != nil {
 		t.Fatalf("prepare unsafe next schema: %v", err)
 	}
-	unsafe, err := InspectSchemaForVersion(ctx, pool, 16)
+	unsafe, err := InspectSchemaForVersion(ctx, pool, 17)
 	if err != nil || unsafe.State != SchemaAhead || unsafe.CompatibilityError() == nil {
 		t.Fatalf("unsafe previous binary compatibility = %#v, %v", unsafe, err)
 	}

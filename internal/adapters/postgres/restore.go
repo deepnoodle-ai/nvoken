@@ -12,7 +12,7 @@ import (
 // expectations to one embedded schema. A new migration must update the
 // manifest and its invariant queries before a newer binary can verify a
 // restore.
-const restoreManifestSchemaVersion uint = 16
+const restoreManifestSchemaVersion uint = 17
 
 var restoreRequiredTables = []string{
 	"account_memberships",
@@ -26,6 +26,8 @@ var restoreRequiredTables = []string{
 	"execution_dispatches",
 	"execution_spec_snapshots",
 	"invocation_checkpoints",
+	"invocation_mcp_discoveries",
+	"invocation_mcp_server_bindings",
 	"invocation_provider_credentials",
 	"invocation_states",
 	"invocations",
@@ -74,6 +76,11 @@ var restoreRequiredConstraints = []string{
 	"invocation_checkpoints_receipt_boundary",
 	"invocation_checkpoints_tool_call_boundary",
 	"invocation_checkpoints_sequence_unique",
+	"invocation_mcp_server_bindings_invocation_boundary",
+	"invocation_mcp_server_bindings_secret_shape",
+	"invocation_mcp_server_bindings_server_unique",
+	"invocation_mcp_discoveries_invocation_boundary",
+	"invocation_mcp_discoveries_invocation_unique",
 }
 
 const restoreRequiredNonterminalIndex = "invocations_one_nonterminal_per_session"

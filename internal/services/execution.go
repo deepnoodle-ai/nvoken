@@ -646,6 +646,11 @@ func (s *InvocationExecutionService) ReapExpired(ctx context.Context, limit int)
 			return nil, fmt.Errorf("clear expired Invocation provider credentials: %w", err)
 		}
 	}
+	if mcpStore, ok := s.store.(ports.MCPRepository); ok {
+		if _, err := mcpStore.ClearExpiredMCPServerBindingMaterial(ctx, now, limit); err != nil {
+			return nil, fmt.Errorf("clear expired Invocation MCP credentials: %w", err)
+		}
+	}
 	deadlineCandidates, err := s.store.ListExpiredInvocationDeadlines(ctx, now, limit)
 	if err != nil {
 		return nil, err

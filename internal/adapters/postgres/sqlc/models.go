@@ -205,6 +205,29 @@ type InvocationCheckpoint struct {
 	CreatedAt              time.Time
 }
 
+type InvocationMcpDiscovery struct {
+	ID                string
+	InvocationID      string
+	AccountID         string
+	TenantPartitionID string
+	Catalog           []byte
+	CreatedAt         time.Time
+}
+
+type InvocationMcpServerBinding struct {
+	ID                string
+	InvocationID      string
+	AccountID         string
+	TenantPartitionID string
+	ServerName        string
+	EncryptionKeyID   *string
+	Nonce             []byte
+	Ciphertext        []byte
+	ExpiresAt         *time.Time
+	ClearedAt         *time.Time
+	CreatedAt         time.Time
+}
+
 type InvocationProviderCredential struct {
 	ID                   string
 	InvocationID         string

@@ -30,6 +30,8 @@ const (
 	PrefixProviderCredential           StableIDPrefix = "pcrd"
 	PrefixProviderCredentialVersion    StableIDPrefix = "pcvr"
 	PrefixInvocationProviderCredential StableIDPrefix = "ipcb"
+	PrefixInvocationMCPServerBinding   StableIDPrefix = "imcb"
+	PrefixInvocationMCPDiscovery       StableIDPrefix = "mcpd"
 )
 
 func (p StableIDPrefix) Valid() bool {
@@ -42,7 +44,8 @@ func (p StableIDPrefix) Valid() bool {
 		PrefixCallbackDelivery, PrefixOperatorSubject, PrefixMembership,
 		PrefixCredential, PrefixDeviceAuthorization, PrefixBrowserSession,
 		PrefixProviderCredential, PrefixProviderCredentialVersion,
-		PrefixInvocationProviderCredential:
+		PrefixInvocationProviderCredential, PrefixInvocationMCPServerBinding,
+		PrefixInvocationMCPDiscovery:
 		return true
 	default:
 		return false

@@ -20,6 +20,7 @@ import (
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/httpguard"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/identity"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/liveevents"
+	"github.com/deepnoodle-ai/nvoken/internal/adapters/mcpclient"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/postgres"
 	"github.com/deepnoodle-ai/nvoken/internal/adapters/worksignal"
 	callbackruntime "github.com/deepnoodle-ai/nvoken/internal/callback"
@@ -291,12 +292,14 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	signaller := worksignal.NewInProcess()
 	cancellations := worksignal.NewPostgresCancellation(pool)
+	mcp := mcpclient.New(mcpclient.Config{})
 	runtime := services.NewRuntimeService(store, txm, clock, ids,
 		services.WithWorkSignaller(signaller), services.WithCancellationSignaller(cancellations),
 		services.WithLimitPolicy(cfg.Limits), services.WithRuntimeLogger(slog.Default()),
 		services.WithInvocationExecutionMode(cfg.InvocationExecutionMode, cfg.Dispatch.Queue),
 		services.WithCallbackTools(cfg.CallbackSigningKey != ""),
-		services.WithProviderCredentialPolicy(cfg.CredentialPolicy, cfg.CredentialCipher, cfg.CredentialCleanupGrace))
+		services.WithProviderCredentialPolicy(cfg.CredentialPolicy, cfg.CredentialCipher, cfg.CredentialCleanupGrace),
+		services.WithMCPClient(mcp))
 	providerCredentials := services.NewProviderCredentialService(store, txm, clock, ids, cfg.CredentialCipher)
 	modelCatalog := divegen.New(divegen.Config{})
 	ownership := services.NewInvocationExecutionService(store, txm, clock, ids,

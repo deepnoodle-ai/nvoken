@@ -77,6 +77,11 @@ high-churn tables (`sessions`, `invocations`, `tool_calls`,
 an indexed column and are never HOT, so dead tuples accumulate faster than
 row counts suggest. Storage parameters only; no shape change.
 
+Migration `000017` adds encrypted per-Invocation remote MCP server bindings
+and one fenced discovery snapshot. The terminal credential trigger clears MCP
+header ciphertext in the same settlement transaction, while retained bindings
+and discovery rows keep only credential-free durable evidence.
+
 ## Large-table rules
 
 Migration statements run under `MIGRATION_TIMEOUT` and take ordinary

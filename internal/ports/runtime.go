@@ -10,28 +10,29 @@ import (
 )
 
 var (
-	ErrNotFound                   = errors.New("not found")
-	ErrUnauthenticated            = errors.New("unauthenticated")
-	ErrRetryable                  = errors.New("retryable infrastructure failure")
-	ErrConcurrentAdmission        = errors.New("concurrent admission conflict")
-	ErrLeaseLost                  = errors.New("invocation lease lost")
-	ErrProviderUnsupported        = errors.New("model provider unsupported")
-	ErrProviderKeyMissing         = errors.New("model provider credential missing")
-	ErrCredentialUnavailable      = errors.New("model provider credential unavailable")
-	ErrPlatformFundingDenied      = errors.New("platform funding denied")
-	ErrProviderCredentialConflict = errors.New("model provider credential conflict")
-	ErrGenerationFailed           = errors.New("model generation failed")
-	ErrGenerationInputInvalid     = errors.New("durable model generation input invalid")
-	ErrGenerationRecoveryInvalid  = errors.New("durable generation recovery invalid")
-	ErrModelResponseInvalid       = errors.New("model response invalid")
-	ErrExecutionResultInvalid     = errors.New("invocation execution result invalid")
-	ErrDispatchLeaseLost          = errors.New("execution dispatch publication lease lost")
-	ErrTaskAlreadyExists          = errors.New("task already exists")
-	ErrDispatchAttemptActive      = errors.New("execution dispatch attempt already active")
-	ErrDispatchAttemptPending     = errors.New("execution dispatch attempt decision pending")
-	ErrToolCallConflict           = errors.New("tool call identity or outcome conflict")
-	ErrToolCallNotRunnable        = errors.New("tool call is not runnable")
-	ErrCallbackDeliveryLeaseLost  = errors.New("callback delivery lease lost")
+	ErrNotFound                       = errors.New("not found")
+	ErrUnauthenticated                = errors.New("unauthenticated")
+	ErrRetryable                      = errors.New("retryable infrastructure failure")
+	ErrConcurrentAdmission            = errors.New("concurrent admission conflict")
+	ErrLeaseLost                      = errors.New("invocation lease lost")
+	ErrProviderUnsupported            = errors.New("model provider unsupported")
+	ErrProviderKeyMissing             = errors.New("model provider credential missing")
+	ErrCredentialUnavailable          = errors.New("model provider credential unavailable")
+	ErrPlatformFundingDenied          = errors.New("platform funding denied")
+	ErrProviderCredentialConflict     = errors.New("model provider credential conflict")
+	ErrMCPServerCredentialUnavailable = errors.New("MCP server credential unavailable")
+	ErrGenerationFailed               = errors.New("model generation failed")
+	ErrGenerationInputInvalid         = errors.New("durable model generation input invalid")
+	ErrGenerationRecoveryInvalid      = errors.New("durable generation recovery invalid")
+	ErrModelResponseInvalid           = errors.New("model response invalid")
+	ErrExecutionResultInvalid         = errors.New("invocation execution result invalid")
+	ErrDispatchLeaseLost              = errors.New("execution dispatch publication lease lost")
+	ErrTaskAlreadyExists              = errors.New("task already exists")
+	ErrDispatchAttemptActive          = errors.New("execution dispatch attempt already active")
+	ErrDispatchAttemptPending         = errors.New("execution dispatch attempt decision pending")
+	ErrToolCallConflict               = errors.New("tool call identity or outcome conflict")
+	ErrToolCallNotRunnable            = errors.New("tool call is not runnable")
+	ErrCallbackDeliveryLeaseLost      = errors.New("callback delivery lease lost")
 )
 
 type ProviderFailureClass string
@@ -212,6 +213,24 @@ type ProviderCredentialRepository interface {
 	CreateInvocationProviderCredential(context.Context, domain.InvocationProviderCredential) error
 	GetInvocationProviderCredential(context.Context, string, string) (domain.InvocationProviderCredential, error)
 	ClearExpiredProviderCredentialMaterial(context.Context, time.Time, int) (int64, error)
+}
+
+type MCPRepository interface {
+	CreateInvocationMCPServerBinding(context.Context, domain.InvocationMCPServerBinding) error
+	GetInvocationMCPServerBinding(context.Context, string, string) (domain.InvocationMCPServerBinding, error)
+	ListInvocationMCPServerBindings(context.Context, string) ([]domain.InvocationMCPServerBinding, error)
+	ClearExpiredMCPServerBindingMaterial(context.Context, time.Time, int) (int64, error)
+	CreateInvocationMCPDiscovery(context.Context, domain.InvocationMCPDiscovery, string, int64) (domain.InvocationMCPDiscovery, error)
+	GetInvocationMCPDiscovery(context.Context, string) (domain.InvocationMCPDiscovery, error)
+}
+
+type MCPClient interface {
+	Discover(context.Context, domain.MCPServerConnection) ([]domain.MCPRemoteTool, error)
+	Call(context.Context, domain.MCPServerConnection, string, json.RawMessage) (domain.MCPCallResult, error)
+}
+
+type MCPServerCredentialResolver interface {
+	ResolveMCPServerHeaders(context.Context, string, string) (map[string]string, error)
 }
 
 type CredentialCipher interface {

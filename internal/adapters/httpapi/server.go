@@ -40,6 +40,7 @@ const (
 
 type RuntimeService interface {
 	Admit(context.Context, domain.RuntimeAuthContext, services.CreateInvocationInput) (services.InvocationAcknowledgement, error)
+	ListMCPTools(context.Context, domain.RuntimeAuthContext, services.MCPListToolsInput) (services.MCPListToolsResult, error)
 	GetInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error)
 	GetInvocationResult(context.Context, domain.RuntimeAuthContext, string) (services.InvocationResultRead, error)
 	ListInvocations(context.Context, domain.RuntimeAuthContext, services.InvocationListInput) (services.InvocationList, error)
@@ -201,6 +202,7 @@ func newHandler(cfg handlerConfig) http.Handler {
 	mux.HandleFunc("/v1/auth/device/confirm", h.requireMethod(http.MethodPost, h.confirmDeviceAuthorization))
 	mux.HandleFunc("/v1/auth/bootstrap/session", h.requireMethod(http.MethodPost, h.createBootstrapSession))
 	mux.HandleFunc("/auth/device", h.requireMethod(http.MethodGet, h.deviceApprovalPage))
+	mux.HandleFunc("/v1/mcp/list-tools", h.requireMethod(http.MethodPost, h.listMCPTools))
 	mux.HandleFunc("/v1/invocations", h.invocations)
 	mux.HandleFunc("/v1/invocations/{invocation_id}", h.requireMethod(http.MethodGet, h.getInvocation))
 	mux.HandleFunc("/v1/invocations/{invocation_id}/result", h.requireMethod(http.MethodGet, h.getInvocationResult))
@@ -564,6 +566,36 @@ func (h *handler) createInvocation(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *handler) listMCPTools(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	auth, err := h.authenticate(r)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	if h.runtime == nil {
+		h.writeError(w, requestID, &services.PublicError{
+			Code:    services.CodeUnavailable,
+			Message: "The service is temporarily unavailable.",
+		})
+		return
+	}
+	var input services.MCPListToolsInput
+	if err := decodeBoundedStrictJSON(w, r, &input, services.MaxInvocationBodyBytes); err != nil {
+		h.writeError(w, requestID, &services.PublicError{
+			Code:    services.CodeInvalidRequest,
+			Message: err.Error(),
+		})
+		return
+	}
+	result, err := h.runtime.ListMCPTools(r.Context(), auth, input)
+	if err != nil {
+		h.writeError(w, requestID, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func acceptsEventStream(r *http.Request) bool {
 	for _, value := range r.Header.Values("Accept") {
 		for item := range strings.SplitSeq(value, ",") {
@@ -910,6 +942,8 @@ func (h *handler) writeError(w http.ResponseWriter, requestID string, err error)
 			status = http.StatusConflict
 		case services.CodeUnavailable:
 			status = http.StatusServiceUnavailable
+		case services.CodeMCPDiscoveryFailed:
+			status = http.StatusBadGateway
 		default:
 			status = http.StatusInternalServerError
 		}

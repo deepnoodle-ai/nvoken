@@ -15,6 +15,13 @@ import (
 func canonicalCreateInvocation(input CreateInvocationInput) CreateInvocationInput {
 	provider, _ := CanonicalModelProvider(input.Spec.Model.Provider)
 	input.Spec.Model.Provider = provider
+	if input.Spec.MCPServers != nil {
+		servers := make([]MCPServerSpec, len(input.Spec.MCPServers))
+		for index, server := range input.Spec.MCPServers {
+			servers[index] = resolvedMCPServerSpec(server)
+		}
+		input.Spec.MCPServers = servers
+	}
 	if input.ProviderCredentials != nil {
 		selections := make([]ProviderCredentialSelection, len(input.ProviderCredentials))
 		for index, selection := range input.ProviderCredentials {

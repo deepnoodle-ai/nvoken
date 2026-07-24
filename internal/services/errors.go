@@ -14,6 +14,7 @@ const (
 	CodeToolResultConflict         ErrorCode = "tool_result_conflict"
 	CodeToolResultExpired          ErrorCode = "tool_result_expired"
 	CodeProviderCredentialConflict ErrorCode = "provider_credential_conflict"
+	CodeMCPDiscoveryFailed         ErrorCode = "mcp_discovery_failed"
 	CodeInternal                   ErrorCode = "internal"
 	CodeUnavailable                ErrorCode = "unavailable"
 )

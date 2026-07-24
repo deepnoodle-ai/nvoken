@@ -34,8 +34,10 @@ func (a fakeAuthenticator) Authenticate(context.Context, string) (domain.Runtime
 
 type fakeRuntime struct {
 	admitInput       services.CreateInvocationInput
+	mcpInput         services.MCPListToolsInput
 	toolResultsInput services.SubmitHostToolResultsInput
 	admitCalls       int
+	mcpCalls         int
 	cancelCalls      int
 	toolResultCalls  int
 	ack              services.InvocationAcknowledgement
@@ -47,6 +49,7 @@ type fakeRuntime struct {
 	sessions         services.SessionList
 	messages         services.SessionMessageList
 	transcript       services.TranscriptSnapshot
+	mcpTools         services.MCPListToolsResult
 	err              error
 }
 
@@ -129,6 +132,16 @@ func (f *fakeRuntime) Admit(_ context.Context, _ domain.RuntimeAuthContext, inpu
 	f.admitCalls++
 	f.admitInput = input
 	return f.ack, f.err
+}
+
+func (f *fakeRuntime) ListMCPTools(
+	_ context.Context,
+	_ domain.RuntimeAuthContext,
+	input services.MCPListToolsInput,
+) (services.MCPListToolsResult, error) {
+	f.mcpCalls++
+	f.mcpInput = input
+	return f.mcpTools, f.err
 }
 
 func (f *fakeRuntime) GetInvocation(context.Context, domain.RuntimeAuthContext, string) (services.InvocationRead, error) {
@@ -1084,6 +1097,7 @@ func TestRuntimePublicErrorsHaveStableHTTPMappings(t *testing.T) {
 			status: http.StatusConflict,
 		},
 		{name: "unavailable", code: services.CodeUnavailable, status: http.StatusServiceUnavailable},
+		{name: "MCP discovery", code: services.CodeMCPDiscoveryFailed, status: http.StatusBadGateway},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1098,6 +1112,54 @@ func TestRuntimePublicErrorsHaveStableHTTPMappings(t *testing.T) {
 			}
 			assertErrorEnvelope(t, recorder.Body.Bytes(), string(test.code))
 		})
+	}
+}
+
+func TestMCPListToolsAcceptsHeadersWithoutReturningThem(t *testing.T) {
+	runtime := &fakeRuntime{
+		mcpTools: services.MCPListToolsResult{
+			Tools: []domain.MCPProjectedTool{
+				{
+					ServerName:    "calendar",
+					ProjectedName: "calendar__lookup",
+					RemoteName:    "lookup",
+					Description:   "Look up a calendar event",
+					InputSchema:   json.RawMessage(`{"type":"object"}`),
+					Annotations:   domain.MCPToolAnnotations{},
+				},
+			},
+			Exclusions: []domain.MCPToolExclusion{},
+		},
+	}
+	body := []byte(`{
+		"server": {
+			"name": "calendar",
+			"url": "https://calendar.example.test/mcp",
+			"headers": {
+				"Authorization": "Bearer mcp-secret",
+				"X-API-Key": "api-secret"
+			}
+		}
+	}`)
+	recorder := httptest.NewRecorder()
+	testHandler(runtime, nil, io.Discard).ServeHTTP(
+		recorder,
+		authenticatedRequest(http.MethodPost, "/v1/mcp/list-tools", body),
+	)
+	if recorder.Code != http.StatusOK || runtime.mcpCalls != 1 {
+		t.Fatalf("list tools = %d, calls = %d, body = %s", recorder.Code, runtime.mcpCalls, recorder.Body.String())
+	}
+	if runtime.mcpInput.Server.Headers["Authorization"] != "Bearer mcp-secret" ||
+		runtime.mcpInput.Server.Headers["X-API-Key"] != "api-secret" {
+		t.Fatalf("service input headers = %#v", runtime.mcpInput.Server.Headers)
+	}
+	for _, secret := range []string{"mcp-secret", "api-secret", "Authorization", "X-API-Key"} {
+		if strings.Contains(recorder.Body.String(), secret) {
+			t.Fatalf("response contains %q: %s", secret, recorder.Body.String())
+		}
+	}
+	if !strings.Contains(recorder.Body.String(), `"projected_name":"calendar__lookup"`) {
+		t.Fatalf("response = %s", recorder.Body.String())
 	}
 }
 

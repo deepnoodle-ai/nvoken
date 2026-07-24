@@ -1106,6 +1106,46 @@ func (q *Queries) ClearExpiredInvocationCredentialMaterial(ctx context.Context, 
 	return result.RowsAffected(), nil
 }
 
+const clearExpiredMCPServerBindingMaterial = `-- name: ClearExpiredMCPServerBindingMaterial :execrows
+WITH candidates AS (
+    SELECT id FROM invocation_mcp_server_bindings
+    WHERE ciphertext IS NOT NULL
+      AND expires_at <= $1
+    ORDER BY expires_at, id
+    LIMIT $2
+)
+UPDATE invocation_mcp_server_bindings
+SET encryption_key_id = NULL, nonce = NULL, ciphertext = NULL,
+    cleared_at = $1
+WHERE id IN (SELECT id FROM candidates)
+`
+
+type ClearExpiredMCPServerBindingMaterialParams struct {
+	ObservedAt *time.Time
+	BatchLimit int32
+}
+
+// ClearExpiredMCPServerBindingMaterial
+//
+//	WITH candidates AS (
+//	    SELECT id FROM invocation_mcp_server_bindings
+//	    WHERE ciphertext IS NOT NULL
+//	      AND expires_at <= $1
+//	    ORDER BY expires_at, id
+//	    LIMIT $2
+//	)
+//	UPDATE invocation_mcp_server_bindings
+//	SET encryption_key_id = NULL, nonce = NULL, ciphertext = NULL,
+//	    cleared_at = $1
+//	WHERE id IN (SELECT id FROM candidates)
+func (q *Queries) ClearExpiredMCPServerBindingMaterial(ctx context.Context, arg ClearExpiredMCPServerBindingMaterialParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearExpiredMCPServerBindingMaterial, arg.ObservedAt, arg.BatchLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createAPICredential = `-- name: CreateAPICredential :exec
 INSERT INTO api_credentials (
     id, account_id, kind, name, prefix, verifier, status, profile, role_cap,
@@ -1778,6 +1818,127 @@ func (q *Queries) CreateInvocationCheckpoint(ctx context.Context, arg CreateInvo
 		arg.ThroughMessageSequence,
 		arg.UsageReceiptID,
 		arg.ToolCallID,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const createInvocationMCPDiscovery = `-- name: CreateInvocationMCPDiscovery :one
+INSERT INTO invocation_mcp_discoveries (
+    id, invocation_id, account_id, tenant_partition_id, catalog, created_at
+)
+SELECT
+    $1, $2, $3,
+    $4, $5, $6
+FROM invocations
+WHERE invocations.id = $2
+  AND invocations.account_id = $3
+  AND invocations.tenant_partition_id = $4
+  AND invocations.status = 'running'
+  AND invocations.lease_owner = $7
+  AND invocations.lease_attempt = $8
+RETURNING id, invocation_id, account_id, tenant_partition_id, catalog, created_at
+`
+
+type CreateInvocationMCPDiscoveryParams struct {
+	ID                string
+	InvocationID      string
+	AccountID         string
+	TenantPartitionID string
+	Catalog           []byte
+	CreatedAt         time.Time
+	LeaseOwner        *string
+	LeaseAttempt      int64
+}
+
+// CreateInvocationMCPDiscovery
+//
+//	INSERT INTO invocation_mcp_discoveries (
+//	    id, invocation_id, account_id, tenant_partition_id, catalog, created_at
+//	)
+//	SELECT
+//	    $1, $2, $3,
+//	    $4, $5, $6
+//	FROM invocations
+//	WHERE invocations.id = $2
+//	  AND invocations.account_id = $3
+//	  AND invocations.tenant_partition_id = $4
+//	  AND invocations.status = 'running'
+//	  AND invocations.lease_owner = $7
+//	  AND invocations.lease_attempt = $8
+//	RETURNING id, invocation_id, account_id, tenant_partition_id, catalog, created_at
+func (q *Queries) CreateInvocationMCPDiscovery(ctx context.Context, arg CreateInvocationMCPDiscoveryParams) (InvocationMcpDiscovery, error) {
+	row := q.db.QueryRow(ctx, createInvocationMCPDiscovery,
+		arg.ID,
+		arg.InvocationID,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.Catalog,
+		arg.CreatedAt,
+		arg.LeaseOwner,
+		arg.LeaseAttempt,
+	)
+	var i InvocationMcpDiscovery
+	err := row.Scan(
+		&i.ID,
+		&i.InvocationID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Catalog,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createInvocationMCPServerBinding = `-- name: CreateInvocationMCPServerBinding :exec
+INSERT INTO invocation_mcp_server_bindings (
+    id, invocation_id, account_id, tenant_partition_id, server_name,
+    encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at
+) VALUES (
+    $1, $2, $3,
+    $4, $5,
+    $6, $7, $8,
+    $9, $10, $11
+)
+`
+
+type CreateInvocationMCPServerBindingParams struct {
+	ID                string
+	InvocationID      string
+	AccountID         string
+	TenantPartitionID string
+	ServerName        string
+	EncryptionKeyID   *string
+	Nonce             []byte
+	Ciphertext        []byte
+	ExpiresAt         *time.Time
+	ClearedAt         *time.Time
+	CreatedAt         time.Time
+}
+
+// CreateInvocationMCPServerBinding
+//
+//	INSERT INTO invocation_mcp_server_bindings (
+//	    id, invocation_id, account_id, tenant_partition_id, server_name,
+//	    encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at
+//	) VALUES (
+//	    $1, $2, $3,
+//	    $4, $5,
+//	    $6, $7, $8,
+//	    $9, $10, $11
+//	)
+func (q *Queries) CreateInvocationMCPServerBinding(ctx context.Context, arg CreateInvocationMCPServerBindingParams) error {
+	_, err := q.db.Exec(ctx, createInvocationMCPServerBinding,
+		arg.ID,
+		arg.InvocationID,
+		arg.AccountID,
+		arg.TenantPartitionID,
+		arg.ServerName,
+		arg.EncryptionKeyID,
+		arg.Nonce,
+		arg.Ciphertext,
+		arg.ExpiresAt,
+		arg.ClearedAt,
 		arg.CreatedAt,
 	)
 	return err
@@ -3584,6 +3745,64 @@ func (q *Queries) GetInvocationForUpdate(ctx context.Context, id string) (Invoca
 	return i, err
 }
 
+const getInvocationMCPDiscovery = `-- name: GetInvocationMCPDiscovery :one
+SELECT id, invocation_id, account_id, tenant_partition_id, catalog, created_at FROM invocation_mcp_discoveries
+WHERE invocation_id = $1
+`
+
+// GetInvocationMCPDiscovery
+//
+//	SELECT id, invocation_id, account_id, tenant_partition_id, catalog, created_at FROM invocation_mcp_discoveries
+//	WHERE invocation_id = $1
+func (q *Queries) GetInvocationMCPDiscovery(ctx context.Context, invocationID string) (InvocationMcpDiscovery, error) {
+	row := q.db.QueryRow(ctx, getInvocationMCPDiscovery, invocationID)
+	var i InvocationMcpDiscovery
+	err := row.Scan(
+		&i.ID,
+		&i.InvocationID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.Catalog,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getInvocationMCPServerBinding = `-- name: GetInvocationMCPServerBinding :one
+SELECT id, invocation_id, account_id, tenant_partition_id, server_name, encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at FROM invocation_mcp_server_bindings
+WHERE invocation_id = $1
+  AND server_name = $2
+`
+
+type GetInvocationMCPServerBindingParams struct {
+	InvocationID string
+	ServerName   string
+}
+
+// GetInvocationMCPServerBinding
+//
+//	SELECT id, invocation_id, account_id, tenant_partition_id, server_name, encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at FROM invocation_mcp_server_bindings
+//	WHERE invocation_id = $1
+//	  AND server_name = $2
+func (q *Queries) GetInvocationMCPServerBinding(ctx context.Context, arg GetInvocationMCPServerBindingParams) (InvocationMcpServerBinding, error) {
+	row := q.db.QueryRow(ctx, getInvocationMCPServerBinding, arg.InvocationID, arg.ServerName)
+	var i InvocationMcpServerBinding
+	err := row.Scan(
+		&i.ID,
+		&i.InvocationID,
+		&i.AccountID,
+		&i.TenantPartitionID,
+		&i.ServerName,
+		&i.EncryptionKeyID,
+		&i.Nonce,
+		&i.Ciphertext,
+		&i.ExpiresAt,
+		&i.ClearedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getInvocationProviderCredential = `-- name: GetInvocationProviderCredential :one
 SELECT id, invocation_id, account_id, tenant_partition_id, provider, source, provider_credential_id, credential_version_id, selector, encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at FROM invocation_provider_credentials
 WHERE invocation_id = $1
@@ -4965,6 +5184,49 @@ func (q *Queries) ListInvocationLifecycleChanges(ctx context.Context, arg ListIn
 			&i.Provenance,
 			&i.Output,
 			&i.OutputProvenance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvocationMCPServerBindings = `-- name: ListInvocationMCPServerBindings :many
+SELECT id, invocation_id, account_id, tenant_partition_id, server_name, encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at FROM invocation_mcp_server_bindings
+WHERE invocation_id = $1
+ORDER BY created_at, id
+`
+
+// ListInvocationMCPServerBindings
+//
+//	SELECT id, invocation_id, account_id, tenant_partition_id, server_name, encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at FROM invocation_mcp_server_bindings
+//	WHERE invocation_id = $1
+//	ORDER BY created_at, id
+func (q *Queries) ListInvocationMCPServerBindings(ctx context.Context, invocationID string) ([]InvocationMcpServerBinding, error) {
+	rows, err := q.db.Query(ctx, listInvocationMCPServerBindings, invocationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InvocationMcpServerBinding{}
+	for rows.Next() {
+		var i InvocationMcpServerBinding
+		if err := rows.Scan(
+			&i.ID,
+			&i.InvocationID,
+			&i.AccountID,
+			&i.TenantPartitionID,
+			&i.ServerName,
+			&i.EncryptionKeyID,
+			&i.Nonce,
+			&i.Ciphertext,
+			&i.ExpiresAt,
+			&i.ClearedAt,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

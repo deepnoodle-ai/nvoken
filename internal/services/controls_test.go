@@ -318,9 +318,13 @@ func (s *legacyFingerprintStore) GetInvocationProviderCredential(context.Context
 	return s.binding, nil
 }
 
+func (s *legacyFingerprintStore) ListInvocationMCPServerBindings(context.Context, string) ([]domain.InvocationMCPServerBinding, error) {
+	return nil, nil
+}
+
 func TestRetainedFingerprintVersionsReplayAndConflict(t *testing.T) {
-	if currentAdmissionFingerprintVersion != 7 {
-		t.Fatalf("current fingerprint version = %d, want retained v7 baseline", currentAdmissionFingerprintVersion)
+	if currentAdmissionFingerprintVersion != 8 {
+		t.Fatalf("current fingerprint version = %d, want v8", currentAdmissionFingerprintVersion)
 	}
 	input := validServiceInput()
 	fingerprints := map[int]func(CreateInvocationInput) ([32]byte, error){
@@ -331,6 +335,7 @@ func TestRetainedFingerprintVersionsReplayAndConflict(t *testing.T) {
 		5: InvocationFingerprintV5,
 		6: InvocationFingerprintV6,
 		7: InvocationFingerprintV7,
+		8: InvocationFingerprintV8,
 	}
 	for version := 1; version <= currentAdmissionFingerprintVersion; version++ {
 		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
@@ -338,7 +343,7 @@ func TestRetainedFingerprintVersionsReplayAndConflict(t *testing.T) {
 			if err != nil {
 				t.Fatalf("stored fingerprint: %v", err)
 			}
-			current, err := InvocationFingerprintV7(input)
+			current, err := InvocationFingerprintV8(input)
 			if err != nil {
 				t.Fatalf("current fingerprint: %v", err)
 			}
@@ -370,7 +375,7 @@ func TestRetainedFingerprintVersionsReplayAndConflict(t *testing.T) {
 			changed := input
 			changed.Input.Content = append([]TextInputBlock(nil), input.Input.Content...)
 			changed.Input.Content[0].Text += " changed"
-			changedCurrent, err := InvocationFingerprintV7(changed)
+			changedCurrent, err := InvocationFingerprintV8(changed)
 			if err != nil {
 				t.Fatalf("changed current fingerprint: %v", err)
 			}

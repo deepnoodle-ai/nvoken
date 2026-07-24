@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-const currentAdmissionFingerprintVersion = 7
+const currentAdmissionFingerprintVersion = 8
 
 const fingerprintVersionV1 = 1
 const fingerprintVersionV2 = 2
@@ -19,6 +19,7 @@ const fingerprintVersionV4 = 4
 const fingerprintVersionV5 = 5
 const fingerprintVersionV6 = 6
 const fingerprintVersionV7 = 7
+const fingerprintVersionV8 = 8
 
 // InvocationFingerprintV1 hashes a fixed JSON representation whose object-key
 // order is part of the versioned contract. Values are already typed, so source
@@ -436,6 +437,78 @@ func invocationFingerprintBytesV7(input CreateInvocationInput) ([]byte, error) {
 	}
 	canonical = strings.Replace(canonical, waitingNeedle, waiting.String()+waitingNeedle, 1)
 	return []byte(canonical), nil
+}
+
+// InvocationFingerprintV8 adds ordered remote MCP server declarations after
+// tools. Credential headers are deliberately absent; transport and timeout
+// defaults are materialized so equivalent requests share one identity.
+func InvocationFingerprintV8(input CreateInvocationInput) ([sha256.Size]byte, error) {
+	canonical, err := invocationFingerprintBytesV8(input)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(canonical), nil
+}
+
+func invocationFingerprintBytesV8(input CreateInvocationInput) ([]byte, error) {
+	v7, err := invocationFingerprintBytesV7(input)
+	if err != nil {
+		return nil, err
+	}
+	canonical := bytes.Replace(
+		v7,
+		[]byte(`{"version":`+strconv.Itoa(fingerprintVersionV7)),
+		[]byte(`{"version":`+strconv.Itoa(fingerprintVersionV8)),
+		1,
+	)
+	needle := []byte(`],"provider_credentials":`)
+	index := bytes.LastIndex(canonical, needle)
+	if index < 0 {
+		return nil, fmt.Errorf("v7 fingerprint shape is invalid")
+	}
+	var servers bytes.Buffer
+	servers.WriteString(`,"mcp_servers":[`)
+	for serverIndex, unresolved := range input.Spec.MCPServers {
+		if serverIndex > 0 {
+			servers.WriteByte(',')
+		}
+		server := resolvedMCPServerSpec(unresolved)
+		servers.WriteString(`{"name":`)
+		if err := writeJSONString(&servers, server.Name); err != nil {
+			return nil, err
+		}
+		servers.WriteString(`,"url":`)
+		if err := writeJSONString(&servers, server.URL); err != nil {
+			return nil, err
+		}
+		servers.WriteString(`,"transport":`)
+		if err := writeJSONString(&servers, server.Transport); err != nil {
+			return nil, err
+		}
+		servers.WriteString(`,"allowed_tools":`)
+		if unresolved.AllowedTools == nil {
+			servers.WriteString("null")
+		} else {
+			servers.WriteByte('[')
+			for toolIndex, name := range server.AllowedTools {
+				if toolIndex > 0 {
+					servers.WriteByte(',')
+				}
+				if err := writeJSONString(&servers, name); err != nil {
+					return nil, err
+				}
+			}
+			servers.WriteByte(']')
+		}
+		servers.WriteString(`,"timeouts":{"discovery_seconds":`)
+		servers.WriteString(strconv.Itoa(server.Timeouts.DiscoverySeconds))
+		servers.WriteString(`,"call_seconds":`)
+		servers.WriteString(strconv.Itoa(server.Timeouts.CallSeconds))
+		servers.WriteString(`}}`)
+	}
+	servers.WriteByte(']')
+	offset := index + 1
+	return append(append(canonical[:offset:offset], servers.Bytes()...), canonical[offset:]...), nil
 }
 
 func writeOptionalInt(buffer *bytes.Buffer, value *int) {

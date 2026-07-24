@@ -55,6 +55,10 @@ func TestInvocationFingerprintV7DesignVectors(t *testing.T) {
 	testFingerprintDesignVectors(t, "admission-fingerprint-v7.json", 7)
 }
 
+func TestInvocationFingerprintV8DesignVectors(t *testing.T) {
+	testFingerprintDesignVectors(t, "admission-fingerprint-v8.json", 8)
+}
+
 func TestInvocationFingerprintV6PreservesLiteralSourceWithoutSecretMaterial(t *testing.T) {
 	input := validServiceInput()
 	omitted, err := InvocationFingerprintV6(input)
@@ -145,9 +149,12 @@ func testFingerprintDesignVectors(t *testing.T, filename string, version int) {
 			} else if version == 6 {
 				canonical, err = invocationFingerprintBytesV6(input)
 				fingerprint, _ = InvocationFingerprintV6(input)
-			} else {
+			} else if version == 7 {
 				canonical, err = invocationFingerprintBytesV7(input)
 				fingerprint, _ = InvocationFingerprintV7(input)
+			} else {
+				canonical, err = invocationFingerprintBytesV8(input)
+				fingerprint, _ = InvocationFingerprintV8(input)
 			}
 			if err != nil {
 				t.Fatalf("canonicalize: %v", err)

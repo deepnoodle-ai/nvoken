@@ -1360,6 +1360,60 @@ SET encryption_key_id = NULL, nonce = NULL, ciphertext = NULL,
     cleared_at = sqlc.arg(observed_at)
 WHERE id IN (SELECT id FROM candidates);
 
+-- name: CreateInvocationMCPServerBinding :exec
+INSERT INTO invocation_mcp_server_bindings (
+    id, invocation_id, account_id, tenant_partition_id, server_name,
+    encryption_key_id, nonce, ciphertext, expires_at, cleared_at, created_at
+) VALUES (
+    sqlc.arg(id), sqlc.arg(invocation_id), sqlc.arg(account_id),
+    sqlc.arg(tenant_partition_id), sqlc.arg(server_name),
+    sqlc.narg(encryption_key_id), sqlc.narg(nonce), sqlc.narg(ciphertext),
+    sqlc.narg(expires_at), sqlc.narg(cleared_at), sqlc.arg(created_at)
+);
+
+-- name: GetInvocationMCPServerBinding :one
+SELECT * FROM invocation_mcp_server_bindings
+WHERE invocation_id = sqlc.arg(invocation_id)
+  AND server_name = sqlc.arg(server_name);
+
+-- name: ListInvocationMCPServerBindings :many
+SELECT * FROM invocation_mcp_server_bindings
+WHERE invocation_id = sqlc.arg(invocation_id)
+ORDER BY created_at, id;
+
+-- name: ClearExpiredMCPServerBindingMaterial :execrows
+WITH candidates AS (
+    SELECT id FROM invocation_mcp_server_bindings
+    WHERE ciphertext IS NOT NULL
+      AND expires_at <= sqlc.arg(observed_at)
+    ORDER BY expires_at, id
+    LIMIT sqlc.arg(batch_limit)
+)
+UPDATE invocation_mcp_server_bindings
+SET encryption_key_id = NULL, nonce = NULL, ciphertext = NULL,
+    cleared_at = sqlc.arg(observed_at)
+WHERE id IN (SELECT id FROM candidates);
+
+-- name: CreateInvocationMCPDiscovery :one
+INSERT INTO invocation_mcp_discoveries (
+    id, invocation_id, account_id, tenant_partition_id, catalog, created_at
+)
+SELECT
+    sqlc.arg(id), sqlc.arg(invocation_id), sqlc.arg(account_id),
+    sqlc.arg(tenant_partition_id), sqlc.arg(catalog), sqlc.arg(created_at)
+FROM invocations
+WHERE invocations.id = sqlc.arg(invocation_id)
+  AND invocations.account_id = sqlc.arg(account_id)
+  AND invocations.tenant_partition_id = sqlc.arg(tenant_partition_id)
+  AND invocations.status = 'running'
+  AND invocations.lease_owner = sqlc.arg(lease_owner)
+  AND invocations.lease_attempt = sqlc.arg(lease_attempt)
+RETURNING *;
+
+-- name: GetInvocationMCPDiscovery :one
+SELECT * FROM invocation_mcp_discoveries
+WHERE invocation_id = sqlc.arg(invocation_id);
+
 -- name: ExpireProviderCredentialVersions :execrows
 WITH candidates AS (
     SELECT id FROM provider_credential_versions

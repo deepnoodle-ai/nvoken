@@ -70,6 +70,7 @@ type InlineExecutionSpec struct {
 	Limits       *InvocationLimitInput `json:"limits,omitempty"`
 	Output       *StructuredOutputSpec `json:"output,omitempty"`
 	Tools        []HostToolSpec        `json:"tools,omitempty"`
+	MCPServers   []MCPServerSpec       `json:"mcp_servers,omitempty"`
 }
 
 type HostToolSpec struct {
@@ -200,6 +201,7 @@ type admissionStore interface {
 	ports.ExecutionDispatchRepository
 	ports.ToolCallRepository
 	ports.ProviderCredentialRepository
+	ports.MCPRepository
 }
 
 type InvocationExecutionMode string
@@ -224,6 +226,7 @@ type RuntimeService struct {
 	credentialPolicy       ProviderCredentialPolicy
 	credentialCipher       ports.CredentialCipher
 	credentialCleanupGrace time.Duration
+	mcpClient              ports.MCPClient
 }
 
 type RuntimeOption func(*RuntimeService)
@@ -280,6 +283,12 @@ func WithProviderCredentialPolicy(
 		service.credentialPolicy = policy
 		service.credentialCipher = cipher
 		service.credentialCleanupGrace = cleanupGrace
+	}
+}
+
+func WithMCPClient(client ports.MCPClient) RuntimeOption {
+	return func(service *RuntimeService) {
+		service.mcpClient = client
 	}
 }
 
@@ -367,6 +376,9 @@ func ValidateCreateInvocation(input CreateInvocationInput) error {
 	if err := validateHostTools(input.Spec.Tools); err != nil {
 		return err
 	}
+	if err := validateMCPServers(input.Spec.MCPServers); err != nil {
+		return err
+	}
 	provider, ok := CanonicalModelProvider(input.Spec.Model.Provider)
 	if !ok {
 		return invalidRequest("spec.model.provider is not supported.")
@@ -432,6 +444,9 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 	if err := s.validateCredentialSelection(input); err != nil {
 		return InvocationAcknowledgement{}, err
 	}
+	if err := s.validateMCPServerBindings(input); err != nil {
+		return InvocationAcknowledgement{}, err
+	}
 	if hasCallbackTools(input.Spec.Tools) && !s.callbackTools {
 		return InvocationAcknowledgement{}, invalidRequest("spec.tools callback mode is not configured for this installation.")
 	}
@@ -444,7 +459,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 	resolvedLimits, err := s.limitPolicy.ResolveForFeatures(
 		input.Spec.Limits,
 		input.Spec.Output != nil,
-		len(input.Spec.Tools) != 0,
+		len(input.Spec.Tools) != 0 || len(input.Spec.MCPServers) != 0,
 	)
 	if err != nil {
 		return InvocationAcknowledgement{}, err
@@ -456,7 +471,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 		}
 	}
-	fingerprint, err := InvocationFingerprintV7(input)
+	fingerprint, err := InvocationFingerprintV8(input)
 	if err != nil {
 		return InvocationAcknowledgement{}, &PublicError{Code: CodeInternal, Message: "The request could not be completed.", Cause: err}
 	}
@@ -533,11 +548,14 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			if err != nil {
 				return err
 			}
-			ids, err := s.newAdmissionIDs(s.executionMode == InvocationExecutionCloudTasks)
+			ids, err := s.newAdmissionIDs(
+				s.executionMode == InvocationExecutionCloudTasks,
+				len(input.Spec.MCPServers),
+			)
 			if err != nil {
 				return err
 			}
-			specJSON, err := json.Marshal(input.Spec)
+			specJSON, err := json.Marshal(durableExecutionSpec(input.Spec))
 			if err != nil {
 				return err
 			}
@@ -617,6 +635,20 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 			}
 			if err := s.store.CreateInvocationProviderCredential(txCtx, binding); err != nil {
 				return err
+			}
+			for index, server := range input.Spec.MCPServers {
+				mcpBinding, err := s.invocationMCPServerBinding(
+					invocation,
+					server,
+					ids.mcpBindings[index],
+					now,
+				)
+				if err != nil {
+					return err
+				}
+				if err := s.store.CreateInvocationMCPServerBinding(txCtx, mcpBinding); err != nil {
+					return err
+				}
 			}
 			if err := s.store.AppendSessionMessage(txCtx, message); err != nil {
 				return err
@@ -904,7 +936,9 @@ func (s *RuntimeService) findIdempotent(
 	expected := fingerprint[:]
 	switch existing.FingerprintVersion {
 	case 1:
-		if legacyInput.Spec.Limits != nil || legacyInput.Spec.Output != nil || len(legacyInput.Spec.Tools) != 0 || legacyInput.ProviderCredentials != nil {
+		if legacyInput.Spec.Limits != nil || legacyInput.Spec.Output != nil ||
+			len(legacyInput.Spec.Tools) != 0 || len(legacyInput.Spec.MCPServers) != 0 ||
+			legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
 		}
 		legacy, legacyErr := InvocationFingerprintV1(legacyInput)
@@ -913,7 +947,8 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 2:
-		if legacyInput.Spec.Output != nil || len(legacyInput.Spec.Tools) != 0 || legacyInput.ProviderCredentials != nil {
+		if legacyInput.Spec.Output != nil || len(legacyInput.Spec.Tools) != 0 ||
+			len(legacyInput.Spec.MCPServers) != 0 || legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
 		}
 		legacy, legacyErr := InvocationFingerprintV2(legacyInput)
@@ -922,7 +957,8 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 3:
-		if len(legacyInput.Spec.Tools) != 0 || legacyInput.ProviderCredentials != nil {
+		if len(legacyInput.Spec.Tools) != 0 || len(legacyInput.Spec.MCPServers) != 0 ||
+			legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{
 				Code:    CodeIdempotencyConflict,
 				Message: "The idempotency key was already used with a different request.",
@@ -934,7 +970,8 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 4:
-		if hasCallbackTools(legacyInput.Spec.Tools) || legacyInput.ProviderCredentials != nil {
+		if hasCallbackTools(legacyInput.Spec.Tools) || len(legacyInput.Spec.MCPServers) != 0 ||
+			legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{
 				Code:    CodeIdempotencyConflict,
 				Message: "The idempotency key was already used with a different request.",
@@ -946,7 +983,7 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 5:
-		if legacyInput.ProviderCredentials != nil {
+		if len(legacyInput.Spec.MCPServers) != 0 || legacyInput.ProviderCredentials != nil {
 			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
 		}
 		legacy, legacyErr := InvocationFingerprintV5(legacyInput)
@@ -955,6 +992,9 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 6:
+		if len(legacyInput.Spec.MCPServers) != 0 {
+			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
+		}
 		provider := input.Spec.Model.Provider
 		binding, bindingErr := s.store.GetInvocationProviderCredential(ctx, existing.ID, provider)
 		if bindingErr != nil || binding.InvocationID != existing.ID || binding.Provider != provider {
@@ -966,9 +1006,27 @@ func (s *RuntimeService) findIdempotent(
 		}
 		expected = legacy[:]
 	case 7:
+		if len(legacyInput.Spec.MCPServers) != 0 {
+			return domain.Invocation{}, false, &PublicError{Code: CodeIdempotencyConflict, Message: "The idempotency key was already used with a different request."}
+		}
 		provider := input.Spec.Model.Provider
 		binding, bindingErr := s.store.GetInvocationProviderCredential(ctx, existing.ID, provider)
 		if bindingErr != nil || binding.InvocationID != existing.ID || binding.Provider != provider {
+			return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
+		}
+		legacy, legacyErr := InvocationFingerprintV7(input)
+		if legacyErr != nil {
+			return domain.Invocation{}, false, legacyErr
+		}
+		expected = legacy[:]
+	case 8:
+		provider := input.Spec.Model.Provider
+		binding, bindingErr := s.store.GetInvocationProviderCredential(ctx, existing.ID, provider)
+		if bindingErr != nil || binding.InvocationID != existing.ID || binding.Provider != provider {
+			return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
+		}
+		mcpBindings, bindingErr := s.store.ListInvocationMCPServerBindings(ctx, existing.ID)
+		if bindingErr != nil || !mcpBindingsMatchSpec(existing.ID, input.Spec.MCPServers, mcpBindings) {
 			return domain.Invocation{}, false, &PublicError{Code: CodeInternal, Message: "The request could not be completed."}
 		}
 	default:
@@ -983,9 +1041,17 @@ func (s *RuntimeService) findIdempotent(
 	return existing, true, nil
 }
 
-type admissionIDs struct{ snapshot, invocation, message, state, dispatch, binding string }
+type admissionIDs struct {
+	snapshot    string
+	invocation  string
+	message     string
+	state       string
+	dispatch    string
+	binding     string
+	mcpBindings []string
+}
 
-func (s *RuntimeService) newAdmissionIDs(includeDispatch bool) (admissionIDs, error) {
+func (s *RuntimeService) newAdmissionIDs(includeDispatch bool, mcpBindings int) (admissionIDs, error) {
 	var ids admissionIDs
 	var err error
 	if ids.snapshot, err = s.ids.NewID(domain.PrefixExecutionSpecSnapshot); err != nil {
@@ -1003,12 +1069,42 @@ func (s *RuntimeService) newAdmissionIDs(includeDispatch bool) (admissionIDs, er
 	if ids.binding, err = s.ids.NewID(domain.PrefixInvocationProviderCredential); err != nil {
 		return ids, err
 	}
+	ids.mcpBindings = make([]string, mcpBindings)
+	for index := range ids.mcpBindings {
+		if ids.mcpBindings[index], err = s.ids.NewID(domain.PrefixInvocationMCPServerBinding); err != nil {
+			return ids, err
+		}
+	}
 	if includeDispatch {
 		if ids.dispatch, err = s.ids.NewID(domain.PrefixExecutionDispatch); err != nil {
 			return ids, err
 		}
 	}
 	return ids, nil
+}
+
+func mcpBindingsMatchSpec(
+	invocationID string,
+	servers []MCPServerSpec,
+	bindings []domain.InvocationMCPServerBinding,
+) bool {
+	if len(servers) != len(bindings) {
+		return false
+	}
+	expected := make(map[string]struct{}, len(servers))
+	for _, server := range servers {
+		expected[server.Name] = struct{}{}
+	}
+	for _, binding := range bindings {
+		if binding.InvocationID != invocationID {
+			return false
+		}
+		if _, ok := expected[binding.ServerName]; !ok {
+			return false
+		}
+		delete(expected, binding.ServerName)
+	}
+	return len(expected) == 0
 }
 
 func acknowledgementFor(invocation domain.Invocation, deduplicated bool) InvocationAcknowledgement {

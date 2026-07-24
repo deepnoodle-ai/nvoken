@@ -59,17 +59,17 @@ func TestRetainedWorkSurvivesCompatibleUpgradeAndRollback(t *testing.T) {
 	// step past the embedded head. The production rule requires the same
 	// two values in its SQL and manifest.
 	if _, err := pool.Exec(ctx, `
-		UPDATE nvoken_schema_migrations SET version = 17;
+		UPDATE nvoken_schema_migrations SET version = 18;
 		UPDATE nvoken_schema_compatibility
-		SET schema_version = 17, minimum_binary_schema_version = 16
+		SET schema_version = 18, minimum_binary_schema_version = 17
 	`); err != nil {
 		t.Fatalf("apply compatible fixture migration: %v", err)
 	}
-	previousStatus, err := InspectSchemaForVersion(ctx, pool, 16)
+	previousStatus, err := InspectSchemaForVersion(ctx, pool, 17)
 	if err != nil || previousStatus.State != SchemaCompatibleNewer {
 		t.Fatalf("binary N status after migration = %#v, %v", previousStatus, err)
 	}
-	nextStatus, err := InspectSchemaForVersion(ctx, pool, 17)
+	nextStatus, err := InspectSchemaForVersion(ctx, pool, 18)
 	if err != nil || nextStatus.State != SchemaCompatible {
 		t.Fatalf("binary N+1 status after migration = %#v, %v", nextStatus, err)
 	}
@@ -122,9 +122,9 @@ func TestRetainedWorkSurvivesCompatibleUpgradeAndRollback(t *testing.T) {
 		t.Fatalf("resume retained waiting work = %#v, %v", resumed, err)
 	}
 
-	// Roll back only the application binary. Schema 17 remains in place and
+	// Roll back only the application binary. Schema 18 remains in place and
 	// binary N reuses the accepted results under the same fences.
-	rollbackStatus, err := InspectSchemaForVersion(ctx, pool, 16)
+	rollbackStatus, err := InspectSchemaForVersion(ctx, pool, 17)
 	if err != nil || rollbackStatus.State != SchemaCompatibleNewer {
 		t.Fatalf("rollback schema status = %#v, %v", rollbackStatus, err)
 	}
