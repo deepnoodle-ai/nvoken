@@ -52,6 +52,16 @@ func TestConformance(t *testing.T) {
 	if !foundFutureProvider {
 		t.Fatalf("future provider did not decode: %#v", models.Items)
 	}
+	mcpTools, err := client.ListMCPTools(context.Background(), MCPServer{
+		Name:         "support",
+		URL:          "https://mcp.example.test/rpc",
+		AllowedTools: []string{"lookup"},
+		Headers:      map[string]string{"Authorization": "Bearer conformance-mcp-secret"},
+	})
+	if err != nil || len(mcpTools.Tools) != 1 ||
+		mcpTools.Tools[0].ProjectedName != "support__lookup" {
+		t.Fatalf("list MCP tools: %#v err=%v", mcpTools, err)
+	}
 	exactModel, err := client.GetModel(context.Background(), Model{
 		Provider: "openai",
 		ID:       conformanceExactModelID,
@@ -69,6 +79,12 @@ func TestConformance(t *testing.T) {
 				Provider: "openai",
 				ID:       "gpt-test",
 			},
+			MCPServers: []MCPServer{{
+				Name:         "support",
+				URL:          "https://mcp.example.test/rpc",
+				AllowedTools: []string{"lookup"},
+				Headers:      map[string]string{"Authorization": "Bearer conformance-mcp-secret"},
+			}},
 		},
 		ProviderCredentials: []ProviderCredentialSelection{{
 			Provider: "openai",

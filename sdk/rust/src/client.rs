@@ -249,6 +249,62 @@ impl Tool {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct McpTimeouts {
+    pub discovery_seconds: Option<u32>,
+    pub call_seconds: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct McpServer {
+    pub name: String,
+    pub url: String,
+    pub allowed_tools: Vec<String>,
+    pub headers: HashMap<String, String>,
+    pub timeouts: Option<McpTimeouts>,
+}
+
+impl McpServer {
+    pub fn new(name: impl Into<String>, url: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            url: url.into(),
+            allowed_tools: Vec::new(),
+            headers: HashMap::new(),
+            timeouts: None,
+        }
+    }
+
+    pub fn allowed_tool(mut self, name: impl Into<String>) -> Self {
+        self.allowed_tools.push(name.into());
+        self
+    }
+
+    pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.insert(name.into(), value.into());
+        self
+    }
+
+    pub fn timeouts(mut self, timeouts: McpTimeouts) -> Self {
+        self.timeouts = Some(timeouts);
+        self
+    }
+
+    fn generated(&self) -> models::McpServerSpec {
+        let mut result = models::McpServerSpec::new(self.name.clone(), self.url.clone());
+        result.transport = Some(models::mcp_server_spec::Transport::TransportStreamableHTTP);
+        result.allowed_tools = (!self.allowed_tools.is_empty()).then(|| self.allowed_tools.clone());
+        result.headers = (!self.headers.is_empty()).then(|| self.headers.clone());
+        result.timeouts = self.timeouts.as_ref().map(|timeouts| {
+            Box::new(models::McpTimeouts {
+                discovery_seconds: timeouts.discovery_seconds,
+                call_seconds: timeouts.call_seconds,
+            })
+        });
+        result
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Limits {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -271,6 +327,7 @@ pub struct ExecutionSpec {
     pub model: Model,
     pub limits: Option<Limits>,
     pub tools: Vec<Tool>,
+    pub mcp_servers: Vec<McpServer>,
     pub output_schema: Option<HashMap<String, Value>>,
 }
 
@@ -281,6 +338,7 @@ impl ExecutionSpec {
             model,
             limits: None,
             tools: Vec::new(),
+            mcp_servers: Vec::new(),
             output_schema: None,
         }
     }
@@ -297,6 +355,11 @@ impl ExecutionSpec {
 
     pub fn tool(mut self, tool: Tool) -> Self {
         self.tools.push(tool);
+        self
+    }
+
+    pub fn mcp_server(mut self, server: McpServer) -> Self {
+        self.mcp_servers.push(server);
         self
     }
 
@@ -544,6 +607,14 @@ impl Client {
             tools.push(mode);
         }
         spec.tools = (!tools.is_empty()).then_some(tools);
+        spec.mcp_servers = (!request.spec.mcp_servers.is_empty()).then(|| {
+            request
+                .spec
+                .mcp_servers
+                .iter()
+                .map(McpServer::generated)
+                .collect()
+        });
         let input = models::InvocationInput::String(request.input);
         let idempotency_key = request
             .idempotency_key
@@ -615,6 +686,18 @@ impl Client {
             provider.as_deref(),
             options.include_deprecated,
             None,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn list_mcp_tools(
+        &self,
+        server: &McpServer,
+    ) -> Result<models::McpListToolsResponse, NvokenError> {
+        apis::mcp_api::list_mcp_tools(
+            &self.configuration,
+            models::McpListToolsRequest::new(server.generated()),
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))

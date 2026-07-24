@@ -16,6 +16,7 @@ from nvoken import (
     ExecutionSpec,
     InvocationHandle,
     InvokeRequest,
+    MCPServer,
     Model,
     NvokenError,
     ProviderCredentialSelection,
@@ -55,6 +56,14 @@ async def test_shared_fault_server_semantics() -> None:
         assert models.catalog_version == "conformance-catalog-v1"
         assert next(model for model in models.items if model.id == "future-model").provider == \
             "future_provider"
+        server = MCPServer(
+            name="support",
+            url="https://mcp.example.test/rpc",
+            allowed_tools=("lookup",),
+            headers={"Authorization": "Bearer conformance-mcp-secret"},
+        )
+        mcp_tools = await client.list_mcp_tools(server)
+        assert mcp_tools.tools[0].projected_name == "support__lookup"
         exact_model = await client.get_model(Model(provider="openai", id=EXACT_MODEL_ID))
         assert exact_model.id == EXACT_MODEL_ID
         assert exact_model.cataloged is False
@@ -67,6 +76,7 @@ async def test_shared_fault_server_semantics() -> None:
             spec=ExecutionSpec(
                 instructions="help",
                 model=Model(provider="openai", id="gpt-test"),
+                mcp_servers=(server,),
             ),
             provider_credentials=(
                 ProviderCredentialSelection(

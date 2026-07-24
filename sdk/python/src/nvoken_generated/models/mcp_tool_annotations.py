@@ -17,27 +17,20 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, StrictBool
 from typing import Any, ClassVar, Dict, Optional
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class InvocationFailure(BaseModel):
+class MCPToolAnnotations(BaseModel):
     """
-    Failed Invocations may carry paired usage and provenance when a model response produced safe normalized evidence before deadline or limit settlement. Cancellation and pre-response failures carry neither.
+    MCPToolAnnotations
     """ # noqa: E501
-    code: StrictStr
-    message: StrictStr
-    details: Optional[Dict[str, Any]] = None
-    __properties: ClassVar[List[str]] = ["code", "message", "details"]
-
-    @field_validator('code')
-    def code_validate_enum(cls, value):
-        """Validates the enum"""
-        if value not in set(['deadline_exceeded', 'budget_exceeded', 'credential_unavailable', 'provider_error', 'mcp_discovery_failed', 'structured_output_unsatisfied', 'internal']):
-            raise ValueError("must be one of enum values ('deadline_exceeded', 'budget_exceeded', 'credential_unavailable', 'provider_error', 'mcp_discovery_failed', 'structured_output_unsatisfied', 'internal')")
-        return value
+    read_only_hint: Optional[StrictBool]
+    idempotent_hint: Optional[StrictBool]
+    destructive_hint: Optional[StrictBool]
+    __properties: ClassVar[List[str]] = ["read_only_hint", "idempotent_hint", "destructive_hint"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -57,7 +50,7 @@ class InvocationFailure(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of InvocationFailure from a JSON string"""
+        """Create an instance of MCPToolAnnotations from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -78,11 +71,26 @@ class InvocationFailure(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # set to None if read_only_hint (nullable) is None
+        # and model_fields_set contains the field
+        if self.read_only_hint is None and "read_only_hint" in self.model_fields_set:
+            _dict['read_only_hint'] = None
+
+        # set to None if idempotent_hint (nullable) is None
+        # and model_fields_set contains the field
+        if self.idempotent_hint is None and "idempotent_hint" in self.model_fields_set:
+            _dict['idempotent_hint'] = None
+
+        # set to None if destructive_hint (nullable) is None
+        # and model_fields_set contains the field
+        if self.destructive_hint is None and "destructive_hint" in self.model_fields_set:
+            _dict['destructive_hint'] = None
+
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of InvocationFailure from a dict"""
+        """Create an instance of MCPToolAnnotations from a dict"""
         if obj is None:
             return None
 
@@ -90,8 +98,8 @@ class InvocationFailure(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "code": obj.get("code"),
-            "message": obj.get("message"),
-            "details": obj.get("details")
+            "read_only_hint": obj.get("read_only_hint"),
+            "idempotent_hint": obj.get("idempotent_hint"),
+            "destructive_hint": obj.get("destructive_hint")
         })
         return _obj

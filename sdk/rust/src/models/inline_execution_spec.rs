@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// InlineExecutionSpec : Immutable launch snapshot. Unknown or deferred fields, including spec references, are rejected rather than ignored. Callback declarations require installation callback signing configuration. A tools-bearing spec requires at least two model iterations; omission resolves to three or the lower installation maximum.
+/// InlineExecutionSpec : Immutable launch snapshot. Unknown or deferred fields, including spec references, are rejected rather than ignored. Callback declarations require installation callback signing configuration. Remote MCP credential headers are encrypted outside this snapshot and never returned. A tools-bearing spec, including mcp_servers, requires at least two model iterations; omission resolves to three or the lower installation maximum.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InlineExecutionSpec {
     /// Optional model instructions. Omission adds no hidden default.
@@ -25,10 +25,12 @@ pub struct InlineExecutionSpec {
     pub output: Option<Box<models::StructuredOutputSpec>>,
     #[serde(rename = "tools", skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<models::ToolSpec>>,
+    #[serde(rename = "mcp_servers", skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<Vec<models::McpServerSpec>>,
 }
 
 impl InlineExecutionSpec {
-    /// Immutable launch snapshot. Unknown or deferred fields, including spec references, are rejected rather than ignored. Callback declarations require installation callback signing configuration. A tools-bearing spec requires at least two model iterations; omission resolves to three or the lower installation maximum.
+    /// Immutable launch snapshot. Unknown or deferred fields, including spec references, are rejected rather than ignored. Callback declarations require installation callback signing configuration. Remote MCP credential headers are encrypted outside this snapshot and never returned. A tools-bearing spec, including mcp_servers, requires at least two model iterations; omission resolves to three or the lower installation maximum.
     pub fn new(model: models::ModelSelection) -> InlineExecutionSpec {
         InlineExecutionSpec {
             instructions: None,
@@ -36,6 +38,7 @@ impl InlineExecutionSpec {
             limits: None,
             output: None,
             tools: None,
+            mcp_servers: None,
         }
     }
 }

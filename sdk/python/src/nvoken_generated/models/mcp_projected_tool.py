@@ -17,26 +17,35 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, Optional
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from typing import Any, ClassVar, Dict, List
+from typing_extensions import Annotated
+from nvoken_generated.models.mcp_tool_annotations import MCPToolAnnotations
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class InvocationFailure(BaseModel):
+class MCPProjectedTool(BaseModel):
     """
-    Failed Invocations may carry paired usage and provenance when a model response produced safe normalized evidence before deadline or limit settlement. Cancellation and pre-response failures carry neither.
+    MCPProjectedTool
     """ # noqa: E501
-    code: StrictStr
-    message: StrictStr
-    details: Optional[Dict[str, Any]] = None
-    __properties: ClassVar[List[str]] = ["code", "message", "details"]
+    server_name: StrictStr
+    projected_name: Annotated[str, Field(min_length=1, strict=True, max_length=64)]
+    remote_name: StrictStr
+    description: Annotated[str, Field(strict=True, max_length=4096)]
+    input_schema: Dict[str, Any]
+    annotations: MCPToolAnnotations
+    additional_properties: Dict[str, Any] = {}
+    __properties: ClassVar[List[str]] = ["server_name", "projected_name", "remote_name", "description", "input_schema", "annotations"]
 
-    @field_validator('code')
-    def code_validate_enum(cls, value):
-        """Validates the enum"""
-        if value not in set(['deadline_exceeded', 'budget_exceeded', 'credential_unavailable', 'provider_error', 'mcp_discovery_failed', 'structured_output_unsatisfied', 'internal']):
-            raise ValueError("must be one of enum values ('deadline_exceeded', 'budget_exceeded', 'credential_unavailable', 'provider_error', 'mcp_discovery_failed', 'structured_output_unsatisfied', 'internal')")
+    @field_validator('projected_name')
+    def projected_name_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^[A-Za-z0-9_-]+$", value):
+            raise ValueError(r"must validate the regular expression /^[A-Za-z0-9_-]+$/")
         return value
 
     model_config = ConfigDict(
@@ -57,7 +66,7 @@ class InvocationFailure(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of InvocationFailure from a JSON string"""
+        """Create an instance of MCPProjectedTool from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -69,8 +78,10 @@ class InvocationFailure(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
+        * Fields in `self.additional_properties` are added to the output dict.
         """
         excluded_fields: Set[str] = set([
+            "additional_properties",
         ])
 
         _dict = self.model_dump(
@@ -78,11 +89,19 @@ class InvocationFailure(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of annotations
+        if self.annotations:
+            _dict['annotations'] = self.annotations.to_dict()
+        # puts key-value pairs in additional_properties in the top level
+        if self.additional_properties is not None:
+            for _key, _value in self.additional_properties.items():
+                _dict[_key] = _value
+
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of InvocationFailure from a dict"""
+        """Create an instance of MCPProjectedTool from a dict"""
         if obj is None:
             return None
 
@@ -90,8 +109,16 @@ class InvocationFailure(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "code": obj.get("code"),
-            "message": obj.get("message"),
-            "details": obj.get("details")
+            "server_name": obj.get("server_name"),
+            "projected_name": obj.get("projected_name"),
+            "remote_name": obj.get("remote_name"),
+            "description": obj.get("description"),
+            "input_schema": obj.get("input_schema"),
+            "annotations": MCPToolAnnotations.from_dict(obj["annotations"]) if obj.get("annotations") is not None else None
         })
+        # store additional fields in additional_properties
+        for _key in obj.keys():
+            if _key not in cls.__properties:
+                _obj.additional_properties[_key] = obj.get(_key)
+
         return _obj

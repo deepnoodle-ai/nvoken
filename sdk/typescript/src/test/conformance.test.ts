@@ -17,6 +17,7 @@ import {
   defineJsonSchema,
   formatInvocationFailure,
   formatNvokenError,
+  mcpServer,
   toolInput,
   verifyCallback,
   type HostTool,
@@ -199,6 +200,14 @@ test("shared fault server semantics", async (context) => {
   const models = await client.listModels();
   assert.equal(models.catalogVersion, "conformance-catalog-v1");
   assert.equal(models.items.find((model) => model.id === "future-model")?.provider, "future_provider");
+  const server = mcpServer({
+    name: "support",
+    url: "https://mcp.example.test/rpc",
+    allowedTools: ["lookup"],
+    headers: { Authorization: "Bearer conformance-mcp-secret" },
+  });
+  const mcpTools = await client.listMcpTools(server);
+  assert.equal(mcpTools.tools[0]?.projectedName, "support__lookup");
   const exactModel = await client.getModel({ provider: "openai", id: exactModelId });
   assert.equal(exactModel.id, exactModelId);
   assert.equal(exactModel.cataloged, false);
@@ -210,6 +219,7 @@ test("shared fault server semantics", async (context) => {
     spec: {
       instructions: "help",
       model: { provider: "openai", id: "gpt-test" },
+      mcpServers: [server],
       outputSchema: defineJsonSchema<Answer>({
         type: "object",
         properties: { answer: { type: "string" } },

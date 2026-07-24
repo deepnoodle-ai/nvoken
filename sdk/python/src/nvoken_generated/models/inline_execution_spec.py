@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.invocation_limit_request import InvocationLimitRequest
+from nvoken_generated.models.mcp_server_spec import MCPServerSpec
 from nvoken_generated.models.model_selection import ModelSelection
 from nvoken_generated.models.structured_output_spec import StructuredOutputSpec
 from nvoken_generated.models.tool_spec import ToolSpec
@@ -30,14 +31,15 @@ from pydantic_core import to_jsonable_python
 
 class InlineExecutionSpec(BaseModel):
     """
-    Immutable launch snapshot. Unknown or deferred fields, including spec references, are rejected rather than ignored. Callback declarations require installation callback signing configuration. A tools-bearing spec requires at least two model iterations; omission resolves to three or the lower installation maximum.
+    Immutable launch snapshot. Unknown or deferred fields, including spec references, are rejected rather than ignored. Callback declarations require installation callback signing configuration. Remote MCP credential headers are encrypted outside this snapshot and never returned. A tools-bearing spec, including mcp_servers, requires at least two model iterations; omission resolves to three or the lower installation maximum.
     """ # noqa: E501
     instructions: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Optional model instructions. Omission adds no hidden default.")
     model: ModelSelection
     limits: Optional[InvocationLimitRequest] = None
     output: Optional[StructuredOutputSpec] = None
     tools: Optional[Annotated[List[ToolSpec], Field(max_length=32)]] = None
-    __properties: ClassVar[List[str]] = ["instructions", "model", "limits", "output", "tools"]
+    mcp_servers: Optional[Annotated[List[MCPServerSpec], Field(max_length=8)]] = None
+    __properties: ClassVar[List[str]] = ["instructions", "model", "limits", "output", "tools", "mcp_servers"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -94,6 +96,13 @@ class InlineExecutionSpec(BaseModel):
                 if _item_tools:
                     _items.append(_item_tools.to_dict())
             _dict['tools'] = _items
+        # override the default output from pydantic by calling `to_dict()` of each item in mcp_servers (list)
+        _items = []
+        if self.mcp_servers:
+            for _item_mcp_servers in self.mcp_servers:
+                if _item_mcp_servers:
+                    _items.append(_item_mcp_servers.to_dict())
+            _dict['mcp_servers'] = _items
         return _dict
 
     @classmethod
@@ -110,6 +119,7 @@ class InlineExecutionSpec(BaseModel):
             "model": ModelSelection.from_dict(obj["model"]) if obj.get("model") is not None else None,
             "limits": InvocationLimitRequest.from_dict(obj["limits"]) if obj.get("limits") is not None else None,
             "output": StructuredOutputSpec.from_dict(obj["output"]) if obj.get("output") is not None else None,
-            "tools": [ToolSpec.from_dict(_item) for _item in obj["tools"]] if obj.get("tools") is not None else None
+            "tools": [ToolSpec.from_dict(_item) for _item in obj["tools"]] if obj.get("tools") is not None else None,
+            "mcp_servers": [MCPServerSpec.from_dict(_item) for _item in obj["mcp_servers"]] if obj.get("mcp_servers") is not None else None
         })
         return _obj

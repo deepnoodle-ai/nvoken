@@ -19,6 +19,7 @@ __version__ = "0.1.0"
 # Define package exports
 __all__ = [
     "InvocationsApi",
+    "MCPApi",
     "ModelsApi",
     "ProviderCredentialsApi",
     "SessionsApi",
@@ -58,6 +59,13 @@ __all__ = [
     "InvocationStatus",
     "InvocationStreamEvent",
     "InvocationUpdateEvent",
+    "MCPListToolsRequest",
+    "MCPListToolsResponse",
+    "MCPProjectedTool",
+    "MCPServerSpec",
+    "MCPTimeouts",
+    "MCPToolAnnotations",
+    "MCPToolExclusion",
     "ModelCost",
     "ModelDescriptor",
     "ModelList",
@@ -95,6 +103,7 @@ __all__ = [
 
 # import apis into sdk package
 from nvoken_generated.api.invocations_api import InvocationsApi as InvocationsApi
+from nvoken_generated.api.mcp_api import MCPApi as MCPApi
 from nvoken_generated.api.models_api import ModelsApi as ModelsApi
 from nvoken_generated.api.provider_credentials_api import ProviderCredentialsApi as ProviderCredentialsApi
 from nvoken_generated.api.sessions_api import SessionsApi as SessionsApi
@@ -138,6 +147,13 @@ from nvoken_generated.models.invocation_result_event import InvocationResultEven
 from nvoken_generated.models.invocation_status import InvocationStatus as InvocationStatus
 from nvoken_generated.models.invocation_stream_event import InvocationStreamEvent as InvocationStreamEvent
 from nvoken_generated.models.invocation_update_event import InvocationUpdateEvent as InvocationUpdateEvent
+from nvoken_generated.models.mcp_list_tools_request import MCPListToolsRequest as MCPListToolsRequest
+from nvoken_generated.models.mcp_list_tools_response import MCPListToolsResponse as MCPListToolsResponse
+from nvoken_generated.models.mcp_projected_tool import MCPProjectedTool as MCPProjectedTool
+from nvoken_generated.models.mcp_server_spec import MCPServerSpec as MCPServerSpec
+from nvoken_generated.models.mcp_timeouts import MCPTimeouts as MCPTimeouts
+from nvoken_generated.models.mcp_tool_annotations import MCPToolAnnotations as MCPToolAnnotations
+from nvoken_generated.models.mcp_tool_exclusion import MCPToolExclusion as MCPToolExclusion
 from nvoken_generated.models.model_cost import ModelCost as ModelCost
 from nvoken_generated.models.model_descriptor import ModelDescriptor as ModelDescriptor
 from nvoken_generated.models.model_list import ModelList as ModelList

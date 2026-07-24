@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { InvocationsApi, ModelsApi, SessionsApi } from "./generated/apis/index.js";
+import { InvocationsApi, MCPApi, ModelsApi, SessionsApi } from "./generated/apis/index.js";
 import type {
   CreateInvocationRequest,
   Invocation,
@@ -11,6 +11,9 @@ import type {
   InvocationProviderCredentialSelection,
   InvocationResult,
   InvocationStatus,
+  MCPListToolsResponse,
+  MCPServerSpec,
+  MCPTimeouts,
   ModelDescriptor,
   ModelList,
   PendingHostToolCall,
@@ -328,7 +331,30 @@ export interface ExecutionSpec<TOutput extends object = JsonObject> {
   model: Model;
   limits?: Limits;
   tools?: Array<Tool<object>>;
+  mcpServers?: Array<MCPServerSpec>;
   outputSchema?: OutputSchema<TOutput>;
+}
+
+export interface MCPServerOptions {
+  name: string;
+  url: string;
+  transport?: "streamable_http";
+  allowedTools?: Iterable<string>;
+  headers?: Record<string, string>;
+  timeouts?: MCPTimeouts;
+}
+
+export function mcpServer(options: MCPServerOptions): MCPServerSpec {
+  return {
+    name: options.name,
+    url: options.url,
+    transport: options.transport,
+    allowedTools: options.allowedTools === undefined
+      ? undefined
+      : new Set(options.allowedTools),
+    headers: options.headers === undefined ? undefined : { ...options.headers },
+    timeouts: options.timeouts === undefined ? undefined : { ...options.timeouts },
+  };
 }
 
 export type InvokeInput = string | readonly TextInputBlock[];
@@ -379,6 +405,7 @@ export interface AgentOptions<TOutput extends object = JsonObject> {
   model?: Model;
   limits?: Limits;
   tools?: Array<Tool<object>>;
+  mcpServers?: Array<MCPServerSpec>;
   outputSchema?: OutputSchema<TOutput>;
   providerCredentials?: InvocationProviderCredentialSelection[];
 }
@@ -500,6 +527,7 @@ export interface WaitOptions {
 
 export class Client {
   readonly invocations: InvocationsApi;
+  readonly mcp: MCPApi;
   readonly models: ModelsApi;
   readonly sessions: SessionsApi;
   readonly configuration: Configuration;
@@ -531,6 +559,7 @@ export class Client {
       headers: { "User-Agent": "@deepnoodle/nvoken" },
     });
     this.invocations = new InvocationsApi(this.configuration);
+    this.mcp = new MCPApi(this.configuration);
     this.models = new ModelsApi(this.configuration);
     this.sessions = new SessionsApi(this.configuration);
     this.retry = {
@@ -553,8 +582,13 @@ export class Client {
     }
   }
 
-  raw(): { invocations: InvocationsApi; models: ModelsApi; sessions: SessionsApi } {
-    return { invocations: this.invocations, models: this.models, sessions: this.sessions };
+  raw(): { invocations: InvocationsApi; mcp: MCPApi; models: ModelsApi; sessions: SessionsApi } {
+    return {
+      invocations: this.invocations,
+      mcp: this.mcp,
+      models: this.models,
+      sessions: this.sessions,
+    };
   }
 
   agent<TOutput extends object = JsonObject>(
@@ -570,6 +604,19 @@ export class Client {
           provider: options.provider,
           includeDeprecated: options.includeDeprecated,
         },
+        { signal },
+      ),
+      signal,
+    );
+  }
+
+  listMcpTools(
+    server: MCPServerSpec,
+    signal?: AbortSignal,
+  ): Promise<MCPListToolsResponse> {
+    return this.replaySafe(
+      () => this.mcp.listMCPTools(
+        { mCPListToolsRequest: { server } },
         { signal },
       ),
       signal,
@@ -912,6 +959,7 @@ export class Agent<TOutput extends object = JsonObject> {
         model: this.model,
         limits: this.options.limits,
         tools: this.options.tools,
+        mcpServers: this.options.mcpServers,
         outputSchema: this.options.outputSchema,
       },
       providerCredentials: this.options.providerCredentials,
@@ -1366,6 +1414,14 @@ function invocationRequestToWire<TOutput extends object>(
           mode: tool.mode,
           inputSchema: schemaToJSON(tool.inputSchema, "input"),
         }),
+      mcpServers: request.spec.mcpServers?.map((server) => ({
+        ...server,
+        allowedTools: server.allowedTools === undefined
+          ? undefined
+          : new Set(server.allowedTools),
+        headers: server.headers === undefined ? undefined : { ...server.headers },
+        timeouts: server.timeouts === undefined ? undefined : { ...server.timeouts },
+      })),
       output: request.spec.outputSchema
         ? { schema: schemaToJSON(request.spec.outputSchema, "output") }
         : undefined,

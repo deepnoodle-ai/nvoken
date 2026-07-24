@@ -18,25 +18,25 @@ import re  # noqa: F401
 import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Dict
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class InvocationFailure(BaseModel):
+class MCPToolExclusion(BaseModel):
     """
-    Failed Invocations may carry paired usage and provenance when a model response produced safe normalized evidence before deadline or limit settlement. Cancellation and pre-response failures carry neither.
+    MCPToolExclusion
     """ # noqa: E501
-    code: StrictStr
-    message: StrictStr
-    details: Optional[Dict[str, Any]] = None
-    __properties: ClassVar[List[str]] = ["code", "message", "details"]
+    server_name: StrictStr
+    remote_name: StrictStr
+    reason: StrictStr
+    __properties: ClassVar[List[str]] = ["server_name", "remote_name", "reason"]
 
-    @field_validator('code')
-    def code_validate_enum(cls, value):
+    @field_validator('reason')
+    def reason_validate_enum(cls, value):
         """Validates the enum"""
-        if value not in set(['deadline_exceeded', 'budget_exceeded', 'credential_unavailable', 'provider_error', 'mcp_discovery_failed', 'structured_output_unsatisfied', 'internal']):
-            raise ValueError("must be one of enum values ('deadline_exceeded', 'budget_exceeded', 'credential_unavailable', 'provider_error', 'mcp_discovery_failed', 'structured_output_unsatisfied', 'internal')")
+        if value not in set(['not_allowlisted', 'invalid_name', 'name_collision', 'invalid_schema', 'schema_too_large', 'schema_too_deep']):
+            raise ValueError("must be one of enum values ('not_allowlisted', 'invalid_name', 'name_collision', 'invalid_schema', 'schema_too_large', 'schema_too_deep')")
         return value
 
     model_config = ConfigDict(
@@ -57,7 +57,7 @@ class InvocationFailure(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of InvocationFailure from a JSON string"""
+        """Create an instance of MCPToolExclusion from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -82,7 +82,7 @@ class InvocationFailure(BaseModel):
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of InvocationFailure from a dict"""
+        """Create an instance of MCPToolExclusion from a dict"""
         if obj is None:
             return None
 
@@ -90,8 +90,8 @@ class InvocationFailure(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "code": obj.get("code"),
-            "message": obj.get("message"),
-            "details": obj.get("details")
+            "server_name": obj.get("server_name"),
+            "remote_name": obj.get("remote_name"),
+            "reason": obj.get("reason")
         })
         return _obj

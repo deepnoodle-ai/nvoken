@@ -31,6 +31,7 @@ var operationCommands = map[string]string{
 	"getSession":               "session get",
 	"getSessionTranscript":     "session transcript",
 	"listInvocations":          "invocation list",
+	"listMCPTools":             "mcp list-tools",
 	"listModels":               "model list",
 	"listProviderCredentials":  "provider-credential list",
 	"listSessionMessages":      "session messages",

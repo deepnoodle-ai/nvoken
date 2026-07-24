@@ -1602,7 +1602,6 @@ components:
         transport:
           type: string
           enum: [streamable_http]
-          default: streamable_http
           x-enum-varnames: [TransportStreamableHTTP]
         allowed_tools:
           type: array

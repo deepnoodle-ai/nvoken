@@ -13,6 +13,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Literal
 import httpx
 
 from nvoken_generated.api.invocations_api import InvocationsApi
+from nvoken_generated.api.mcp_api import MCPApi
 from nvoken_generated.api.models_api import ModelsApi
 from nvoken_generated.api.provider_credentials_api import ProviderCredentialsApi
 from nvoken_generated.api.sessions_api import SessionsApi
@@ -43,6 +44,10 @@ from nvoken_generated.models.invocation_provider_credential_selection_one_of1 im
 )
 from nvoken_generated.models.invocation_result import InvocationResult
 from nvoken_generated.models.invocation_status import InvocationStatus
+from nvoken_generated.models.mcp_list_tools_request import MCPListToolsRequest
+from nvoken_generated.models.mcp_list_tools_response import MCPListToolsResponse
+from nvoken_generated.models.mcp_server_spec import MCPServerSpec as GeneratedMCPServerSpec
+from nvoken_generated.models.mcp_timeouts import MCPTimeouts as GeneratedMCPTimeouts
 from nvoken_generated.models.model_selection import ModelSelection
 from nvoken_generated.models.model_descriptor import ModelDescriptor
 from nvoken_generated.models.model_list import ModelList
@@ -142,11 +147,28 @@ class Limits:
 
 
 @dataclass(frozen=True)
+class MCPTimeouts:
+    discovery_seconds: int | None = None
+    call_seconds: int | None = None
+
+
+@dataclass(frozen=True)
+class MCPServer:
+    name: str
+    url: str
+    transport: Literal["streamable_http"] = "streamable_http"
+    allowed_tools: tuple[str, ...] = ()
+    headers: dict[str, str] = field(default_factory=dict, repr=False)
+    timeouts: MCPTimeouts | None = None
+
+
+@dataclass(frozen=True)
 class ExecutionSpec:
     model: Model
     instructions: str | None = None
     limits: Limits | None = None
     tools: tuple[Tool, ...] = ()
+    mcp_servers: tuple[MCPServer, ...] = ()
     output_schema: dict[str, Any] | None = None
 
 
@@ -222,6 +244,7 @@ class Client:
         configuration.discard_unknown_keys = False
         self.api_client = ApiClient(configuration)
         self.invocations = InvocationsApi(self.api_client)
+        self.mcp = MCPApi(self.api_client)
         self.models = ModelsApi(self.api_client)
         self.provider_credentials = ProviderCredentialsApi(self.api_client)
         self.sessions = SessionsApi(self.api_client)
@@ -275,6 +298,11 @@ class Client:
         return await self._replay_safe(lambda: self.models.list_models(
             provider=generated_provider,
             include_deprecated=include_deprecated,
+        ))
+
+    async def list_mcp_tools(self, server: MCPServer) -> MCPListToolsResponse:
+        return await self._replay_safe(lambda: self.mcp.list_mcp_tools(
+            MCPListToolsRequest(server=_generated_mcp_server(server))
         ))
 
     async def get_model(self, model: Model) -> ModelDescriptor:
@@ -353,6 +381,10 @@ class Client:
                 ),
                 limits=InvocationLimitRequest(**vars(limits)) if limits else None,
                 tools=tools or None,
+                mcp_servers=[
+                    _generated_mcp_server(server)
+                    for server in request.spec.mcp_servers
+                ] or None,
                 output=StructuredOutputSpec(schema=request.spec.output_schema)
                 if request.spec.output_schema
                 else None,
@@ -362,7 +394,6 @@ class Client:
                 for selection in request.provider_credentials
             ] or None,
         )
-
     def invocation(self, invocation_id: str) -> InvocationHandle:
         return InvocationHandle(self, invocation_id)
 
@@ -744,6 +775,21 @@ class Client:
                     else exponential / 2 + random.random() * exponential / 2
                 await asyncio.sleep(delay)
         raise last_error or NvokenError("unexpected_response", "request did not run")
+
+
+def _generated_mcp_server(server: MCPServer) -> GeneratedMCPServerSpec:
+    timeouts = server.timeouts
+    return GeneratedMCPServerSpec(
+        name=server.name,
+        url=server.url,
+        transport=server.transport,
+        allowed_tools=list(server.allowed_tools) or None,
+        headers=dict(server.headers) or None,
+        timeouts=GeneratedMCPTimeouts(
+            discovery_seconds=timeouts.discovery_seconds,
+            call_seconds=timeouts.call_seconds,
+        ) if timeouts else None,
+    )
 
 
 def _model_provider(provider: str) -> str:

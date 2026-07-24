@@ -34,6 +34,8 @@ pub enum ErrorCode {
     ToolResultConflict,
     #[serde(rename = "tool_result_expired")]
     ToolResultExpired,
+    #[serde(rename = "mcp_discovery_failed")]
+    McpDiscoveryFailed,
     #[serde(rename = "rate_limited")]
     RateLimited,
     #[serde(rename = "internal")]
@@ -55,6 +57,7 @@ impl std::fmt::Display for ErrorCode {
             Self::InvocationNotWaiting => write!(f, "invocation_not_waiting"),
             Self::ToolResultConflict => write!(f, "tool_result_conflict"),
             Self::ToolResultExpired => write!(f, "tool_result_expired"),
+            Self::McpDiscoveryFailed => write!(f, "mcp_discovery_failed"),
             Self::RateLimited => write!(f, "rate_limited"),
             Self::Internal => write!(f, "internal"),
             Self::Unavailable => write!(f, "unavailable"),

@@ -12,8 +12,8 @@ pub use callback::{
 };
 pub use client::{
     Client, ErrorCategory, ExecutionSpec, InvocationHandle, InvokeRequest, Limits,
-    ListInvocationsOptions, ListModelsOptions, ListSessionsOptions, MessageListOptions, Model,
-    NvokenError, ProviderCredentialSelection, ProviderCredentialSource, RetryPolicy, Tool,
-    ToolMode, ToolResult, WaitCondition, WaitOptions,
+    ListInvocationsOptions, ListModelsOptions, ListSessionsOptions, McpServer, McpTimeouts,
+    MessageListOptions, Model, NvokenError, ProviderCredentialSelection, ProviderCredentialSource,
+    RetryPolicy, Tool, ToolMode, ToolResult, WaitCondition, WaitOptions,
 };
 pub use stream::{ReducedSnapshot, Reducer, StreamEvent, StreamPreview};

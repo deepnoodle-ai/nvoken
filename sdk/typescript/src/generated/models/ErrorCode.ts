@@ -28,6 +28,7 @@ export const ErrorCode = {
     InvocationNotWaiting: 'invocation_not_waiting',
     ToolResultConflict: 'tool_result_conflict',
     ToolResultExpired: 'tool_result_expired',
+    McpDiscoveryFailed: 'mcp_discovery_failed',
     RateLimited: 'rate_limited',
     Internal: 'internal',
     Unavailable: 'unavailable'

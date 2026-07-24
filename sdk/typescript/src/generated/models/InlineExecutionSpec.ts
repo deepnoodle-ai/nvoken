@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { MCPServerSpec } from './MCPServerSpec.js';
+import {
+    MCPServerSpecFromJSON,
+    MCPServerSpecFromJSONTyped,
+    MCPServerSpecToJSON,
+    MCPServerSpecToJSONTyped,
+} from './MCPServerSpec.js';
 import type { ModelSelection } from './ModelSelection.js';
 import {
     ModelSelectionFromJSON,
@@ -45,9 +52,11 @@ import {
 /**
  * Immutable launch snapshot. Unknown or deferred fields, including spec
  * references, are rejected rather than ignored. Callback declarations
- * require installation callback signing configuration. A tools-bearing
- * spec requires at least two model iterations; omission resolves to three
- * or the lower installation maximum.
+ * require installation callback signing configuration. Remote MCP
+ * credential headers are encrypted outside this snapshot and never
+ * returned. A tools-bearing spec, including mcp_servers, requires at
+ * least two model iterations; omission resolves to three or the lower
+ * installation maximum.
  *
  * @export
  * @interface InlineExecutionSpec
@@ -83,6 +92,12 @@ export interface InlineExecutionSpec {
      * @memberof InlineExecutionSpec
      */
     tools?: Array<ToolSpec>;
+    /**
+     *
+     * @type {Array<MCPServerSpec>}
+     * @memberof InlineExecutionSpec
+     */
+    mcpServers?: Array<MCPServerSpec>;
 }
 
 /**
@@ -108,6 +123,7 @@ export function InlineExecutionSpecFromJSONTyped(json: any, ignoreDiscriminator:
         'limits': json['limits'] == null ? undefined : InvocationLimitRequestFromJSON(json['limits']),
         'output': json['output'] == null ? undefined : StructuredOutputSpecFromJSON(json['output']),
         'tools': json['tools'] == null ? undefined : ((json['tools'] as Array<any>).map(ToolSpecFromJSON)),
+        'mcpServers': json['mcp_servers'] == null ? undefined : ((json['mcp_servers'] as Array<any>).map(MCPServerSpecFromJSON)),
     };
 }
 
@@ -127,5 +143,6 @@ export function InlineExecutionSpecToJSONTyped(value?: InlineExecutionSpec | nul
         'limits': InvocationLimitRequestToJSON(value['limits']),
         'output': StructuredOutputSpecToJSON(value['output']),
         'tools': value['tools'] == null ? undefined : ((value['tools'] as Array<any>).map(ToolSpecToJSON)),
+        'mcp_servers': value['mcpServers'] == null ? undefined : ((value['mcpServers'] as Array<any>).map(MCPServerSpecToJSON)),
     };
 }

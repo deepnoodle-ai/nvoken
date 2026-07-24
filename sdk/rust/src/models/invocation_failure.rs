@@ -43,6 +43,8 @@ pub enum Code {
     CredentialUnavailable,
     #[serde(rename = "provider_error")]
     ProviderError,
+    #[serde(rename = "mcp_discovery_failed")]
+    McpDiscoveryFailed,
     #[serde(rename = "structured_output_unsatisfied")]
     StructuredOutputUnsatisfied,
     #[serde(rename = "internal")]

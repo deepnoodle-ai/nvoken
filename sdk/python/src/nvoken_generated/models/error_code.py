@@ -36,6 +36,7 @@ class ErrorCode(str, Enum):
     INVOCATION_NOT_WAITING = 'invocation_not_waiting'
     TOOL_RESULT_CONFLICT = 'tool_result_conflict'
     TOOL_RESULT_EXPIRED = 'tool_result_expired'
+    MCP_DISCOVERY_FAILED = 'mcp_discovery_failed'
     RATE_LIMITED = 'rate_limited'
     INTERNAL = 'internal'
     UNAVAILABLE = 'unavailable'

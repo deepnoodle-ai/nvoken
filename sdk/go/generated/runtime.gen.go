@@ -40,6 +40,7 @@ const (
 	ErrorCodeInternal                   ErrorCode = "internal"
 	ErrorCodeInvalidRequest             ErrorCode = "invalid_request"
 	ErrorCodeInvocationNotWaiting       ErrorCode = "invocation_not_waiting"
+	ErrorCodeMcpDiscoveryFailed         ErrorCode = "mcp_discovery_failed"
 	ErrorCodeNotFound                   ErrorCode = "not_found"
 	ErrorCodeProviderCredentialConflict ErrorCode = "provider_credential_conflict"
 	ErrorCodeRateLimited                ErrorCode = "rate_limited"
@@ -62,6 +63,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeInvalidRequest:
 		return true
 	case ErrorCodeInvocationNotWaiting:
+		return true
+	case ErrorCodeMcpDiscoveryFailed:
 		return true
 	case ErrorCodeNotFound:
 		return true
@@ -138,6 +141,7 @@ const (
 	InvocationFailureCodeCredentialUnavailable       InvocationFailureCode = "credential_unavailable"
 	InvocationFailureCodeDeadlineExceeded            InvocationFailureCode = "deadline_exceeded"
 	InvocationFailureCodeInternal                    InvocationFailureCode = "internal"
+	InvocationFailureCodeMcpDiscoveryFailed          InvocationFailureCode = "mcp_discovery_failed"
 	InvocationFailureCodeProviderError               InvocationFailureCode = "provider_error"
 	InvocationFailureCodeStructuredOutputUnsatisfied InvocationFailureCode = "structured_output_unsatisfied"
 )
@@ -152,6 +156,8 @@ func (e InvocationFailureCode) Valid() bool {
 	case InvocationFailureCodeDeadlineExceeded:
 		return true
 	case InvocationFailureCodeInternal:
+		return true
+	case InvocationFailureCodeMcpDiscoveryFailed:
 		return true
 	case InvocationFailureCodeProviderError:
 		return true
@@ -252,6 +258,51 @@ const (
 func (e InvocationUpdateEventType) Valid() bool {
 	switch e {
 	case EventInvocationUpdate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MCPServerSpecTransport.
+const (
+	TransportStreamableHTTP MCPServerSpecTransport = "streamable_http"
+)
+
+// Valid indicates whether the value is a known member of the MCPServerSpecTransport enum.
+func (e MCPServerSpecTransport) Valid() bool {
+	switch e {
+	case TransportStreamableHTTP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MCPToolExclusionReason.
+const (
+	InvalidName    MCPToolExclusionReason = "invalid_name"
+	InvalidSchema  MCPToolExclusionReason = "invalid_schema"
+	NameCollision  MCPToolExclusionReason = "name_collision"
+	NotAllowlisted MCPToolExclusionReason = "not_allowlisted"
+	SchemaTooDeep  MCPToolExclusionReason = "schema_too_deep"
+	SchemaTooLarge MCPToolExclusionReason = "schema_too_large"
+)
+
+// Valid indicates whether the value is a known member of the MCPToolExclusionReason enum.
+func (e MCPToolExclusionReason) Valid() bool {
+	switch e {
+	case InvalidName:
+		return true
+	case InvalidSchema:
+		return true
+	case NameCollision:
+		return true
+	case NotAllowlisted:
+		return true
+	case SchemaTooDeep:
+		return true
+	case SchemaTooLarge:
 		return true
 	default:
 		return false
@@ -658,9 +709,11 @@ type CreateInvocationRequest struct {
 
 	// Spec Immutable launch snapshot. Unknown or deferred fields, including spec
 	// references, are rejected rather than ignored. Callback declarations
-	// require installation callback signing configuration. A tools-bearing
-	// spec requires at least two model iterations; omission resolves to three
-	// or the lower installation maximum.
+	// require installation callback signing configuration. Remote MCP
+	// credential headers are encrypted outside this snapshot and never
+	// returned. A tools-bearing spec, including mcp_servers, requires at
+	// least two model iterations; omission resolves to three or the lower
+	// installation maximum.
 	Spec InlineExecutionSpec `json:"spec"`
 
 	// TenantKey Optional tenant partition. For Session-key resolution or a new
@@ -726,9 +779,11 @@ type HostToolSpecMode string
 
 // InlineExecutionSpec Immutable launch snapshot. Unknown or deferred fields, including spec
 // references, are rejected rather than ignored. Callback declarations
-// require installation callback signing configuration. A tools-bearing
-// spec requires at least two model iterations; omission resolves to three
-// or the lower installation maximum.
+// require installation callback signing configuration. Remote MCP
+// credential headers are encrypted outside this snapshot and never
+// returned. A tools-bearing spec, including mcp_servers, requires at
+// least two model iterations; omission resolves to three or the lower
+// installation maximum.
 type InlineExecutionSpec struct {
 	// Instructions Optional model instructions. Omission adds no hidden default.
 	Instructions *string `json:"instructions,omitempty"`
@@ -739,8 +794,9 @@ type InlineExecutionSpec struct {
 	// defaults supply all three time limits and the iteration limit.
 	// Output-token and estimated-cost limits are unlimited when omitted.
 	// Installation maxima may be lower than the schema's numeric range.
-	Limits *InvocationLimitRequest `json:"limits,omitempty"`
-	Model  ModelSelection          `json:"model"`
+	Limits     *InvocationLimitRequest `json:"limits,omitempty"`
+	McpServers *[]MCPServerSpec        `json:"mcp_servers,omitempty"`
+	Model      ModelSelection          `json:"model"`
 
 	// Output Optional per-Invocation structured-output contract. nvoken exposes a
 	// reserved durable submit tool and publishes only a server-validated
@@ -1024,6 +1080,73 @@ type InvocationUpdateEvent struct {
 
 // InvocationUpdateEventType defines model for InvocationUpdateEvent.Type.
 type InvocationUpdateEventType string
+
+// MCPListToolsRequest defines model for MCPListToolsRequest.
+type MCPListToolsRequest struct {
+	Server MCPServerSpec `json:"server"`
+}
+
+// MCPListToolsResponse defines model for MCPListToolsResponse.
+type MCPListToolsResponse struct {
+	Exclusions []MCPToolExclusion `json:"exclusions"`
+	Tools      []MCPProjectedTool `json:"tools"`
+}
+
+// MCPProjectedTool defines model for MCPProjectedTool.
+type MCPProjectedTool struct {
+	Annotations   MCPToolAnnotations     `json:"annotations"`
+	Description   string                 `json:"description"`
+	InputSchema   map[string]interface{} `json:"input_schema"`
+	ProjectedName string                 `json:"projected_name"`
+	RemoteName    string                 `json:"remote_name"`
+	ServerName    string                 `json:"server_name"`
+}
+
+// MCPServerSpec defines model for MCPServerSpec.
+type MCPServerSpec struct {
+	// AllowedTools Optional ordered allowlist. Every named tool must be discovered and projectable.
+	AllowedTools *[]string `json:"allowed_tools,omitempty"`
+
+	// Headers Secret request headers, limited to 8 KiB encoded. Routing,
+	// framing, proxy, cookie, hop-by-hop, and MCP session headers are
+	// rejected. Headers are encrypted per Invocation and never returned.
+	Headers *map[string]string `json:"headers,omitempty"`
+
+	// Name Unique server name used as the projected tool-name prefix. Names
+	// beginning with nvoken in any letter case are reserved.
+	Name      string                  `json:"name"`
+	Timeouts  *MCPTimeouts            `json:"timeouts,omitempty"`
+	Transport *MCPServerSpecTransport `json:"transport,omitempty"`
+
+	// URL Public HTTPS streamable-HTTP MCP endpoint without userinfo or a fragment.
+	URL string `json:"url"`
+}
+
+// MCPServerSpecTransport defines model for MCPServerSpec.Transport.
+type MCPServerSpecTransport string
+
+// MCPTimeouts defines model for MCPTimeouts.
+type MCPTimeouts struct {
+	CallSeconds      *int `json:"call_seconds,omitempty"`
+	DiscoverySeconds *int `json:"discovery_seconds,omitempty"`
+}
+
+// MCPToolAnnotations defines model for MCPToolAnnotations.
+type MCPToolAnnotations struct {
+	DestructiveHint *bool `json:"destructive_hint"`
+	IdempotentHint  *bool `json:"idempotent_hint"`
+	ReadOnlyHint    *bool `json:"read_only_hint"`
+}
+
+// MCPToolExclusion defines model for MCPToolExclusion.
+type MCPToolExclusion struct {
+	Reason     MCPToolExclusionReason `json:"reason"`
+	RemoteName string                 `json:"remote_name"`
+	ServerName string                 `json:"server_name"`
+}
+
+// MCPToolExclusionReason defines model for MCPToolExclusion.Reason.
+type MCPToolExclusionReason string
 
 // ModelCost defines model for ModelCost.
 type ModelCost struct {
@@ -1507,6 +1630,9 @@ type Internal = ErrorResponse
 // InvalidRequest defines model for InvalidRequest.
 type InvalidRequest = ErrorResponse
 
+// MCPDiscoveryFailed defines model for MCPDiscoveryFailed.
+type MCPDiscoveryFailed = ErrorResponse
+
 // NotFound defines model for NotFound.
 type NotFound = ErrorResponse
 
@@ -1631,6 +1757,9 @@ type CreateInvocationJSONRequestBody = CreateInvocationRequest
 
 // SubmitHostToolResultsJSONRequestBody defines body for SubmitHostToolResults for application/json ContentType.
 type SubmitHostToolResultsJSONRequestBody = SubmitHostToolResultsRequest
+
+// ListMCPToolsJSONRequestBody defines body for ListMCPTools for application/json ContentType.
+type ListMCPToolsJSONRequestBody = MCPListToolsRequest
 
 // CreateProviderCredentialJSONRequestBody defines body for CreateProviderCredential for application/json ContentType.
 type CreateProviderCredentialJSONRequestBody = CreateProviderCredentialRequest
@@ -2464,6 +2593,32 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 	SubmitHostToolResults(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListMCPToolsWithBody Discover and project one remote MCP server's tools
+	//
+	// Opens one short-lived streamable-HTTP MCP session through guarded
+	// public-only egress, drains tools/list pagination, applies the same
+	// allowlist and projection rules used by Invocation execution, and then
+	// closes the session. Supplied headers are used only for this request,
+	// are never logged or returned, and are not persisted.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
+	ListMCPToolsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListMCPTools Discover and project one remote MCP server's tools
+	//
+	// Opens one short-lived streamable-HTTP MCP session through guarded
+	// public-only egress, drains tools/list pagination, applies the same
+	// allowlist and projection rules used by Invocation execution, and then
+	// closes the session. Supplied headers are used only for this request,
+	// are never logged or returned, and are not persisted.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
+	ListMCPTools(ctx context.Context, body ListMCPToolsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListModels List nvoken's curated model catalog
 	//
 	// Returns the complete bounded set of text-generation models nvoken
@@ -2864,6 +3019,52 @@ func (c *Client) SubmitHostToolResultsWithBody(ctx context.Context, invocationID
 // Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 func (c *Client) SubmitHostToolResults(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSubmitHostToolResultsRequest(c.Server, invocationID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListMCPToolsWithBody Discover and project one remote MCP server's tools
+//
+// Opens one short-lived streamable-HTTP MCP session through guarded
+// public-only egress, drains tools/list pagination, applies the same
+// allowlist and projection rules used by Invocation execution, and then
+// closes the session. Supplied headers are used only for this request,
+// are never logged or returned, and are not persisted.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
+func (c *Client) ListMCPToolsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMCPToolsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListMCPTools Discover and project one remote MCP server's tools
+//
+// Opens one short-lived streamable-HTTP MCP session through guarded
+// public-only egress, drains tools/list pagination, applies the same
+// allowlist and projection rules used by Invocation execution, and then
+// closes the session. Supplied headers are used only for this request,
+// are never logged or returned, and are not persisted.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
+func (c *Client) ListMCPTools(ctx context.Context, body ListMCPToolsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMCPToolsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3537,6 +3738,46 @@ func NewSubmitHostToolResultsRequestWithBody(server string, invocationID Invocat
 	}
 
 	operationPath := fmt.Sprintf("/v1/invocations/%s/tool-results", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListMCPToolsRequest calls the generic ListMCPTools builder with application/json body
+func NewListMCPToolsRequest(server string, body ListMCPToolsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewListMCPToolsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewListMCPToolsRequestWithBody constructs an http.Request for the ListMCPTools method, with any body, and a specified content type
+func NewListMCPToolsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/mcp/list-tools")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4566,6 +4807,32 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 	SubmitHostToolResultsWithResponse(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitHostToolResultsHTTPResponse, error)
 
+	// ListMCPToolsWithBodyWithResponse Discover and project one remote MCP server's tools
+	//
+	// Opens one short-lived streamable-HTTP MCP session through guarded
+	// public-only egress, drains tools/list pagination, applies the same
+	// allowlist and projection rules used by Invocation execution, and then
+	// closes the session. Supplied headers are used only for this request,
+	// are never logged or returned, and are not persisted.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
+	ListMCPToolsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ListMCPToolsHTTPResponse, error)
+
+	// ListMCPToolsWithResponse Discover and project one remote MCP server's tools
+	//
+	// Opens one short-lived streamable-HTTP MCP session through guarded
+	// public-only egress, drains tools/list pagination, applies the same
+	// allowlist and projection rules used by Invocation execution, and then
+	// closes the session. Supplied headers are used only for this request,
+	// are never logged or returned, and are not persisted.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
+	ListMCPToolsWithResponse(ctx context.Context, body ListMCPToolsJSONRequestBody, reqEditors ...RequestEditorFn) (*ListMCPToolsHTTPResponse, error)
+
 	// ListModelsWithResponse List nvoken's curated model catalog
 	//
 	// Returns the complete bounded set of text-generation models nvoken
@@ -5383,6 +5650,103 @@ func (r SubmitHostToolResultsHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SubmitHostToolResultsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListMCPToolsHTTPResponse429Headers the declared response headers of an HTTP 429 response for ListMCPTools
+type ListMCPToolsHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type ListMCPToolsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MCPListToolsResponse
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON502 the response for an HTTP 502 `application/json` response
+	JSON502 *MCPDiscoveryFailed
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *ListMCPToolsHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListMCPToolsHTTPResponse) GetJSON200() *MCPListToolsResponse {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListMCPToolsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListMCPToolsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListMCPToolsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r ListMCPToolsHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListMCPToolsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON502 returns the response for an HTTP 502 `application/json` response
+func (r ListMCPToolsHTTPResponse) GetJSON502() *MCPDiscoveryFailed {
+	return r.JSON502
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListMCPToolsHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListMCPToolsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMCPToolsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMCPToolsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListMCPToolsHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -6694,6 +7058,44 @@ func (c *ClientWithResponses) SubmitHostToolResultsWithResponse(ctx context.Cont
 	return ParseSubmitHostToolResultsHTTPResponse(rsp)
 }
 
+// ListMCPToolsWithBodyWithResponse Discover and project one remote MCP server's tools
+//
+// Opens one short-lived streamable-HTTP MCP session through guarded
+// public-only egress, drains tools/list pagination, applies the same
+// allowlist and projection rules used by Invocation execution, and then
+// closes the session. Supplied headers are used only for this request,
+// are never logged or returned, and are not persisted.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
+func (c *ClientWithResponses) ListMCPToolsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ListMCPToolsHTTPResponse, error) {
+	rsp, err := c.ListMCPToolsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMCPToolsHTTPResponse(rsp)
+}
+
+// ListMCPToolsWithResponse Discover and project one remote MCP server's tools
+//
+// Opens one short-lived streamable-HTTP MCP session through guarded
+// public-only egress, drains tools/list pagination, applies the same
+// allowlist and projection rules used by Invocation execution, and then
+// closes the session. Supplied headers are used only for this request,
+// are never logged or returned, and are not persisted.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
+func (c *ClientWithResponses) ListMCPToolsWithResponse(ctx context.Context, body ListMCPToolsJSONRequestBody, reqEditors ...RequestEditorFn) (*ListMCPToolsHTTPResponse, error) {
+	rsp, err := c.ListMCPTools(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMCPToolsHTTPResponse(rsp)
+}
+
 // ListModelsWithResponse List nvoken's curated model catalog
 //
 // Returns the complete bounded set of text-generation models nvoken
@@ -7523,6 +7925,94 @@ func ParseSubmitHostToolResultsHTTPResponse(rsp *http.Response) (*SubmitHostTool
 		}
 		response.JSON503 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseListMCPToolsHTTPResponse parses an HTTP response from a ListMCPToolsWithResponse call
+func ParseListMCPToolsHTTPResponse(rsp *http.Response) (*ListMCPToolsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMCPToolsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MCPListToolsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 502:
+		var dest MCPDiscoveryFailed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON502 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers ListMCPToolsHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil

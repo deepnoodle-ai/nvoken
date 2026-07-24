@@ -7,8 +7,8 @@ use http::HeaderMap;
 use nvoken::{
     deduplicate_callback_result, verify_callback, CallbackError, CallbackResultStore, Client,
     ErrorCategory, ExecutionSpec, InvokeRequest, Limits, ListInvocationsOptions, ListModelsOptions,
-    MessageListOptions, Model, ProviderCredentialSelection, ProviderCredentialSource, Reducer,
-    RetryPolicy, StreamEvent, StreamPreview, Tool, ToolResult, WaitCondition, WaitOptions,
+    McpServer, MessageListOptions, Model, ProviderCredentialSelection, ProviderCredentialSource,
+    Reducer, RetryPolicy, StreamEvent, StreamPreview, Tool, ToolResult, WaitCondition, WaitOptions,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -92,6 +92,11 @@ async fn shared_fault_server_semantics() {
             .provider,
         "future_provider"
     );
+    let server = McpServer::new("support", "https://mcp.example.test/rpc")
+        .allowed_tool("lookup")
+        .header("Authorization", "Bearer conformance-mcp-secret");
+    let mcp_tools = client.list_mcp_tools(&server).await.unwrap();
+    assert_eq!(mcp_tools.tools[0].projected_name, "support__lookup");
     let exact_model = client
         .get_model(&Model {
             provider: "openai".to_owned(),
@@ -121,6 +126,7 @@ async fn shared_fault_server_semantics() {
                 },
                 limits: None,
                 tools: Vec::new(),
+                mcp_servers: vec![server],
                 output_schema: None,
             },
             provider_credentials: vec![ProviderCredentialSelection {

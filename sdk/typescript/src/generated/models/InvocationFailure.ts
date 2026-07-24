@@ -51,6 +51,7 @@ export const InvocationFailureCodeEnum = {
     BudgetExceeded: 'budget_exceeded',
     CredentialUnavailable: 'credential_unavailable',
     ProviderError: 'provider_error',
+    McpDiscoveryFailed: 'mcp_discovery_failed',
     StructuredOutputUnsatisfied: 'structured_output_unsatisfied',
     Internal: 'internal'
 } as const;

@@ -137,6 +137,27 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		t.Fatalf("model check output=%q err=%v", output, err)
 	}
 
+	output, err = executeCLI(
+		t,
+		baseURL,
+		false,
+		"mcp",
+		"list-tools",
+		"--name",
+		"support",
+		"--url",
+		"https://mcp.example.test/rpc",
+		"--allowed-tool",
+		"lookup",
+		"--header",
+		"Authorization=Bearer conformance-mcp-secret",
+	)
+	if err != nil ||
+		output != "tool\tsupport__lookup\tlookup\tLook up a support record.\n" ||
+		strings.Contains(output, "conformance-mcp-secret") {
+		t.Fatalf("MCP list-tools output=%q err=%v", output, err)
+	}
+
 	output, err = executeCLI(t, baseURL, false, "invocation", "get", testInvocationID)
 	if err != nil || !strings.Contains(output, testInvocationID+"\tcompleted\t"+testSessionID) {
 		t.Fatalf("text invocation output=%q err=%v", output, err)
@@ -372,6 +393,19 @@ func TestEveryOperationHasACommand(t *testing.T) {
 	}
 	if len(operationCommands) != len(manifest.Operations) {
 		t.Fatalf("command coverage has %d entries for %d operations", len(operationCommands), len(manifest.Operations))
+	}
+}
+
+func TestMCPHeadersFromEnvironmentStaySecretSafe(t *testing.T) {
+	t.Setenv("NVOKEN_TEST_MCP_HEADERS", `{"Authorization":"Bearer environment-secret"}`)
+	headers, err := mcpHeaders(nil, "NVOKEN_TEST_MCP_HEADERS")
+	if err != nil || headers["Authorization"] != "Bearer environment-secret" {
+		t.Fatalf("MCP environment headers: %#v err=%v", headers, err)
+	}
+	_, err = mcpHeaders([]string{"Authorization=Bearer flag-secret"}, "NVOKEN_TEST_MCP_HEADERS")
+	if err == nil || strings.Contains(err.Error(), "environment-secret") ||
+		strings.Contains(err.Error(), "flag-secret") {
+		t.Fatalf("duplicate MCP header error exposed a secret: %v", err)
 	}
 }
 

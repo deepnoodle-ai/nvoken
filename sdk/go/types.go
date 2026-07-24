@@ -24,6 +24,9 @@ type ProviderCredential = generated.ProviderCredential
 type ProviderCredentialScope = generated.ProviderCredentialScope
 type ProviderCredentialStatus = generated.ProviderCredentialStatus
 type InvocationChange = generated.InvocationChange
+type MCPListToolsResponse = generated.MCPListToolsResponse
+type MCPProjectedTool = generated.MCPProjectedTool
+type MCPToolExclusion = generated.MCPToolExclusion
 
 const (
 	InvocationQueued                              = generated.InvocationStatusQueued
@@ -119,11 +122,26 @@ type CallbackTarget struct {
 	URL string `json:"url"`
 }
 
+type MCPTimeouts struct {
+	DiscoverySeconds *int `json:"discovery_seconds,omitempty"`
+	CallSeconds      *int `json:"call_seconds,omitempty"`
+}
+
+type MCPServer struct {
+	Name         string            `json:"name"`
+	URL          string            `json:"url"`
+	Transport    string            `json:"transport,omitempty"`
+	AllowedTools []string          `json:"allowed_tools,omitempty"`
+	Headers      map[string]string `json:"headers,omitempty"`
+	Timeouts     *MCPTimeouts      `json:"timeouts,omitempty"`
+}
+
 type ExecutionSpec struct {
 	Instructions string         `json:"instructions"`
 	Model        Model          `json:"model"`
 	Limits       *Limits        `json:"limits,omitempty"`
 	Tools        []Tool         `json:"tools,omitempty"`
+	MCPServers   []MCPServer    `json:"mcp_servers,omitempty"`
 	OutputSchema map[string]any `json:"-"`
 }
 
@@ -307,6 +325,9 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 				}
 			}
 			typedSpec["tools"] = r.Spec.Tools
+		}
+		if len(r.Spec.MCPServers) > 0 {
+			typedSpec["mcp_servers"] = r.Spec.MCPServers
 		}
 		if r.Spec.OutputSchema != nil {
 			typedSpec["output"] = map[string]any{"schema": r.Spec.OutputSchema}

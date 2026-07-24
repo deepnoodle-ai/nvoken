@@ -17,27 +17,22 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, Optional
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, ClassVar, Dict, List
+from typing_extensions import Annotated
+from nvoken_generated.models.mcp_projected_tool import MCPProjectedTool
+from nvoken_generated.models.mcp_tool_exclusion import MCPToolExclusion
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class InvocationFailure(BaseModel):
+class MCPListToolsResponse(BaseModel):
     """
-    Failed Invocations may carry paired usage and provenance when a model response produced safe normalized evidence before deadline or limit settlement. Cancellation and pre-response failures carry neither.
+    MCPListToolsResponse
     """ # noqa: E501
-    code: StrictStr
-    message: StrictStr
-    details: Optional[Dict[str, Any]] = None
-    __properties: ClassVar[List[str]] = ["code", "message", "details"]
-
-    @field_validator('code')
-    def code_validate_enum(cls, value):
-        """Validates the enum"""
-        if value not in set(['deadline_exceeded', 'budget_exceeded', 'credential_unavailable', 'provider_error', 'mcp_discovery_failed', 'structured_output_unsatisfied', 'internal']):
-            raise ValueError("must be one of enum values ('deadline_exceeded', 'budget_exceeded', 'credential_unavailable', 'provider_error', 'mcp_discovery_failed', 'structured_output_unsatisfied', 'internal')")
-        return value
+    tools: Annotated[List[MCPProjectedTool], Field(max_length=64)]
+    exclusions: List[MCPToolExclusion]
+    __properties: ClassVar[List[str]] = ["tools", "exclusions"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -57,7 +52,7 @@ class InvocationFailure(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of InvocationFailure from a JSON string"""
+        """Create an instance of MCPListToolsResponse from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -78,11 +73,25 @@ class InvocationFailure(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of each item in tools (list)
+        _items = []
+        if self.tools:
+            for _item_tools in self.tools:
+                if _item_tools:
+                    _items.append(_item_tools.to_dict())
+            _dict['tools'] = _items
+        # override the default output from pydantic by calling `to_dict()` of each item in exclusions (list)
+        _items = []
+        if self.exclusions:
+            for _item_exclusions in self.exclusions:
+                if _item_exclusions:
+                    _items.append(_item_exclusions.to_dict())
+            _dict['exclusions'] = _items
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of InvocationFailure from a dict"""
+        """Create an instance of MCPListToolsResponse from a dict"""
         if obj is None:
             return None
 
@@ -90,8 +99,7 @@ class InvocationFailure(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "code": obj.get("code"),
-            "message": obj.get("message"),
-            "details": obj.get("details")
+            "tools": [MCPProjectedTool.from_dict(_item) for _item in obj["tools"]] if obj.get("tools") is not None else None,
+            "exclusions": [MCPToolExclusion.from_dict(_item) for _item in obj["exclusions"]] if obj.get("exclusions") is not None else None
         })
         return _obj

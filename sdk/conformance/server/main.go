@@ -90,6 +90,7 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 
 	switch {
 	case serveModels(response, request):
+	case serveMCP(response, request):
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
 		s.createInvocation(response, request)
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodGet:
@@ -103,6 +104,53 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	default:
 		writeError(response, http.StatusNotFound, "not_found", "unknown conformance route")
 	}
+}
+
+func serveMCP(response http.ResponseWriter, request *http.Request) bool {
+	if request.URL.Path != "/v1/mcp/list-tools" || request.Method != http.MethodPost {
+		return false
+	}
+	var body struct {
+		Server conformanceMCPServer `json:"server"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
+		!body.Server.valid() {
+		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server declaration did not round-trip")
+		return true
+	}
+	writeJSON(response, http.StatusOK, map[string]any{
+		"tools": []any{map[string]any{
+			"server_name":    "support",
+			"remote_name":    "lookup",
+			"projected_name": "support__lookup",
+			"description":    "Look up a support record.",
+			"input_schema": map[string]any{
+				"type": "object",
+			},
+			"annotations": map[string]any{
+				"read_only_hint":   true,
+				"idempotent_hint":  true,
+				"destructive_hint": false,
+			},
+		}},
+		"exclusions": []any{},
+	})
+	return true
+}
+
+type conformanceMCPServer struct {
+	Name         string            `json:"name"`
+	URL          string            `json:"url"`
+	AllowedTools []string          `json:"allowed_tools"`
+	Headers      map[string]string `json:"headers"`
+}
+
+func (s conformanceMCPServer) valid() bool {
+	return s.Name == "support" &&
+		s.URL == "https://mcp.example.test/rpc" &&
+		len(s.AllowedTools) == 1 &&
+		s.AllowedTools[0] == "lookup" &&
+		s.Headers["Authorization"] == "Bearer conformance-mcp-secret"
 }
 
 func serveModels(response http.ResponseWriter, request *http.Request) bool {
@@ -196,6 +244,9 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 				APIKey string `json:"api_key"`
 			} `json:"credential"`
 		} `json:"provider_credentials"`
+		Spec struct {
+			MCPServers []conformanceMCPServer `json:"mcp_servers"`
+		} `json:"spec"`
 	}
 	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 		writeError(response, http.StatusBadRequest, "invalid_request", "invalid conformance admission")
@@ -209,6 +260,11 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 			writeError(response, http.StatusBadRequest, "invalid_request", "provider credentials did not round-trip")
 			return
 		}
+	}
+	if len(body.Spec.MCPServers) > 0 &&
+		(len(body.Spec.MCPServers) != 1 || !body.Spec.MCPServers[0].valid()) {
+		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server declaration did not round-trip")
+		return
 	}
 	s.mu.Lock()
 	s.admissionAttempts++

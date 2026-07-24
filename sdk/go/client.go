@@ -265,6 +265,27 @@ func (c *Client) ListModels(
 	}, nil
 }
 
+func (c *Client) ListMCPTools(
+	ctx context.Context,
+	server MCPServer,
+) (*MCPListToolsResponse, error) {
+	body := generated.MCPListToolsRequest{
+		Server: generatedMCPServer(server),
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.MCPListToolsResponse], error) {
+		response, err := c.raw.ListMCPToolsWithResponse(ctx, body)
+		if err != nil {
+			return callResult[generated.MCPListToolsResponse]{}, err
+		}
+		return callResult[generated.MCPListToolsResponse]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
 func (c *Client) GetModel(ctx context.Context, model Model) (*ModelDescriptor, error) {
 	if model.ID == "" {
 		return nil, &Error{Category: ErrorValidation, Message: "model id is required"}
@@ -290,6 +311,35 @@ func (c *Client) GetModel(ctx context.Context, model Model) (*ModelDescriptor, e
 			Body:   response.Body,
 		}, nil
 	})
+}
+
+func generatedMCPServer(server MCPServer) generated.MCPServerSpec {
+	result := generated.MCPServerSpec{
+		Name: server.Name,
+		URL:  server.URL,
+	}
+	if server.Transport != "" {
+		transport := generated.MCPServerSpecTransport(server.Transport)
+		result.Transport = &transport
+	}
+	if server.AllowedTools != nil {
+		allowedTools := append([]string(nil), server.AllowedTools...)
+		result.AllowedTools = &allowedTools
+	}
+	if server.Headers != nil {
+		headers := make(map[string]string, len(server.Headers))
+		for name, value := range server.Headers {
+			headers[name] = value
+		}
+		result.Headers = &headers
+	}
+	if server.Timeouts != nil {
+		result.Timeouts = &generated.MCPTimeouts{
+			DiscoverySeconds: server.Timeouts.DiscoverySeconds,
+			CallSeconds:      server.Timeouts.CallSeconds,
+		}
+	}
+	return result
 }
 
 func (c *Client) SubmitToolResults(ctx context.Context, invocationID string, results []ToolResult) (*ToolResultResponse, error) {
