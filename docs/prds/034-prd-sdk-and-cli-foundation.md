@@ -1,6 +1,6 @@
 # Make the SDKs and CLI one durable-workflow product
 
-**Status:** Ready
+**Status:** Implemented
 **Sequence:** 034
 **Depends on:** `026-prd-multi-language-sdks-and-go-cli.md` and
 `033-prd-api-sdk-contract-stabilization.md`
@@ -123,45 +123,56 @@ and device-auth changes.
 
 ## Acceptance
 
-- [ ] **A1 (R1):** `docs/codebase/sdk-and-cli.md` names each shared concept
+- [x] **A1 (R1):** `docs/codebase/sdk-and-cli.md` names each shared concept
   once and records idiomatic mappings for waits and local timeout,
   cancellation, pagination, callbacks, errors, raw access, credentials,
   Session serialization, missing handlers, no-text results, and previews.
-- [ ] **A2 (R1):** Shared fixtures pass at every package's documented level for
+- [x] **A2 (R1):** Shared fixtures pass at every package's documented level for
   error mapping, durable cursor retention, delta accumulation/resync,
   wait-until, and `output_text`. TypeScript, Python, and Go prove automatic
   park → submit → resume → settle dispatch; Rust proves wait-for-action plus
   manual durable ToolCall result submission through its handle.
-- [ ] **A3 (R2):** TypeScript `run()` and `text()` settle through
+- [x] **A3 (R2):** TypeScript `run()` and `text()` settle through
   create-and-stream; forced disconnect and deliberate stream rotation produce
   the same authoritative result without duplicate host-tool dispatch.
-- [ ] **A4 (R2):** A missing TypeScript handler cancels before its typed error
+- [x] **A4 (R2):** A missing TypeScript handler cancels before its typed error
   by default, the opt-out preserves waiting work, and `NoOutputTextError`
   distinguishes structured-only and tool-only completion.
-- [ ] **A5 (R2):** TypeScript exports the principal Runtime nouns; settled
+- [x] **A5 (R2):** TypeScript exports the principal Runtime nouns; settled
   result IDs are non-optional; `stream({timeoutMs})` stops locally; and shared
   reducer vectors prove preview replacement and discard.
-- [ ] **A6 (R3):** Python tests prove the five Agent verbs, bound Session
+- [x] **A6 (R3):** Python tests prove the five Agent verbs, bound Session
   serialization, transcript/Session reads, provider-credential lifecycle,
   host-tool dispatch, missing-handler policy, no-text results, structured
   output, wait controls, previews, collection iterators, and native
   cancellation.
-- [ ] **A7 (R4):** Go tests prove the five Agent verbs, bound Session
+- [x] **A7 (R4):** Go tests prove the five Agent verbs, bound Session
   serialization, typed tool modes, facade-owned list types, structured-output
   decoding, host-tool dispatch, missing-handler policy, no-text results, wait
   controls, and previews.
-- [ ] **A8 (R5):** Rust tests prove shared handle access during streaming,
+- [x] **A8 (R5):** Rust tests prove shared handle access during streaming,
   request/spec builders or defaults, configurable polling, and typed callback
   errors; its README makes no Agent-facade claim.
-- [ ] **A9 (R6):** CLI integration tests prove answer printing, delta
+- [x] **A9 (R6):** CLI integration tests prove answer printing, delta
   rendering, actionable waits, host-key Session recovery, readable
   transcripts, exact-wire spec-file admission with fingerprint-equivalent
   material, and unchanged JSON output.
-- [ ] **A10 (R7):** The Agent example, stream/troubleshooting guide,
+- [x] **A10 (R7):** The Agent example, stream/troubleshooting guide,
   concurrency/idempotency point-of-use help, provider migration, and model
   check workflows pass their documented smoke paths.
-- [ ] **A11 (R1–R7):** `make check` and `make sdk-check` pass, and no SDK README
+- [x] **A11 (R1–R7):** `make check` and `make sdk-check` pass, and no SDK README
   claims a higher-level facade than its package exports.
+
+**Completion evidence (2026-07-24):** `make check` and `make sdk-check` pass.
+The shared conformance server, fault fixtures, callback vector, reducer vector,
+and language suites prove the documented common floor. TypeScript, Python, and
+Go expose tested Agent facades; Rust exposes the tested transport-plus-handle
+floor and states its gaps. CLI integration covers answer printing, delta
+rendering, actionable waits, host-key Session recovery, readable transcripts,
+exact-wire spec-file admission, stable JSON, and the bounded `model check`
+probe. Both TypeScript examples compile in the SDK gate, and the provider
+migration and streaming guides record executable smoke paths and recovery
+rules.
 
 ## Risks and open decisions
 

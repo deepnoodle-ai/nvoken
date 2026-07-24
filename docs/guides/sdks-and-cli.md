@@ -9,7 +9,8 @@ from `openapi/runtime.yaml`, then adds handwritten reliability helpers. The
 common baseline is exact-request admission replay, durable Invocation handles,
 typed errors, bounded polling, Invocation SSE, host ToolCall result replay,
 callback verification, model discovery, and a raw generated-client escape
-hatch. Higher-level workflow coverage is intentionally uneven today.
+hatch. Agent workflows are implemented in TypeScript, Python, and Go; Rust's
+documented floor is transport plus durable handle.
 
 An Invocation is one durable agent turn. The host owns `agent_key`, optional
 `tenant_key`, `session_key`, and `idempotency_key`; the spec travels with each
@@ -20,9 +21,9 @@ its native casing.
 
 | Package | Supported handwritten level | Session stream | Raw generated client |
 | --- | --- | --- | --- |
-| Go | `Client` + `InvocationHandle` | `Client.StreamSession` | `Client.Raw()` |
+| Go | `Agent` + `Client` + `InvocationHandle` | `Client.StreamSession` | `Client.Raw()` |
 | TypeScript | `Client` + high-level `Agent` and bound Session | `streamSession` | `client.raw()` |
-| Python | async `Client` + `InvocationHandle` | `Client.stream_session` | `nvoken_generated` |
+| Python | async `Agent` + `Client` + `InvocationHandle` | `Client.stream_session` | `nvoken_generated` |
 | Rust | `Client` + `InvocationHandle` | Generated operation only | `nvoken::apis` |
 
 Each package directory contains an executable facade-only quickstart. A local
@@ -35,18 +36,22 @@ All four handwritten facades follow the baseline parts of the
 lazy Invocation handles, generated idempotency for ordinary calls, actionable
 and terminal waits, direct Invocation event streams, typed errors, per-turn
 provider-credential selection, and an explicit raw generated-client escape
-hatch. TypeScript is currently the only high-level Agent reference facade;
-Phase 2A of the
-[API and SDK excellence proposal](../proposals/2026-07-24-api-sdk-excellence.md#phase-2a--sdk-and-cli-foundation)
-owns parity work rather than implying it already exists.
+hatch. TypeScript is the reference Agent facade; Python and Go expose the same
+five Agent verbs with language-native cancellation and result shapes. Rust
+deliberately remains transport plus durable handle and documents manual
+wait-for-action → submit → settle orchestration.
 
 The [TypeScript SDK guide](../../sdk/typescript/README.md) also covers
 actionable host-tool waits, schema-bound tool and structured-output types,
 Agent/tenant Session identity, exact host-key recovery, pagination, and
 fixed-cut transcript draining. The
+[TypeScript Agent and host tools](../../examples/typescript-agent-tools/README.md)
+is the high-level Agent example. The
 [TypeScript invoke showcase](../../examples/typescript-invoke-showcase/README.md)
-compiles those advanced flows in the normal SDK gate and can run them against a
-local Runtime and real provider.
+demonstrates the lower-level handle rung. Both compile in the normal SDK gate
+and can run against a local Runtime and real provider. See
+[Streaming and recovery](streaming-and-recovery.md) for the shared preview,
+cursor, and authoritative-settlement guarantees.
 
 ## CLI
 
@@ -62,8 +67,9 @@ nvokend --version
 Contributors can build either command from source through the
 [Develop nvoken guide](developing-nvoken.md).
 
-Before device login exists, commands require `NVOKEN_API_KEY`. Endpoint
-precedence is `--base-url`, `NVOKEN_BASE_URL`, the JSON config file, then
+Authenticate interactively with `nvoken auth login`, select a saved profile,
+or supply `NVOKEN_API_KEY` for a host or CI process. Endpoint precedence is
+`--base-url`, `NVOKEN_BASE_URL`, the saved profile, the JSON config file, then
 `http://localhost:8080`. The default config is
 `$XDG_CONFIG_HOME/nvoken/config.json` (or the operating system equivalent):
 
@@ -73,12 +79,43 @@ precedence is `--base-url`, `NVOKEN_BASE_URL`, the JSON config file, then
 
 Use `--json` before the command for machine-readable output. The CLI covers
 durable invoke, Invocation get/result/list/wait/cancel, Session get/list/
-messages/transcript/stream, model discovery and pricing inspection, and
-ToolCall result submission. Model discovery is organized under `model list`,
-`model get`, and the pricing-focused `model pricing` view. `invocation result`
-prints the composed result: the Invocation, its canonical messages, and the
-assistant text. It imports the Go SDK and does not maintain HTTP routes or
-payload types of its own.
+resolve/messages/transcript/stream, model discovery/pricing/access checks, and
+ToolCall result submission. Text `invoke` streams and prints one answer;
+machine-readable admission acknowledgements retain their stable JSON shape.
+`invocation wait --until actionable` stops at waiting or terminal work, and
+`session resolve --session-key ...` recovers a durable Session from host keys.
+`invocation result` prints the composed result: the Invocation, its canonical
+messages, and the assistant text.
+
+For a complete execution spec, put the exact public wire `spec` object in a
+JSON file:
+
+```bash
+nvoken invoke 'Classify this request' \
+  --agent support \
+  --session-key ticket-483 \
+  --idempotency-key ticket-483-turn-7 \
+  --spec-file ./spec.json
+```
+
+Reuse that idempotency key only with the unchanged request after an uncertain
+acknowledgement; changed fingerprint material returns
+`idempotency_conflict`. A Session accepts one nonterminal Invocation at a
+time. Local bound Sessions serialize one process, while the Runtime remains
+authoritative across processes.
+
+Catalog discovery is not a provider-access check. A small billed canary proves
+the configured credential/model path and reports the local pricing evidence:
+
+```bash
+nvoken model list --provider openai
+nvoken model get --provider openai --model gpt-5.4-mini
+nvoken model check openai/gpt-5.4-mini
+```
+
+The CLI imports the Go SDK and does not maintain HTTP routes or payload types
+of its own. See [Coming from provider APIs](from-provider-apis.md) for the
+provider-loop migration.
 
 ## Development
 

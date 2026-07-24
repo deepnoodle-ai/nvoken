@@ -16,6 +16,10 @@ order.
   multi-turn Sessions, host tools, structured output, streaming, and recovery
 - [SDKs and client CLI](sdks-and-cli.md) — install a client and choose its
   supported workflow facade
+- [Coming from provider APIs](from-provider-apis.md) — map provider messages,
+  tool loops, conversations, and structured output onto durable workflows
+- [Streaming and recovery](streaming-and-recovery.md) — preview guarantees,
+  authoritative settlement, reconnect sequence, and troubleshooting
 - [Pre-1.0 API and SDK migration](api-sdk-migration.md) — coordinated breaking
   names and behavior changes after v0.2.0
 - [Runtime admission](runtime-admission.md) — wire-level durable Invocation,

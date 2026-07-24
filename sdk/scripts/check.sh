@@ -48,6 +48,8 @@ npm run build --prefix sdk/typescript
 npm test --prefix sdk/typescript
 npm ci --prefix examples/typescript-invoke-showcase
 npm run build --prefix examples/typescript-invoke-showcase
+npm ci --prefix examples/typescript-agent-tools
+npm run build --prefix examples/typescript-agent-tools
 
 python3 -m venv sdk/python/.venv
 sdk/python/.venv/bin/python -m pip install --quiet --upgrade pip

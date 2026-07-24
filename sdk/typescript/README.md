@@ -4,9 +4,14 @@ An Invocation is one durable agent turn. The host supplies `agentKey`,
 optional `tenantKey`, `sessionKey`, and `idempotencyKey`; instructions, model,
 and tools travel inline with the turn.
 
-The supported entry point is `Client`. It provides a small agent API for the
-common path, durable `InvocationHandle` objects when you need control, and the
-generated transport under `client.raw()`.
+The package has three deliberate levels:
+
+- `Agent` is the ordinary workflow facade: `text`, `run`, `invoke`, `stream`,
+  and locally serialized bound Sessions.
+- `Client` and `InvocationHandle` expose durable operations, transcript
+  drains, collection iterators, configurable waits, and resumable streams.
+- `client.raw()` is the complete generated Runtime transport and low-level
+  escape hatch.
 
 ## Install
 
@@ -205,9 +210,11 @@ const support = new Client().agent({
 console.log(await support.text("Where is order 42?"));
 ```
 
-If a requested host tool has no handler, `run()` throws
-`MissingToolHandlerError` with the handle and pending call. The low-level
-`invoke()` path remains available for queues, browsers, and external workers.
+If a requested host tool has no handler, `run()` cancels the parked Invocation
+before throwing `MissingToolHandlerError` with the handle and pending call.
+Set `leaveWaitingOnMissingHandler` only when another worker deliberately owns
+the call. The low-level `invoke()` path remains available for queues, browsers,
+and external workers.
 
 Stable ToolCall IDs let a handler make its own side effects idempotent. They do
 not make arbitrary side effects exactly-once.
@@ -286,7 +293,9 @@ Disconnecting the caller never cancels the Invocation.
 
 Use `handle.stream()` to reconnect to one already-admitted Invocation. The
 lower-level Session stream and its `Reducer` remain available for applications
-that need to follow every turn in a conversation.
+that need to follow every turn in a conversation. The repository's
+[streaming and recovery guide](../../docs/guides/streaming-and-recovery.md)
+states the preview, resync, cursor, and authoritative-settlement guarantees.
 
 ## Sessions, messages, and transcripts
 

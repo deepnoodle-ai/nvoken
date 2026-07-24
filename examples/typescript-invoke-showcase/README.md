@@ -12,9 +12,12 @@ quickstart. It makes real provider requests and verifies:
 - exact Session-key lookup, facade pagination, transcript draining, and
   Invocation-scoped SSE.
 
-The app intentionally uses only the supported `Client` facade. Its build is
-part of `make sdk-check`, so the advanced examples fail CI if the public SDK
-surface drifts.
+This example intentionally demonstrates the lower-level `Client` and durable
+handle rung for application-managed orchestration. Use
+[TypeScript Agent and host tools](../typescript-agent-tools/README.md) for the
+ordinary `Agent`, automatic host-tool dispatch, and bound Session rung. Its
+build is part of `make sdk-check`, so the advanced examples fail CI if the
+public SDK surface drifts.
 
 Start the source daemon as described in
 [Develop nvoken](../../docs/guides/developing-nvoken.md), build the SDK, then

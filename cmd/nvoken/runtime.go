@@ -112,6 +112,15 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("model", "m").Required().Help("Exact model ID"),
 		).
 		Run(runModelPricing)
+	models.Command("check").
+		Description("Run a small billed probe to verify configured provider access").
+		Args("selection").
+		Flags(
+			cli.String("agent").Default("nvoken-model-check").Help("Stable Agent key used for the probe"),
+			cli.String("tenant").Help("Tenant partition whose configured credential should be checked"),
+			cli.Int("timeout").Default(30).Help("Local probe timeout in seconds"),
+		).
+		Run(runModelCheck)
 
 	sessions := app.Group("session").Description("Read Session state and transcript")
 	sessions.Command("get").Args("session-id").Run(runSessionGet)
@@ -238,6 +247,98 @@ func runModelPricing(command *cli.Context) error {
 		)
 		return err
 	})
+}
+
+func runModelCheck(command *cli.Context) error {
+	provider, modelID, found := strings.Cut(command.Arg(0), "/")
+	if !found || provider == "" || modelID == "" {
+		return errors.New("model selection must be provider/model")
+	}
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	model, err := client.GetModel(command.Context(), nvoken.Model{
+		Provider: provider,
+		ID:       modelID,
+	})
+	if err != nil {
+		return err
+	}
+	maxIterations := 1
+	maxOutputTokens := 8
+	handle, err := client.Invoke(command.Context(), nvoken.InvokeRequest{
+		AgentKey:  command.String("agent"),
+		TenantKey: optionalString(command.String("tenant")),
+		Input:     "Reply with exactly OK.",
+		Spec: nvoken.ExecutionSpec{
+			Instructions: "Reply with exactly OK and no other text.",
+			Model: nvoken.Model{
+				Provider: provider,
+				ID:       modelID,
+			},
+			Limits: &nvoken.Limits{
+				MaxOutputTokens: &maxOutputTokens,
+				MaxIterations:   &maxIterations,
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	invocation, err := handle.Wait(command.Context(), nvoken.WaitOptions{
+		Timeout: time.Duration(command.Int("timeout")) * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	result := struct {
+		Provider       string                  `json:"provider"`
+		ID             string                  `json:"id"`
+		Cataloged      bool                    `json:"cataloged"`
+		Pricing        nvoken.ModelPricing     `json:"pricing"`
+		InvocationID   string                  `json:"invocation_id"`
+		Invocation     nvoken.InvocationStatus `json:"invocation_status"`
+		ProviderError  *string                 `json:"provider_error"`
+		ProviderAccess bool                    `json:"provider_access"`
+	}{
+		Provider:       provider,
+		ID:             modelID,
+		Cataloged:      model.Cataloged,
+		Pricing:        model.Pricing,
+		InvocationID:   invocation.ID,
+		Invocation:     invocation.Status,
+		ProviderAccess: invocation.Status == nvoken.InvocationCompleted,
+	}
+	if invocation.Error != nil {
+		result.ProviderError = &invocation.Error.Message
+	}
+	if err := writeOutput(command, result, func(writer io.Writer) error {
+		status := "PASS"
+		if !result.ProviderAccess {
+			status = "FAIL"
+		}
+		_, err := fmt.Fprintf(
+			writer,
+			"%s\t%s/%s\tcataloged=%t\tpricing=%s\tinvocation=%s\n",
+			status,
+			result.Provider,
+			result.ID,
+			result.Cataloged,
+			result.Pricing.Status,
+			result.InvocationID,
+		)
+		return err
+	}); err != nil {
+		return err
+	}
+	if result.ProviderAccess {
+		return nil
+	}
+	if result.ProviderError != nil {
+		return fmt.Errorf("model check failed: %s", *result.ProviderError)
+	}
+	return fmt.Errorf("model check failed with Invocation status %s", result.Invocation)
 }
 
 func selectedModel(command *cli.Context) (*nvoken.ModelDescriptor, error) {

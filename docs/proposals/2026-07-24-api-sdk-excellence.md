@@ -1252,45 +1252,54 @@ same durable workflow without forcing raw API use.
 
 **Acceptance gate:**
 
-- [ ] **AC-2A.1 (`EX-2A.1`):** The checked SDK design names every shared
+- [x] **AC-2A.1 (`EX-2A.1`):** The checked SDK design names every shared
   concept once and specifies language-idiomatic mappings for waits,
   cancellation, pagination, callback tools, errors, raw access, provider
   credentials, and reducer previews.
-- [ ] **AC-2A.2 (`EX-2A.1`):** Shared fixtures cover error mapping, durable
+- [x] **AC-2A.2 (`EX-2A.1`):** Shared fixtures cover error mapping, durable
   cursor retention, delta accumulation/resync, wait-until behavior,
   `output_text`, and the park → submit → resume → settle dispatch loop.
-- [ ] **AC-2A.3 (`EX-2A.2`):** TypeScript `run()` and `text()` use
+- [x] **AC-2A.3 (`EX-2A.2`):** TypeScript `run()` and `text()` use
   create-and-stream with authoritative-read fallback, and a forced stream
   disconnect still produces the same settled result.
-- [ ] **AC-2A.4 (`EX-2A.2`):** A missing TypeScript tool handler cancels before
+- [x] **AC-2A.4 (`EX-2A.2`):** A missing TypeScript tool handler cancels before
   throwing by default, supports the documented opt-out, and
   `NoOutputTextError` distinguishes structured-only or tool-only completion.
-- [ ] **AC-2A.5 (`EX-2A.2`):** TypeScript exports the principal Runtime nouns,
+- [x] **AC-2A.5 (`EX-2A.2`):** TypeScript exports the principal Runtime nouns,
   terminal result types no longer require non-null assertions for known IDs,
   `stream({timeoutMs})` is bounded, and reducer fixtures prove preview
   replacement and resync behavior.
-- [ ] **AC-2A.6 (`EX-2A.3`):** Python exposes the five Agent verbs, bound
+- [x] **AC-2A.6 (`EX-2A.3`):** Python exposes the five Agent verbs, bound
   Session serialization, transcript and Session-stream reads,
   provider-credential operations, host-tool dispatch, structured output, and
   the shared wait and reducer semantics.
-- [ ] **AC-2A.7 (`EX-2A.4`):** Go exposes the five Agent verbs, bound Session
+- [x] **AC-2A.7 (`EX-2A.4`):** Go exposes the five Agent verbs, bound Session
   serialization, typed tool modes, facade-owned list types, structured-output
   decoding, host-tool dispatch, and the shared wait and reducer semantics.
-- [ ] **AC-2A.8 (`EX-2A.5`):** Rust handles allow stream-plus-act without an
+- [x] **AC-2A.8 (`EX-2A.5`):** Rust handles allow stream-plus-act without an
   exclusive mutable borrow, core request types have builders or defaults,
   polling is configurable, callback errors are typed, and the README states
   the exact supported level.
-- [ ] **AC-2A.9 (`EX-2A.6`):** The CLI can admit and print one answer, render
+- [x] **AC-2A.9 (`EX-2A.6`):** The CLI can admit and print one answer, render
   text deltas, wait until actionable, recover Sessions by host keys, display
   readable transcript text, and accept a complete spec file; JSON output
   remains stable.
-- [ ] **AC-2A.10 (`EX-2A.6`):** The Agent-facade example, stream guarantees and
+- [x] **AC-2A.10 (`EX-2A.6`):** The Agent-facade example, stream guarantees and
   troubleshooting table, point-of-use concurrency/idempotency guidance,
   provider-API migration guide, and `model check` workflow pass their
   documented smoke paths.
-- [ ] **AC-2A.11 (phase gate):** `make sdk-check` proves the documented common
+- [x] **AC-2A.11 (phase gate):** `make sdk-check` proves the documented common
   behavior in every language at its supported level, and no SDK README claims
   a higher-level facade that the package does not expose.
+
+**Completion evidence (2026-07-24):** `make check` and `make sdk-check` pass.
+The checked design and shared fixtures govern all four language suites;
+TypeScript, Python, and Go pass their Agent-facade behaviors, while Rust passes
+its documented handle/request floor. CLI integration proves the complete
+`AC-2A.9` workflow and the bounded `model check` canary. The high-level Agent
+example and lower-level invoke showcase compile in the SDK gate; the streaming
+and provider-migration guides contain the documented smoke commands and
+point-of-use recovery rules.
 
 ### Phase 2B — remote MCP flagship
 

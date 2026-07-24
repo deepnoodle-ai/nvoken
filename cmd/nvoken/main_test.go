@@ -124,6 +124,18 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		!strings.Contains(output, `"status":"priced"`) {
 		t.Fatalf("model pricing JSON output=%q err=%v", output, err)
 	}
+	output, err = executeCLI(
+		t,
+		baseURL,
+		false,
+		"model",
+		"check",
+		"openai/gpt-test",
+	)
+	if err != nil ||
+		!strings.Contains(output, "PASS\topenai/gpt-test\tcataloged=true\tpricing=priced") {
+		t.Fatalf("model check output=%q err=%v", output, err)
+	}
 
 	output, err = executeCLI(t, baseURL, false, "invocation", "get", testInvocationID)
 	if err != nil || !strings.Contains(output, testInvocationID+"\tcompleted\t"+testSessionID) {
