@@ -52,3 +52,18 @@ Run the gate before commit:
 ```bash
 make check   # build + vet + test + sqlc drift + OpenAPI lint + gofmt
 ```
+
+## Releases
+
+Releases are cut by pushing tags (see `.github/workflows/release.yml` for Go
+binaries + Homebrew, `release-npm.yml` for the npm SDK). The Go tag `vX.Y.Z` and
+the npm tag `npm-vX.Y.Z` share one version, and the `v*` workflow fails unless
+the tag, `sdk/typescript/package.json`, and the `examples/typescript-chat`
+dependency all match.
+
+Update `CHANGELOG.md` in advance of every release: move the accumulated
+`[Unreleased]` notes under a new `[X.Y.Z] - YYYY-MM-DD` heading before tagging.
+Keep entries CONCISE — one tight line per change under the Keep a Changelog
+headings (`Added` / `Changed` / `Fixed` / `Removed`), lead breaking changes with
+**Breaking:**, and cite the PR number. Add notes to `[Unreleased]` as
+user-facing changes land, not only at release time.
