@@ -114,11 +114,15 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		t.Fatalf("text invocation output=%q err=%v", output, err)
 	}
 	output, err = executeCLI(t, baseURL, false, "invocation", "result", testInvocationID)
-	if err != nil || !strings.Contains(output, testInvocationID+"\tcompleted\t"+testSessionID) || !strings.Contains(output, "\nworld\n") {
+	if err != nil ||
+		!strings.Contains(output, testInvocationID+"\tcompleted\t"+testSessionID) ||
+		!strings.Contains(output, "\nThe charge was duplicated.\n\nA refund is queued.\n") {
 		t.Fatalf("text invocation result output=%q err=%v", output, err)
 	}
 	output, err = executeCLI(t, baseURL, true, "invocation", "result", testInvocationID)
-	if err != nil || !strings.Contains(output, `"output_text":"world"`) || !strings.Contains(output, `"structured_output":{"answer":"world"}`) {
+	if err != nil ||
+		!strings.Contains(output, `"output_text":"The charge was duplicated.\n\nA refund is queued."`) ||
+		!strings.Contains(output, `"structured_output":{"answer":"world"}`) {
 		t.Fatalf("JSON invocation result output=%q err=%v", output, err)
 	}
 	output, err = executeCLI(t, baseURL, true, "invocation", "list")

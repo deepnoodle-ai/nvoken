@@ -1192,37 +1192,48 @@ capability work expands it.
 - [x] **AC-1.1 (`EX-1.1`):** PRD 033 states one stabilization outcome, maps
   every binding requirement to an observable acceptance proof, receives the
   required independent review once, and has no unresolved blocking finding.
-- [ ] **AC-1.2 (`EX-1.2`):** `docs/design/decisions.md` defines “An Invocation
+- [x] **AC-1.2 (`EX-1.2`):** `docs/design/decisions.md` defines “An Invocation
   is one durable agent turn,” the conceptual/resource naming rule, and the
   reason `Invocation` remains the public noun.
-- [ ] **AC-1.3 (`EX-1.2`):** Existing v1–v7 durable rows remain replay
-  comparable, unchanged admissions continue to use v7, and the next material
-  admission shape uses v8 with fixtures proving legacy equality and v8
-  conflict behavior. Any alternative reset has an approved retained-data
-  migration and rollback proof before replacing this criterion.
-- [ ] **AC-1.4 (`EX-1.3`):** The wire and server map `401` to
-  `authentication`, `403` to `permission`, local cancellation to `cancelled`,
-  and actual deadline expiry to `timeout`.
-- [ ] **AC-1.5 (`EX-1.3`):** Provider credential listing uses the standard
+- [x] **AC-1.3 (`EX-1.2`):** Existing v1–v7 durable rows remain replay
+  comparable, unchanged admissions continue to use v7, and v8 is reserved for
+  the next material admission shape. That shape's governing PRD owns the v8
+  fixtures proving legacy equality and v8 conflict behavior. Any alternative
+  reset requires an approved retained-data migration and rollback proof.
+- [x] **AC-1.4 (`EX-1.3`):** The wire retains `unauthenticated` and `forbidden`;
+  handwritten facades map HTTP `401` to `authentication` and `403` to
+  `permission`. Local cancellation is never reported as `timeout`: SDKs either
+  use `cancelled` or preserve Python's native `asyncio.CancelledError`, while
+  actual deadline expiry maps to `timeout`.
+- [x] **AC-1.5 (`EX-1.3`):** Provider credential listing uses the standard
   `{items, has_more, next_cursor}` envelope; a test with more than one page
   reaches every item exactly once.
-- [ ] **AC-1.6 (`EX-1.3`):** Model provider identifiers have one
+- [x] **AC-1.6 (`EX-1.3`):** Model provider identifiers have one
   additive-compatible public type, while admission still rejects a provider
   the installation cannot execute.
-- [ ] **AC-1.7 (`EX-1.3`):** The Appendix A fixture passes end to end: text
+- [x] **AC-1.7 (`EX-1.3`):** The Appendix A fixture passes end to end: text
   blocks within one assistant message concatenate directly and distinct
   assistant messages join with exactly `"\n\n"`.
-- [ ] **AC-1.8 (`EX-1.4`):** All four SDKs expose the agreed
+- [x] **AC-1.8 (`EX-1.4`):** All four SDKs expose the agreed
   `outputText`/`output_text`/`OutputText` and
   `listSessionMessages` equivalents; the displaced public names and leaked
   TypeScript retry/run-loop helpers are absent from their documented surfaces.
-- [ ] **AC-1.9 (`EX-1.4`):** OpenAPI regeneration is clean, generated drift
+- [x] **AC-1.9 (`EX-1.4`):** OpenAPI regeneration is clean, generated drift
   checks pass, and the same behavior fixtures pass in Go, TypeScript, Python,
   and Rust.
-- [ ] **AC-1.10 (`EX-1.5`):** README, `api.md`, every SDK README, examples, and
+- [x] **AC-1.10 (`EX-1.5`):** README, `api.md`, every SDK README, examples, and
   migration notes use the identity tuple and Invocation/turn rule
   consistently, scope the four-SDK claim honestly, and contain no stale
   identifier from this revision.
+
+**Completion evidence (2026-07-24):** `make check` and `make sdk-check` pass.
+The shared conformance server and all four SDK suites prove the Appendix A
+`output_text` result, authentication-versus-permission mapping, cancellation
+semantics, provider extensibility, and renamed facade accessors. Service tests
+traverse three credential pages exactly once, bind cursors to their query, and
+retain fingerprint comparison for v1–v7 while stamping new admissions as v7.
+Generated drift is clean; the decision log, primary API and SDK documentation,
+examples, and the migration guide describe the stabilized contract.
 
 ### Phase 2A — SDK and CLI foundation
 

@@ -418,17 +418,34 @@ def check_repository_facts(matrix_text: str, claims: dict[str, str]) -> list[str
     openapi = (ROOT / "openapi/runtime.yaml").read_text()
     try:
         provider_block = yaml_schema_block(openapi, "ModelProvider")
-        provider_enum = re.search(r"enum:\s*\[([^]]+)]", provider_block)
-        api_providers = comma_values(provider_enum.group(1)) if provider_enum else set()
+        provider_contract_open = (
+            re.search(r"^\s+type:\s+string\s*$", provider_block, re.MULTILINE) is not None
+            and re.search(
+                r'^\s+pattern:\s+["\']\^\[a-z]\[a-z0-9_]\*\$["\']\s*$',
+                provider_block,
+                re.MULTILINE,
+            ) is not None
+            and re.search(r"^\s+enum:", provider_block, re.MULTILINE) is None
+        )
     except ValueError:
-        api_providers = set()
+        provider_contract_open = False
     wanted_providers = comma_values(expected["provider_registry"])
     readme = (ROOT / "README.md").read_text()
     header_match = re.search(r"<sub>Works with&nbsp;\*\*(.*?)\*\*</sub>", readme)
     readme_providers = {
         item.strip().lower() for item in header_match.group(1).split("·")
     } if header_match else set()
-    if providers != wanted_providers or api_providers != wanted_providers or readme_providers != wanted_providers:
+    runtime = (ROOT / "internal/services/runtime.go").read_text()
+    admission_rejects_uninstalled = (
+        "CanonicalModelProvider(input.Spec.Model.Provider)" in runtime
+        and "spec.model.provider is not supported." in runtime
+    )
+    if (
+        providers != wanted_providers
+        or not provider_contract_open
+        or not admission_rejects_uninstalled
+        or readme_providers != wanted_providers
+    ):
         errors.append("provider_registry")
 
     try:

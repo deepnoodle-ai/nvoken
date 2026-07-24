@@ -294,7 +294,7 @@ test("shared fault server semantics", async (context) => {
     "invocation.update",
     "invocation.result",
   ]);
-  assert.equal(streamedText, "world");
+  assert.equal(streamedText, resultFixture.message_join.expected_output_text);
   const state = await fetch(`${baseUrl}/__test/state`).then((response) => response.json()) as {
     admission_attempts: number;
     credential_admissions: number;

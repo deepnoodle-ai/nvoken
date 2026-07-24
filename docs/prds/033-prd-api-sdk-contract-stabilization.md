@@ -1,6 +1,6 @@
 # Stabilize the pre-1.0 Runtime and SDK contract
 
-**Status:** Ready
+**Status:** Implemented
 **Sequence:** 033
 **Depends on:** `026-prd-multi-language-sdks-and-go-cli.md`,
 `028-prd-per-provider-credential-modes.md`,
@@ -83,13 +83,15 @@ reset or deletion of retained fingerprint algorithms.
   reset; deleting or rewriting a retained algorithm requires a separate
   retained-data migration and rollback decision.
 
-- **R3 — Precise SDK error categories.** Every handwritten SDK must expose the
-  same categories and mapping: HTTP `401` is `authentication`; HTTP `403` is
-  `permission`; caller cancellation is `cancelled`; actual deadline expiry is
-  `timeout`. Permission and cancellation are not retryable merely because of
-  their category. This is facade normalization, not a wire-code rename:
-  existing server codes `unauthenticated` and `forbidden` remain authoritative
-  and are not collapsed by the SDK mapping.
+- **R3 — Precise SDK error categories.** Every handwritten SDK must distinguish
+  the same conditions: HTTP `401` is `authentication`; HTTP `403` is
+  `permission`; caller cancellation is never `timeout`; actual deadline expiry
+  is `timeout`. TypeScript, Go, and Rust use the SDK category `cancelled` when
+  they wrap cancellation; Python preserves native `asyncio.CancelledError` so
+  structured concurrency continues to work. Permission and cancellation are
+  not retryable merely because of their category. This is facade normalization,
+  not a wire-code rename: existing server codes `unauthenticated` and
+  `forbidden` remain authoritative and are not collapsed by the SDK mapping.
 
 - **R4 — Complete provider-credential listing.** `GET
   /v1/provider-credentials` must accept an opaque `cursor` and return the
@@ -150,35 +152,35 @@ reset or deletion of retained fingerprint algorithms.
 
 ## Acceptance
 
-- [ ] **A1 (R1):** A repository-wide contract and documentation check finds the
+- [x] **A1 (R1):** A repository-wide contract and documentation check finds the
   exact Invocation definition in the root README, `api.md`, and all four SDK
   READMEs; the existing terminology decision is updated to record the
   resource/concept rule and rationale; no public identifier or resource noun
   named `Turn` is introduced.
 
-- [ ] **A2 (R2):** Fingerprint fixtures and service tests replay equal requests
+- [x] **A2 (R2):** Fingerprint fixtures and service tests replay equal requests
   admitted as each of v1–v7 after upgrade, reject a material change for every
   retained version, stamp a new admission as v7, and identify v8 as the next
   version for the next fingerprint-material contract without deleting or
   rewriting any retained fixture.
 
-- [ ] **A3 (R3):** Shared facade tests in Go, TypeScript, Python, and Rust prove
+- [x] **A3 (R3):** Shared facade tests in Go, TypeScript, Python, and Rust prove
   `401 → authentication`, `403 → permission`, caller cancellation →
-  `cancelled`, and elapsed deadline → `timeout`, including the category and
-  original wire status where one exists.
+  `cancelled` or native `asyncio.CancelledError`, and elapsed deadline →
+  `timeout`, including the category and original wire status where one exists.
 
-- [ ] **A4 (R4):** An end-to-end list with more than two pages follows only
+- [x] **A4 (R4):** An end-to-end list with more than two pages follows only
   returned cursors and reaches every credential exactly once; empty and final
   pages satisfy the envelope invariant, while a malformed cursor or a cursor
   reused with changed filters, scope, or limit returns `400 invalid_request`.
 
-- [ ] **A5 (R5):** OpenAPI exposes one provider schema and generated drift is
+- [x] **A5 (R5):** OpenAPI exposes one provider schema and generated drift is
   clean: `ModelProvider` is extensible and `ModelCatalogProvider` is absent.
   All four generated clients decode a fixture containing a future valid
   provider identifier unchanged; admission and provider-credential creation
   reject that same unregistered provider before durable work or secret storage.
 
-- [ ] **A6 (R6):** `sdk/conformance/fixtures/invocation-result.json` carries the
+- [x] **A6 (R6):** `sdk/conformance/fixtures/invocation-result.json` carries the
   Appendix A case and passes through the server result read and all four SDK
   accessors as
   `"The charge was duplicated.\n\nA refund is queued."`; companion fixtures
@@ -186,12 +188,12 @@ reset or deletion of retained fingerprint algorithms.
   unchanged nullability for nonterminal, failed, cancelled, and textless
   completed Invocations.
 
-- [ ] **A7 (R7):** Compile-time or public-surface tests use the new names in all
+- [x] **A7 (R7):** Compile-time or public-surface tests use the new names in all
   four SDKs and fail against the displaced facade names. The TypeScript package
   no longer exposes `runImmediately` or `replaySafe`, while `Agent.run()` and
   Invocation-scoped handle message reads still work.
 
-- [ ] **A8 (R1–R8):** OpenAPI generation and drift checks, shared conformance
+- [x] **A8 (R1–R8):** OpenAPI generation and drift checks, shared conformance
   in all four languages, `make check`, and `make sdk-check` pass. README,
   design API, SDK READMEs, examples, and
   `docs/guides/api-sdk-migration.md` contain no stale identifier or contradicted

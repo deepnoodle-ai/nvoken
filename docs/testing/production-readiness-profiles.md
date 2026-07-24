@@ -68,7 +68,7 @@ implementation claims and are deliberately outside this comparison.
 | Fact | Expected value | Authoritative source | Compared repository claims |
 | --- | --- | --- | --- |
 | `profile_names` | `single_daemon`, `google_cloud` | This matrix's profile and current-status tables | Exact profile rows in this matrix |
-| `provider_registry` | `anthropic`, `openai` | [`newModel`](../../internal/adapters/divegen/generator.go) | Runtime OpenAPI provider enum and the root README provider line |
+| `provider_registry` | `anthropic`, `openai` | [`newModel`](../../internal/adapters/divegen/generator.go) | Open `ModelProvider` schema, installed-provider admission rejection, and the root README provider line |
 | `openapi_tool_modes` | `host`, `callback` | [`ToolSpec`](../../openapi/runtime.yaml) | Runtime admission guide examples and this recorded value |
 | `openapi_version` | `0.1.0` | [`openapi/runtime.yaml`](../../openapi/runtime.yaml) | This recorded value |
 | `migration_head` | `000016` | [Embedded forward migrations](../../internal/adapters/postgres/migrations/) | Migration inventory and this recorded value |
