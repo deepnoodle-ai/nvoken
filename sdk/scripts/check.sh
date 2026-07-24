@@ -4,7 +4,7 @@ set -euo pipefail
 readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly SERVER_PORT="$(python3 -c 'import socket; sock = socket.socket(); sock.bind(("127.0.0.1", 0)); print(sock.getsockname()[1]); sock.close()')"
 readonly BASE_URL="http://127.0.0.1:${SERVER_PORT}"
-readonly SERVER_LOG="$(mktemp "${TMPDIR:-/tmp}/nvoken-conformance.XXXXXX.log")"
+readonly SERVER_LOG="$(mktemp "${TMPDIR:-/tmp}/nvoken-conformance.XXXXXX")"
 readonly SERVER_WORK="$(mktemp -d "${TMPDIR:-/tmp}/nvoken-conformance.XXXXXX")"
 readonly SERVER_BIN="${SERVER_WORK}/server"
 

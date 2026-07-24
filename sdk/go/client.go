@@ -1,6 +1,7 @@
 package nvoken
 
 import (
+	"bytes"
 	"context"
 	cryptorand "crypto/rand"
 	"encoding/hex"
@@ -166,12 +167,16 @@ func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*Invocation
 	if request.IdempotencyKey == "" {
 		request.IdempotencyKey = generatedIdempotencyKey()
 	}
-	body, err := request.generated()
+	body, err := request.encoded()
 	if err != nil {
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
 	}
 	ack, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationAcknowledgement], error) {
-		response, callErr := c.raw.CreateInvocationWithResponse(ctx, body)
+		response, callErr := c.raw.CreateInvocationWithBodyWithResponse(
+			ctx,
+			"application/json",
+			bytes.NewReader(body),
+		)
 		if callErr != nil {
 			return callResult[generated.InvocationAcknowledgement]{}, callErr
 		}

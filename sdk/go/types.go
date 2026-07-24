@@ -135,6 +135,7 @@ type InvokeRequest struct {
 	IdempotencyKey      string
 	Input               string
 	Spec                ExecutionSpec
+	SpecJSON            json.RawMessage
 	ProviderCredentials []ProviderCredentialSelection
 }
 
@@ -249,55 +250,68 @@ func (o WaitOptions) normalized() WaitOptions {
 	return o
 }
 
-func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
+func (r InvokeRequest) encoded() ([]byte, error) {
 	if r.AgentKey == "" {
-		return generated.CreateInvocationRequest{}, fmt.Errorf("agent key is required")
+		return nil, fmt.Errorf("agent key is required")
 	}
 	if r.Input == "" {
-		return generated.CreateInvocationRequest{}, fmt.Errorf("input is required")
+		return nil, fmt.Errorf("input is required")
 	}
-	spec := map[string]any{"model": r.Spec.Model}
-	if r.Spec.Instructions != "" {
-		spec["instructions"] = r.Spec.Instructions
-	}
-	if r.Spec.Limits != nil {
-		spec["limits"] = r.Spec.Limits
-	}
-	if len(r.Spec.Tools) > 0 {
-		for _, tool := range r.Spec.Tools {
-			switch tool.Mode {
-			case ToolModeHost:
-				if tool.Callback != nil {
-					return generated.CreateInvocationRequest{}, fmt.Errorf(
-						"host tool %q cannot include a callback target",
-						tool.Name,
-					)
-				}
-			case ToolModeCallback:
-				if tool.Callback == nil || tool.Callback.URL == "" {
-					return generated.CreateInvocationRequest{}, fmt.Errorf(
-						"callback tool %q requires a callback target",
-						tool.Name,
-					)
-				}
-				if tool.Handler != nil {
-					return generated.CreateInvocationRequest{}, fmt.Errorf(
-						"callback tool %q cannot include a local handler",
-						tool.Name,
-					)
-				}
-			default:
-				return generated.CreateInvocationRequest{}, fmt.Errorf(
-					"tool %q has unsupported mode %q",
-					tool.Name,
-					tool.Mode,
-				)
-			}
+	var spec any
+	if len(r.SpecJSON) > 0 {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(r.SpecJSON, &object); err != nil {
+			return nil, fmt.Errorf("decode wire execution spec: %w", err)
 		}
-		spec["tools"] = r.Spec.Tools
-	}
-	if r.Spec.OutputSchema != nil {
-		spec["output"] = map[string]any{"schema": r.Spec.OutputSchema}
+		if object == nil {
+			return nil, fmt.Errorf("wire execution spec must be a JSON object")
+		}
+		spec = json.RawMessage(r.SpecJSON)
+	} else {
+		typedSpec := map[string]any{"model": r.Spec.Model}
+		if r.Spec.Instructions != "" {
+			typedSpec["instructions"] = r.Spec.Instructions
+		}
+		if r.Spec.Limits != nil {
+			typedSpec["limits"] = r.Spec.Limits
+		}
+		if len(r.Spec.Tools) > 0 {
+			for _, tool := range r.Spec.Tools {
+				switch tool.Mode {
+				case ToolModeHost:
+					if tool.Callback != nil {
+						return nil, fmt.Errorf(
+							"host tool %q cannot include a callback target",
+							tool.Name,
+						)
+					}
+				case ToolModeCallback:
+					if tool.Callback == nil || tool.Callback.URL == "" {
+						return nil, fmt.Errorf(
+							"callback tool %q requires a callback target",
+							tool.Name,
+						)
+					}
+					if tool.Handler != nil {
+						return nil, fmt.Errorf(
+							"callback tool %q cannot include a local handler",
+							tool.Name,
+						)
+					}
+				default:
+					return nil, fmt.Errorf(
+						"tool %q has unsupported mode %q",
+						tool.Name,
+						tool.Mode,
+					)
+				}
+			}
+			typedSpec["tools"] = r.Spec.Tools
+		}
+		if r.Spec.OutputSchema != nil {
+			typedSpec["output"] = map[string]any{"schema": r.Spec.OutputSchema}
+		}
+		spec = typedSpec
 	}
 	wire := map[string]any{
 		"agent_key":       r.AgentKey,
@@ -315,14 +329,14 @@ func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
 		wire["session_key"] = *r.SessionKey
 	}
 	if len(r.ProviderCredentials) > 1 {
-		return generated.CreateInvocationRequest{}, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"at most one provider credential selection is supported",
 		)
 	}
 	if len(r.ProviderCredentials) == 1 {
 		selection := r.ProviderCredentials[0]
 		if selection.Provider == "" {
-			return generated.CreateInvocationRequest{}, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"provider credential selection provider is required",
 			)
 		}
@@ -333,20 +347,20 @@ func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
 		switch selection.Source {
 		case ProviderCredentialCallerEphemeral:
 			if selection.APIKey == "" {
-				return generated.CreateInvocationRequest{}, fmt.Errorf(
+				return nil, fmt.Errorf(
 					"caller-ephemeral provider credentials require an API key",
 				)
 			}
 			item["credential"] = map[string]any{"api_key": selection.APIKey}
 		case ProviderCredentialAccountBYOK, ProviderCredentialTenantBYOK, ProviderCredentialPlatform:
 			if selection.APIKey != "" {
-				return generated.CreateInvocationRequest{}, fmt.Errorf(
+				return nil, fmt.Errorf(
 					"%s provider credentials cannot include an API key",
 					selection.Source,
 				)
 			}
 		default:
-			return generated.CreateInvocationRequest{}, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"unsupported provider credential source %q",
 				selection.Source,
 			)
@@ -355,7 +369,15 @@ func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
 	}
 	encoded, err := json.Marshal(wire)
 	if err != nil {
-		return generated.CreateInvocationRequest{}, fmt.Errorf("encode invocation: %w", err)
+		return nil, fmt.Errorf("encode invocation: %w", err)
+	}
+	return encoded, nil
+}
+
+func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
+	encoded, err := r.encoded()
+	if err != nil {
+		return generated.CreateInvocationRequest{}, err
 	}
 	var request generated.CreateInvocationRequest
 	if err := json.Unmarshal(encoded, &request); err != nil {

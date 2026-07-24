@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -46,6 +49,19 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	}
 	if handle.InvocationID != testInvocationID || handle.SessionID != testSessionID {
 		t.Fatalf("unexpected JSON handle: %#v", handle)
+	}
+
+	output, err = executeCLI(t, baseURL, false,
+		"invoke",
+		"hello again",
+		"--agent", "support",
+		"--idempotency-key", "cli-answer",
+		"--instructions", "help",
+		"--provider", "openai",
+		"--model", "gpt-test",
+	)
+	if err != nil || output != "The charge was duplicated.\n\nA refund is queued.\n" {
+		t.Fatalf("text answer output=%q err=%v", output, err)
 	}
 
 	output, err = executeCLI(
@@ -129,6 +145,19 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("JSON invocation list output=%q err=%v", output, err)
 	}
+	output, err = executeCLI(
+		t,
+		baseURL,
+		false,
+		"invocation",
+		"wait",
+		"invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328",
+		"--until",
+		"actionable",
+	)
+	if err != nil || !strings.Contains(output, "\twaiting\t") {
+		t.Fatalf("actionable wait output=%q err=%v", output, err)
+	}
 	output, err = executeCLI(t, baseURL, true, "session", "list")
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("JSON Session list output=%q err=%v", output, err)
@@ -137,9 +166,34 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("JSON messages output=%q err=%v", output, err)
 	}
+	output, err = executeCLI(t, baseURL, false, "session", "messages", testSessionID)
+	if err != nil || output != "1\tuser\thello\nnext_cursor\tmessages-page-2\n" {
+		t.Fatalf("text messages output=%q err=%v", output, err)
+	}
+	output, err = executeCLI(
+		t,
+		baseURL,
+		false,
+		"session",
+		"resolve",
+		"--session-key",
+		"ticket-A-42",
+		"--tenant",
+		"acme",
+	)
+	if err != nil || !strings.HasPrefix(output, testSessionID+"\t") {
+		t.Fatalf("Session resolve output=%q err=%v", output, err)
+	}
 	output, err = executeCLI(t, baseURL, true, "session", "transcript", testSessionID)
 	if err != nil || !strings.Contains(output, `"resume_cursor":"cursor-2"`) {
 		t.Fatalf("JSON transcript output=%q err=%v", output, err)
+	}
+	output, err = executeCLI(t, baseURL, false, "session", "transcript", testSessionID)
+	if err != nil ||
+		!strings.Contains(output, "1\tuser\thello\n") ||
+		!strings.Contains(output, "2\tassistant\tworld\n") ||
+		!strings.Contains(output, "resume_cursor\tcursor-2\n") {
+		t.Fatalf("text transcript output=%q err=%v", output, err)
 	}
 
 	resetServer(t, baseURL)
@@ -166,6 +220,88 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	output, err = executeCLI(t, baseURL, false, "session", "stream", testSessionID)
 	if err != nil || !strings.Contains(output, "transcript.update\tcursor-2") || !strings.Contains(output, "stream.end\tcursor-2") {
 		t.Fatalf("stream output=%q err=%v", output, err)
+	}
+}
+
+func TestSpecFileAdmissionAndDeltaRendering(t *testing.T) {
+	t.Setenv("NVOKEN_API_KEY", "test-key")
+	var admission map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/invocations":
+			if err := json.NewDecoder(request.Body).Decode(&admission); err != nil {
+				t.Errorf("decode admission: %v", err)
+				http.Error(response, err.Error(), http.StatusBadRequest)
+				return
+			}
+			response.Header().Set("Content-Type", "application/json")
+			response.WriteHeader(http.StatusAccepted)
+			_, _ = io.WriteString(response, `{
+				"agent_id":"agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
+				"session_id":"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+				"invocation_id":"invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+				"status":"queued",
+				"deduplicated":false,
+				"deadline_at":"2026-07-21T12:05:00Z"
+			}`)
+		case "/v1/invocations/" + testInvocationID + "/stream":
+			response.Header().Set("Content-Type", "text/event-stream")
+			_, _ = io.WriteString(response, "id: cursor-1\n")
+			_, _ = io.WriteString(response, "event: output_text.delta\n")
+			_, _ = io.WriteString(response, `data: {"text":"streamed answer"}`+"\n\n")
+			_, _ = io.WriteString(response, "id: cursor-2\n")
+			_, _ = io.WriteString(response, "event: invocation.result\n")
+			_, _ = io.WriteString(response, "data: {}\n\n")
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+
+	specPath := filepath.Join(t.TempDir(), "spec.json")
+	specJSON := `{
+		"instructions":"Preserve this exact public shape.",
+		"model":{"provider":"openai","id":"gpt-test"},
+		"limits":{"total_timeout_seconds":42,"max_iterations":3},
+		"output":{"schema":{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}}
+	}`
+	if err := os.WriteFile(specPath, []byte(specJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, err := executeCLI(
+		t,
+		server.URL,
+		true,
+		"invoke",
+		"hello",
+		"--agent",
+		"support",
+		"--idempotency-key",
+		"spec-file-test",
+		"--spec-file",
+		specPath,
+	)
+	if err != nil || !json.Valid([]byte(output)) {
+		t.Fatalf("spec-file admission output=%q err=%v", output, err)
+	}
+	var expectedSpec any
+	if err := json.Unmarshal([]byte(specJSON), &expectedSpec); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(admission["spec"], expectedSpec) {
+		t.Fatalf("admitted spec=%#v want=%#v", admission["spec"], expectedSpec)
+	}
+
+	output, err = executeCLI(
+		t,
+		server.URL,
+		false,
+		"invocation",
+		"stream",
+		testInvocationID,
+	)
+	if err != nil || output != "streamed answer\n" {
+		t.Fatalf("delta stream output=%q err=%v", output, err)
 	}
 }
 
