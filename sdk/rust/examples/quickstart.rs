@@ -1,4 +1,4 @@
-use nvoken::{Client, InvokeRequest, Model};
+use nvoken::{Client, ExecutionSpec, InvokeRequest, Model, WaitOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -6,17 +6,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::var("NVOKEN_BASE_URL")?,
         std::env::var("NVOKEN_API_KEY")?,
     )?;
-    let mut handle = client
-        .invoke(InvokeRequest::new(
-            "support",
-            "Why was I charged twice?",
-            Model {
-                provider: "anthropic".to_owned(),
-                id: "claude-sonnet-5".to_owned(),
-            },
-        ))
-        .await?;
-    let invocation = handle.wait(None).await?;
+    let model = Model::new("anthropic", "claude-sonnet-5");
+    let request = InvokeRequest::new("support", "Why was I charged twice?", model.clone())
+        .spec(ExecutionSpec::new(model).instructions("Help the customer with billing questions."));
+    let mut handle = client.invoke(request).await?;
+    let invocation = handle.wait_with_options(WaitOptions::default()).await?;
     let result = handle.result().await?;
     println!("{} {:?}", invocation.id, invocation.status);
     if let Some(text) = result.output_text {

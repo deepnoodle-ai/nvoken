@@ -4,12 +4,19 @@ An Invocation is one durable agent turn. The host supplies `agent_key`,
 optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
 model, and tools travel inline with the turn.
 
-`nvoken::Client` is the supported facade for durable Runtime workflows. It
-provides durable handles, replay-safe middleware retries, typed errors,
-resumable SSE, composed result reads (`result`, `list_messages`,
-`output_text`), and callback verification. Session-scoped messages use
-`Client::list_session_messages`. `nvoken::apis` is the generated raw
-client escape hatch.
+The supported handwritten level is transport plus durable handle. It is not an
+Agent facade:
+
+- `Client` covers Invocation admission, explicit resource reads and lists,
+  model discovery, per-turn credential selection, and ToolCall submission.
+- `InvocationHandle` covers refresh, configurable terminal/actionable waits,
+  composed results, cancellation, and resumable Invocation SSE. Streaming and
+  ToolCall submission use shared borrows, so a consumer can act while its
+  stream is alive.
+- `nvoken::apis` and `nvoken::models` are the complete generated Runtime
+  transport and raw escape hatch.
+
+Callback verification failures use the typed `CallbackError` enum.
 
 ```bash
 cargo add nvoken
@@ -30,9 +37,19 @@ request.provider_credentials = vec![ProviderCredentialSelection {
 ```
 
 The other source variants are `AccountByok`, `TenantByok`, and `Platform`.
-The handwritten Rust surface currently streams one Invocation; Session SSE is
-available only through the generated operation until the Phase 2A ergonomics
-work lands.
+`Model::new`, `ExecutionSpec` builders, `Tool::host` / `Tool::callback`, and
+`InvokeRequest` builders cover the core admission path without generated
+constructors.
+
+`WaitOptions` configures the condition, overall local timeout, and polling
+cadence. Dropping or timing out a future is local only; call `cancel` for a
+durable cancellation.
+
+Remaining handwritten gaps are explicit: Rust has no Agent verbs, bound
+Session serialization, or automatic host-tool dispatch. Session SSE,
+transcript draining, and provider-credential lifecycle operations remain
+available through the generated APIs. Hosts implement the manual durable loop
+with `wait_for_action`, `submit_tool_results`, and `wait_for_result`.
 
 Discover models through the same facade:
 

@@ -5,10 +5,10 @@ use std::time::{Duration, UNIX_EPOCH};
 use futures_util::StreamExt;
 use http::HeaderMap;
 use nvoken::{
-    deduplicate_callback_result, verify_callback, CallbackResultStore, Client, ErrorCategory,
-    ExecutionSpec, InvokeRequest, ListInvocationsOptions, ListModelsOptions, MessageListOptions,
-    Model, ProviderCredentialSelection, ProviderCredentialSource, Reducer, RetryPolicy,
-    StreamEvent, StreamPreview, ToolResult,
+    deduplicate_callback_result, verify_callback, CallbackError, CallbackResultStore, Client,
+    ErrorCategory, ExecutionSpec, InvokeRequest, Limits, ListInvocationsOptions, ListModelsOptions,
+    MessageListOptions, Model, ProviderCredentialSelection, ProviderCredentialSource, Reducer,
+    RetryPolicy, StreamEvent, StreamPreview, Tool, ToolResult, WaitCondition, WaitOptions,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -18,6 +18,38 @@ const SESSION_ID: &str = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const TOOL_CALL_ID: &str = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
 const WAIT_ID: &str = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
 const EXACT_MODEL_ID: &str = "experimental/model?variant=雪%#1";
+
+#[test]
+fn request_and_spec_builders_cover_core_admission_types() {
+    let mut input_schema = HashMap::new();
+    input_schema.insert("type".to_owned(), json!("object"));
+    let mut output_schema = HashMap::new();
+    output_schema.insert("type".to_owned(), json!("object"));
+    let spec = ExecutionSpec::new(Model::new("openai", "gpt-test"))
+        .instructions("help")
+        .limits(Limits {
+            max_iterations: Some(4),
+            ..Limits::default()
+        })
+        .tool(Tool::host("lookup", "Look up a value", input_schema))
+        .output_schema(output_schema);
+    let request = InvokeRequest::new("support", "hello", Model::new("openai", "replaced-by-spec"))
+        .tenant_key("acme")
+        .session_key("ticket-42")
+        .idempotency_key("request-key")
+        .spec(spec)
+        .provider_credential(ProviderCredentialSelection {
+            provider: "openai".to_owned(),
+            source: ProviderCredentialSource::AccountByok,
+        });
+
+    assert_eq!(request.spec.model.id, "gpt-test");
+    assert_eq!(request.spec.instructions.as_deref(), Some("help"));
+    assert_eq!(request.spec.tools.len(), 1);
+    assert_eq!(request.session_key.as_deref(), Some("ticket-42"));
+    assert_eq!(request.session_id, None);
+    assert_eq!(request.provider_credentials.len(), 1);
+}
 
 #[tokio::test]
 async fn shared_fault_server_semantics() {
@@ -111,8 +143,23 @@ async fn shared_fault_server_semantics() {
     );
 
     let mut waiting = client.invocation(WAIT_ID);
+    let actionable = waiting
+        .wait_with_options(WaitOptions {
+            until: WaitCondition::Actionable,
+            timeout: Some(Duration::from_millis(50)),
+            min_poll_interval: Duration::from_millis(1),
+            max_poll_interval: Duration::from_millis(2),
+        })
+        .await
+        .unwrap();
+    assert_eq!(actionable.status, nvoken::models::InvocationStatus::Waiting);
     let timeout = waiting
-        .wait(Some(Duration::from_millis(10)))
+        .wait_with_options(WaitOptions {
+            timeout: Some(Duration::from_millis(10)),
+            min_poll_interval: Duration::from_millis(1),
+            max_poll_interval: Duration::from_millis(2),
+            ..WaitOptions::default()
+        })
         .await
         .unwrap_err();
     assert_eq!(timeout.category, ErrorCategory::Timeout);
@@ -170,8 +217,12 @@ async fn shared_fault_server_semantics() {
     );
     assert_eq!(result_handle.list_messages().await.unwrap().len(), 3);
 
-    let mut mutable_handle = handle.clone();
-    let result = mutable_handle
+    let stream_handle = client.invocation(INVOCATION_ID);
+    let stream = stream_handle.stream();
+    futures_util::pin_mut!(stream);
+    let mut event_types = Vec::new();
+    event_types.push(stream.next().await.unwrap().unwrap().event_type);
+    let result = stream_handle
         .submit_tool_results(vec![ToolResult {
             tool_call_id: TOOL_CALL_ID.to_owned(),
             content: json!({"ok": true}),
@@ -181,9 +232,12 @@ async fn shared_fault_server_semantics() {
         .unwrap();
     assert!(result.results[0].deduplicated);
     assert_eq!(
-        mutable_handle.cancel().await.unwrap().status,
+        stream_handle.cancel().await.unwrap().status,
         nvoken::models::InvocationStatus::Cancelled
     );
+    while let Some(item) = stream.next().await {
+        event_types.push(item.unwrap().event_type);
+    }
 
     assert_error(&client, "conflict", ErrorCategory::Conflict, 409).await;
     assert_error(
@@ -205,13 +259,6 @@ async fn shared_fault_server_semantics() {
     assert_eq!(local_error.category, ErrorCategory::Conflict);
     assert_eq!(local_error.status, None);
 
-    let stream_handle = client.invocation(INVOCATION_ID);
-    let stream = stream_handle.stream();
-    futures_util::pin_mut!(stream);
-    let mut event_types = Vec::new();
-    while let Some(item) = stream.next().await {
-        event_types.push(item.unwrap().event_type);
-    }
     assert_eq!(
         event_types,
         vec![
@@ -357,13 +404,14 @@ async fn shared_callback_signing_and_deduplication_vector() {
         verify_callback(vector.key.as_bytes(), &headers, vector.body.as_bytes(), now).unwrap();
     assert_eq!(verified.tool_call_id, TOOL_CALL_ID);
 
-    assert!(verify_callback(
+    let signature_error = verify_callback(
         vector.key.as_bytes(),
         &headers,
         format!("{} ", vector.body).as_bytes(),
         now,
     )
-    .is_err());
+    .unwrap_err();
+    assert!(matches!(signature_error, CallbackError::SignatureMismatch));
     for (name, value) in [
         ("x-nvoken-timestamp", "1784635801"),
         ("x-nvoken-delivery-id", "different"),

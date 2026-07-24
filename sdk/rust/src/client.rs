@@ -197,6 +197,15 @@ pub struct Model {
     pub id: String,
 }
 
+impl Model {
+    pub fn new(provider: impl Into<String>, id: impl Into<String>) -> Self {
+        Self {
+            provider: provider.into(),
+            id: id.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Tool {
     pub mode: ToolMode,
@@ -209,6 +218,35 @@ pub struct Tool {
 pub enum ToolMode {
     Host,
     Callback { url: String },
+}
+
+impl Tool {
+    pub fn host(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        input_schema: HashMap<String, Value>,
+    ) -> Self {
+        Self {
+            mode: ToolMode::Host,
+            name: name.into(),
+            description: description.into(),
+            input_schema,
+        }
+    }
+
+    pub fn callback(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        input_schema: HashMap<String, Value>,
+        url: impl Into<String>,
+    ) -> Self {
+        Self {
+            mode: ToolMode::Callback { url: url.into() },
+            name: name.into(),
+            description: description.into(),
+            input_schema,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -236,6 +274,38 @@ pub struct ExecutionSpec {
     pub output_schema: Option<HashMap<String, Value>>,
 }
 
+impl ExecutionSpec {
+    pub fn new(model: Model) -> Self {
+        Self {
+            instructions: None,
+            model,
+            limits: None,
+            tools: Vec::new(),
+            output_schema: None,
+        }
+    }
+
+    pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
+        self.instructions = Some(instructions.into());
+        self
+    }
+
+    pub fn limits(mut self, limits: Limits) -> Self {
+        self.limits = Some(limits);
+        self
+    }
+
+    pub fn tool(mut self, tool: Tool) -> Self {
+        self.tools.push(tool);
+        self
+    }
+
+    pub fn output_schema(mut self, schema: HashMap<String, Value>) -> Self {
+        self.output_schema = Some(schema);
+        self
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct InvokeRequest {
     pub agent_key: String,
@@ -257,15 +327,41 @@ impl InvokeRequest {
             session_key: None,
             idempotency_key: None,
             input: input.into(),
-            spec: ExecutionSpec {
-                instructions: None,
-                model,
-                limits: None,
-                tools: Vec::new(),
-                output_schema: None,
-            },
+            spec: ExecutionSpec::new(model),
             provider_credentials: Vec::new(),
         }
+    }
+
+    pub fn tenant_key(mut self, tenant_key: impl Into<String>) -> Self {
+        self.tenant_key = Some(tenant_key.into());
+        self
+    }
+
+    pub fn session_id(mut self, session_id: impl Into<String>) -> Self {
+        self.session_id = Some(session_id.into());
+        self.session_key = None;
+        self
+    }
+
+    pub fn session_key(mut self, session_key: impl Into<String>) -> Self {
+        self.session_key = Some(session_key.into());
+        self.session_id = None;
+        self
+    }
+
+    pub fn idempotency_key(mut self, idempotency_key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(idempotency_key.into());
+        self
+    }
+
+    pub fn spec(mut self, spec: ExecutionSpec) -> Self {
+        self.spec = spec;
+        self
+    }
+
+    pub fn provider_credential(mut self, selection: ProviderCredentialSelection) -> Self {
+        self.provider_credentials.push(selection);
+        self
     }
 }
 
@@ -321,6 +417,31 @@ pub struct ListSessionsOptions {
 pub struct MessageListOptions {
     pub cursor: Option<String>,
     pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitCondition {
+    Terminal,
+    Actionable,
+}
+
+#[derive(Debug, Clone)]
+pub struct WaitOptions {
+    pub until: WaitCondition,
+    pub timeout: Option<Duration>,
+    pub min_poll_interval: Duration,
+    pub max_poll_interval: Duration,
+}
+
+impl Default for WaitOptions {
+    fn default() -> Self {
+        Self {
+            until: WaitCondition::Terminal,
+            timeout: None,
+            min_poll_interval: Duration::from_millis(100),
+            max_poll_interval: Duration::from_secs(2),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -718,18 +839,43 @@ impl InvocationHandle {
         &mut self,
         timeout: Option<Duration>,
     ) -> Result<models::Invocation, NvokenError> {
+        self.wait_with_options(WaitOptions {
+            timeout,
+            ..WaitOptions::default()
+        })
+        .await
+    }
+
+    pub async fn wait_with_options(
+        &mut self,
+        options: WaitOptions,
+    ) -> Result<models::Invocation, NvokenError> {
+        if options.min_poll_interval.is_zero()
+            || options.max_poll_interval < options.min_poll_interval
+        {
+            return Err(NvokenError::validation(
+                "wait poll intervals must be positive and ordered",
+            ));
+        }
         let future = async {
-            let mut delay = Duration::from_millis(100);
+            let mut delay = options.min_poll_interval;
             loop {
                 let invocation = self.refresh().await?;
-                if terminal(invocation.status) {
+                let satisfied = match options.until {
+                    WaitCondition::Terminal => terminal(invocation.status),
+                    WaitCondition::Actionable => {
+                        invocation.status == models::InvocationStatus::Waiting
+                            || terminal(invocation.status)
+                    }
+                };
+                if satisfied {
                     return Ok(invocation);
                 }
                 tokio::time::sleep(delay).await;
-                delay = delay.saturating_mul(2).min(Duration::from_secs(2));
+                delay = delay.saturating_mul(2).min(options.max_poll_interval);
             }
         };
-        match timeout {
+        match options.timeout {
             Some(timeout) => tokio::time::timeout(timeout, future)
                 .await
                 .map_err(|_| NvokenError::timeout("local wait timed out"))?,
@@ -771,55 +917,48 @@ impl InvocationHandle {
         }
     }
 
-    pub async fn cancel(&mut self) -> Result<models::Invocation, NvokenError> {
-        let invocation = self.client.cancel_invocation(&self.invocation_id).await?;
-        self.apply(&invocation);
-        Ok(invocation)
+    pub async fn cancel(&self) -> Result<models::Invocation, NvokenError> {
+        self.client.cancel_invocation(&self.invocation_id).await
     }
 
     pub async fn submit_tool_results(
-        &mut self,
+        &self,
         results: Vec<ToolResult>,
     ) -> Result<models::SubmitHostToolResultsResponse, NvokenError> {
-        let response = self
-            .client
+        self.client
             .submit_tool_results(&self.invocation_id, results)
-            .await?;
-        self.session_id = Some(response.session_id.clone());
-        self.status = Some(response.status);
-        Ok(response)
+            .await
     }
 
     pub async fn wait_for_action(
         &mut self,
         timeout: Option<Duration>,
     ) -> Result<models::Invocation, NvokenError> {
-        let future = async {
-            let mut delay = Duration::from_millis(100);
-            loop {
-                let invocation = self.refresh().await?;
-                if invocation.status == models::InvocationStatus::Waiting
-                    || terminal(invocation.status)
-                {
-                    return Ok(invocation);
-                }
-                tokio::time::sleep(delay).await;
-                delay = delay.saturating_mul(2).min(Duration::from_secs(2));
-            }
-        };
-        match timeout {
-            Some(timeout) => tokio::time::timeout(timeout, future)
-                .await
-                .map_err(|_| NvokenError::timeout("local wait timed out"))?,
-            None => future.await,
-        }
+        self.wait_with_options(WaitOptions {
+            until: WaitCondition::Actionable,
+            timeout,
+            ..WaitOptions::default()
+        })
+        .await
     }
 
     pub async fn wait_for_result(
         &mut self,
         timeout: Option<Duration>,
     ) -> Result<models::InvocationResult, NvokenError> {
-        let invocation = self.wait(timeout).await?;
+        self.wait_for_result_with_options(WaitOptions {
+            timeout,
+            ..WaitOptions::default()
+        })
+        .await
+    }
+
+    pub async fn wait_for_result_with_options(
+        &mut self,
+        mut options: WaitOptions,
+    ) -> Result<models::InvocationResult, NvokenError> {
+        options.until = WaitCondition::Terminal;
+        let invocation = self.wait_with_options(options).await?;
         if invocation.status != models::InvocationStatus::Completed {
             let mut error = NvokenError::new(
                 ErrorCategory::Conflict,

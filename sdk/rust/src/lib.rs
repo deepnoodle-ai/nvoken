@@ -7,13 +7,13 @@ pub mod routes;
 pub mod stream;
 
 pub use callback::{
-    deduplicate_callback_result, verify_callback, CallbackEnvelope, CallbackResultStore,
-    VerifiedCallback,
+    deduplicate_callback_result, verify_callback, CallbackEnvelope, CallbackError,
+    CallbackResultStore, VerifiedCallback,
 };
 pub use client::{
     Client, ErrorCategory, ExecutionSpec, InvocationHandle, InvokeRequest, Limits,
     ListInvocationsOptions, ListModelsOptions, ListSessionsOptions, MessageListOptions, Model,
     NvokenError, ProviderCredentialSelection, ProviderCredentialSource, RetryPolicy, Tool,
-    ToolMode, ToolResult,
+    ToolMode, ToolResult, WaitCondition, WaitOptions,
 };
 pub use stream::{ReducedSnapshot, Reducer, StreamEvent, StreamPreview};
