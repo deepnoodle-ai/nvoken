@@ -14,9 +14,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	handle, err := client.Invoke(context.Background(), nvoken.InvokeRequest{
+	agent, err := client.Agent(nvoken.AgentOptions{
 		AgentKey: "support",
-		Input:    "Why was I charged twice?",
 		Spec: nvoken.ExecutionSpec{
 			Instructions: "Help the customer with billing questions.",
 			Model: nvoken.Model{
@@ -28,16 +27,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	invocation, err := handle.Wait(context.Background(), nvoken.WaitOptions{})
+	answer, err := agent.Text(
+		context.Background(),
+		"Why was I charged twice?",
+		nvoken.AgentInvocationOptions{},
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	result, err := handle.Result(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("%s %s\n", invocation.ID, invocation.Status)
-	if result.OutputText != nil {
-		fmt.Printf("agent> %s\n", *result.OutputText)
-	}
+	fmt.Printf("agent> %s\n", answer)
 }

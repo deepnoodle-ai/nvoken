@@ -1,6 +1,7 @@
 package nvoken
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -18,12 +19,11 @@ type PendingHostToolCall = generated.PendingHostToolCall
 type ToolResultResponse = generated.SubmitHostToolResultsResponse
 type ModelProvider = generated.ModelProvider
 type ModelDescriptor = generated.ModelDescriptor
-type ModelList = generated.ModelList
 type ModelPricing = generated.ModelPricing
 type ProviderCredential = generated.ProviderCredential
-type ProviderCredentialList = generated.ProviderCredentialList
 type ProviderCredentialScope = generated.ProviderCredentialScope
 type ProviderCredentialStatus = generated.ProviderCredentialStatus
+type InvocationChange = generated.InvocationChange
 
 const (
 	InvocationQueued                              = generated.InvocationStatusQueued
@@ -40,6 +40,49 @@ const (
 	ProviderCredentialStatusRevoked               = generated.ProviderCredentialStatusRevoked
 )
 
+type ModelList struct {
+	CatalogVersion string            `json:"catalog_version"`
+	Items          []ModelDescriptor `json:"items"`
+}
+
+type InvocationList struct {
+	HasMore    bool         `json:"has_more"`
+	Items      []Invocation `json:"items"`
+	NextCursor *string      `json:"next_cursor"`
+}
+
+type SessionList struct {
+	HasMore    bool      `json:"has_more"`
+	Items      []Session `json:"items"`
+	NextCursor *string   `json:"next_cursor"`
+}
+
+type SessionMessageList struct {
+	HasMore    bool             `json:"has_more"`
+	Items      []SessionMessage `json:"items"`
+	NextCursor *string          `json:"next_cursor"`
+}
+
+type ProviderCredentialList struct {
+	HasMore    bool                 `json:"has_more"`
+	Items      []ProviderCredential `json:"items"`
+	NextCursor *string              `json:"next_cursor"`
+}
+
+type TranscriptSnapshot struct {
+	HasMore           bool               `json:"has_more"`
+	InvocationChanges []InvocationChange `json:"invocation_changes"`
+	Messages          []SessionMessage   `json:"messages"`
+	NextPageToken     *string            `json:"next_page_token"`
+	ResumeCursor      string             `json:"resume_cursor"`
+}
+
+type TranscriptDrain struct {
+	InvocationChanges []InvocationChange `json:"invocation_changes"`
+	Messages          []SessionMessage   `json:"messages"`
+	ResumeCursor      string             `json:"resume_cursor"`
+}
+
 type Model struct {
 	Provider string `json:"provider"`
 	ID       string `json:"id"`
@@ -54,12 +97,22 @@ type Limits struct {
 	MaxIterations         *int     `json:"max_iterations,omitempty"`
 }
 
+type ToolMode string
+
+const (
+	ToolModeHost     ToolMode = "host"
+	ToolModeCallback ToolMode = "callback"
+)
+
+type ToolHandler func(context.Context, any) (any, error)
+
 type Tool struct {
-	Mode        string          `json:"mode"`
+	Mode        ToolMode        `json:"mode"`
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema map[string]any  `json:"input_schema"`
 	Callback    *CallbackTarget `json:"callback,omitempty"`
+	Handler     ToolHandler     `json:"-"`
 }
 
 type CallbackTarget struct {
@@ -169,7 +222,16 @@ type TranscriptOptions struct {
 type WaitOptions struct {
 	MinPollInterval time.Duration
 	MaxPollInterval time.Duration
+	Until           WaitCondition
+	Timeout         time.Duration
 }
+
+type WaitCondition string
+
+const (
+	WaitUntilTerminal   WaitCondition = "terminal"
+	WaitUntilActionable WaitCondition = "actionable"
+)
 
 func (o WaitOptions) normalized() WaitOptions {
 	if o.MinPollInterval <= 0 {
@@ -180,6 +242,9 @@ func (o WaitOptions) normalized() WaitOptions {
 	}
 	if o.MaxPollInterval < o.MinPollInterval {
 		o.MaxPollInterval = o.MinPollInterval
+	}
+	if o.Until == "" {
+		o.Until = WaitUntilTerminal
 	}
 	return o
 }
@@ -199,6 +264,36 @@ func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
 		spec["limits"] = r.Spec.Limits
 	}
 	if len(r.Spec.Tools) > 0 {
+		for _, tool := range r.Spec.Tools {
+			switch tool.Mode {
+			case ToolModeHost:
+				if tool.Callback != nil {
+					return generated.CreateInvocationRequest{}, fmt.Errorf(
+						"host tool %q cannot include a callback target",
+						tool.Name,
+					)
+				}
+			case ToolModeCallback:
+				if tool.Callback == nil || tool.Callback.URL == "" {
+					return generated.CreateInvocationRequest{}, fmt.Errorf(
+						"callback tool %q requires a callback target",
+						tool.Name,
+					)
+				}
+				if tool.Handler != nil {
+					return generated.CreateInvocationRequest{}, fmt.Errorf(
+						"callback tool %q cannot include a local handler",
+						tool.Name,
+					)
+				}
+			default:
+				return generated.CreateInvocationRequest{}, fmt.Errorf(
+					"tool %q has unsupported mode %q",
+					tool.Name,
+					tool.Mode,
+				)
+			}
+		}
 		spec["tools"] = r.Spec.Tools
 	}
 	if r.Spec.OutputSchema != nil {
@@ -304,4 +399,15 @@ func generatedToolResults(results []ToolResult) (generated.SubmitHostToolResults
 
 func terminal(status InvocationStatus) bool {
 	return status == InvocationCompleted || status == InvocationFailed || status == InvocationCancelled
+}
+
+func waitSatisfied(status InvocationStatus, until WaitCondition) bool {
+	switch until {
+	case WaitUntilTerminal:
+		return terminal(status)
+	case WaitUntilActionable:
+		return status == InvocationWaiting || terminal(status)
+	default:
+		return false
+	}
 }

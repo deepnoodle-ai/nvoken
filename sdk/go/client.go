@@ -7,6 +7,7 @@ import (
 	"fmt"
 	mathrand "math/rand/v2"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
@@ -32,8 +33,10 @@ func (p RetryPolicy) normalized() RetryPolicy {
 }
 
 type Client struct {
-	raw   *generated.ClientWithResponses
-	retry RetryPolicy
+	raw          *generated.ClientWithResponses
+	retry        RetryPolicy
+	sessionMu    sync.Mutex
+	sessionLocks map[string]*sync.Mutex
 }
 
 type ClientOption func(*clientOptions)
@@ -74,7 +77,11 @@ func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error)
 	if err != nil {
 		return nil, fmt.Errorf("create generated Runtime client: %w", err)
 	}
-	return &Client{raw: raw, retry: config.retry.normalized()}, nil
+	return &Client{
+		raw:          raw,
+		retry:        config.retry.normalized(),
+		sessionLocks: make(map[string]*sync.Mutex),
+	}, nil
 }
 
 func (c *Client) Raw() *generated.ClientWithResponses { return c.raw }
@@ -232,7 +239,7 @@ func (c *Client) ListModels(
 		Provider:          options.Provider,
 		IncludeDeprecated: options.IncludeDeprecated,
 	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ModelList], error) {
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ModelList], error) {
 		response, err := c.raw.ListModelsWithResponse(ctx, params)
 		if err != nil {
 			return callResult[generated.ModelList]{}, err
@@ -244,6 +251,13 @@ func (c *Client) ListModels(
 			Body:   response.Body,
 		}, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &ModelList{
+		CatalogVersion: result.CatalogVersion,
+		Items:          result.Items,
+	}, nil
 }
 
 func (c *Client) GetModel(ctx context.Context, model Model) (*ModelDescriptor, error) {
@@ -304,7 +318,7 @@ func (c *Client) ListProviderCredentials(
 		Cursor:    options.Cursor,
 		Limit:     options.Limit,
 	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredentialList], error) {
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredentialList], error) {
 		response, err := c.raw.ListProviderCredentialsWithResponse(ctx, params)
 		if err != nil {
 			return callResult[generated.ProviderCredentialList]{}, err
@@ -316,6 +330,14 @@ func (c *Client) ListProviderCredentials(
 			Body:   response.Body,
 		}, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &ProviderCredentialList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
 }
 
 func (c *Client) CreateProviderCredential(
@@ -409,7 +431,7 @@ func (c *Client) RevokeProviderCredential(ctx context.Context, id string) (*Prov
 	})
 }
 
-func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOptions) (*generated.InvocationList, error) {
+func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOptions) (*InvocationList, error) {
 	params := &generated.ListInvocationsParams{
 		TenantKey:     options.TenantKey,
 		DefaultTenant: options.DefaultTenant,
@@ -419,16 +441,24 @@ func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOpt
 		Cursor:        options.Cursor,
 		Limit:         options.Limit,
 	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationList], error) {
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationList], error) {
 		response, err := c.raw.ListInvocationsWithResponse(ctx, params)
 		if err != nil {
 			return callResult[generated.InvocationList]{}, err
 		}
 		return callResult[generated.InvocationList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &InvocationList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
 }
 
-func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) (*generated.SessionList, error) {
+func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) (*SessionList, error) {
 	params := &generated.ListSessionsParams{
 		TenantKey:     options.TenantKey,
 		DefaultTenant: options.DefaultTenant,
@@ -437,13 +467,21 @@ func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) 
 		Cursor:        options.Cursor,
 		Limit:         options.Limit,
 	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionList], error) {
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionList], error) {
 		response, err := c.raw.ListSessionsWithResponse(ctx, params)
 		if err != nil {
 			return callResult[generated.SessionList]{}, err
 		}
 		return callResult[generated.SessionList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &SessionList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
 }
 
 func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, error) {
@@ -456,24 +494,32 @@ func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, er
 	})
 }
 
-func (c *Client) ListSessionMessages(ctx context.Context, sessionID string, options MessageListOptions) (*generated.SessionMessageList, error) {
+func (c *Client) ListSessionMessages(ctx context.Context, sessionID string, options MessageListOptions) (*SessionMessageList, error) {
 	params := &generated.ListSessionMessagesParams{Cursor: options.Cursor, Limit: options.Limit}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionMessageList], error) {
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionMessageList], error) {
 		response, err := c.raw.ListSessionMessagesWithResponse(ctx, sessionID, params)
 		if err != nil {
 			return callResult[generated.SessionMessageList]{}, err
 		}
 		return callResult[generated.SessionMessageList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &SessionMessageList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
 }
 
-func (c *Client) GetTranscript(ctx context.Context, sessionID string, options TranscriptOptions) (*generated.TranscriptSnapshot, error) {
+func (c *Client) GetTranscript(ctx context.Context, sessionID string, options TranscriptOptions) (*TranscriptSnapshot, error) {
 	params := &generated.GetSessionTranscriptParams{
 		Cursor:    options.Cursor,
 		PageToken: options.PageToken,
 		Limit:     options.Limit,
 	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.TranscriptSnapshot], error) {
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.TranscriptSnapshot], error) {
 		response, err := c.raw.GetSessionTranscriptWithResponse(ctx, sessionID, params)
 		if err != nil {
 			return callResult[generated.TranscriptSnapshot]{}, err
@@ -485,6 +531,204 @@ func (c *Client) GetTranscript(ctx context.Context, sessionID string, options Tr
 			Body:   response.Body,
 		}, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &TranscriptSnapshot{
+		HasMore:           result.HasMore,
+		InvocationChanges: result.InvocationChanges,
+		Messages:          result.Messages,
+		NextPageToken:     result.NextPageToken,
+		ResumeCursor:      result.ResumeCursor,
+	}, nil
+}
+
+func (c *Client) DrainTranscript(
+	ctx context.Context,
+	sessionID string,
+	cursor *string,
+	limit *int,
+) (*TranscriptDrain, error) {
+	drain := &TranscriptDrain{}
+	var pageToken *string
+	for {
+		page, err := c.GetTranscript(ctx, sessionID, TranscriptOptions{
+			Cursor:    cursor,
+			PageToken: pageToken,
+			Limit:     limit,
+		})
+		if err != nil {
+			return nil, err
+		}
+		drain.Messages = append(drain.Messages, page.Messages...)
+		drain.InvocationChanges = append(
+			drain.InvocationChanges,
+			page.InvocationChanges...,
+		)
+		drain.ResumeCursor = page.ResumeCursor
+		if !page.HasMore {
+			if drain.ResumeCursor == "" {
+				return nil, &Error{
+					Category: ErrorUnexpectedResponse,
+					Message:  "transcript drain returned no resume cursor",
+				}
+			}
+			return drain, nil
+		}
+		if page.NextPageToken == nil || *page.NextPageToken == "" {
+			return nil, &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "transcript page has_more without next_page_token",
+			}
+		}
+		cursor = nil
+		pageToken = page.NextPageToken
+	}
+}
+
+func (c *Client) GetSessionByKey(
+	ctx context.Context,
+	sessionKey string,
+	options ListSessionsOptions,
+) (*Session, error) {
+	options.SessionKey = &sessionKey
+	limit := 2
+	options.Limit = &limit
+	page, err := c.ListSessions(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	switch len(page.Items) {
+	case 0:
+		return nil, &Error{
+			Category: ErrorNotFound,
+			Message:  fmt.Sprintf("Session key %q was not found", sessionKey),
+		}
+	case 1:
+		return &page.Items[0], nil
+	default:
+		return nil, &Error{
+			Category: ErrorConflict,
+			Message:  fmt.Sprintf("Session key %q matched more than one Session", sessionKey),
+		}
+	}
+}
+
+func (c *Client) EachInvocation(
+	ctx context.Context,
+	options ListInvocationsOptions,
+	consume func(Invocation) error,
+) error {
+	options.Cursor = nil
+	for {
+		page, err := c.ListInvocations(ctx, options)
+		if err != nil {
+			return err
+		}
+		for _, item := range page.Items {
+			if err := consume(item); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore {
+			return nil
+		}
+		if page.NextCursor == nil || *page.NextCursor == "" {
+			return &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "Invocation page has_more without next_cursor",
+			}
+		}
+		options.Cursor = page.NextCursor
+	}
+}
+
+func (c *Client) EachSession(
+	ctx context.Context,
+	options ListSessionsOptions,
+	consume func(Session) error,
+) error {
+	options.Cursor = nil
+	for {
+		page, err := c.ListSessions(ctx, options)
+		if err != nil {
+			return err
+		}
+		for _, item := range page.Items {
+			if err := consume(item); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore {
+			return nil
+		}
+		if page.NextCursor == nil || *page.NextCursor == "" {
+			return &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "Session page has_more without next_cursor",
+			}
+		}
+		options.Cursor = page.NextCursor
+	}
+}
+
+func (c *Client) EachSessionMessage(
+	ctx context.Context,
+	sessionID string,
+	options MessageListOptions,
+	consume func(SessionMessage) error,
+) error {
+	options.Cursor = nil
+	for {
+		page, err := c.ListSessionMessages(ctx, sessionID, options)
+		if err != nil {
+			return err
+		}
+		for _, item := range page.Items {
+			if err := consume(item); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore {
+			return nil
+		}
+		if page.NextCursor == nil || *page.NextCursor == "" {
+			return &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "message page has_more without next_cursor",
+			}
+		}
+		options.Cursor = page.NextCursor
+	}
+}
+
+func (c *Client) EachProviderCredential(
+	ctx context.Context,
+	options ListProviderCredentialsOptions,
+	consume func(ProviderCredential) error,
+) error {
+	options.Cursor = nil
+	for {
+		page, err := c.ListProviderCredentials(ctx, options)
+		if err != nil {
+			return err
+		}
+		for _, item := range page.Items {
+			if err := consume(item); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore {
+			return nil
+		}
+		if page.NextCursor == nil || *page.NextCursor == "" {
+			return &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "provider credential page has_more without next_cursor",
+			}
+		}
+		options.Cursor = page.NextCursor
+	}
 }
 
 type InvocationHandle struct {
@@ -511,13 +755,30 @@ func (h *InvocationHandle) Refresh(ctx context.Context) (*Invocation, error) {
 
 func (h *InvocationHandle) Wait(ctx context.Context, options WaitOptions) (*Invocation, error) {
 	options = options.normalized()
+	if options.Until != WaitUntilTerminal && options.Until != WaitUntilActionable {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  fmt.Sprintf("unsupported wait condition %q", options.Until),
+		}
+	}
+	if options.Timeout < 0 {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "wait timeout cannot be negative",
+		}
+	}
+	if options.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, options.Timeout)
+		defer cancel()
+	}
 	delay := options.MinPollInterval
 	for {
 		invocation, err := h.Refresh(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if terminal(invocation.Status) {
+		if waitSatisfied(invocation.Status, options.Until) {
 			return invocation, nil
 		}
 		timer := time.NewTimer(delay)
@@ -595,25 +856,8 @@ func (h *InvocationHandle) Cancel(ctx context.Context) (*Invocation, error) {
 }
 
 func (h *InvocationHandle) WaitForAction(ctx context.Context, options WaitOptions) (*Invocation, error) {
-	options = options.normalized()
-	delay := options.MinPollInterval
-	for {
-		invocation, err := h.Refresh(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if invocation.Status == InvocationWaiting || terminal(invocation.Status) {
-			return invocation, nil
-		}
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, transportError(ctx.Err())
-		case <-timer.C:
-		}
-		delay = min(delay*2, options.MaxPollInterval)
-	}
+	options.Until = WaitUntilActionable
+	return h.Wait(ctx, options)
 }
 
 func (h *InvocationHandle) WaitForResult(ctx context.Context, options WaitOptions) (*InvocationResult, error) {
