@@ -1,4 +1,4 @@
-import type { Invocation, ModelProvider } from "./generated/models/index.js";
+import type { Invocation } from "./generated/models/index.js";
 
 export interface InvocationDiagnosticOptions {
   includeLogGuidance?: boolean;
@@ -7,7 +7,7 @@ export interface InvocationDiagnosticOptions {
 export function invocationFailureMessage(
   invocationId: string,
   invocation: Pick<Invocation, "status" | "error">,
-  provider?: ModelProvider,
+  provider?: string,
   options: InvocationDiagnosticOptions = {},
 ): string {
   const reason = invocation.error
@@ -30,7 +30,7 @@ function terminalSentence(value: string): string {
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
-function modelDocumentation(provider: ModelProvider): string {
+function modelDocumentation(provider: string): string {
   return provider === "openai"
     ? "https://developers.openai.com/api/docs/models"
     : "https://platform.claude.com/docs/en/about-claude/models/overview";

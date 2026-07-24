@@ -67,7 +67,7 @@ runtime is listed in `api.md` ("Explicitly absent from the Runtime API").
 | Agent anchors       | Auto-created identity records grouping Sessions and Invocations                                     |
 | Session state       | Canonical transcript, retention, one nonterminal Invocation, host key, tenant partition, indexed metadata |
 | Invocation state    | Admission, status, structured output, errors, spec snapshot/digest, usage, provenance               |
-| Turn execution      | Model calls, tool selection, checkpointing, continuation, cancellation, settlement                  |
+| turn execution      | Model calls, tool selection, checkpointing, continuation, cancellation, settlement                  |
 | Tool exchange       | Durable ToolCalls across builtin, callback, and host modes                                        |
 | Recovery            | Leases, fencing, checkpoints, replay cursors, retry policy, stale-engine rejection                  |
 | Trust boundary      | Runtime credentials, signed callbacks, model gateway, limits, normalized metering                  |
@@ -190,7 +190,7 @@ Every tool declares one mode:
 | Role                      | Responsibility                                                                   | Deploy cadence                        |
 | ------------------------- | -------------------------------------------------------------------------------- | ------------------------------------- |
 | `nvokend` (control plane) | API, admission, Session projections, ToolCall delivery, signing, model gateway, reads | Continuous                            |
-| Turn engine               | Claims admitted Invocations and executes the turn end to end                     | Rare — only when harness code changes |
+| turn engine               | Claims admitted Invocations and executes the turn end to end                     | Rare — only when harness code changes |
 
 The engine deploys by drain when its hosting platform keeps the execution
 segment alive: stop claiming, finish in-flight turns, and exit while the new

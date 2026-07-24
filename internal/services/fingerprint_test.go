@@ -240,6 +240,14 @@ func TestValidateCreateInvocationLimits(t *testing.T) {
 	}
 }
 
+func TestValidateCreateInvocationRejectsUninstalledExtensibleProvider(t *testing.T) {
+	input := validServiceInput()
+	input.Spec.Model.Provider = "future_provider"
+	if err := ValidateCreateInvocation(input); err == nil {
+		t.Fatal("syntactically valid uninstalled provider was admitted")
+	}
+}
+
 func TestValidateCreateInvocationUnicodeAndBlockBoundaries(t *testing.T) {
 	setters := map[string]func(*CreateInvocationInput, string){
 		"agent_key":       func(input *CreateInvocationInput, value string) { input.AgentKey = value },

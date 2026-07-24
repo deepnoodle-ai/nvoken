@@ -62,8 +62,6 @@ pub mod model_pricing;
 pub use self::model_pricing::ModelPricing;
 pub mod model_provenance;
 pub use self::model_provenance::ModelProvenance;
-pub mod model_provider;
-pub use self::model_provider::ModelProvider;
 pub mod model_selection;
 pub use self::model_selection::ModelSelection;
 pub mod model_usage;

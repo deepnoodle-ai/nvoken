@@ -293,7 +293,7 @@ const invocation = await handle.wait();
 if (invocation.status !== "completed") throw new Error(invocation.status);
 const messages = await handle.listMessages();
 if (!messages.flatMap((message) => message.content).some(isTextContentBlock)) throw new Error("no text block");
-console.log(await handle.text());
+console.log(await handle.outputText());
 """,
         encoding="utf-8",
     )

@@ -426,7 +426,7 @@ func runSessionMessages(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	page, err := client.ListMessages(command.Context(), command.Arg(0), nvoken.MessageListOptions{
+	page, err := client.ListSessionMessages(command.Context(), command.Arg(0), nvoken.MessageListOptions{
 		Cursor: optionalString(command.String("cursor")),
 		Limit:  optionalInt(command.Int("limit")),
 	})

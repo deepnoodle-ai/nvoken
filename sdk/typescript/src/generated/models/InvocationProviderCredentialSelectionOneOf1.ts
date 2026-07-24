@@ -13,14 +13,6 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { ModelProvider } from './ModelProvider.js';
-import {
-    ModelProviderFromJSON,
-    ModelProviderFromJSONTyped,
-    ModelProviderToJSON,
-    ModelProviderToJSONTyped,
-} from './ModelProvider.js';
-
 /**
  *
  * @export
@@ -28,11 +20,14 @@ import {
  */
 export interface InvocationProviderCredentialSelectionOneOf1 {
     /**
+     * Extensible canonical provider identifier. Consumers must preserve
+     * unknown values so adding a provider does not break decoding. Request
+     * positions still reject providers not registered by the installation.
      *
-     * @type {ModelProvider}
+     * @type {string}
      * @memberof InvocationProviderCredentialSelectionOneOf1
      */
-    provider: ModelProvider;
+    provider: string;
     /**
      *
      * @type {InvocationProviderCredentialSelectionOneOf1SourceEnum}
@@ -72,7 +67,7 @@ export function InvocationProviderCredentialSelectionOneOf1FromJSONTyped(json: a
     }
     return {
 
-        'provider': ModelProviderFromJSON(json['provider']),
+        'provider': json['provider'],
         'source': json['source'],
     };
 }
@@ -88,7 +83,7 @@ export function InvocationProviderCredentialSelectionOneOf1ToJSONTyped(value?: I
 
     return {
 
-        'provider': ModelProviderToJSON(value['provider']),
+        'provider': value['provider'],
         'source': value['source'],
     };
 }

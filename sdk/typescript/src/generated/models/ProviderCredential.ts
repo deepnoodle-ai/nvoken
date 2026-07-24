@@ -13,13 +13,6 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { ModelProvider } from './ModelProvider.js';
-import {
-    ModelProviderFromJSON,
-    ModelProviderFromJSONTyped,
-    ModelProviderToJSON,
-    ModelProviderToJSONTyped,
-} from './ModelProvider.js';
 import type { ProviderCredentialScope } from './ProviderCredentialScope.js';
 import {
     ProviderCredentialScopeFromJSON,
@@ -41,11 +34,14 @@ export interface ProviderCredential {
      */
     id: string;
     /**
+     * Extensible canonical provider identifier. Consumers must preserve
+     * unknown values so adding a provider does not break decoding. Request
+     * positions still reject providers not registered by the installation.
      *
-     * @type {ModelProvider}
+     * @type {string}
      * @memberof ProviderCredential
      */
-    provider: ModelProvider;
+    provider: string;
     /**
      *
      * @type {ProviderCredentialScope}
@@ -181,7 +177,7 @@ export function ProviderCredentialFromJSONTyped(json: any, ignoreDiscriminator: 
     return {
 
         'id': json['id'],
-        'provider': ModelProviderFromJSON(json['provider']),
+        'provider': json['provider'],
         'scope': ProviderCredentialScopeFromJSON(json['scope']),
         'tenantKey': json['tenant_key'],
         'status': json['status'],
@@ -210,7 +206,7 @@ export function ProviderCredentialToJSONTyped(value?: ProviderCredential | null,
     return {
 
         'id': value['id'],
-        'provider': ModelProviderToJSON(value['provider']),
+        'provider': value['provider'],
         'scope': ProviderCredentialScopeToJSON(value['scope']),
         'tenant_key': value['tenantKey'],
         'status': value['status'],

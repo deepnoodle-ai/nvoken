@@ -301,6 +301,7 @@ func (c *Client) ListProviderCredentials(
 		Scope:     options.Scope,
 		Status:    status,
 		TenantKey: options.TenantKey,
+		Cursor:    options.Cursor,
 		Limit:     options.Limit,
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderCredentialList], error) {
@@ -455,7 +456,7 @@ func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, er
 	})
 }
 
-func (c *Client) ListMessages(ctx context.Context, sessionID string, options MessageListOptions) (*generated.SessionMessageList, error) {
+func (c *Client) ListSessionMessages(ctx context.Context, sessionID string, options MessageListOptions) (*generated.SessionMessageList, error) {
 	params := &generated.ListSessionMessagesParams{Cursor: options.Cursor, Limit: options.Limit}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionMessageList], error) {
 		response, err := c.raw.ListSessionMessagesWithResponse(ctx, sessionID, params)
@@ -561,7 +562,7 @@ func (h *InvocationHandle) ListMessages(ctx context.Context) ([]SessionMessage, 
 // empty string: the wire keeps those distinct, but this helper
 // deliberately treats both as "no useful answer". Read Result directly
 // to observe the distinction.
-func (h *InvocationHandle) Text(ctx context.Context) (string, error) {
+func (h *InvocationHandle) OutputText(ctx context.Context) (string, error) {
 	result, err := h.Result(ctx)
 	if err != nil {
 		return "", err

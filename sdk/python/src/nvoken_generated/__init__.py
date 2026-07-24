@@ -63,7 +63,6 @@ __all__ = [
     "ModelList",
     "ModelPricing",
     "ModelProvenance",
-    "ModelProvider",
     "ModelSelection",
     "ModelUsage",
     "OutputTextDeltaEvent",
@@ -144,7 +143,6 @@ from nvoken_generated.models.model_descriptor import ModelDescriptor as ModelDes
 from nvoken_generated.models.model_list import ModelList as ModelList
 from nvoken_generated.models.model_pricing import ModelPricing as ModelPricing
 from nvoken_generated.models.model_provenance import ModelProvenance as ModelProvenance
-from nvoken_generated.models.model_provider import ModelProvider as ModelProvider
 from nvoken_generated.models.model_selection import ModelSelection as ModelSelection
 from nvoken_generated.models.model_usage import ModelUsage as ModelUsage
 from nvoken_generated.models.output_text_delta_event import OutputTextDeltaEvent as OutputTextDeltaEvent

@@ -1,0 +1,45 @@
+{
+  "message_join": {
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "The charge was"
+          },
+          {
+            "type": "tool_use",
+            "id": "tcal_fixture",
+            "name": "lookup"
+          },
+          {
+            "type": "text",
+            "text": " duplicated."
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "A refund is queued."
+          }
+        ]
+      }
+    ],
+    "expected_output_text": "The charge was duplicated.\n\nA refund is queued."
+  },
+  "nullability": {
+    "null_statuses": [
+      "queued",
+      "running",
+      "waiting",
+      "failed",
+      "cancelled"
+    ],
+    "completed_without_text_is_null": true,
+    "empty_text_block_is_empty_string": true
+  }
+}

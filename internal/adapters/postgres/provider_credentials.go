@@ -130,6 +130,8 @@ func (s *Store) ListProviderCredentials(ctx context.Context, query ports.Provide
 		Provider:          query.Provider,
 		Scope:             scope,
 		Status:            status,
+		BeforeCreatedAt:   query.BeforeCreatedAt,
+		BeforeID:          query.BeforeCredentialID,
 		BatchLimit:        boundedBatchLimit(query.Limit),
 	})
 	if err != nil {

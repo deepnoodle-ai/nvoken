@@ -1,5 +1,9 @@
 # nvoken Python SDK
 
+An Invocation is one durable agent turn. The host supplies `agent_key`,
+optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
+model, and tools travel inline with the turn.
+
 The supported API is `nvoken.Client`; generated Runtime operations remain
 available from `nvoken_generated` as a raw escape hatch.
 
@@ -11,7 +15,8 @@ NVOKEN_BASE_URL=http://localhost:8080 NVOKEN_API_KEY=... \
 
 The async facade provides durable handles, replay-safe retries, typed errors,
 cursor iterators, resumable SSE, composed result reads (`result`,
-`list_messages`, `text`), and callback verification.
+`list_messages`, `output_text`), and callback verification. Session-scoped
+messages use `Client.list_session_messages`.
 
 Pass a stored or one-turn provider credential directly through
 `InvokeRequest`:

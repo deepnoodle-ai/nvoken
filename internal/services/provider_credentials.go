@@ -47,6 +47,7 @@ type ProviderCredentialListInput struct {
 	Scope     *domain.ProviderCredentialScope
 	Status    *domain.ProviderCredentialStatus
 	TenantKey *string
+	Cursor    string
 	Limit     int
 }
 
@@ -69,7 +70,9 @@ type ProviderCredentialRead struct {
 }
 
 type ProviderCredentialList struct {
-	Items []ProviderCredentialRead `json:"items"`
+	Items      []ProviderCredentialRead `json:"items"`
+	HasMore    bool                     `json:"has_more"`
+	NextCursor *string                  `json:"next_cursor"`
 }
 
 type providerCredentialStore interface {
@@ -267,11 +270,27 @@ func (s *ProviderCredentialService) List(
 	if err != nil {
 		return ProviderCredentialList{}, err
 	}
+	if input.Cursor != "" {
+		beforeCreatedAt, beforeCredentialID, err := decodeProviderCredentialCursor(input.Cursor, query)
+		if err != nil {
+			return ProviderCredentialList{}, err
+		}
+		query.BeforeCreatedAt = &beforeCreatedAt
+		query.BeforeCredentialID = &beforeCredentialID
+	}
+	limit := query.Limit
+	query.Limit++
 	credentials, err := s.store.ListProviderCredentials(ctx, query)
 	if err != nil {
 		return ProviderCredentialList{}, err
 	}
-	items := make([]ProviderCredentialRead, 0, len(credentials))
+	page := ProviderCredentialList{
+		Items: make([]ProviderCredentialRead, 0, min(len(credentials), limit)),
+	}
+	if len(credentials) > limit {
+		page.HasMore = true
+		credentials = credentials[:limit]
+	}
 	for _, credential := range credentials {
 		if err := s.authorizeProviderCredential(ctx, auth, credential); err != nil {
 			continue
@@ -280,9 +299,19 @@ func (s *ProviderCredentialService) List(
 		if err != nil {
 			return ProviderCredentialList{}, err
 		}
-		items = append(items, read)
+		page.Items = append(page.Items, read)
 	}
-	return ProviderCredentialList{Items: items}, nil
+	if page.HasMore && len(credentials) > 0 {
+		last := credentials[len(credentials)-1]
+		cursorQuery := query
+		cursorQuery.Limit = limit
+		cursor, err := encodeProviderCredentialCursor(cursorQuery, last.CreatedAt, last.ID)
+		if err != nil {
+			return ProviderCredentialList{}, recoveryCursorEncodingError(err)
+		}
+		page.NextCursor = &cursor
+	}
+	return page, nil
 }
 
 func (s *ProviderCredentialService) Get(

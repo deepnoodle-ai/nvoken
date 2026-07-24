@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// ModelDescriptor : Cataloged descriptors include all maintained metadata fields. Uncataloged descriptors include only provider, id, cataloged, and pricing; absent metadata is unknown rather than false or zero.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ModelDescriptor {
-    /// Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break catalog decoding.
+    /// Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation.
     #[serde(rename = "provider")]
     pub provider: String,
     #[serde(rename = "id")]

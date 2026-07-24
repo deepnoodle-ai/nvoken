@@ -14,6 +14,7 @@ type ErrorCategory string
 
 const (
 	ErrorAuthentication     ErrorCategory = "authentication"
+	ErrorPermission         ErrorCategory = "permission"
 	ErrorValidation         ErrorCategory = "validation"
 	ErrorNotFound           ErrorCategory = "not_found"
 	ErrorConflict           ErrorCategory = "conflict"
@@ -62,8 +63,10 @@ func errorFromResponse(status int, header http.Header, body []byte) error {
 	}
 	category := ErrorUnexpectedResponse
 	switch {
-	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+	case status == http.StatusUnauthorized:
 		category = ErrorAuthentication
+	case status == http.StatusForbidden:
+		category = ErrorPermission
 	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
 		category = ErrorValidation
 	case status == http.StatusNotFound:

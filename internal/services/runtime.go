@@ -560,7 +560,7 @@ func (s *RuntimeService) Admit(ctx context.Context, auth domain.RuntimeAuthConte
 				SpecSnapshotID:         snapshot.ID,
 				IdempotencyKey:         input.IdempotencyKey,
 				RequestFingerprint:     fingerprint[:],
-				FingerprintVersion:     7,
+				FingerprintVersion:     currentAdmissionFingerprintVersion,
 				Status:                 domain.InvocationQueued,
 				CurrentStateRevision:   revision,
 				TotalTimeoutMS:         resolvedLimits.TotalTimeout.Milliseconds(),

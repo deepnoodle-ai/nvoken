@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -40,7 +41,6 @@ from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.model_selection import ModelSelection
 from nvoken_generated.models.model_descriptor import ModelDescriptor
 from nvoken_generated.models.model_list import ModelList
-from nvoken_generated.models.model_provider import ModelProvider
 from nvoken_generated.models.provider_static_credential import ProviderStaticCredential
 from nvoken_generated.models.session import Session
 from nvoken_generated.models.session_list import SessionList
@@ -58,12 +58,14 @@ from .stream import ReducedSnapshot, Reducer, StreamEvent, stream_invocation, st
 
 ErrorCategory = Literal[
     "authentication",
+    "permission",
     "validation",
     "not_found",
     "conflict",
     "rate_limit",
     "server",
     "transport",
+    "cancelled",
     "timeout",
     "unexpected_response",
 ]
@@ -393,7 +395,7 @@ class Client:
     async def get_session(self, session_id: str) -> Session:
         return await self._replay_safe(lambda: self.sessions.get_session(session_id))
 
-    async def list_messages(
+    async def list_session_messages(
         self,
         session_id: str,
         *,
@@ -438,14 +440,13 @@ class Client:
         raise last_error or NvokenError("unexpected_response", "request did not run")
 
 
-def _model_provider(provider: str) -> ModelProvider:
-    try:
-        return ModelProvider(provider)
-    except ValueError as error:
+def _model_provider(provider: str) -> str:
+    if re.fullmatch(r"[a-z][a-z0-9_]*", provider) is None:
         raise NvokenError(
             "validation",
-            "model provider must be anthropic or openai",
-        ) from error
+            "model provider must be a valid canonical identifier",
+        )
+    return provider
 
 
 def _provider_credential_selection(
@@ -533,7 +534,7 @@ class InvocationHandle:
         """
         return (await self.result()).messages
 
-    async def text(self) -> str:
+    async def output_text(self) -> str:
         """Return the completed turn's canonical assistant text.
 
         Raises ``unexpected_response`` when the wire ``output_text`` is null
@@ -624,7 +625,8 @@ def normalize_error(error: ApiException | httpx.HTTPError) -> NvokenError:
         except json.JSONDecodeError:
             pass
     category: ErrorCategory = (
-        "authentication" if status in {401, 403}
+        "authentication" if status == 401
+        else "permission" if status == 403
         else "validation" if status in {400, 422}
         else "not_found" if status == 404
         else "conflict" if status == 409
@@ -653,7 +655,8 @@ async def normalize_httpx_response(response: httpx.Response) -> NvokenError:
         pass
     status = response.status_code
     category: ErrorCategory = (
-        "authentication" if status in {401, 403}
+        "authentication" if status == 401
+        else "permission" if status == 403
         else "validation" if status in {400, 422}
         else "not_found" if status == 404
         else "conflict" if status == 409

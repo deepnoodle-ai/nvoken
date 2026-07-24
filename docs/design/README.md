@@ -52,7 +52,9 @@ The current wire vocabulary, string input normalization, timeout trio, and host
 tool mode use the v7 vectors in
 [`admission-fingerprint-v7.json`](admission-fingerprint-v7.json). Versions one
 through six remain readable only so already-admitted durable rows retain their
-original equality semantics.
+original equality semantics. Contract changes that do not alter admission
+material continue to use v7; the next material shape uses v8 and must add its
+own fixture without rewriting or deleting v1–v7.
 
 ## Document authority
 

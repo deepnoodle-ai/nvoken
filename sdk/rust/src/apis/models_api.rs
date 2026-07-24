@@ -40,7 +40,7 @@ pub enum ListModelsError {
 /// Returns a descriptor for any valid installed provider and exact model ID, including IDs outside the curated catalog. `cataloged` distinguishes maintained metadata from tolerant inspection. Pricing is the standard local USD estimate used by nvoken's estimated-cost guardrail, not provider billing or proof of account access.
 pub async fn get_model(
     configuration: &configuration::Configuration,
-    provider: models::ModelProvider,
+    provider: &str,
     model_id: &str,
     if_none_match: Option<&str>,
 ) -> Result<models::ModelDescriptor, Error<GetModelError>> {
@@ -52,7 +52,7 @@ pub async fn get_model(
     let uri_str = format!(
         "{}/v1/models/{provider}/{model_id}",
         configuration.base_path,
-        provider = p_path_provider.to_string(),
+        provider = crate::apis::urlencode(p_path_provider),
         model_id = crate::apis::urlencode(p_path_model_id)
     );
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
@@ -99,7 +99,7 @@ pub async fn get_model(
 /// Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected credential can access the model. Ordering is deterministic but has no semantic meaning.
 pub async fn list_models(
     configuration: &configuration::Configuration,
-    provider: Option<models::ModelProvider>,
+    provider: Option<&str>,
     include_deprecated: Option<bool>,
     if_none_match: Option<&str>,
 ) -> Result<models::ModelList, Error<ListModelsError>> {

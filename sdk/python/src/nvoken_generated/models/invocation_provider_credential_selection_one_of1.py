@@ -17,9 +17,9 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict
-from nvoken_generated.models.model_provider import ModelProvider
+from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -28,9 +28,19 @@ class InvocationProviderCredentialSelectionOneOf1(BaseModel):
     """
     InvocationProviderCredentialSelectionOneOf1
     """ # noqa: E501
-    provider: ModelProvider
+    provider: Annotated[str, Field(strict=True)] = Field(description="Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation. ")
     source: StrictStr
     __properties: ClassVar[List[str]] = ["provider", "source"]
+
+    @field_validator('provider')
+    def provider_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^[a-z][a-z0-9_]*$", value):
+            raise ValueError(r"must validate the regular expression /^[a-z][a-z0-9_]*$/")
+        return value
 
     @field_validator('source')
     def source_validate_enum(cls, value):

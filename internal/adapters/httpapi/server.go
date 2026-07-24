@@ -417,7 +417,7 @@ func (h *handler) listProviderCredentials(w http.ResponseWriter, r *http.Request
 		h.writeError(w, requestID, err)
 		return
 	}
-	query, err := strictQuery(r, "provider", "scope", "status", "tenant_key", "limit")
+	query, err := strictQuery(r, "provider", "scope", "status", "tenant_key", "cursor", "limit")
 	if err != nil {
 		h.writeError(w, requestID, invalidQuery(err))
 		return
@@ -425,6 +425,7 @@ func (h *handler) listProviderCredentials(w http.ResponseWriter, r *http.Request
 	input := services.ProviderCredentialListInput{
 		Provider:  optionalQueryString(query, "provider"),
 		TenantKey: optionalQueryString(query, "tenant_key"),
+		Cursor:    query.Get("cursor"),
 	}
 	if value := optionalQueryString(query, "scope"); value != nil {
 		scope := domain.ProviderCredentialScope(*value)

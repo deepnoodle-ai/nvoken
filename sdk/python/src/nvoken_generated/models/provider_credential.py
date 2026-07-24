@@ -21,7 +21,6 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
-from nvoken_generated.models.model_provider import ModelProvider
 from nvoken_generated.models.provider_credential_scope import ProviderCredentialScope
 from typing import Optional, Set
 from typing_extensions import Self
@@ -32,7 +31,7 @@ class ProviderCredential(BaseModel):
     Safe metadata only; secret material is never represented.
     """ # noqa: E501
     id: Annotated[str, Field(strict=True)] = Field(description="UUIDv7 with the public `pcrd_` prefix.")
-    provider: ModelProvider
+    provider: Annotated[str, Field(strict=True)] = Field(description="Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation. ")
     scope: ProviderCredentialScope
     tenant_key: Optional[StrictStr]
     status: StrictStr = Field(description="Active roots remain rotatable and revocable even when their current version has expired.")
@@ -56,6 +55,16 @@ class ProviderCredential(BaseModel):
 
         if not re.match(r"^pcrd_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value):
             raise ValueError(r"must validate the regular expression /^pcrd_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/")
+        return value
+
+    @field_validator('provider')
+    def provider_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^[a-z][a-z0-9_]*$", value):
+            raise ValueError(r"must validate the regular expression /^[a-z][a-z0-9_]*$/")
         return value
 
     @field_validator('status')

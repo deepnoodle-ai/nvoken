@@ -91,8 +91,8 @@ func (s *RuntimeService) withReadSnapshot(ctx context.Context, fn func(context.C
 	return fn(ctx)
 }
 
-// assistantOutputText concatenates the text content blocks of the
-// assistant-role messages in transcript order without separators. It is
+// assistantOutputText concatenates text blocks within one assistant message
+// directly and joins distinct assistant messages with two newlines. It is
 // non-nil only for a completed Invocation with at least one assistant text
 // block: evidence from failed and cancelled turns must not masquerade as
 // successful output. Undecodable assistant content is an error, never a
@@ -101,8 +101,7 @@ func assistantOutputText(status domain.InvocationStatus, messages []domain.Sessi
 	if status != domain.InvocationCompleted {
 		return nil, nil
 	}
-	var text strings.Builder
-	found := false
+	messageTexts := make([]string, 0)
 	for _, message := range messages {
 		if message.Role != domain.MessageRoleAssistant {
 			continue
@@ -114,6 +113,8 @@ func assistantOutputText(status domain.InvocationStatus, messages []domain.Sessi
 		if err := json.Unmarshal(message.Content, &blocks); err != nil {
 			return nil, fmt.Errorf("decode assistant message %s content: %w", message.ID, err)
 		}
+		var messageText strings.Builder
+		foundInMessage := false
 		for _, block := range blocks {
 			if block.Type != "text" {
 				continue
@@ -122,13 +123,16 @@ func assistantOutputText(status domain.InvocationStatus, messages []domain.Sessi
 			if err := json.Unmarshal(block.Text, &value); err != nil {
 				return nil, fmt.Errorf("decode assistant message %s text block: %w", message.ID, err)
 			}
-			found = true
-			text.WriteString(value)
+			foundInMessage = true
+			messageText.WriteString(value)
+		}
+		if foundInMessage {
+			messageTexts = append(messageTexts, messageText.String())
 		}
 	}
-	if !found {
+	if len(messageTexts) == 0 {
 		return nil, nil
 	}
-	value := text.String()
+	value := strings.Join(messageTexts, "\n\n")
 	return &value, nil
 }

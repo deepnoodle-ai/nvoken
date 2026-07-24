@@ -28,20 +28,15 @@ import {
     ModelListFromJSON,
     ModelListToJSON,
 } from '../models/ModelList.js';
-import {
-    type ModelProvider,
-    ModelProviderFromJSON,
-    ModelProviderToJSON,
-} from '../models/ModelProvider.js';
 
 export interface GetModelRequest {
-    provider: ModelProvider;
+    provider: string;
     modelId: string;
     ifNoneMatch?: string;
 }
 
 export interface ListModelsRequest {
-    provider?: ModelProvider;
+    provider?: string;
     includeDeprecated?: boolean;
     ifNoneMatch?: string;
 }

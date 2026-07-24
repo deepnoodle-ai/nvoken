@@ -336,24 +336,6 @@ func (e ModelProvenanceCredentialSource) Valid() bool {
 	}
 }
 
-// Defines values for ModelProvider.
-const (
-	Anthropic ModelProvider = "anthropic"
-	Openai    ModelProvider = "openai"
-)
-
-// Valid indicates whether the value is a known member of the ModelProvider enum.
-func (e ModelProvider) Valid() bool {
-	switch e {
-	case Anthropic:
-		return true
-	case Openai:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for OutputTextDeltaEventType.
 const (
 	EventOutputTextDelta OutputTextDeltaEventType = "output_text.delta"
@@ -693,8 +675,12 @@ type CreateProviderCredentialRequest struct {
 	Credential     ProviderStaticCredential `json:"credential"`
 	ExpiresAt      *time.Time               `json:"expires_at,omitempty"`
 	IdempotencyKey string                   `json:"idempotency_key"`
-	Provider       ModelProvider            `json:"provider"`
-	Scope          ProviderCredentialScope  `json:"scope"`
+
+	// Provider Extensible canonical provider identifier. Consumers must preserve
+	// unknown values so adding a provider does not break decoding. Request
+	// positions still reject providers not registered by the installation.
+	Provider ModelProvider           `json:"provider"`
+	Scope    ProviderCredentialScope `json:"scope"`
 
 	// TenantKey Required for tenant scope and forbidden for Account scope.
 	TenantKey *string `json:"tenant_key,omitempty"`
@@ -953,9 +939,13 @@ type InvocationProviderCredentialSelection struct {
 
 // InvocationProviderCredentialSelection0 defines model for InvocationProviderCredentialSelection.0.
 type InvocationProviderCredentialSelection0 struct {
-	Credential ProviderStaticCredential                     `json:"credential"`
-	Provider   ModelProvider                                `json:"provider"`
-	Source     InvocationProviderCredentialSelection0Source `json:"source"`
+	Credential ProviderStaticCredential `json:"credential"`
+
+	// Provider Extensible canonical provider identifier. Consumers must preserve
+	// unknown values so adding a provider does not break decoding. Request
+	// positions still reject providers not registered by the installation.
+	Provider ModelProvider                                `json:"provider"`
+	Source   InvocationProviderCredentialSelection0Source `json:"source"`
 }
 
 // InvocationProviderCredentialSelection0Source defines model for InvocationProviderCredentialSelection.0.Source.
@@ -963,6 +953,9 @@ type InvocationProviderCredentialSelection0Source string
 
 // InvocationProviderCredentialSelection1 defines model for InvocationProviderCredentialSelection.1.
 type InvocationProviderCredentialSelection1 struct {
+	// Provider Extensible canonical provider identifier. Consumers must preserve
+	// unknown values so adding a provider does not break decoding. Request
+	// positions still reject providers not registered by the installation.
 	Provider ModelProvider                                `json:"provider"`
 	Source   InvocationProviderCredentialSelection1Source `json:"source"`
 }
@@ -1032,10 +1025,6 @@ type InvocationUpdateEvent struct {
 // InvocationUpdateEventType defines model for InvocationUpdateEvent.Type.
 type InvocationUpdateEventType string
 
-// ModelCatalogProvider Extensible canonical provider identifier. Consumers must preserve
-// unknown values so adding a provider does not break catalog decoding.
-type ModelCatalogProvider = string
-
 // ModelCost defines model for ModelCost.
 type ModelCost struct {
 	CacheRead  float32 `json:"cache_read"`
@@ -1070,8 +1059,9 @@ type ModelDescriptor struct {
 	Pricing ModelPricing `json:"pricing"`
 
 	// Provider Extensible canonical provider identifier. Consumers must preserve
-	// unknown values so adding a provider does not break catalog decoding.
-	Provider ModelCatalogProvider `json:"provider"`
+	// unknown values so adding a provider does not break decoding. Request
+	// positions still reject providers not registered by the installation.
+	Provider ModelProvider `json:"provider"`
 
 	// Recommended nvoken's suggested general-purpose starting point for this provider.
 	Recommended *bool `json:"recommended,omitempty"`
@@ -1131,12 +1121,18 @@ type ModelProvenance struct {
 // ModelProvenanceCredentialSource defines model for ModelProvenance.CredentialSource.
 type ModelProvenanceCredentialSource string
 
-// ModelProvider defines model for ModelProvider.
-type ModelProvider string
+// ModelProvider Extensible canonical provider identifier. Consumers must preserve
+// unknown values so adding a provider does not break decoding. Request
+// positions still reject providers not registered by the installation.
+type ModelProvider = string
 
 // ModelSelection defines model for ModelSelection.
 type ModelSelection struct {
-	ID       string        `json:"id"`
+	ID string `json:"id"`
+
+	// Provider Extensible canonical provider identifier. Consumers must preserve
+	// unknown values so adding a provider does not break decoding. Request
+	// positions still reject providers not registered by the installation.
 	Provider ModelProvider `json:"provider"`
 }
 
@@ -1194,9 +1190,13 @@ type ProviderCredential struct {
 	ID                ProviderCredentialID         `json:"id"`
 	OverlapExpiresAt  *time.Time                   `json:"overlap_expires_at"`
 	PreviousVersionID *ProviderCredentialVersionID `json:"previous_version_id"`
-	Provider          ModelProvider                `json:"provider"`
-	RevokedAt         *time.Time                   `json:"revoked_at"`
-	Scope             ProviderCredentialScope      `json:"scope"`
+
+	// Provider Extensible canonical provider identifier. Consumers must preserve
+	// unknown values so adding a provider does not break decoding. Request
+	// positions still reject providers not registered by the installation.
+	Provider  ModelProvider           `json:"provider"`
+	RevokedAt *time.Time              `json:"revoked_at"`
+	Scope     ProviderCredentialScope `json:"scope"`
 
 	// Status Active roots remain rotatable and revocable even when their current version has expired.
 	Status    ProviderCredentialStatus `json:"status"`
@@ -1222,7 +1222,9 @@ type ProviderCredentialID = string
 
 // ProviderCredentialList defines model for ProviderCredentialList.
 type ProviderCredentialList struct {
-	Items []ProviderCredential `json:"items"`
+	HasMore    bool                 `json:"has_more"`
+	Items      []ProviderCredential `json:"items"`
+	NextCursor *string              `json:"next_cursor"`
 }
 
 // ProviderCredentialScope defines model for ProviderCredentialScope.
@@ -1568,7 +1570,10 @@ type ListProviderCredentialsParams struct {
 	Scope     *ProviderCredentialScope             `form:"scope,omitempty" json:"scope,omitempty"`
 	Status    *ListProviderCredentialsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
 	TenantKey *string                              `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
-	Limit     *int                                 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque continuation cursor bound to the Account, effective scope, filters, and limit.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListProviderCredentialsParamsStatus defines parameters for ListProviderCredentials.
@@ -3755,6 +3760,18 @@ func NewListProviderCredentialsRequest(server string, params *ListProviderCreden
 		if params.TenantKey != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

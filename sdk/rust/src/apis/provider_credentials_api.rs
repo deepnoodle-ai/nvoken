@@ -181,10 +181,11 @@ pub async fn get_provider_credential(
 /// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
 pub async fn list_provider_credentials(
     configuration: &configuration::Configuration,
-    provider: Option<models::ModelProvider>,
+    provider: Option<&str>,
     scope: Option<models::ProviderCredentialScope>,
     status: Option<&str>,
     tenant_key: Option<&str>,
+    cursor: Option<&str>,
     limit: Option<u32>,
 ) -> Result<models::ProviderCredentialList, Error<ListProviderCredentialsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
@@ -192,6 +193,7 @@ pub async fn list_provider_credentials(
     let p_query_scope = scope;
     let p_query_status = status;
     let p_query_tenant_key = tenant_key;
+    let p_query_cursor = cursor;
     let p_query_limit = limit;
 
     let uri_str = format!("{}/v1/provider-credentials", configuration.base_path);
@@ -208,6 +210,9 @@ pub async fn list_provider_credentials(
     }
     if let Some(ref param_value) = p_query_tenant_key {
         req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_cursor {
+        req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_limit {
         req_builder = req_builder.query(&[("limit", &param_value.to_string())]);

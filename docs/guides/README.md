@@ -16,6 +16,8 @@ order.
   multi-turn Sessions, host tools, structured output, streaming, and recovery
 - [SDKs and client CLI](sdks-and-cli.md) — install a client and choose its
   supported workflow facade
+- [Pre-1.0 API and SDK migration](api-sdk-migration.md) — coordinated breaking
+  names and behavior changes after v0.2.0
 - [Runtime admission](runtime-admission.md) — wire-level durable Invocation,
   Session, streaming, cancellation, and ToolCall behavior
 - [Credentials and CLI authentication](credentials-and-cli-auth.md) — machine

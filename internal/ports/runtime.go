@@ -187,12 +187,14 @@ type InvocationRepository interface {
 }
 
 type ProviderCredentialListQuery struct {
-	AccountID         string
-	TenantPartitionID *string
-	Provider          *string
-	Scope             *domain.ProviderCredentialScope
-	Status            *domain.ProviderCredentialStatus
-	Limit             int
+	AccountID          string
+	TenantPartitionID  *string
+	Provider           *string
+	Scope              *domain.ProviderCredentialScope
+	Status             *domain.ProviderCredentialStatus
+	BeforeCreatedAt    *time.Time
+	BeforeCredentialID *string
+	Limit              int
 }
 
 type ProviderCredentialRepository interface {

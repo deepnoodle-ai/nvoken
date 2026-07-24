@@ -1,9 +1,14 @@
 # nvoken Rust SDK
 
+An Invocation is one durable agent turn. The host supplies `agent_key`,
+optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
+model, and tools travel inline with the turn.
+
 `nvoken::Client` is the supported facade for durable Runtime workflows. It
 provides durable handles, replay-safe middleware retries, typed errors,
-resumable SSE, composed result reads (`result`, `list_messages`, `text`), and
-callback verification. `nvoken::apis` is the generated raw
+resumable SSE, composed result reads (`result`, `list_messages`,
+`output_text`), and callback verification. Session-scoped messages use
+`Client::list_session_messages`. `nvoken::apis` is the generated raw
 client escape hatch.
 
 ```bash

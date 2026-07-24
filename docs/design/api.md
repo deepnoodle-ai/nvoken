@@ -26,6 +26,12 @@ or self-hosting.
 
 ## Contract conventions
 
+**An Invocation is one durable agent turn.** Lowercase “turn” names the
+conceptual model-and-tool cycle; `Invocation` names its durable API resource.
+The host owns the four request identities: `agent_key`, optional `tenant_key`,
+`session_key`, and `idempotency_key`. Agent behavior is not registered:
+instructions, model, and tools travel inline on each Invocation.
+
 Authentication and tenancy:
 
 - The host authenticates with a Runtime-profile machine credential; Account
@@ -51,8 +57,8 @@ Idempotency and concurrency:
   effective tenant partition, and Agent key. An equal replay returns the
   original records before the concurrency check; a materially changed replay
   returns `409 idempotency_conflict`.
-- At most one Invocation in `queued`, `running`, or `waiting` may exist for a
-  Session. A distinct request while that slot is occupied returns
+- A Session runs one turn at a time: at most one nonterminal Invocation. A
+  distinct request while that slot is occupied returns
   `409 session_invocation_active` before appending input.
 - A host session key resolves or creates the Session within `(Account,
   effective tenant partition, Agent, session_key)`; ID format is canonical in
@@ -96,7 +102,9 @@ The language-neutral canonical bytes and digests are compatibility fixtures:
 [v5](admission-fingerprint-v5.json),
 [v6](admission-fingerprint-v6.json), and
 [v7](admission-fingerprint-v7.json). A retry always uses the algorithm recorded
-on the retained row; only a new admission uses v7.
+on the retained row; only a new admission uses v7. The next
+fingerprint-material request shape uses v8 and adds its own compatibility
+fixture; non-material contract changes do not mint a version.
 
 Streaming and recovery:
 
@@ -138,7 +146,10 @@ the pricing evidence used by the estimated-cost guardrail travel together.
 selection; it does not prove that the caller's provider account, region, or
 credential can access it. Model IDs are exact values and must be encoded as one
 path segment. Both reads support `ETag`/`If-None-Match`; the complete list also
-has an opaque `catalog_version`.
+has an opaque `catalog_version`. Every position uses the same extensible,
+validated `ModelProvider` string as Invocation and credential requests. Adding
+a syntactically valid provider stays decodable by older clients; request
+admission still requires an installed adapter.
 
 `/v1/capabilities` remains installation-centered. It reports installed
 adapters and protocol features rather than acting as a model or pricing
@@ -400,7 +411,7 @@ section 7).
 
 | Method   | Endpoint                                                   | Purpose                                                                                         |
 | -------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `GET`    | `/v1/provider-credentials`                                 | List safe metadata for Account- and tenant-scoped model-provider credentials.                   |
+| `GET`    | `/v1/provider-credentials`                                 | Cursor-page safe metadata for Account- and tenant-scoped model-provider credentials.             |
 | `POST`   | `/v1/provider-credentials`                                 | Store one encrypted Account or tenant BYOK credential for a canonical provider.                 |
 | `GET`    | `/v1/provider-credentials/{provider_credential_id}`        | Read scope, provider, version, status, and audit metadata without secret material.               |
 | `POST`   | `/v1/provider-credentials/{provider_credential_id}/rotate` | Replace credential material with a versioned, explicitly bounded overlap.                       |
@@ -414,6 +425,9 @@ manages credentials on their behalf. Invocation admission may instead carry a
 provider credential for `caller_ephemeral` use; the secret is encrypted into
 the Invocation binding, excluded from its spec and idempotency fingerprint,
 and destroyed when the Invocation settles or its credential lease expires.
+The list uses fixed descending `(created_at, id)` keyset order and the strict
+`{items, has_more, next_cursor}` envelope. Its opaque cursor is bound to the
+Account, effective tenant scope, filters, and page limit.
 
 ### CLI device authorization
 
@@ -488,7 +502,9 @@ POST /v1/invocations
 The answer is one read away. `GET /v1/invocations/{invocation_id}/result`
 returns the composed `InvocationResult` at any status: the authoritative
 Invocation, this Invocation's canonical messages composed at read time, and
-`output_text`, the assistant text blocks concatenated in transcript order.
+`output_text`. Text blocks within one assistant message concatenate directly;
+distinct assistant messages join with exactly `"\n\n"` in transcript order,
+and non-text blocks add no separator.
 `output_text` is non-null only for a completed turn with assistant text; a
 schema-bearing turn reads `invocation.structured_output` instead. The
 Invocation and its messages come from one repeatable-read snapshot, so a

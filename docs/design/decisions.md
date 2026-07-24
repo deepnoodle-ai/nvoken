@@ -20,7 +20,15 @@ entries originate in the design program for nvoken's predecessor runtime
 
 8.  Make sure we fully understand, "if we 100% focused on the embedded case, what should the product look like?"
 
-9. Terminology: the word "loop" is reserved for the predecessor runtime's Loops feature (scheduled automations), which nvoken does not recreate. The model-and-tool-call cycle within one Invocation is a "turn" (agent turn, turn engine). The positioning phrase is "agent runtime as a service".
+9. Invocation and turn terminology (amended 2026-07-24): **An Invocation is
+one durable agent turn.** Lowercase “turn” is the conceptual model-and-tool
+cycle; it is never a capitalized resource noun or API identifier.
+`Invocation` is the durable resource. It remains the public noun because the
+nvoken → invoke → Invocation chain aligns product, verb, and resource. A
+Session runs one turn at a time: at most one nonterminal Invocation. The word
+“loop” remains reserved for the predecessor runtime's Loops feature (scheduled
+automations), which nvoken does not recreate. The positioning phrase is
+“agent runtime as a service.”
 
 10. Interaction model: the Session event log is the single interaction medium — agent output, ToolCalls, lifecycle, and host input are durable, cursor-ordered events. Live delivery is SSE with cursor resume; host input (tool results, directions) is an HTTP POST of typed events; there is no WebSocket. A host ToolCall parks the Invocation in a waiting state, holding no compute, until the result event arrives. Chosen over a duplex WebSocket for client flexibility and ops/debuggability, informed by the CMA event model (which we beat on cursor resume).
 
@@ -321,8 +329,9 @@ the only stored content projection. The composed result read,
 `GET /v1/invocations/{invocation_id}/result`, returns one slim
 `InvocationResult` at any status: the authoritative Invocation, every
 canonical message this Invocation owns in ascending sequence, and
-`output_text`, the assistant text blocks concatenated in transcript order
-without separators. `output_text` is non-null only for a completed Invocation
+`output_text`. Text blocks within one assistant message concatenate directly;
+distinct assistant messages join with exactly two newlines in transcript
+order, and non-text blocks add no separator. `output_text` is non-null only for a completed Invocation
 with at least one assistant text block; failed and cancelled turns keep their
 messages readable as evidence while `output_text` stays null, so evidence
 never masquerades as successful output. The Invocation row and its messages
@@ -377,6 +386,20 @@ model IDs are percent-encoded as one path segment, both reads are conditionally
 cacheable, and response provider identifiers remain open strings so older
 clients can decode newly installed providers. `/v1/capabilities` remains the
 installation and protocol-feature boundary, not a provider or model catalog.
-The pre-freeze `/v1/model-pricing-capabilities` experiment is removed without
+All request and response positions use the same extensible, validated
+`ModelProvider` string; syntactic openness keeps provider additions decodable,
+while admission and credential lifecycle still reject providers not installed
+in the Runtime. The pre-freeze `/v1/model-pricing-capabilities` experiment is removed without
 an alias. Public versions and fields use nvoken-owned vocabulary and do not
 expose implementation dependency identities.
+
+36. Pre-1.0 contract stabilization preserves durable compatibility
+(2026-07-24): non-material contract repairs do not mint a fingerprint version.
+New admissions remain v7, algorithms and fixtures v1 through v7 remain
+available for replay comparison, and the next fingerprint-material request
+shape owns v8. Provider credential listing adopts the standard cursor envelope
+and fixed descending `(created_at, id)` order. SDK facades distinguish
+authentication (`401`) from permission (`403`), cancellation from deadline
+expiry, Invocation `outputText` reads from Agent `text` runs, and
+Invocation-scoped from Session-scoped message reads. These pre-1.0 renames have
+no compatibility aliases.

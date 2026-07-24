@@ -20,13 +20,6 @@ import {
     ProviderStaticCredentialToJSON,
     ProviderStaticCredentialToJSONTyped,
 } from './ProviderStaticCredential.js';
-import type { ModelProvider } from './ModelProvider.js';
-import {
-    ModelProviderFromJSON,
-    ModelProviderFromJSONTyped,
-    ModelProviderToJSON,
-    ModelProviderToJSONTyped,
-} from './ModelProvider.js';
 import type { ProviderCredentialScope } from './ProviderCredentialScope.js';
 import {
     ProviderCredentialScopeFromJSON,
@@ -42,11 +35,14 @@ import {
  */
 export interface CreateProviderCredentialRequest {
     /**
+     * Extensible canonical provider identifier. Consumers must preserve
+     * unknown values so adding a provider does not break decoding. Request
+     * positions still reject providers not registered by the installation.
      *
-     * @type {ModelProvider}
+     * @type {string}
      * @memberof CreateProviderCredentialRequest
      */
-    provider: ModelProvider;
+    provider: string;
     /**
      *
      * @type {ProviderCredentialScope}
@@ -102,7 +98,7 @@ export function CreateProviderCredentialRequestFromJSONTyped(json: any, ignoreDi
     }
     return {
 
-        'provider': ModelProviderFromJSON(json['provider']),
+        'provider': json['provider'],
         'scope': ProviderCredentialScopeFromJSON(json['scope']),
         'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
         'credential': ProviderStaticCredentialFromJSON(json['credential']),
@@ -122,7 +118,7 @@ export function CreateProviderCredentialRequestToJSONTyped(value?: CreateProvide
 
     return {
 
-        'provider': ModelProviderToJSON(value['provider']),
+        'provider': value['provider'],
         'scope': ProviderCredentialScopeToJSON(value['scope']),
         'tenant_key': value['tenantKey'],
         'credential': ProviderStaticCredentialToJSON(value['credential']),

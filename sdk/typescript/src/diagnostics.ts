@@ -1,4 +1,4 @@
-import type { Invocation, ModelProvider } from "./generated/models/index.js";
+import type { Invocation } from "./generated/models/index.js";
 
 import { NvokenError } from "./client.js";
 import {
@@ -22,7 +22,7 @@ export function formatNvokenError(error: unknown): string {
 export function formatInvocationFailure(
   invocationId: string,
   invocation: Pick<Invocation, "status" | "error">,
-  provider: ModelProvider,
+  provider: string,
   options: InvocationDiagnosticOptions = {},
 ): string {
   return invocationFailureMessage(invocationId, invocation, provider, options);

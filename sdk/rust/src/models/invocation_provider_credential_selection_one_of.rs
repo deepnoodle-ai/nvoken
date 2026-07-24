@@ -13,8 +13,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InvocationProviderCredentialSelectionOneOf {
+    /// Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation.
     #[serde(rename = "provider")]
-    pub provider: models::ModelProvider,
+    pub provider: String,
     #[serde(rename = "source")]
     pub source: Source,
     #[serde(rename = "credential")]
@@ -23,7 +24,7 @@ pub struct InvocationProviderCredentialSelectionOneOf {
 
 impl InvocationProviderCredentialSelectionOneOf {
     pub fn new(
-        provider: models::ModelProvider,
+        provider: String,
         source: Source,
         credential: models::ProviderStaticCredential,
     ) -> InvocationProviderCredentialSelectionOneOf {

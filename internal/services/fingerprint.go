@@ -10,6 +10,8 @@ import (
 	"unicode/utf8"
 )
 
+const currentAdmissionFingerprintVersion = 7
+
 const fingerprintVersionV1 = 1
 const fingerprintVersionV2 = 2
 const fingerprintVersionV3 = 3

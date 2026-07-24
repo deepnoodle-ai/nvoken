@@ -11,6 +11,13 @@ typed errors, bounded polling, Invocation SSE, host ToolCall result replay,
 callback verification, model discovery, and a raw generated-client escape
 hatch. Higher-level workflow coverage is intentionally uneven today.
 
+An Invocation is one durable agent turn. The host owns `agent_key`, optional
+`tenant_key`, `session_key`, and `idempotency_key`; the spec travels with each
+Invocation. Across facades, handle `outputText` reads `output_text`,
+Session-scoped reads say `listSessionMessages`, `401` is `authentication`,
+`403` is `permission`, cancellation is not a timeout, and each language uses
+its native casing.
+
 | Package | Supported handwritten level | Session stream | Raw generated client |
 | --- | --- | --- | --- |
 | Go | `Client` + `InvocationHandle` | `Client.StreamSession` | `Client.Raw()` |

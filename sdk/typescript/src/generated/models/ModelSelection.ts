@@ -13,14 +13,6 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { ModelProvider } from './ModelProvider.js';
-import {
-    ModelProviderFromJSON,
-    ModelProviderFromJSONTyped,
-    ModelProviderToJSON,
-    ModelProviderToJSONTyped,
-} from './ModelProvider.js';
-
 /**
  *
  * @export
@@ -28,11 +20,14 @@ import {
  */
 export interface ModelSelection {
     /**
+     * Extensible canonical provider identifier. Consumers must preserve
+     * unknown values so adding a provider does not break decoding. Request
+     * positions still reject providers not registered by the installation.
      *
-     * @type {ModelProvider}
+     * @type {string}
      * @memberof ModelSelection
      */
-    provider: ModelProvider;
+    provider: string;
     /**
      *
      * @type {string}
@@ -40,8 +35,6 @@ export interface ModelSelection {
      */
     id: string;
 }
-
-
 
 /**
  * Check if a given object implements the ModelSelection interface.
@@ -62,7 +55,7 @@ export function ModelSelectionFromJSONTyped(json: any, ignoreDiscriminator: bool
     }
     return {
 
-        'provider': ModelProviderFromJSON(json['provider']),
+        'provider': json['provider'],
         'id': json['id'],
     };
 }
@@ -78,7 +71,7 @@ export function ModelSelectionToJSONTyped(value?: ModelSelection | null, ignoreD
 
     return {
 
-        'provider': ModelProviderToJSON(value['provider']),
+        'provider': value['provider'],
         'id': value['id'],
     };
 }

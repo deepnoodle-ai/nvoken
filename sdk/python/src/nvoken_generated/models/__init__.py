@@ -45,7 +45,6 @@ from nvoken_generated.models.model_descriptor import ModelDescriptor
 from nvoken_generated.models.model_list import ModelList
 from nvoken_generated.models.model_pricing import ModelPricing
 from nvoken_generated.models.model_provenance import ModelProvenance
-from nvoken_generated.models.model_provider import ModelProvider
 from nvoken_generated.models.model_selection import ModelSelection
 from nvoken_generated.models.model_usage import ModelUsage
 from nvoken_generated.models.output_text_delta_event import OutputTextDeltaEvent

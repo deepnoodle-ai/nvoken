@@ -295,7 +295,7 @@ async function fetchStream(
   } catch (error) {
     if (signal?.aborted) {
       throw new NvokenError(
-        "timeout",
+        "cancelled",
         "local stream was cancelled",
         undefined,
         undefined,
@@ -449,12 +449,12 @@ function parseRetryAfter(value: string | null): number | undefined {
 function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     if (signal?.aborted) {
-      reject(new NvokenError("timeout", "local stream was cancelled"));
+      reject(new NvokenError("cancelled", "local stream was cancelled"));
       return;
     }
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new NvokenError("timeout", "local stream was cancelled"));
+      reject(new NvokenError("cancelled", "local stream was cancelled"));
     };
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);

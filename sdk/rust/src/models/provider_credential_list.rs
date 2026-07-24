@@ -15,10 +15,22 @@ use serde::{Deserialize, Serialize};
 pub struct ProviderCredentialList {
     #[serde(rename = "items")]
     pub items: Vec<models::ProviderCredential>,
+    #[serde(rename = "has_more")]
+    pub has_more: bool,
+    #[serde(rename = "next_cursor", deserialize_with = "Option::deserialize")]
+    pub next_cursor: Option<String>,
 }
 
 impl ProviderCredentialList {
-    pub fn new(items: Vec<models::ProviderCredential>) -> ProviderCredentialList {
-        ProviderCredentialList { items }
+    pub fn new(
+        items: Vec<models::ProviderCredential>,
+        has_more: bool,
+        next_cursor: Option<String>,
+    ) -> ProviderCredentialList {
+        ProviderCredentialList {
+            items,
+            has_more,
+            next_cursor,
+        }
     }
 }

@@ -39,6 +39,13 @@ async fn shared_fault_server_semantics() {
         },
     )
     .unwrap();
+    let result_fixture: Value = serde_json::from_str(include_str!(
+        "../../conformance/fixtures/invocation-result.json"
+    ))
+    .unwrap();
+    let expected_output_text = result_fixture["message_join"]["expected_output_text"]
+        .as_str()
+        .unwrap();
     let models = client
         .list_models(ListModelsOptions::default())
         .await
@@ -128,7 +135,7 @@ async fn shared_fault_server_semantics() {
         .unwrap();
     assert!(!second_page.has_more);
     let messages = client
-        .list_messages(SESSION_ID, MessageListOptions::default())
+        .list_session_messages(SESSION_ID, MessageListOptions::default())
         .await
         .unwrap();
     assert_eq!(messages.next_cursor.as_deref(), Some("messages-page-2"));
@@ -140,7 +147,7 @@ async fn shared_fault_server_semantics() {
         composed.invocation.status,
         nvoken::models::InvocationStatus::Completed
     );
-    assert_eq!(composed.messages.len(), 2);
+    assert_eq!(composed.messages.len(), 3);
     assert_eq!(
         composed.messages[0].role,
         nvoken::models::SessionMessageRole::User
@@ -149,15 +156,19 @@ async fn shared_fault_server_semantics() {
         composed.messages[1].role,
         nvoken::models::SessionMessageRole::Assistant
     );
+    assert_eq!(
+        composed.messages[2].role,
+        nvoken::models::SessionMessageRole::Assistant
+    );
     let structured = composed.invocation.structured_output.as_ref().unwrap();
     assert_eq!(structured.get("answer"), Some(&json!("world")));
     assert!(composed.invocation.structured_output_provenance.is_some());
-    assert_eq!(composed.output_text.as_deref(), Some("world"));
+    assert_eq!(composed.output_text.as_deref(), Some(expected_output_text));
     assert_eq!(
-        result_handle.text().await.unwrap(),
+        result_handle.output_text().await.unwrap(),
         composed.output_text.clone().unwrap()
     );
-    assert_eq!(result_handle.list_messages().await.unwrap().len(), 2);
+    assert_eq!(result_handle.list_messages().await.unwrap().len(), 3);
 
     let mut mutable_handle = handle.clone();
     let result = mutable_handle
@@ -175,6 +186,14 @@ async fn shared_fault_server_semantics() {
     );
 
     assert_error(&client, "conflict", ErrorCategory::Conflict, 409).await;
+    assert_error(
+        &client,
+        "unauthenticated",
+        ErrorCategory::Authentication,
+        401,
+    )
+    .await;
+    assert_error(&client, "forbidden", ErrorCategory::Permission, 403).await;
     assert_eq!(
         client.get_invocation("rate-limit").await.unwrap().status,
         nvoken::models::InvocationStatus::Completed

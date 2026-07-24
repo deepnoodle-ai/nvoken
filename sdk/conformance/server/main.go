@@ -282,6 +282,10 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 		return
 	}
 	switch remainder {
+	case "unauthenticated":
+		writeError(response, http.StatusUnauthorized, "unauthenticated", "authenticate")
+	case "forbidden":
+		writeError(response, http.StatusForbidden, "forbidden", "permission denied")
 	case "conflict":
 		writeError(response, http.StatusConflict, "idempotency_conflict", "request conflicts with durable state")
 	case "failed":
@@ -501,9 +505,13 @@ func invocationResult() map[string]any {
 		"schema_sha256": "abababababababababababababababababababababababababababababababab",
 	}
 	return map[string]any{
-		"invocation":  composed,
-		"messages":    []any{firstMessage(), secondMessage()},
-		"output_text": "world",
+		"invocation": composed,
+		"messages": []any{
+			firstMessage(),
+			firstResultAssistantMessage(),
+			secondResultAssistantMessage(),
+		},
+		"output_text": "The charge was duplicated.\n\nA refund is queued.",
 	}
 }
 
@@ -543,6 +551,36 @@ func secondMessage() map[string]any {
 		"role":          "assistant",
 		"content":       []any{map[string]any{"type": "text", "text": "world"}},
 		"created_at":    "2026-07-21T12:00:02Z",
+	}
+}
+
+func firstResultAssistantMessage() map[string]any {
+	return map[string]any{
+		"id":            "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+		"session_id":    sessionID,
+		"agent_id":      agentID,
+		"invocation_id": invocationID,
+		"sequence":      2,
+		"role":          "assistant",
+		"content": []any{
+			map[string]any{"type": "text", "text": "The charge was"},
+			map[string]any{"type": "tool_use", "id": "tcal_fixture", "name": "lookup"},
+			map[string]any{"type": "text", "text": " duplicated."},
+		},
+		"created_at": "2026-07-21T12:00:02Z",
+	}
+}
+
+func secondResultAssistantMessage() map[string]any {
+	return map[string]any{
+		"id":            "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
+		"session_id":    sessionID,
+		"agent_id":      agentID,
+		"invocation_id": invocationID,
+		"sequence":      3,
+		"role":          "assistant",
+		"content":       []any{map[string]any{"type": "text", "text": "A refund is queued."}},
+		"created_at":    "2026-07-21T12:00:03Z",
 	}
 }
 

@@ -17,8 +17,9 @@ pub struct ProviderCredential {
     /// UUIDv7 with the public `pcrd_` prefix.
     #[serde(rename = "id")]
     pub id: String,
+    /// Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation.
     #[serde(rename = "provider")]
-    pub provider: models::ModelProvider,
+    pub provider: String,
     #[serde(rename = "scope")]
     pub scope: models::ProviderCredentialScope,
     #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
@@ -61,7 +62,7 @@ impl ProviderCredential {
     /// Safe metadata only; secret material is never represented.
     pub fn new(
         id: String,
-        provider: models::ModelProvider,
+        provider: String,
         scope: models::ProviderCredentialScope,
         tenant_key: Option<String>,
         status: Status,

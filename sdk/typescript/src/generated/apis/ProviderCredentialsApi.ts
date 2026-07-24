@@ -24,11 +24,6 @@ import {
     ErrorResponseToJSON,
 } from '../models/ErrorResponse.js';
 import {
-    type ModelProvider,
-    ModelProviderFromJSON,
-    ModelProviderToJSON,
-} from '../models/ModelProvider.js';
-import {
     type ProviderCredential,
     ProviderCredentialFromJSON,
     ProviderCredentialToJSON,
@@ -58,10 +53,11 @@ export interface GetProviderCredentialRequest {
 }
 
 export interface ListProviderCredentialsRequest {
-    provider?: ModelProvider;
+    provider?: string;
     scope?: ProviderCredentialScope;
     status?: ListProviderCredentialsStatusEnum;
     tenantKey?: string;
+    cursor?: string;
     limit?: number;
 }
 
@@ -211,6 +207,10 @@ export class ProviderCredentialsApi extends runtime.BaseAPI {
 
         if (requestParameters['tenantKey'] != null) {
             queryParameters['tenant_key'] = requestParameters['tenantKey'];
+        }
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
         }
 
         if (requestParameters['limit'] != null) {

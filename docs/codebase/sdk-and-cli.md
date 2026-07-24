@@ -74,8 +74,9 @@ iteration syntax differs:
 - `Client` is the configured entry point; `client.invocation(id)` creates a
   lazy `InvocationHandle` without a network request.
 - `InvocationHandle` exposes `refresh`, `wait`, `waitForAction`,
-  `waitForResult`, `result`, `text`, `stream`, ToolCall submission, and
-  `cancel` using native language casing.
+  `waitForResult`, `result`, `outputText`, `listMessages`, `stream`, ToolCall
+  submission, and `cancel` using native language casing. `outputText` is the
+  read accessor; Agent `text(input)` runs a turn.
 - Retry controls are `maxAttempts`, `minDelay`, and `maxDelay`; polling
   controls are `minPollInterval` and `maxPollInterval`, with the language's
   ordinary duration type or unit suffix.
@@ -83,18 +84,23 @@ iteration syntax differs:
   generates an idempotency key when omitted from a facade call, and exposes
   the actual key and acknowledgement metadata on the handle.
 - Session selectors are mutually exclusive types in handwritten facades.
-  Session pagination, message pagination, and fixed-cut transcript draining
-  have symmetric helpers.
+  Session pagination, Session-scoped `listSessionMessages`, and fixed-cut
+  transcript draining have symmetric helpers. A handle's `listMessages`
+  remains Invocation-scoped.
 - Model discovery uses `listModels` and `getModel` (with native language
-  casing). Catalog response providers remain raw strings for additive provider
-  compatibility, while model-selection requests retain the installed-provider
-  type.
+  casing). Every provider position uses the same extensible validated string
+  for additive compatibility; the server remains the authority that rejects an
+  uninstalled provider.
 - Invocation streams expose the wire's discriminated event union directly.
   `output_text.delta` plus `invocation.result` is the minimum useful consumer;
   Session reducers are an advanced multi-turn primitive, not the golden path.
 - Typed errors distinguish transport/API failures, terminal Invocation
   failures, Session-busy conflicts, and missing host-tool handlers while
   retaining safe wire details and request IDs.
+- Typed SDK categories map `401` to `authentication`, `403` to `permission`,
+  caller cancellation to `cancelled` when represented as an SDK error, and
+  elapsed deadlines to `timeout`. Native task cancellation remains native in
+  languages whose cancellation model requires propagation.
 - The generated transport remains an explicit raw escape hatch and owns
   one-to-one operation coverage.
 

@@ -19,6 +19,7 @@ func registerProviderCredentialCommands(app *cli.App) {
 			cli.String("scope").Enum("account", "tenant").Help("Filter by credential scope"),
 			cli.String("status").Enum("active", "revoked").Help("Filter by root status"),
 			cli.String("tenant").Help("Filter by tenant partition"),
+			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
 		).
 		Run(runProviderCredentialList)
@@ -55,6 +56,7 @@ func runProviderCredentialList(command *cli.Context) error {
 		Scope:     optionalProviderCredentialScope(command.String("scope")),
 		Status:    optionalProviderCredentialStatus(command.String("status")),
 		TenantKey: optionalString(command.String("tenant")),
+		Cursor:    optionalString(command.String("cursor")),
 		Limit:     optionalInt(command.Int("limit")),
 	})
 	if err != nil {

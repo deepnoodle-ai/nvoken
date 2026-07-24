@@ -5241,8 +5241,12 @@ WHERE account_id = $1
   AND ($3::text IS NULL OR provider = $3::text)
   AND ($4::text IS NULL OR scope = $4::text)
   AND ($5::text IS NULL OR status = $5::text)
+  AND (
+      $6::timestamptz IS NULL
+      OR (created_at, id) < ($6::timestamptz, $7::text)
+  )
 ORDER BY created_at DESC, id DESC
-LIMIT $6
+LIMIT $8
 `
 
 type ListProviderCredentialsParams struct {
@@ -5251,6 +5255,8 @@ type ListProviderCredentialsParams struct {
 	Provider          *string
 	Scope             *string
 	Status            *string
+	BeforeCreatedAt   *time.Time
+	BeforeID          *string
 	BatchLimit        int32
 }
 
@@ -5265,8 +5271,12 @@ type ListProviderCredentialsParams struct {
 //	  AND ($3::text IS NULL OR provider = $3::text)
 //	  AND ($4::text IS NULL OR scope = $4::text)
 //	  AND ($5::text IS NULL OR status = $5::text)
+//	  AND (
+//	      $6::timestamptz IS NULL
+//	      OR (created_at, id) < ($6::timestamptz, $7::text)
+//	  )
 //	ORDER BY created_at DESC, id DESC
-//	LIMIT $6
+//	LIMIT $8
 func (q *Queries) ListProviderCredentials(ctx context.Context, arg ListProviderCredentialsParams) ([]ProviderCredential, error) {
 	rows, err := q.db.Query(ctx, listProviderCredentials,
 		arg.AccountID,
@@ -5274,6 +5284,8 @@ func (q *Queries) ListProviderCredentials(ctx context.Context, arg ListProviderC
 		arg.Provider,
 		arg.Scope,
 		arg.Status,
+		arg.BeforeCreatedAt,
+		arg.BeforeID,
 		arg.BatchLimit,
 	)
 	if err != nil {

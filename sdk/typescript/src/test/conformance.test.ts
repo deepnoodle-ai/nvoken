@@ -124,6 +124,10 @@ test("shared fault server semantics", async (context) => {
     context.skip("NVOKEN_CONFORMANCE_URL is not set");
     return;
   }
+  const resultFixture = JSON.parse(await readFile(
+    new URL("../../../conformance/fixtures/invocation-result.json", import.meta.url),
+    "utf8",
+  )) as { message_join: { expected_output_text: string } };
   await fetch(`${baseUrl}/__test/reset`, { method: "POST" });
   const client = new Client({
     baseUrl,
@@ -181,7 +185,7 @@ test("shared fault server semantics", async (context) => {
   setTimeout(() => controller.abort(), 10);
   await assert.rejects(
     waiting.wait({ signal: controller.signal, minPollIntervalMs: 1, maxPollIntervalMs: 2 }),
-    (error: unknown) => error instanceof NvokenError && error.category === "timeout",
+    (error: unknown) => error instanceof NvokenError && error.category === "cancelled",
   );
 
   const firstPage = await client.listInvocations();
@@ -189,7 +193,7 @@ test("shared fault server semantics", async (context) => {
   assert.equal(firstPage.nextCursor, "invocations-page-2");
   const secondPage = await client.listInvocations({ cursor: firstPage.nextCursor ?? undefined });
   assert.equal(secondPage.hasMore, false);
-  const messages = await client.listMessages(sessionId);
+  const messages = await client.listSessionMessages(sessionId);
   assert.equal(messages.nextCursor, "messages-page-2");
   const traversedMessages = [];
   for await (const message of client.messagePages(sessionId, { limit: 1 })) {
@@ -220,8 +224,11 @@ test("shared fault server semantics", async (context) => {
   assert.deepEqual(transcript.invocationChanges.map((change) => change.revision), [1, 2]);
   assert.equal(transcript.resumeCursor, "cursor-2");
 
-  assert.deepEqual((await handle.listMessages()).map((message) => message.role), ["user", "assistant"]);
-  assert.equal(await handle.text(), "world");
+  assert.deepEqual(
+    (await handle.listMessages()).map((message) => message.role),
+    ["user", "assistant", "assistant"],
+  );
+  assert.equal(await handle.outputText(), resultFixture.message_join.expected_output_text);
 
   const composed = await handle.result();
   assert.equal(composed.invocation.id, invocationId);
@@ -229,8 +236,11 @@ test("shared fault server semantics", async (context) => {
   assert.deepEqual(composed.invocation.structuredOutput, { answer: "world" });
   assert.equal(composed.invocation.structuredOutput?.answer, "world");
   assert.equal(composed.invocation.structuredOutputProvenance?.source, "tool_call");
-  assert.deepEqual(composed.messages.map((message) => message.role), ["user", "assistant"]);
-  assert.equal(composed.outputText, await handle.text());
+  assert.deepEqual(
+    composed.messages.map((message) => message.role),
+    ["user", "assistant", "assistant"],
+  );
+  assert.equal(composed.outputText, await handle.outputText());
 
   const result = await handle.submitToolResults([{ toolCallId, content: { ok: true } }]);
   assert.equal(result.results[0]?.deduplicated, true);
@@ -242,6 +252,18 @@ test("shared fault server semantics", async (context) => {
       && error.category === "conflict"
       && error.status === 409
       && Boolean(error.requestId),
+  );
+  await assert.rejects(
+    client.getInvocation("unauthenticated"),
+    (error: unknown) => error instanceof NvokenError
+      && error.category === "authentication"
+      && error.status === 401,
+  );
+  await assert.rejects(
+    client.getInvocation("forbidden"),
+    (error: unknown) => error instanceof NvokenError
+      && error.category === "permission"
+      && error.status === 403,
   );
   assert.equal((await client.getInvocation("rate-limit")).status, "completed");
   await assert.rejects(

@@ -29,7 +29,7 @@ class ModelDescriptor(BaseModel):
     """
     Cataloged descriptors include all maintained metadata fields. Uncataloged descriptors include only provider, id, cataloged, and pricing; absent metadata is unknown rather than false or zero.
     """ # noqa: E501
-    provider: Annotated[str, Field(strict=True)] = Field(description="Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break catalog decoding. ")
+    provider: Annotated[str, Field(strict=True)] = Field(description="Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation. ")
     id: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     cataloged: StrictBool = Field(description="Whether nvoken advertises and maintains metadata for this selection.")
     display_name: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None

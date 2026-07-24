@@ -101,10 +101,10 @@ func TestGetInvocationResultComposesCompletedTextTurn(t *testing.T) {
 		invocation: resultTestInvocation(domain.InvocationCompleted),
 		partition:  domain.TenantPartition{ID: resultPartitionID, AccountID: resultAccountID},
 		messages: []domain.SessionMessage{
-			resultTestMessage(1, domain.MessageRoleUser, `[{"type":"text","text":"Say hello twice."}]`),
-			resultTestMessage(2, domain.MessageRoleAssistant, `[{"type":"text","text":"Hello"},{"type":"tool_use","id":"tcal_1","name":"noop"},{"type":"text","text":", "}]`),
+			resultTestMessage(1, domain.MessageRoleUser, `[{"type":"text","text":"What happened?"}]`),
+			resultTestMessage(2, domain.MessageRoleAssistant, `[{"type":"text","text":"The charge was"},{"type":"tool_use","id":"tcal_1","name":"noop"},{"type":"text","text":" duplicated."}]`),
 			resultTestMessage(3, domain.MessageRoleTool, `[{"type":"tool_result","tool_use_id":"tcal_1"}]`),
-			resultTestMessage(4, domain.MessageRoleAssistant, `[{"type":"text","text":"world"}]`),
+			resultTestMessage(4, domain.MessageRoleAssistant, `[{"type":"text","text":"A refund is queued."}]`),
 		},
 	}
 	service := newInvocationResultTestService(store)
@@ -119,8 +119,8 @@ func TestGetInvocationResultComposesCompletedTextTurn(t *testing.T) {
 	if len(result.Messages) != 4 {
 		t.Fatalf("messages = %d, want every role in sequence order", len(result.Messages))
 	}
-	if result.OutputText == nil || *result.OutputText != "Hello, world" {
-		t.Fatalf("output text = %v, want separator-free concatenation across assistant messages", result.OutputText)
+	if result.OutputText == nil || *result.OutputText != "The charge was duplicated.\n\nA refund is queued." {
+		t.Fatalf("output text = %v, want direct block concatenation and double-newline message joining", result.OutputText)
 	}
 }
 

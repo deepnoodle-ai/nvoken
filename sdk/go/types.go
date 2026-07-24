@@ -3,6 +3,7 @@ package nvoken
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
@@ -25,18 +26,18 @@ type ProviderCredentialScope = generated.ProviderCredentialScope
 type ProviderCredentialStatus = generated.ProviderCredentialStatus
 
 const (
-	InvocationQueued                = generated.InvocationStatusQueued
-	InvocationRunning               = generated.InvocationStatusRunning
-	InvocationWaiting               = generated.InvocationStatusWaiting
-	InvocationCompleted             = generated.InvocationStatusCompleted
-	InvocationFailed                = generated.InvocationStatusFailed
-	InvocationCancelled             = generated.InvocationStatusCancelled
-	ModelProviderAnthropic          = generated.Anthropic
-	ModelProviderOpenAI             = generated.Openai
-	ProviderCredentialScopeAccount  = generated.Account
-	ProviderCredentialScopeTenant   = generated.Tenant
-	ProviderCredentialStatusActive  = generated.ProviderCredentialStatusActive
-	ProviderCredentialStatusRevoked = generated.ProviderCredentialStatusRevoked
+	InvocationQueued                              = generated.InvocationStatusQueued
+	InvocationRunning                             = generated.InvocationStatusRunning
+	InvocationWaiting                             = generated.InvocationStatusWaiting
+	InvocationCompleted                           = generated.InvocationStatusCompleted
+	InvocationFailed                              = generated.InvocationStatusFailed
+	InvocationCancelled                           = generated.InvocationStatusCancelled
+	ModelProviderAnthropic          ModelProvider = "anthropic"
+	ModelProviderOpenAI             ModelProvider = "openai"
+	ProviderCredentialScopeAccount                = generated.Account
+	ProviderCredentialScopeTenant                 = generated.Tenant
+	ProviderCredentialStatusActive                = generated.ProviderCredentialStatusActive
+	ProviderCredentialStatusRevoked               = generated.ProviderCredentialStatusRevoked
 )
 
 type Model struct {
@@ -104,6 +105,7 @@ type ListProviderCredentialsOptions struct {
 	Scope     *ProviderCredentialScope
 	Status    *ProviderCredentialStatus
 	TenantKey *string
+	Cursor    *string
 	Limit     *int
 }
 
@@ -269,12 +271,10 @@ func (r InvokeRequest) generated() (generated.CreateInvocationRequest, error) {
 
 func generatedModelProvider(provider string) (generated.ModelProvider, error) {
 	value := generated.ModelProvider(provider)
-	switch value {
-	case generated.Anthropic, generated.Openai:
-		return value, nil
-	default:
-		return "", fmt.Errorf("model provider must be anthropic or openai")
+	if !regexp.MustCompile(`^[a-z][a-z0-9_]*$`).MatchString(value) {
+		return "", fmt.Errorf("model provider must be a valid canonical identifier")
 	}
+	return value, nil
 }
 
 func generatedToolResults(results []ToolResult) (generated.SubmitHostToolResultsRequest, error) {

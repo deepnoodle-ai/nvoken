@@ -13,14 +13,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ModelSelection {
+    /// Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation.
     #[serde(rename = "provider")]
-    pub provider: models::ModelProvider,
+    pub provider: String,
     #[serde(rename = "id")]
     pub id: String,
 }
 
 impl ModelSelection {
-    pub fn new(provider: models::ModelProvider, id: String) -> ModelSelection {
+    pub fn new(provider: String, id: String) -> ModelSelection {
         ModelSelection { provider, id }
     }
 }

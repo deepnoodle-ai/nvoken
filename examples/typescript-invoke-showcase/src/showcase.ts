@@ -290,7 +290,7 @@ async function main(): Promise<void> {
 
   const toolInvocation = await toolHandle.wait();
   assert.equal(toolInvocation.status, "completed", failure(toolHandle, toolInvocation));
-  const toolText = await toolHandle.text();
+  const toolText = await toolHandle.outputText();
   assert.match(toolText, /ready|tomorrow/i);
   const toolMessages = await toolHandle.listMessages();
   assert.deepEqual(toolMessages.map((message) => message.role), [
@@ -367,7 +367,7 @@ async function main(): Promise<void> {
   assert.equal(structuredInvocation.structuredOutputProvenance?.source, "tool_call");
   assert.ok(structuredInvocation.structuredOutputProvenance?.toolCallId.startsWith("tcal_"));
   assert.ok(structuredInvocation.structuredOutputProvenance?.schemaSha256);
-  assert.ok((await structuredHandle.text()).length > 0);
+  assert.ok((await structuredHandle.outputText()).length > 0);
   assert.ok(streamEvents.has("invocation.result"));
   assert.ok(streamedMessages >= 3);
   console.log("PASS structured output, provenance, composed text, and resumable Invocation SSE");
@@ -408,7 +408,7 @@ async function completed(request: InvokeRequest): Promise<{
   return {
     handle,
     invocation,
-    text: await handle.text(),
+    text: await handle.outputText(),
   };
 }
 

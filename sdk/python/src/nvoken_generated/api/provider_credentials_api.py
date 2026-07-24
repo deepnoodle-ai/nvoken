@@ -19,7 +19,6 @@ from pydantic import Field, StrictStr, field_validator
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.create_provider_credential_request import CreateProviderCredentialRequest
-from nvoken_generated.models.model_provider import ModelProvider
 from nvoken_generated.models.provider_credential import ProviderCredential
 from nvoken_generated.models.provider_credential_list import ProviderCredentialList
 from nvoken_generated.models.provider_credential_scope import ProviderCredentialScope
@@ -614,10 +613,11 @@ class ProviderCredentialsApi:
     @validate_call
     async def list_provider_credentials(
         self,
-        provider: Optional[ModelProvider] = None,
+        provider: Optional[Annotated[str, Field(strict=True)]] = None,
         scope: Optional[ProviderCredentialScope] = None,
         status: Optional[StrictStr] = None,
         tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
+        cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque continuation cursor bound to the Account, effective scope, filters, and limit.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
             None,
@@ -637,13 +637,15 @@ class ProviderCredentialsApi:
         Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
 
         :param provider:
-        :type provider: ModelProvider
+        :type provider: str
         :param scope:
         :type scope: ProviderCredentialScope
         :param status:
         :type status: str
         :param tenant_key:
         :type tenant_key: str
+        :param cursor: Opaque continuation cursor bound to the Account, effective scope, filters, and limit.
+        :type cursor: str
         :param limit:
         :type limit: int
         :param _request_timeout: timeout setting for this request. If one
@@ -673,6 +675,7 @@ class ProviderCredentialsApi:
             scope=scope,
             status=status,
             tenant_key=tenant_key,
+            cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
             _content_type=_content_type,
@@ -702,10 +705,11 @@ class ProviderCredentialsApi:
     @validate_call
     async def list_provider_credentials_with_http_info(
         self,
-        provider: Optional[ModelProvider] = None,
+        provider: Optional[Annotated[str, Field(strict=True)]] = None,
         scope: Optional[ProviderCredentialScope] = None,
         status: Optional[StrictStr] = None,
         tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
+        cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque continuation cursor bound to the Account, effective scope, filters, and limit.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
             None,
@@ -725,13 +729,15 @@ class ProviderCredentialsApi:
         Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
 
         :param provider:
-        :type provider: ModelProvider
+        :type provider: str
         :param scope:
         :type scope: ProviderCredentialScope
         :param status:
         :type status: str
         :param tenant_key:
         :type tenant_key: str
+        :param cursor: Opaque continuation cursor bound to the Account, effective scope, filters, and limit.
+        :type cursor: str
         :param limit:
         :type limit: int
         :param _request_timeout: timeout setting for this request. If one
@@ -761,6 +767,7 @@ class ProviderCredentialsApi:
             scope=scope,
             status=status,
             tenant_key=tenant_key,
+            cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
             _content_type=_content_type,
@@ -790,10 +797,11 @@ class ProviderCredentialsApi:
     @validate_call
     async def list_provider_credentials_without_preload_content(
         self,
-        provider: Optional[ModelProvider] = None,
+        provider: Optional[Annotated[str, Field(strict=True)]] = None,
         scope: Optional[ProviderCredentialScope] = None,
         status: Optional[StrictStr] = None,
         tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
+        cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque continuation cursor bound to the Account, effective scope, filters, and limit.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
             None,
@@ -813,13 +821,15 @@ class ProviderCredentialsApi:
         Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
 
         :param provider:
-        :type provider: ModelProvider
+        :type provider: str
         :param scope:
         :type scope: ProviderCredentialScope
         :param status:
         :type status: str
         :param tenant_key:
         :type tenant_key: str
+        :param cursor: Opaque continuation cursor bound to the Account, effective scope, filters, and limit.
+        :type cursor: str
         :param limit:
         :type limit: int
         :param _request_timeout: timeout setting for this request. If one
@@ -849,6 +859,7 @@ class ProviderCredentialsApi:
             scope=scope,
             status=status,
             tenant_key=tenant_key,
+            cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
             _content_type=_content_type,
@@ -877,6 +888,7 @@ class ProviderCredentialsApi:
         scope,
         status,
         tenant_key,
+        cursor,
         limit,
         _request_auth,
         _content_type,
@@ -902,7 +914,7 @@ class ProviderCredentialsApi:
         # process the query parameters
         if provider is not None:
 
-            _query_params.append(('provider', provider.value))
+            _query_params.append(('provider', provider))
 
         if scope is not None:
 
@@ -915,6 +927,10 @@ class ProviderCredentialsApi:
         if tenant_key is not None:
 
             _query_params.append(('tenant_key', tenant_key))
+
+        if cursor is not None:
+
+            _query_params.append(('cursor', cursor))
 
         if limit is not None:
 

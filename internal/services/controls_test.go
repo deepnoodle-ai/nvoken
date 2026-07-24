@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -306,8 +307,85 @@ func TestExecutionDeadlineUsesRemainingActiveAndWallLimits(t *testing.T) {
 type legacyFingerprintStore struct {
 	admissionStore
 	invocation domain.Invocation
+	binding    domain.InvocationProviderCredential
 }
 
 func (s *legacyFingerprintStore) GetInvocationByIdempotencyKey(context.Context, string, string, string, string) (domain.Invocation, error) {
 	return s.invocation, nil
+}
+
+func (s *legacyFingerprintStore) GetInvocationProviderCredential(context.Context, string, string) (domain.InvocationProviderCredential, error) {
+	return s.binding, nil
+}
+
+func TestRetainedFingerprintVersionsReplayAndConflict(t *testing.T) {
+	if currentAdmissionFingerprintVersion != 7 {
+		t.Fatalf("current fingerprint version = %d, want retained v7 baseline", currentAdmissionFingerprintVersion)
+	}
+	input := validServiceInput()
+	fingerprints := map[int]func(CreateInvocationInput) ([32]byte, error){
+		1: InvocationFingerprintV1,
+		2: InvocationFingerprintV2,
+		3: InvocationFingerprintV3,
+		4: InvocationFingerprintV4,
+		5: InvocationFingerprintV5,
+		6: InvocationFingerprintV6,
+		7: InvocationFingerprintV7,
+	}
+	for version := 1; version <= currentAdmissionFingerprintVersion; version++ {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			stored, err := fingerprints[version](input)
+			if err != nil {
+				t.Fatalf("stored fingerprint: %v", err)
+			}
+			current, err := InvocationFingerprintV7(input)
+			if err != nil {
+				t.Fatalf("current fingerprint: %v", err)
+			}
+			invocationID := "invk_019b0a12-0000-7000-8000-000000000001"
+			store := &legacyFingerprintStore{
+				invocation: domain.Invocation{
+					ID:                 invocationID,
+					FingerprintVersion: version,
+					RequestFingerprint: stored[:],
+				},
+				binding: domain.InvocationProviderCredential{
+					InvocationID: invocationID,
+					Provider:     input.Spec.Model.Provider,
+				},
+			}
+			service := &RuntimeService{store: store}
+			if _, found, err := service.findIdempotent(
+				context.Background(),
+				"account",
+				"partition",
+				"agent",
+				"key",
+				input,
+				input,
+				current,
+			); err != nil || !found {
+				t.Fatalf("equal replay found = %t, error = %v", found, err)
+			}
+			changed := input
+			changed.Input.Content = append([]TextInputBlock(nil), input.Input.Content...)
+			changed.Input.Content[0].Text += " changed"
+			changedCurrent, err := InvocationFingerprintV7(changed)
+			if err != nil {
+				t.Fatalf("changed current fingerprint: %v", err)
+			}
+			if _, _, err := service.findIdempotent(
+				context.Background(),
+				"account",
+				"partition",
+				"agent",
+				"key",
+				changed,
+				changed,
+				changedCurrent,
+			); err == nil {
+				t.Fatal("materially changed replay matched retained row")
+			}
+		})
+	}
 }

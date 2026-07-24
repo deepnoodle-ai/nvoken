@@ -1,8 +1,14 @@
 # nvoken Go SDK
 
+An Invocation is one durable agent turn. The host supplies `agent_key`,
+optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
+model, and tools travel inline with the turn.
+
 The supported entry point is `nvoken.Client`. It returns durable handles and
 owns replay-safe retries, polling, typed errors, SSE recovery, composed
-result reads (`Result`, `ListMessages`, `Text`), and callback verification. `Client.Raw()` exposes the generated Runtime client when a
+result reads (`Result`, `ListMessages`, `OutputText`), and callback
+verification. Session-scoped messages use `Client.ListSessionMessages`.
+`Client.Raw()` exposes the generated Runtime client when a
 low-level operation is needed.
 
 ```bash

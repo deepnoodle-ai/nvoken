@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/deepnoodle-ai/nvoken/internal/domain"
+	"github.com/deepnoodle-ai/nvoken/internal/ports"
 )
 
 const maxRecoveryCursorBytes = 4096
@@ -27,6 +30,19 @@ type collectionFilter struct {
 	AgentID     string `json:"agent_id,omitempty"`
 	SessionKey  string `json:"session_key,omitempty"`
 	Status      string `json:"status,omitempty"`
+}
+
+type providerCredentialCursor struct {
+	Version           int       `json:"version"`
+	Kind              string    `json:"kind"`
+	AccountID         string    `json:"account_id"`
+	TenantPartitionID string    `json:"tenant_partition_id,omitempty"`
+	Provider          string    `json:"provider,omitempty"`
+	Scope             string    `json:"scope,omitempty"`
+	Status            string    `json:"status,omitempty"`
+	Limit             int       `json:"limit"`
+	CreatedAt         time.Time `json:"created_at"`
+	ResourceID        string    `json:"resource_id"`
 }
 
 type messageCursor struct {
@@ -101,6 +117,69 @@ func decodeCollectionCursor(encoded, kind, accountID string, filters collectionF
 		return time.Time{}, "", invalidRequest("cursor is invalid for this collection and filter set.")
 	}
 	return cursor.CreatedAt.UTC(), cursor.ResourceID, nil
+}
+
+func encodeProviderCredentialCursor(query ports.ProviderCredentialListQuery, createdAt time.Time, resourceID string) (string, error) {
+	cursor := providerCredentialCursor{
+		Version:    1,
+		Kind:       "provider_credentials",
+		AccountID:  query.AccountID,
+		Limit:      query.Limit,
+		CreatedAt:  createdAt.UTC(),
+		ResourceID: resourceID,
+	}
+	if query.TenantPartitionID != nil {
+		cursor.TenantPartitionID = *query.TenantPartitionID
+	}
+	if query.Provider != nil {
+		cursor.Provider = *query.Provider
+	}
+	if query.Scope != nil {
+		cursor.Scope = string(*query.Scope)
+	}
+	if query.Status != nil {
+		cursor.Status = string(*query.Status)
+	}
+	return encodeRecoveryCursor(cursor)
+}
+
+func decodeProviderCredentialCursor(encoded string, query ports.ProviderCredentialListQuery) (time.Time, string, error) {
+	var cursor providerCredentialCursor
+	if err := decodeRecoveryCursor(encoded, &cursor); err != nil ||
+		cursor.Version != 1 ||
+		cursor.Kind != "provider_credentials" ||
+		cursor.AccountID != query.AccountID ||
+		cursor.TenantPartitionID != optionalStringValue(query.TenantPartitionID) ||
+		cursor.Provider != optionalStringValue(query.Provider) ||
+		cursor.Scope != optionalProviderCredentialScopeValue(query.Scope) ||
+		cursor.Status != optionalProviderCredentialStatusValue(query.Status) ||
+		cursor.Limit != query.Limit ||
+		cursor.CreatedAt.IsZero() ||
+		!domain.ValidStableID(cursor.ResourceID, domain.PrefixProviderCredential) {
+		return time.Time{}, "", invalidRequest("cursor is invalid for this provider credential collection and filter set.")
+	}
+	return cursor.CreatedAt.UTC(), cursor.ResourceID, nil
+}
+
+func optionalStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func optionalProviderCredentialScopeValue(value *domain.ProviderCredentialScope) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
+}
+
+func optionalProviderCredentialStatusValue(value *domain.ProviderCredentialStatus) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
 }
 
 func encodeMessageCursor(accountID, sessionID string, sequence int64) (string, error) {

@@ -1,5 +1,9 @@
 # nvoken TypeScript SDK
 
+An Invocation is one durable agent turn. The host supplies `agentKey`,
+optional `tenantKey`, `sessionKey`, and `idempotencyKey`; instructions, model,
+and tools travel inline with the turn.
+
 The supported entry point is `Client`. It provides a small agent API for the
 common path, durable `InvocationHandle` objects when you need control, and the
 generated transport under `client.raw()`.
@@ -108,9 +112,12 @@ Useful handle methods are:
 - `waitForAction()` for `waiting` or terminal state;
 - `waitForResult()` for successful terminal work, with
   `InvocationError` on failure or cancellation;
-- `result()`, `text()`, and `listMessages()` for composed result reads;
+- `result()`, `outputText()`, and `listMessages()` for composed result reads;
 - `submitToolResults()` and `cancel()` for explicit orchestration;
 - `stream()` for the lower-level Invocation event stream.
+
+`client.listSessionMessages(sessionId)` is the Session-scoped message read;
+`handle.listMessages()` reads only messages owned by that Invocation.
 
 The SDK generates an idempotency key before admission and reuses the exact body
 and key on ambiguous retries. The key is exposed as `handle.idempotencyKey`.

@@ -22,10 +22,11 @@ func TestProviderCredentialLifecycleMethods(t *testing.T) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/provider-credentials":
 			if request.URL.Query().Get("provider") != "openai" || request.URL.Query().Get("scope") != "account" ||
-				request.URL.Query().Get("status") != "active" || request.URL.Query().Get("limit") != "10" {
+				request.URL.Query().Get("status") != "active" || request.URL.Query().Get("cursor") != "page-2" ||
+				request.URL.Query().Get("limit") != "10" {
 				t.Errorf("list query = %q", request.URL.RawQuery)
 			}
-			_, _ = writer.Write([]byte(`{"items":[` + providerCredentialFixture(credentialID, status, version) + `]}`))
+			_, _ = writer.Write([]byte(`{"items":[` + providerCredentialFixture(credentialID, status, version) + `],"has_more":false,"next_cursor":null}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/v1/provider-credentials":
 			assertProviderCredentialSecretRequest(t, request, "create-secret", "create-once")
 			secretRequests++
@@ -54,11 +55,13 @@ func TestProviderCredentialLifecycleMethods(t *testing.T) {
 	provider := ModelProviderOpenAI
 	scope := ProviderCredentialScopeAccount
 	status := ProviderCredentialStatusActive
+	cursor := "page-2"
 	limit := 10
 	listed, err := client.ListProviderCredentials(context.Background(), ListProviderCredentialsOptions{
 		Provider: &provider,
 		Scope:    &scope,
 		Status:   &status,
+		Cursor:   &cursor,
 		Limit:    &limit,
 	})
 	if err != nil || len(listed.Items) != 1 || listed.Items[0].ID != credentialID {

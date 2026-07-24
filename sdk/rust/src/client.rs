@@ -19,12 +19,14 @@ use crate::stream::{stream_handle, StreamEvent};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCategory {
     Authentication,
+    Permission,
     Validation,
     NotFound,
     Conflict,
     RateLimit,
     Server,
     Transport,
+    Cancelled,
     Timeout,
     UnexpectedResponse,
 }
@@ -489,7 +491,7 @@ impl Client {
             .transpose()?;
         apis::models_api::list_models(
             &self.configuration,
-            provider,
+            provider.as_deref(),
             options.include_deprecated,
             None,
         )
@@ -501,14 +503,10 @@ impl Client {
         if model.id.is_empty() {
             return Err(NvokenError::validation("model id is required"));
         }
-        apis::models_api::get_model(
-            &self.configuration,
-            model_provider(&model.provider)?,
-            &model.id,
-            None,
-        )
-        .await
-        .map_err(|error| self.normalize_generated_error(error))
+        let provider = model_provider(&model.provider)?;
+        apis::models_api::get_model(&self.configuration, &provider, &model.id, None)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn get_invocation(
@@ -602,7 +600,7 @@ impl Client {
         .map_err(|error| self.normalize_generated_error(error))
     }
 
-    pub async fn list_messages(
+    pub async fn list_session_messages(
         &self,
         session_id: &str,
         options: MessageListOptions,
@@ -676,14 +674,18 @@ fn provider_credential_selection(
     }
 }
 
-fn model_provider(provider: &str) -> Result<models::ModelProvider, NvokenError> {
-    match provider {
-        "anthropic" => Ok(models::ModelProvider::Anthropic),
-        "openai" => Ok(models::ModelProvider::Openai),
-        _ => Err(NvokenError::validation(
-            "model provider must be anthropic or openai",
-        )),
+fn model_provider(provider: &str) -> Result<String, NvokenError> {
+    let mut characters = provider.chars();
+    if !matches!(characters.next(), Some('a'..='z'))
+        || !characters.all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
+        })
+    {
+        return Err(NvokenError::validation(
+            "model provider must be a valid canonical identifier",
+        ));
     }
+    Ok(provider.to_owned())
 }
 
 #[derive(Clone)]
@@ -758,7 +760,7 @@ impl InvocationHandle {
     /// or the empty string: the wire keeps those distinct, but this helper
     /// deliberately treats both as "no useful answer". Read `result()`
     /// directly to observe the distinction.
-    pub async fn text(&mut self) -> Result<String, NvokenError> {
+    pub async fn output_text(&mut self) -> Result<String, NvokenError> {
         let result = self.result().await?;
         match result.output_text {
             Some(text) if !text.is_empty() => Ok(text),
@@ -900,7 +902,8 @@ impl NvokenError {
 
     pub(crate) fn response(status: StatusCode, body: Value) -> Self {
         let category = match status.as_u16() {
-            401 | 403 => ErrorCategory::Authentication,
+            401 => ErrorCategory::Authentication,
+            403 => ErrorCategory::Permission,
             400 | 422 => ErrorCategory::Validation,
             404 => ErrorCategory::NotFound,
             409 => ErrorCategory::Conflict,

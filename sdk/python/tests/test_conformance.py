@@ -38,6 +38,10 @@ async def test_shared_fault_server_semantics() -> None:
     base_url = os.getenv("NVOKEN_CONFORMANCE_URL")
     if not base_url:
         pytest.skip("NVOKEN_CONFORMANCE_URL is not set")
+    result_fixture = json.loads(
+        (Path(__file__).parents[2] / "conformance/fixtures/invocation-result.json").read_text()
+    )
+    expected_output_text = result_fixture["message_join"]["expected_output_text"]
     async with httpx.AsyncClient() as setup:
         await setup.post(f"{base_url}/__test/reset")
 
@@ -91,7 +95,7 @@ async def test_shared_fault_server_semantics() -> None:
         assert first_page.next_cursor == "invocations-page-2"
         second_page = await client.list_invocations(cursor=first_page.next_cursor)
         assert second_page.has_more is False
-        messages = await client.list_messages(SESSION_ID)
+        messages = await client.list_session_messages(SESSION_ID)
         assert messages.next_cursor == "messages-page-2"
 
         composed = await handle.result()
@@ -99,10 +103,14 @@ async def test_shared_fault_server_semantics() -> None:
         assert composed.invocation.status == "completed"
         assert composed.invocation.structured_output == {"answer": "world"}
         assert composed.invocation.structured_output_provenance.source == "tool_call"
-        assert [message.role for message in composed.messages] == ["user", "assistant"]
-        assert composed.output_text == "world"
-        assert await handle.text() == composed.output_text
-        assert len(await handle.list_messages()) == 2
+        assert [message.role for message in composed.messages] == [
+            "user",
+            "assistant",
+            "assistant",
+        ]
+        assert composed.output_text == expected_output_text
+        assert await handle.output_text() == composed.output_text
+        assert len(await handle.list_messages()) == 3
 
         accepted = await handle.submit_tool_results([
             ToolResult(tool_call_id=TOOL_CALL_ID, content={"ok": True}),
@@ -115,6 +123,14 @@ async def test_shared_fault_server_semantics() -> None:
         assert conflict.value.category == "conflict"
         assert conflict.value.status == 409
         assert conflict.value.request_id
+        with pytest.raises(NvokenError) as unauthenticated:
+            await client.get_invocation("unauthenticated")
+        assert unauthenticated.value.category == "authentication"
+        assert unauthenticated.value.status == 401
+        with pytest.raises(NvokenError) as forbidden:
+            await client.get_invocation("forbidden")
+        assert forbidden.value.category == "permission"
+        assert forbidden.value.status == 403
         assert (await client.get_invocation("rate-limit")).status == "completed"
         with pytest.raises(NvokenError) as rate_limited:
             await client.get_invocation("rate-limit-always")

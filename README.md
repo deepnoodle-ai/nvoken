@@ -19,6 +19,11 @@
 
 nvoken is a lightweight, open-source agent harness-as-a-service and AI gateway.
 Your app sends an agent spec and the input; nvoken runs the whole agent turn.
+**An Invocation is one durable agent turn.** The lowercase word `turn` is the conceptual unit;
+`Invocation` is the durable API resource. The host-owned identity tuple is
+`agent_key` (Agent identity), `tenant_key` (optional partition), `session_key`
+(conversation identity), and `idempotency_key` (turn retry identity); the
+instructions, model, and tools travel inline on each Invocation.
 The current Runtime implements durable turns, streaming, checkpoints, durable
 waits, and host and callback tools. Remote MCP tools, steering, and broader
 human-in-the-loop workflows remain deferred.
@@ -114,7 +119,9 @@ admission, execution does not belong to the request handler, and clients recover
 authoritative state by durable ID or a scope-bound cursor. The answer is one
 read away: `GET /v1/invocations/{invocation_id}/result` returns the
 authoritative Invocation, the turn's canonical messages, and the assistant text
-as one `output_text` string. The same `POST` streams one Invocation when the
+as one `output_text` string. Text blocks within one assistant message
+concatenate directly; distinct assistant messages join with exactly two
+newlines. The same `POST` streams one Invocation when the
 client sends `Accept: text/event-stream`; `output_text.delta` previews are
 id-less, while durable `invocation.update` and `invocation.result` frames carry
 resume cursors. A Session SSE stream exposes the same vocabulary across turns.
@@ -128,6 +135,10 @@ continue it. A callback tool instead lets nvoken deliver the same durable call
 to a public host HTTPS endpoint with a stable ToolCall idempotency key and a
 versioned HMAC signature. The exact surface is in
 [openapi/runtime.yaml](openapi/runtime.yaml).
+
+A Session runs one turn at a time: at most one nonterminal Invocation. An equal
+idempotent replay returns the original durable record; a distinct concurrent
+turn receives `session_invocation_active`.
 
 Each Invocation also binds its model provider to one explicit payment and
 credential source: caller-ephemeral, reusable Account BYOK, tenant BYOK, or a

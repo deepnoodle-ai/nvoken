@@ -1250,6 +1250,10 @@ WHERE account_id = sqlc.arg(account_id)
   AND (sqlc.narg(provider)::text IS NULL OR provider = sqlc.narg(provider)::text)
   AND (sqlc.narg(scope)::text IS NULL OR scope = sqlc.narg(scope)::text)
   AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status)::text)
+  AND (
+      sqlc.narg(before_created_at)::timestamptz IS NULL
+      OR (created_at, id) < (sqlc.narg(before_created_at)::timestamptz, sqlc.narg(before_id)::text)
+  )
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(batch_limit);
 

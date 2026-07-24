@@ -20,13 +20,6 @@ import {
     ProviderStaticCredentialToJSON,
     ProviderStaticCredentialToJSONTyped,
 } from './ProviderStaticCredential.js';
-import type { ModelProvider } from './ModelProvider.js';
-import {
-    ModelProviderFromJSON,
-    ModelProviderFromJSONTyped,
-    ModelProviderToJSON,
-    ModelProviderToJSONTyped,
-} from './ModelProvider.js';
 
 /**
  *
@@ -35,11 +28,14 @@ import {
  */
 export interface InvocationProviderCredentialSelectionOneOf {
     /**
+     * Extensible canonical provider identifier. Consumers must preserve
+     * unknown values so adding a provider does not break decoding. Request
+     * positions still reject providers not registered by the installation.
      *
-     * @type {ModelProvider}
+     * @type {string}
      * @memberof InvocationProviderCredentialSelectionOneOf
      */
-    provider: ModelProvider;
+    provider: string;
     /**
      *
      * @type {InvocationProviderCredentialSelectionOneOfSourceEnum}
@@ -84,7 +80,7 @@ export function InvocationProviderCredentialSelectionOneOfFromJSONTyped(json: an
     }
     return {
 
-        'provider': ModelProviderFromJSON(json['provider']),
+        'provider': json['provider'],
         'source': json['source'],
         'credential': ProviderStaticCredentialFromJSON(json['credential']),
     };
@@ -101,7 +97,7 @@ export function InvocationProviderCredentialSelectionOneOfToJSONTyped(value?: In
 
     return {
 
-        'provider': ModelProviderToJSON(value['provider']),
+        'provider': value['provider'],
         'source': value['source'],
         'credential': ProviderStaticCredentialToJSON(value['credential']),
     };

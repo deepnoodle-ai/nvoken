@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
+	"sort"
 	"testing"
 	"time"
 
@@ -130,9 +133,25 @@ func (s *credentialLifecycleStore) ListProviderCredentials(
 			continue
 		}
 		result = append(result, credential)
-		if len(result) == query.Limit {
-			break
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].CreatedAt.Equal(result[j].CreatedAt) {
+			return result[i].ID > result[j].ID
 		}
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
+	if query.BeforeCreatedAt != nil && query.BeforeCredentialID != nil {
+		filtered := result[:0]
+		for _, credential := range result {
+			if credential.CreatedAt.Before(*query.BeforeCreatedAt) ||
+				credential.CreatedAt.Equal(*query.BeforeCreatedAt) && credential.ID < *query.BeforeCredentialID {
+				filtered = append(filtered, credential)
+			}
+		}
+		result = filtered
+	}
+	if len(result) > query.Limit {
+		result = result[:query.Limit]
 	}
 	return result, nil
 }
@@ -416,6 +435,147 @@ func TestProviderCredentialAccountScopeRequiresOperator(t *testing.T) {
 	})
 	if !errors.As(err, &public) || public.Code != CodeForbidden {
 		t.Fatalf("tenant-constrained Operator Account create error = %v", err)
+	}
+}
+
+func TestProviderCredentialRejectsUninstalledExtensibleProviderBeforeStorage(t *testing.T) {
+	accountID := "acct_019b0a12-0000-7000-8000-000000000001"
+	clock := credentialLifecycleClock{now: time.Now().UTC()}
+	store := newCredentialLifecycleStore(accountID)
+	service := NewProviderCredentialService(
+		store,
+		credentialLifecycleTx{},
+		clock,
+		identity.NewUUIDv7Generator(clock),
+		&unavailableCredentialCipher{},
+	)
+	auth := domain.RuntimeAuthContext{
+		AccountID: accountID,
+		Operations: map[domain.RuntimeOperation]struct{}{
+			domain.OperationCreateProviderCredential: {},
+		},
+		EffectiveProfile: domain.CredentialProfileOperator,
+	}
+	_, err := service.Create(context.Background(), auth, CreateProviderCredentialInput{
+		Provider: "future_provider",
+		Scope:    domain.ProviderCredentialScopeAccount,
+		Credential: ProviderStaticCredentialInput{
+			APIKey: "must-not-store",
+		},
+		IdempotencyKey: "future-provider",
+	})
+	var public *PublicError
+	if !errors.As(err, &public) || public.Code != CodeInvalidRequest {
+		t.Fatalf("future provider error = %v", err)
+	}
+	if len(store.credentials) != 0 || len(store.versions) != 0 {
+		t.Fatalf("unsupported provider wrote roots=%d versions=%d", len(store.credentials), len(store.versions))
+	}
+}
+
+func TestProviderCredentialListCursorTraversesAndBindsQuery(t *testing.T) {
+	accountID := "acct_019b0a12-0000-7000-8000-000000000001"
+	store := newCredentialLifecycleStore(accountID)
+	base := time.Date(2026, time.July, 24, 12, 0, 0, 0, time.UTC)
+	for index := 1; index <= 5; index++ {
+		credentialID := fmt.Sprintf("pcrd_019b0a12-0000-7000-8000-%012d", index)
+		versionID := fmt.Sprintf("pcvr_019b0a12-0000-7000-8000-%012d", index)
+		credential := domain.ProviderCredential{
+			ID:               credentialID,
+			AccountID:        accountID,
+			Provider:         string(domain.ModelProviderOpenAI),
+			Scope:            domain.ProviderCredentialScopeAccount,
+			Status:           domain.ProviderCredentialActive,
+			CurrentVersion:   1,
+			CurrentVersionID: versionID,
+			CreatedBy:        "test",
+			CreatedAt:        base.Add(time.Duration(index) * time.Second),
+			UpdatedAt:        base.Add(time.Duration(index) * time.Second),
+		}
+		store.credentials[credentialID] = credential
+		store.versions[versionID] = domain.ProviderCredentialVersion{
+			ID:                   versionID,
+			ProviderCredentialID: credentialID,
+			AccountID:            accountID,
+			Provider:             string(domain.ModelProviderOpenAI),
+			Version:              1,
+			Status:               domain.ProviderCredentialVersionActive,
+			CreatedAt:            credential.CreatedAt,
+		}
+	}
+	service := NewProviderCredentialService(
+		store,
+		credentialLifecycleTx{},
+		credentialLifecycleClock{now: base},
+		identity.NewUUIDv7Generator(credentialLifecycleClock{now: base}),
+		&unavailableCredentialCipher{},
+	)
+	auth := domain.RuntimeAuthContext{
+		AccountID: accountID,
+		Operations: map[domain.RuntimeOperation]struct{}{
+			domain.OperationListProviderCredentials: {},
+		},
+		EffectiveProfile: domain.CredentialProfileOperator,
+	}
+	input := ProviderCredentialListInput{Limit: 2}
+	var ids []string
+	for pageNumber := 0; ; pageNumber++ {
+		page, err := service.List(context.Background(), auth, input)
+		if err != nil {
+			t.Fatalf("page %d: %v", pageNumber, err)
+		}
+		for _, item := range page.Items {
+			ids = append(ids, item.ID)
+		}
+		if !page.HasMore {
+			if page.NextCursor != nil {
+				t.Fatalf("final page next cursor = %q", *page.NextCursor)
+			}
+			break
+		}
+		if page.NextCursor == nil {
+			t.Fatalf("page %d has_more without next_cursor", pageNumber)
+		}
+		if pageNumber == 0 {
+			wrongLimit := input
+			wrongLimit.Limit = 3
+			wrongLimit.Cursor = *page.NextCursor
+			if _, err := service.List(context.Background(), auth, wrongLimit); err == nil {
+				t.Fatal("cursor reused with a different limit")
+			}
+			provider := string(domain.ModelProviderAnthropic)
+			wrongFilter := input
+			wrongFilter.Provider = &provider
+			wrongFilter.Cursor = *page.NextCursor
+			if _, err := service.List(context.Background(), auth, wrongFilter); err == nil {
+				t.Fatal("cursor reused with different filters")
+			}
+			otherAuth := auth
+			otherAuth.AccountID = "acct_019b0a12-0000-7000-8000-000000000099"
+			if _, err := service.List(context.Background(), otherAuth, ProviderCredentialListInput{
+				Limit:  2,
+				Cursor: *page.NextCursor,
+			}); err == nil {
+				t.Fatal("cursor reused by a different Account")
+			}
+		}
+		input.Cursor = *page.NextCursor
+	}
+	want := []string{
+		"pcrd_019b0a12-0000-7000-8000-000000000005",
+		"pcrd_019b0a12-0000-7000-8000-000000000004",
+		"pcrd_019b0a12-0000-7000-8000-000000000003",
+		"pcrd_019b0a12-0000-7000-8000-000000000002",
+		"pcrd_019b0a12-0000-7000-8000-000000000001",
+	}
+	if !slices.Equal(ids, want) {
+		t.Fatalf("traversal ids = %v, want %v", ids, want)
+	}
+	if _, err := service.List(context.Background(), auth, ProviderCredentialListInput{
+		Limit:  2,
+		Cursor: "not-base64",
+	}); err == nil {
+		t.Fatal("malformed cursor accepted")
 	}
 }
 

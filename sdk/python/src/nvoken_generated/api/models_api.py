@@ -15,12 +15,11 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictBool
+from pydantic import Field, StrictBool, field_validator
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.model_descriptor import ModelDescriptor
 from nvoken_generated.models.model_list import ModelList
-from nvoken_generated.models.model_provider import ModelProvider
 
 from nvoken_generated.api_client import ApiClient, RequestSerialized
 from nvoken_generated.api_response import ApiResponse
@@ -43,7 +42,7 @@ class ModelsApi:
     @validate_call
     async def get_model(
         self,
-        provider: Annotated[ModelProvider, Field(description="Installed canonical model provider.")],
+        provider: Annotated[str, Field(strict=True, description="Installed canonical model provider.")],
         model_id: Annotated[str, Field(min_length=1, strict=True, max_length=255, description="Exact model ID used in `spec.model.id`. Encode the complete value as one path segment, including `/`, reserved characters, and Unicode. ")],
         if_none_match: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="ETag from a prior response for this exact representation.")] = None,
         _request_timeout: Union[
@@ -64,7 +63,7 @@ class ModelsApi:
         Returns a descriptor for any valid installed provider and exact model ID, including IDs outside the curated catalog. `cataloged` distinguishes maintained metadata from tolerant inspection. Pricing is the standard local USD estimate used by nvoken's estimated-cost guardrail, not provider billing or proof of account access.
 
         :param provider: Installed canonical model provider. (required)
-        :type provider: ModelProvider
+        :type provider: str
         :param model_id: Exact model ID used in `spec.model.id`. Encode the complete value as one path segment, including `/`, reserved characters, and Unicode.  (required)
         :type model_id: str
         :param if_none_match: ETag from a prior response for this exact representation.
@@ -124,7 +123,7 @@ class ModelsApi:
     @validate_call
     async def get_model_with_http_info(
         self,
-        provider: Annotated[ModelProvider, Field(description="Installed canonical model provider.")],
+        provider: Annotated[str, Field(strict=True, description="Installed canonical model provider.")],
         model_id: Annotated[str, Field(min_length=1, strict=True, max_length=255, description="Exact model ID used in `spec.model.id`. Encode the complete value as one path segment, including `/`, reserved characters, and Unicode. ")],
         if_none_match: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="ETag from a prior response for this exact representation.")] = None,
         _request_timeout: Union[
@@ -145,7 +144,7 @@ class ModelsApi:
         Returns a descriptor for any valid installed provider and exact model ID, including IDs outside the curated catalog. `cataloged` distinguishes maintained metadata from tolerant inspection. Pricing is the standard local USD estimate used by nvoken's estimated-cost guardrail, not provider billing or proof of account access.
 
         :param provider: Installed canonical model provider. (required)
-        :type provider: ModelProvider
+        :type provider: str
         :param model_id: Exact model ID used in `spec.model.id`. Encode the complete value as one path segment, including `/`, reserved characters, and Unicode.  (required)
         :type model_id: str
         :param if_none_match: ETag from a prior response for this exact representation.
@@ -205,7 +204,7 @@ class ModelsApi:
     @validate_call
     async def get_model_without_preload_content(
         self,
-        provider: Annotated[ModelProvider, Field(description="Installed canonical model provider.")],
+        provider: Annotated[str, Field(strict=True, description="Installed canonical model provider.")],
         model_id: Annotated[str, Field(min_length=1, strict=True, max_length=255, description="Exact model ID used in `spec.model.id`. Encode the complete value as one path segment, including `/`, reserved characters, and Unicode. ")],
         if_none_match: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="ETag from a prior response for this exact representation.")] = None,
         _request_timeout: Union[
@@ -226,7 +225,7 @@ class ModelsApi:
         Returns a descriptor for any valid installed provider and exact model ID, including IDs outside the curated catalog. `cataloged` distinguishes maintained metadata from tolerant inspection. Pricing is the standard local USD estimate used by nvoken's estimated-cost guardrail, not provider billing or proof of account access.
 
         :param provider: Installed canonical model provider. (required)
-        :type provider: ModelProvider
+        :type provider: str
         :param model_id: Exact model ID used in `spec.model.id`. Encode the complete value as one path segment, including `/`, reserved characters, and Unicode.  (required)
         :type model_id: str
         :param if_none_match: ETag from a prior response for this exact representation.
@@ -306,7 +305,7 @@ class ModelsApi:
 
         # process the path parameters
         if provider is not None:
-            _path_params['provider'] = provider.value
+            _path_params['provider'] = provider
         if model_id is not None:
             _path_params['model_id'] = model_id
         # process the query parameters
@@ -352,7 +351,7 @@ class ModelsApi:
     @validate_call
     async def list_models(
         self,
-        provider: Annotated[Optional[ModelProvider], Field(description="Limit results to one installed canonical provider.")] = None,
+        provider: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Limit results to one installed canonical provider.")] = None,
         include_deprecated: Annotated[Optional[StrictBool], Field(description="Include catalog entries nvoken marks as deprecated.")] = None,
         if_none_match: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="ETag from a prior response for this exact representation.")] = None,
         _request_timeout: Union[
@@ -373,7 +372,7 @@ class ModelsApi:
         Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected credential can access the model. Ordering is deterministic but has no semantic meaning.
 
         :param provider: Limit results to one installed canonical provider.
-        :type provider: ModelProvider
+        :type provider: str
         :param include_deprecated: Include catalog entries nvoken marks as deprecated.
         :type include_deprecated: bool
         :param if_none_match: ETag from a prior response for this exact representation.
@@ -433,7 +432,7 @@ class ModelsApi:
     @validate_call
     async def list_models_with_http_info(
         self,
-        provider: Annotated[Optional[ModelProvider], Field(description="Limit results to one installed canonical provider.")] = None,
+        provider: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Limit results to one installed canonical provider.")] = None,
         include_deprecated: Annotated[Optional[StrictBool], Field(description="Include catalog entries nvoken marks as deprecated.")] = None,
         if_none_match: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="ETag from a prior response for this exact representation.")] = None,
         _request_timeout: Union[
@@ -454,7 +453,7 @@ class ModelsApi:
         Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected credential can access the model. Ordering is deterministic but has no semantic meaning.
 
         :param provider: Limit results to one installed canonical provider.
-        :type provider: ModelProvider
+        :type provider: str
         :param include_deprecated: Include catalog entries nvoken marks as deprecated.
         :type include_deprecated: bool
         :param if_none_match: ETag from a prior response for this exact representation.
@@ -514,7 +513,7 @@ class ModelsApi:
     @validate_call
     async def list_models_without_preload_content(
         self,
-        provider: Annotated[Optional[ModelProvider], Field(description="Limit results to one installed canonical provider.")] = None,
+        provider: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Limit results to one installed canonical provider.")] = None,
         include_deprecated: Annotated[Optional[StrictBool], Field(description="Include catalog entries nvoken marks as deprecated.")] = None,
         if_none_match: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="ETag from a prior response for this exact representation.")] = None,
         _request_timeout: Union[
@@ -535,7 +534,7 @@ class ModelsApi:
         Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected credential can access the model. Ordering is deterministic but has no semantic meaning.
 
         :param provider: Limit results to one installed canonical provider.
-        :type provider: ModelProvider
+        :type provider: str
         :param include_deprecated: Include catalog entries nvoken marks as deprecated.
         :type include_deprecated: bool
         :param if_none_match: ETag from a prior response for this exact representation.
@@ -617,7 +616,7 @@ class ModelsApi:
         # process the query parameters
         if provider is not None:
 
-            _query_params.append(('provider', provider.value))
+            _query_params.append(('provider', provider))
 
         if include_deprecated is not None:
 

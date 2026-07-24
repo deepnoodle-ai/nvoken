@@ -32,7 +32,6 @@ export * from './ModelDescriptor.js';
 export * from './ModelList.js';
 export * from './ModelPricing.js';
 export * from './ModelProvenance.js';
-export * from './ModelProvider.js';
 export * from './ModelSelection.js';
 export * from './ModelUsage.js';
 export * from './OutputTextDeltaEvent.js';

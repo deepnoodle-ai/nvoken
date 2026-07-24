@@ -32,7 +32,8 @@ import {
 export interface ModelDescriptor {
     /**
      * Extensible canonical provider identifier. Consumers must preserve
-     * unknown values so adding a provider does not break catalog decoding.
+     * unknown values so adding a provider does not break decoding. Request
+     * positions still reject providers not registered by the installation.
      *
      * @type {string}
      * @memberof ModelDescriptor

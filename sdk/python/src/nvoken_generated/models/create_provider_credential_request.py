@@ -18,10 +18,9 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
-from nvoken_generated.models.model_provider import ModelProvider
 from nvoken_generated.models.provider_credential_scope import ProviderCredentialScope
 from nvoken_generated.models.provider_static_credential import ProviderStaticCredential
 from typing import Optional, Set
@@ -32,13 +31,23 @@ class CreateProviderCredentialRequest(BaseModel):
     """
     CreateProviderCredentialRequest
     """ # noqa: E501
-    provider: ModelProvider
+    provider: Annotated[str, Field(strict=True)] = Field(description="Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation. ")
     scope: ProviderCredentialScope
     tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Required for tenant scope and forbidden for Account scope.")
     credential: ProviderStaticCredential
     expires_at: Optional[datetime] = None
     idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     __properties: ClassVar[List[str]] = ["provider", "scope", "tenant_key", "credential", "expires_at", "idempotency_key"]
+
+    @field_validator('provider')
+    def provider_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^[a-z][a-z0-9_]*$", value):
+            raise ValueError(r"must validate the regular expression /^[a-z][a-z0-9_]*$/")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

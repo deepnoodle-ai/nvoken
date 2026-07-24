@@ -33,6 +33,12 @@ func TestConformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var resultFixture struct {
+		MessageJoin struct {
+			ExpectedOutputText string `json:"expected_output_text"`
+		} `json:"message_join"`
+	}
+	decodeFile(t, "../conformance/fixtures/invocation-result.json", &resultFixture)
 	models, err := client.ListModels(context.Background(), ListModelsOptions{})
 	if err != nil || models.CatalogVersion != "conformance-catalog-v1" {
 		t.Fatalf("list models: %#v err=%v", models, err)
@@ -105,7 +111,7 @@ func TestConformance(t *testing.T) {
 	if err != nil || secondPage.HasMore {
 		t.Fatalf("invocation cursor continuation: %#v err=%v", secondPage, err)
 	}
-	messagePage, err := client.ListMessages(context.Background(), conformanceSessionID, MessageListOptions{})
+	messagePage, err := client.ListSessionMessages(context.Background(), conformanceSessionID, MessageListOptions{})
 	if err != nil || !messagePage.HasMore || messagePage.NextCursor == nil {
 		t.Fatalf("message cursor page: %#v err=%v", messagePage, err)
 	}
@@ -114,10 +120,12 @@ func TestConformance(t *testing.T) {
 	if err != nil || composed.Invocation.ID != conformanceInvocationID || composed.Invocation.Status != InvocationCompleted {
 		t.Fatalf("composed result: %#v err=%v", composed, err)
 	}
-	if len(composed.Messages) != 2 || composed.OutputText == nil || *composed.OutputText != "world" {
+	if len(composed.Messages) != 3 || composed.OutputText == nil ||
+		*composed.OutputText != resultFixture.MessageJoin.ExpectedOutputText {
 		t.Fatalf("composed result payload: %#v", composed)
 	}
-	if composed.Messages[0].Role != "user" || composed.Messages[1].Role != "assistant" {
+	if composed.Messages[0].Role != "user" || composed.Messages[1].Role != "assistant" ||
+		composed.Messages[2].Role != "assistant" {
 		t.Fatalf("composed result roles: %#v", composed.Messages)
 	}
 	if composed.Invocation.StructuredOutput == nil || (*composed.Invocation.StructuredOutput)["answer"] != "world" {
@@ -126,12 +134,12 @@ func TestConformance(t *testing.T) {
 	if composed.Invocation.StructuredOutputProvenance == nil || composed.Invocation.StructuredOutputProvenance.Source != "tool_call" {
 		t.Fatalf("composed structured output provenance: %#v", composed.Invocation.StructuredOutputProvenance)
 	}
-	text, err := handle.Text(context.Background())
+	text, err := handle.OutputText(context.Background())
 	if err != nil || text != *composed.OutputText {
 		t.Fatalf("handle text = %q, want the wire output_text; err=%v", text, err)
 	}
 	handleMessages, err := handle.ListMessages(context.Background())
-	if err != nil || len(handleMessages) != 2 {
+	if err != nil || len(handleMessages) != 3 {
 		t.Fatalf("handle messages: %#v err=%v", handleMessages, err)
 	}
 
@@ -148,6 +156,8 @@ func TestConformance(t *testing.T) {
 	}
 
 	assertGoError(t, client, "conflict", ErrorConflict, http.StatusConflict)
+	assertGoError(t, client, "unauthenticated", ErrorAuthentication, http.StatusUnauthorized)
+	assertGoError(t, client, "forbidden", ErrorPermission, http.StatusForbidden)
 	if _, err := client.GetInvocation(context.Background(), "rate-limit"); err != nil {
 		t.Fatalf("429 should be retried: %v", err)
 	}

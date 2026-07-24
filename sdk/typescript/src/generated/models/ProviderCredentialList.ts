@@ -33,6 +33,18 @@ export interface ProviderCredentialList {
      * @memberof ProviderCredentialList
      */
     items: Array<ProviderCredential>;
+    /**
+     *
+     * @type {boolean}
+     * @memberof ProviderCredentialList
+     */
+    hasMore: boolean;
+    /**
+     *
+     * @type {string}
+     * @memberof ProviderCredentialList
+     */
+    nextCursor: string | null;
 }
 
 /**
@@ -40,6 +52,8 @@ export interface ProviderCredentialList {
  */
 export function instanceOfProviderCredentialList(value: object): value is ProviderCredentialList {
     if (!('items' in value) || value['items'] === undefined) return false;
+    if (!('hasMore' in value) || value['hasMore'] === undefined) return false;
+    if (!('nextCursor' in value) || value['nextCursor'] === undefined) return false;
     return true;
 }
 
@@ -54,6 +68,8 @@ export function ProviderCredentialListFromJSONTyped(json: any, ignoreDiscriminat
     return {
 
         'items': ((json['items'] as Array<any>).map(ProviderCredentialFromJSON)),
+        'hasMore': json['has_more'],
+        'nextCursor': json['next_cursor'],
     };
 }
 
@@ -69,5 +85,7 @@ export function ProviderCredentialListToJSONTyped(value?: ProviderCredentialList
     return {
 
         'items': ((value['items'] as Array<any>).map(ProviderCredentialToJSON)),
+        'has_more': value['hasMore'],
+        'next_cursor': value['nextCursor'],
     };
 }

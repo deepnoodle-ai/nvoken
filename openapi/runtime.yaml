@@ -585,6 +585,12 @@ paths:
             type: string
             minLength: 1
             maxLength: 255
+        - name: cursor
+          in: query
+          description: Opaque continuation cursor bound to the Account, effective scope, filters, and limit.
+          schema:
+            type: string
+            minLength: 1
         - name: limit
           in: query
           schema:
@@ -1154,13 +1160,11 @@ components:
       description: UUIDv7 with the public `pcvr_` prefix.
     ModelProvider:
       type: string
-      enum: [anthropic, openai]
-    ModelCatalogProvider:
-      type: string
       pattern: "^[a-z][a-z0-9_]*$"
       description: |
         Extensible canonical provider identifier. Consumers must preserve
-        unknown values so adding a provider does not break catalog decoding.
+        unknown values so adding a provider does not break decoding. Request
+        positions still reject providers not registered by the installation.
     ModelPricing:
       type: object
       additionalProperties: false
@@ -1207,7 +1211,7 @@ components:
       required: [provider, id, cataloged, pricing]
       properties:
         provider:
-          $ref: "#/components/schemas/ModelCatalogProvider"
+          $ref: "#/components/schemas/ModelProvider"
         id:
           type: string
           minLength: 1
@@ -1459,12 +1463,18 @@ components:
     ProviderCredentialList:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, has_more, next_cursor]
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/ProviderCredential"
+        has_more:
+          type: boolean
+        next_cursor:
+          oneOf:
+            - type: string
+            - type: "null"
     InvocationInput:
       description: |
         A plain string is shorthand for one text block. Use the object form
