@@ -81,7 +81,7 @@ func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error)
 	}
 	requestEditor := func(_ context.Context, request *http.Request) error {
 		request.Header.Set("Authorization", "Bearer "+apiKey)
-		request.Header.Set("User-Agent", "nvoken-go/0.1.0")
+		request.Header.Set("User-Agent", "nvoken-go/"+Version)
 		return nil
 	}
 	raw, err := generated.NewClientWithResponses(

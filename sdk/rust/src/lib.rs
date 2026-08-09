@@ -10,6 +10,9 @@ pub mod routes;
 pub mod schema_preflight;
 pub mod stream;
 
+/// The released version of the Rust SDK.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub use agent::{
     Agent, AgentEventStream, AgentInvocationOptions, AgentOptions, AgentResult, AgentSession,
     AgentStreamEvent, AnswerPendingToolCallsOptions, SessionBinding, ToolCallClaim,

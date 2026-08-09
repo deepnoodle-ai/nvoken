@@ -12,6 +12,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Literal
 
 import httpx
 
+from nvoken_generated import __version__ as SDK_VERSION
 from nvoken_generated.api.agents_api import AgentsApi
 from nvoken_generated.api.budgets_api import BudgetsApi
 from nvoken_generated.api.invocations_api import InvocationsApi
@@ -512,7 +513,10 @@ class Client:
         self.sessions = SessionsApi(self.api_client)
         self.stream_client = httpx.AsyncClient(
             base_url=self.base_url,
-            headers={"Authorization": f"Bearer {api_key}", "User-Agent": "nvoken-python/0.1.0"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": f"nvoken-python/{SDK_VERSION}",
+            },
             transport=transport,
             timeout=None,
         )
