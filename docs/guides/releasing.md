@@ -53,9 +53,12 @@ git push origin "pypi-v${version}"
 git push origin "crates-v${version}"
 ```
 
-If an npm tag workflow fails after the tag exists, fix the workflow on `main`
-and run `release-npm` manually with `release_ref` set to the existing immutable
-tag. Never move or recreate a published release tag to retry its workflow.
+If an npm tag workflow fails before the registry artifact exists, fix the
+workflow on `main`, verify the version is still absent from npm, and recreate
+only that unpublished npm tag on the fixed commit. npm trusted publishing must
+run from a tag-push event; manual workflow dispatch can present a different
+workflow identity to the registry. Never move or recreate a tag after its
+artifact exists.
 
 Verify every workflow, the registry artifacts, the GitHub release archives,
 and the updated `deepnoodle-ai/homebrew-tap` formula before announcing the

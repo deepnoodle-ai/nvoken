@@ -4,12 +4,6 @@ on:
   push:
     tags:
       - npm-v*
-  workflow_dispatch:
-    inputs:
-      release_ref:
-        description: Existing npm release tag to publish
-        required: true
-        type: string
 
 jobs:
   publish:
@@ -25,8 +19,6 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref }}
       # Node 24 bundles an npm newer than the 11.5.1 trusted-publishing
       # minimum, so the CLI needs no separate upgrade step.
       # setup-node v7 no longer exports the dummy NODE_AUTH_TOKEN that made npm
@@ -58,12 +50,10 @@ jobs:
           test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
       - name: Verify release tag matches package version
         working-directory: sdk/typescript
-        env:
-          RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
         run: |
           version="$(node --print "require('./package.json').version")"
-          if [ "${RELEASE_REF}" != "npm-v${version}" ]; then
-            echo "release ref ${RELEASE_REF} does not match package version ${version}" >&2
+          if [ "${GITHUB_REF_NAME}" != "npm-v${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match package version ${version}" >&2
             exit 1
           fi
       - run: npm ci
