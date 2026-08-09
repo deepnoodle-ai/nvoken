@@ -34,7 +34,6 @@
     "dist/diagnostics.js",
     "dist/examples/quickstart.js",
     "dist/generated",
-    "dist/identity-generated",
     "dist/index.d.ts",
     "dist/index.js",
     "dist/invocation-error.d.ts",

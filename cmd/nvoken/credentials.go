@@ -8,7 +8,7 @@ import (
 
 	"github.com/deepnoodle-ai/wonton/cli"
 
-	identityclient "github.com/deepnoodle-ai/nvoken/sdk/go/identitygenerated"
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
 func registerCredentialCommands(app *cli.App) {
@@ -34,8 +34,8 @@ func registerCredentialCommands(app *cli.App) {
 	group.Command("revoke").Description("Revoke a credential").Use(requireAuth()).AddArg(&cli.Arg{Name: "id", Required: true}).Run(runCredentialRevoke)
 }
 
-func credentialClient(ctx *cli.Context) (*identityclient.ClientWithResponses, error) {
-	return identityClient(authFor(ctx), true)
+func credentialClient(ctx *cli.Context) (*generated.ClientWithResponses, error) {
+	return apiClient(authFor(ctx), true)
 }
 
 func runCredentialList(ctx *cli.Context) error {
@@ -43,12 +43,12 @@ func runCredentialList(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	var status *identityclient.CredentialStatus
+	var status *generated.CredentialStatus
 	if value := optionalString(ctx.String("status")); value != nil {
-		typed := identityclient.CredentialStatus(*value)
+		typed := generated.CredentialStatus(*value)
 		status = &typed
 	}
-	response, err := client.ListCredentialsWithResponse(ctx.Context(), &identityclient.ListCredentialsParams{
+	response, err := client.ListCredentialsWithResponse(ctx.Context(), &generated.ListCredentialsParams{
 		Status: status,
 		Cursor: optionalString(ctx.String("cursor")),
 		Limit:  optionalInt(ctx.Int("limit")),
@@ -77,7 +77,7 @@ func runCredentialCreate(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	body := identityclient.CreateCredentialRequest{Name: name, Profile: identityclient.Profile(ctx.String("credential-profile"))}
+	body := generated.CreateCredentialRequest{Name: name, Profile: generated.Profile(ctx.String("credential-profile"))}
 	if value := strings.TrimSpace(ctx.String("app-id")); value != "" {
 		body.AppID = &value
 	}
@@ -88,9 +88,9 @@ func runCredentialCreate(ctx *cli.Context) error {
 		body.SessionID = &value
 	}
 	if values := ctx.Strings("operation"); len(values) > 0 {
-		operations := make([]identityclient.Operation, len(values))
+		operations := make([]generated.Operation, len(values))
 		for i, value := range values {
-			operations[i] = identityclient.Operation(value)
+			operations[i] = generated.Operation(value)
 		}
 		body.Operations = &operations
 	}
@@ -105,7 +105,7 @@ func runCredentialCreate(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	response, err := client.CreateCredentialWithResponse(ctx.Context(), &identityclient.CreateCredentialParams{IdempotencyKey: key}, body)
+	response, err := client.CreateCredentialWithResponse(ctx.Context(), &generated.CreateCredentialParams{IdempotencyKey: key}, body)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func runCredentialRotate(ctx *cli.Context) error {
 	if overlap < 0 || overlap > 24*time.Hour {
 		return errors.New("--overlap must be between zero and 24h")
 	}
-	response, err := client.RotateCredentialWithResponse(ctx.Context(), ctx.Args()[0], &identityclient.RotateCredentialParams{IdempotencyKey: key}, identityclient.RotateCredentialJSONRequestBody{OverlapSeconds: int(overlap.Seconds())})
+	response, err := client.RotateCredentialWithResponse(ctx.Context(), ctx.Args()[0], &generated.RotateCredentialParams{IdempotencyKey: key}, generated.RotateCredentialJSONRequestBody{OverlapSeconds: int(overlap.Seconds())})
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func runCredentialRevoke(ctx *cli.Context) error {
 	return nil
 }
 
-func renderCredentialIssuance(ctx *cli.Context, issuance *identityclient.CredentialIssuance) error {
+func renderCredentialIssuance(ctx *cli.Context, issuance *generated.CredentialIssuance) error {
 	if jsonOutput(ctx) {
 		return renderJSON(ctx, issuance)
 	}

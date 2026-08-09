@@ -160,8 +160,8 @@ page, err := client.ListCredentials(ctx, nvoken.ListCredentialsOptions{})
 `GetCurrentIdentity`, `GetCredential`, `RotateCredential`, and
 `RevokeCredential` complete the lifecycle. Create and rotate return the secret
 only through `CredentialIssuance`, alongside `DeliveryExpiresAt` and `Replayed`;
-store it before the delivery deadline. `RawIdentity()` exposes the generated
-Identity transport when the facade is intentionally too narrow.
+store it before the delivery deadline. `Raw()` exposes the generated transport
+when the facade is intentionally too narrow.
 
 ## Structured-output schema preflight
 

@@ -3,9 +3,9 @@
 ## Source boundaries
 
 The service contract is authored in the private `nvoken-cloud` repository. The
-two files under this repository's `openapi/` directory are synchronized
-snapshots, not a second source of truth. Their exact upstream commit is recorded
-in `openapi/SOURCE.json`.
+`openapi/nvoken.yaml` file in this repository is a synchronized snapshot, not a
+second source of truth. Its exact upstream commit is recorded in
+`openapi/SOURCE.json`.
 
 The generated transports are intentionally committed. A contributor can build,
 test, and package every public client without access to `nvoken-cloud` or an
@@ -22,7 +22,7 @@ make sdk-generate
 make check
 ```
 
-`make openapi-sync-check` compares both snapshot files and their provenance
+`make openapi-sync-check` compares the snapshot and its provenance
 with the neighboring cloud checkout. The default sync refuses uncommitted
 contract changes. `scripts/sync_openapi.py --allow-dirty` exists for local
 cross-repository iteration, but dirty provenance should not be merged.

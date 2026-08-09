@@ -235,9 +235,11 @@ func serveMCP(response http.ResponseWriter, request *http.Request) bool {
 				"type": "object",
 			},
 			"annotations": map[string]any{
+				"present":          true,
 				"read_only_hint":   true,
 				"idempotent_hint":  true,
 				"destructive_hint": false,
+				"open_world_hint":  nil,
 			},
 		}},
 		"exclusions": []any{},

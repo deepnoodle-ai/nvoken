@@ -1,8 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion or retention-control operation. Session context compaction creates a private provider projection without mutating canonical Session messages. Authoritative records exposed by this contract, plus private compaction state, are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, reusable definitions, URL media input, and reusable model provider key lifecycle are included. General administrative APIs remain outside this version.  ## Protected vocabulary  Several names deliberately converge with established agent APIs and must not be casually renamed: `metadata` uses OpenAI\'s bounds of 16 keys, 64-character names, and 512-byte values; `output_text` is the composed text convenience; `reasoning.effort` uses `low`, `medium`, `high`, `xhigh`, and `max`; `stop_reason: end_turn`, status `running`, and message phases `commentary` and `final_answer` are likewise intentional.  ## Echo resolved config  Every setting the runtime resolves on the caller\'s behalf is readable back, resolved, on the resource that used it. A host never has to reconstruct what applied from the request it sent plus its own model of nvoken\'s defaults — the resource says.  Concretely: an Invocation echoes `limits` after installation defaults and feature floors, alongside the `definition` it was admitted with exactly as snapshotted, and `provenance` records what actually ran. A Session echoes its compaction policy with `auto` already materialized to the integer it resolved to and the model it bound, and its retention window as accepted. New settings are expected to follow: a default the caller cannot read back is a setting only the server knows about.
+ * nvoken API
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -155,26 +155,34 @@ export interface CreateInvocationRequest {
      */
     sessionKey?: string;
     /**
-     * Durable options for the resolved Session. On an existing Session,
-     * every supplied value is compared with the stored value: equal is
-     * accepted and different returns `session_options_conflict`.
-     * Compaction is the one late-installable option: when no policy is
-     * stored yet, this admission installs its model-validated policy.
-     * Session options are not part of the reusable execution snapshot or
-     * its idempotency comparison.
+     * Settings stored on the Session itself, rather than on this turn.
+     *
+     * On a new Session these are saved. On a Session that already exists they
+     * are checked rather than applied: matching values are fine, and a
+     * different value returns `session_options_conflict` telling you which
+     * paths disagreed. This keeps two callers from silently reconfiguring
+     * each other's conversation.
+     *
+     * Compaction is the exception — if no summarization policy is stored yet,
+     * this turn can install one, because the policy needs a model to validate
+     * against and only a turn supplies that.
      *
      * @type {SessionOptions}
      * @memberof CreateInvocationRequest
      */
     sessionOptions?: SessionOptions;
     /**
-     * Opaque host correlation data recorded on this Invocation. It is
-     * part of the admitted input, so it is immutable and material to
-     * idempotency: a replay carrying different metadata conflicts rather
-     * than updating it. A genuine retry describes the same originating
-     * request and so carries the same values by construction.
+     * Your own data to attach to this turn — a ticket number, a trace
+     * ID, whatever helps you tie it back to your system. nvoken stores
+     * it and hands it back untouched.
      *
-     * Session metadata is separate and mutable — see
+     * It is fixed once the turn is created and counts as part of the
+     * request for idempotency. Retrying with the same `idempotency_key`
+     * but different metadata is treated as a different request and
+     * returns a conflict rather than updating it. A genuine retry of the
+     * same original request carries the same values anyway.
+     *
+     * Session metadata is a separate thing and can be changed — see
      * `session_options.metadata` and `PATCH /v1/sessions/{session_id}`.
      *
      * @type {{ [key: string]: string; }}
@@ -182,35 +190,47 @@ export interface CreateInvocationRequest {
      */
     metadata?: { [key: string]: string; };
     /**
-     * Stable admission identity scoped to (effective tenant
-     * partition, agent_key). Reuse an unchanged request after any 5xx,
-     * timeout, disconnect, or missing acknowledgement. Deduplication is
-     * guaranteed while the original Invocation is retained.
+     * Your key for making retries safe. Send the same unchanged request
+     * again after a 5xx, a timeout, a dropped connection, or any case
+     * where you never saw the response, and you get the original turn
+     * back instead of starting a second one.
+     *
+     * Keys are scoped to the tenant and `agent_key`, so the same key
+     * under a different tenant is a different request. Deduplication
+     * lasts as long as the original turn still exists.
      *
      * @type {string}
      * @memberof CreateInvocationRequest
      */
     idempotencyKey: string;
     /**
-     * Policy when the resolved Session already has a nonterminal
-     * Invocation. `reject` returns `session_invocation_active`.
-     * `supersede` atomically applies the ordinary durable cancellation
-     * transition to that Invocation before admitting this replacement,
-     * dropping its work from later turns. `interrupt` stops it
-     * gracefully and admits only after it has settled `completed`, so
-     * the replacement builds on what the stopped turn produced: it is
-     * "stop and redo" where supersede is "discard and redo". Omission
-     * and explicit `reject` compare equal on replay.
+     * What to do when the Session already has a turn running. A Session
+     * runs one turn at a time.
+     *
+     * - `reject` (the default) refuses this request with
+     *   `session_invocation_active` and leaves the running turn alone.
+     * - `supersede` cancels the running turn and starts this one in its
+     *   place. The cancelled turn's work is discarded and does not carry
+     *   forward — "discard and redo".
+     * - `interrupt` asks the running turn to stop cleanly and starts
+     *   this one only once it has, so this turn builds on what the
+     *   stopped one produced — "stop and redo".
+     *
+     * Omitting the field and sending `reject` are the same request for
+     * idempotency purposes.
      *
      * @type {CreateInvocationRequestIfActiveEnum}
      * @memberof CreateInvocationRequest
      */
     ifActive?: CreateInvocationRequestIfActiveEnum;
     /**
-     * `settle` ends a coherent consumption-budget stop as `incomplete`.
-     * `pause` parks it as resumable `paused`. Applies to iteration,
-     * output-token, per-turn estimated-cost, and Session estimated-cost
-     * ceilings; deadlines always settle.
+     * What to do when the turn runs out of one of its spending limits.
+     * `settle` ends it as `incomplete`. `pause` leaves it as `paused` so
+     * you can raise the limit and continue it.
+     *
+     * Covers the iteration, output-token, per-turn cost, and Session
+     * cost limits. Deadlines are not covered — a turn that runs out of
+     * time always ends and can never be resumed.
      *
      * @type {CreateInvocationRequestOnBudgetExhaustedEnum}
      * @memberof CreateInvocationRequest
@@ -229,11 +249,14 @@ export interface CreateInvocationRequest {
      */
     webhook?: WebhookTarget;
     /**
-     * Immutable content-addressed definition previously admitted inline
-     * by this app. Unknown and foreign IDs return
-     * `definition_not_found`. Mutually exclusive with every inline
-     * definition field. A reference and the byte-identical inline
-     * definition are equal on idempotent replay.
+     * Reuse an agent definition you already sent inline on an earlier turn,
+     * instead of sending it again. The ID is derived from the definition's
+     * own content, so it never points at anything but that exact definition.
+     *
+     * IDs from another app, or IDs that do not exist, return
+     * `definition_not_found`. Cannot be combined with the inline definition
+     * fields. Sending the ID and sending the identical definition inline
+     * count as the same request when retrying with an idempotency key.
      *
      * @type {string}
      * @memberof CreateInvocationRequest
@@ -300,21 +323,17 @@ export interface CreateInvocationRequest {
      */
     providerTools?: Array<ProviderTool>;
     /**
-     * Explicit nonsecret source selection for the model provider.
-     * Omission resolves the default chain at admission: the app's
-     * stored key for the provider when one exists, else a
-     * self-hosted installation's environment key (config_byok), else
-     * platform funding when the installation enables it. The chosen
-     * source is bound durably at admission; execution never falls
-     * through to a different payer afterward. The selection is stored
-     * outside the reusable execution snapshot; only caller_ephemeral accepts secret
-     * material, and a caller may equivalently supply it with the
-     * X-Anthropic-Api-Key, X-Openai-Api-Key, X-Gemini-Api-Key, or
-     * X-Xai-Api-Key request header naming the model provider. Equal
-     * idempotent replay never replaces the original encrypted key. The
-     * field is deliberately plural even though this
-     * contract currently permits one entry: future routed invocations
-     * may select keys for more than one model provider.
+     * Which key pays for the model on this turn. Names a source; never
+     * contains a secret.
+     *
+     * Leave it out and nvoken works down its default order: your app's stored
+     * key for that provider, then a self-hosted installation's environment
+     * key (`config_byok`), then platform funding if the installation allows
+     * it.
+     *
+     * Whichever source is chosen is fixed when the turn starts. A turn never
+     * silently falls through to a different payer partway through, so the
+     * bill cannot move once work has begun.
      *
      * @type {Array<ProviderKeySelection>}
      * @memberof CreateInvocationRequest

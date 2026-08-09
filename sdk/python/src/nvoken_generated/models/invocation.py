@@ -1,9 +1,9 @@
 # coding: utf-8
 
 """
-    nvoken Runtime API
+    nvoken API
 
-    This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion or retention-control operation. Session context compaction creates a private provider projection without mutating canonical Session messages. Authoritative records exposed by this contract, plus private compaction state, are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, reusable definitions, URL media input, and reusable model provider key lifecycle are included. General administrative APIs remain outside this version.  ## Protected vocabulary  Several names deliberately converge with established agent APIs and must not be casually renamed: `metadata` uses OpenAI's bounds of 16 keys, 64-character names, and 512-byte values; `output_text` is the composed text convenience; `reasoning.effort` uses `low`, `medium`, `high`, `xhigh`, and `max`; `stop_reason: end_turn`, status `running`, and message phases `commentary` and `final_answer` are likewise intentional.  ## Echo resolved config  Every setting the runtime resolves on the caller's behalf is readable back, resolved, on the resource that used it. A host never has to reconstruct what applied from the request it sent plus its own model of nvoken's defaults — the resource says.  Concretely: an Invocation echoes `limits` after installation defaults and feature floors, alongside the `definition` it was admitted with exactly as snapshotted, and `provenance` records what actually ran. A Session echoes its compaction policy with `auto` already materialized to the integer it resolved to and the model it bound, and its retention window as accepted. New settings are expected to follow: a default the caller cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.agent_definition import AgentDefinition
@@ -39,13 +39,13 @@ class Invocation(BaseModel):
     """
     Invocation
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="UUIDv7 with the public `invk_` prefix.")
-    agent_id: Annotated[str, Field(strict=True)] = Field(description="UUIDv7 with the public `agnt_` prefix.")
-    session_id: Annotated[str, Field(strict=True)] = Field(description="UUIDv7 with the public `sesn_` prefix.")
-    user_key: Optional[StrictStr] = Field(description="Host-owned end-user label admitted on this turn. Filtering only; not an isolation boundary. ")
-    definition_id: Annotated[str, Field(strict=True)] = Field(description="UUIDv7 with the public `def_` prefix.")
-    definition: Optional[AgentDefinition] = Field(description="The admitted definition, returned exactly as snapshotted. Remote MCP request headers were never stored and never appear here. Present on `GET /v1/invocations/{id}` and on the result; null in list items, where `definition_id` identifies it. `definition.limits` is what the host requested; `limits` is what the installation resolved. ")
-    deduplicated: Optional[StrictBool] = Field(default=None, description="Present only in the `POST /v1/invocations` response. False for a new durable admission and true when the idempotency key returned an existing Invocation. ")
+    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `inv_` prefix. Treat the body as opaque.")
+    agent_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
+    session_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `sess_` prefix. Treat the body as opaque.")
+    user_key: Optional[StrictStr] = Field(description="Your own label for the end user this turn belongs to. Useful for filtering lists. It is not a security boundary — no request is ever refused because of it, so do not rely on it to keep one user's data away from another. ")
+    definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `def_` prefix. Treat the body as opaque.")
+    definition: Optional[AgentDefinition] = Field(description="The agent definition this turn actually ran with, stored when the turn started and returned exactly as it was. Request headers for remote MCP servers are never stored and never appear here.  Present on `GET /v1/invocations/{id}` and on the result. Null in list items, where `definition_id` identifies it instead. ")
+    deduplicated: Optional[StrictBool] = Field(default=None, description="Only present on the `POST /v1/invocations` response. False when this call created a new turn, true when your idempotency key matched one that already existed and you got that one back. ")
     status: InvocationStatus
     stop_reason: Optional[InvocationStopReason] = Field(description="Why the turn stopped or paused. Present on `completed`, `incomplete`, and `paused`; null on every other status — a failure keeps `error` as the authority. Treat an unrecognized value as an ordinary end. ")
     blocking_budget: Optional[BudgetBlock] = Field(description="Exact Session or shared Budget for a budget stop, otherwise null.")
@@ -53,9 +53,9 @@ class Invocation(BaseModel):
     error: Optional[InvocationFailure]
     usage: Optional[ModelUsage] = Field(description="One normalized terminal aggregate, not a billing ledger.")
     provenance: Optional[ModelProvenance]
-    structured_output: Optional[Dict[str, Any]] = Field(description="Server-validated terminal object for a schema-bearing Invocation. Null until successful terminal settlement and always null when no output contract was admitted. ")
+    structured_output: Optional[Dict[str, Any]] = Field(description="The object the model produced, already checked against the schema you asked for. Null until the turn finishes successfully, and always null if you did not ask for structured output. ")
     structured_output_provenance: Optional[StructuredOutputProvenance]
-    metadata: Optional[Dict[str, Annotated[str, Field(strict=True, max_length=512)]]] = Field(description="Host correlation data recorded at admission, returned verbatim. ")
+    metadata: Optional[Dict[str, Annotated[str, Field(strict=True, max_length=512)]]] = Field(description="Your own data, stored when the turn was created and returned exactly as you sent it. ")
     limits: ResolvedLimits
     active_execution_ms: Annotated[int, Field(strict=True, ge=0)]
     deadline_at: Optional[datetime] = Field(description="The deadline currently enforced by the runtime. Null while the Invocation is waiting without an explicit waiting timeout; the explicit waiting deadline while bounded; otherwise the total-time deadline for queued, running, and terminal Invocations. ")
@@ -64,46 +64,6 @@ class Invocation(BaseModel):
     ended_at: Optional[datetime]
     pending_tool_calls: Optional[List[PendingHostToolCall]] = Field(default=None, description="Present for a waiting Invocation with unresolved host calls.")
     __properties: ClassVar[List[str]] = ["id", "agent_id", "session_id", "user_key", "definition_id", "definition", "deduplicated", "status", "stop_reason", "blocking_budget", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "pending_tool_calls"]
-
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^invk_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value):
-            raise ValueError(r"must validate the regular expression /^invk_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/")
-        return value
-
-    @field_validator('agent_id')
-    def agent_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^agnt_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value):
-            raise ValueError(r"must validate the regular expression /^agnt_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/")
-        return value
-
-    @field_validator('session_id')
-    def session_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^sesn_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value):
-            raise ValueError(r"must validate the regular expression /^sesn_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/")
-        return value
-
-    @field_validator('definition_id')
-    def definition_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^def_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value):
-            raise ValueError(r"must validate the regular expression /^def_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

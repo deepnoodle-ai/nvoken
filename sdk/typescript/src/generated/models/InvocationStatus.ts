@@ -1,8 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion or retention-control operation. Session context compaction creates a private provider projection without mutating canonical Session messages. Authoritative records exposed by this contract, plus private compaction state, are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, reusable definitions, URL media input, and reusable model provider key lifecycle are included. General administrative APIs remain outside this version.  ## Protected vocabulary  Several names deliberately converge with established agent APIs and must not be casually renamed: `metadata` uses OpenAI\'s bounds of 16 keys, 64-character names, and 512-byte values; `output_text` is the composed text convenience; `reasoning.effort` uses `low`, `medium`, `high`, `xhigh`, and `max`; `stop_reason: end_turn`, status `running`, and message phases `commentary` and `final_answer` are likewise intentional.  ## Echo resolved config  Every setting the runtime resolves on the caller\'s behalf is readable back, resolved, on the resource that used it. A host never has to reconstruct what applied from the request it sent plus its own model of nvoken\'s defaults — the resource says.  Concretely: an Invocation echoes `limits` after installation defaults and feature floors, alongside the `definition` it was admitted with exactly as snapshotted, and `provenance` records what actually ran. A Session echoes its compaction policy with `auto` already materialized to the integer it resolved to and the model it bound, and its retention window as accepted. New settings are expected to follow: a default the caller cannot read back is a setting only the server knows about.
+ * nvoken API
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -14,32 +14,35 @@
 
 
 /**
- * `completed`, `incomplete`, `failed`, and `cancelled` are terminal and
- * immutable.
+ * `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+ * turn reaches one of them it never changes again.
  *
- * `completed` means exactly one thing: the turn ended the way it was
- * asked to — the model finished, or the caller interrupted it.
- * `incomplete` means the runtime enforced a budget at a coherent
- * execution seam. Any budget exhaustion observed at such a seam settles
- * `incomplete` with `stop_reason` naming the budget; the transcript is
- * valid and stays in the next turn's context, exactly as a completed
- * turn's does. Exhaustion that cannot reach a seam — a deadline landing
- * mid-request, reaper settlement — still settles `failed` with `error`
- * as the authority. A schema-bearing turn that never published a
- * validated object also fails, `structured_output_unsatisfied`,
- * whichever budget stopped it.
+ * `completed` means the turn ended the way it was asked to: the model
+ * finished on its own, or you interrupted it.
  *
- * `waiting`—known elsewhere as `requires_action`—means the Invocation has
- * durable pending host ToolCalls and owns no execution lease. Final
- * result acceptance moves it back to
- * `queued`. Checkpoint recovery may also move `running` back to
- * `queued`; the `attempt` counter distinguishes a retry from tool-result
- * acceptance, and lifecycle revision orders every transition.
+ * `incomplete` means a limit you set stopped the turn cleanly, between
+ * steps rather than mid-request. `stop_reason` names the limit that ran
+ * out. The reply so far is valid and carries into the next turn just
+ * like a completed turn's does, so this is a stopping point rather than
+ * an error.
  *
- * `paused` is nonterminal dormant work stopped at a coherent consumption
- * ceiling. It owns no lease and its deadlines are suspended until the
- * exhausted turn limit is raised or the Session budget is raised or
- * removed. It still accepts interrupt, cancel, and staged nudges.
+ * `failed` means the turn could not stop cleanly — a deadline landing in
+ * the middle of a model request, for example — or that a turn you asked
+ * for structured output from never produced a valid object. Read `error`
+ * for the reason; the reply, if any, is not carried forward.
+ *
+ * `waiting` — `requires_action` in some other APIs — means the turn has
+ * stopped for tool calls you need to run. Nothing is executing. Send the
+ * results and the turn returns to `queued` and picks up where it left
+ * off. A turn can also return to `queued` on its own if nvoken had to
+ * restart it after an interruption; `attempt` tells the two apart, and
+ * the `revision` on each stream update tells you their order.
+ *
+ * `paused` means an opt-in spending limit stopped the turn but left it
+ * resumable. Nothing is executing, and its deadlines are on hold, so a
+ * turn cannot expire while you decide. Raise the turn's limit, or raise
+ * or remove the Session budget, and it continues. It still accepts
+ * interrupt, cancel, and nudge.
  *
  * @export
  */

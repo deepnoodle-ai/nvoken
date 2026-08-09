@@ -14,7 +14,7 @@ import (
 	"github.com/deepnoodle-ai/wonton/cli"
 
 	"github.com/deepnoodle-ai/nvoken/internal/authstore"
-	identityclient "github.com/deepnoodle-ai/nvoken/sdk/go/identitygenerated"
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
 const defaultBaseURL = "http://localhost:8080"
@@ -138,20 +138,20 @@ func requireAuth() cli.Middleware {
 	}
 }
 
-func identityClient(auth *resolvedAuth, authenticated bool) (*identityclient.ClientWithResponses, error) {
+func apiClient(auth *resolvedAuth, authenticated bool) (*generated.ClientWithResponses, error) {
 	if auth.BaseURLErr != nil {
 		return nil, auth.BaseURLErr
 	}
-	options := []identityclient.ClientOption{
-		identityclient.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
+	options := []generated.ClientOption{
+		generated.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
 	}
 	if authenticated {
-		options = append(options, identityclient.WithRequestEditorFn(func(_ context.Context, request *http.Request) error {
+		options = append(options, generated.WithRequestEditorFn(func(_ context.Context, request *http.Request) error {
 			request.Header.Set("Authorization", "Bearer "+auth.APIKey)
 			return nil
 		}))
 	}
-	return identityclient.NewClientWithResponses(auth.BaseURL, options...)
+	return generated.NewClientWithResponses(auth.BaseURL, options...)
 }
 
 func renderJSON(ctx *cli.Context, value any) error {

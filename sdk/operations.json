@@ -1,5 +1,5 @@
 {
-  "generated_by": "openapi/runtime.yaml; do not edit",
+  "generated_by": "openapi/nvoken.yaml; do not edit",
   "operations": [
     {
       "operation_id": "cancelInvocation",
@@ -15,6 +15,11 @@
       "operation_id": "createBudget",
       "method": "POST",
       "path": "/v1/budgets"
+    },
+    {
+      "operation_id": "createCredential",
+      "method": "POST",
+      "path": "/v1/identity/credentials"
     },
     {
       "operation_id": "createInvocation",
@@ -60,6 +65,16 @@
       "operation_id": "getBudget",
       "method": "GET",
       "path": "/v1/budgets/{budget_id}"
+    },
+    {
+      "operation_id": "getCredential",
+      "method": "GET",
+      "path": "/v1/identity/credentials/{credential_id}"
+    },
+    {
+      "operation_id": "getCurrentIdentity",
+      "method": "GET",
+      "path": "/v1/identity"
     },
     {
       "operation_id": "getDailyUsage",
@@ -115,6 +130,11 @@
       "operation_id": "listApps",
       "method": "GET",
       "path": "/v1/apps"
+    },
+    {
+      "operation_id": "listCredentials",
+      "method": "GET",
+      "path": "/v1/identity/credentials"
     },
     {
       "operation_id": "listInvocations",
@@ -177,9 +197,19 @@
       "path": "/v1/invocations/{invocation_id}/resume"
     },
     {
+      "operation_id": "revokeCredential",
+      "method": "POST",
+      "path": "/v1/identity/credentials/{credential_id}/revoke"
+    },
+    {
       "operation_id": "revokeProviderKey",
       "method": "DELETE",
       "path": "/v1/provider-keys/{provider_key_id}"
+    },
+    {
+      "operation_id": "rotateCredential",
+      "method": "POST",
+      "path": "/v1/identity/credentials/{credential_id}/rotate"
     },
     {
       "operation_id": "rotateProviderKey",

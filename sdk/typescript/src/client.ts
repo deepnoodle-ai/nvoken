@@ -5,13 +5,13 @@
 import {
   AgentsApi,
   BudgetsApi,
+  IdentityApi,
   InvocationsApi,
   MCPApi,
   ModelsApi,
   ProviderKeysApi,
   SessionsApi,
 } from "./generated/apis/index.js";
-import { DefaultApi as IdentityApi } from "./identity-generated/apis/index.js";
 import type {
   Agent as AgentIdentity,
   AgentList,
@@ -73,7 +73,7 @@ import type {
   CurrentIdentity,
   Operation as RuntimeOperation,
   Profile as CredentialProfile,
-} from "./identity-generated/models/index.js";
+} from "./generated/models/index.js";
 export type {
   Credential,
   CredentialIssuance,
@@ -82,13 +82,8 @@ export type {
   CurrentIdentity,
   Operation as RuntimeOperation,
   Profile as CredentialProfile,
-} from "./identity-generated/models/index.js";
+} from "./generated/models/index.js";
 import { Configuration, FetchError, ResponseError } from "./generated/runtime.js";
-import {
-  Configuration as IdentityConfiguration,
-  FetchError as IdentityFetchError,
-  ResponseError as IdentityResponseError,
-} from "./identity-generated/runtime.js";
 import { invocationFailureMessage } from "./invocation-error.js";
 import {
   mediaInputIssue,
@@ -1059,12 +1054,7 @@ export class Client {
     this.models = new ModelsApi(this.configuration);
     this.providerKeys = new ProviderKeysApi(this.configuration);
     this.sessions = new SessionsApi(this.configuration);
-    this.identity = new IdentityApi(new IdentityConfiguration({
-      basePath: baseUrl.replace(/\/$/, ""),
-      accessToken: apiKey,
-      fetchApi: this.fetch,
-      headers: { "User-Agent": `@deepnoodle/nvoken/${VERSION}` },
-    }));
+    this.identity = new IdentityApi(this.configuration);
     this.retry = {
       maxAttempts: options.retry?.maxAttempts ?? 4,
       minDelayMs: options.retry?.minDelayMs ?? 100,
@@ -2915,7 +2905,7 @@ function missingModel(): never {
 
 export async function normalizeError(error: unknown): Promise<NvokenError> {
   if (error instanceof NvokenError) return error;
-  if (error instanceof ResponseError || error instanceof IdentityResponseError) {
+  if (error instanceof ResponseError) {
     const response = error.response;
     let body: {
       code?: string;
@@ -2966,7 +2956,7 @@ export async function normalizeError(error: unknown): Promise<NvokenError> {
       { cause: error },
     );
   }
-  if (error instanceof FetchError || error instanceof IdentityFetchError || error instanceof TypeError) {
+  if (error instanceof FetchError || error instanceof TypeError) {
     return new NvokenError(
       "transport",
       "nvoken transport failed",

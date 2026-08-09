@@ -1,7 +1,7 @@
 """
-    nvoken Runtime API
+    nvoken API
 
-    This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion or retention-control operation. Session context compaction creates a private provider projection without mutating canonical Session messages. Authoritative records exposed by this contract, plus private compaction state, are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, reusable definitions, URL media input, and reusable model provider key lifecycle are included. General administrative APIs remain outside this version.  ## Protected vocabulary  Several names deliberately converge with established agent APIs and must not be casually renamed: `metadata` uses OpenAI's bounds of 16 keys, 64-character names, and 512-byte values; `output_text` is the composed text convenience; `reasoning.effort` uses `low`, `medium`, `high`, `xhigh`, and `max`; `stop_reason: end_turn`, status `running`, and message phases `commentary` and `final_answer` are likewise intentional.  ## Echo resolved config  Every setting the runtime resolves on the caller's behalf is readable back, resolved, on the resource that used it. A host never has to reconstruct what applied from the request it sent plus its own model of nvoken's defaults — the resource says.  Concretely: an Invocation echoes `limits` after installation defaults and feature floors, alongside the `definition` it was admitted with exactly as snapshotted, and `provenance` records what actually ran. A Session echoes its compaction policy with `auto` already materialized to the integer it resolved to and the model it bound, and its retention window as accepted. New settings are expected to follow: a default the caller cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictBool, field_validator
+from pydantic import Field, StrictBool
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.create_session_request import CreateSessionRequest
@@ -65,7 +65,7 @@ class SessionsApi:
     ) -> Session:
         """Create or seed a Session without admitting an Invocation
 
-        Creates a Session with zero Invocations and optional host-asserted starting history. Every body field is optional. An omitted `agent_key` leaves the Session unbound: `agent_id` is null until the first admitted Invocation binds it, and the binding is immutable once set either way; `seed_messages` therefore requires `agent_key`. A `session_key` requires an `agent_key`, because key uniqueness and lookup are scoped per (tenant partition, Agent); a keyed create is an upsert that accepts equal supplied Session options and returns `session_options_conflict` when a supplied value differs. Without a `session_key`, every call creates a fresh Session. Precedence for the tenant partition is credential constraint, explicit `tenant_key`, then the default partition.
+        Creates an empty Session, optionally seeded with history you already have. Use this when you want a conversation to exist before the first turn runs — to show it in a UI, or to import messages from elsewhere.  Every field is optional. Leave out `agent_key` and the Session starts unbound: `agent_id` stays null until the first turn binds it permanently.
 
         :param create_session_request: (required)
         :type create_session_request: CreateSessionRequest
@@ -139,7 +139,7 @@ class SessionsApi:
     ) -> ApiResponse[Session]:
         """Create or seed a Session without admitting an Invocation
 
-        Creates a Session with zero Invocations and optional host-asserted starting history. Every body field is optional. An omitted `agent_key` leaves the Session unbound: `agent_id` is null until the first admitted Invocation binds it, and the binding is immutable once set either way; `seed_messages` therefore requires `agent_key`. A `session_key` requires an `agent_key`, because key uniqueness and lookup are scoped per (tenant partition, Agent); a keyed create is an upsert that accepts equal supplied Session options and returns `session_options_conflict` when a supplied value differs. Without a `session_key`, every call creates a fresh Session. Precedence for the tenant partition is credential constraint, explicit `tenant_key`, then the default partition.
+        Creates an empty Session, optionally seeded with history you already have. Use this when you want a conversation to exist before the first turn runs — to show it in a UI, or to import messages from elsewhere.  Every field is optional. Leave out `agent_key` and the Session starts unbound: `agent_id` stays null until the first turn binds it permanently.
 
         :param create_session_request: (required)
         :type create_session_request: CreateSessionRequest
@@ -213,7 +213,7 @@ class SessionsApi:
     ) -> RESTResponseType:
         """Create or seed a Session without admitting an Invocation
 
-        Creates a Session with zero Invocations and optional host-asserted starting history. Every body field is optional. An omitted `agent_key` leaves the Session unbound: `agent_id` is null until the first admitted Invocation binds it, and the binding is immutable once set either way; `seed_messages` therefore requires `agent_key`. A `session_key` requires an `agent_key`, because key uniqueness and lookup are scoped per (tenant partition, Agent); a keyed create is an upsert that accepts equal supplied Session options and returns `session_options_conflict` when a supplied value differs. Without a `session_key`, every call creates a fresh Session. Precedence for the tenant partition is credential constraint, explicit `tenant_key`, then the default partition.
+        Creates an empty Session, optionally seeded with history you already have. Use this when you want a conversation to exist before the first turn runs — to show it in a UI, or to import messages from elsewhere.  Every field is optional. Leave out `agent_key` and the Session starts unbound: `agent_id` stays null until the first turn binds it permanently.
 
         :param create_session_request: (required)
         :type create_session_request: CreateSessionRequest
@@ -344,7 +344,7 @@ class SessionsApi:
     @validate_call
     async def delete_session(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -360,7 +360,7 @@ class SessionsApi:
     ) -> None:
         """Erase a Session and everything under it
 
-        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  An Invocation still running is stopped. No cancellation is recorded, because there is nothing left to record it against — the Invocation is removed rather than settled, and no `invocation.settled` webhook is emitted for it. A host that needs a settled record should cancel and observe the terminal state before deleting.  Erasure is scoped like every other Session operation: an unknown or out-of-scope `session_id` returns `not_found`, so a retry after a lost response can treat `404` as already-done. The `delete_session` operation belongs to the Runtime and Operator profiles; a Viewer credential cannot erase a transcript.  **This is not account deletion by itself.** nvoken keeps no account tombstone, so a host honouring a deletion request must first stop admitting work for that tenant, then page `GET /v1/sessions` and delete until the list is empty. Otherwise a concurrent request creates a new Session behind the sweep.  Two consequences worth planning for. Usage reporting shrinks retroactively: `GET /v1/usage/daily` is computed at read time from Invocation evidence that erasure removes, which is why the endpoint is documented as operational visibility rather than a billing ledger — a billing host records usage at settlement, keyed by Invocation id. And the erased Invocations' idempotency keys become free for reuse, consistent with the documented guarantee that deduplication holds while the original Invocation is retained.
+        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against, and no `invocation.settled` webhook fires for it. If you need a record that the turn ended, cancel it and wait for its final state before deleting.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Past usage numbers shrink: `GET /v1/usage/daily` is calculated from the records you just erased, which is why it is operational visibility rather than a billing ledger — bill from usage you recorded yourself when each turn finished, keyed by Invocation ID. And the deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
 
         :param session_id: (required)
         :type session_id: str
@@ -418,7 +418,7 @@ class SessionsApi:
     @validate_call
     async def delete_session_with_http_info(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -434,7 +434,7 @@ class SessionsApi:
     ) -> ApiResponse[None]:
         """Erase a Session and everything under it
 
-        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  An Invocation still running is stopped. No cancellation is recorded, because there is nothing left to record it against — the Invocation is removed rather than settled, and no `invocation.settled` webhook is emitted for it. A host that needs a settled record should cancel and observe the terminal state before deleting.  Erasure is scoped like every other Session operation: an unknown or out-of-scope `session_id` returns `not_found`, so a retry after a lost response can treat `404` as already-done. The `delete_session` operation belongs to the Runtime and Operator profiles; a Viewer credential cannot erase a transcript.  **This is not account deletion by itself.** nvoken keeps no account tombstone, so a host honouring a deletion request must first stop admitting work for that tenant, then page `GET /v1/sessions` and delete until the list is empty. Otherwise a concurrent request creates a new Session behind the sweep.  Two consequences worth planning for. Usage reporting shrinks retroactively: `GET /v1/usage/daily` is computed at read time from Invocation evidence that erasure removes, which is why the endpoint is documented as operational visibility rather than a billing ledger — a billing host records usage at settlement, keyed by Invocation id. And the erased Invocations' idempotency keys become free for reuse, consistent with the documented guarantee that deduplication holds while the original Invocation is retained.
+        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against, and no `invocation.settled` webhook fires for it. If you need a record that the turn ended, cancel it and wait for its final state before deleting.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Past usage numbers shrink: `GET /v1/usage/daily` is calculated from the records you just erased, which is why it is operational visibility rather than a billing ledger — bill from usage you recorded yourself when each turn finished, keyed by Invocation ID. And the deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
 
         :param session_id: (required)
         :type session_id: str
@@ -492,7 +492,7 @@ class SessionsApi:
     @validate_call
     async def delete_session_without_preload_content(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -508,7 +508,7 @@ class SessionsApi:
     ) -> RESTResponseType:
         """Erase a Session and everything under it
 
-        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  An Invocation still running is stopped. No cancellation is recorded, because there is nothing left to record it against — the Invocation is removed rather than settled, and no `invocation.settled` webhook is emitted for it. A host that needs a settled record should cancel and observe the terminal state before deleting.  Erasure is scoped like every other Session operation: an unknown or out-of-scope `session_id` returns `not_found`, so a retry after a lost response can treat `404` as already-done. The `delete_session` operation belongs to the Runtime and Operator profiles; a Viewer credential cannot erase a transcript.  **This is not account deletion by itself.** nvoken keeps no account tombstone, so a host honouring a deletion request must first stop admitting work for that tenant, then page `GET /v1/sessions` and delete until the list is empty. Otherwise a concurrent request creates a new Session behind the sweep.  Two consequences worth planning for. Usage reporting shrinks retroactively: `GET /v1/usage/daily` is computed at read time from Invocation evidence that erasure removes, which is why the endpoint is documented as operational visibility rather than a billing ledger — a billing host records usage at settlement, keyed by Invocation id. And the erased Invocations' idempotency keys become free for reuse, consistent with the documented guarantee that deduplication holds while the original Invocation is retained.
+        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against, and no `invocation.settled` webhook fires for it. If you need a record that the turn ended, cancel it and wait for its final state before deleting.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Past usage numbers shrink: `GET /v1/usage/daily` is calculated from the records you just erased, which is why it is operational visibility rather than a billing ledger — bill from usage you recorded yourself when each turn finished, keyed by Invocation ID. And the deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
 
         :param session_id: (required)
         :type session_id: str
@@ -626,7 +626,7 @@ class SessionsApi:
     @validate_call
     async def fork_session(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         fork_session_request: ForkSessionRequest,
         _request_timeout: Union[
             None,
@@ -704,7 +704,7 @@ class SessionsApi:
     @validate_call
     async def fork_session_with_http_info(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         fork_session_request: ForkSessionRequest,
         _request_timeout: Union[
             None,
@@ -782,7 +782,7 @@ class SessionsApi:
     @validate_call
     async def fork_session_without_preload_content(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         fork_session_request: ForkSessionRequest,
         _request_timeout: Union[
             None,
@@ -936,7 +936,7 @@ class SessionsApi:
     @validate_call
     async def get_session(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1010,7 +1010,7 @@ class SessionsApi:
     @validate_call
     async def get_session_with_http_info(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1084,7 +1084,7 @@ class SessionsApi:
     @validate_call
     async def get_session_without_preload_content(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1218,7 +1218,7 @@ class SessionsApi:
     @validate_call
     async def get_session_transcript(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque fixed-cut continuation from `next_page_token`.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
@@ -1237,7 +1237,7 @@ class SessionsApi:
     ) -> TranscriptSnapshot:
         """Drain a fixed-cut incremental transcript snapshot
 
-        Projects canonical messages and append-only Invocation lifecycle changes. Supply a prior `resume_cursor` as `cursor` to drain newer durable state. Continue a multi-page fixed cut with `page_token` until `has_more` is false. Each page contains one phase: all message pages are delivered before lifecycle-change pages, so terminal state cannot precede the transcript rows committed with it. Omitting both positions starts at the beginning of the retained Session.
+        Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `resume_cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.
 
         :param session_id: (required)
         :type session_id: str
@@ -1304,7 +1304,7 @@ class SessionsApi:
     @validate_call
     async def get_session_transcript_with_http_info(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque fixed-cut continuation from `next_page_token`.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
@@ -1323,7 +1323,7 @@ class SessionsApi:
     ) -> ApiResponse[TranscriptSnapshot]:
         """Drain a fixed-cut incremental transcript snapshot
 
-        Projects canonical messages and append-only Invocation lifecycle changes. Supply a prior `resume_cursor` as `cursor` to drain newer durable state. Continue a multi-page fixed cut with `page_token` until `has_more` is false. Each page contains one phase: all message pages are delivered before lifecycle-change pages, so terminal state cannot precede the transcript rows committed with it. Omitting both positions starts at the beginning of the retained Session.
+        Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `resume_cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.
 
         :param session_id: (required)
         :type session_id: str
@@ -1390,7 +1390,7 @@ class SessionsApi:
     @validate_call
     async def get_session_transcript_without_preload_content(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque fixed-cut continuation from `next_page_token`.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
@@ -1409,7 +1409,7 @@ class SessionsApi:
     ) -> RESTResponseType:
         """Drain a fixed-cut incremental transcript snapshot
 
-        Projects canonical messages and append-only Invocation lifecycle changes. Supply a prior `resume_cursor` as `cursor` to drain newer durable state. Continue a multi-page fixed cut with `page_token` until `has_more` is false. Each page contains one phase: all message pages are delivered before lifecycle-change pages, so terminal state cannot precede the transcript rows committed with it. Omitting both positions starts at the beginning of the retained Session.
+        Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `resume_cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.
 
         :param session_id: (required)
         :type session_id: str
@@ -1551,7 +1551,7 @@ class SessionsApi:
     @validate_call
     async def list_session_compactions(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1569,7 +1569,7 @@ class SessionsApi:
     ) -> SessionCompactionList:
         """Page through immutable Session compaction records
 
-        Returns newest-first diagnostic records for every attempted compaction pass. `applied` records include the private summary projection and its model usage. `fell_through` records identify the failure class and may include usage when the provider returned trustworthy evidence. Only applied records change future model context; neither kind changes the canonical Session transcript.  The summary is derived from the caller's own transcript and therefore uses the same authorization and Session scoping as transcript reads. The opaque cursor is bound to the authenticated app and Session.
+        Lists every attempt nvoken made to summarize this Session's history, newest first. Use it to understand why the model's context looks the way it does.  An `applied` record includes the summary that took effect and what the summarizing call cost. A `fell_through` record tells you why the attempt was not usable, and includes usage when a model call happened before it failed.
 
         :param session_id: (required)
         :type session_id: str
@@ -1633,7 +1633,7 @@ class SessionsApi:
     @validate_call
     async def list_session_compactions_with_http_info(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1651,7 +1651,7 @@ class SessionsApi:
     ) -> ApiResponse[SessionCompactionList]:
         """Page through immutable Session compaction records
 
-        Returns newest-first diagnostic records for every attempted compaction pass. `applied` records include the private summary projection and its model usage. `fell_through` records identify the failure class and may include usage when the provider returned trustworthy evidence. Only applied records change future model context; neither kind changes the canonical Session transcript.  The summary is derived from the caller's own transcript and therefore uses the same authorization and Session scoping as transcript reads. The opaque cursor is bound to the authenticated app and Session.
+        Lists every attempt nvoken made to summarize this Session's history, newest first. Use it to understand why the model's context looks the way it does.  An `applied` record includes the summary that took effect and what the summarizing call cost. A `fell_through` record tells you why the attempt was not usable, and includes usage when a model call happened before it failed.
 
         :param session_id: (required)
         :type session_id: str
@@ -1715,7 +1715,7 @@ class SessionsApi:
     @validate_call
     async def list_session_compactions_without_preload_content(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1733,7 +1733,7 @@ class SessionsApi:
     ) -> RESTResponseType:
         """Page through immutable Session compaction records
 
-        Returns newest-first diagnostic records for every attempted compaction pass. `applied` records include the private summary projection and its model usage. `fell_through` records identify the failure class and may include usage when the provider returned trustworthy evidence. Only applied records change future model context; neither kind changes the canonical Session transcript.  The summary is derived from the caller's own transcript and therefore uses the same authorization and Session scoping as transcript reads. The opaque cursor is bound to the authenticated app and Session.
+        Lists every attempt nvoken made to summarize this Session's history, newest first. Use it to understand why the model's context looks the way it does.  An `applied` record includes the summary that took effect and what the summarizing call cost. A `fell_through` record tells you why the attempt was not usable, and includes usage when a model call happened before it failed.
 
         :param session_id: (required)
         :type session_id: str
@@ -1867,7 +1867,7 @@ class SessionsApi:
     @validate_call
     async def list_session_messages(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1949,7 +1949,7 @@ class SessionsApi:
     @validate_call
     async def list_session_messages_with_http_info(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -2031,7 +2031,7 @@ class SessionsApi:
     @validate_call
     async def list_session_messages_without_preload_content(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -2186,7 +2186,7 @@ class SessionsApi:
         tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
         default_tenant: Annotated[Optional[StrictBool], Field(description="Select only the default tenant partition. Mutually exclusive with tenant_key.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. Filters to rows whose Session carries this label. ")] = None,
-        agent_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
+        agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
         agent_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned Agent key. On Session and Invocation lists this is mutually exclusive with agent_id. ")] = None,
         session_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
@@ -2206,7 +2206,7 @@ class SessionsApi:
     ) -> SessionList:
         """List authoritative Sessions
 
-        Returns newest-first Session identity and current nonterminal Invocation state. Exact filters combine with AND. Tenant filtering and cursor binding follow the Invocation-list rules. `agent_id` and `agent_key` are mutually exclusive and normalize to the same cursor filter.
+        Lists Sessions, newest first, each with the state of its currently running turn if it has one. Filters combine with AND. Tenant filtering and cursors work the same as on the Invocation list. `agent_id` and `agent_key` are mutually exclusive.
 
         :param tenant_key: Exact non-default tenant partition reference.
         :type tenant_key: str
@@ -2287,7 +2287,7 @@ class SessionsApi:
         tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
         default_tenant: Annotated[Optional[StrictBool], Field(description="Select only the default tenant partition. Mutually exclusive with tenant_key.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. Filters to rows whose Session carries this label. ")] = None,
-        agent_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
+        agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
         agent_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned Agent key. On Session and Invocation lists this is mutually exclusive with agent_id. ")] = None,
         session_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
@@ -2307,7 +2307,7 @@ class SessionsApi:
     ) -> ApiResponse[SessionList]:
         """List authoritative Sessions
 
-        Returns newest-first Session identity and current nonterminal Invocation state. Exact filters combine with AND. Tenant filtering and cursor binding follow the Invocation-list rules. `agent_id` and `agent_key` are mutually exclusive and normalize to the same cursor filter.
+        Lists Sessions, newest first, each with the state of its currently running turn if it has one. Filters combine with AND. Tenant filtering and cursors work the same as on the Invocation list. `agent_id` and `agent_key` are mutually exclusive.
 
         :param tenant_key: Exact non-default tenant partition reference.
         :type tenant_key: str
@@ -2388,7 +2388,7 @@ class SessionsApi:
         tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
         default_tenant: Annotated[Optional[StrictBool], Field(description="Select only the default tenant partition. Mutually exclusive with tenant_key.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. Filters to rows whose Session carries this label. ")] = None,
-        agent_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
+        agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
         agent_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned Agent key. On Session and Invocation lists this is mutually exclusive with agent_id. ")] = None,
         session_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
@@ -2408,7 +2408,7 @@ class SessionsApi:
     ) -> RESTResponseType:
         """List authoritative Sessions
 
-        Returns newest-first Session identity and current nonterminal Invocation state. Exact filters combine with AND. Tenant filtering and cursor binding follow the Invocation-list rules. `agent_id` and `agent_key` are mutually exclusive and normalize to the same cursor filter.
+        Lists Sessions, newest first, each with the state of its currently running turn if it has one. Filters combine with AND. Tenant filtering and cursors work the same as on the Invocation list. `agent_id` and `agent_key` are mutually exclusive.
 
         :param tenant_key: Exact non-default tenant partition reference.
         :type tenant_key: str
@@ -2583,7 +2583,7 @@ class SessionsApi:
     @validate_call
     async def stream_session_transcript(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.")] = None,
@@ -2600,9 +2600,9 @@ class SessionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> TranscriptStreamEvent:
-        """Replay and tail one Session transcript over SSE
+        """Follow a Session transcript over Server-Sent Events
 
-        Opens a resumable Server-Sent Events projection over the same fixed-cut transcript read model as the JSON endpoint. With deltas enabled, the server subscribes to live fan-out before its first Postgres drain. In either mode it re-drains Postgres on a bounded poll and closes after authoritative terminal reconciliation or deliberate rotation. Disconnecting never cancels the Invocation.  Every nonempty `transcript.update` frame carries `id: <resume_cursor>`; that opaque ID is the only replay position clients persist. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`. Deltas are ephemeral and may be lost; after `stream.resync`, discard provisional output and wait for canonical messages. `stream.end` reason `terminal` means the final Postgres drain observed no nonterminal Invocation. Reason `rotate` means reconnect with the last durable ID. An abnormal close has no terminal meaning. `deltas=false` skips preview fan-out without changing replay, polling, cursor, or terminal semantics.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP client that can set the `Authorization` header; the browser EventSource constructor alone cannot do so. The server emits `retry: 1000` as its default reconnect delay.
+        Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.
 
         :param session_id: (required)
         :type session_id: str
@@ -2669,7 +2669,7 @@ class SessionsApi:
     @validate_call
     async def stream_session_transcript_with_http_info(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.")] = None,
@@ -2686,9 +2686,9 @@ class SessionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[TranscriptStreamEvent]:
-        """Replay and tail one Session transcript over SSE
+        """Follow a Session transcript over Server-Sent Events
 
-        Opens a resumable Server-Sent Events projection over the same fixed-cut transcript read model as the JSON endpoint. With deltas enabled, the server subscribes to live fan-out before its first Postgres drain. In either mode it re-drains Postgres on a bounded poll and closes after authoritative terminal reconciliation or deliberate rotation. Disconnecting never cancels the Invocation.  Every nonempty `transcript.update` frame carries `id: <resume_cursor>`; that opaque ID is the only replay position clients persist. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`. Deltas are ephemeral and may be lost; after `stream.resync`, discard provisional output and wait for canonical messages. `stream.end` reason `terminal` means the final Postgres drain observed no nonterminal Invocation. Reason `rotate` means reconnect with the last durable ID. An abnormal close has no terminal meaning. `deltas=false` skips preview fan-out without changing replay, polling, cursor, or terminal semantics.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP client that can set the `Authorization` header; the browser EventSource constructor alone cannot do so. The server emits `retry: 1000` as its default reconnect delay.
+        Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.
 
         :param session_id: (required)
         :type session_id: str
@@ -2755,7 +2755,7 @@ class SessionsApi:
     @validate_call
     async def stream_session_transcript_without_preload_content(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.")] = None,
@@ -2772,9 +2772,9 @@ class SessionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Replay and tail one Session transcript over SSE
+        """Follow a Session transcript over Server-Sent Events
 
-        Opens a resumable Server-Sent Events projection over the same fixed-cut transcript read model as the JSON endpoint. With deltas enabled, the server subscribes to live fan-out before its first Postgres drain. In either mode it re-drains Postgres on a bounded poll and closes after authoritative terminal reconciliation or deliberate rotation. Disconnecting never cancels the Invocation.  Every nonempty `transcript.update` frame carries `id: <resume_cursor>`; that opaque ID is the only replay position clients persist. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`. Deltas are ephemeral and may be lost; after `stream.resync`, discard provisional output and wait for canonical messages. `stream.end` reason `terminal` means the final Postgres drain observed no nonterminal Invocation. Reason `rotate` means reconnect with the last durable ID. An abnormal close has no terminal meaning. `deltas=false` skips preview fan-out without changing replay, polling, cursor, or terminal semantics.  The explicit `cursor` query parameter takes precedence over `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP client that can set the `Authorization` header; the browser EventSource constructor alone cannot do so. The server emits `retry: 1000` as its default reconnect delay.
+        Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.
 
         :param session_id: (required)
         :type session_id: str
@@ -2915,7 +2915,7 @@ class SessionsApi:
     @validate_call
     async def update_session(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         update_session_request: UpdateSessionRequest,
         _request_timeout: Union[
             None,
@@ -2993,7 +2993,7 @@ class SessionsApi:
     @validate_call
     async def update_session_with_http_info(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         update_session_request: UpdateSessionRequest,
         _request_timeout: Union[
             None,
@@ -3071,7 +3071,7 @@ class SessionsApi:
     @validate_call
     async def update_session_without_preload_content(
         self,
-        session_id: Annotated[str, Field(strict=True)],
+        session_id: Annotated[str, Field(min_length=1, strict=True)],
         update_session_request: UpdateSessionRequest,
         _request_timeout: Union[
             None,

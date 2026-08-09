@@ -9,9 +9,7 @@ readonly DIFF="$WORK/diff"
 readonly GENERATED_PATHS=(
   sdk/operations.json
   sdk/go/generated
-  sdk/go/identitygenerated
   sdk/typescript/src/generated
-  sdk/typescript/src/identity-generated
   sdk/python/src/nvoken_generated
   sdk/rust/src/apis
   sdk/rust/src/models

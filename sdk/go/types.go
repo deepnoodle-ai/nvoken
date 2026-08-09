@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
-	"github.com/deepnoodle-ai/nvoken/sdk/go/identitygenerated"
 )
 
 type Invocation = generated.Invocation
@@ -51,12 +50,12 @@ type ToolCallDelivery = generated.ToolCallDelivery
 type ToolCallMode = generated.ToolCallMode
 type ToolCallStatus = generated.ToolCallStatus
 type CallbackDeliveryOutcome = generated.CallbackDeliveryOutcome
-type Credential = identitygenerated.Credential
-type CredentialList = identitygenerated.CredentialList
-type CredentialProfile = identitygenerated.Profile
-type CredentialStatus = identitygenerated.CredentialStatus
-type CurrentIdentity = identitygenerated.CurrentIdentity
-type RuntimeOperation = identitygenerated.Operation
+type Credential = generated.Credential
+type CredentialList = generated.CredentialList
+type CredentialProfile = generated.Profile
+type CredentialStatus = generated.CredentialStatus
+type CurrentIdentity = generated.CurrentIdentity
+type RuntimeOperation = generated.Operation
 
 type CredentialIssuance struct {
 	Credential        Credential
@@ -105,44 +104,44 @@ const (
 	PendingInputExpired                         = generated.PendingInputStatusExpired
 	PendingInputCancelled                       = generated.PendingInputStatusCancelled
 	DailyUsageGroupByTenantKey                  = generated.TenantKey
-	CredentialProfileRuntime                    = identitygenerated.Runtime
-	CredentialProfileViewer                     = identitygenerated.Viewer
-	CredentialProfileOperator                   = identitygenerated.Operator
-	CredentialStatusActive                      = identitygenerated.Active
-	CredentialStatusRevoked                     = identitygenerated.Revoked
-	OperationCreateInvocation                   = identitygenerated.CreateInvocation
-	OperationCreateSession                      = identitygenerated.CreateSession
-	OperationGetAgent                           = identitygenerated.GetAgent
-	OperationListAgents                         = identitygenerated.ListAgents
-	OperationGetInvocation                      = identitygenerated.GetInvocation
-	OperationSubmitToolResults                  = identitygenerated.SubmitToolResults
-	OperationCancelInvocation                   = identitygenerated.CancelInvocation
-	OperationResumeInvocation                   = identitygenerated.ResumeInvocation
-	OperationListInvocations                    = identitygenerated.ListInvocations
-	OperationGetSession                         = identitygenerated.GetSession
-	OperationUpdateSession                      = identitygenerated.UpdateSession
-	OperationDeleteSession                      = identitygenerated.DeleteSession
-	OperationListSessions                       = identitygenerated.ListSessions
-	OperationListSessionMessages                = identitygenerated.ListSessionMessages
-	OperationGetSessionTranscript               = identitygenerated.GetSessionTranscript
-	OperationGetIdentity                        = identitygenerated.GetIdentity
-	OperationListCredentials                    = identitygenerated.ListCredentials
-	OperationCreateCredential                   = identitygenerated.CreateCredential
-	OperationGetCredential                      = identitygenerated.GetCredential
-	OperationRotateCredential                   = identitygenerated.RotateCredential
-	OperationRevokeCredential                   = identitygenerated.RevokeCredential
-	OperationListProviderKeys                   = identitygenerated.ListProviderKeys
-	OperationCreateProviderKey                  = identitygenerated.CreateProviderKey
-	OperationGetProviderKey                     = identitygenerated.GetProviderKey
-	OperationRotateProviderKey                  = identitygenerated.RotateProviderKey
-	OperationRevokeProviderKey                  = identitygenerated.RevokeProviderKey
-	OperationReadUsage                          = identitygenerated.ReadUsage
-	OperationReadBudgets                        = identitygenerated.ReadBudgets
-	OperationWriteBudgets                       = identitygenerated.WriteBudgets
-	OperationRegisterApp                        = identitygenerated.RegisterApp
-	OperationListApps                           = identitygenerated.ListApps
-	OperationGetApp                             = identitygenerated.GetApp
-	OperationUpdateApp                          = identitygenerated.UpdateApp
+	CredentialProfileRuntime                    = generated.Runtime
+	CredentialProfileViewer                     = generated.Viewer
+	CredentialProfileOperator                   = generated.Operator
+	CredentialStatusActive                      = generated.CredentialStatusActive
+	CredentialStatusRevoked                     = generated.CredentialStatusRevoked
+	OperationCreateInvocation                   = generated.CreateInvocation
+	OperationCreateSession                      = generated.CreateSession
+	OperationGetAgent                           = generated.GetAgent
+	OperationListAgents                         = generated.ListAgents
+	OperationGetInvocation                      = generated.GetInvocation
+	OperationSubmitToolResults                  = generated.SubmitToolResults
+	OperationCancelInvocation                   = generated.CancelInvocation
+	OperationResumeInvocation                   = generated.ResumeInvocation
+	OperationListInvocations                    = generated.ListInvocations
+	OperationGetSession                         = generated.GetSession
+	OperationUpdateSession                      = generated.UpdateSession
+	OperationDeleteSession                      = generated.DeleteSession
+	OperationListSessions                       = generated.ListSessions
+	OperationListSessionMessages                = generated.ListSessionMessages
+	OperationGetSessionTranscript               = generated.GetSessionTranscript
+	OperationGetIdentity                        = generated.GetIdentity
+	OperationListCredentials                    = generated.ListCredentials
+	OperationCreateCredential                   = generated.CreateCredential
+	OperationGetCredential                      = generated.GetCredential
+	OperationRotateCredential                   = generated.RotateCredential
+	OperationRevokeCredential                   = generated.RevokeCredential
+	OperationListProviderKeys                   = generated.ListProviderKeys
+	OperationCreateProviderKey                  = generated.CreateProviderKey
+	OperationGetProviderKey                     = generated.GetProviderKey
+	OperationRotateProviderKey                  = generated.RotateProviderKey
+	OperationRevokeProviderKey                  = generated.RevokeProviderKey
+	OperationReadUsage                          = generated.ReadUsage
+	OperationReadBudgets                        = generated.ReadBudgets
+	OperationWriteBudgets                       = generated.WriteBudgets
+	OperationRegisterApp                        = generated.RegisterApp
+	OperationListApps                           = generated.ListApps
+	OperationGetApp                             = generated.GetApp
+	OperationUpdateApp                          = generated.UpdateApp
 )
 
 type ModelList struct {

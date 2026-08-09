@@ -4,6 +4,7 @@
 from nvoken_generated.api.agents_api import AgentsApi
 from nvoken_generated.api.apps_api import AppsApi
 from nvoken_generated.api.budgets_api import BudgetsApi
+from nvoken_generated.api.identity_api import IdentityApi
 from nvoken_generated.api.invocations_api import InvocationsApi
 from nvoken_generated.api.mcp_api import MCPApi
 from nvoken_generated.api.models_api import ModelsApi
