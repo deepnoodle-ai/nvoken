@@ -1,0 +1,1740 @@
+package nvoken
+
+import (
+	"bytes"
+	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	mathrand "math/rand/v2"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
+	"github.com/deepnoodle-ai/nvoken/sdk/go/identitygenerated"
+)
+
+type RetryPolicy struct {
+	MaxAttempts int
+	MinDelay    time.Duration
+	MaxDelay    time.Duration
+}
+
+func (p RetryPolicy) normalized() RetryPolicy {
+	if p.MaxAttempts <= 0 {
+		p.MaxAttempts = 4
+	}
+	if p.MinDelay <= 0 {
+		p.MinDelay = 100 * time.Millisecond
+	}
+	if p.MaxDelay <= 0 {
+		p.MaxDelay = 2 * time.Second
+	}
+	return p
+}
+
+type Client struct {
+	raw          *generated.ClientWithResponses
+	identityRaw  *identitygenerated.ClientWithResponses
+	retry        RetryPolicy
+	DefaultModel *Model
+	sessionMu    sync.Mutex
+	sessionLocks map[string]*sync.Mutex
+}
+
+type ClientOption func(*clientOptions)
+
+type clientOptions struct {
+	httpClient   *http.Client
+	retry        RetryPolicy
+	defaultModel *Model
+}
+
+func WithHTTPClient(client *http.Client) ClientOption {
+	return func(options *clientOptions) { options.httpClient = client }
+}
+
+func WithRetryPolicy(policy RetryPolicy) ClientOption {
+	return func(options *clientOptions) { options.retry = policy }
+}
+
+// WithDefaultModel sets the model an Agent uses when it does not name one
+// itself. It is resolved into model client-side before the request; the
+// server keeps requiring exact selection.
+func WithDefaultModel(model Model) ClientOption {
+	return func(options *clientOptions) { options.defaultModel = &model }
+}
+
+func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error) {
+	if baseURL == "" {
+		return nil, fmt.Errorf("base URL is required")
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("API key is required")
+	}
+	config := clientOptions{httpClient: &http.Client{}}
+	for _, option := range options {
+		option(&config)
+	}
+	requestEditor := func(_ context.Context, request *http.Request) error {
+		request.Header.Set("Authorization", "Bearer "+apiKey)
+		request.Header.Set("User-Agent", "nvoken-go/0.1.0")
+		return nil
+	}
+	raw, err := generated.NewClientWithResponses(
+		baseURL,
+		generated.WithHTTPClient(config.httpClient),
+		generated.WithRequestEditorFn(requestEditor),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create generated Runtime client: %w", err)
+	}
+	identityRaw, err := identitygenerated.NewClientWithResponses(
+		baseURL,
+		identitygenerated.WithHTTPClient(config.httpClient),
+		identitygenerated.WithRequestEditorFn(requestEditor),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create generated Identity client: %w", err)
+	}
+	return &Client{
+		raw:          raw,
+		identityRaw:  identityRaw,
+		retry:        config.retry.normalized(),
+		DefaultModel: config.defaultModel,
+		sessionLocks: make(map[string]*sync.Mutex),
+	}, nil
+}
+
+func (c *Client) Raw() *generated.ClientWithResponses { return c.raw }
+
+func (c *Client) RawIdentity() *identitygenerated.ClientWithResponses { return c.identityRaw }
+
+type callResult[T any] struct {
+	Value  *T
+	Status int
+	Header http.Header
+	Body   []byte
+}
+
+func callReplaySafe[T any](ctx context.Context, policy RetryPolicy, replaySafe bool, call func() (callResult[T], error)) (*T, error) {
+	policy = policy.normalized()
+	var lastErr error
+	for attempt := 1; attempt <= policy.MaxAttempts; attempt++ {
+		result, err := call()
+		if err == nil && result.Status >= 200 && result.Status < 300 && result.Value != nil {
+			return result.Value, nil
+		}
+		if err == nil && result.Status >= 200 && result.Status < 300 {
+			return nil, &Error{Category: ErrorUnexpectedResponse, Status: result.Status, Message: "nvoken returned an empty success response"}
+		}
+		if err != nil {
+			lastErr = transportError(err)
+		} else {
+			lastErr = errorFromResponse(result.Status, result.Header, result.Body)
+		}
+		if !replaySafe || attempt == policy.MaxAttempts || !retryable(err, result.Status) {
+			return nil, lastErr
+		}
+		delay := retryDelay(policy, attempt, result.Header)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, transportError(ctx.Err())
+		case <-timer.C:
+		}
+	}
+	return nil, lastErr
+}
+
+func retryable(transport error, status int) bool {
+	if transport != nil {
+		return true
+	}
+	switch status {
+	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests,
+		http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func retryDelay(policy RetryPolicy, attempt int, header http.Header) time.Duration {
+	if delay := parseRetryAfter(header.Get("Retry-After"), time.Now()); delay > 0 {
+		if delay > policy.MaxDelay {
+			return policy.MaxDelay
+		}
+		return delay
+	}
+	delay := policy.MinDelay << (attempt - 1)
+	if delay > policy.MaxDelay {
+		delay = policy.MaxDelay
+	}
+	if delay <= 1 {
+		return delay
+	}
+	return delay/2 + time.Duration(mathrand.Int64N(int64(delay/2)+1))
+}
+
+func responseHeader(response *http.Response) http.Header {
+	if response == nil {
+		return make(http.Header)
+	}
+	return response.Header
+}
+
+func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*InvocationHandle, error) {
+	if request.IdempotencyKey == "" {
+		request.IdempotencyKey = generatedIdempotencyKey()
+	}
+	body, err := request.encoded()
+	if err != nil {
+		if sdkError, ok := err.(*Error); ok {
+			return nil, sdkError
+		}
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	invocation, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
+		response, callErr := c.raw.CreateInvocationWithBodyWithResponse(
+			ctx,
+			&generated.CreateInvocationParams{},
+			"application/json",
+			bytes.NewReader(body),
+		)
+		if callErr != nil {
+			return callResult[generated.Invocation]{}, callErr
+		}
+		return callResult[generated.Invocation]{
+			Value:  response.JSON202,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &InvocationHandle{
+		client:         c,
+		InvocationID:   invocation.ID,
+		IdempotencyKey: request.IdempotencyKey,
+		SessionID:      invocation.SessionID,
+		AgentID:        invocation.AgentID,
+		Status:         invocation.Status,
+		Deduplicated:   invocation.Deduplicated,
+		DeadlineAt:     invocation.DeadlineAt,
+	}, nil
+}
+
+func (c *Client) Invocation(invocationID string) *InvocationHandle {
+	return &InvocationHandle{client: c, InvocationID: invocationID}
+}
+
+func (c *Client) GetInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
+		response, err := c.raw.GetInvocationWithResponse(ctx, invocationID)
+		if err != nil {
+			return callResult[generated.Invocation]{}, err
+		}
+		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+}
+
+func (c *Client) GetInvocationResult(ctx context.Context, invocationID string) (*InvocationResult, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationResult], error) {
+		response, err := c.raw.GetInvocationResultWithResponse(ctx, invocationID)
+		if err != nil {
+			return callResult[generated.InvocationResult]{}, err
+		}
+		return callResult[generated.InvocationResult]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+}
+
+func (c *Client) CancelInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
+		response, err := c.raw.CancelInvocationWithResponse(ctx, invocationID)
+		if err != nil {
+			return callResult[generated.Invocation]{}, err
+		}
+		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+}
+
+// InterruptInvocation stops an Invocation gracefully and keeps its work. The
+// turn settles `completed` with stop reason `interrupted` once it reaches an
+// execution seam, so the messages it already produced stay in the Session.
+// CancelInvocation is the discarding stop.
+func (c *Client) InterruptInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
+		response, err := c.raw.InterruptInvocationWithResponse(ctx, invocationID)
+		if err != nil {
+			return callResult[generated.Invocation]{}, err
+		}
+		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+}
+
+// ResumeInvocation raises the one exhausted turn-level ceiling on a paused
+// Invocation. The service validates that exactly the exhausted limit changed
+// and that its replacement is above both the previous limit and usage so far.
+func (c *Client) ResumeInvocation(
+	ctx context.Context,
+	invocationID string,
+	limits Limits,
+) (*Invocation, error) {
+	body, err := json.Marshal(struct {
+		Limits Limits `json:"limits"`
+	}{Limits: limits})
+	if err != nil {
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.Invocation], error) {
+		response, err := c.raw.ResumeInvocationWithBodyWithResponse(
+			ctx,
+			invocationID,
+			"application/json",
+			bytes.NewReader(body),
+		)
+		if err != nil {
+			return callResult[generated.Invocation]{}, err
+		}
+		return callResult[generated.Invocation]{
+			Value:  response.JSON202,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// NudgeInvocation appends steering to a running Invocation without ending it.
+// The turn keeps everything it has already produced — the difference from
+// supersession, which rewinds — and the model sees the input at its next
+// execution seam rather than immediately.
+//
+// Input the turn never reaches is settled `expired` when the Invocation
+// settles; nvoken never re-homes it onto a later turn, so re-sending missed
+// direction as the next Invocation's input is the caller's decision to make.
+func (c *Client) NudgeInvocation(
+	ctx context.Context,
+	invocationID string,
+	request NudgeRequest,
+) (*NudgeAcknowledgement, error) {
+	if strings.TrimSpace(request.Content) == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "nudge content is required"}
+	}
+	body, err := json.Marshal(struct {
+		Content        string `json:"content"`
+		IdempotencyKey string `json:"idempotency_key,omitempty"`
+	}{Content: request.Content, IdempotencyKey: request.IdempotencyKey})
+	if err != nil {
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	// Replay-safe only with a key: without one a retried POST would stage the
+	// same direction twice.
+	replaySafe := request.IdempotencyKey != ""
+	return callReplaySafe(ctx, c.retry, replaySafe, func() (callResult[generated.NudgeAcknowledgement], error) {
+		response, callErr := c.raw.NudgeInvocationWithBodyWithResponse(
+			ctx,
+			invocationID,
+			"application/json",
+			bytes.NewReader(body),
+		)
+		if callErr != nil {
+			return callResult[generated.NudgeAcknowledgement]{}, callErr
+		}
+		return callResult[generated.NudgeAcknowledgement]{
+			Value:  response.JSON202,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// ListPendingInputs reads the staged queue in the order the turn will consume
+// it, settled rows included. It is the reconciliation source for a surface
+// that shows queued direction.
+func (c *Client) ListPendingInputs(
+	ctx context.Context,
+	invocationID string,
+	options ListPendingInputsOptions,
+) (*PendingInputList, error) {
+	params := &generated.ListPendingInputsParams{
+		Status: options.Status,
+		Cursor: options.Cursor,
+		Limit:  options.Limit,
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.PendingInputList], error) {
+		response, callErr := c.raw.ListPendingInputsWithResponse(ctx, invocationID, params)
+		if callErr != nil {
+			return callResult[generated.PendingInputList]{}, callErr
+		}
+		return callResult[generated.PendingInputList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &PendingInputList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
+}
+
+// ListToolCalls reads durable execution records in discovery order. Inputs and
+// results remain in the Session transcript. Callback records include retained
+// delivery outcome metadata.
+func (c *Client) ListToolCalls(
+	ctx context.Context,
+	invocationID string,
+	options ListToolCallsOptions,
+) (*ToolCallList, error) {
+	params := &generated.ListToolCallsParams{
+		Cursor: options.Cursor,
+		Limit:  options.Limit,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ToolCallList], error) {
+		response, err := c.raw.ListToolCallsWithResponse(ctx, invocationID, params)
+		if err != nil {
+			return callResult[generated.ToolCallList]{}, err
+		}
+		return callResult[generated.ToolCallList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// CancelPendingInput withdraws staged input the turn has not taken. Input the
+// executor already drained is reported as a conflict rather than removed from
+// a transcript it is already part of.
+func (c *Client) CancelPendingInput(
+	ctx context.Context,
+	invocationID string,
+	pendingInputID string,
+) (*PendingInput, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.PendingInput], error) {
+		response, err := c.raw.CancelPendingInputWithResponse(ctx, invocationID, pendingInputID)
+		if err != nil {
+			return callResult[generated.PendingInput]{}, err
+		}
+		return callResult[generated.PendingInput]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) ListModels(
+	ctx context.Context,
+	options ListModelsOptions,
+) (*ModelList, error) {
+	params := &generated.ListModelsParams{
+		Provider:          options.Provider,
+		IncludeDeprecated: options.IncludeDeprecated,
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ModelList], error) {
+		response, err := c.raw.ListModelsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.ModelList]{}, err
+		}
+		return callResult[generated.ModelList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ModelList{
+		CatalogVersion: result.CatalogVersion,
+		Items:          result.Items,
+	}, nil
+}
+
+func (c *Client) ListMCPTools(
+	ctx context.Context,
+	server MCPServer,
+) (*MCPListToolsResponse, error) {
+	body := generated.MCPListToolsRequest{
+		Server: generatedMCPServer(server),
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.MCPListToolsResponse], error) {
+		response, err := c.raw.ListMCPToolsWithResponse(ctx, body)
+		if err != nil {
+			return callResult[generated.MCPListToolsResponse]{}, err
+		}
+		return callResult[generated.MCPListToolsResponse]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetModel(ctx context.Context, model Model) (*ModelDescriptor, error) {
+	if model.ID == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "model id is required"}
+	}
+	provider, err := generatedModelProvider(model.Provider)
+	if err != nil {
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ModelDescriptor], error) {
+		response, callErr := c.raw.GetModelWithResponse(
+			ctx,
+			provider,
+			model.ID,
+			&generated.GetModelParams{},
+		)
+		if callErr != nil {
+			return callResult[generated.ModelDescriptor]{}, callErr
+		}
+		return callResult[generated.ModelDescriptor]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func generatedMCPServer(server MCPServer) generated.MCPServer {
+	result := generated.MCPServer{
+		Name: server.Name,
+		URL:  server.URL,
+	}
+	if server.Transport != "" {
+		transport := generated.MCPServerTransport(server.Transport)
+		result.Transport = &transport
+	}
+	if server.AllowedTools != nil {
+		allowedTools := append([]string(nil), server.AllowedTools...)
+		result.AllowedTools = &allowedTools
+	}
+	if server.Headers != nil {
+		headers := make(map[string]string, len(server.Headers))
+		for name, value := range server.Headers {
+			headers[name] = value
+		}
+		result.Headers = &headers
+	}
+	if server.Timeouts != nil {
+		result.Timeouts = &generated.MCPTimeouts{
+			DiscoverySeconds: server.Timeouts.DiscoverySeconds,
+			CallSeconds:      server.Timeouts.CallSeconds,
+		}
+	}
+	return result
+}
+
+func (c *Client) SubmitToolResults(ctx context.Context, invocationID string, results []ToolResult) (*ToolResultResponse, error) {
+	body, err := generatedToolResults(results)
+	if err != nil {
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SubmitHostToolResultsResponse], error) {
+		response, callErr := c.raw.SubmitHostToolResultsWithResponse(ctx, invocationID, body)
+		if callErr != nil {
+			return callResult[generated.SubmitHostToolResultsResponse]{}, callErr
+		}
+		return callResult[generated.SubmitHostToolResultsResponse]{Value: response.JSON202, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+}
+
+func (c *Client) GetCurrentIdentity(ctx context.Context) (*CurrentIdentity, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.CurrentIdentity], error) {
+		response, err := c.identityRaw.GetCurrentIdentityWithResponse(ctx)
+		if err != nil {
+			return callResult[identitygenerated.CurrentIdentity]{}, err
+		}
+		return callResult[identitygenerated.CurrentIdentity]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) ListCredentials(
+	ctx context.Context,
+	options ListCredentialsOptions,
+) (*CredentialList, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.CredentialList], error) {
+		response, err := c.identityRaw.ListCredentialsWithResponse(ctx, &identitygenerated.ListCredentialsParams{
+			Status: options.Status,
+			Cursor: options.Cursor,
+			Limit:  options.Limit,
+		})
+		if err != nil {
+			return callResult[identitygenerated.CredentialList]{}, err
+		}
+		return callResult[identitygenerated.CredentialList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) CreateCredential(
+	ctx context.Context,
+	input CreateCredentialInput,
+) (*CredentialIssuance, error) {
+	if input.Name == "" || !input.Profile.Valid() || input.IdempotencyKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "credential name, profile, and idempotency key are required"}
+	}
+	body := identitygenerated.CreateCredentialRequest{
+		AppID:     input.AppID,
+		ExpiresAt: input.ExpiresAt,
+		Name:      input.Name,
+		Profile:   input.Profile,
+		SessionID: input.SessionID,
+		TenantKey: input.TenantKey,
+	}
+	if input.Operations != nil {
+		operations := append([]RuntimeOperation(nil), input.Operations...)
+		body.Operations = &operations
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.CredentialIssuance], error) {
+		response, err := c.identityRaw.CreateCredentialWithResponse(
+			ctx,
+			&identitygenerated.CreateCredentialParams{IdempotencyKey: input.IdempotencyKey},
+			body,
+		)
+		if err != nil {
+			return callResult[identitygenerated.CredentialIssuance]{}, err
+		}
+		return callResult[identitygenerated.CredentialIssuance]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return credentialIssuance(result)
+}
+
+func (c *Client) GetCredential(ctx context.Context, credentialID string) (*Credential, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.Credential], error) {
+		response, err := c.identityRaw.GetCredentialWithResponse(ctx, credentialID)
+		if err != nil {
+			return callResult[identitygenerated.Credential]{}, err
+		}
+		return callResult[identitygenerated.Credential]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) RotateCredential(
+	ctx context.Context,
+	credentialID string,
+	input RotateCredentialInput,
+) (*CredentialIssuance, error) {
+	if credentialID == "" || input.IdempotencyKey == "" || input.OverlapSeconds < 0 || input.OverlapSeconds > 86400 {
+		return nil, &Error{Category: ErrorValidation, Message: "credential ID and idempotency key are required, and overlap seconds must be between 0 and 86400"}
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.CredentialIssuance], error) {
+		response, err := c.identityRaw.RotateCredentialWithResponse(
+			ctx,
+			credentialID,
+			&identitygenerated.RotateCredentialParams{IdempotencyKey: input.IdempotencyKey},
+			identitygenerated.RotateCredentialJSONRequestBody{OverlapSeconds: input.OverlapSeconds},
+		)
+		if err != nil {
+			return callResult[identitygenerated.CredentialIssuance]{}, err
+		}
+		return callResult[identitygenerated.CredentialIssuance]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return credentialIssuance(result)
+}
+
+func (c *Client) RevokeCredential(ctx context.Context, credentialID string) (*Credential, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.Credential], error) {
+		response, err := c.identityRaw.RevokeCredentialWithResponse(ctx, credentialID)
+		if err != nil {
+			return callResult[identitygenerated.Credential]{}, err
+		}
+		return callResult[identitygenerated.Credential]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func credentialIssuance(value *identitygenerated.CredentialIssuance) (*CredentialIssuance, error) {
+	if value == nil || value.Secret == nil || *value.Secret == "" {
+		return nil, &Error{Category: ErrorUnexpectedResponse, Message: "nvoken returned credential issuance without one-time secret material"}
+	}
+	return &CredentialIssuance{
+		Credential:        value.Credential,
+		Secret:            *value.Secret,
+		DeliveryExpiresAt: value.DeliveryExpiresAt,
+		Replayed:          value.Replayed,
+	}, nil
+}
+
+func (c *Client) ListProviderKeys(
+	ctx context.Context,
+	options ListProviderKeysOptions,
+) (*ProviderKeyList, error) {
+	var status *generated.ListProviderKeysParamsStatus
+	if options.Status != nil {
+		value := generated.ListProviderKeysParamsStatus(*options.Status)
+		status = &value
+	}
+	params := &generated.ListProviderKeysParams{
+		Provider:  options.Provider,
+		Scope:     options.Scope,
+		Status:    status,
+		TenantKey: options.TenantKey,
+		Cursor:    options.Cursor,
+		Limit:     options.Limit,
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderKeyList], error) {
+		response, err := c.raw.ListProviderKeysWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.ProviderKeyList]{}, err
+		}
+		return callResult[generated.ProviderKeyList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ProviderKeyList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
+}
+
+func (c *Client) CreateProviderKey(
+	ctx context.Context,
+	input CreateProviderKeyInput,
+) (*ProviderKey, error) {
+	if input.APIKey == "" || input.IdempotencyKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "provider API key and idempotency key are required"}
+	}
+	body := generated.CreateProviderKeyRequest{
+		Key: generated.ProviderStaticKey{
+			APIKey: &input.APIKey,
+		},
+		ExpiresAt:      input.ExpiresAt,
+		IdempotencyKey: input.IdempotencyKey,
+		Provider:       input.Provider,
+		Scope:          input.Scope,
+		TenantKey:      input.TenantKey,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderKey], error) {
+		response, err := c.raw.CreateProviderKeyWithResponse(ctx, body)
+		if err != nil {
+			return callResult[generated.ProviderKey]{}, err
+		}
+		return callResult[generated.ProviderKey]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetProviderKey(ctx context.Context, id string) (*ProviderKey, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderKey], error) {
+		response, err := c.raw.GetProviderKeyWithResponse(ctx, id)
+		if err != nil {
+			return callResult[generated.ProviderKey]{}, err
+		}
+		return callResult[generated.ProviderKey]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetProviderKeyUsage(ctx context.Context, id string) (*ProviderKeyUsage, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderKeyUsage], error) {
+		response, err := c.raw.GetProviderKeyUsageWithResponse(ctx, id)
+		if err != nil {
+			return callResult[generated.ProviderKeyUsage]{}, err
+		}
+		return callResult[generated.ProviderKeyUsage]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetDailyUsage(ctx context.Context, params *GetDailyUsageParams) (*DailyUsage, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.DailyUsage], error) {
+		response, err := c.raw.GetDailyUsageWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.DailyUsage]{}, err
+		}
+		return callResult[generated.DailyUsage]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) CreateBudget(ctx context.Context, input CreateBudgetInput) (*Budget, error) {
+	if input.IdempotencyKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "budget idempotency key is required"}
+	}
+	body := generated.CreateBudgetRequest{
+		AgentID:             input.AgentID,
+		CredentialID:        input.CredentialID,
+		DefaultTenant:       input.DefaultTenant,
+		IdempotencyKey:      input.IdempotencyKey,
+		MaxEstimatedCostUsd: float32(input.MaxEstimatedCostUSD),
+		ProviderKeyID:       input.ProviderKeyID,
+		Scope:               input.Scope,
+		TenantKey:           input.TenantKey,
+		UserKey:             input.UserKey,
+		WindowEnd:           input.WindowEnd,
+		WindowStart:         input.WindowStart,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Budget], error) {
+		response, err := c.raw.CreateBudgetWithResponse(ctx, body)
+		if err != nil {
+			return callResult[generated.Budget]{}, err
+		}
+		return callResult[generated.Budget]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetBudget(ctx context.Context, budgetID string) (*Budget, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Budget], error) {
+		response, err := c.raw.GetBudgetWithResponse(ctx, budgetID)
+		if err != nil {
+			return callResult[generated.Budget]{}, err
+		}
+		return callResult[generated.Budget]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) UpdateBudget(ctx context.Context, budgetID string, maxEstimatedCostUSD float64) (*Budget, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Budget], error) {
+		response, err := c.raw.UpdateBudgetWithResponse(ctx, budgetID, generated.UpdateBudgetRequest{
+			MaxEstimatedCostUsd: float32(maxEstimatedCostUSD),
+		})
+		if err != nil {
+			return callResult[generated.Budget]{}, err
+		}
+		return callResult[generated.Budget]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) DeleteBudget(ctx context.Context, budgetID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.DeleteBudgetWithResponse(ctx, budgetID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
+func (c *Client) RotateProviderKey(
+	ctx context.Context,
+	id string,
+	input RotateProviderKeyInput,
+) (*ProviderKey, error) {
+	if input.APIKey == "" || input.IdempotencyKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "provider API key and idempotency key are required"}
+	}
+	body := generated.RotateProviderKeyRequest{
+		Key: generated.ProviderStaticKey{
+			APIKey: &input.APIKey,
+		},
+		ExpiresAt:      input.ExpiresAt,
+		IdempotencyKey: input.IdempotencyKey,
+		OverlapSeconds: input.OverlapSeconds,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderKey], error) {
+		response, err := c.raw.RotateProviderKeyWithResponse(ctx, id, body)
+		if err != nil {
+			return callResult[generated.ProviderKey]{}, err
+		}
+		return callResult[generated.ProviderKey]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) RevokeProviderKey(ctx context.Context, id string) (*ProviderKey, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ProviderKey], error) {
+		response, err := c.raw.RevokeProviderKeyWithResponse(ctx, id)
+		if err != nil {
+			return callResult[generated.ProviderKey]{}, err
+		}
+		return callResult[generated.ProviderKey]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// RegisterApp registers one host application and returns its generated app_id.
+// It requires a credential that is not associated with an app.
+func (c *Client) RegisterApp(ctx context.Context, name string, options RegisterAppOptions) (*App, error) {
+	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.App], error) {
+		response, err := c.raw.RegisterAppWithResponse(ctx, generated.RegisterAppJSONRequestBody{
+			Name:        name,
+			ExternalRef: options.ExternalRef,
+			DisplayName: options.DisplayName,
+		})
+		if err != nil {
+			return callResult[generated.App]{}, err
+		}
+		return callResult[generated.App]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetApp(ctx context.Context, appID string) (*App, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.App], error) {
+		response, err := c.raw.GetAppWithResponse(ctx, appID)
+		if err != nil {
+			return callResult[generated.App]{}, err
+		}
+		return callResult[generated.App]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) ListApps(ctx context.Context, options ListAppsOptions) (*AppList, error) {
+	params := &generated.ListAppsParams{
+		ExternalRef: options.ExternalRef,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AppList], error) {
+		response, err := c.raw.ListAppsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.AppList]{}, err
+		}
+		return callResult[generated.AppList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// UpdateApp changes an app's mutable presentation fields; name and
+// external_ref cannot be changed.
+func (c *Client) UpdateApp(ctx context.Context, appID string, displayName string) (*App, error) {
+	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.App], error) {
+		response, err := c.raw.UpdateAppWithResponse(ctx, appID, generated.UpdateAppJSONRequestBody{DisplayName: displayName})
+		if err != nil {
+			return callResult[generated.App]{}, err
+		}
+		return callResult[generated.App]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentIdentity, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
+		response, err := c.raw.GetAgentWithResponse(ctx, agentID)
+		if err != nil {
+			return callResult[generated.Agent]{}, err
+		}
+		return callResult[generated.Agent]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) ListAgents(ctx context.Context, options ListAgentsOptions) (*AgentList, error) {
+	params := &generated.ListAgentsParams{
+		AgentKey: options.AgentKey,
+		Cursor:   options.Cursor,
+		Limit:    options.Limit,
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentList], error) {
+		response, err := c.raw.ListAgentsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.AgentList]{}, err
+		}
+		return callResult[generated.AgentList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &AgentList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
+}
+
+func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOptions) (*InvocationList, error) {
+	statuses := append([]InvocationStatus(nil), options.Statuses...)
+	if options.Status != nil {
+		statuses = append(statuses, *options.Status)
+	}
+	var statusFilter *[]InvocationStatus
+	if len(statuses) != 0 {
+		statusFilter = &statuses
+	}
+	params := &generated.ListInvocationsParams{
+		TenantKey:     options.TenantKey,
+		DefaultTenant: options.DefaultTenant,
+		UserKey:       options.UserKey,
+		SessionID:     options.SessionID,
+		AgentID:       options.AgentID,
+		AgentKey:      options.AgentKey,
+		Status:        statusFilter,
+		Cursor:        options.Cursor,
+		Limit:         options.Limit,
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationList], error) {
+		response, err := c.raw.ListInvocationsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.InvocationList]{}, err
+		}
+		return callResult[generated.InvocationList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &InvocationList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
+}
+
+func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) (*SessionList, error) {
+	params := &generated.ListSessionsParams{
+		TenantKey:     options.TenantKey,
+		DefaultTenant: options.DefaultTenant,
+		UserKey:       options.UserKey,
+		AgentID:       options.AgentID,
+		AgentKey:      options.AgentKey,
+		SessionKey:    options.SessionKey,
+		Cursor:        options.Cursor,
+		Limit:         options.Limit,
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionList], error) {
+		response, err := c.raw.ListSessionsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.SessionList]{}, err
+		}
+		return callResult[generated.SessionList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &SessionList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
+}
+
+// CreateSession creates a Session with zero Invocations and optional
+// host-asserted starting history. Without a SessionKey every call creates a
+// fresh Session, so the call is only retried when a keyed upsert makes replay
+// safe.
+func (c *Client) CreateSession(ctx context.Context, options CreateSessionOptions) (*Session, error) {
+	body := generated.CreateSessionJSONRequestBody{
+		AgentKey:   options.AgentKey,
+		TenantKey:  options.TenantKey,
+		UserKey:    options.UserKey,
+		SessionKey: options.SessionKey,
+	}
+	if options.SessionOptions != nil {
+		sessionOptions, err := options.SessionOptions.generated()
+		if err != nil {
+			return nil, err
+		}
+		body.SessionOptions = sessionOptions
+	}
+	if len(options.SeedMessages) > 0 {
+		seedMessages := make([]generated.SeedMessage, len(options.SeedMessages))
+		for index, seed := range options.SeedMessages {
+			content := generated.SeedMessageContent{}
+			if err := content.FromSeedMessageContent0(seed.Content); err != nil {
+				return nil, err
+			}
+			seedMessages[index] = generated.SeedMessage{
+				Role:    seed.Role,
+				Content: content,
+			}
+		}
+		body.SeedMessages = &seedMessages
+	}
+	return callReplaySafe(ctx, c.retry, options.SessionKey != nil, func() (callResult[generated.Session], error) {
+		response, err := c.raw.CreateSessionWithResponse(ctx, body)
+		if err != nil {
+			return callResult[generated.Session]{}, err
+		}
+		return callResult[generated.Session]{Value: response.JSON201, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+}
+
+// ForkSession copies source history through an inclusive message into a new
+// Session. The source is unchanged, and the child starts with no usage or
+// compaction summary. Without a SessionKey every call creates a fresh child.
+func (c *Client) ForkSession(
+	ctx context.Context,
+	sourceSessionID string,
+	options ForkSessionOptions,
+) (*Session, error) {
+	if (options.FromMessageID == nil) == (options.FromSequence == nil) {
+		return nil, fmt.Errorf("fork session requires exactly one message ID or sequence")
+	}
+	fromMessage := generated.ForkSessionRequest_FromMessage{}
+	if options.FromMessageID != nil {
+		if err := fromMessage.FromSessionMessageID(*options.FromMessageID); err != nil {
+			return nil, err
+		}
+	} else if err := fromMessage.FromForkSessionRequestFromMessage1(*options.FromSequence); err != nil {
+		return nil, err
+	}
+	body := generated.ForkSessionJSONRequestBody{
+		FromMessage: fromMessage,
+		SessionKey:  options.SessionKey,
+		UserKey:     options.UserKey,
+	}
+	if options.SessionOptions != nil {
+		sessionOptions, err := options.SessionOptions.generatedFork()
+		if err != nil {
+			return nil, err
+		}
+		body.SessionOptions = sessionOptions
+	}
+	return callReplaySafe(ctx, c.retry, options.SessionKey != nil, func() (callResult[generated.Session], error) {
+		response, err := c.raw.ForkSessionWithResponse(ctx, sourceSessionID, body)
+		if err != nil {
+			return callResult[generated.Session]{}, err
+		}
+		return callResult[generated.Session]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// DeleteSession erases a Session and everything under it: its Invocations,
+// transcript, checkpoints, tool calls, artifacts, and undelivered
+// webhooks. The erasure is immediate and irreversible.
+//
+// A running Invocation is stopped, and no cancellation is recorded — the
+// Invocation is removed rather than settled, so no invocation.settled
+// webhook is emitted for it. Cancel first if you need a settled record.
+//
+// An unknown or out-of-scope Session is not found, so a retry after a lost
+// response can treat that as already-done.
+//
+// This is not account erasure by itself: nvoken keeps no account tombstone, so
+// a caller honouring a deletion request must stop admitting work for the
+// tenant before paginating and deleting.
+func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
+	// Deletion is idempotent by shape — a repeat is not-found rather than a
+	// second erasure — so it is safe to replay.
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.DeleteSessionWithResponse(ctx, sessionID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
+// UpdateSession merges a metadata patch into a Session: a present key
+// replaces, an explicit null deletes, and an unmentioned key survives. Merging
+// rather than replacing is what stops independent writers — a title UI and
+// correlation tooling — from silently discarding each other's keys.
+func (c *Client) UpdateSession(
+	ctx context.Context,
+	sessionID string,
+	metadata map[string]*string,
+) (*Session, error) {
+	body := generated.UpdateSessionJSONRequestBody{Metadata: &metadata}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Session], error) {
+		response, err := c.raw.UpdateSessionWithResponse(ctx, sessionID, body)
+		if err != nil {
+			return callResult[generated.Session]{}, err
+		}
+		return callResult[generated.Session]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+}
+
+func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Session], error) {
+		response, err := c.raw.GetSessionWithResponse(ctx, sessionID)
+		if err != nil {
+			return callResult[generated.Session]{}, err
+		}
+		return callResult[generated.Session]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+}
+
+func (c *Client) ListSessionMessages(ctx context.Context, sessionID string, options MessageListOptions) (*SessionMessageList, error) {
+	params := &generated.ListSessionMessagesParams{Cursor: options.Cursor, Limit: options.Limit}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionMessageList], error) {
+		response, err := c.raw.ListSessionMessagesWithResponse(ctx, sessionID, params)
+		if err != nil {
+			return callResult[generated.SessionMessageList]{}, err
+		}
+		return callResult[generated.SessionMessageList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &SessionMessageList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
+}
+
+// ListSessionCompactions returns newest-first immutable records for applied
+// and fell-through summary passes. Only applied records affect model context.
+func (c *Client) ListSessionCompactions(
+	ctx context.Context,
+	sessionID string,
+	options CompactionListOptions,
+) (*SessionCompactionList, error) {
+	params := &generated.ListSessionCompactionsParams{
+		Cursor: options.Cursor,
+		Limit:  options.Limit,
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionCompactionList], error) {
+		response, err := c.raw.ListSessionCompactionsWithResponse(ctx, sessionID, params)
+		if err != nil {
+			return callResult[generated.SessionCompactionList]{}, err
+		}
+		return callResult[generated.SessionCompactionList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &SessionCompactionList{
+		HasMore:    result.HasMore,
+		Items:      result.Items,
+		NextCursor: result.NextCursor,
+	}, nil
+}
+
+func (c *Client) GetTranscript(ctx context.Context, sessionID string, options TranscriptOptions) (*TranscriptSnapshot, error) {
+	params := &generated.GetSessionTranscriptParams{
+		Cursor:    options.Cursor,
+		PageToken: options.PageToken,
+		Limit:     options.Limit,
+	}
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.TranscriptSnapshot], error) {
+		response, err := c.raw.GetSessionTranscriptWithResponse(ctx, sessionID, params)
+		if err != nil {
+			return callResult[generated.TranscriptSnapshot]{}, err
+		}
+		return callResult[generated.TranscriptSnapshot]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &TranscriptSnapshot{
+		HasMore:           result.HasMore,
+		InvocationChanges: result.InvocationChanges,
+		Messages:          result.Messages,
+		NextPageToken:     result.NextPageToken,
+		ResumeCursor:      result.ResumeCursor,
+	}, nil
+}
+
+func (c *Client) DrainTranscript(
+	ctx context.Context,
+	sessionID string,
+	cursor *string,
+	limit *int,
+) (*TranscriptDrain, error) {
+	drain := &TranscriptDrain{}
+	var pageToken *string
+	for {
+		page, err := c.GetTranscript(ctx, sessionID, TranscriptOptions{
+			Cursor:    cursor,
+			PageToken: pageToken,
+			Limit:     limit,
+		})
+		if err != nil {
+			return nil, err
+		}
+		drain.Messages = append(drain.Messages, page.Messages...)
+		drain.InvocationChanges = append(
+			drain.InvocationChanges,
+			page.InvocationChanges...,
+		)
+		drain.ResumeCursor = page.ResumeCursor
+		if !page.HasMore {
+			if drain.ResumeCursor == "" {
+				return nil, &Error{
+					Category: ErrorUnexpectedResponse,
+					Message:  "transcript drain returned no resume cursor",
+				}
+			}
+			return drain, nil
+		}
+		if page.NextPageToken == nil || *page.NextPageToken == "" {
+			return nil, &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "transcript page has_more without next_page_token",
+			}
+		}
+		cursor = nil
+		pageToken = page.NextPageToken
+	}
+}
+
+func (c *Client) GetSessionByKey(
+	ctx context.Context,
+	sessionKey string,
+	options ListSessionsOptions,
+) (*Session, error) {
+	options.SessionKey = &sessionKey
+	limit := 2
+	options.Limit = &limit
+	page, err := c.ListSessions(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	switch len(page.Items) {
+	case 0:
+		return nil, &Error{
+			Category: ErrorNotFound,
+			Message:  fmt.Sprintf("Session key %q was not found", sessionKey),
+		}
+	case 1:
+		return &page.Items[0], nil
+	default:
+		return nil, &Error{
+			Category: ErrorConflict,
+			Message:  fmt.Sprintf("Session key %q matched more than one Session", sessionKey),
+		}
+	}
+}
+
+func (c *Client) EachInvocation(
+	ctx context.Context,
+	options ListInvocationsOptions,
+	consume func(Invocation) error,
+) error {
+	options.Cursor = nil
+	for {
+		page, err := c.ListInvocations(ctx, options)
+		if err != nil {
+			return err
+		}
+		for _, item := range page.Items {
+			if err := consume(item); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore {
+			return nil
+		}
+		if page.NextCursor == nil || *page.NextCursor == "" {
+			return &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "Invocation page has_more without next_cursor",
+			}
+		}
+		options.Cursor = page.NextCursor
+	}
+}
+
+func (c *Client) EachSession(
+	ctx context.Context,
+	options ListSessionsOptions,
+	consume func(Session) error,
+) error {
+	options.Cursor = nil
+	for {
+		page, err := c.ListSessions(ctx, options)
+		if err != nil {
+			return err
+		}
+		for _, item := range page.Items {
+			if err := consume(item); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore {
+			return nil
+		}
+		if page.NextCursor == nil || *page.NextCursor == "" {
+			return &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "Session page has_more without next_cursor",
+			}
+		}
+		options.Cursor = page.NextCursor
+	}
+}
+
+func (c *Client) EachSessionMessage(
+	ctx context.Context,
+	sessionID string,
+	options MessageListOptions,
+	consume func(SessionMessage) error,
+) error {
+	options.Cursor = nil
+	for {
+		page, err := c.ListSessionMessages(ctx, sessionID, options)
+		if err != nil {
+			return err
+		}
+		for _, item := range page.Items {
+			if err := consume(item); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore {
+			return nil
+		}
+		if page.NextCursor == nil || *page.NextCursor == "" {
+			return &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "message page has_more without next_cursor",
+			}
+		}
+		options.Cursor = page.NextCursor
+	}
+}
+
+func (c *Client) EachProviderKey(
+	ctx context.Context,
+	options ListProviderKeysOptions,
+	consume func(ProviderKey) error,
+) error {
+	options.Cursor = nil
+	for {
+		page, err := c.ListProviderKeys(ctx, options)
+		if err != nil {
+			return err
+		}
+		for _, item := range page.Items {
+			if err := consume(item); err != nil {
+				return err
+			}
+		}
+		if !page.HasMore {
+			return nil
+		}
+		if page.NextCursor == nil || *page.NextCursor == "" {
+			return &Error{
+				Category: ErrorUnexpectedResponse,
+				Message:  "provider key page has_more without next_cursor",
+			}
+		}
+		options.Cursor = page.NextCursor
+	}
+}
+
+type InvocationHandle struct {
+	client         *Client
+	InvocationID   string           `json:"invocation_id"`
+	IdempotencyKey string           `json:"idempotency_key,omitempty"`
+	SessionID      string           `json:"session_id,omitempty"`
+	AgentID        string           `json:"agent_id,omitempty"`
+	Status         InvocationStatus `json:"status,omitempty"`
+	Deduplicated   *bool            `json:"deduplicated,omitempty"`
+	DeadlineAt     *time.Time       `json:"deadline_at,omitempty"`
+}
+
+func (h *InvocationHandle) Refresh(ctx context.Context) (*Invocation, error) {
+	invocation, err := h.client.GetInvocation(ctx, h.InvocationID)
+	if err == nil {
+		h.SessionID = invocation.SessionID
+		h.AgentID = invocation.AgentID
+		h.Status = invocation.Status
+		h.DeadlineAt = invocation.DeadlineAt
+	}
+	return invocation, err
+}
+
+func (h *InvocationHandle) Wait(ctx context.Context, options WaitOptions) (*Invocation, error) {
+	options = options.normalized()
+	if options.Until != WaitUntilTerminal && options.Until != WaitUntilActionable {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  fmt.Sprintf("unsupported wait condition %q", options.Until),
+		}
+	}
+	if options.Timeout < 0 {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "wait timeout cannot be negative",
+		}
+	}
+	if options.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, options.Timeout)
+		defer cancel()
+	}
+	delay := options.MinPollInterval
+	for {
+		invocation, err := h.Refresh(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if waitSatisfied(invocation.Status, options.Until) {
+			return invocation, nil
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, transportError(ctx.Err())
+		case <-timer.C:
+		}
+		delay *= 2
+		if delay > options.MaxPollInterval {
+			delay = options.MaxPollInterval
+		}
+	}
+}
+
+// Result reads the composed InvocationResult at any status: the
+// authoritative Invocation, this Invocation's canonical messages, and the
+// output_text projection.
+func (h *InvocationHandle) Result(ctx context.Context) (*InvocationResult, error) {
+	result, err := h.client.GetInvocationResult(ctx, h.InvocationID)
+	if err == nil {
+		h.SessionID = result.Invocation.SessionID
+		h.AgentID = result.Invocation.AgentID
+		h.Status = result.Invocation.Status
+	}
+	return result, err
+}
+
+// ListMessages returns this Invocation's canonical messages from the
+// composed result read.
+func (h *InvocationHandle) ListMessages(ctx context.Context) ([]SessionMessage, error) {
+	result, err := h.Result(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return result.Messages, nil
+}
+
+// Text returns the completed turn's canonical assistant text. It fails
+// with ErrorUnexpectedResponse when the wire output_text is null or the
+// empty string: the wire keeps those distinct, but this helper
+// deliberately treats both as "no useful answer". Read Result directly
+// to observe the distinction.
+func (h *InvocationHandle) OutputText(ctx context.Context) (string, error) {
+	result, err := h.Result(ctx)
+	if err != nil {
+		return "", err
+	}
+	if result.OutputText == nil || *result.OutputText == "" {
+		return "", &Error{
+			Category: ErrorUnexpectedResponse,
+			Message:  "Invocation " + h.InvocationID + " has no canonical assistant text",
+		}
+	}
+	return *result.OutputText, nil
+}
+
+func (h *InvocationHandle) SubmitToolResults(ctx context.Context, results []ToolResult) (*ToolResultResponse, error) {
+	response, err := h.client.SubmitToolResults(ctx, h.InvocationID, results)
+	if err == nil {
+		h.Status = response.Status
+	}
+	return response, err
+}
+
+func (h *InvocationHandle) Cancel(ctx context.Context) (*Invocation, error) {
+	invocation, err := h.client.CancelInvocation(ctx, h.InvocationID)
+	if err == nil {
+		h.SessionID = invocation.SessionID
+		h.AgentID = invocation.AgentID
+		h.Status = invocation.Status
+	}
+	return invocation, err
+}
+
+func (h *InvocationHandle) Interrupt(ctx context.Context) (*Invocation, error) {
+	invocation, err := h.client.InterruptInvocation(ctx, h.InvocationID)
+	if err == nil {
+		h.SessionID = invocation.SessionID
+		h.AgentID = invocation.AgentID
+		h.Status = invocation.Status
+	}
+	return invocation, err
+}
+
+// Nudge appends steering to this running turn. It is not an interrupt: the
+// model sees the input at the next execution seam, and nothing in flight is
+// aborted for it.
+func (h *InvocationHandle) Nudge(ctx context.Context, content string) (*NudgeAcknowledgement, error) {
+	return h.client.NudgeInvocation(ctx, h.InvocationID, NudgeRequest{Content: content})
+}
+
+// NudgeWith is Nudge with an idempotency key, so a retried call stages the
+// direction once.
+func (h *InvocationHandle) NudgeWith(ctx context.Context, request NudgeRequest) (*NudgeAcknowledgement, error) {
+	return h.client.NudgeInvocation(ctx, h.InvocationID, request)
+}
+
+func (h *InvocationHandle) ListPendingInputs(ctx context.Context, options ListPendingInputsOptions) (*PendingInputList, error) {
+	return h.client.ListPendingInputs(ctx, h.InvocationID, options)
+}
+
+func (h *InvocationHandle) ListToolCalls(ctx context.Context, options ListToolCallsOptions) (*ToolCallList, error) {
+	return h.client.ListToolCalls(ctx, h.InvocationID, options)
+}
+
+func (h *InvocationHandle) CancelPendingInput(ctx context.Context, pendingInputID string) (*PendingInput, error) {
+	return h.client.CancelPendingInput(ctx, h.InvocationID, pendingInputID)
+}
+
+func (h *InvocationHandle) WaitForAction(ctx context.Context, options WaitOptions) (*Invocation, error) {
+	options.Until = WaitUntilActionable
+	return h.Wait(ctx, options)
+}
+
+func (h *InvocationHandle) WaitForResult(ctx context.Context, options WaitOptions) (*InvocationResult, error) {
+	invocation, err := h.Wait(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	if invocation.Status != InvocationCompleted {
+		return nil, &Error{
+			Category: ErrorConflict,
+			Message:  invocationEndedMessage(h.InvocationID, invocation),
+		}
+	}
+	return h.Result(ctx)
+}
+
+func generatedIdempotencyKey() string {
+	var value [16]byte
+	if _, err := cryptorand.Read(value[:]); err != nil {
+		return fmt.Sprintf("nvoken-%d", time.Now().UnixNano())
+	}
+	return "nvoken-" + hex.EncodeToString(value[:])
+}

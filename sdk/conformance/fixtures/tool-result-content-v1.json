@@ -1,0 +1,33 @@
+{
+  "description": "tool_result content shapes at the provider boundary. A JSON string and an array of content blocks pass through unchanged; any other JSON value is serialized to its compact JSON text and sent to the model as a string. The durable transcript always retains the submitted value.",
+  "cases": [
+    {
+      "name": "string passes through",
+      "submitted": "ready",
+      "provider": "ready"
+    },
+    {
+      "name": "array of content blocks passes through",
+      "submitted": [
+        {
+          "type": "text",
+          "text": "ready"
+        }
+      ],
+      "provider": [
+        {
+          "type": "text",
+          "text": "ready"
+        }
+      ]
+    },
+    {
+      "name": "object is serialized to compact JSON text",
+      "submitted": {
+        "order_id": "order-123",
+        "state": "ready"
+      },
+      "provider": "{\"order_id\":\"order-123\",\"state\":\"ready\"}"
+    }
+  ]
+}

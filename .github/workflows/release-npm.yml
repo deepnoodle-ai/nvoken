@@ -1,0 +1,63 @@
+name: release-npm
+
+on:
+  push:
+    tags:
+      - npm-v*
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # The npm trusted publisher is bound to this environment. Without it the
+    # OIDC subject is the tag ref, the registry rejects the exchange, and npm
+    # falls back to anonymous auth and reports a misleading 404.
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@deepnoodle/nvoken
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      # Node 24 bundles an npm newer than the 11.5.1 trusted-publishing
+      # minimum, so the CLI needs no separate upgrade step.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Verify release tag matches package version
+        working-directory: sdk/typescript
+        run: |
+          version="$(node --print "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "npm-v${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match package version ${version}" >&2
+            exit 1
+          fi
+      - run: npm ci
+        working-directory: sdk/typescript
+      - run: npm run build
+        working-directory: sdk/typescript
+      - run: npm test
+        working-directory: sdk/typescript
+      - run: npm pack --dry-run
+        working-directory: sdk/typescript
+      - run: npm publish
+        working-directory: sdk/typescript
+      - name: Verify the public registry artifact
+        working-directory: sdk/typescript
+        run: |
+          # publish succeeds before the registry's read replica catches up, so a
+          # single `npm view` right after publish can 404 on a version that is
+          # live. Retry with backoff instead of failing the release on that lag.
+          version="$(node --print "require('./package.json').version")"
+          for attempt in 1 2 3 4 5 6; do
+            published="$(npm view "@deepnoodle/nvoken@${version}" version 2>/dev/null || true)"
+            if [ "${published}" = "${version}" ]; then
+              echo "registry serves @deepnoodle/nvoken@${version}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: registry not serving ${version} yet; retrying in 10s"
+            sleep 10
+          done
+          echo "registry never served @deepnoodle/nvoken@${version} after retries" >&2
+          exit 1

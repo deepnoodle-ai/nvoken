@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "definition_id": "def_019b0a12-0000-7000-8000-000000000005",
+  "reference_fields": {
+    "definition_id": "def_019b0a12-0000-7000-8000-000000000005"
+  },
+  "rules": {
+    "content_addressed": true,
+    "immutable": true,
+    "app_scoped": true,
+    "inline_reference_replay_equal": true,
+    "retained_while_referenced": true,
+    "read_echoes_resolved_definition": true
+  },
+  "refusals": [
+    {
+      "id": "foreign-definition-id",
+      "status": 404,
+      "code": "definition_not_found"
+    },
+    {
+      "id": "unknown-definition-id",
+      "status": 404,
+      "code": "definition_not_found"
+    },
+    {
+      "id": "definition-plus-inline",
+      "status": 400,
+      "code": "invalid_request"
+    }
+  ],
+  "inline_definition_fields": [
+    "instructions",
+    "model",
+    "sampling",
+    "reasoning",
+    "tool_choice",
+    "limits",
+    "structured_output",
+    "tools",
+    "mcp_servers",
+    "provider_tools"
+  ]
+}

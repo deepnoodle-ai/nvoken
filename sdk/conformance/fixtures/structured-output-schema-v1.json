@@ -1,0 +1,782 @@
+{
+  "version": 1,
+  "limits": {
+    "schema_bytes": 32768,
+    "schema_depth": 16,
+    "pattern_bytes": 1024
+  },
+  "accepted": [
+    {
+      "id": "minimal-object",
+      "schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "all-supported-keywords-and-positions",
+      "schema": {
+        "type": "object",
+        "title": "Classification",
+        "description": "A portable structured result.",
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Short label",
+            "enum": [
+              "low",
+              "high"
+            ],
+            "pattern": "^[a-z]+$",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "ratio": {
+            "type": "number",
+            "minimum": -1.5,
+            "maximum": 1.5
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 0,
+            "maxItems": 4
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "label",
+          "count"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "unique-items-and-two-digit-bounds",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "uniqueItems": true,
+            "minItems": 10,
+            "maxItems": 25
+          }
+        },
+        "required": [
+          "candidates"
+        ]
+      }
+    },
+    {
+      "id": "integral-bounds-in-any-spelling",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "exponent": {
+            "type": "string",
+            "maxLength": 1.6e2
+          },
+          "trailing-zero": {
+            "type": "string",
+            "maxLength": 10.0
+          }
+        }
+      }
+    },
+    {
+      "id": "keyword-shaped-and-escaped-property-names",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "$ref": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "a/b~c": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "$ref",
+          "a/b~c"
+        ]
+      }
+    },
+    {
+      "id": "pattern-at-limit",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "pattern": ""
+          }
+        }
+      },
+      "repeat": {
+        "path": "/properties/value/pattern",
+        "character": "a",
+        "count": 1024
+      }
+    },
+    {
+      "id": "schema-size-at-limit",
+      "schema": {
+        "type": "object",
+        "description": ""
+      },
+      "repeat": {
+        "path": "/description",
+        "character": "a",
+        "count": 32734
+      }
+    },
+    {
+      "id": "schema-depth-at-limit",
+      "generate": {
+        "kind": "nested-object",
+        "depth": 16
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "id": "unsupported-ref",
+      "schema": {
+        "type": "object",
+        "$ref": "#/schema"
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/$ref",
+        "keyword": "$ref"
+      }
+    },
+    {
+      "id": "unsupported-defs",
+      "schema": {
+        "type": "object",
+        "$defs": {}
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/$defs",
+        "keyword": "$defs"
+      }
+    },
+    {
+      "id": "unsupported-any-of",
+      "schema": {
+        "type": "object",
+        "anyOf": []
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/anyOf",
+        "keyword": "anyOf"
+      }
+    },
+    {
+      "id": "unsupported-one-of",
+      "schema": {
+        "type": "object",
+        "oneOf": []
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/oneOf",
+        "keyword": "oneOf"
+      }
+    },
+    {
+      "id": "unsupported-all-of",
+      "schema": {
+        "type": "object",
+        "allOf": []
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/allOf",
+        "keyword": "allOf"
+      }
+    },
+    {
+      "id": "unsupported-not",
+      "schema": {
+        "type": "object",
+        "not": {}
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/not",
+        "keyword": "not"
+      }
+    },
+    {
+      "id": "unsupported-if",
+      "schema": {
+        "type": "object",
+        "if": {}
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/if",
+        "keyword": "if"
+      }
+    },
+    {
+      "id": "unsupported-then",
+      "schema": {
+        "type": "object",
+        "then": {}
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/then",
+        "keyword": "then"
+      }
+    },
+    {
+      "id": "unsupported-else",
+      "schema": {
+        "type": "object",
+        "else": {}
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/else",
+        "keyword": "else"
+      }
+    },
+    {
+      "id": "unsupported-const",
+      "schema": {
+        "type": "object",
+        "const": {}
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/const",
+        "keyword": "const"
+      }
+    },
+    {
+      "id": "unsupported-format",
+      "schema": {
+        "type": "object",
+        "format": "json"
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/format",
+        "keyword": "format"
+      }
+    },
+    {
+      "id": "unsupported-default",
+      "schema": {
+        "type": "object",
+        "default": {}
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/default",
+        "keyword": "default"
+      }
+    },
+    {
+      "id": "unsupported-nullable",
+      "schema": {
+        "type": "object",
+        "nullable": true
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/nullable",
+        "keyword": "nullable"
+      }
+    },
+    {
+      "id": "unsupported-pattern-properties",
+      "schema": {
+        "type": "object",
+        "patternProperties": {}
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/patternProperties",
+        "keyword": "patternProperties"
+      }
+    },
+    {
+      "id": "unsupported-prefix-items",
+      "schema": {
+        "type": "object",
+        "prefixItems": []
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/prefixItems",
+        "keyword": "prefixItems"
+      }
+    },
+    {
+      "id": "unsupported-exclusive-minimum",
+      "schema": {
+        "type": "object",
+        "exclusiveMinimum": 0
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/exclusiveMinimum",
+        "keyword": "exclusiveMinimum"
+      }
+    },
+    {
+      "id": "unsupported-exclusive-maximum",
+      "schema": {
+        "type": "object",
+        "exclusiveMaximum": 1
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/exclusiveMaximum",
+        "keyword": "exclusiveMaximum"
+      }
+    },
+    {
+      "id": "unsupported-multiple-of",
+      "schema": {
+        "type": "object",
+        "multipleOf": 2
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/multipleOf",
+        "keyword": "multipleOf"
+      }
+    },
+    {
+      "id": "unique-items-requires-array-type",
+      "schema": {
+        "type": "object",
+        "uniqueItems": true
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/uniqueItems",
+        "keyword": "uniqueItems"
+      }
+    },
+    {
+      "id": "unique-items-must-be-boolean",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": "yes"
+          }
+        }
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/properties/tags/uniqueItems",
+        "keyword": "uniqueItems"
+      }
+    },
+    {
+      "id": "noninteger-bound",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 10.5
+          }
+        }
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/properties/value/maxLength",
+        "keyword": "maxLength"
+      }
+    },
+    {
+      "id": "unsupported-extension",
+      "schema": {
+        "type": "object",
+        "x-example": true
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/x-example",
+        "keyword": "x-example"
+      }
+    },
+    {
+      "id": "unsupported-nested-escaped-property",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "a/b~c": {
+            "type": "string",
+            "$ref": "#/schema"
+          }
+        }
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/properties/a~1b~0c/$ref",
+        "keyword": "$ref"
+      }
+    },
+    {
+      "id": "unsupported-array-item",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            }
+          }
+        }
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/properties/values/items/format",
+        "keyword": "format"
+      }
+    },
+    {
+      "id": "unsupported-additional-property-schema",
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string",
+          "$defs": {}
+        }
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/additionalProperties/$defs",
+        "keyword": "$defs"
+      }
+    },
+    {
+      "id": "deterministic-root-first-issue",
+      "schema": {
+        "type": "object",
+        "$ref": "#/schema",
+        "anyOf": []
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/$ref",
+        "keyword": "$ref"
+      }
+    },
+    {
+      "id": "deterministic-nested-first-issue",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          }
+        }
+      },
+      "issue": {
+        "code": "unsupported_keyword",
+        "path": "/properties/value/format",
+        "keyword": "format"
+      }
+    },
+    {
+      "id": "missing-root-type",
+      "schema": {
+        "properties": {}
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/type",
+        "keyword": "type"
+      }
+    },
+    {
+      "id": "non-object-root-type",
+      "schema": {
+        "type": "string"
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/type",
+        "keyword": "type"
+      }
+    },
+    {
+      "id": "type-union",
+      "schema": {
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/type",
+        "keyword": "type"
+      }
+    },
+    {
+      "id": "missing-nested-type",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "description": "missing type"
+          }
+        }
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/properties/value/type",
+        "keyword": "type"
+      }
+    },
+    {
+      "id": "properties-not-object",
+      "schema": {
+        "type": "object",
+        "properties": []
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/properties",
+        "keyword": "properties"
+      }
+    },
+    {
+      "id": "required-duplicate",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "value"
+        ]
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/required/1",
+        "keyword": "required"
+      }
+    },
+    {
+      "id": "required-undeclared",
+      "schema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "value"
+        ]
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/required/0",
+        "keyword": "required"
+      }
+    },
+    {
+      "id": "array-missing-items",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "values": {
+            "type": "array"
+          }
+        }
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/properties/values/items",
+        "keyword": "items"
+      }
+    },
+    {
+      "id": "invalid-additional-properties",
+      "schema": {
+        "type": "object",
+        "additionalProperties": null
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/additionalProperties",
+        "keyword": "additionalProperties"
+      }
+    },
+    {
+      "id": "misplaced-pattern",
+      "schema": {
+        "type": "object",
+        "pattern": "x"
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/pattern",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "id": "invalid-minimum-type",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "number",
+            "minimum": "zero"
+          }
+        }
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/properties/value/minimum",
+        "keyword": "minimum"
+      }
+    },
+    {
+      "id": "inverted-length-bounds",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 1
+          }
+        }
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/properties/value/maxLength",
+        "keyword": "maxLength"
+      }
+    },
+    {
+      "id": "empty-enum",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": []
+          }
+        }
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/properties/value/enum",
+        "keyword": "enum"
+      }
+    },
+    {
+      "id": "root-enum",
+      "schema": {
+        "type": "object",
+        "enum": [
+          {}
+        ]
+      },
+      "issue": {
+        "code": "invalid_schema",
+        "path": "/enum",
+        "keyword": "enum"
+      }
+    },
+    {
+      "id": "pattern-over-limit",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "pattern": ""
+          }
+        }
+      },
+      "repeat": {
+        "path": "/properties/value/pattern",
+        "character": "a",
+        "count": 1025
+      },
+      "issue": {
+        "code": "limit_exceeded",
+        "path": "/properties/value/pattern",
+        "keyword": "pattern"
+      }
+    },
+    {
+      "id": "schema-size-over-limit",
+      "schema": {
+        "type": "object",
+        "description": ""
+      },
+      "repeat": {
+        "path": "/description",
+        "character": "a",
+        "count": 32735
+      },
+      "issue": {
+        "code": "limit_exceeded",
+        "path": ""
+      }
+    },
+    {
+      "id": "schema-depth-over-limit",
+      "generate": {
+        "kind": "nested-object",
+        "depth": 17
+      },
+      "issue": {
+        "code": "limit_exceeded",
+        "path": "/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child/properties/child"
+      }
+    }
+  ]
+}

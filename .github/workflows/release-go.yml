@@ -1,0 +1,29 @@
+name: release-go
+
+on:
+  push:
+    tags:
+      - sdk/go/v*
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: sdk/go/go.mod
+          cache-dependency-path: sdk/go/go.sum
+      - name: Verify module tag and package
+        run: |
+          version="${GITHUB_REF_NAME#sdk/go/v}"
+          if [ "${GITHUB_REF_NAME}" != "sdk/go/v${version}" ]; then
+            echo "invalid Go SDK tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          cd sdk/go
+          go test ./...
+          test "$(go list -m)" = "github.com/deepnoodle-ai/nvoken/sdk/go"

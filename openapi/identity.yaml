@@ -1,0 +1,400 @@
+openapi: 3.1.0
+info:
+  title: nvoken Identity API
+  version: 0.1.0
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  description: |
+    Durable machine API key contract. Machine credentials use `nvk_…` bearer
+    API keys. A configured trusted console may also present a short-lived
+    Ed25519 issuer token; this is an authentication presentation only and does
+    not create a user identity model in nvoken.
+
+    Authorization matrix:
+    - Runtime credentials may call every Runtime operation and GET /v1/identity.
+    - Viewer credentials may call Runtime reads and GET /v1/identity.
+    - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.
+    Tenant, Session, operation, and expiry constraints only narrow these grants.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /v1/identity:
+    get:
+      operationId: getCurrentIdentity
+      summary: Explain the authenticated caller
+      responses:
+        "200":
+          description: The resolved caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentIdentity"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /v1/identity/credentials:
+    get:
+      operationId: listCredentials
+      summary: List safe credential metadata
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/CredentialStatus"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Bounded credential metadata only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createCredential
+      summary: Create a machine credential
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCredentialRequest"
+      responses:
+        "201":
+          description: One-time credential secret
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialIssuance"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /v1/identity/credentials/{credential_id}:
+    parameters:
+      - $ref: "#/components/parameters/CredentialID"
+    get:
+      operationId: getCredential
+      summary: Read safe credential metadata
+      responses:
+        "200":
+          description: Credential metadata without secret material
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/identity/credentials/{credential_id}/rotate:
+    parameters:
+      - $ref: "#/components/parameters/CredentialID"
+    post:
+      operationId: rotateCredential
+      summary: Rotate a machine credential with bounded overlap
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [overlap_seconds]
+              properties:
+                overlap_seconds:
+                  type: integer
+                  minimum: 0
+                  maximum: 86400
+      responses:
+        "201":
+          description: One-time replacement secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialIssuance"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /v1/identity/credentials/{credential_id}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/CredentialID"
+    post:
+      operationId: revokeCredential
+      summary: Revoke a credential
+      responses:
+        "200":
+          description: Revoked credential metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key or Ed25519 JWT
+      description: |
+        Present either a machine API key or, when
+        `CONSOLE_ISSUER_PUBLIC_KEYS` is configured, a JWT with `alg: EdDSA`,
+        a known `kid`, `iss: nvoken-console`, `aud: nvoken`, and required
+        `iat`, `exp`, `scope`, `profile`, and `sub` claims. `scope` is `app`
+        (with `app_id`) or `installation`; `profile` is `operator` or
+        `viewer`; `exp - iat` may not exceed five minutes. An app token's
+        `sub` must equal the app's `external_ref` unless `admin: true`.
+  parameters:
+    CredentialID:
+      name: credential_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^cred_[0-9a-f-]{36}$
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque continuation cursor bound to the status filter and page limit.
+      schema:
+        type: string
+        minLength: 1
+    Limit:
+      name: limit
+      in: query
+      description: Maximum credentials in this page. Defaults to 100.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 100
+  schemas:
+    Profile:
+      type: string
+      enum: [Runtime, Viewer, Operator]
+    Operation:
+      type: string
+      enum: [create_invocation, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_budgets, write_budgets, register_app, list_apps, get_app, update_app]
+    CredentialStatus:
+      type: string
+      enum: [active, revoked]
+    Credential:
+      type: object
+      required: [id, name, prefix, status, profile, operations, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        prefix:
+          type: string
+        status:
+          $ref: "#/components/schemas/CredentialStatus"
+        profile:
+          $ref: "#/components/schemas/Profile"
+        app_id:
+          type: [string, "null"]
+        creator_credential_id:
+          type: [string, "null"]
+        creator_subject:
+          type: [string, "null"]
+          description: Opaque issuer subject when the credential was created by an issuer token.
+        tenant_key:
+          type: [string, "null"]
+        session_id:
+          type: [string, "null"]
+        operations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Operation"
+        expires_at:
+          type: [string, "null"]
+          format: date-time
+        rotated_from_id:
+          type: [string, "null"]
+        rotation_overlap_ends_at:
+          type: [string, "null"]
+          format: date-time
+        revoked_at:
+          type: [string, "null"]
+          format: date-time
+        last_used_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CredentialList:
+      type: object
+      additionalProperties: false
+      required: [items, has_more, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Credential"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: [string, "null"]
+    CreateCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [name, profile]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        profile:
+          $ref: "#/components/schemas/Profile"
+        app_id:
+          type: string
+          pattern: ^app_[0-9a-f-]{36}$
+          description: |
+            Target App for an app-less Operator provisioning an app credential.
+            Omit to issue another app-less credential. An app-bound Operator
+            may omit this field or repeat its own App ID, but cannot name a
+            different App.
+        tenant_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+        session_id:
+          type: string
+        operations:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/Operation"
+        expires_at:
+          type: string
+          format: date-time
+    CredentialIssuance:
+      type: object
+      required: [credential, secret, delivery_expires_at, replayed]
+      properties:
+        credential:
+          $ref: "#/components/schemas/Credential"
+        secret:
+          type: string
+          writeOnly: true
+        delivery_expires_at:
+          type: string
+          format: date-time
+        replayed:
+          type: boolean
+    CurrentIdentity:
+      type: object
+      required: [authentication]
+      properties:
+        authentication:
+          type: object
+          required: [credential_id, effective_profile, operations, method, assurance]
+          properties:
+            credential_id:
+              type: string
+            effective_profile:
+              $ref: "#/components/schemas/Profile"
+            tenant_key:
+              type: [string, "null"]
+            session_id:
+              type: [string, "null"]
+            operations:
+              type: array
+              items:
+                $ref: "#/components/schemas/Operation"
+            method:
+              type: string
+              enum: [api_key, issuer_token]
+            assurance:
+              type: string
+              const: bearer
+    Error:
+      type: object
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    InvalidRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthenticated:
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: The credential is not authorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found or undisclosable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Idempotency or lifecycle conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

@@ -1,0 +1,30 @@
+{
+  "routes": {
+    "nudge": "/v1/invocations/{invocation_id}/nudge",
+    "list": "/v1/invocations/{invocation_id}/pending-inputs",
+    "cancel": "/v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel"
+  },
+  "request": {
+    "content_only": { "content": "focus on the marine segment" },
+    "with_idempotency_key": {
+      "content": "focus on the marine segment",
+      "idempotency_key": "nudge-1"
+    }
+  },
+  "acknowledgement": {
+    "status": 202,
+    "fields": ["pending_input_id", "state", "deduped", "after_sequence"]
+  },
+  "pending_input_status": {
+    "values": ["pending", "drained", "expired", "cancelled"],
+    "consumed_state": "pending",
+    "drained_carries": "drained_message_sequence"
+  },
+  "list_order": "created_at,id ascending",
+  "conflicts": {
+    "terminal_invocation": "invocation_not_active",
+    "reused_key_different_content": "idempotency_conflict",
+    "queue_full": { "code": "nudge_queue_full", "details_key": "limit", "limit": 8 },
+    "already_settled": { "code": "pending_input_settled", "details_key": "pending_input" }
+  }
+}

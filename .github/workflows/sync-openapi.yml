@@ -1,0 +1,79 @@
+name: sync-openapi
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [nvoken-openapi-updated]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check out the authoritative contracts
+        env:
+          NVOKEN_CLOUD_TOKEN: ${{ secrets.NVOKEN_CLOUD_TOKEN }}
+        run: |
+          if [ -z "${NVOKEN_CLOUD_TOKEN}" ]; then
+            echo "NVOKEN_CLOUD_TOKEN is required to read deepnoodle-ai/nvoken-cloud" >&2
+            exit 1
+          fi
+          git clone --depth=1 \
+            "https://x-access-token:${NVOKEN_CLOUD_TOKEN}@github.com/deepnoodle-ai/nvoken-cloud.git" \
+            "${RUNNER_TEMP}/nvoken-cloud"
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.5
+          cache-dependency-path: |
+            go.sum
+            sdk/go/go.sum
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Synchronize, generate, and verify
+        env:
+          NVOKEN_CLOUD_REPO: ${{ runner.temp }}/nvoken-cloud
+        run: |
+          make openapi-sync
+          make sdk-generate
+          make openapi-sync-check
+          make check
+      - name: Open the synchronization pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NVOKEN_CLOUD_REPO: ${{ runner.temp }}/nvoken-cloud
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "public SDK artifacts already match nvoken-cloud"
+            exit 0
+          fi
+          source_commit="$(git -C "${NVOKEN_CLOUD_REPO}" rev-parse HEAD)"
+          branch="codex/sync-openapi-${source_commit:0:12}-${RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${branch}"
+          git add openapi sdk
+          git commit -m "Sync OpenAPI from nvoken-cloud ${source_commit:0:12}"
+          git push origin "${branch}"
+          gh pr create \
+            --base main \
+            --head "${branch}" \
+            --title "Sync OpenAPI from nvoken-cloud ${source_commit:0:12}" \
+            --body "Synchronizes the authoritative nvoken-cloud OpenAPI contracts at ${source_commit} and regenerates all public SDK transports."
