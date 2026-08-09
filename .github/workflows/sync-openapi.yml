@@ -16,14 +16,14 @@ jobs:
       - uses: actions/checkout@v6
       - name: Check out the authoritative contracts
         env:
-          NVOKEN_CLOUD_TOKEN: ${{ secrets.NVOKEN_CLOUD_TOKEN }}
+          DN_REPO_READ: ${{ secrets.DN_REPO_READ }}
         run: |
-          if [ -z "${NVOKEN_CLOUD_TOKEN}" ]; then
-            echo "NVOKEN_CLOUD_TOKEN is required to read deepnoodle-ai/nvoken-cloud" >&2
+          if [ -z "${DN_REPO_READ}" ]; then
+            echo "DN_REPO_READ is required to read deepnoodle-ai/nvoken-cloud" >&2
             exit 1
           fi
           git clone --depth=1 \
-            "https://x-access-token:${NVOKEN_CLOUD_TOKEN}@github.com/deepnoodle-ai/nvoken-cloud.git" \
+            "https://x-access-token:${DN_REPO_READ}@github.com/deepnoodle-ai/nvoken-cloud.git" \
             "${RUNNER_TEMP}/nvoken-cloud"
       - uses: actions/setup-go@v6
         with:

@@ -186,8 +186,8 @@ pull requests. The current team and release volume do not justify that cost.
    synchronized snapshot boundary.
 3. Run the complete local gate, then stop changing SDK and CLI sources in
    `nvoken-cloud`.
-4. Configure registry trusted publishers, the Homebrew token, and the private
-   `NVOKEN_CLOUD_TOKEN` used by the optional sync workflow.
+4. Configure registry trusted publishers and the Homebrew token, and make the
+   organization secret `DN_REPO_READ` available to the optional sync workflow.
 5. Publish the first aligned release from this repository after review.
 
 ## Open questions

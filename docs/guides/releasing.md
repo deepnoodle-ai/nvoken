@@ -16,9 +16,10 @@ the corresponding trusted publishers:
   then configure repository `deepnoodle-ai/nvoken`, workflow
   `release-crates.yml`, environment `crates-io` as its trusted publisher.
 
-Add `TAP_GITHUB_TOKEN` with write access to `deepnoodle-ai/homebrew-tap` and
-`NVOKEN_CLOUD_TOKEN` with read-only contents access to
-`deepnoodle-ai/nvoken-cloud` as repository Actions secrets.
+Add `TAP_GITHUB_TOKEN` with write access to `deepnoodle-ai/homebrew-tap` as a
+repository Actions secret. Ensure the organization Actions secret
+`DN_REPO_READ` is available to this repository; the OpenAPI synchronization
+workflow uses it to read `deepnoodle-ai/nvoken-cloud`.
 
 ## Prepare a release
 
