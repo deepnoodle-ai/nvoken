@@ -7,6 +7,9 @@ readonly OPENAPI_GENERATOR_VERSION="7.22.0"
 readonly OPENAPI_GENERATOR_SHA256="3f1e6ce5c6ad4f15242c6170ab43aad4bad771622617eeece4a7d4f72ffaf329"
 readonly WORK="$(mktemp -d "${TMPDIR:-/tmp}/nvoken-sdk-generate.XXXXXX")"
 readonly JAR="$WORK/openapi-generator-cli.jar"
+readonly TYPESCRIPT_VERSION="$(python3 -c 'import json; print(json.load(open("sdk/typescript/package.json"))["version"])')"
+readonly PYTHON_VERSION="$(python3 -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("sdk/python/pyproject.toml").read_text())["project"]["version"])')"
+readonly RUST_VERSION="$(python3 -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("sdk/rust/Cargo.toml").read_text())["package"]["version"])')"
 
 cleanup() {
   rm -rf "$WORK"
@@ -39,28 +42,28 @@ java -jar "$JAR" generate \
   --generator-name typescript-fetch \
   --input-spec openapi/runtime.yaml \
   --output "$WORK/typescript" \
-  --additional-properties 'npmName=@deepnoodle/nvoken,npmVersion=0.1.0,supportsES6=true,useSingleRequestParameter=true,importFileExtension=.js,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false' \
+  --additional-properties "npmName=@deepnoodle/nvoken,npmVersion=${TYPESCRIPT_VERSION},supportsES6=true,useSingleRequestParameter=true,importFileExtension=.js,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 java -jar "$JAR" generate \
   --generator-name typescript-fetch \
   --input-spec openapi/identity.yaml \
   --output "$WORK/typescript-identity" \
-  --additional-properties 'npmName=@deepnoodle/nvoken,npmVersion=0.1.0,supportsES6=true,useSingleRequestParameter=true,importFileExtension=.js,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false' \
+  --additional-properties "npmName=@deepnoodle/nvoken,npmVersion=${TYPESCRIPT_VERSION},supportsES6=true,useSingleRequestParameter=true,importFileExtension=.js,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 java -jar "$JAR" generate \
   --generator-name python \
   --input-spec openapi/runtime.yaml \
   --output "$WORK/python" \
-  --additional-properties 'packageName=nvoken_generated,projectName=nvoken,packageVersion=0.1.0,library=httpx,supportHttpxSync=true,generateSourceCodeOnly=true,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false' \
+  --additional-properties "packageName=nvoken_generated,projectName=nvoken,packageVersion=${PYTHON_VERSION},library=httpx,supportHttpxSync=true,generateSourceCodeOnly=true,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 java -jar "$JAR" generate \
   --generator-name rust \
   --input-spec openapi/runtime.yaml \
   --output "$WORK/rust" \
-  --additional-properties 'packageName=nvoken,packageVersion=0.1.0,library=reqwest,supportAsync=true,supportMiddleware=true,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false,preferUnsignedInt=true' \
+  --additional-properties "packageName=nvoken,packageVersion=${RUST_VERSION},library=reqwest,supportAsync=true,supportMiddleware=true,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false,preferUnsignedInt=true" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 rm -rf sdk/go/generated

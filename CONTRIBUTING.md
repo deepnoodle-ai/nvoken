@@ -50,3 +50,5 @@ Package versions should normally stay aligned. Release tags are:
 
 Registry trusted publishers, the Homebrew tap token, and the private contract
 sync token are configured in GitHub rather than stored in this repository.
+The complete release checklist and one-time registry bootstrap steps are in
+[`docs/guides/releasing.md`](docs/guides/releasing.md).

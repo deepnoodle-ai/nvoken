@@ -1,0 +1,58 @@
+# Releasing nvoken clients
+
+SDK and CLI releases are built from the same reviewed commit but use separate
+tags so a registry-specific failure can be retried independently.
+
+## One-time registry setup
+
+Create the GitHub environments `npm`, `pypi`, and `crates-io`, then configure
+the corresponding trusted publishers:
+
+- npm: organization `deepnoodle-ai`, repository `nvoken`, workflow
+  `release-npm.yml`, environment `npm`, allowed action `npm publish`;
+- PyPI pending publisher: project `nvoken`, owner `deepnoodle-ai`, repository
+  `nvoken`, workflow `release-pypi.yml`, environment `pypi`;
+- crates.io: publish the first crate version with a scoped crates.io token,
+  then configure repository `deepnoodle-ai/nvoken`, workflow
+  `release-crates.yml`, environment `crates-io` as its trusted publisher.
+
+Add `TAP_GITHUB_TOKEN` with write access to `deepnoodle-ai/homebrew-tap` and
+`NVOKEN_CLOUD_TOKEN` with read-only contents access to
+`deepnoodle-ai/nvoken-cloud` as repository Actions secrets.
+
+## Prepare a release
+
+1. Update `CHANGELOG.md` and the versions in `sdk/go/version.go`,
+   `sdk/typescript/package.json`, `sdk/typescript/src/version.ts`,
+   `sdk/python/pyproject.toml`, and `sdk/rust/Cargo.toml`.
+2. Run `make sdk-generate` so generated package metadata uses those versions.
+3. Run `make check` and `make openapi-sync-check
+   NVOKEN_CLOUD_REPO=../nvoken-cloud`.
+4. Merge the release pull request and confirm the `check` workflow passed on
+   `main`.
+
+The OpenAPI documents keep their independent contract version. Do not change
+`info.version` merely to match an SDK release.
+
+## Publish an aligned version
+
+Create annotated tags on the same verified `main` commit, then push them:
+
+```bash
+version=0.9.1
+git tag -a "v${version}" -m "nvoken CLI ${version}"
+git tag -a "sdk/go/v${version}" -m "nvoken Go SDK ${version}"
+git tag -a "npm-v${version}" -m "nvoken TypeScript SDK ${version}"
+git tag -a "pypi-v${version}" -m "nvoken Python SDK ${version}"
+git tag -a "crates-v${version}" -m "nvoken Rust SDK ${version}"
+git push origin \
+  "v${version}" \
+  "sdk/go/v${version}" \
+  "npm-v${version}" \
+  "pypi-v${version}" \
+  "crates-v${version}"
+```
+
+Verify every workflow, the registry artifacts, the GitHub release archives,
+and the updated `deepnoodle-ai/homebrew-tap` formula before announcing the
+release. Never move or replace a published release tag.

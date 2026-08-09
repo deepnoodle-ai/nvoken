@@ -30,12 +30,13 @@ openapi-sync-check:
 	python3 scripts/sync_openapi.py --check --repo "$(NVOKEN_CLOUD_REPO)"
 
 release:
-	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=0.9.0"; exit 1; fi
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=x.y.z"; exit 1; fi
 	python3 scripts/release.py "$(VERSION)"
 
 scripts-check:
 	bash -n sdk/scripts/generate.sh sdk/scripts/check-generated.sh sdk/scripts/check.sh
 	python3 -m compileall -q scripts sdk/scripts/check_package_files.py
+	python3 scripts/check_versions.py
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_*.py'
 
 sdk-generate:

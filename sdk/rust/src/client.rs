@@ -968,8 +968,9 @@ impl Client {
         if base_url.is_empty() || api_key.is_empty() {
             return Err(NvokenError::validation("base URL and API key are required"));
         }
+        let user_agent = format!("nvoken-rust/{}", crate::VERSION);
         let transport = reqwest::Client::builder()
-            .user_agent("nvoken-rust/0.1.0")
+            .user_agent(&user_agent)
             .build()
             .map_err(|error| NvokenError::transport(error.to_string()))?;
         let response_metadata = ResponseMetadataStore::default();
@@ -983,7 +984,7 @@ impl Client {
             .build();
         let configuration = apis::configuration::Configuration {
             base_path: base_url,
-            user_agent: Some("nvoken-rust/0.1.0".to_owned()),
+            user_agent: Some(user_agent),
             client: middleware,
             bearer_access_token: Some(api_key),
             ..Default::default()

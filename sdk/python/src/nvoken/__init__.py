@@ -1,4 +1,5 @@
 from nvoken_generated import *  # noqa: F403
+from nvoken_generated import __version__ as __version__
 from nvoken_generated.models.agent import Agent as AgentIdentity
 
 from .callback import (
@@ -72,6 +73,7 @@ from .client import (
 )
 from .stream import Reducer, ReducedSnapshot, StreamEvent, StreamPreview, stream_session
 __all__ = [
+    "__version__",
     "ASK_USER_DESCRIPTION",
     "ASK_USER_TOOL_NAME",
     "AskUserInput",
