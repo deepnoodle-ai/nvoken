@@ -35,7 +35,9 @@ The OpenAPI documents keep their independent contract version. Do not change
 
 ## Publish an aligned version
 
-Create annotated tags on the same verified `main` commit, then push them:
+Create annotated tags on the same verified `main` commit, then push them one at
+a time. GitHub does not create tag-push workflow events when more than three
+tags are pushed together.
 
 ```bash
 version=0.10.0
@@ -44,14 +46,17 @@ git tag -a "sdk/go/v${version}" -m "nvoken Go SDK ${version}"
 git tag -a "npm-v${version}" -m "nvoken TypeScript SDK ${version}"
 git tag -a "pypi-v${version}" -m "nvoken Python SDK ${version}"
 git tag -a "crates-v${version}" -m "nvoken Rust SDK ${version}"
-git push origin \
-  "v${version}" \
-  "sdk/go/v${version}" \
-  "npm-v${version}" \
-  "pypi-v${version}" \
-  "crates-v${version}"
+git push origin "v${version}"
+git push origin "sdk/go/v${version}"
+git push origin "npm-v${version}"
+git push origin "pypi-v${version}"
+git push origin "crates-v${version}"
 ```
+
+If an npm tag workflow fails after the tag exists, fix the workflow on `main`
+and run `release-npm` manually with `release_ref` set to the existing immutable
+tag. Never move or recreate a published release tag to retry its workflow.
 
 Verify every workflow, the registry artifacts, the GitHub release archives,
 and the updated `deepnoodle-ai/homebrew-tap` formula before announcing the
-release. Never move or replace a published release tag.
+release.

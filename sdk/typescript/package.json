@@ -20,7 +20,7 @@
     }
   },
   "bin": {
-    "nvoken-quickstart": "./dist/examples/quickstart.js"
+    "nvoken-quickstart": "dist/examples/quickstart.js"
   },
   "sideEffects": false,
   "files": [
