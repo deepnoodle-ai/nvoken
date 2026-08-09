@@ -889,7 +889,7 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 		wire["provider_tools"] = r.ProviderTools
 	}
 	if r.OutputSchema != nil {
-		wire["structured_output"] = map[string]any{"schema": r.OutputSchema}
+		wire["output_schema"] = r.OutputSchema
 	}
 	if r.TenantKey != nil {
 		wire["tenant_key"] = *r.TenantKey

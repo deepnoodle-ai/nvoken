@@ -77,7 +77,7 @@ func TestInvokePreflightsOutputSchemaBeforeTransport(t *testing.T) {
 	}
 }
 
-func TestInvokeRequestOutputSchemaEncodesAsStructuredOutput(t *testing.T) {
+func TestInvokeRequestOutputSchemaEncodesDirectly(t *testing.T) {
 	body, err := InvokeRequest{
 		AgentKey:     "support",
 		Input:        "help",
@@ -88,19 +88,17 @@ func TestInvokeRequestOutputSchemaEncodesAsStructuredOutput(t *testing.T) {
 		t.Fatalf("encode: %v", err)
 	}
 	var wire struct {
-		Output           json.RawMessage `json:"output"`
-		StructuredOutput struct {
-			Schema map[string]any `json:"schema"`
-		} `json:"structured_output"`
+		OutputSchema     map[string]any  `json:"output_schema"`
+		StructuredOutput json.RawMessage `json:"structured_output"`
 	}
 	if err := json.Unmarshal(body, &wire); err != nil {
 		t.Fatalf("decode wire body: %v", err)
 	}
-	if wire.Output != nil {
-		t.Fatalf("output = %s, want absent (wire schema is structured_output)", wire.Output)
+	if wire.StructuredOutput != nil {
+		t.Fatalf("structured_output = %s, want absent", wire.StructuredOutput)
 	}
-	if wire.StructuredOutput.Schema["type"] != "object" {
-		t.Fatalf("structured_output.schema = %#v, want the supplied OutputSchema", wire.StructuredOutput.Schema)
+	if wire.OutputSchema["type"] != "object" {
+		t.Fatalf("output_schema = %#v, want the supplied OutputSchema", wire.OutputSchema)
 	}
 }
 

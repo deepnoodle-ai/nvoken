@@ -36,7 +36,7 @@
     "reasoning",
     "tool_choice",
     "limits",
-    "structured_output",
+    "output_schema",
     "tools",
     "mcp_servers",
     "provider_tools"
