@@ -459,6 +459,7 @@ def test_shared_output_schema_preflight_fixtures() -> None:
         error = failure.value
         assert error.category == "validation", test_case["id"]
         assert error.code == "schema_preflight_failed", test_case["id"]
+        assert error.details["kind"] == "output_schema", test_case["id"]
         assert error.details["code"] == test_case["issue"]["code"], test_case["id"]
         assert error.details["path"] == test_case["issue"]["path"], test_case["id"]
         assert error.details.get("keyword") == test_case["issue"].get("keyword"), \
@@ -543,7 +544,7 @@ async def test_shared_fault_server_semantics() -> None:
             (Path(__file__).parents[2] / "conformance/fixtures/shared-usage-budgets-v1.json").read_text()
         )
         assert fixture["scopes"] == [
-            "app", "customer", "user", "agent", "provider_key", "api_credential"
+            "app", "tenant", "user", "agent", "provider_key", "credential"
         ]
         budget = await client.create_budget(
             scope="app",

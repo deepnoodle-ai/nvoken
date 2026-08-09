@@ -484,6 +484,7 @@ fn shared_output_schema_preflight_fixtures() {
             "{id}"
         );
         let details = error.details.unwrap();
+        assert_eq!(details["kind"], "output_schema", "{id}");
         assert_eq!(details["code"], expected.code, "{id}");
         assert_eq!(details["path"], expected.path, "{id}");
         assert_eq!(
@@ -700,7 +701,17 @@ async fn shared_fault_server_semantics() {
         "../../conformance/fixtures/shared-usage-budgets-v1.json"
     ))
     .unwrap();
-    assert_eq!(budget_fixture["scopes"].as_array().unwrap().len(), 6);
+    assert_eq!(
+        budget_fixture["scopes"],
+        json!([
+            "app",
+            "tenant",
+            "user",
+            "agent",
+            "provider_key",
+            "credential"
+        ])
+    );
     let mut request = models::CreateBudgetRequest::new(
         models::BudgetScope::App,
         chrono::DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z").unwrap(),

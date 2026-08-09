@@ -740,6 +740,7 @@ test("shared output schema fixtures have portable preflight issues", async () =>
         assert.ok(error instanceof NvokenError, testCase.id);
         assert.equal(error.category, "validation", testCase.id);
         assert.equal(error.code, "schema_preflight_failed", testCase.id);
+        assert.equal(error.details?.kind, "output_schema", testCase.id);
         assert.equal(error.details?.code, testCase.issue!.code, testCase.id);
         assert.equal(error.details?.path, testCase.issue!.path, testCase.id);
         assert.equal(error.details?.keyword, testCase.issue!.keyword, testCase.id);
@@ -1107,7 +1108,7 @@ test("shared fault server semantics", async (context) => {
   )) as { scopes: string[]; budget: { id: string } };
   assert.deepEqual(
     budgetFixture.scopes,
-    ["app", "customer", "user", "agent", "provider_key", "api_credential"],
+    ["app", "tenant", "user", "agent", "provider_key", "credential"],
   );
   let budget = await client.createBudget({
     scope: "app",

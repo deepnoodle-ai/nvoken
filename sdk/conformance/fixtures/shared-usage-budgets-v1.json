@@ -1,11 +1,11 @@
 {
   "scopes": [
     "app",
-    "customer",
+    "tenant",
     "user",
     "agent",
     "provider_key",
-    "api_credential"
+    "credential"
   ],
   "app_create": {
     "scope": "app",
@@ -15,7 +15,7 @@
     "idempotency_key": "budget-conformance-1"
   },
   "budget": {
-    "id": "bdgt_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+    "id": "budg_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
     "scope": "app",
     "tenant_key": null,
     "user_key": null,
@@ -33,14 +33,14 @@
     "updated_at": "2026-08-08T12:00:00Z"
   },
   "blocking_budget": {
-    "id": "bdgt_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+    "id": "budg_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
     "scope": "app"
   },
   "unbounded_error": {
     "code": "budget_exceeded",
     "details": {
       "kind": "estimated_cost_unavailable",
-      "budget_id": "bdgt_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+      "budget_id": "budg_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
       "budget_scope": "app"
     }
   }

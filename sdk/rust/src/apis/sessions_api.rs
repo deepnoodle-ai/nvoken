@@ -300,7 +300,7 @@ pub async fn fork_session(
     }
 }
 
-/// An installation-wide credential may resolve a Session in any tenant partition. A tenant-constrained credential resolves only Sessions in its partition. Missing, incompatible, and undisclosable resources use `not_found`; a credential denied the read operation itself receives `forbidden`.
+/// An App credential without a tenant constraint may resolve a Session in any tenant partition in that App. A tenant-constrained credential resolves only Sessions in its partition. Missing, incompatible, and undisclosable resources use `not_found`; a credential denied the read operation itself receives `forbidden`.
 pub async fn get_session(
     configuration: &configuration::Configuration,
     session_id: &str,
@@ -690,7 +690,7 @@ pub async fn stream_session_transcript(
     }
 }
 
-/// Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget admits it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
+/// Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget allows it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
 pub async fn update_session(
     configuration: &configuration::Configuration,
     session_id: &str,

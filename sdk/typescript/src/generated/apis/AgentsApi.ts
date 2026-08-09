@@ -80,7 +80,7 @@ export class AgentsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Reads identity without admitting work. Out-of-scope and undisclosable constrained resources use `not_found`.
+     * Reads identity without creating work. Out-of-scope and undisclosable constrained resources use `not_found`.
      * Read one Agent identity anchor
      */
     async getAgentRaw(requestParameters: GetAgentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Agent>> {
@@ -91,7 +91,7 @@ export class AgentsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Reads identity without admitting work. Out-of-scope and undisclosable constrained resources use `not_found`.
+     * Reads identity without creating work. Out-of-scope and undisclosable constrained resources use `not_found`.
      * Read one Agent identity anchor
      */
     async getAgent(requestParameters: GetAgentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Agent> {

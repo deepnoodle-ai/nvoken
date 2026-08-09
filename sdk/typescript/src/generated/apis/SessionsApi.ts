@@ -167,7 +167,7 @@ export class SessionsApi extends runtime.BaseAPI {
 
     /**
      * Creates an empty Session, optionally seeded with history you already have. Use this when you want a conversation to exist before the first turn runs — to show it in a UI, or to import messages from elsewhere.  Every field is optional. Leave out `agent_key` and the Session starts unbound: `agent_id` stays null until the first turn binds it permanently.
-     * Create or seed a Session without admitting an Invocation
+     * Create or seed a Session without creating an Invocation
      */
     async createSessionRaw(requestParameters: CreateSessionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Session>> {
         const requestOptions = await this.createSessionRequestOpts(requestParameters);
@@ -178,7 +178,7 @@ export class SessionsApi extends runtime.BaseAPI {
 
     /**
      * Creates an empty Session, optionally seeded with history you already have. Use this when you want a conversation to exist before the first turn runs — to show it in a UI, or to import messages from elsewhere.  Every field is optional. Leave out `agent_key` and the Session starts unbound: `agent_id` stays null until the first turn binds it permanently.
-     * Create or seed a Session without admitting an Invocation
+     * Create or seed a Session without creating an Invocation
      */
     async createSession(requestParameters: CreateSessionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Session> {
         const response = await this.createSessionRaw(requestParameters, initOverrides);
@@ -340,7 +340,7 @@ export class SessionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * An installation-wide credential may resolve a Session in any tenant partition. A tenant-constrained credential resolves only Sessions in its partition. Missing, incompatible, and undisclosable resources use `not_found`; a credential denied the read operation itself receives `forbidden`.
+     * An App credential without a tenant constraint may resolve a Session in any tenant partition in that App. A tenant-constrained credential resolves only Sessions in its partition. Missing, incompatible, and undisclosable resources use `not_found`; a credential denied the read operation itself receives `forbidden`.
      * Read authoritative Session identity and current state
      */
     async getSessionRaw(requestParameters: GetSessionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Session>> {
@@ -351,7 +351,7 @@ export class SessionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * An installation-wide credential may resolve a Session in any tenant partition. A tenant-constrained credential resolves only Sessions in its partition. Missing, incompatible, and undisclosable resources use `not_found`; a credential denied the read operation itself receives `forbidden`.
+     * An App credential without a tenant constraint may resolve a Session in any tenant partition in that App. A tenant-constrained credential resolves only Sessions in its partition. Missing, incompatible, and undisclosable resources use `not_found`; a credential denied the read operation itself receives `forbidden`.
      * Read authoritative Session identity and current state
      */
     async getSession(requestParameters: GetSessionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Session> {
@@ -744,7 +744,7 @@ export class SessionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget admits it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other\'s keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other\'s read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
+     * Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget allows it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other\'s keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other\'s read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
      * Update a Session
      */
     async updateSessionRaw(requestParameters: UpdateSessionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Session>> {
@@ -755,7 +755,7 @@ export class SessionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget admits it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other\'s keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other\'s read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
+     * Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget allows it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other\'s keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other\'s read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
      * Update a Session
      */
     async updateSession(requestParameters: UpdateSessionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Session> {

@@ -21,7 +21,7 @@ const (
 	toolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 	definitionID = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
 	exactModelID = "experimental/model?variant=雪%#1"
-	budgetID     = "bdgt_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
+	budgetID     = "budg_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
 )
 
 type state struct {

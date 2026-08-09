@@ -58,7 +58,7 @@ class AgentsApi:
     ) -> Agent:
         """Read one Agent identity anchor
 
-        Reads identity without admitting work. Out-of-scope and undisclosable constrained resources use `not_found`.
+        Reads identity without creating work. Out-of-scope and undisclosable constrained resources use `not_found`.
 
         :param agent_id: (required)
         :type agent_id: str
@@ -132,7 +132,7 @@ class AgentsApi:
     ) -> ApiResponse[Agent]:
         """Read one Agent identity anchor
 
-        Reads identity without admitting work. Out-of-scope and undisclosable constrained resources use `not_found`.
+        Reads identity without creating work. Out-of-scope and undisclosable constrained resources use `not_found`.
 
         :param agent_id: (required)
         :type agent_id: str
@@ -206,7 +206,7 @@ class AgentsApi:
     ) -> RESTResponseType:
         """Read one Agent identity anchor
 
-        Reads identity without admitting work. Out-of-scope and undisclosable constrained resources use `not_found`.
+        Reads identity without creating work. Out-of-scope and undisclosable constrained resources use `not_found`.
 
         :param agent_id: (required)
         :type agent_id: str

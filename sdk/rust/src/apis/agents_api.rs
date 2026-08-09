@@ -40,7 +40,7 @@ pub enum ListAgentsError {
     UnknownValue(serde_json::Value),
 }
 
-/// Reads identity without admitting work. Out-of-scope and undisclosable constrained resources use `not_found`.
+/// Reads identity without creating work. Out-of-scope and undisclosable constrained resources use `not_found`.
 pub async fn get_agent(
     configuration: &configuration::Configuration,
     agent_id: &str,

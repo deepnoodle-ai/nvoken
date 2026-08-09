@@ -14,7 +14,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- * Installation-wide identity anchor only. Agent behavior is not registered;
+ * App-scoped identity anchor only. Agent behavior is not registered;
  * instructions, model, tools, and provider keys travel per Invocation.
  *
  * @export
@@ -28,7 +28,7 @@ export interface Agent {
      */
     id: string;
     /**
-     * Stable host-owned key, unique within the installation.
+     * Stable host-owned key, unique within the App.
      * @type {string}
      * @memberof Agent
      */

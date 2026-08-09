@@ -13,10 +13,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CreateInvocationRequest {
-    /// Stable caller-controlled Agent key, unique within the installation. The resulting Agent anchor stores identity only and is shared across tenant partitions.
+    /// Stable caller-controlled Agent key, unique within the authenticated App. The resulting Agent anchor stores identity only and is shared across that App's tenant partitions.
     #[serde(rename = "agent_key")]
     pub agent_key: String,
-    /// Optional tenant partition. For Session-key resolution or a new Session, precedence is credential constraint, this explicit value, then the default partition. For Session-ID resolution, an installation-wide caller may omit it and use the stored partition.
+    /// Optional tenant partition. For Session-key resolution or a new Session, precedence is credential constraint, this explicit value, then the default partition. For Session-ID resolution, an App credential without a tenant constraint may omit it and use the stored partition.
     #[serde(rename = "tenant_key", skip_serializing_if = "Option::is_none")]
     pub tenant_key: Option<String>,
     /// Optional host-owned end-user label recorded on this Invocation and its input message. The Session retains the label from the request that opened it, while later turns may identify different end users. Filtering only; not an isolation boundary.

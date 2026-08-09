@@ -32,6 +32,7 @@ func TestSharedOutputSchemaPreflightFixtures(t *testing.T) {
 			}
 			if sdkError.Category != ErrorValidation ||
 				sdkError.Code != SchemaPreflightCode ||
+				sdkError.Details["kind"] != "output_schema" ||
 				sdkError.Details["code"] != test.Issue.Code ||
 				sdkError.Details["path"] != test.Issue.Path {
 				t.Fatalf("preflight error = %#v, want %#v", sdkError, test.Issue)

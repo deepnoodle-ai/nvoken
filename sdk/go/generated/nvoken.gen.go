@@ -1591,10 +1591,10 @@ func (e ReceiveToolCallbackParamsXNvokenSignatureVersion) Valid() bool {
 	}
 }
 
-// Agent Installation-wide identity anchor only. Agent behavior is not registered;
+// Agent App-scoped identity anchor only. Agent behavior is not registered;
 // instructions, model, tools, and provider keys travel per Invocation.
 type Agent struct {
-	// AgentKey Stable host-owned key, unique within the installation.
+	// AgentKey Stable host-owned key, unique within the App.
 	AgentKey  string    `json:"agent_key"`
 	CreatedAt time.Time `json:"created_at"`
 
@@ -1864,8 +1864,8 @@ type CreateCredentialRequest struct {
 // mutually exclusive.
 type CreateInvocationRequest struct {
 	// AgentKey Stable caller-controlled Agent key, unique within the
-	// installation. The resulting Agent anchor stores identity
-	// only and is shared across tenant partitions.
+	// authenticated App. The resulting Agent anchor stores identity
+	// only and is shared across that App's tenant partitions.
 	AgentKey string `json:"agent_key"`
 
 	// DefinitionID Reuse an agent definition you already sent inline on an earlier turn,
@@ -2003,8 +2003,9 @@ type CreateInvocationRequest struct {
 
 	// TenantKey Optional tenant partition. For Session-key resolution or a new
 	// Session, precedence is credential constraint, this explicit value,
-	// then the default partition. For Session-ID resolution, an
-	// installation-wide caller may omit it and use the stored partition.
+	// then the default partition. For Session-ID resolution, an App
+	// credential without a tenant constraint may omit it and use the
+	// stored partition.
 	TenantKey *string `json:"tenant_key,omitempty"`
 
 	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
@@ -6297,7 +6298,7 @@ type ClientInterface interface {
 
 	// GetAgent Read one Agent identity anchor
 	//
-	// Reads identity without admitting work. Out-of-scope and undisclosable
+	// Reads identity without creating work. Out-of-scope and undisclosable
 	// constrained resources use `not_found`.
 	//
 	// Corresponds with GET /v1/agents/{agent_id} (the `GetAgent` operationId).
@@ -6495,11 +6496,12 @@ type ClientInterface interface {
 	// ListInvocations List authoritative Invocations
 	//
 	// Returns newest-first durable Invocation state. Exact filters combine
-	// with AND. An installation-wide caller may list all tenant partitions, one
-	// named partition with `tenant_key`, or the default partition with
-	// `default_tenant=true`. A tenant-constrained credential is always scoped
-	// to its partition. The opaque cursor is bound to the normalized filter
-	// set and credential tenant scope. `agent_id` and `agent_key` are
+	// with AND. An App credential without a tenant constraint may list all
+	// tenant partitions in that App, one named partition with `tenant_key`,
+	// or the default partition with `default_tenant=true`. A
+	// tenant-constrained credential is always scoped to its partition. The
+	// opaque cursor is bound to the normalized filter set and credential
+	// tenant scope. `agent_id` and `agent_key` are
 	// mutually exclusive; both normalize to the resolved Agent ID for cursor
 	// binding, so an equivalent cursor may resume under either spelling.
 	//
@@ -6520,9 +6522,9 @@ type ClientInterface interface {
 	// Pick the Session with either `session_id` or `session_key`, not both.
 	// A Session ID must belong to the Agent you named, or to a Session
 	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An installation-wide credential may omit `tenant_key` and
-	// use whichever tenant the Session already belongs to. A credential
-	// locked to one tenant cannot reach another; naming a different one
+	// permanently. An App credential without a tenant constraint may omit
+	// `tenant_key` and use whichever tenant the Session already belongs to.
+	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
 	// exists.
 	//
@@ -6617,9 +6619,9 @@ type ClientInterface interface {
 	// Pick the Session with either `session_id` or `session_key`, not both.
 	// A Session ID must belong to the Agent you named, or to a Session
 	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An installation-wide credential may omit `tenant_key` and
-	// use whichever tenant the Session already belongs to. A credential
-	// locked to one tenant cannot reach another; naming a different one
+	// permanently. An App credential without a tenant constraint may omit
+	// `tenant_key` and use whichever tenant the Session already belongs to.
+	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
 	// exists.
 	//
@@ -7154,7 +7156,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/sessions (the `ListSessions` operationId).
 	ListSessions(ctx context.Context, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateSessionWithBody Create or seed a Session without admitting an Invocation
+	// CreateSessionWithBody Create or seed a Session without creating an Invocation
 	//
 	// Creates an empty Session, optionally seeded with history you already
 	// have. Use this when you want a conversation to exist before the first
@@ -7169,7 +7171,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/sessions (the `CreateSession` operationId).
 	CreateSessionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateSession Create or seed a Session without admitting an Invocation
+	// CreateSession Create or seed a Session without creating an Invocation
 	//
 	// Creates an empty Session, optionally seeded with history you already
 	// have. Use this when you want a conversation to exist before the first
@@ -7222,9 +7224,10 @@ type ClientInterface interface {
 
 	// GetSession Read authoritative Session identity and current state
 	//
-	// An installation-wide credential may resolve a Session in any tenant
-	// partition. A tenant-constrained credential resolves only Sessions
-	// in its partition. Missing, incompatible, and undisclosable resources use
+	// An App credential without a tenant constraint may resolve a Session in
+	// any tenant partition in that App. A tenant-constrained credential
+	// resolves only Sessions in its partition. Missing, incompatible, and
+	// undisclosable resources use
 	// `not_found`; a credential denied the read operation itself receives
 	// `forbidden`.
 	//
@@ -7235,7 +7238,7 @@ type ClientInterface interface {
 	//
 	// Replaces or removes the Session lifetime estimated-cost cap, and merges
 	// host metadata when present. Raising or removing an exhausted cap
-	// requeues the paused turn when every first-class Budget admits it.
+	// requeues the paused turn when every first-class Budget allows it.
 	//
 	// For metadata, a present key replaces its value, an explicit
 	// `null` deletes that key, and a key the patch does not mention survives.
@@ -7263,7 +7266,7 @@ type ClientInterface interface {
 	//
 	// Replaces or removes the Session lifetime estimated-cost cap, and merges
 	// host metadata when present. Raising or removing an exhausted cap
-	// requeues the paused turn when every first-class Budget admits it.
+	// requeues the paused turn when every first-class Budget allows it.
 	//
 	// For metadata, a present key replaces its value, an explicit
 	// `null` deletes that key, and a key the patch does not mention survives.
@@ -7450,7 +7453,7 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 
 // GetAgent Read one Agent identity anchor
 //
-// Reads identity without admitting work. Out-of-scope and undisclosable
+// Reads identity without creating work. Out-of-scope and undisclosable
 // constrained resources use `not_found`.
 //
 // Corresponds with GET /v1/agents/{agent_id} (the `GetAgent` operationId).
@@ -7858,11 +7861,12 @@ func (c *Client) RotateCredential(ctx context.Context, credentialID CredentialID
 // ListInvocations List authoritative Invocations
 //
 // Returns newest-first durable Invocation state. Exact filters combine
-// with AND. An installation-wide caller may list all tenant partitions, one
-// named partition with `tenant_key`, or the default partition with
-// `default_tenant=true`. A tenant-constrained credential is always scoped
-// to its partition. The opaque cursor is bound to the normalized filter
-// set and credential tenant scope. `agent_id` and `agent_key` are
+// with AND. An App credential without a tenant constraint may list all
+// tenant partitions in that App, one named partition with `tenant_key`,
+// or the default partition with `default_tenant=true`. A
+// tenant-constrained credential is always scoped to its partition. The
+// opaque cursor is bound to the normalized filter set and credential
+// tenant scope. `agent_id` and `agent_key` are
 // mutually exclusive; both normalize to the resolved Agent ID for cursor
 // binding, so an equivalent cursor may resume under either spelling.
 //
@@ -7893,9 +7897,9 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 // Pick the Session with either `session_id` or `session_key`, not both.
 // A Session ID must belong to the Agent you named, or to a Session
 // created without an Agent — in which case this turn binds that Agent
-// permanently. An installation-wide credential may omit `tenant_key` and
-// use whichever tenant the Session already belongs to. A credential
-// locked to one tenant cannot reach another; naming a different one
+// permanently. An App credential without a tenant constraint may omit
+// `tenant_key` and use whichever tenant the Session already belongs to.
+// A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
 // exists.
 //
@@ -8000,9 +8004,9 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 // Pick the Session with either `session_id` or `session_key`, not both.
 // A Session ID must belong to the Agent you named, or to a Session
 // created without an Agent — in which case this turn binds that Agent
-// permanently. An installation-wide credential may omit `tenant_key` and
-// use whichever tenant the Session already belongs to. A credential
-// locked to one tenant cannot reach another; naming a different one
+// permanently. An App credential without a tenant constraint may omit
+// `tenant_key` and use whichever tenant the Session already belongs to.
+// A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
 // exists.
 //
@@ -8817,7 +8821,7 @@ func (c *Client) ListSessions(ctx context.Context, params *ListSessionsParams, r
 	return c.Client.Do(req)
 }
 
-// CreateSessionWithBody Create or seed a Session without admitting an Invocation
+// CreateSessionWithBody Create or seed a Session without creating an Invocation
 //
 // Creates an empty Session, optionally seeded with history you already
 // have. Use this when you want a conversation to exist before the first
@@ -8842,7 +8846,7 @@ func (c *Client) CreateSessionWithBody(ctx context.Context, contentType string, 
 	return c.Client.Do(req)
 }
 
-// CreateSession Create or seed a Session without admitting an Invocation
+// CreateSession Create or seed a Session without creating an Invocation
 //
 // Creates an empty Session, optionally seeded with history you already
 // have. Use this when you want a conversation to exist before the first
@@ -8915,9 +8919,10 @@ func (c *Client) DeleteSession(ctx context.Context, sessionID SessionID, reqEdit
 
 // GetSession Read authoritative Session identity and current state
 //
-// An installation-wide credential may resolve a Session in any tenant
-// partition. A tenant-constrained credential resolves only Sessions
-// in its partition. Missing, incompatible, and undisclosable resources use
+// An App credential without a tenant constraint may resolve a Session in
+// any tenant partition in that App. A tenant-constrained credential
+// resolves only Sessions in its partition. Missing, incompatible, and
+// undisclosable resources use
 // `not_found`; a credential denied the read operation itself receives
 // `forbidden`.
 //
@@ -8938,7 +8943,7 @@ func (c *Client) GetSession(ctx context.Context, sessionID SessionID, reqEditors
 //
 // Replaces or removes the Session lifetime estimated-cost cap, and merges
 // host metadata when present. Raising or removing an exhausted cap
-// requeues the paused turn when every first-class Budget admits it.
+// requeues the paused turn when every first-class Budget allows it.
 //
 // For metadata, a present key replaces its value, an explicit
 // `null` deletes that key, and a key the patch does not mention survives.
@@ -8976,7 +8981,7 @@ func (c *Client) UpdateSessionWithBody(ctx context.Context, sessionID SessionID,
 //
 // Replaces or removes the Session lifetime estimated-cost cap, and merges
 // host metadata when present. Raising or removing an exhausted cap
-// requeues the paused turn when every first-class Budget admits it.
+// requeues the paused turn when every first-class Budget allows it.
 //
 // For metadata, a present key replaces its value, an explicit
 // `null` deletes that key, and a key the patch does not mention survives.
@@ -12049,7 +12054,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetAgentWithResponse Read one Agent identity anchor
 	//
-	// Reads identity without admitting work. Out-of-scope and undisclosable
+	// Reads identity without creating work. Out-of-scope and undisclosable
 	// constrained resources use `not_found`.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -12265,11 +12270,12 @@ type ClientWithResponsesInterface interface {
 	// ListInvocationsWithResponse List authoritative Invocations
 	//
 	// Returns newest-first durable Invocation state. Exact filters combine
-	// with AND. An installation-wide caller may list all tenant partitions, one
-	// named partition with `tenant_key`, or the default partition with
-	// `default_tenant=true`. A tenant-constrained credential is always scoped
-	// to its partition. The opaque cursor is bound to the normalized filter
-	// set and credential tenant scope. `agent_id` and `agent_key` are
+	// with AND. An App credential without a tenant constraint may list all
+	// tenant partitions in that App, one named partition with `tenant_key`,
+	// or the default partition with `default_tenant=true`. A
+	// tenant-constrained credential is always scoped to its partition. The
+	// opaque cursor is bound to the normalized filter set and credential
+	// tenant scope. `agent_id` and `agent_key` are
 	// mutually exclusive; both normalize to the resolved Agent ID for cursor
 	// binding, so an equivalent cursor may resume under either spelling.
 	//
@@ -12292,9 +12298,9 @@ type ClientWithResponsesInterface interface {
 	// Pick the Session with either `session_id` or `session_key`, not both.
 	// A Session ID must belong to the Agent you named, or to a Session
 	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An installation-wide credential may omit `tenant_key` and
-	// use whichever tenant the Session already belongs to. A credential
-	// locked to one tenant cannot reach another; naming a different one
+	// permanently. An App credential without a tenant constraint may omit
+	// `tenant_key` and use whichever tenant the Session already belongs to.
+	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
 	// exists.
 	//
@@ -12389,9 +12395,9 @@ type ClientWithResponsesInterface interface {
 	// Pick the Session with either `session_id` or `session_key`, not both.
 	// A Session ID must belong to the Agent you named, or to a Session
 	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An installation-wide credential may omit `tenant_key` and
-	// use whichever tenant the Session already belongs to. A credential
-	// locked to one tenant cannot reach another; naming a different one
+	// permanently. An App credential without a tenant constraint may omit
+	// `tenant_key` and use whichever tenant the Session already belongs to.
+	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
 	// exists.
 	//
@@ -12956,7 +12962,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/sessions (the `ListSessions` operationId).
 	ListSessionsWithResponse(ctx context.Context, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*ListSessionsHTTPResponse, error)
 
-	// CreateSessionWithBodyWithResponse Create or seed a Session without admitting an Invocation
+	// CreateSessionWithBodyWithResponse Create or seed a Session without creating an Invocation
 	//
 	// Creates an empty Session, optionally seeded with history you already
 	// have. Use this when you want a conversation to exist before the first
@@ -12971,7 +12977,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/sessions (the `CreateSession` operationId).
 	CreateSessionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSessionHTTPResponse, error)
 
-	// CreateSessionWithResponse Create or seed a Session without admitting an Invocation
+	// CreateSessionWithResponse Create or seed a Session without creating an Invocation
 	//
 	// Creates an empty Session, optionally seeded with history you already
 	// have. Use this when you want a conversation to exist before the first
@@ -13026,9 +13032,10 @@ type ClientWithResponsesInterface interface {
 
 	// GetSessionWithResponse Read authoritative Session identity and current state
 	//
-	// An installation-wide credential may resolve a Session in any tenant
-	// partition. A tenant-constrained credential resolves only Sessions
-	// in its partition. Missing, incompatible, and undisclosable resources use
+	// An App credential without a tenant constraint may resolve a Session in
+	// any tenant partition in that App. A tenant-constrained credential
+	// resolves only Sessions in its partition. Missing, incompatible, and
+	// undisclosable resources use
 	// `not_found`; a credential denied the read operation itself receives
 	// `forbidden`.
 	//
@@ -13041,7 +13048,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Replaces or removes the Session lifetime estimated-cost cap, and merges
 	// host metadata when present. Raising or removing an exhausted cap
-	// requeues the paused turn when every first-class Budget admits it.
+	// requeues the paused turn when every first-class Budget allows it.
 	//
 	// For metadata, a present key replaces its value, an explicit
 	// `null` deletes that key, and a key the patch does not mention survives.
@@ -13069,7 +13076,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Replaces or removes the Session lifetime estimated-cost cap, and merges
 	// host metadata when present. Raising or removing an exhausted cap
-	// requeues the paused turn when every first-class Budget admits it.
+	// requeues the paused turn when every first-class Budget allows it.
 	//
 	// For metadata, a present key replaces its value, an explicit
 	// `null` deletes that key, and a key the patch does not mention survives.
@@ -17492,7 +17499,7 @@ func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params
 
 // GetAgentWithResponse Read one Agent identity anchor
 //
-// Reads identity without admitting work. Out-of-scope and undisclosable
+// Reads identity without creating work. Out-of-scope and undisclosable
 // constrained resources use `not_found`.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -17834,11 +17841,12 @@ func (c *ClientWithResponses) RotateCredentialWithResponse(ctx context.Context, 
 // ListInvocationsWithResponse List authoritative Invocations
 //
 // Returns newest-first durable Invocation state. Exact filters combine
-// with AND. An installation-wide caller may list all tenant partitions, one
-// named partition with `tenant_key`, or the default partition with
-// `default_tenant=true`. A tenant-constrained credential is always scoped
-// to its partition. The opaque cursor is bound to the normalized filter
-// set and credential tenant scope. `agent_id` and `agent_key` are
+// with AND. An App credential without a tenant constraint may list all
+// tenant partitions in that App, one named partition with `tenant_key`,
+// or the default partition with `default_tenant=true`. A
+// tenant-constrained credential is always scoped to its partition. The
+// opaque cursor is bound to the normalized filter set and credential
+// tenant scope. `agent_id` and `agent_key` are
 // mutually exclusive; both normalize to the resolved Agent ID for cursor
 // binding, so an equivalent cursor may resume under either spelling.
 //
@@ -17867,9 +17875,9 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 // Pick the Session with either `session_id` or `session_key`, not both.
 // A Session ID must belong to the Agent you named, or to a Session
 // created without an Agent — in which case this turn binds that Agent
-// permanently. An installation-wide credential may omit `tenant_key` and
-// use whichever tenant the Session already belongs to. A credential
-// locked to one tenant cannot reach another; naming a different one
+// permanently. An App credential without a tenant constraint may omit
+// `tenant_key` and use whichever tenant the Session already belongs to.
+// A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
 // exists.
 //
@@ -17970,9 +17978,9 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 // Pick the Session with either `session_id` or `session_key`, not both.
 // A Session ID must belong to the Agent you named, or to a Session
 // created without an Agent — in which case this turn binds that Agent
-// permanently. An installation-wide credential may omit `tenant_key` and
-// use whichever tenant the Session already belongs to. A credential
-// locked to one tenant cannot reach another; naming a different one
+// permanently. An App credential without a tenant constraint may omit
+// `tenant_key` and use whichever tenant the Session already belongs to.
+// A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
 // exists.
 //
@@ -18705,7 +18713,7 @@ func (c *ClientWithResponses) ListSessionsWithResponse(ctx context.Context, para
 	return ParseListSessionsHTTPResponse(rsp)
 }
 
-// CreateSessionWithBodyWithResponse Create or seed a Session without admitting an Invocation
+// CreateSessionWithBodyWithResponse Create or seed a Session without creating an Invocation
 //
 // Creates an empty Session, optionally seeded with history you already
 // have. Use this when you want a conversation to exist before the first
@@ -18726,7 +18734,7 @@ func (c *ClientWithResponses) CreateSessionWithBodyWithResponse(ctx context.Cont
 	return ParseCreateSessionHTTPResponse(rsp)
 }
 
-// CreateSessionWithResponse Create or seed a Session without admitting an Invocation
+// CreateSessionWithResponse Create or seed a Session without creating an Invocation
 //
 // Creates an empty Session, optionally seeded with history you already
 // have. Use this when you want a conversation to exist before the first
@@ -18793,9 +18801,10 @@ func (c *ClientWithResponses) DeleteSessionWithResponse(ctx context.Context, ses
 
 // GetSessionWithResponse Read authoritative Session identity and current state
 //
-// An installation-wide credential may resolve a Session in any tenant
-// partition. A tenant-constrained credential resolves only Sessions
-// in its partition. Missing, incompatible, and undisclosable resources use
+// An App credential without a tenant constraint may resolve a Session in
+// any tenant partition in that App. A tenant-constrained credential
+// resolves only Sessions in its partition. Missing, incompatible, and
+// undisclosable resources use
 // `not_found`; a credential denied the read operation itself receives
 // `forbidden`.
 //
@@ -18814,7 +18823,7 @@ func (c *ClientWithResponses) GetSessionWithResponse(ctx context.Context, sessio
 //
 // Replaces or removes the Session lifetime estimated-cost cap, and merges
 // host metadata when present. Raising or removing an exhausted cap
-// requeues the paused turn when every first-class Budget admits it.
+// requeues the paused turn when every first-class Budget allows it.
 //
 // For metadata, a present key replaces its value, an explicit
 // `null` deletes that key, and a key the patch does not mention survives.
@@ -18848,7 +18857,7 @@ func (c *ClientWithResponses) UpdateSessionWithBodyWithResponse(ctx context.Cont
 //
 // Replaces or removes the Session lifetime estimated-cost cap, and merges
 // host metadata when present. Raising or removing an exhausted cap
-// requeues the paused turn when every first-class Budget admits it.
+// requeues the paused turn when every first-class Budget allows it.
 //
 // For metadata, a present key replaces its value, an explicit
 // `null` deletes that key, and a key the patch does not mention survives.

@@ -27,10 +27,10 @@ from pydantic_core import to_jsonable_python
 
 class Agent(BaseModel):
     """
-    Installation-wide identity anchor only. Agent behavior is not registered; instructions, model, tools, and provider keys travel per Invocation.
+    App-scoped identity anchor only. Agent behavior is not registered; instructions, model, tools, and provider keys travel per Invocation.
     """ # noqa: E501
     id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
-    agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Stable host-owned key, unique within the installation.")
+    agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Stable host-owned key, unique within the App.")
     created_at: datetime
     __properties: ClassVar[List[str]] = ["id", "agent_key", "created_at"]
 

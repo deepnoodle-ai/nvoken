@@ -11,13 +11,13 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// Agent : Installation-wide identity anchor only. Agent behavior is not registered; instructions, model, tools, and provider keys travel per Invocation.
+/// Agent : App-scoped identity anchor only. Agent behavior is not registered; instructions, model, tools, and provider keys travel per Invocation.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Agent {
     /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
     #[serde(rename = "id")]
     pub id: String,
-    /// Stable host-owned key, unique within the installation.
+    /// Stable host-owned key, unique within the App.
     #[serde(rename = "agent_key")]
     pub agent_key: String,
     #[serde(rename = "created_at")]
@@ -25,7 +25,7 @@ pub struct Agent {
 }
 
 impl Agent {
-    /// Installation-wide identity anchor only. Agent behavior is not registered; instructions, model, tools, and provider keys travel per Invocation.
+    /// App-scoped identity anchor only. Agent behavior is not registered; instructions, model, tools, and provider keys travel per Invocation.
     pub fn new(
         id: String,
         agent_key: String,

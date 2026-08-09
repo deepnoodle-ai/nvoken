@@ -215,7 +215,7 @@ def preflight_output_schema(schema: dict[str, Any]) -> None:
     if issue is None:
         return
     details: dict[str, Any] = {
-        "kind": "structured_output_schema",
+        "kind": "output_schema",
         "code": issue.code,
         "path": issue.path,
     }
@@ -1277,7 +1277,7 @@ class Client:
     async def create_budget(
         self,
         *,
-        scope: Literal["app", "customer", "user", "agent", "provider_key", "api_credential"],
+        scope: Literal["app", "tenant", "user", "agent", "provider_key", "credential"],
         window_start: datetime,
         window_end: datetime,
         max_estimated_cost_usd: float,

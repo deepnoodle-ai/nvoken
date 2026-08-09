@@ -71,7 +71,7 @@ type schemaIssue = SchemaIssue
 
 func outputSchemaError(issue schemaIssue) error {
 	details := map[string]any{
-		"kind": "structured_output_schema",
+		"kind": "output_schema",
 		"code": issue.Code,
 		"path": issue.Path,
 	}

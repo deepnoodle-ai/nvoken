@@ -191,7 +191,7 @@ export function preflightOutputSchema(schema: Record<string, unknown>): void {
   const issue = outputSchemaIssue(schema);
   if (!issue) return;
   const details: Record<string, unknown> = {
-    kind: "structured_output_schema",
+    kind: "output_schema",
     code: issue.code,
     path: issue.path,
   };

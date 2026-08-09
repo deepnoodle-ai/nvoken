@@ -106,8 +106,8 @@ import {
 export interface CreateInvocationRequest {
     /**
      * Stable caller-controlled Agent key, unique within the
-     * installation. The resulting Agent anchor stores identity
-     * only and is shared across tenant partitions.
+     * authenticated App. The resulting Agent anchor stores identity
+     * only and is shared across that App's tenant partitions.
      *
      * @type {string}
      * @memberof CreateInvocationRequest
@@ -116,8 +116,9 @@ export interface CreateInvocationRequest {
     /**
      * Optional tenant partition. For Session-key resolution or a new
      * Session, precedence is credential constraint, this explicit value,
-     * then the default partition. For Session-ID resolution, an
-     * installation-wide caller may omit it and use the stored partition.
+     * then the default partition. For Session-ID resolution, an App
+     * credential without a tenant constraint may omit it and use the
+     * stored partition.
      *
      * @type {string}
      * @memberof CreateInvocationRequest
