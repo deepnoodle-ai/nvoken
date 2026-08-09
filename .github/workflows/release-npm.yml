@@ -34,7 +34,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - name: Verify trusted-publishing runtime
         run: |
@@ -49,6 +48,10 @@ jobs:
           NODE
           if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
             echo "NODE_AUTH_TOKEN must be unset so npm uses OIDC trusted publishing" >&2
+            exit 1
+          fi
+          if [ -n "${NPM_CONFIG_USERCONFIG:-}" ]; then
+            echo "NPM_CONFIG_USERCONFIG must be unset so npm has no token-auth configuration" >&2
             exit 1
           fi
           test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
