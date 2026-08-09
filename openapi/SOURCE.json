@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/deepnoodle-ai/nvoken-cloud",
-  "commit": "01299b46dcf8a10e08f2dfbcae094e33df734ed1",
+  "commit": "b7bc9d5c8ed217afb8c83e095c12fec81882f1bc",
   "dirty": false,
   "contract": "openapi/nvoken.yaml"
 }
