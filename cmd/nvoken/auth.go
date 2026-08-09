@@ -31,7 +31,7 @@ func registerAuthCommands(app *cli.App) {
 // `nvoken credentials create`; there is no interactive login.
 func runAuthLogin(ctx *cli.Context) error {
 	auth := authFor(ctx)
-	client, err := identityClient(auth, true)
+	client, err := apiClient(auth, true)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func runAuthLogin(ctx *cli.Context) error {
 
 func runAuthStatus(ctx *cli.Context) error {
 	auth := authFor(ctx)
-	client, err := identityClient(auth, true)
+	client, err := apiClient(auth, true)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,7 @@ func runAuthRevoke(ctx *cli.Context) error {
 	if auth.Profile == nil || auth.Profile.CredentialID == "" {
 		return errors.New("auth revoke requires a saved profile; use `nvoken credentials revoke <id>` for an environment-backed credential")
 	}
-	client, err := identityClient(auth, true)
+	client, err := apiClient(auth, true)
 	if err != nil {
 		return err
 	}

@@ -48,4 +48,3 @@ export type {
   TranscriptSnapshot,
 } from "./generated/models/index.js";
 export * as raw from "./generated/index.js";
-export * as identityRaw from "./identity-generated/index.js";

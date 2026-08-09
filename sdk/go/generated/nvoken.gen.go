@@ -220,6 +220,57 @@ func (e CreateInvocationRequestOnBudgetExhausted) Valid() bool {
 	}
 }
 
+// Defines values for CredentialStatus.
+const (
+	CredentialStatusActive  CredentialStatus = "active"
+	CredentialStatusRevoked CredentialStatus = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the CredentialStatus enum.
+func (e CredentialStatus) Valid() bool {
+	switch e {
+	case CredentialStatusActive:
+		return true
+	case CredentialStatusRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CurrentIdentityAuthenticationAssurance.
+const (
+	Bearer CurrentIdentityAuthenticationAssurance = "bearer"
+)
+
+// Valid indicates whether the value is a known member of the CurrentIdentityAuthenticationAssurance enum.
+func (e CurrentIdentityAuthenticationAssurance) Valid() bool {
+	switch e {
+	case Bearer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CurrentIdentityAuthenticationMethod.
+const (
+	APIKey      CurrentIdentityAuthenticationMethod = "api_key"
+	IssuerToken CurrentIdentityAuthenticationMethod = "issuer_token"
+)
+
+// Valid indicates whether the value is a known member of the CurrentIdentityAuthenticationMethod enum.
+func (e CurrentIdentityAuthenticationMethod) Valid() bool {
+	switch e {
+	case APIKey:
+		return true
+	case IssuerToken:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DocumentInputBlockType.
 const (
 	InputTypeDocument DocumentInputBlockType = "document"
@@ -787,6 +838,117 @@ func (e ModelToolChoiceMode) Valid() bool {
 	}
 }
 
+// Defines values for Operation.
+const (
+	CancelInvocation     Operation = "cancel_invocation"
+	CreateCredential     Operation = "create_credential"
+	CreateInvocation     Operation = "create_invocation"
+	CreateProviderKey    Operation = "create_provider_key"
+	CreateSession        Operation = "create_session"
+	DeleteSession        Operation = "delete_session"
+	GetAgent             Operation = "get_agent"
+	GetApp               Operation = "get_app"
+	GetCredential        Operation = "get_credential"
+	GetIdentity          Operation = "get_identity"
+	GetInvocation        Operation = "get_invocation"
+	GetProviderKey       Operation = "get_provider_key"
+	GetSession           Operation = "get_session"
+	GetSessionTranscript Operation = "get_session_transcript"
+	ListAgents           Operation = "list_agents"
+	ListApps             Operation = "list_apps"
+	ListCredentials      Operation = "list_credentials"
+	ListInvocations      Operation = "list_invocations"
+	ListProviderKeys     Operation = "list_provider_keys"
+	ListSessionMessages  Operation = "list_session_messages"
+	ListSessions         Operation = "list_sessions"
+	ReadBudgets          Operation = "read_budgets"
+	ReadUsage            Operation = "read_usage"
+	RegisterApp          Operation = "register_app"
+	ResumeInvocation     Operation = "resume_invocation"
+	RevokeCredential     Operation = "revoke_credential"
+	RevokeProviderKey    Operation = "revoke_provider_key"
+	RotateCredential     Operation = "rotate_credential"
+	RotateProviderKey    Operation = "rotate_provider_key"
+	SubmitToolResults    Operation = "submit_tool_results"
+	UpdateApp            Operation = "update_app"
+	UpdateSession        Operation = "update_session"
+	WriteBudgets         Operation = "write_budgets"
+)
+
+// Valid indicates whether the value is a known member of the Operation enum.
+func (e Operation) Valid() bool {
+	switch e {
+	case CancelInvocation:
+		return true
+	case CreateCredential:
+		return true
+	case CreateInvocation:
+		return true
+	case CreateProviderKey:
+		return true
+	case CreateSession:
+		return true
+	case DeleteSession:
+		return true
+	case GetAgent:
+		return true
+	case GetApp:
+		return true
+	case GetCredential:
+		return true
+	case GetIdentity:
+		return true
+	case GetInvocation:
+		return true
+	case GetProviderKey:
+		return true
+	case GetSession:
+		return true
+	case GetSessionTranscript:
+		return true
+	case ListAgents:
+		return true
+	case ListApps:
+		return true
+	case ListCredentials:
+		return true
+	case ListInvocations:
+		return true
+	case ListProviderKeys:
+		return true
+	case ListSessionMessages:
+		return true
+	case ListSessions:
+		return true
+	case ReadBudgets:
+		return true
+	case ReadUsage:
+		return true
+	case RegisterApp:
+		return true
+	case ResumeInvocation:
+		return true
+	case RevokeCredential:
+		return true
+	case RevokeProviderKey:
+		return true
+	case RotateCredential:
+		return true
+	case RotateProviderKey:
+		return true
+	case SubmitToolResults:
+		return true
+	case UpdateApp:
+		return true
+	case UpdateSession:
+		return true
+	case WriteBudgets:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OutputTextDeltaEventType.
 const (
 	EventOutputTextDelta OutputTextDeltaEventType = "output_text.delta"
@@ -820,6 +982,27 @@ func (e PendingInputStatus) Valid() bool {
 	case PendingInputStatusExpired:
 		return true
 	case PendingInputStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Profile.
+const (
+	Operator Profile = "Operator"
+	Runtime  Profile = "Runtime"
+	Viewer   Profile = "Viewer"
+)
+
+// Valid indicates whether the value is a known member of the Profile enum.
+func (e Profile) Valid() bool {
+	switch e {
+	case Operator:
+		return true
+	case Runtime:
+		return true
+	case Viewer:
 		return true
 	default:
 		return false
@@ -1423,7 +1606,7 @@ func (e ReceiveToolCallbackParamsXNvokenSignatureVersion) Valid() bool {
 	}
 }
 
-// APICredentialID UUIDv7 with the public `cred_` prefix.
+// APICredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
 type APICredentialID = string
 
 // Agent Installation-wide identity anchor only. Agent behavior is not registered;
@@ -1433,7 +1616,7 @@ type Agent struct {
 	AgentKey  string    `json:"agent_key"`
 	CreatedAt time.Time `json:"created_at"`
 
-	// ID UUIDv7 with the public `agnt_` prefix.
+	// ID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	ID AgentID `json:"id"`
 }
 
@@ -1482,10 +1665,10 @@ type AgentDefinition struct {
 	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
 }
 
-// AgentDefinitionID UUIDv7 with the public `def_` prefix.
+// AgentDefinitionID Opaque identifier with the public `def_` prefix. Treat the body as opaque.
 type AgentDefinitionID = string
 
-// AgentID UUIDv7 with the public `agnt_` prefix.
+// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 type AgentID = string
 
 // AgentList defines model for AgentList.
@@ -1507,20 +1690,27 @@ type App struct {
 	ExternalRef *string `json:"external_ref"`
 
 	// ID The generated nvoken app identifier.
-	ID string `json:"id"`
+	ID AppID `json:"id"`
 
 	// Name The unique host-chosen name for this app.
 	Name string `json:"name"`
 }
+
+// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+type AppID = string
 
 // AppList defines model for AppList.
 type AppList struct {
 	Items []App `json:"items"`
 }
 
-// Budget Durable enforcement state for one fixed window. Settled and reserved
-// are stored quota facts. They do not shrink when transcript evidence is
-// erased and are not an invoice.
+// Budget What one spending limit has used up so far in its current window.
+// `settled_estimated_cost_usd` is spend from turns that have finished;
+// `reserved_estimated_cost_usd` is spend committed to turns still
+// running; `available_estimated_cost_usd` is what is left. These are
+// nvoken's own running tally for deciding when to stop work — deleting
+// transcripts does not give quota back, and these numbers are an
+// estimate for enforcement, not a bill.
 type Budget struct {
 	AgentID                   *AgentID  `json:"agent_id"`
 	AvailableEstimatedCostUsd float32   `json:"available_estimated_cost_usd"`
@@ -1529,7 +1719,7 @@ type Budget struct {
 	// CredentialFamilyID Root API credential ID shared by its rotation chain.
 	CredentialFamilyID *APICredentialID `json:"credential_family_id"`
 
-	// ID UUIDv7 with the public `bdgt_` prefix.
+	// ID Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
 	ID                       BudgetID       `json:"id"`
 	MaxEstimatedCostUsd      float32        `json:"max_estimated_cost_usd"`
 	PausedInvocations        int            `json:"paused_invocations"`
@@ -1546,7 +1736,7 @@ type Budget struct {
 
 // BudgetBlock Exact durable budget that refused or paused work.
 type BudgetBlock struct {
-	// ID UUIDv7 with the public `bdgt_` prefix.
+	// ID Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
 	ID    BudgetID         `json:"id"`
 	Scope BudgetBlockScope `json:"scope"`
 }
@@ -1554,7 +1744,7 @@ type BudgetBlock struct {
 // BudgetBlockScope defines model for BudgetBlock.Scope.
 type BudgetBlockScope string
 
-// BudgetID UUIDv7 with the public `bdgt_` prefix.
+// BudgetID Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
 type BudgetID = string
 
 // BudgetScope defines model for BudgetScope.
@@ -1573,9 +1763,6 @@ type BuiltinToolDeclarationMode string
 
 // BuiltinToolDeclarationName Fixed runtime-owned public-web fetch capability.
 type BuiltinToolDeclarationName string
-
-// CallbackDeliveryID defines model for CallbackDeliveryID.
-type CallbackDeliveryID = string
 
 // CallbackDeliveryOutcome `pending` covers a blocked, available, or currently leased delivery.
 // The other values are terminal transport outcomes.
@@ -1601,16 +1788,19 @@ type CallbackToolDeclaration struct {
 	InputSchema map[string]interface{}      `json:"input_schema"`
 	Mode        CallbackToolDeclarationMode `json:"mode"`
 
-	// Name Unique within the definition; the `nvoken_` prefix is reserved.
+	// Name The tool's name, unique within this agent definition. Names starting
+	// with `nvoken_` are reserved.
 	//
-	// The charset is deliberately the strictest tool-name constraint any
-	// supported provider imposes, so every admitted name reaches every
-	// provider unchanged. Widening it — to dotted names, for instance —
-	// would require a mangling layer whose collisions nvoken would then
-	// own, and would sit ambiguously beside the `__` separator MCP tool
-	// projection already uses. A host whose own permission grammar uses
-	// dots should map it injectively (`naming.domain.check` becomes
-	// `naming_domain_check`) and state the mapping to the model once.
+	// Letters, digits, `_`, and `-` only. That is the strictest rule any
+	// supported provider imposes, so a name accepted here reaches every
+	// provider unchanged and your agent behaves the same wherever it runs.
+	// nvoken deliberately does not rewrite names to fit — a rewriting layer
+	// would own the collisions it creates, and would clash with the `__`
+	// separator used for MCP tool names.
+	//
+	// If your own permissions use dotted names, map them one-to-one
+	// (`naming.domain.check` becomes `naming_domain_check`) and tell the
+	// model about the mapping once in your instructions.
 	Name string `json:"name"`
 }
 
@@ -1672,16 +1862,16 @@ type CompactionPolicy_TriggerTokens struct {
 // `provider_key_id`, and `credential_id` respectively. A credential ID
 // resolves to its stable rotation family.
 type CreateBudgetRequest struct {
-	// AgentID UUIDv7 with the public `agnt_` prefix.
+	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	AgentID *AgentID `json:"agent_id,omitempty"`
 
-	// CredentialID UUIDv7 with the public `cred_` prefix.
+	// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
 	CredentialID        *APICredentialID `json:"credential_id,omitempty"`
 	DefaultTenant       *bool            `json:"default_tenant,omitempty"`
 	IdempotencyKey      string           `json:"idempotency_key"`
 	MaxEstimatedCostUsd float32          `json:"max_estimated_cost_usd"`
 
-	// ProviderKeyID UUIDv7 with the public `pkey_` prefix.
+	// ProviderKeyID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
 	ProviderKeyID *ProviderKeyID `json:"provider_key_id,omitempty"`
 	Scope         BudgetScope    `json:"scope"`
 	TenantKey     *string        `json:"tenant_key,omitempty"`
@@ -1694,6 +1884,23 @@ type CreateBudgetRequest struct {
 	WindowStart time.Time `json:"window_start"`
 }
 
+// CreateCredentialRequest defines model for CreateCredentialRequest.
+type CreateCredentialRequest struct {
+	// AppID Target App for an app-less Operator provisioning an app credential.
+	// Omit to issue another app-less credential. An app-bound Operator
+	// may omit this field or repeat its own App ID, but cannot name a
+	// different App.
+	AppID      *AppID       `json:"app_id,omitempty"`
+	ExpiresAt  *time.Time   `json:"expires_at,omitempty"`
+	Name       string       `json:"name"`
+	Operations *[]Operation `json:"operations,omitempty"`
+	Profile    Profile      `json:"profile"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID *SessionID `json:"session_id,omitempty"`
+	TenantKey *string    `json:"tenant_key,omitempty"`
+}
+
 // CreateInvocationRequest The request carries one definition form. It either carries
 // definition_id or an inline definition with model. The two forms are
 // mutually exclusive.
@@ -1703,28 +1910,40 @@ type CreateInvocationRequest struct {
 	// only and is shared across tenant partitions.
 	AgentKey string `json:"agent_key"`
 
-	// DefinitionID Immutable content-addressed definition previously admitted inline
-	// by this app. Unknown and foreign IDs return
-	// `definition_not_found`. Mutually exclusive with every inline
-	// definition field. A reference and the byte-identical inline
-	// definition are equal on idempotent replay.
+	// DefinitionID Reuse an agent definition you already sent inline on an earlier turn,
+	// instead of sending it again. The ID is derived from the definition's
+	// own content, so it never points at anything but that exact definition.
+	//
+	// IDs from another app, or IDs that do not exist, return
+	// `definition_not_found`. Cannot be combined with the inline definition
+	// fields. Sending the ID and sending the identical definition inline
+	// count as the same request when retrying with an idempotency key.
 	DefinitionID *AgentDefinitionID `json:"definition_id,omitempty"`
 
-	// IdempotencyKey Stable admission identity scoped to (effective tenant
-	// partition, agent_key). Reuse an unchanged request after any 5xx,
-	// timeout, disconnect, or missing acknowledgement. Deduplication is
-	// guaranteed while the original Invocation is retained.
+	// IdempotencyKey Your key for making retries safe. Send the same unchanged request
+	// again after a 5xx, a timeout, a dropped connection, or any case
+	// where you never saw the response, and you get the original turn
+	// back instead of starting a second one.
+	//
+	// Keys are scoped to the tenant and `agent_key`, so the same key
+	// under a different tenant is a different request. Deduplication
+	// lasts as long as the original turn still exists.
 	IdempotencyKey string `json:"idempotency_key"`
 
-	// IfActive Policy when the resolved Session already has a nonterminal
-	// Invocation. `reject` returns `session_invocation_active`.
-	// `supersede` atomically applies the ordinary durable cancellation
-	// transition to that Invocation before admitting this replacement,
-	// dropping its work from later turns. `interrupt` stops it
-	// gracefully and admits only after it has settled `completed`, so
-	// the replacement builds on what the stopped turn produced: it is
-	// "stop and redo" where supersede is "discard and redo". Omission
-	// and explicit `reject` compare equal on replay.
+	// IfActive What to do when the Session already has a turn running. A Session
+	// runs one turn at a time.
+	//
+	// - `reject` (the default) refuses this request with
+	//   `session_invocation_active` and leaves the running turn alone.
+	// - `supersede` cancels the running turn and starts this one in its
+	//   place. The cancelled turn's work is discarded and does not carry
+	//   forward — "discard and redo".
+	// - `interrupt` asks the running turn to stop cleanly and starts
+	//   this one only once it has, so this turn builds on what the
+	//   stopped one produced — "stop and redo".
+	//
+	// Omitting the field and sending `reject` are the same request for
+	// idempotency purposes.
 	IfActive *CreateInvocationRequestIfActive `json:"if_active,omitempty"`
 
 	// Input A plain string is shorthand for one text block; an array is ordered
@@ -1746,42 +1965,46 @@ type CreateInvocationRequest struct {
 	Limits     *Limits      `json:"limits,omitempty"`
 	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
 
-	// Metadata Opaque host correlation data recorded on this Invocation. It is
-	// part of the admitted input, so it is immutable and material to
-	// idempotency: a replay carrying different metadata conflicts rather
-	// than updating it. A genuine retry describes the same originating
-	// request and so carries the same values by construction.
+	// Metadata Your own data to attach to this turn — a ticket number, a trace
+	// ID, whatever helps you tie it back to your system. nvoken stores
+	// it and hands it back untouched.
 	//
-	// Session metadata is separate and mutable — see
+	// It is fixed once the turn is created and counts as part of the
+	// request for idempotency. Retrying with the same `idempotency_key`
+	// but different metadata is treated as a different request and
+	// returns a conflict rather than updating it. A genuine retry of the
+	// same original request carries the same values anyway.
+	//
+	// Session metadata is a separate thing and can be changed — see
 	// `session_options.metadata` and `PATCH /v1/sessions/{session_id}`.
 	Metadata *Metadata `json:"metadata,omitempty"`
 
-	// Model Model selection accepted at Invocation admission. The object is
-	// canonical. The `provider/id` string is caller convenience: nvoken
-	// splits on the first slash and always echoes the object form.
+	// Model Which model to use. The object form — separate `provider` and `id` — is
+	// the real shape. You may also send a single `provider/id` string for
+	// convenience; nvoken splits it at the first slash and always returns the
+	// object form.
 	Model *ModelInput `json:"model,omitempty"`
 
-	// OnBudgetExhausted `settle` ends a coherent consumption-budget stop as `incomplete`.
-	// `pause` parks it as resumable `paused`. Applies to iteration,
-	// output-token, per-turn estimated-cost, and Session estimated-cost
-	// ceilings; deadlines always settle.
+	// OnBudgetExhausted What to do when the turn runs out of one of its spending limits.
+	// `settle` ends it as `incomplete`. `pause` leaves it as `paused` so
+	// you can raise the limit and continue it.
+	//
+	// Covers the iteration, output-token, per-turn cost, and Session
+	// cost limits. Deadlines are not covered — a turn that runs out of
+	// time always ends and can never be resumed.
 	OnBudgetExhausted *CreateInvocationRequestOnBudgetExhausted `json:"on_budget_exhausted,omitempty"`
 
-	// ProviderKeys Explicit nonsecret source selection for the model provider.
-	// Omission resolves the default chain at admission: the app's
-	// stored key for the provider when one exists, else a
-	// self-hosted installation's environment key (config_byok), else
-	// platform funding when the installation enables it. The chosen
-	// source is bound durably at admission; execution never falls
-	// through to a different payer afterward. The selection is stored
-	// outside the reusable execution snapshot; only caller_ephemeral accepts secret
-	// material, and a caller may equivalently supply it with the
-	// X-Anthropic-Api-Key, X-Openai-Api-Key, X-Gemini-Api-Key, or
-	// X-Xai-Api-Key request header naming the model provider. Equal
-	// idempotent replay never replaces the original encrypted key. The
-	// field is deliberately plural even though this
-	// contract currently permits one entry: future routed invocations
-	// may select keys for more than one model provider.
+	// ProviderKeys Which key pays for the model on this turn. Names a source; never
+	// contains a secret.
+	//
+	// Leave it out and nvoken works down its default order: your app's stored
+	// key for that provider, then a self-hosted installation's environment
+	// key (`config_byok`), then platform funding if the installation allows
+	// it.
+	//
+	// Whichever source is chosen is fixed when the turn starts. A turn never
+	// silently falls through to a different payer partway through, so the
+	// bill cannot move once work has begun.
 	ProviderKeys  *[]ProviderKeySelection `json:"provider_keys,omitempty"`
 	ProviderTools *[]ProviderTool         `json:"provider_tools,omitempty"`
 	Reasoning     *Reasoning              `json:"reasoning,omitempty"`
@@ -1794,13 +2017,17 @@ type CreateInvocationRequest struct {
 	// Agent, session_key). Mutually exclusive with session_id.
 	SessionKey *string `json:"session_key,omitempty"`
 
-	// SessionOptions Durable options for the resolved Session. On an existing Session,
-	// every supplied value is compared with the stored value: equal is
-	// accepted and different returns `session_options_conflict`.
-	// Compaction is the one late-installable option: when no policy is
-	// stored yet, this admission installs its model-validated policy.
-	// Session options are not part of the reusable execution snapshot or
-	// its idempotency comparison.
+	// SessionOptions Settings stored on the Session itself, rather than on this turn.
+	//
+	// On a new Session these are saved. On a Session that already exists they
+	// are checked rather than applied: matching values are fine, and a
+	// different value returns `session_options_conflict` telling you which
+	// paths disagreed. This keeps two callers from silently reconfiguring
+	// each other's conversation.
+	//
+	// Compaction is the exception — if no summarization policy is stored yet,
+	// this turn can install one, because the policy needs a model to validate
+	// against and only a turn supplies that.
 	SessionOptions *SessionOptions `json:"session_options,omitempty"`
 
 	// StructuredOutput Optional per-Invocation structured-output contract. nvoken exposes a
@@ -1848,21 +2075,29 @@ type CreateInvocationRequest struct {
 	Webhook *WebhookTarget `json:"webhook,omitempty"`
 }
 
-// CreateInvocationRequestIfActive Policy when the resolved Session already has a nonterminal
-// Invocation. `reject` returns `session_invocation_active`.
-// `supersede` atomically applies the ordinary durable cancellation
-// transition to that Invocation before admitting this replacement,
-// dropping its work from later turns. `interrupt` stops it
-// gracefully and admits only after it has settled `completed`, so
-// the replacement builds on what the stopped turn produced: it is
-// "stop and redo" where supersede is "discard and redo". Omission
-// and explicit `reject` compare equal on replay.
+// CreateInvocationRequestIfActive What to do when the Session already has a turn running. A Session
+// runs one turn at a time.
+//
+//   - `reject` (the default) refuses this request with
+//     `session_invocation_active` and leaves the running turn alone.
+//   - `supersede` cancels the running turn and starts this one in its
+//     place. The cancelled turn's work is discarded and does not carry
+//     forward — "discard and redo".
+//   - `interrupt` asks the running turn to stop cleanly and starts
+//     this one only once it has, so this turn builds on what the
+//     stopped one produced — "stop and redo".
+//
+// Omitting the field and sending `reject` are the same request for
+// idempotency purposes.
 type CreateInvocationRequestIfActive string
 
-// CreateInvocationRequestOnBudgetExhausted `settle` ends a coherent consumption-budget stop as `incomplete`.
-// `pause` parks it as resumable `paused`. Applies to iteration,
-// output-token, per-turn estimated-cost, and Session estimated-cost
-// ceilings; deadlines always settle.
+// CreateInvocationRequestOnBudgetExhausted What to do when the turn runs out of one of its spending limits.
+// `settle` ends it as `incomplete`. `pause` leaves it as `paused` so
+// you can raise the limit and continue it.
+//
+// Covers the iteration, output-token, per-turn cost, and Session
+// cost limits. Deadlines are not covered — a turn that runs out of
+// time always ends and can never be resumed.
 type CreateInvocationRequestOnBudgetExhausted string
 
 // CreateProviderKeyRequest defines model for CreateProviderKeyRequest.
@@ -1887,10 +2122,10 @@ type CreateProviderKeyRequest struct {
 
 // CreateSessionRequest defines model for CreateSessionRequest.
 type CreateSessionRequest struct {
-	// AgentKey Optional stable caller-controlled Agent key, resolved or created
-	// exactly as invocation admission does. Omitting it creates an
-	// unbound Session whose agent is set by its first admitted
-	// Invocation.
+	// AgentKey Your own name for the agent, handled exactly as it is when starting a
+	// turn: nvoken finds the matching Agent or creates one. Leave it out and
+	// the Session starts with no Agent — `agent_id` stays null until the
+	// first turn binds it.
 	AgentKey *string `json:"agent_key,omitempty"`
 
 	// SeedMessages Host-asserted starting history, accepted only while a new Session
@@ -1905,20 +2140,15 @@ type CreateSessionRequest struct {
 	// upsert: an existing keyed Session is returned unchanged.
 	SessionKey *string `json:"session_key,omitempty"`
 
-	// SessionOptions Durable Session options. Every member is optional and at least one must
-	// be present. A new Session stores the supplied values. When a keyed
-	// upsert or admission resolves an existing Session, supplied values are
-	// comparison-only: equal values are accepted and different values return
-	// `session_options_conflict` with `details.conflicting_paths`.
+	// SessionOptions Settings stored on the Session. Every field is optional, but send at
+	// least one.
 	//
-	// `compaction` requires an Invocation because the policy is validated
-	// against that turn's model. It may be installed on any Session that has
-	// no compaction policy yet, including a Session created ahead of its first
-	// Invocation or a long-running Session opting in later. An `auto` trigger
-	// is materialized from the installing Invocation's context window. Once
-	// set, the resolved policy is immutable. `POST /v1/sessions` therefore
-	// still rejects `compaction`, while admissions may supply it with either
-	// `session_id`, `session_key`, or a new Session.
+	// On a new Session these are saved. When you reach an existing Session,
+	// by ID or by key, they are checked rather than applied: matching values
+	// are accepted, and a different value returns `session_options_conflict`
+	// with `details.conflicting_paths` naming exactly what disagreed.
+	// Compaction needs a turn to install it, because the policy is validated
+	// against that turn's model.
 	SessionOptions *SessionOptions `json:"session_options,omitempty"`
 
 	// TenantKey Optional tenant partition. Precedence is credential constraint,
@@ -1929,6 +2159,71 @@ type CreateSessionRequest struct {
 	// Filtering only; not an isolation boundary.
 	UserKey *string `json:"user_key,omitempty"`
 }
+
+// Credential defines model for Credential.
+type Credential struct {
+	AppID               *AppID           `json:"app_id,omitempty"`
+	CreatedAt           time.Time        `json:"created_at"`
+	CreatorCredentialID *APICredentialID `json:"creator_credential_id,omitempty"`
+
+	// CreatorSubject Opaque issuer subject when the credential was created by an issuer token.
+	CreatorSubject *string    `json:"creator_subject,omitempty"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+
+	// ID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+	ID                    APICredentialID  `json:"id"`
+	LastUsedAt            *time.Time       `json:"last_used_at,omitempty"`
+	Name                  string           `json:"name"`
+	Operations            []Operation      `json:"operations"`
+	Prefix                string           `json:"prefix"`
+	Profile               Profile          `json:"profile"`
+	RevokedAt             *time.Time       `json:"revoked_at,omitempty"`
+	RotatedFromID         *APICredentialID `json:"rotated_from_id,omitempty"`
+	RotationOverlapEndsAt *time.Time       `json:"rotation_overlap_ends_at,omitempty"`
+	SessionID             *SessionID       `json:"session_id,omitempty"`
+	Status                CredentialStatus `json:"status"`
+	TenantKey             *string          `json:"tenant_key,omitempty"`
+	UpdatedAt             time.Time        `json:"updated_at"`
+}
+
+// CredentialIssuance defines model for CredentialIssuance.
+type CredentialIssuance struct {
+	Credential        Credential `json:"credential"`
+	DeliveryExpiresAt time.Time  `json:"delivery_expires_at"`
+	Replayed          bool       `json:"replayed"`
+	Secret            *string    `json:"secret,omitempty"`
+}
+
+// CredentialList defines model for CredentialList.
+type CredentialList struct {
+	HasMore    bool         `json:"has_more"`
+	Items      []Credential `json:"items"`
+	NextCursor *string      `json:"next_cursor"`
+}
+
+// CredentialStatus defines model for CredentialStatus.
+type CredentialStatus string
+
+// CurrentIdentity defines model for CurrentIdentity.
+type CurrentIdentity struct {
+	Authentication struct {
+		Assurance CurrentIdentityAuthenticationAssurance `json:"assurance"`
+
+		// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+		CredentialID     APICredentialID                     `json:"credential_id"`
+		EffectiveProfile Profile                             `json:"effective_profile"`
+		Method           CurrentIdentityAuthenticationMethod `json:"method"`
+		Operations       []Operation                         `json:"operations"`
+		SessionID        *SessionID                          `json:"session_id,omitempty"`
+		TenantKey        *string                             `json:"tenant_key,omitempty"`
+	} `json:"authentication"`
+}
+
+// CurrentIdentityAuthenticationAssurance defines model for CurrentIdentity.Authentication.Assurance.
+type CurrentIdentityAuthenticationAssurance string
+
+// CurrentIdentityAuthenticationMethod defines model for CurrentIdentity.Authentication.Method.
+type CurrentIdentityAuthenticationMethod string
 
 // DailyUsage defines model for DailyUsage.
 type DailyUsage struct {
@@ -1945,9 +2240,9 @@ type DailyUsage struct {
 // DailyUsageBucket defines model for DailyUsageBucket.
 type DailyUsageBucket struct {
 	// AppID The app whose tenants produced the usage.
-	AppID                    string `json:"app_id"`
-	CacheCreationInputTokens int    `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int    `json:"cache_read_input_tokens"`
+	AppID                    AppID `json:"app_id"`
+	CacheCreationInputTokens int   `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int   `json:"cache_read_input_tokens"`
 
 	// Day UTC calendar day of the bucket.
 	Day openapi_types.Date `json:"day"`
@@ -1974,11 +2269,17 @@ type DailyUsageBucket struct {
 	TenantKey *string `json:"tenant_key,omitempty"`
 }
 
-// DocumentInputBlock An inline or URL document. A URL is fetched once during admission.
-// nvoken stores the fetched bytes and never fetches it again. Admission
-// applies the same sniff rules as an image with a 16777216-byte bound.
-// Page limits are the provider's, so an oversized page count settles as
-// input_media_rejected.
+// DeliveryID Identifies one delivery nvoken sent you, callback or webhook alike —
+// both are the same durable record and carry the same `dlvr_` prefix.
+// Treat it as opaque; it appears in the signed payload and identifies the
+// attempt when you report a delivery problem.
+type DeliveryID = string
+
+// DocumentInputBlock A document, sent inline or by URL. A URL is downloaded once as the
+// turn is created; nvoken stores those bytes and never fetches the URL
+// again. Same rules as an image, with a 16 MB limit. Page count is
+// capped by the provider rather than by nvoken, so a document with too
+// many pages fails the turn with `input_media_rejected`.
 type DocumentInputBlock struct {
 	// Source Exactly one source form is required. Inline sources carry media_type
 	// and data. URL sources carry url and may declare media_type.
@@ -2000,16 +2301,19 @@ type DocumentInputSource struct {
 	Data      *string                       `json:"data,omitempty"`
 	MediaType *DocumentInputSourceMediaType `json:"media_type,omitempty"`
 
-	// URL Public HTTPS URL fetched once during admission. The response is
-	// size-bounded while reading and its bytes are sniffed. media_type is
-	// optional for this form. When present it must be application/pdf.
+	// URL A public HTTPS URL, downloaded once as the turn is created. nvoken
+	// stops reading if the response runs past the size limit, and
+	// determines the real media type from the bytes it received.
+	// `media_type` is optional here; if you do send it, it must be
+	// `application/pdf`.
 	URL *string `json:"url,omitempty"`
 }
 
 // DocumentInputSourceMediaType defines model for DocumentInputSource.MediaType.
 type DocumentInputSourceMediaType string
 
-// DocumentReferenceBlock A bounded read projection of a stored input document.
+// DocumentReferenceBlock A stored input document, described rather than sent back. You get its
+// media type, size, and checksum, but not the bytes.
 type DocumentReferenceBlock struct {
 	// Bytes Decoded document byte count; never the document payload.
 	Bytes int `json:"bytes"`
@@ -2059,13 +2363,13 @@ type ForkSessionOptions struct {
 	// forming opinions about a string only the host renders.
 	Metadata *Metadata `json:"metadata,omitempty"`
 
-	// Retention Bounds how long an idle Session is retained. Past the window nvoken
-	// erases the Session and its whole subtree, exactly as
-	// `DELETE /v1/sessions/{session_id}` would.
+	// Retention How long a Session can sit unused before nvoken deletes it. When the
+	// window passes, the Session and everything under it are erased, exactly
+	// as `DELETE /v1/sessions/{session_id}` would.
 	//
-	// The window measures idle time, not lifetime: it restarts on every
-	// Invocation admission and every settlement, so a turn that runs longer
-	// than the window cannot expire underneath itself.
+	// The clock measures idle time, not age: it resets every time a turn
+	// starts and every time one finishes. A long-running turn can never
+	// expire out from under you.
 	//
 	// **Automatic expiry never cancels running work.** A Session holding a
 	// queued, running, or waiting Invocation is skipped and reconsidered on
@@ -2113,16 +2417,19 @@ type HostToolDeclaration struct {
 	InputSchema map[string]interface{}  `json:"input_schema"`
 	Mode        HostToolDeclarationMode `json:"mode"`
 
-	// Name Unique within the definition; the `nvoken_` prefix is reserved.
+	// Name The tool's name, unique within this agent definition. Names starting
+	// with `nvoken_` are reserved.
 	//
-	// The charset is deliberately the strictest tool-name constraint any
-	// supported provider imposes, so every admitted name reaches every
-	// provider unchanged. Widening it — to dotted names, for instance —
-	// would require a mangling layer whose collisions nvoken would then
-	// own, and would sit ambiguously beside the `__` separator MCP tool
-	// projection already uses. A host whose own permission grammar uses
-	// dots should map it injectively (`naming.domain.check` becomes
-	// `naming_domain_check`) and state the mapping to the model once.
+	// Letters, digits, `_`, and `-` only. That is the strictest rule any
+	// supported provider imposes, so a name accepted here reaches every
+	// provider unchanged and your agent behaves the same wherever it runs.
+	// nvoken deliberately does not rewrite names to fit — a rewriting layer
+	// would own the collisions it creates, and would clash with the `__`
+	// separator used for MCP tool names.
+	//
+	// If your own permissions use dotted names, map them one-to-one
+	// (`naming.domain.check` becomes `naming_domain_check`) and tell the
+	// model about the mapping once in your instructions.
 	Name string `json:"name"`
 }
 
@@ -2133,17 +2440,24 @@ type HostToolDeclarationMode string
 type HostToolResultAcceptance struct {
 	Deduplicated bool                           `json:"deduplicated"`
 	Status       HostToolResultAcceptanceStatus `json:"status"`
-	ToolCallID   ToolCallID                     `json:"tool_call_id"`
+
+	// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
+	// transcript `tool_use` block or from the pending host tool calls, and
+	// pass it back verbatim as `tool_call_id` when submitting results. The
+	// same value is the `Idempotency-Key` on a callback delivery.
+	ToolCallID ToolCallID `json:"tool_call_id"`
 }
 
 // HostToolResultAcceptanceStatus defines model for HostToolResultAcceptance.Status.
 type HostToolResultAcceptanceStatus string
 
-// ImageInputBlock An inline or URL image. A URL is fetched once during admission. nvoken
-// stores the fetched bytes and never fetches it again. Admission sniffs
-// the bytes, bounds them to 5242880 bytes and 8000 by 8000 pixels, and
-// requires the selected model to declare the image modality and exact
-// media type.
+// ImageInputBlock An image, sent inline or by URL. A URL is downloaded once as the turn
+// is created; nvoken stores those bytes and never fetches the URL again,
+// so the image stays stable even if the link later changes or breaks.
+// The image must be at most 5 MB and 8000 by 8000 pixels, and the model
+// you selected must support images and this exact media type. nvoken
+// determines the real type from the bytes themselves rather than
+// trusting the declared type or the file extension.
 type ImageInputBlock struct {
 	// Source Exactly one source form is required. Inline sources carry media_type
 	// and data. URL sources carry url and may declare media_type.
@@ -2162,16 +2476,19 @@ type ImageInputSource struct {
 	Data      *string                    `json:"data,omitempty"`
 	MediaType *ImageInputSourceMediaType `json:"media_type,omitempty"`
 
-	// URL Public HTTPS URL fetched once during admission. The response is
-	// size-bounded while reading and its bytes are sniffed. media_type is
-	// optional for this form. When present it must match the sniffed type.
+	// URL A public HTTPS URL, downloaded once as the turn is created. nvoken
+	// stops reading if the response runs past the size limit, and
+	// determines the real media type from the bytes it received.
+	// `media_type` is optional here; if you do send it, it must match
+	// what the bytes actually are.
 	URL *string `json:"url,omitempty"`
 }
 
 // ImageInputSourceMediaType defines model for ImageInputSource.MediaType.
 type ImageInputSourceMediaType string
 
-// ImageReferenceBlock A bounded read projection of a stored input image.
+// ImageReferenceBlock A stored input image, described rather than sent back. You get its
+// media type, size, and checksum, but not the bytes.
 type ImageReferenceBlock struct {
 	// Bytes Decoded media byte count; never the media payload.
 	Bytes int `json:"bytes"`
@@ -2201,7 +2518,7 @@ type InputBlock struct {
 type Invocation struct {
 	ActiveExecutionMs int `json:"active_execution_ms"`
 
-	// AgentID UUIDv7 with the public `agnt_` prefix.
+	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	AgentID AgentID `json:"agent_id"`
 
 	// Attempt Execution attempts this Invocation has been claimed for. It
@@ -2222,63 +2539,68 @@ type Invocation struct {
 	// deadline for queued, running, and terminal Invocations.
 	DeadlineAt *time.Time `json:"deadline_at"`
 
-	// Deduplicated Present only in the `POST /v1/invocations` response. False for a
-	// new durable admission and true when the idempotency key returned
-	// an existing Invocation.
+	// Deduplicated Only present on the `POST /v1/invocations` response. False when this
+	// call created a new turn, true when your idempotency key matched one
+	// that already existed and you got that one back.
 	Deduplicated *bool `json:"deduplicated,omitempty"`
 
-	// Definition The admitted definition, returned exactly as snapshotted. Remote MCP
-	// request headers were never stored and never appear here. Present
-	// on `GET /v1/invocations/{id}` and on the result; null in list
-	// items, where `definition_id` identifies it. `definition.limits` is what the
-	// host requested; `limits` is what the installation resolved.
+	// Definition The agent definition this turn actually ran with, stored when the turn
+	// started and returned exactly as it was. Request headers for remote MCP
+	// servers are never stored and never appear here.
+	//
+	// Present on `GET /v1/invocations/{id}` and on the result. Null in list
+	// items, where `definition_id` identifies it instead.
 	Definition *AgentDefinition `json:"definition"`
 
-	// DefinitionID UUIDv7 with the public `def_` prefix.
+	// DefinitionID Opaque identifier with the public `def_` prefix. Treat the body as opaque.
 	DefinitionID AgentDefinitionID  `json:"definition_id"`
 	EndedAt      *time.Time         `json:"ended_at"`
 	Error        *InvocationFailure `json:"error"`
 
-	// ID UUIDv7 with the public `invk_` prefix.
+	// ID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	ID     InvocationID   `json:"id"`
 	Limits ResolvedLimits `json:"limits"`
 
-	// Metadata Host correlation data recorded at admission, returned verbatim.
+	// Metadata Your own data, stored when the turn was created and returned exactly as
+	// you sent it.
 	Metadata *Metadata `json:"metadata"`
 
 	// PendingToolCalls Present for a waiting Invocation with unresolved host calls.
 	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
 	Provenance       *ModelProvenance       `json:"provenance"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
 
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are terminal and
-	// immutable.
+	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+	// turn reaches one of them it never changes again.
 	//
-	// `completed` means exactly one thing: the turn ended the way it was
-	// asked to — the model finished, or the caller interrupted it.
-	// `incomplete` means the runtime enforced a budget at a coherent
-	// execution seam. Any budget exhaustion observed at such a seam settles
-	// `incomplete` with `stop_reason` naming the budget; the transcript is
-	// valid and stays in the next turn's context, exactly as a completed
-	// turn's does. Exhaustion that cannot reach a seam — a deadline landing
-	// mid-request, reaper settlement — still settles `failed` with `error`
-	// as the authority. A schema-bearing turn that never published a
-	// validated object also fails, `structured_output_unsatisfied`,
-	// whichever budget stopped it.
+	// `completed` means the turn ended the way it was asked to: the model
+	// finished on its own, or you interrupted it.
 	//
-	// `waiting`—known elsewhere as `requires_action`—means the Invocation has
-	// durable pending host ToolCalls and owns no execution lease. Final
-	// result acceptance moves it back to
-	// `queued`. Checkpoint recovery may also move `running` back to
-	// `queued`; the `attempt` counter distinguishes a retry from tool-result
-	// acceptance, and lifecycle revision orders every transition.
+	// `incomplete` means a limit you set stopped the turn cleanly, between
+	// steps rather than mid-request. `stop_reason` names the limit that ran
+	// out. The reply so far is valid and carries into the next turn just
+	// like a completed turn's does, so this is a stopping point rather than
+	// an error.
 	//
-	// `paused` is nonterminal dormant work stopped at a coherent consumption
-	// ceiling. It owns no lease and its deadlines are suspended until the
-	// exhausted turn limit is raised or the Session budget is raised or
-	// removed. It still accepts interrupt, cancel, and staged nudges.
+	// `failed` means the turn could not stop cleanly — a deadline landing in
+	// the middle of a model request, for example — or that a turn you asked
+	// for structured output from never produced a valid object. Read `error`
+	// for the reason; the reply, if any, is not carried forward.
+	//
+	// `waiting` — `requires_action` in some other APIs — means the turn has
+	// stopped for tool calls you need to run. Nothing is executing. Send the
+	// results and the turn returns to `queued` and picks up where it left
+	// off. A turn can also return to `queued` on its own if nvoken had to
+	// restart it after an interruption; `attempt` tells the two apart, and
+	// the `revision` on each stream update tells you their order.
+	//
+	// `paused` means an opt-in spending limit stopped the turn but left it
+	// resumable. Nothing is executing, and its deadlines are on hold, so a
+	// turn cannot expire while you decide. Raise the turn's limit, or raise
+	// or remove the Session budget, and it continues. It still accepts
+	// interrupt, cancel, and nudge.
 	Status InvocationStatus `json:"status"`
 
 	// StopReason Why the turn stopped or paused. Present on `completed`,
@@ -2287,9 +2609,9 @@ type Invocation struct {
 	// ordinary end.
 	StopReason *InvocationStopReason `json:"stop_reason"`
 
-	// StructuredOutput Server-validated terminal object for a schema-bearing Invocation.
-	// Null until successful terminal settlement and always null when no
-	// output contract was admitted.
+	// StructuredOutput The object the model produced, already checked against the schema
+	// you asked for. Null until the turn finishes successfully, and
+	// always null if you did not ask for structured output.
 	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
 	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance"`
 	UpdatedAt                  time.Time                   `json:"updated_at"`
@@ -2297,57 +2619,62 @@ type Invocation struct {
 	// Usage One normalized terminal aggregate, not a billing ledger.
 	Usage *ModelUsage `json:"usage"`
 
-	// UserKey Host-owned end-user label admitted on this turn. Filtering only;
-	// not an isolation boundary.
+	// UserKey Your own label for the end user this turn belongs to. Useful for
+	// filtering lists. It is not a security boundary — no request is
+	// ever refused because of it, so do not rely on it to keep one
+	// user's data away from another.
 	UserKey *string `json:"user_key"`
 }
 
 // InvocationAcceptedEvent defines model for InvocationAcceptedEvent.
 type InvocationAcceptedEvent struct {
-	// AgentID UUIDv7 with the public `agnt_` prefix.
+	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	AgentID      AgentID   `json:"agent_id"`
 	DeadlineAt   time.Time `json:"deadline_at"`
 	Deduplicated bool      `json:"deduplicated"`
 
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID `json:"invocation_id"`
 
-	// Limits The effective budgets this Invocation was admitted with, after
-	// installation defaults and feature floors were applied. Echoed here
-	// so a host sees what it actually got without a second read — an
-	// omitted `max_iterations` in particular resolves to a value the
-	// request never named.
+	// Limits The limits this turn is actually running under, after your
+	// installation's defaults and minimums were applied. Repeated here so you
+	// can see what you got without a second request — worth checking when you
+	// left `max_iterations` out, since the default may be lower than you
+	// expect.
 	Limits ResolvedLimits `json:"limits"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
 
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are terminal and
-	// immutable.
+	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+	// turn reaches one of them it never changes again.
 	//
-	// `completed` means exactly one thing: the turn ended the way it was
-	// asked to — the model finished, or the caller interrupted it.
-	// `incomplete` means the runtime enforced a budget at a coherent
-	// execution seam. Any budget exhaustion observed at such a seam settles
-	// `incomplete` with `stop_reason` naming the budget; the transcript is
-	// valid and stays in the next turn's context, exactly as a completed
-	// turn's does. Exhaustion that cannot reach a seam — a deadline landing
-	// mid-request, reaper settlement — still settles `failed` with `error`
-	// as the authority. A schema-bearing turn that never published a
-	// validated object also fails, `structured_output_unsatisfied`,
-	// whichever budget stopped it.
+	// `completed` means the turn ended the way it was asked to: the model
+	// finished on its own, or you interrupted it.
 	//
-	// `waiting`—known elsewhere as `requires_action`—means the Invocation has
-	// durable pending host ToolCalls and owns no execution lease. Final
-	// result acceptance moves it back to
-	// `queued`. Checkpoint recovery may also move `running` back to
-	// `queued`; the `attempt` counter distinguishes a retry from tool-result
-	// acceptance, and lifecycle revision orders every transition.
+	// `incomplete` means a limit you set stopped the turn cleanly, between
+	// steps rather than mid-request. `stop_reason` names the limit that ran
+	// out. The reply so far is valid and carries into the next turn just
+	// like a completed turn's does, so this is a stopping point rather than
+	// an error.
 	//
-	// `paused` is nonterminal dormant work stopped at a coherent consumption
-	// ceiling. It owns no lease and its deadlines are suspended until the
-	// exhausted turn limit is raised or the Session budget is raised or
-	// removed. It still accepts interrupt, cancel, and staged nudges.
+	// `failed` means the turn could not stop cleanly — a deadline landing in
+	// the middle of a model request, for example — or that a turn you asked
+	// for structured output from never produced a valid object. Read `error`
+	// for the reason; the reply, if any, is not carried forward.
+	//
+	// `waiting` — `requires_action` in some other APIs — means the turn has
+	// stopped for tool calls you need to run. Nothing is executing. Send the
+	// results and the turn returns to `queued` and picks up where it left
+	// off. A turn can also return to `queued` on its own if nvoken had to
+	// restart it after an interruption; `attempt` tells the two apart, and
+	// the `revision` on each stream update tells you their order.
+	//
+	// `paused` means an opt-in spending limit stopped the turn but left it
+	// resumable. Nothing is executing, and its deadlines are on hold, so a
+	// turn cannot expire while you decide. Raise the turn's limit, or raise
+	// or remove the Session budget, and it continues. It still accepts
+	// interrupt, cancel, and nudge.
 	Status InvocationStatus            `json:"status"`
 	Type   InvocationAcceptedEventType `json:"type"`
 }
@@ -2359,38 +2686,41 @@ type InvocationAcceptedEventType string
 type InvocationChange struct {
 	Error *InvocationFailure `json:"error"`
 
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID     `json:"invocation_id"`
 	OccurredAt   time.Time        `json:"occurred_at"`
 	Provenance   *ModelProvenance `json:"provenance"`
 	Revision     int64            `json:"revision"`
 
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are terminal and
-	// immutable.
+	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+	// turn reaches one of them it never changes again.
 	//
-	// `completed` means exactly one thing: the turn ended the way it was
-	// asked to — the model finished, or the caller interrupted it.
-	// `incomplete` means the runtime enforced a budget at a coherent
-	// execution seam. Any budget exhaustion observed at such a seam settles
-	// `incomplete` with `stop_reason` naming the budget; the transcript is
-	// valid and stays in the next turn's context, exactly as a completed
-	// turn's does. Exhaustion that cannot reach a seam — a deadline landing
-	// mid-request, reaper settlement — still settles `failed` with `error`
-	// as the authority. A schema-bearing turn that never published a
-	// validated object also fails, `structured_output_unsatisfied`,
-	// whichever budget stopped it.
+	// `completed` means the turn ended the way it was asked to: the model
+	// finished on its own, or you interrupted it.
 	//
-	// `waiting`—known elsewhere as `requires_action`—means the Invocation has
-	// durable pending host ToolCalls and owns no execution lease. Final
-	// result acceptance moves it back to
-	// `queued`. Checkpoint recovery may also move `running` back to
-	// `queued`; the `attempt` counter distinguishes a retry from tool-result
-	// acceptance, and lifecycle revision orders every transition.
+	// `incomplete` means a limit you set stopped the turn cleanly, between
+	// steps rather than mid-request. `stop_reason` names the limit that ran
+	// out. The reply so far is valid and carries into the next turn just
+	// like a completed turn's does, so this is a stopping point rather than
+	// an error.
 	//
-	// `paused` is nonterminal dormant work stopped at a coherent consumption
-	// ceiling. It owns no lease and its deadlines are suspended until the
-	// exhausted turn limit is raised or the Session budget is raised or
-	// removed. It still accepts interrupt, cancel, and staged nudges.
+	// `failed` means the turn could not stop cleanly — a deadline landing in
+	// the middle of a model request, for example — or that a turn you asked
+	// for structured output from never produced a valid object. Read `error`
+	// for the reason; the reply, if any, is not carried forward.
+	//
+	// `waiting` — `requires_action` in some other APIs — means the turn has
+	// stopped for tool calls you need to run. Nothing is executing. Send the
+	// results and the turn returns to `queued` and picks up where it left
+	// off. A turn can also return to `queued` on its own if nvoken had to
+	// restart it after an interruption; `attempt` tells the two apart, and
+	// the `revision` on each stream update tells you their order.
+	//
+	// `paused` means an opt-in spending limit stopped the turn but left it
+	// resumable. Nothing is executing, and its deadlines are on hold, so a
+	// turn cannot expire while you decide. Raise the turn's limit, or raise
+	// or remove the Session budget, and it continues. It still accepts
+	// interrupt, cancel, and nudge.
 	Status                     InvocationStatus            `json:"status"`
 	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
 	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance"`
@@ -2398,44 +2728,46 @@ type InvocationChange struct {
 	Usage                      *ModelUsage                 `json:"usage"`
 }
 
-// InvocationFailure Failed Invocations may carry paired usage and provenance when a model
-// response produced safe normalized evidence before deadline or limit
-// settlement. Cancellation carries any checkpointed usage and
-// provenance accumulated before it was requested; a pre-response
-// failure carries neither.
+// InvocationFailure A failed turn still reports `usage` and `provenance` if the model
+// answered at least once before it stopped, so you can see what you were
+// charged for. A cancelled turn reports whatever it had used up to the
+// moment you cancelled. A turn that failed before any model reply
+// reports neither.
 //
-// `details` is a bounded, code-specific object. Each code names its own
-// keys and nothing else reads them:
+// `details` is a small object whose keys depend on `code`. Each code
+// below lists the only keys it sets:
 //
-//   - `deadline_exceeded` carries `details.scope`, the deadline that was
-//     breached, drawn from `total | active_execution | execution_segment
-//     | waiting`. One condition has one code: a deadline reports this
-//     wherever the runtime noticed it.
-//   - `budget_exceeded` carries `details.kind`, the consumption ceiling
-//     the turn overran, drawn from `output_tokens | estimated_cost |
-//     estimated_cost_unavailable`. A ceiling only lands here when no
-//     coherent seam absorbed it; at a seam the same ceiling settles
-//     `incomplete` with the matching `stop_reason` instead.
-//     `estimated_cost_unavailable` is always a failure — nothing was
-//     exhausted, nvoken simply cannot price the model.
-//   - `structured_output_unsatisfied` carries `details.reason`, drawn from
-//     `missing | invalid | oversized`.
-//   - `context_window_exceeded` carries the integer keys
-//     `input_tokens`, `context_window_tokens`, and
-//     `requested_output_tokens`, each present only when known.
-//   - `input_media_rejected` carries `modality`, `media_type`, and
-//     `reason` as the provider reported them, each present only when
-//     known.
+//   - `deadline_exceeded` sets `details.scope` to the deadline that ran
+//     out: `total`, `active_execution`, `execution_segment`, or `waiting`.
+//   - `budget_exceeded` sets `details.kind` to the limit the turn went
+//     over: `output_tokens`, `estimated_cost`, or
+//     `estimated_cost_unavailable`. A limit only shows up as a failure
+//     when the turn could not stop cleanly; when it could, the turn ends
+//     `incomplete` with a matching `stop_reason` instead.
+//     `estimated_cost_unavailable` always means failure, and it does not
+//     mean you overspent — it means nvoken has no price for the model and
+//     so cannot enforce the cost limit you set.
+//   - `structured_output_unsatisfied` sets `details.reason` to `missing`,
+//     `invalid`, or `oversized`.
+//   - `context_window_exceeded` sets the integer keys `input_tokens`,
+//     `context_window_tokens`, and `requested_output_tokens`, each only
+//     when nvoken knows it.
+//   - `input_media_rejected` sets `modality`, `media_type`, and `reason`
+//     as the provider reported them, each only when known.
 //
-// A `provider_error` failure carries
-// `details.provider_failure_class`, nvoken's own classification of the
-// provider failure, drawn from `configuration | canceled | throttled |
-// upstream_rejected | upstream_unavailable | timeout_or_transport |
-// invalid_response | unknown`. `upstream_rejected` means the provider
-// refused this request — do not retry it as-is. `upstream_unavailable`
-// and `throttled` mean the provider could not serve it — retry with
-// backoff. No raw provider error material ever crosses into this
-// payload.
+// A `provider_error` sets `details.provider_failure_class`, which is
+// nvoken's summary of what went wrong at the provider and is the field
+// to branch your retry logic on:
+//
+//   - `upstream_rejected` — the provider refused this request. Do not
+//     retry it unchanged; fix the request first.
+//   - `upstream_unavailable` or `throttled` — the provider could not serve
+//     it right now. Retry with backoff.
+//   - `configuration`, `canceled`, `timeout_or_transport`,
+//     `invalid_response`, or `unknown` — everything else.
+//
+// Provider error text is never passed through here, so nothing in this
+// object leaks another vendor's wording or your key material.
 type InvocationFailure struct {
 	Code    InvocationFailureCode   `json:"code"`
 	Details *map[string]interface{} `json:"details,omitempty"`
@@ -2445,7 +2777,7 @@ type InvocationFailure struct {
 // InvocationFailureCode defines model for InvocationFailure.Code.
 type InvocationFailureCode string
 
-// InvocationID UUIDv7 with the public `invk_` prefix.
+// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 type InvocationID = string
 
 // InvocationInput A plain string is shorthand for one text block; an array is ordered
@@ -2479,22 +2811,23 @@ type InvocationResult struct {
 	// canonical transcript. Nothing is stored twice.
 	Messages []SessionMessage `json:"messages"`
 
-	// OutputText The text content blocks of this Invocation's assistant-role
-	// messages concatenated in transcript order without separators.
-	// Non-null only when the Invocation is completed and at least one
-	// assistant text block exists. Failed and cancelled Invocations
-	// keep their messages readable as evidence while output_text stays
-	// null.
+	// OutputText The assistant's text from this turn, joined together in order with
+	// nothing between the pieces. This is the convenience field for "what did
+	// the agent say?"
+	//
+	// Non-null only when the turn completed and produced at least one piece
+	// of text. Failed and cancelled turns leave it null even if some text was
+	// produced, so read the messages directly if you need those.
 	OutputText *string `json:"output_text"`
 }
 
 // InvocationResultEvent defines model for InvocationResultEvent.
 type InvocationResultEvent struct {
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID     `json:"invocation_id"`
 	Result       InvocationResult `json:"result"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID                 `json:"session_id"`
 	Type      InvocationResultEventType `json:"type"`
 }
@@ -2502,45 +2835,53 @@ type InvocationResultEvent struct {
 // InvocationResultEventType defines model for InvocationResultEvent.Type.
 type InvocationResultEventType string
 
-// InvocationStatus `completed`, `incomplete`, `failed`, and `cancelled` are terminal and
-// immutable.
+// InvocationStatus `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+// turn reaches one of them it never changes again.
 //
-// `completed` means exactly one thing: the turn ended the way it was
-// asked to — the model finished, or the caller interrupted it.
-// `incomplete` means the runtime enforced a budget at a coherent
-// execution seam. Any budget exhaustion observed at such a seam settles
-// `incomplete` with `stop_reason` naming the budget; the transcript is
-// valid and stays in the next turn's context, exactly as a completed
-// turn's does. Exhaustion that cannot reach a seam — a deadline landing
-// mid-request, reaper settlement — still settles `failed` with `error`
-// as the authority. A schema-bearing turn that never published a
-// validated object also fails, `structured_output_unsatisfied`,
-// whichever budget stopped it.
+// `completed` means the turn ended the way it was asked to: the model
+// finished on its own, or you interrupted it.
 //
-// `waiting`—known elsewhere as `requires_action`—means the Invocation has
-// durable pending host ToolCalls and owns no execution lease. Final
-// result acceptance moves it back to
-// `queued`. Checkpoint recovery may also move `running` back to
-// `queued`; the `attempt` counter distinguishes a retry from tool-result
-// acceptance, and lifecycle revision orders every transition.
+// `incomplete` means a limit you set stopped the turn cleanly, between
+// steps rather than mid-request. `stop_reason` names the limit that ran
+// out. The reply so far is valid and carries into the next turn just
+// like a completed turn's does, so this is a stopping point rather than
+// an error.
 //
-// `paused` is nonterminal dormant work stopped at a coherent consumption
-// ceiling. It owns no lease and its deadlines are suspended until the
-// exhausted turn limit is raised or the Session budget is raised or
-// removed. It still accepts interrupt, cancel, and staged nudges.
+// `failed` means the turn could not stop cleanly — a deadline landing in
+// the middle of a model request, for example — or that a turn you asked
+// for structured output from never produced a valid object. Read `error`
+// for the reason; the reply, if any, is not carried forward.
+//
+// `waiting` — `requires_action` in some other APIs — means the turn has
+// stopped for tool calls you need to run. Nothing is executing. Send the
+// results and the turn returns to `queued` and picks up where it left
+// off. A turn can also return to `queued` on its own if nvoken had to
+// restart it after an interruption; `attempt` tells the two apart, and
+// the `revision` on each stream update tells you their order.
+//
+// `paused` means an opt-in spending limit stopped the turn but left it
+// resumable. Nothing is executing, and its deadlines are on hold, so a
+// turn cannot expire while you decide. Raise the turn's limit, or raise
+// or remove the Session budget, and it continues. It still accepts
+// interrupt, cancel, and nudge.
 type InvocationStatus string
 
-// InvocationStopReason Why a turn stopped. It spans both non-failure terminals and is
-// partitioned between them.
+// InvocationStopReason Why a turn stopped. Set on turns that did not fail, and which values
+// can appear depends on the status.
 //
-// A `completed` turn carries `end_turn` (the model finishing) or
-// `interrupted` (a caller's graceful stop, taken at the next execution
-// seam). An `incomplete` turn carries the budget it exhausted at a seam:
-// `max_iterations`, `deadline`, `max_output_tokens`, or
-// `max_estimated_cost`, `session_budget`, or `shared_budget`. A paused turn carries one of
-// the consumption reasons but never `deadline`. An interrupt is deliberately not `incomplete` —
-// the caller asked the turn to end there, so ending there is the
-// requested result. The vocabulary is extensible.
+// A `completed` turn carries `end_turn` (the model finished on its own)
+// or `interrupted` (you asked it to stop, and it stopped at the next
+// clean point). An `incomplete` turn carries whichever limit ran out:
+// `max_iterations`, `deadline`, `max_output_tokens`,
+// `max_estimated_cost`, `session_budget`, or `shared_budget`. A `paused`
+// turn carries one of the spending limits, never `deadline`, because a
+// paused turn's deadlines are on hold.
+//
+// An interrupt is deliberately `completed` rather than `incomplete`: you
+// asked the turn to end there, so ending there is the result you wanted,
+// not a shortfall.
+//
+// Expect new values here over time.
 type InvocationStopReason string
 
 // InvocationStreamEvent Typed event from one Invocation stream. A minimal consumer prints
@@ -2553,11 +2894,11 @@ type InvocationStreamEvent struct {
 type InvocationUpdateEvent struct {
 	Invocation Invocation `json:"invocation"`
 
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID     `json:"invocation_id"`
 	NewMessages  []SessionMessage `json:"new_messages"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID                 `json:"session_id"`
 	Type      InvocationUpdateEventType `json:"type"`
 }
@@ -2574,14 +2915,19 @@ type InvocationUpdateEventType string
 type Limits struct {
 	ActiveTimeoutSeconds *int `json:"active_timeout_seconds,omitempty"`
 
-	// MaxEstimatedCostUsd nvoken's standard list-price guardrail, not preauthorization or a billing
-	// ledger. Requires known USD pricing for the selected model and
-	// otherwise fails closed with `budget_exceeded` and
-	// `details.kind = estimated_cost_unavailable`. When pricing absence
-	// is knowable before execution, nvoken rejects before a provider call.
-	// Reaching the ceiling itself is not a failure when it is noticed at
-	// an execution seam: the turn settles `incomplete` with
-	// `stop_reason: max_estimated_cost` and keeps its work.
+	// MaxEstimatedCostUsd A cost ceiling for this turn, in USD, estimated from list prices.
+	// It does not reserve funds and is not a bill.
+	//
+	// The model must have a known price. If it does not, the turn fails
+	// with `budget_exceeded` and
+	// `details.kind = estimated_cost_unavailable` — and where nvoken can
+	// tell in advance, it refuses before calling the provider at all, so
+	// you are not charged for a turn it cannot police.
+	//
+	// Hitting the ceiling is not itself a failure. If the turn can stop
+	// cleanly it ends `incomplete` with
+	// `stop_reason: max_estimated_cost` and keeps everything it
+	// produced.
 	MaxEstimatedCostUsd *float32 `json:"max_estimated_cost_usd,omitempty"`
 	MaxIterations       *int     `json:"max_iterations,omitempty"`
 	MaxOutputTokens     *int     `json:"max_output_tokens,omitempty"`
@@ -2606,12 +2952,21 @@ type MCPListToolsResponse struct {
 
 // MCPProjectedTool defines model for MCPProjectedTool.
 type MCPProjectedTool struct {
-	Annotations   MCPToolAnnotations     `json:"annotations"`
-	Description   string                 `json:"description"`
-	InputSchema   map[string]interface{} `json:"input_schema"`
-	ProjectedName string                 `json:"projected_name"`
-	RemoteName    string                 `json:"remote_name"`
-	ServerName    string                 `json:"server_name"`
+	// Annotations What the remote server said about a tool's behavior, plus whether it said anything at all. The declaration facts are reported separately from the values because a server that starts declaring a hint it previously omitted has changed the contract a reviewer approved, even when the effective value did not move.
+	//
+	// `read_only_hint` and `idempotent_hint` are non-null only when the server declared them true: the MCP schema types both as bare booleans with `omitempty`, so a declared false is indistinguishable from an absent one. `destructive_hint` and `open_world_hint` keep the full distinction. Treat a null `read_only_hint` as "potentially mutating", never as "read-only unknown but probably safe" — nvoken does.
+	Annotations MCPToolAnnotations     `json:"annotations"`
+	Description string                 `json:"description"`
+	InputSchema map[string]interface{} `json:"input_schema"`
+
+	// OutputSchema The server's declared result shape, when it declares one. nvoken does not validate results against it.
+	OutputSchema  *map[string]interface{} `json:"output_schema,omitempty"`
+	ProjectedName string                  `json:"projected_name"`
+	RemoteName    string                  `json:"remote_name"`
+	ServerName    string                  `json:"server_name"`
+
+	// Title The server's human-readable name for the tool, when it declares one. nvoken does not present it to the model; it is reported because it is part of the contract a host reviews.
+	Title *string `json:"title,omitempty"`
 }
 
 // MCPServer defines model for MCPServer.
@@ -2624,8 +2979,10 @@ type MCPServer struct {
 	// rejected. Headers are encrypted per Invocation and never returned.
 	Headers *map[string]string `json:"headers,omitempty"`
 
-	// Name Unique server name used as the projected tool-name prefix. Names
-	// beginning with nvoken in any letter case are reserved.
+	// Name A name for this MCP server, unique within the turn. Its tools are
+	// exposed to the model as `<name>__<tool>`, so this is the prefix your
+	// model will see. Names starting with `nvoken`, in any casing, are
+	// reserved.
 	Name      string              `json:"name"`
 	Timeouts  *MCPTimeouts        `json:"timeouts,omitempty"`
 	Transport *MCPServerTransport `json:"transport,omitempty"`
@@ -2643,11 +3000,17 @@ type MCPTimeouts struct {
 	DiscoverySeconds *int `json:"discovery_seconds,omitempty"`
 }
 
-// MCPToolAnnotations defines model for MCPToolAnnotations.
+// MCPToolAnnotations What the remote server said about a tool's behavior, plus whether it said anything at all. The declaration facts are reported separately from the values because a server that starts declaring a hint it previously omitted has changed the contract a reviewer approved, even when the effective value did not move.
+//
+// `read_only_hint` and `idempotent_hint` are non-null only when the server declared them true: the MCP schema types both as bare booleans with `omitempty`, so a declared false is indistinguishable from an absent one. `destructive_hint` and `open_world_hint` keep the full distinction. Treat a null `read_only_hint` as "potentially mutating", never as "read-only unknown but probably safe" — nvoken does.
 type MCPToolAnnotations struct {
 	DestructiveHint *bool `json:"destructive_hint"`
 	IdempotentHint  *bool `json:"idempotent_hint"`
-	ReadOnlyHint    *bool `json:"read_only_hint"`
+	OpenWorldHint   *bool `json:"open_world_hint"`
+
+	// Present Whether the server sent an annotations object at all.
+	Present      bool  `json:"present"`
+	ReadOnlyHint *bool `json:"read_only_hint"`
 }
 
 // MCPToolExclusion defines model for MCPToolExclusion.
@@ -2660,12 +3023,15 @@ type MCPToolExclusion struct {
 // MCPToolExclusionReason defines model for MCPToolExclusion.Reason.
 type MCPToolExclusionReason string
 
-// MessagePhase `final_answer` is the assistant message that settled its turn
-// `completed` with `stop_reason: end_turn` — the reply. `commentary` is
-// everything else: narration between tool calls, and every message of an
-// interrupted or `incomplete` turn, none of which was ever an answer. A
-// turn with no `final_answer` is visibly unfinished, which is what makes
-// `incomplete` directly renderable.
+// MessagePhase Tells you which assistant message is the actual answer, so you can
+// render a turn without guessing.
+//
+// `final_answer` is the message the model ended the turn with — the
+// reply you would show a user. `commentary` is everything else: the
+// model thinking out loud between tool calls, and every message of a
+// turn that was interrupted or stopped early, none of which was ever an
+// answer. A turn with no `final_answer` was left unfinished, and you can
+// show it as such.
 type MessagePhase string
 
 // Metadata Opaque host correlation data. nvoken stores it, returns it verbatim,
@@ -2710,14 +3076,16 @@ type ModelCost struct {
 	Total      float32 `json:"total"`
 }
 
-// ModelDescriptor Cataloged descriptors include all maintained metadata fields.
-// Uncataloged descriptors include only provider, id, cataloged, and
-// pricing; absent metadata is unknown rather than false or zero.
-// A cataloged descriptor's controls are the same qualified capabilities
-// used by admission; omitted controls on an uncataloged descriptor mean
-// unknown, not unsupported. Deprecated models remain admissible until
-// `retires_at`; after that date, new admission returns `model_retired`
-// with this entry's replacement.
+// ModelDescriptor What nvoken knows about one model.
+//
+// For a model in nvoken's catalog you get the full picture, including the
+// capability details under `controls` — the same ones nvoken checks when
+// deciding whether to accept a turn. For a model not in the catalog you
+// get only `provider`, `id`, `cataloged`, and `pricing`. Missing
+// information there means unknown, not "unsupported" or "zero" — so treat
+// an absent capability as "nvoken cannot tell", not as false.
+//
+// A deprecated model keeps working until its `retires_at` date.
 type ModelDescriptor struct {
 	// Cataloged Whether nvoken advertises and maintains metadata for this selection.
 	Cataloged           bool                      `json:"cataloged"`
@@ -2731,16 +3099,19 @@ type ModelDescriptor struct {
 	DisplayName  *string             `json:"display_name,omitempty"`
 	ID           string              `json:"id"`
 
-	// InputModalities Input modalities admission accepts for this model selection. Media
-	// modalities also publish their exact media types under
-	// controls.input.media.
+	// InputModalities The kinds of input this model accepts. For images and documents, the
+	// exact media types are listed under `controls.input.media`.
 	InputModalities *[]string `json:"input_modalities,omitempty"`
 	MaxOutputTokens *int      `json:"max_output_tokens,omitempty"`
 
-	// Pricing Standard local price evidence used by nvoken's estimated-cost
-	// guardrail. A `priced` object also carries currency, unit, input, output,
-	// and update date. `unpriced` and `unknown` carry only status and the
-	// opaque pricing version. Clients compare versions for equality only.
+	// Pricing The list prices nvoken uses to estimate what a turn will cost. These
+	// are nvoken's own recorded prices, not a live quote from the provider.
+	//
+	// A `priced` entry carries the currency, unit, input and output rates,
+	// and when it was last updated. `unpriced` and `unknown` carry only the
+	// status and a version string. Treat that version as opaque — compare
+	// two versions for equality to detect a change, but do not try to order
+	// or parse them.
 	Pricing ModelPricing `json:"pricing"`
 
 	// Provider Extensible canonical provider identifier. Consumers must preserve
@@ -2752,13 +3123,14 @@ type ModelDescriptor struct {
 	Recommended *bool  `json:"recommended,omitempty"`
 	Replacement *Model `json:"replacement,omitempty"`
 
-	// RetiresAt Date nvoken starts refusing new admission for this model.
+	// RetiresAt The date nvoken stops accepting new turns on this model.
 	RetiresAt *openapi_types.Date `json:"retires_at,omitempty"`
 }
 
-// ModelInput Model selection accepted at Invocation admission. The object is
-// canonical. The `provider/id` string is caller convenience: nvoken
-// splits on the first slash and always echoes the object form.
+// ModelInput Which model to use. The object form — separate `provider` and `id` — is
+// the real shape. You may also send a single `provider/id` string for
+// convenience; nvoken splits it at the first slash and always returns the
+// object form.
 type ModelInput struct {
 	union json.RawMessage
 }
@@ -2786,16 +3158,20 @@ type ModelMediaCapabilities struct {
 
 // ModelMediaKindCapabilities defines model for ModelMediaKindCapabilities.
 type ModelMediaKindCapabilities struct {
-	// MediaTypes Exact media types admission accepts for this model. An empty list
-	// means the modality is unsupported.
+	// MediaTypes The exact media types this model accepts. An empty list means it does
+	// not accept this kind of input at all.
 	MediaTypes []string `json:"media_types"`
 	Supported  bool     `json:"supported"`
 }
 
-// ModelPricing Standard local price evidence used by nvoken's estimated-cost
-// guardrail. A `priced` object also carries currency, unit, input, output,
-// and update date. `unpriced` and `unknown` carry only status and the
-// opaque pricing version. Clients compare versions for equality only.
+// ModelPricing The list prices nvoken uses to estimate what a turn will cost. These
+// are nvoken's own recorded prices, not a live quote from the provider.
+//
+// A `priced` entry carries the currency, unit, input and output rates,
+// and when it was last updated. `unpriced` and `unknown` carry only the
+// status and a version string. Treat that version as opaque — compare
+// two versions for equality to detect a change, but do not try to order
+// or parse them.
 type ModelPricing struct {
 	CacheRead  *string               `json:"cache_read,omitempty"`
 	CacheWrite *string               `json:"cache_write,omitempty"`
@@ -2826,11 +3202,11 @@ type ModelPricingUnit string
 type ModelProvenance struct {
 	Provider string `json:"provider"`
 
-	// ProviderKeyID UUIDv7 with the public `pkey_` prefix.
+	// ProviderKeyID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
 	ProviderKeyID     *ProviderKeyID                   `json:"provider_key_id,omitempty"`
 	ProviderKeySource ModelProvenanceProviderKeySource `json:"provider_key_source"`
 
-	// ProviderKeyVersionID UUIDv7 with the public `pkeyv_` prefix.
+	// ProviderKeyVersionID Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
 	ProviderKeyVersionID *ProviderKeyVersionID `json:"provider_key_version_id,omitempty"`
 	RequestedModel       string                `json:"requested_model"`
 	ServedModel          string                `json:"served_model"`
@@ -2876,10 +3252,10 @@ type ModelSamplingCapabilities struct {
 type ModelToolCapabilities struct {
 	Choice ModelToolChoiceCapabilities `json:"choice"`
 
-	// WebSearch Whether this exact model supports the provider's server-side web
-	// search. Admission fails closed on it, so `provider_tools` is
-	// refused on a model that reports false — including any uncataloged
-	// model, which reports nothing.
+	// WebSearch Whether this model can run the provider's own web search. If it reports
+	// false, asking for `provider_tools` is refused rather than silently
+	// ignored — and a model missing from nvoken's catalog reports nothing, so
+	// it is refused too.
 	WebSearch bool `json:"web_search"`
 }
 
@@ -2901,7 +3277,8 @@ type ModelUsage struct {
 	EstimatedCost            *ModelCost `json:"estimated_cost,omitempty"`
 	InputTokens              int        `json:"input_tokens"`
 
-	// ModelCalls Model requests represented by this aggregate. Older retained evidence may omit it.
+	// ModelCalls How many model requests these totals cover. Older records may not have
+	// it.
 	ModelCalls      *int `json:"model_calls,omitempty"`
 	OutputTokens    int  `json:"output_tokens"`
 	ReasoningTokens *int `json:"reasoning_tokens,omitempty"`
@@ -2917,13 +3294,13 @@ type NudgeAcknowledgement struct {
 	AfterSequence int64 `json:"after_sequence"`
 	Deduped       bool  `json:"deduped"`
 
-	// PendingInputID UUIDv7 with the public `npin_` prefix.
+	// PendingInputID Opaque identifier with the public `input_` prefix. Treat the body as opaque.
 	PendingInputID PendingInputID `json:"pending_input_id"`
 
-	// State `pending` is the only state the turn consumes. `drained` means the
-	// executor promoted the content into the transcript, `expired` that the
-	// Invocation settled without taking it, and `cancelled` that the caller
-	// withdrew it first.
+	// State `pending` is the only state a turn will still pick up. `drained` means
+	// the turn took it and it is now in the transcript. `expired` means the
+	// turn ended without ever taking it. `cancelled` means you withdrew it
+	// before the turn got to it.
 	State PendingInputStatus `json:"state"`
 }
 
@@ -2940,6 +3317,9 @@ type NudgeInvocationRequest struct {
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 }
 
+// Operation defines model for Operation.
+type Operation string
+
 // OutputTextDeltaEvent defines model for OutputTextDeltaEvent.
 type OutputTextDeltaEvent struct {
 	// Attempt Execution attempt that emitted this preview. Discard provisional
@@ -2948,13 +3328,13 @@ type OutputTextDeltaEvent struct {
 	ContentIndex int       `json:"content_index"`
 	EmittedAt    time.Time `json:"emitted_at"`
 
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID `json:"invocation_id"`
 
 	// Iteration Model iteration that owns the assistant message.
 	Iteration int `json:"iteration"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID                `json:"session_id"`
 	Text      string                   `json:"text"`
 	Type      OutputTextDeltaEventType `json:"type"`
@@ -2967,10 +3347,15 @@ type OutputTextDeltaEventType string
 type PendingHostToolCall struct {
 	// DeadlineAt The Invocation's explicit waiting deadline, or null when external
 	// waiting is unbounded.
-	DeadlineAt *time.Time  `json:"deadline_at"`
-	ID         ToolCallID  `json:"id"`
-	Input      interface{} `json:"input"`
-	Name       string      `json:"name"`
+	DeadlineAt *time.Time `json:"deadline_at"`
+
+	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
+	// transcript `tool_use` block or from the pending host tool calls, and
+	// pass it back verbatim as `tool_call_id` when submitting results. The
+	// same value is the `Idempotency-Key` on a callback delivery.
+	ID    ToolCallID  `json:"id"`
+	Input interface{} `json:"input"`
+	Name  string      `json:"name"`
 }
 
 // PendingInput defines model for PendingInput.
@@ -2988,22 +3373,22 @@ type PendingInput struct {
 	// a drained input, and the receipt that the model saw it.
 	DrainedMessageSequence *int64 `json:"drained_message_sequence,omitempty"`
 
-	// ID UUIDv7 with the public `npin_` prefix.
+	// ID Opaque identifier with the public `input_` prefix. Treat the body as opaque.
 	ID             PendingInputID `json:"id"`
 	IdempotencyKey *string        `json:"idempotency_key,omitempty"`
 
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID `json:"invocation_id"`
 	SettledAt    *time.Time   `json:"settled_at,omitempty"`
 
-	// Status `pending` is the only state the turn consumes. `drained` means the
-	// executor promoted the content into the transcript, `expired` that the
-	// Invocation settled without taking it, and `cancelled` that the caller
-	// withdrew it first.
+	// Status `pending` is the only state a turn will still pick up. `drained` means
+	// the turn took it and it is now in the transcript. `expired` means the
+	// turn ended without ever taking it. `cancelled` means you withdrew it
+	// before the turn got to it.
 	Status PendingInputStatus `json:"status"`
 }
 
-// PendingInputID UUIDv7 with the public `npin_` prefix.
+// PendingInputID Opaque identifier with the public `input_` prefix. Treat the body as opaque.
 type PendingInputID = string
 
 // PendingInputList defines model for PendingInputList.
@@ -3013,11 +3398,14 @@ type PendingInputList struct {
 	NextCursor *string        `json:"next_cursor"`
 }
 
-// PendingInputStatus `pending` is the only state the turn consumes. `drained` means the
-// executor promoted the content into the transcript, `expired` that the
-// Invocation settled without taking it, and `cancelled` that the caller
-// withdrew it first.
+// PendingInputStatus `pending` is the only state a turn will still pick up. `drained` means
+// the turn took it and it is now in the transcript. `expired` means the
+// turn ended without ever taking it. `cancelled` means you withdrew it
+// before the turn got to it.
 type PendingInputStatus string
+
+// Profile defines model for Profile.
+type Profile string
 
 // ProviderKey Safe metadata only; secret material is never represented.
 type ProviderKey struct {
@@ -3025,7 +3413,7 @@ type ProviderKey struct {
 	CreatedBy string     `json:"created_by"`
 	ExpiresAt *time.Time `json:"expires_at"`
 
-	// ID UUIDv7 with the public `pkey_` prefix.
+	// ID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
 	ID                ProviderKeyID         `json:"id"`
 	OverlapExpiresAt  *time.Time            `json:"overlap_expires_at"`
 	PreviousVersionID *ProviderKeyVersionID `json:"previous_version_id"`
@@ -3047,20 +3435,22 @@ type ProviderKey struct {
 	UpdatedAt time.Time         `json:"updated_at"`
 	Version   int               `json:"version"`
 
-	// VersionID UUIDv7 with the public `pkeyv_` prefix.
+	// VersionID Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
 	VersionID ProviderKeyVersionID `json:"version_id"`
 
-	// VersionStatus An expired current version is unusable; rotate the active provider key before any admission or model call can use it.
+	// VersionStatus An expired version cannot be used. Rotate the key before any new turn
+	// or model call can use it.
 	VersionStatus ProviderKeyVersionStatus `json:"version_status"`
 }
 
 // ProviderKeyStatus Active roots remain rotatable and revocable even when their current version has expired.
 type ProviderKeyStatus string
 
-// ProviderKeyVersionStatus An expired current version is unusable; rotate the active provider key before any admission or model call can use it.
+// ProviderKeyVersionStatus An expired version cannot be used. Rotate the key before any new turn
+// or model call can use it.
 type ProviderKeyVersionStatus string
 
-// ProviderKeyID UUIDv7 with the public `pkey_` prefix.
+// ProviderKeyID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
 type ProviderKeyID = string
 
 // ProviderKeyList defines model for ProviderKeyList.
@@ -3112,10 +3502,10 @@ type ProviderKeySelection1Source string
 
 // ProviderKeyUsage defines model for ProviderKeyUsage.
 type ProviderKeyUsage struct {
-	// ID UUIDv7 with the public `pkey_` prefix.
+	// ID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
 	ID ProviderKeyID `json:"id"`
 
-	// Invocations Invocations that bound this provider key at admission.
+	// Invocations How many turns used this provider key.
 	Invocations int `json:"invocations"`
 
 	// LastUsedAt Latest durable model checkpoint under any bound Invocation, null before the first model call.
@@ -3135,7 +3525,7 @@ type ProviderKeyUsage struct {
 	Usage *ModelUsage `json:"usage"`
 }
 
-// ProviderKeyVersionID UUIDv7 with the public `pkeyv_` prefix.
+// ProviderKeyVersionID Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
 type ProviderKeyVersionID = string
 
 // ProviderStaticKey defines model for ProviderStaticKey.
@@ -3144,38 +3534,17 @@ type ProviderStaticKey struct {
 	APIKey *string `json:"api_key,omitempty"`
 }
 
-// ProviderTool Selects one server-side tool the provider runs inside the generation
-// call. Unlike a host tool the turn does not park for it, and unlike a
-// builtin nvoken does not execute it — the provider does, and bills it on
-// the same provider key the model runs on. That is deliberate: a
-// runtime-operated search would make nvoken hold a search vendor
-// relationship and answer "who pays per query" for every installation,
-// while this uses the billing relationship the host already has.
+// ProviderTool Turns on a tool the model provider runs itself, inside the model call —
+// web search, for example.
 //
-// **Anthropic only, for now.** The providers' search controls differ
-// materially, and a "common" option set would either be the empty
-// intersection or would silently drop fields on some providers — which is
-// exactly what nvoken's fail-closed posture forbids. Another provider is
-// rejected at admission rather than served a degraded search. Widening is
-// per-provider capability work.
+// This behaves differently from your own tools in two ways: the turn
+// never stops to wait for it, and nvoken never executes it. The provider
+// does, and charges it to the same provider key the model is running on.
 //
-// A model that does not declare `controls.tools.web_search` is refused
-// too, including any uncataloged model: a tool configuration the provider
-// quietly ignored would bill a turn that did no searching and return an
-// answer the host believes was researched.
-//
-// **Cost accounting.** Search charges ride the provider's bill outside
-// nvoken's estimate. `limits.max_estimated_cost_usd` and the usage
-// reporting cover model tokens; the provider does not report a
-// per-search fee through the interface nvoken reads, so a host that needs
-// a hard ceiling on search spend should set `max_uses`.
-//
-// **What appears in the transcript.** The model's `server_tool_use` block
-// is public, so a host can show what was searched for. The matching
-// `web_search_tool_result` is not: it carries the provider's encrypted
-// continuation bytes, which the next turn must echo back verbatim and
-// which mean nothing to a host. The sources behind a claim arrive as
-// citations on the visible text blocks.
+// That is deliberate. A search tool operated by nvoken would mean nvoken
+// holding a vendor relationship with a search provider and answering "who
+// pays per query" for every installation. Letting the provider run it
+// keeps one key and one bill.
 type ProviderTool struct {
 	Type ProviderToolType `json:"type"`
 
@@ -3249,13 +3618,13 @@ type ResumeInvocationRequest struct {
 	Limits Limits `json:"limits"`
 }
 
-// RetentionPolicy Bounds how long an idle Session is retained. Past the window nvoken
-// erases the Session and its whole subtree, exactly as
-// `DELETE /v1/sessions/{session_id}` would.
+// RetentionPolicy How long a Session can sit unused before nvoken deletes it. When the
+// window passes, the Session and everything under it are erased, exactly
+// as `DELETE /v1/sessions/{session_id}` would.
 //
-// The window measures idle time, not lifetime: it restarts on every
-// Invocation admission and every settlement, so a turn that runs longer
-// than the window cannot expire underneath itself.
+// The clock measures idle time, not age: it resets every time a turn
+// starts and every time one finishes. A long-running turn can never
+// expire out from under you.
 //
 // **Automatic expiry never cancels running work.** A Session holding a
 // queued, running, or waiting Invocation is skipped and reconsidered on
@@ -3279,10 +3648,12 @@ type RotateProviderKeyRequest struct {
 
 // Sampling defines model for Sampling.
 type Sampling struct {
-	// Temperature Portable sampling temperature. Omit sampling to preserve the
-	// provider default. An explicit zero remains explicit. Admission
-	// fails closed unless the selected model descriptor positively
-	// declares support.
+	// Temperature Sampling temperature, expressed the same way across providers. Omit
+	// `sampling` entirely to keep the provider's own default; an explicit `0`
+	// means 0 and is not treated as absent.
+	//
+	// If the model is not known to support temperature, the turn is refused
+	// rather than run with the setting quietly dropped.
 	Temperature float64 `json:"temperature"`
 }
 
@@ -3311,6 +3682,10 @@ type SeedMessageContent1 = []TextInputBlock
 
 // ServerToolUseBlock A provider-run tool call retained in the public transcript.
 type ServerToolUseBlock struct {
+	// ID The provider's own ID for a tool it ran itself, such as web
+	// search. This is not a ToolCall ID: you never send a result for
+	// it, and it never appears in your pending tool calls. It is here
+	// so you can show the user what the model looked up.
 	ID    string                 `json:"id"`
 	Input interface{}            `json:"input"`
 	Name  string                 `json:"name"`
@@ -3328,9 +3703,8 @@ type Session struct {
 	// ActiveInvocationStatus Status of active_invocation_id; null exactly when that ID is null.
 	ActiveInvocationStatus *SessionActiveInvocationStatus `json:"active_invocation_status"`
 
-	// AgentID Null only for a Session created ahead of its first Invocation.
-	// The first admitted Invocation binds it; once set the binding is
-	// immutable.
+	// AgentID Null only while a Session created ahead of time has not run a turn yet.
+	// The first turn binds the Agent, and after that it never changes.
 	AgentID *AgentID `json:"agent_id"`
 
 	// BlockingBudget Budget blocking the active paused Invocation, otherwise null.
@@ -3354,16 +3728,16 @@ type Session struct {
 	Context   *SessionContext `json:"context"`
 	CreatedAt time.Time       `json:"created_at"`
 
-	// ExpiresAt When this Session becomes eligible for automatic erasure, or null
-	// when it has no retention window. It moves forward on every
-	// Invocation admission and settlement, so a Session in use stays
-	// ahead of it.
+	// ExpiresAt When nvoken may automatically delete this Session, or null if it
+	// has no retention window. The date moves forward every time a turn
+	// starts and every time one finishes, so a Session in active use
+	// never reaches it.
 	ExpiresAt *time.Time `json:"expires_at"`
 
 	// ForkedFrom Durable source prefix lineage, or null for an original Session.
 	ForkedFrom *SessionForkLineage `json:"forked_from"`
 
-	// ID UUIDv7 with the public `sesn_` prefix.
+	// ID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	ID SessionID `json:"id"`
 
 	// Metadata Host correlation data, returned verbatim. Set at creation through
@@ -3398,9 +3772,13 @@ type Session struct {
 // SessionActiveInvocationStatus defines model for Session.ActiveInvocationStatus.
 type SessionActiveInvocationStatus string
 
-// SessionBudget Mutable Session-wide USD list-price guardrail. The estimate is derived
-// from durable model-call evidence and is operational control, not a
-// billing ledger. Models without catalog pricing fail closed.
+// SessionBudget A spending cap in USD covering every turn in this Session. You can
+// change it at any time.
+//
+// The figure is nvoken's own estimate, based on published list prices
+// and the model calls it recorded — it is a control for stopping runaway
+// work, not a bill. If a model has no price in nvoken's catalog, turns
+// using it are refused rather than run uncosted.
 type SessionBudget struct {
 	MaxEstimatedCostUsd float32 `json:"max_estimated_cost_usd"`
 }
@@ -3415,29 +3793,32 @@ type SessionCompaction struct {
 	// null when status is applied.
 	FailureClass *string `json:"failure_class"`
 
-	// ID UUIDv7-shaped diagnostic identifier with the public `cmp_` prefix.
+	// ID Opaque identifier with the public `comp_` prefix. Treat the body as opaque.
 	ID SessionCompactionID `json:"id"`
 
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID `json:"invocation_id"`
 
-	// Status `applied` means the summary became the Session's private context
-	// projection. `fell_through` means the turn continued with the prior
-	// projection after a failed or invalid summary pass.
+	// Status `applied` means the new summary took effect and is what the model now
+	// sees in place of the older messages. `fell_through` means the summary
+	// attempt failed or came back unusable, so the turn carried on with the
+	// previous summary. Either way the turn keeps running — a failed summary
+	// is not a failed turn.
 	Status SessionCompactionStatus `json:"status"`
 
-	// Summary Diagnostic private context projection for an applied pass; null
-	// for a fell-through pass. It is derived from the host transcript
-	// and is not a canonical Session message.
+	// Summary The summary text itself, for an attempt that took effect; null for one
+	// that did not. It is shown here so you can see what the model is working
+	// from. It is not a message in the conversation and never appears in the
+	// transcript.
 	Summary *string `json:"summary"`
 
-	// Usage Summary-model usage when trustworthy evidence exists. This counts
-	// toward Session usage but never toward the creating Invocation's
-	// usage.
+	// Usage What the summarizing model call cost, when it was recorded reliably.
+	// This counts toward the Session's usage but never toward the usage of
+	// the turn that triggered it.
 	Usage *ModelUsage `json:"usage"`
 }
 
-// SessionCompactionID UUIDv7-shaped diagnostic identifier with the public `cmp_` prefix.
+// SessionCompactionID Opaque identifier with the public `comp_` prefix. Treat the body as opaque.
 type SessionCompactionID = string
 
 // SessionCompactionList defines model for SessionCompactionList.
@@ -3447,16 +3828,20 @@ type SessionCompactionList struct {
 	NextCursor *string             `json:"next_cursor"`
 }
 
-// SessionCompactionStatus `applied` means the summary became the Session's private context
-// projection. `fell_through` means the turn continued with the prior
-// projection after a failed or invalid summary pass.
+// SessionCompactionStatus `applied` means the new summary took effect and is what the model now
+// sees in place of the older messages. `fell_through` means the summary
+// attempt failed or came back unusable, so the turn carried on with the
+// previous summary. Either way the turn keeps running — a failed summary
+// is not a failed turn.
 type SessionCompactionStatus string
 
-// SessionContentBlock One public, provider-neutral transcript block. Stored media bytes are
-// projected on reads as `type`, `media_type`, optional `title`, byte
-// count in `bytes`, and a `sha256:` digest.
+// SessionContentBlock One block of a stored message, in nvoken's own shape rather than any
+// provider's. Images and documents come back described rather than
+// inlined — type, media type, optional title, size in `bytes`, and a
+// `sha256:` checksum — so reading a transcript never ships the original
+// bytes back to you.
 //
-// New block types will appear as features ship. Render the types you know
+// New block types will appear as features ship. Render the ones you know
 // and skip the rest.
 type SessionContentBlock struct {
 	union json.RawMessage
@@ -3468,9 +3853,10 @@ type SessionContext struct {
 	// model is not in this nvoken installation's catalog.
 	ContextWindowTokens *int `json:"context_window_tokens"`
 
-	// EstimatedTokens Estimated tokens in the retained generation context: the latest
-	// applied summary plus the generation-eligible messages after its
-	// watermark. This is the same estimate the compaction trigger uses.
+	// EstimatedTokens Roughly how many tokens the model will see on the next turn: the
+	// most recent summary, plus the messages that came after it. This is
+	// the same number nvoken checks when deciding whether to summarize
+	// again.
 	EstimatedTokens int64 `json:"estimated_tokens"`
 
 	// Model Model whose context window applies: the Session compaction model
@@ -3482,14 +3868,14 @@ type SessionContext struct {
 // SessionForkLineage The source Session and inclusive source message of a fork. These IDs
 // remain as lineage after the source Session is erased.
 type SessionForkLineage struct {
-	// Message UUIDv7 with the public `smsg_` prefix.
+	// Message Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
 	Message SessionMessageID `json:"message"`
 
-	// Session UUIDv7 with the public `sesn_` prefix.
+	// Session Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	Session SessionID `json:"session"`
 }
 
-// SessionID UUIDv7 with the public `sesn_` prefix.
+// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 type SessionID = string
 
 // SessionList defines model for SessionList.
@@ -3501,7 +3887,7 @@ type SessionList struct {
 
 // SessionMessage defines model for SessionMessage.
 type SessionMessage struct {
-	// AgentID UUIDv7 with the public `agnt_` prefix.
+	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	AgentID AgentID               `json:"agent_id"`
 	Content []SessionContentBlock `json:"content"`
 
@@ -3509,7 +3895,7 @@ type SessionMessage struct {
 	CopiedFromMessageID *SessionMessageID `json:"copied_from_message_id,omitempty"`
 	CreatedAt           time.Time         `json:"created_at"`
 
-	// ID UUIDv7 with the public `smsg_` prefix.
+	// ID Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
 	ID SessionMessageID `json:"id"`
 
 	// InvocationID The Invocation that wrote this row, or null for seeded and copied
@@ -3521,21 +3907,17 @@ type SessionMessage struct {
 	// fork copies preserve the source marker.
 	Origin *SessionMessageOrigin `json:"origin,omitempty"`
 
-	// Phase What this assistant message was in its turn. Absent on user and
-	// tool messages, which have no phase.
+	// Phase Whether this assistant message is the turn's actual answer or something
+	// along the way. Absent on user and tool messages, which have no phase.
 	//
-	// Derived at read time from the settling facts on an
-	// Invocation-owned message and frozen onto a fork copy. It never
-	// takes host input. One consequence: a live source message read
-	// before its turn settles reads `commentary`, because nothing had
-	// settled yet. The same source message read after settlement reads
-	// its final phase, and the stream's `invocation_changes` are what
-	// announce the settlement in between.
+	// It is worked out when you read, from how the turn ended, and it is
+	// frozen onto forked copies so a fork keeps the phases it had. Your own
+	// input never carries a phase.
 	Phase    *MessagePhase      `json:"phase,omitempty"`
 	Role     SessionMessageRole `json:"role"`
 	Sequence int64              `json:"sequence"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
 
 	// UserKey Per-turn host end-user attribution. Copied rows preserve it;
@@ -3548,7 +3930,7 @@ type SessionMessage struct {
 // fork copies preserve the source marker.
 type SessionMessageOrigin string
 
-// SessionMessageID UUIDv7 with the public `smsg_` prefix.
+// SessionMessageID Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
 type SessionMessageID = string
 
 // SessionMessageList defines model for SessionMessageList.
@@ -3561,24 +3943,23 @@ type SessionMessageList struct {
 // SessionMessageRole defines model for SessionMessageRole.
 type SessionMessageRole string
 
-// SessionOptions Durable Session options. Every member is optional and at least one must
-// be present. A new Session stores the supplied values. When a keyed
-// upsert or admission resolves an existing Session, supplied values are
-// comparison-only: equal values are accepted and different values return
-// `session_options_conflict` with `details.conflicting_paths`.
+// SessionOptions Settings stored on the Session. Every field is optional, but send at
+// least one.
 //
-// `compaction` requires an Invocation because the policy is validated
-// against that turn's model. It may be installed on any Session that has
-// no compaction policy yet, including a Session created ahead of its first
-// Invocation or a long-running Session opting in later. An `auto` trigger
-// is materialized from the installing Invocation's context window. Once
-// set, the resolved policy is immutable. `POST /v1/sessions` therefore
-// still rejects `compaction`, while admissions may supply it with either
-// `session_id`, `session_key`, or a new Session.
+// On a new Session these are saved. When you reach an existing Session,
+// by ID or by key, they are checked rather than applied: matching values
+// are accepted, and a different value returns `session_options_conflict`
+// with `details.conflicting_paths` naming exactly what disagreed.
+// Compaction needs a turn to install it, because the policy is validated
+// against that turn's model.
 type SessionOptions struct {
-	// Budget Mutable Session-wide USD list-price guardrail. The estimate is derived
-	// from durable model-call evidence and is operational control, not a
-	// billing ledger. Models without catalog pricing fail closed.
+	// Budget A spending cap in USD covering every turn in this Session. You can
+	// change it at any time.
+	//
+	// The figure is nvoken's own estimate, based on published list prices
+	// and the model calls it recorded — it is a control for stopping runaway
+	// work, not a bill. If a model has no price in nvoken's catalog, turns
+	// using it are refused rather than run uncosted.
 	Budget *SessionBudget `json:"budget,omitempty"`
 
 	// Compaction Durable Session context-compaction policy. Omission of model uses the
@@ -3600,13 +3981,13 @@ type SessionOptions struct {
 	// forming opinions about a string only the host renders.
 	Metadata *Metadata `json:"metadata,omitempty"`
 
-	// Retention Bounds how long an idle Session is retained. Past the window nvoken
-	// erases the Session and its whole subtree, exactly as
-	// `DELETE /v1/sessions/{session_id}` would.
+	// Retention How long a Session can sit unused before nvoken deletes it. When the
+	// window passes, the Session and everything under it are erased, exactly
+	// as `DELETE /v1/sessions/{session_id}` would.
 	//
-	// The window measures idle time, not lifetime: it restarts on every
-	// Invocation admission and every settlement, so a turn that runs longer
-	// than the window cannot expire underneath itself.
+	// The clock measures idle time, not age: it resets every time a turn
+	// starts and every time one finishes. A long-running turn can never
+	// expire out from under you.
 	//
 	// **Automatic expiry never cancels running work.** A Session holding a
 	// queued, running, or waiting Invocation is skipped and reconsidered on
@@ -3622,20 +4003,22 @@ type SessionOptions struct {
 type StreamEndEvent struct {
 	InvocationID *InvocationID `json:"invocation_id"`
 
-	// Reason `rotate` means reconnect with `resume_cursor`. `terminal` means
-	// the scoped Invocation settled, or the Session became idle for a
-	// Session-scoped stream.
+	// Reason `rotate` means the server is cycling the connection — reconnect with
+	// your last `resume_cursor`. `terminal` means there is nothing more
+	// coming: the turn finished, or for a Session stream, nothing is running
+	// any more.
 	Reason       StreamEndEventReason `json:"reason"`
 	ResumeCursor string               `json:"resume_cursor"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID          `json:"session_id"`
 	Type      StreamEndEventType `json:"type"`
 }
 
-// StreamEndEventReason `rotate` means reconnect with `resume_cursor`. `terminal` means
-// the scoped Invocation settled, or the Session became idle for a
-// Session-scoped stream.
+// StreamEndEventReason `rotate` means the server is cycling the connection — reconnect with
+// your last `resume_cursor`. `terminal` means there is nothing more
+// coming: the turn finished, or for a Session stream, nothing is running
+// any more.
 type StreamEndEventReason string
 
 // StreamEndEventType defines model for StreamEndEvent.Type.
@@ -3646,7 +4029,7 @@ type StreamResyncEvent struct {
 	InvocationID *InvocationID           `json:"invocation_id"`
 	Reason       StreamResyncEventReason `json:"reason"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID             `json:"session_id"`
 	Type      StreamResyncEventType `json:"type"`
 }
@@ -3673,12 +4056,23 @@ type StructuredOutput struct {
 	Schema map[string]interface{} `json:"schema"`
 }
 
-// StructuredOutputProvenance Immutable proof that output equals the accepted reserved durable
-// ToolCall request under the admitted schema digest.
+// StructuredOutputProvenance Shows where `structured_output` came from and what it was checked
+// against, so you can verify the object rather than trust it. It records
+// the tool call the model produced the object in and the exact schema
+// that object was validated against. It never changes after the turn
+// ends.
 type StructuredOutputProvenance struct {
+	// SchemaSha256 SHA-256 of the JSON Schema this object was checked against. Compare
+	// it with your own schema's hash to confirm the model answered the
+	// version you sent.
 	SchemaSha256 string                           `json:"schema_sha256"`
 	Source       StructuredOutputProvenanceSource `json:"source"`
-	ToolCallID   *string                          `json:"tool_call_id,omitempty"`
+
+	// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
+	// transcript `tool_use` block or from the pending host tool calls, and
+	// pass it back verbatim as `tool_call_id` when submitting results. The
+	// same value is the `Idempotency-Key` on a callback delivery.
+	ToolCallID *ToolCallID `json:"tool_call_id,omitempty"`
 }
 
 // StructuredOutputProvenanceSource defines model for StructuredOutputProvenance.Source.
@@ -3687,48 +4081,56 @@ type StructuredOutputProvenanceSource string
 // SubmitHostToolResultsRequest defines model for SubmitHostToolResultsRequest.
 type SubmitHostToolResultsRequest struct {
 	Results []struct {
-		Content    interface{} `json:"content"`
-		IsError    *bool       `json:"is_error,omitempty"`
-		ToolCallID ToolCallID  `json:"tool_call_id"`
+		Content interface{} `json:"content"`
+		IsError *bool       `json:"is_error,omitempty"`
+
+		// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
+		// transcript `tool_use` block or from the pending host tool calls, and
+		// pass it back verbatim as `tool_call_id` when submitting results. The
+		// same value is the `Idempotency-Key` on a callback delivery.
+		ToolCallID ToolCallID `json:"tool_call_id"`
 	} `json:"results"`
 }
 
 // SubmitHostToolResultsResponse defines model for SubmitHostToolResultsResponse.
 type SubmitHostToolResultsResponse struct {
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID     InvocationID               `json:"invocation_id"`
 	PendingToolCalls []PendingHostToolCall      `json:"pending_tool_calls"`
 	Results          []HostToolResultAcceptance `json:"results"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
 
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are terminal and
-	// immutable.
+	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+	// turn reaches one of them it never changes again.
 	//
-	// `completed` means exactly one thing: the turn ended the way it was
-	// asked to — the model finished, or the caller interrupted it.
-	// `incomplete` means the runtime enforced a budget at a coherent
-	// execution seam. Any budget exhaustion observed at such a seam settles
-	// `incomplete` with `stop_reason` naming the budget; the transcript is
-	// valid and stays in the next turn's context, exactly as a completed
-	// turn's does. Exhaustion that cannot reach a seam — a deadline landing
-	// mid-request, reaper settlement — still settles `failed` with `error`
-	// as the authority. A schema-bearing turn that never published a
-	// validated object also fails, `structured_output_unsatisfied`,
-	// whichever budget stopped it.
+	// `completed` means the turn ended the way it was asked to: the model
+	// finished on its own, or you interrupted it.
 	//
-	// `waiting`—known elsewhere as `requires_action`—means the Invocation has
-	// durable pending host ToolCalls and owns no execution lease. Final
-	// result acceptance moves it back to
-	// `queued`. Checkpoint recovery may also move `running` back to
-	// `queued`; the `attempt` counter distinguishes a retry from tool-result
-	// acceptance, and lifecycle revision orders every transition.
+	// `incomplete` means a limit you set stopped the turn cleanly, between
+	// steps rather than mid-request. `stop_reason` names the limit that ran
+	// out. The reply so far is valid and carries into the next turn just
+	// like a completed turn's does, so this is a stopping point rather than
+	// an error.
 	//
-	// `paused` is nonterminal dormant work stopped at a coherent consumption
-	// ceiling. It owns no lease and its deadlines are suspended until the
-	// exhausted turn limit is raised or the Session budget is raised or
-	// removed. It still accepts interrupt, cancel, and staged nudges.
+	// `failed` means the turn could not stop cleanly — a deadline landing in
+	// the middle of a model request, for example — or that a turn you asked
+	// for structured output from never produced a valid object. Read `error`
+	// for the reason; the reply, if any, is not carried forward.
+	//
+	// `waiting` — `requires_action` in some other APIs — means the turn has
+	// stopped for tool calls you need to run. Nothing is executing. Send the
+	// results and the turn returns to `queued` and picks up where it left
+	// off. A turn can also return to `queued` on its own if nvoken had to
+	// restart it after an interruption; `attempt` tells the two apart, and
+	// the `revision` on each stream update tells you their order.
+	//
+	// `paused` means an opt-in spending limit stopped the turn but left it
+	// resumable. Nothing is executing, and its deadlines are on hold, so a
+	// turn cannot expire while you decide. Raise the turn's limit, or raise
+	// or remove the Session budget, and it continues. It still accepts
+	// interrupt, cancel, and nudge.
 	Status InvocationStatus `json:"status"`
 }
 
@@ -3760,13 +4162,13 @@ type ThinkingDeltaEvent struct {
 	ContentIndex int       `json:"content_index"`
 	EmittedAt    time.Time `json:"emitted_at"`
 
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID `json:"invocation_id"`
 
 	// Iteration Model iteration that owns the assistant message.
 	Iteration int `json:"iteration"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID              `json:"session_id"`
 	Thinking  string                 `json:"thinking"`
 	Type      ThinkingDeltaEventType `json:"type"`
@@ -3782,13 +4184,18 @@ type ToolCall struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// Delivery Present only when mode is callback.
-	Delivery  *ToolCallDelivery `json:"delivery,omitempty"`
-	ID        ToolCallID        `json:"id"`
-	Iteration int               `json:"iteration"`
-	Mode      ToolCallMode      `json:"mode"`
-	Name      string            `json:"name"`
-	SettledAt *time.Time        `json:"settled_at"`
-	Status    ToolCallStatus    `json:"status"`
+	Delivery *ToolCallDelivery `json:"delivery,omitempty"`
+
+	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
+	// transcript `tool_use` block or from the pending host tool calls, and
+	// pass it back verbatim as `tool_call_id` when submitting results. The
+	// same value is the `Idempotency-Key` on a callback delivery.
+	ID        ToolCallID     `json:"id"`
+	Iteration int            `json:"iteration"`
+	Mode      ToolCallMode   `json:"mode"`
+	Name      string         `json:"name"`
+	SettledAt *time.Time     `json:"settled_at"`
+	Status    ToolCallStatus `json:"status"`
 }
 
 // ToolCallDelivery defines model for ToolCallDelivery.
@@ -3804,7 +4211,10 @@ type ToolCallDelivery struct {
 	Outcome CallbackDeliveryOutcome `json:"outcome"`
 }
 
-// ToolCallID defines model for ToolCallID.
+// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
+// transcript `tool_use` block or from the pending host tool calls, and
+// pass it back verbatim as `tool_call_id` when submitting results. The
+// same value is the `Idempotency-Key` on a callback delivery.
 type ToolCallID = string
 
 // ToolCallList defines model for ToolCallList.
@@ -3822,18 +4232,28 @@ type ToolCallStatus string
 
 // ToolCallbackContext defines model for ToolCallbackContext.
 type ToolCallbackContext struct {
-	AgentKey   string             `json:"agent_key"`
-	DeliveryID CallbackDeliveryID `json:"delivery_id"`
+	AgentKey string `json:"agent_key"`
 
-	// InvocationID UUIDv7 with the public `invk_` prefix.
+	// DeliveryID Identifies one delivery nvoken sent you, callback or webhook alike —
+	// both are the same durable record and carry the same `dlvr_` prefix.
+	// Treat it as opaque; it appears in the signed payload and identifies the
+	// attempt when you report a delivery problem.
+	DeliveryID DeliveryID `json:"delivery_id"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID  InvocationID                     `json:"invocation_id"`
 	SchemaVersion ToolCallbackContextSchemaVersion `json:"schema_version"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
 
 	// TenantKey Absent for the app's default tenant.
-	TenantKey  *string    `json:"tenant_key,omitempty"`
+	TenantKey *string `json:"tenant_key,omitempty"`
+
+	// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
+	// transcript `tool_use` block or from the pending host tool calls, and
+	// pass it back verbatim as `tool_call_id` when submitting results. The
+	// same value is the `Idempotency-Key` on a callback delivery.
 	ToolCallID ToolCallID `json:"tool_call_id"`
 }
 
@@ -3873,9 +4293,13 @@ type ToolResultBlock struct {
 	// Content The host's own JSON, retained verbatim. Its canonical encoding is
 	// limited to 262144 bytes and 32 nesting levels; the complete result
 	// submission body is limited to 1048576 bytes.
-	Content   interface{}         `json:"content"`
-	IsError   *bool               `json:"is_error,omitempty"`
-	ToolUseID string              `json:"tool_use_id"`
+	Content interface{} `json:"content"`
+	IsError *bool       `json:"is_error,omitempty"`
+
+	// ToolUseID The `id` of the `tool_use` block this result answers. The name comes
+	// from the provider message format nvoken stores and replays; the value
+	// is a ToolCall ID.
+	ToolUseID ToolCallID          `json:"tool_use_id"`
 	Type      ToolResultBlockType `json:"type"`
 }
 
@@ -3884,7 +4308,11 @@ type ToolResultBlockType string
 
 // ToolUseBlock A host, builtin, MCP, or callback tool call.
 type ToolUseBlock struct {
-	ID    string           `json:"id"`
+	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
+	// transcript `tool_use` block or from the pending host tool calls, and
+	// pass it back verbatim as `tool_call_id` when submitting results. The
+	// same value is the `Idempotency-Key` on a callback delivery.
+	ID    ToolCallID       `json:"id"`
 	Input interface{}      `json:"input"`
 	Name  string           `json:"name"`
 	Type  ToolUseBlockType `json:"type"`
@@ -3900,7 +4328,7 @@ type TranscriptSnapshot struct {
 	Messages          []SessionMessage   `json:"messages"`
 	NextPageToken     *string            `json:"next_page_token"`
 
-	// ResumeCursor Delivered composite message-sequence and lifecycle-revision watermark.
+	// ResumeCursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
 	ResumeCursor string `json:"resume_cursor"`
 }
 
@@ -3916,10 +4344,10 @@ type TranscriptUpdate struct {
 	InvocationChanges []InvocationChange `json:"invocation_changes"`
 	Messages          []SessionMessage   `json:"messages"`
 
-	// ResumeCursor Delivered composite message-sequence and lifecycle-revision watermark.
+	// ResumeCursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
 	ResumeCursor string `json:"resume_cursor"`
 
-	// SessionID UUIDv7 with the public `sesn_` prefix.
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID            `json:"session_id"`
 	Type      TranscriptUpdateType `json:"type"`
 }
@@ -4006,14 +4434,17 @@ type WebSearchTool struct {
 	UserLocation *WebSearchLocation `json:"user_location,omitempty"`
 }
 
-// WebhookEvent `invocation.waiting` fires when the Invocation parks with at least one
-// unresolved host ToolCall the caller must satisfy; a wait made entirely
-// of callback tools emits nothing, because nvoken delivers those itself.
-// `invocation.paused` fires when an opt-in consumption budget parks the
-// turn and carries the exhausted `stop_reason`.
-// `invocation.settled` fires once when the Invocation reaches
-// `completed`, `incomplete`, `failed`, or `cancelled`; completed and
-// incomplete payloads carry `stop_reason` next to `failure_code`.
+// WebhookEvent `invocation.waiting` fires when a turn stops and needs you to run at
+// least one tool. A turn waiting only on callback tools sends nothing,
+// because nvoken delivers those to your endpoint itself and there is
+// nothing for you to do.
+//
+// `invocation.paused` fires when a spending limit you opted into stopped
+// the turn, and carries the `stop_reason` naming the limit.
+//
+// `invocation.settled` fires exactly once, when the turn reaches
+// `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
+// incomplete payloads carry `stop_reason` alongside `failure_code`.
 type WebhookEvent string
 
 // WebhookTarget Optional endpoint nvoken posts a signed webhook to when this
@@ -4049,11 +4480,20 @@ type WebhookTarget struct {
 // AgentKeyFilter defines model for AgentKeyFilter.
 type AgentKeyFilter = string
 
+// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+type CredentialID = APICredentialID
+
+// CredentialLimit defines model for CredentialLimit.
+type CredentialLimit = int
+
 // Cursor defines model for Cursor.
 type Cursor = string
 
 // DefaultTenantFilter defines model for DefaultTenantFilter.
 type DefaultTenantFilter = bool
+
+// IdempotencyKey defines model for IdempotencyKey.
+type IdempotencyKey = string
 
 // IfNoneMatch defines model for IfNoneMatch.
 type IfNoneMatch = string
@@ -4111,6 +4551,33 @@ type ListAgentsParams struct {
 type ListAppsParams struct {
 	// ExternalRef Return only apps whose `external_ref` equals this value.
 	ExternalRef *string `form:"external_ref,omitempty" json:"external_ref,omitempty"`
+}
+
+// ListCredentialsParams defines parameters for ListCredentials.
+type ListCredentialsParams struct {
+	Status *CredentialStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Maximum credentials in this page. Defaults to 100. Credential listing
+	// caps at 100 rather than the 200 the other list operations allow.
+	Limit *CredentialLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CreateCredentialParams defines parameters for CreateCredential.
+type CreateCredentialParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// RotateCredentialJSONBody defines parameters for RotateCredential.
+type RotateCredentialJSONBody struct {
+	OverlapSeconds int `json:"overlap_seconds"`
+}
+
+// RotateCredentialParams defines parameters for RotateCredential.
+type RotateCredentialParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ListInvocationsParams defines parameters for ListInvocations.
@@ -4320,10 +4787,10 @@ type ReceiveToolCallbackParams struct {
 	XNvokenSignatureVersion ReceiveToolCallbackParamsXNvokenSignatureVersion `json:"X-Nvoken-Signature-Version"`
 
 	// XNvokenTimestamp Unix timestamp used in the signature.
-	XNvokenTimestamp         int64              `json:"X-Nvoken-Timestamp"`
-	XNvokenDeliveryID        CallbackDeliveryID `json:"X-Nvoken-Delivery-Id"`
-	XNvokenSigningKeyID      string             `json:"X-Nvoken-Signing-Key-Id"`
-	XNvokenSigningKeyVersion int64              `json:"X-Nvoken-Signing-Key-Version"`
+	XNvokenTimestamp         int64      `json:"X-Nvoken-Timestamp"`
+	XNvokenDeliveryID        DeliveryID `json:"X-Nvoken-Delivery-Id"`
+	XNvokenSigningKeyID      string     `json:"X-Nvoken-Signing-Key-Id"`
+	XNvokenSigningKeyVersion int64      `json:"X-Nvoken-Signing-Key-Version"`
 
 	// IdempotencyKey The stable ToolCall ID. It is unchanged across retries.
 	IdempotencyKey ToolCallID `json:"Idempotency-Key"`
@@ -4343,6 +4810,12 @@ type CreateBudgetJSONRequestBody = CreateBudgetRequest
 
 // UpdateBudgetJSONRequestBody defines body for UpdateBudget for application/json ContentType.
 type UpdateBudgetJSONRequestBody = UpdateBudgetRequest
+
+// CreateCredentialJSONRequestBody defines body for CreateCredential for application/json ContentType.
+type CreateCredentialJSONRequestBody = CreateCredentialRequest
+
+// RotateCredentialJSONRequestBody defines body for RotateCredential for application/json ContentType.
+type RotateCredentialJSONRequestBody RotateCredentialJSONBody
 
 // CreateInvocationJSONRequestBody defines body for CreateInvocation for application/json ContentType.
 type CreateInvocationJSONRequestBody = CreateInvocationRequest
@@ -5873,7 +6346,7 @@ type ClientInterface interface {
 	// isolation boundary.
 	//
 	// Corresponds with GET /v1/apps/{app_id} (the `GetApp` operationId).
-	GetApp(ctx context.Context, appID string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateAppWithBody Update an app
 	//
@@ -5884,7 +6357,7 @@ type ClientInterface interface {
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
-	UpdateAppWithBody(ctx context.Context, appID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateAppWithBody(ctx context.Context, appID AppID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateApp Update an app
 	//
@@ -5895,7 +6368,7 @@ type ClientInterface interface {
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
-	UpdateApp(ctx context.Context, appID string, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateBudgetWithBody Create one fixed usage budget window
 	//
@@ -5933,8 +6406,10 @@ type ClientInterface interface {
 
 	// UpdateBudgetWithBody Raise or lower a Budget cap
 	//
-	// Replaces the cap. It cannot be lower than settled plus reserved cost.
-	// Raising it reevaluates paused work in bounded batches.
+	// Sets a new spending cap. It cannot be lower than what the current
+	// window has already used and committed. Raising it releases turns that
+	// were paused for hitting the old cap; they resume in batches rather than
+	// all at once.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5943,13 +6418,63 @@ type ClientInterface interface {
 
 	// UpdateBudget Raise or lower a Budget cap
 	//
-	// Replaces the cap. It cannot be lower than settled plus reserved cost.
-	// Raising it reevaluates paused work in bounded batches.
+	// Sets a new spending cap. It cannot be lower than what the current
+	// window has already used and committed. Raising it releases turns that
+	// were paused for hitting the old cap; they resume in batches rather than
+	// all at once.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PATCH /v1/budgets/{budget_id} (the `UpdateBudget` operationId).
 	UpdateBudget(ctx context.Context, budgetID BudgetID, body UpdateBudgetJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetCurrentIdentity Explain the authenticated caller
+	//
+	// Corresponds with GET /v1/identity (the `GetCurrentIdentity` operationId).
+	GetCurrentIdentity(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListCredentials List safe credential metadata
+	//
+	// Corresponds with GET /v1/identity/credentials (the `ListCredentials` operationId).
+	ListCredentials(ctx context.Context, params *ListCredentialsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateCredentialWithBody Create a machine credential
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
+	CreateCredentialWithBody(ctx context.Context, params *CreateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateCredential Create a machine credential
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
+	CreateCredential(ctx context.Context, params *CreateCredentialParams, body CreateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetCredential Read safe credential metadata
+	//
+	// Corresponds with GET /v1/identity/credentials/{credential_id} (the `GetCredential` operationId).
+	GetCredential(ctx context.Context, credentialID CredentialID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeCredential Revoke a credential
+	//
+	// Corresponds with POST /v1/identity/credentials/{credential_id}/revoke (the `RevokeCredential` operationId).
+	RevokeCredential(ctx context.Context, credentialID CredentialID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotateCredentialWithBody Rotate a machine credential with bounded overlap
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
+	RotateCredentialWithBody(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotateCredential Rotate a machine credential with bounded overlap
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
+	RotateCredential(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, body RotateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListInvocations List authoritative Invocations
 	//
@@ -5965,158 +6490,194 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/invocations (the `ListInvocations` operationId).
 	ListInvocations(ctx context.Context, params *ListInvocationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateInvocationWithBody Durably admit one background agent turn
+	// CreateInvocationWithBody Start one background agent turn
 	//
-	// Resolves or creates the installation-wide Agent identity anchor,
-	// resolves or creates a Session, resolves the inline or referenced
-	// definition, appends exactly one caller-input message, and creates one
-	// queued Invocation in a single transaction. The response is sent only
-	// after that transaction commits. The request handler never executes the
-	// model.
+	// Starts one agent turn and returns immediately. In a single database
+	// transaction nvoken finds or creates the Agent and Session, resolves
+	// the agent definition you sent inline or referenced by `definition_id`,
+	// appends your input as one message, and queues the turn. You get a
+	// response only after that transaction commits, so a `202` means the
+	// work is safely recorded and will run even if nvoken restarts. The
+	// model does not run on this request — it runs in the background, and
+	// you follow it with the stream or by polling.
 	//
-	// `session_id` and `session_key` are mutually exclusive. A Session ID must
-	// belong to the named Agent, or be a Session created without one — the
-	// first admitted Invocation binds the Agent permanently. An installation-wide
-	// credential may omit `tenant_key` and use the Session's stored partition.
-	// A tenant-constrained credential cannot cross its partition; an explicit
-	// mismatch is rejected with `403 forbidden` before resource lookup.
+	// Pick the Session with either `session_id` or `session_key`, not both.
+	// A Session ID must belong to the Agent you named, or to a Session
+	// created without an Agent — in which case this turn binds that Agent
+	// permanently. An installation-wide credential may omit `tenant_key` and
+	// use whichever tenant the Session already belongs to. A credential
+	// locked to one tenant cannot reach another; naming a different one
+	// returns `403 forbidden` without revealing whether the resource
+	// exists.
 	//
-	// `idempotency_key` is scoped to the effective
-	// tenant partition, and `agent_key`. A same-key replay is checked before
-	// the Session's one-nonterminal-Invocation rule. It returns the original
-	// records without appending input, even when the Invocation is terminal.
-	// Material equality covers the Session selector kind and value, the
-	// resolved definition, and input. A `definition_id` and its byte-identical
-	// inline definition compare equal. Requested limits are compared before
-	// default resolution, so an explicit default differs from omission. JSON
-	// object member order is ignored, array order is significant, and strings
-	// are not rewritten. A changed material field returns
-	// `idempotency_conflict`.
+	// ## Retrying safely
 	//
-	// `if_active` defaults to `reject`, preserving
-	// `session_invocation_active`. Explicit `supersede` requires both create
-	// and cancel authority. While holding the Session lock, it durably
-	// cancels any nonterminal Invocation and admits this replacement in the
-	// same transaction. With no active work it admits normally. Equal replay
-	// returns the original work before supersession and never cancels newer
-	// active work.
+	// Send `idempotency_key` and you can retry this request without risking
+	// a second turn. A repeat with the same key returns the original turn
+	// and does not add your input again, even if that turn has already
+	// finished. Keys are scoped to the tenant and `agent_key`.
 	//
-	// `interrupt` requires the same authority and keeps the same lock
-	// ordering, but stops the active Invocation gracefully instead of
-	// cancelling it: work already at a seam settles and the replacement is
-	// admitted in the same transaction, while work under a live lease has
-	// the interrupt recorded and this request waits for it to settle. If it
-	// has not settled within the wait, the response is
+	// A repeat counts as the same request only if the Session selector, the
+	// resolved definition, and the input all match. A `definition_id` and
+	// the identical inline definition count as the same. Limits are compared
+	// as you sent them, so sending a value that happens to equal the default
+	// is not the same as omitting it. Key order inside JSON objects does not
+	// matter; array order does. Change anything that matters and you get
+	// `idempotency_conflict` rather than a surprise second turn.
+	//
+	// ## When the Session is already busy
+	//
+	// A Session runs one turn at a time, and `if_active` decides what
+	// happens when you start another. The default, `reject`, returns
+	// `session_invocation_active`.
+	//
+	// `supersede` cancels the running turn and starts yours in its place,
+	// atomically — there is no moment where the Session has no turn or two
+	// turns. It requires permission to both create and cancel. Retrying the
+	// same request returns your original turn and never cancels newer work
+	// that started in the meantime.
+	//
+	// `interrupt` needs the same permission but stops the running turn
+	// cleanly instead of discarding its work. If that turn can stop
+	// immediately, yours starts in the same transaction. If it is mid-step,
+	// nvoken records the interrupt and this request waits for it. If it has
+	// not stopped by the time the wait is up, you get
 	// `session_invocation_active` with `details.interrupt_requested = true`
-	// and the request may be reissued.
+	// — the interrupt is still in effect, so just send the request again.
 	//
-	// A cataloged model continues to admit while deprecated. On and after
-	// its `retires_at` date, a new admission is refused with `422
-	// model_retired`; `details` carries the refused `model`, `retires_at`,
-	// the exact `replacement` provider/id pair, and the request `path`.
-	// Equal idempotent replay still returns work admitted before retirement.
+	// ## Retired models
 	//
-	// A text-only request body is limited to 1 MiB. A body carrying image or
-	// document blocks is limited to 24 MiB, within which decoded media is
-	// bounded separately: at most 8 media blocks, 16 MiB decoded in total,
-	// 5 MiB per image, and 16 MiB per document. Requests over any of these
-	// limits are rejected before admission. URL media is fetched after an
-	// idempotent replay check and before any row is admitted. The guarded
-	// fetch accepts public HTTPS only, enforces the item limit while reading,
-	// and sniffs the returned bytes. nvoken stores those bytes and does not
-	// fetch the URL again.
+	// A deprecated model keeps working. On and after its `retires_at` date,
+	// new turns are refused with `422 model_retired`, and `details` tells
+	// you what to do about it: the `model` you asked for, its `retires_at`
+	// date, the exact `replacement` provider and id to switch to, and the
+	// request `path`. Retrying an idempotency key from before the retirement
+	// still returns that original turn.
 	//
-	// The supported streaming pattern is admit-then-stream: admit with a
-	// plain JSON POST, then follow the Invocation over
-	// `GET /v1/invocations/{invocation_id}/stream`. It survives a dropped
-	// connection without re-admitting and does not depend on front-end
-	// streaming behavior. `Accept: text/event-stream` on this request is a
-	// deployment-dependent convenience, not a first-class mode: the
-	// committed admission is the first `invocation.accepted` frame and the
-	// connection tails that Invocation through `invocation.result`, but
-	// delivery requires the deployment front end to stream a non-`200`
-	// POST response unbuffered. Some managed front ends (including Cloud
-	// Run's) buffer it until the Invocation settles, which makes a
-	// host-tool turn's `waiting` state invisible on this connection.
+	// ## Size limits
+	//
+	// A text-only body may be up to 1 MiB. A body with images or documents
+	// may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB
+	// of decoded media in total, 5 MiB per image, and 16 MiB per document.
+	// Anything over these is rejected before a turn is created.
+	//
+	// URLs are fetched after the idempotency check and before anything is
+	// saved, so a retry does not download twice. nvoken accepts public HTTPS
+	// only, stops reading at the size limit, and checks what the bytes
+	// actually are. It stores them and never fetches the URL again.
+	//
+	// ## Streaming
+	//
+	// Start the turn with a plain JSON POST, then follow it with
+	// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
+	// build on: it survives a dropped connection without starting the turn
+	// over, and it works the same everywhere.
+	//
+	// You can instead send `Accept: text/event-stream` on this request and
+	// have the response stream directly, starting with `invocation.accepted`
+	// and running through `invocation.result`. Treat that as a convenience,
+	// not something to depend on — it needs your deployment's front end to
+	// stream a non-`200` POST response without buffering. Some managed
+	// platforms, Cloud Run among them, buffer it until the turn finishes.
+	// On those, a turn that stops to wait for your tools appears to hang,
+	// because you never see the `waiting` state.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/invocations (the `CreateInvocation` operationId).
 	CreateInvocationWithBody(ctx context.Context, params *CreateInvocationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateInvocation Durably admit one background agent turn
+	// CreateInvocation Start one background agent turn
 	//
-	// Resolves or creates the installation-wide Agent identity anchor,
-	// resolves or creates a Session, resolves the inline or referenced
-	// definition, appends exactly one caller-input message, and creates one
-	// queued Invocation in a single transaction. The response is sent only
-	// after that transaction commits. The request handler never executes the
-	// model.
+	// Starts one agent turn and returns immediately. In a single database
+	// transaction nvoken finds or creates the Agent and Session, resolves
+	// the agent definition you sent inline or referenced by `definition_id`,
+	// appends your input as one message, and queues the turn. You get a
+	// response only after that transaction commits, so a `202` means the
+	// work is safely recorded and will run even if nvoken restarts. The
+	// model does not run on this request — it runs in the background, and
+	// you follow it with the stream or by polling.
 	//
-	// `session_id` and `session_key` are mutually exclusive. A Session ID must
-	// belong to the named Agent, or be a Session created without one — the
-	// first admitted Invocation binds the Agent permanently. An installation-wide
-	// credential may omit `tenant_key` and use the Session's stored partition.
-	// A tenant-constrained credential cannot cross its partition; an explicit
-	// mismatch is rejected with `403 forbidden` before resource lookup.
+	// Pick the Session with either `session_id` or `session_key`, not both.
+	// A Session ID must belong to the Agent you named, or to a Session
+	// created without an Agent — in which case this turn binds that Agent
+	// permanently. An installation-wide credential may omit `tenant_key` and
+	// use whichever tenant the Session already belongs to. A credential
+	// locked to one tenant cannot reach another; naming a different one
+	// returns `403 forbidden` without revealing whether the resource
+	// exists.
 	//
-	// `idempotency_key` is scoped to the effective
-	// tenant partition, and `agent_key`. A same-key replay is checked before
-	// the Session's one-nonterminal-Invocation rule. It returns the original
-	// records without appending input, even when the Invocation is terminal.
-	// Material equality covers the Session selector kind and value, the
-	// resolved definition, and input. A `definition_id` and its byte-identical
-	// inline definition compare equal. Requested limits are compared before
-	// default resolution, so an explicit default differs from omission. JSON
-	// object member order is ignored, array order is significant, and strings
-	// are not rewritten. A changed material field returns
-	// `idempotency_conflict`.
+	// ## Retrying safely
 	//
-	// `if_active` defaults to `reject`, preserving
-	// `session_invocation_active`. Explicit `supersede` requires both create
-	// and cancel authority. While holding the Session lock, it durably
-	// cancels any nonterminal Invocation and admits this replacement in the
-	// same transaction. With no active work it admits normally. Equal replay
-	// returns the original work before supersession and never cancels newer
-	// active work.
+	// Send `idempotency_key` and you can retry this request without risking
+	// a second turn. A repeat with the same key returns the original turn
+	// and does not add your input again, even if that turn has already
+	// finished. Keys are scoped to the tenant and `agent_key`.
 	//
-	// `interrupt` requires the same authority and keeps the same lock
-	// ordering, but stops the active Invocation gracefully instead of
-	// cancelling it: work already at a seam settles and the replacement is
-	// admitted in the same transaction, while work under a live lease has
-	// the interrupt recorded and this request waits for it to settle. If it
-	// has not settled within the wait, the response is
+	// A repeat counts as the same request only if the Session selector, the
+	// resolved definition, and the input all match. A `definition_id` and
+	// the identical inline definition count as the same. Limits are compared
+	// as you sent them, so sending a value that happens to equal the default
+	// is not the same as omitting it. Key order inside JSON objects does not
+	// matter; array order does. Change anything that matters and you get
+	// `idempotency_conflict` rather than a surprise second turn.
+	//
+	// ## When the Session is already busy
+	//
+	// A Session runs one turn at a time, and `if_active` decides what
+	// happens when you start another. The default, `reject`, returns
+	// `session_invocation_active`.
+	//
+	// `supersede` cancels the running turn and starts yours in its place,
+	// atomically — there is no moment where the Session has no turn or two
+	// turns. It requires permission to both create and cancel. Retrying the
+	// same request returns your original turn and never cancels newer work
+	// that started in the meantime.
+	//
+	// `interrupt` needs the same permission but stops the running turn
+	// cleanly instead of discarding its work. If that turn can stop
+	// immediately, yours starts in the same transaction. If it is mid-step,
+	// nvoken records the interrupt and this request waits for it. If it has
+	// not stopped by the time the wait is up, you get
 	// `session_invocation_active` with `details.interrupt_requested = true`
-	// and the request may be reissued.
+	// — the interrupt is still in effect, so just send the request again.
 	//
-	// A cataloged model continues to admit while deprecated. On and after
-	// its `retires_at` date, a new admission is refused with `422
-	// model_retired`; `details` carries the refused `model`, `retires_at`,
-	// the exact `replacement` provider/id pair, and the request `path`.
-	// Equal idempotent replay still returns work admitted before retirement.
+	// ## Retired models
 	//
-	// A text-only request body is limited to 1 MiB. A body carrying image or
-	// document blocks is limited to 24 MiB, within which decoded media is
-	// bounded separately: at most 8 media blocks, 16 MiB decoded in total,
-	// 5 MiB per image, and 16 MiB per document. Requests over any of these
-	// limits are rejected before admission. URL media is fetched after an
-	// idempotent replay check and before any row is admitted. The guarded
-	// fetch accepts public HTTPS only, enforces the item limit while reading,
-	// and sniffs the returned bytes. nvoken stores those bytes and does not
-	// fetch the URL again.
+	// A deprecated model keeps working. On and after its `retires_at` date,
+	// new turns are refused with `422 model_retired`, and `details` tells
+	// you what to do about it: the `model` you asked for, its `retires_at`
+	// date, the exact `replacement` provider and id to switch to, and the
+	// request `path`. Retrying an idempotency key from before the retirement
+	// still returns that original turn.
 	//
-	// The supported streaming pattern is admit-then-stream: admit with a
-	// plain JSON POST, then follow the Invocation over
-	// `GET /v1/invocations/{invocation_id}/stream`. It survives a dropped
-	// connection without re-admitting and does not depend on front-end
-	// streaming behavior. `Accept: text/event-stream` on this request is a
-	// deployment-dependent convenience, not a first-class mode: the
-	// committed admission is the first `invocation.accepted` frame and the
-	// connection tails that Invocation through `invocation.result`, but
-	// delivery requires the deployment front end to stream a non-`200`
-	// POST response unbuffered. Some managed front ends (including Cloud
-	// Run's) buffer it until the Invocation settles, which makes a
-	// host-tool turn's `waiting` state invisible on this connection.
+	// ## Size limits
+	//
+	// A text-only body may be up to 1 MiB. A body with images or documents
+	// may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB
+	// of decoded media in total, 5 MiB per image, and 16 MiB per document.
+	// Anything over these is rejected before a turn is created.
+	//
+	// URLs are fetched after the idempotency check and before anything is
+	// saved, so a retry does not download twice. nvoken accepts public HTTPS
+	// only, stops reading at the size limit, and checks what the bytes
+	// actually are. It stores them and never fetches the URL again.
+	//
+	// ## Streaming
+	//
+	// Start the turn with a plain JSON POST, then follow it with
+	// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
+	// build on: it survives a dropped connection without starting the turn
+	// over, and it works the same everywhere.
+	//
+	// You can instead send `Accept: text/event-stream` on this request and
+	// have the response stream directly, starting with `invocation.accepted`
+	// and running through `invocation.result`. Treat that as a convenience,
+	// not something to depend on — it needs your deployment's front end to
+	// stream a non-`200` POST response without buffering. Some managed
+	// platforms, Cloud Run among them, buffer it until the turn finishes.
+	// On those, a turn that stops to wait for your tools appears to hang,
+	// because you never see the `waiting` state.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6125,139 +6686,142 @@ type ClientInterface interface {
 
 	// GetInvocation Read authoritative Invocation identity and state
 	//
-	// Returns the durable current state. Post-admission failures appear here.
-	// A credential authenticated for Runtime but denied this read operation
-	// receives `forbidden`.
-	// A resource outside the caller's tenant constraint is
-	// reported as `not_found` when disclosure would reveal its existence.
+	// The turn's current state, including anything that went wrong after it
+	// started.
+	//
+	// A credential that can authenticate but lacks permission for this read
+	// gets `forbidden`. A turn belonging to another tenant is reported as
+	// `not_found` rather than `forbidden`, so you cannot use this endpoint to
+	// discover whether an ID exists outside your scope.
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id} (the `GetInvocation` operationId).
 	GetInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CancelInvocation Idempotently cancel an Invocation
+	// CancelInvocation Stop a turn and discard its work
 	//
-	// Atomically makes nonterminal work `cancelled`. Repeating the request,
-	// or cancelling an Invocation that already completed or failed, returns
-	// the unchanged authoritative terminal row. A successful response means
-	// cancellation is durable; provider work stops cooperatively and may
-	// have already incurred external cost. The request body must be empty.
+	// Stops a turn and discards what it produced. The turn ends `cancelled`
+	// and its work does not carry into the next turn — use interrupt instead
+	// if you want to keep it.
+	//
+	// Safe to repeat. Cancelling a turn that already finished returns it
+	// unchanged rather than failing. A successful response means the
+	// cancellation is recorded and will stick. Work already sent to the
+	// model provider stops as soon as it can, so you may still be billed for
+	// what had run by then.
+	//
+	// Send an empty request body.
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/cancel (the `CancelInvocation` operationId).
 	CancelInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// InterruptInvocation Gracefully stop an Invocation and keep its work
+	// InterruptInvocation Stop a turn but keep what it produced
 	//
-	// Asks the turn to stop at its next execution seam and settle
-	// `completed` with `stop_reason = interrupted`, so its assistant and
-	// tool messages stay in the next turn's generation context. That is the
-	// whole difference from cancellation, which drops the turn's work from
-	// every later turn.
+	// Asks a running turn to stop at its next clean stopping point. It ends
+	// `completed` with `stop_reason: interrupted`, and everything it
+	// produced — the model's replies and any tool results — stays in the
+	// conversation for the next turn. That is the whole difference from
+	// cancelling, which throws the turn's work away.
 	//
-	// The request is durable and idempotent. Work already at a seam —
-	// `queued`, `waiting`, or `running` with no live owner — settles before
-	// this call returns, closing any pending tool calls with synthetic
-	// results; a subsequently submitted tool result then gets the ordinary
-	// terminal `409`. Work under a live lease records the request and
-	// returns the Invocation unchanged, still `running`: its executor stops
-	// at the next checkpoint boundary, at worst one provider call away.
-	// Follow the Invocation stream or re-read it to observe settlement.
+	// The request is recorded and safe to repeat. What happens next depends
+	// on what the turn was doing:
 	//
-	// Interrupting terminal work is a no-op that returns the unchanged
-	// terminal row. A turn whose definition carries `structured_output` and that
-	// never published a validated object fails
-	// `structured_output_unsatisfied` instead of completing — the
-	// obligation was not met. Usage and settlement evidence are complete:
-	// the work was kept, so it is charged. The request body must be empty.
+	// - Between steps (`queued`, `waiting`, or `running` with nothing
+	//   actively executing) it stops before this call returns. Any tool
+	//   calls you still owed results for are closed out, so submitting one
+	//   afterwards returns `409`.
+	// - Mid-step, nvoken records the request and returns the turn still
+	//   `running`. It stops at the next checkpoint, at worst one model call
+	//   later. Watch the stream or re-read the turn to see it end.
+	//
+	// Interrupting a turn that has already finished changes nothing and
+	// returns it as-is. A turn that was asked for structured output but
+	// never produced a valid object ends `failed` with
+	// `structured_output_unsatisfied` rather than `completed`. Either way
+	// usage is reported in full and billed, because the work was kept.
+	//
+	// Send an empty request body.
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/interrupt (the `InterruptInvocation` operationId).
 	InterruptInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// NudgeInvocationWithBody Append steering to a running Invocation
+	// NudgeInvocationWithBody Send extra direction to a running turn
 	//
-	// Stages caller guidance against a turn that is already running — "focus
-	// on the marine segment" — without ending it and without discarding the
-	// work being steered. This is the difference from
-	// `if_active: supersede`, which rewinds: a superseded turn's assistant
-	// and tool work product is dropped from the next generation, so steering
-	// a long turn by supersession throws away exactly what is being steered.
-	// Unlike Claude's `system.message`, a nudge is durable staged input
-	// consumed at an execution seam, not an event injected immediately into
-	// a managed session.
+	// Sends extra direction to a turn that is already running — "focus on
+	// the marine segment" — without stopping it and without losing the work
+	// you are steering. Use this when a long turn is heading the wrong way
+	// and you want to correct it in place.
 	//
-	// A nudge is not an interrupt. The earliest injection point is the next
-	// execution seam: the start of the next execution segment, which is a
-	// host-tool turn's park boundary, or the stop seam where a turn that
-	// considers itself finished re-enters its loop to answer the input in
-	// place. An in-flight provider call or tool run is never aborted for it,
-	// and an Invocation that has been interrupted is never given more to do —
-	// the interrupt wins the seam and the staged input expires.
+	// Compare with `if_active: supersede` on a new Invocation, which
+	// replaces the running turn and discards what it had produced. Steering
+	// a long turn that way throws away exactly the work you were trying to
+	// redirect.
 	//
-	// A nudge is never implicitly minted and never implicitly converted.
-	// `POST /v1/invocations` against a busy Session keeps its `if_active`
-	// semantics; admission is never silently turned into a nudge, and a
-	// nudge is never silently turned into an Invocation. nvoken holds no
-	// agent configuration — the definition travels inline on every admission — so
-	// there is nothing it could legitimately run converted input with.
+	// **A nudge is not an interrupt, and it is not immediate.** The turn
+	// picks it up at its next clean stopping point: when it starts its next
+	// step, when it pauses for you to run a tool, or when a turn that
+	// thought it was finished re-enters its loop to answer you. A model call
+	// or tool run already in flight is never aborted to deliver it. A turn
+	// you have interrupted is never given more work — the interrupt wins and
+	// the direction you staged expires unused.
 	//
-	// Input that the turn never takes is settled `expired` when the
-	// Invocation settles, in the same transaction and under the same Session
-	// lock this request takes. It never influences a later Invocation.
-	// Re-sending missed direction as the next Invocation's input is the
-	// host's call to make, and `GET .../pending-inputs` is where the miss is
-	// visible.
+	// Nudges and Invocations never turn into each other. Posting to
+	// `/v1/invocations` against a busy Session behaves exactly as its
+	// `if_active` setting says; it never quietly becomes a nudge, and a
+	// nudge never quietly becomes a new turn.
 	//
-	// `content` is text: a string, or an array of text blocks. Image and
-	// document blocks are accepted on an Invocation's own input but not
-	// here, because the stop seam carries a continuation as text and staging
-	// content one seam would silently drop is worse than refusing it.
+	// If the turn ends without ever picking it up, your input is marked
+	// `expired` at that moment and has no effect on any later turn. Check
+	// `GET .../pending-inputs` to see whether it was used or missed. Whether
+	// to re-send missed direction as the next turn's input is your call.
 	//
-	// Requires the same authority as cancelling the Invocation.
+	// `content` must be text — a string, or an array of text blocks. Images
+	// and documents are fine on a turn's own input but are refused here,
+	// because a turn resuming in place carries text only, and silently
+	// dropping your attachment would be worse than telling you now.
+	//
+	// Requires the same permission as cancelling the turn.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
 	NudgeInvocationWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// NudgeInvocation Append steering to a running Invocation
+	// NudgeInvocation Send extra direction to a running turn
 	//
-	// Stages caller guidance against a turn that is already running — "focus
-	// on the marine segment" — without ending it and without discarding the
-	// work being steered. This is the difference from
-	// `if_active: supersede`, which rewinds: a superseded turn's assistant
-	// and tool work product is dropped from the next generation, so steering
-	// a long turn by supersession throws away exactly what is being steered.
-	// Unlike Claude's `system.message`, a nudge is durable staged input
-	// consumed at an execution seam, not an event injected immediately into
-	// a managed session.
+	// Sends extra direction to a turn that is already running — "focus on
+	// the marine segment" — without stopping it and without losing the work
+	// you are steering. Use this when a long turn is heading the wrong way
+	// and you want to correct it in place.
 	//
-	// A nudge is not an interrupt. The earliest injection point is the next
-	// execution seam: the start of the next execution segment, which is a
-	// host-tool turn's park boundary, or the stop seam where a turn that
-	// considers itself finished re-enters its loop to answer the input in
-	// place. An in-flight provider call or tool run is never aborted for it,
-	// and an Invocation that has been interrupted is never given more to do —
-	// the interrupt wins the seam and the staged input expires.
+	// Compare with `if_active: supersede` on a new Invocation, which
+	// replaces the running turn and discards what it had produced. Steering
+	// a long turn that way throws away exactly the work you were trying to
+	// redirect.
 	//
-	// A nudge is never implicitly minted and never implicitly converted.
-	// `POST /v1/invocations` against a busy Session keeps its `if_active`
-	// semantics; admission is never silently turned into a nudge, and a
-	// nudge is never silently turned into an Invocation. nvoken holds no
-	// agent configuration — the definition travels inline on every admission — so
-	// there is nothing it could legitimately run converted input with.
+	// **A nudge is not an interrupt, and it is not immediate.** The turn
+	// picks it up at its next clean stopping point: when it starts its next
+	// step, when it pauses for you to run a tool, or when a turn that
+	// thought it was finished re-enters its loop to answer you. A model call
+	// or tool run already in flight is never aborted to deliver it. A turn
+	// you have interrupted is never given more work — the interrupt wins and
+	// the direction you staged expires unused.
 	//
-	// Input that the turn never takes is settled `expired` when the
-	// Invocation settles, in the same transaction and under the same Session
-	// lock this request takes. It never influences a later Invocation.
-	// Re-sending missed direction as the next Invocation's input is the
-	// host's call to make, and `GET .../pending-inputs` is where the miss is
-	// visible.
+	// Nudges and Invocations never turn into each other. Posting to
+	// `/v1/invocations` against a busy Session behaves exactly as its
+	// `if_active` setting says; it never quietly becomes a nudge, and a
+	// nudge never quietly becomes a new turn.
 	//
-	// `content` is text: a string, or an array of text blocks. Image and
-	// document blocks are accepted on an Invocation's own input but not
-	// here, because the stop seam carries a continuation as text and staging
-	// content one seam would silently drop is worse than refusing it.
+	// If the turn ends without ever picking it up, your input is marked
+	// `expired` at that moment and has no effect on any later turn. Check
+	// `GET .../pending-inputs` to see whether it was used or missed. Whether
+	// to re-send missed direction as the next turn's input is your call.
 	//
-	// Requires the same authority as cancelling the Invocation.
+	// `content` must be text — a string, or an array of text blocks. Images
+	// and documents are fine on a turn's own input but are refused here,
+	// because a turn resuming in place carries text only, and silently
+	// dropping your attachment would be worse than telling you now.
+	//
+	// Requires the same permission as cancelling the turn.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6266,85 +6830,103 @@ type ClientInterface interface {
 
 	// ListPendingInputs List staged input for an Invocation
 	//
-	// Returns the staged queue in `(created_at, id)` ascending order — the
-	// order the turn will consume it — with settled rows retained so a
-	// caller can answer "what did the user say, and did the model see it".
-	// This, not an event vocabulary, is the reconciliation source for a
-	// surface that shows queued direction: a drained input also appears on
-	// the transcript stream as an ordinary `user` message.
+	// Lists the direction you have sent to this turn with `/nudge`, in the
+	// order the turn will pick it up. Entries stay listed after they are used
+	// or missed, so you can answer "what did the user say, and did the model
+	// ever see it?"
+	//
+	// Check `status` on each entry: `drained` means the turn used it,
+	// `expired` means the turn ended first, `cancelled` means you withdrew
+	// it.
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id}/pending-inputs (the `ListPendingInputs` operationId).
 	ListPendingInputs(ctx context.Context, invocationID InvocationID, params *ListPendingInputsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CancelPendingInput Withdraw staged input the turn has not taken
 	//
-	// Cancels input that is still `pending`. Cancelling input that is
-	// already `cancelled` returns it unchanged, so a retry is safe.
+	// Withdraws direction you sent with `/nudge`, as long as the turn has not
+	// picked it up yet. Cancelling something already cancelled returns it
+	// unchanged, so retrying is safe.
 	//
-	// Cancel and drain serialize on the row, so whichever commits first
-	// wins outright: a cancelled input is never seen by the model, and input
-	// the executor already drained is reported `409 pending_input_settled`
-	// with the current resource in `details.pending_input` rather than being
-	// withdrawn from a transcript it is already part of. The request body
-	// must be empty.
-	//
-	// Requires the same authority as cancelling the Invocation.
+	// Cancelling races the turn, and whichever happens first wins outright:
+	// you either withdraw it cleanly or the turn uses it. It is never
+	// half-applied. If the turn got there first, you get a conflict and the
+	// entry stays `drained`.
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel (the `CancelPendingInput` operationId).
 	CancelPendingInput(ctx context.Context, invocationID InvocationID, pendingInputID PendingInputID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetInvocationResult Read the composed Invocation result
+	// GetInvocationResult Read a turn together with its messages
 	//
-	// Returns one InvocationResult at any status: the authoritative
-	// Invocation, this Invocation's canonical messages composed at read
-	// time, and the output_text convenience projection. The Invocation and
-	// its messages are read in one repeatable-read snapshot, so the payload
-	// never shows a terminal status with a missing message tail.
-	// Authentication, tenant scoping, and the nondisclosing not_found rule
-	// match the plain Invocation read exactly.
+	// Returns the turn and the messages it produced, at any status. This is
+	// the convenient read for "what did the agent say?" — `output_text`
+	// gives you the assistant's text already joined into a single string, so
+	// you do not have to walk the message blocks yourself.
+	//
+	// The turn and its messages are read from one consistent database
+	// snapshot, so you will never see a finished turn whose last message is
+	// missing.
+	//
+	// Authentication, tenant scoping, and the not-found behavior are the
+	// same as reading the Invocation on its own.
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
 	GetInvocationResult(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ResumeInvocationWithBody Raise the exhausted turn ceiling and resume a paused Invocation
+	// ResumeInvocationWithBody Raise a paused turn's limit and continue it
 	//
-	// Requeues an Invocation paused on a turn-level consumption ceiling.
-	// `limits` must contain only the exhausted field, raised above both its
-	// prior value and the amount already consumed, and the new value must
-	// remain within installation policy. A Session-budget pause resumes by
-	// raising or removing the Session budget instead. Deadlines never pause.
+	// Continues a turn that paused because one of its own spending limits
+	// ran out. Send `limits` containing only the limit that ran out, raised
+	// above both its old value and what the turn has already used, and still
+	// within what your installation allows.
+	//
+	// If the turn paused on the Session budget rather than its own limit,
+	// raise or remove that budget instead — this endpoint will not resume
+	// it. Deadlines never pause a turn, so they never bring you here.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ResumeInvocation Raise the exhausted turn ceiling and resume a paused Invocation
+	// ResumeInvocation Raise a paused turn's limit and continue it
 	//
-	// Requeues an Invocation paused on a turn-level consumption ceiling.
-	// `limits` must contain only the exhausted field, raised above both its
-	// prior value and the amount already consumed, and the new value must
-	// remain within installation policy. A Session-budget pause resumes by
-	// raising or removing the Session budget instead. Deadlines never pause.
+	// Continues a turn that paused because one of its own spending limits
+	// ran out. Send `limits` containing only the limit that ran out, raised
+	// above both its old value and what the turn has already used, and still
+	// within what your installation allows.
+	//
+	// If the turn paused on the Session budget rather than its own limit,
+	// raise or remove that budget instead — this endpoint will not resume
+	// it. Deadlines never pause a turn, so they never bring you here.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocation(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// StreamInvocation Resume and tail one Invocation over SSE
+	// StreamInvocation Follow one turn over Server-Sent Events
 	//
-	// Replays durable updates after `cursor`, optionally forwards ephemeral
-	// output previews for this Invocation, and ends only when this Invocation
-	// settles or the connection rotates. Durable frames carry an SSE `id`;
-	// previews and control frames do not. After `stream.resync`, discard
-	// provisional output and wait for durable state.
+	// Follows one turn as it runs, and can be resumed after a dropped
+	// connection. Pass `cursor` to pick up after a position you already
+	// received; the stream replays everything saved since then, then
+	// continues live until the turn finishes.
 	//
-	// The explicit `cursor` query parameter takes precedence over
-	// `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
-	// last durable ID. `deltas=false` skips preview fan-out without changing
-	// replay, polling, cursor, or terminal semantics. Disconnecting never
-	// cancels the Invocation.
+	// Saved updates carry an SSE `id` — that is your resume position, and
+	// the only value you need to store. Live text previews and control
+	// frames carry no `id` because they are not saved state. If you receive
+	// `stream.resync`, discard the preview text you have accumulated and
+	// wait for the saved messages; previews can be lost, saved updates
+	// cannot.
+	//
+	// The `cursor` query parameter wins over the `Last-Event-ID` header.
+	// `stream.end` with reason `rotate` means the server is cycling the
+	// connection — reconnect using your last saved `id`. Set `deltas=false`
+	// to skip previews; nothing about replay, resumption, or how the stream
+	// ends changes.
+	//
+	// Disconnecting never cancels the turn. It keeps running, and you can
+	// reconnect or read it later.
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
 	StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6417,11 +6999,14 @@ type ClientInterface interface {
 
 	// ListMCPToolsWithBody Discover and project one remote MCP server's tools
 	//
-	// Opens one short-lived streamable-HTTP MCP session through guarded
-	// public-only egress, drains tools/list pagination, applies the same
-	// allowlist and projection rules used by Invocation execution, and then
-	// closes the session. Supplied headers are used only for this request,
-	// are never logged or returned, and are not persisted.
+	// Connects to a remote MCP server and lists the tools it offers, without
+	// starting a turn. Use it to check a server works and see what the model
+	// would get before you wire it into an agent.
+	//
+	// nvoken opens one short-lived session, reads through every page of the
+	// server's tool list, applies the same filtering rules a real turn would,
+	// and disconnects. Headers you supply are used for this call only and are
+	// never stored.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6430,11 +7015,14 @@ type ClientInterface interface {
 
 	// ListMCPTools Discover and project one remote MCP server's tools
 	//
-	// Opens one short-lived streamable-HTTP MCP session through guarded
-	// public-only egress, drains tools/list pagination, applies the same
-	// allowlist and projection rules used by Invocation execution, and then
-	// closes the session. Supplied headers are used only for this request,
-	// are never logged or returned, and are not persisted.
+	// Connects to a remote MCP server and lists the tools it offers, without
+	// starting a turn. Use it to check a server works and see what the model
+	// would get before you wire it into an agent.
+	//
+	// nvoken opens one short-lived session, reads through every page of the
+	// server's tool list, applies the same filtering rules a real turn would,
+	// and disconnects. Headers you supply are used for this call only and are
+	// never stored.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6528,40 +7116,35 @@ type ClientInterface interface {
 
 	// GetProviderKeyUsage Read the token usage rollup for one provider key
 	//
-	// Aggregates durable checkpoint evidence across every Invocation that
-	// bound the provider key: how many Invocations used it, when a model call
-	// last used it, and the summed model usage. Derived at read time from the
-	// transcript record, never from a separately maintained counter.
-	// Authorization matches reading the provider key itself.
+	// Totals usage for one provider key across every turn that used it: how
+	// many turns, when a model call last used it, and the combined token and
+	// cost totals.
+	//
+	// Calculated from stored records each time you ask, not kept in a running
+	// counter, so deleting Sessions lowers these numbers.
 	//
 	// Corresponds with GET /v1/provider-keys/{provider_key_id}/usage (the `GetProviderKeyUsage` operationId).
 	GetProviderKeyUsage(ctx context.Context, providerKeyID ProviderKeyID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSessions List authoritative Sessions
 	//
-	// Returns newest-first Session identity and current nonterminal
-	// Invocation state. Exact filters combine with AND. Tenant filtering and
-	// cursor binding follow the Invocation-list rules. `agent_id` and
-	// `agent_key` are mutually exclusive and normalize to the same cursor
-	// filter.
+	// Lists Sessions, newest first, each with the state of its currently
+	// running turn if it has one. Filters combine with AND. Tenant filtering
+	// and cursors work the same as on the Invocation list. `agent_id` and
+	// `agent_key` are mutually exclusive.
 	//
 	// Corresponds with GET /v1/sessions (the `ListSessions` operationId).
 	ListSessions(ctx context.Context, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSessionWithBody Create or seed a Session without admitting an Invocation
 	//
-	// Creates a Session with zero Invocations and optional host-asserted
-	// starting history. Every body field is optional. An omitted `agent_key` leaves the
-	// Session unbound: `agent_id` is null until the first admitted
-	// Invocation binds it, and the binding is immutable once set either way;
-	// `seed_messages` therefore requires `agent_key`. A `session_key`
-	// requires an `agent_key`, because key uniqueness
-	// and lookup are scoped per (tenant partition, Agent); a keyed create
-	// is an upsert that accepts equal supplied Session options and returns
-	// `session_options_conflict` when a supplied value differs.
-	// Without a `session_key`, every call creates a fresh Session.
-	// Precedence for the tenant partition is credential constraint,
-	// explicit `tenant_key`, then the default partition.
+	// Creates an empty Session, optionally seeded with history you already
+	// have. Use this when you want a conversation to exist before the first
+	// turn runs — to show it in a UI, or to import messages from elsewhere.
+	//
+	// Every field is optional. Leave out `agent_key` and the Session starts
+	// unbound: `agent_id` stays null until the first turn binds it
+	// permanently.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6570,18 +7153,13 @@ type ClientInterface interface {
 
 	// CreateSession Create or seed a Session without admitting an Invocation
 	//
-	// Creates a Session with zero Invocations and optional host-asserted
-	// starting history. Every body field is optional. An omitted `agent_key` leaves the
-	// Session unbound: `agent_id` is null until the first admitted
-	// Invocation binds it, and the binding is immutable once set either way;
-	// `seed_messages` therefore requires `agent_key`. A `session_key`
-	// requires an `agent_key`, because key uniqueness
-	// and lookup are scoped per (tenant partition, Agent); a keyed create
-	// is an upsert that accepts equal supplied Session options and returns
-	// `session_options_conflict` when a supplied value differs.
-	// Without a `session_key`, every call creates a fresh Session.
-	// Precedence for the tenant partition is credential constraint,
-	// explicit `tenant_key`, then the default partition.
+	// Creates an empty Session, optionally seeded with history you already
+	// have. Use this when you want a conversation to exist before the first
+	// turn runs — to show it in a UI, or to import messages from elsewhere.
+	//
+	// Every field is optional. Leave out `agent_key` and the Session starts
+	// unbound: `agent_id` stays null until the first turn binds it
+	// permanently.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6595,32 +7173,31 @@ type ClientInterface interface {
 	// bindings, and undelivered webhooks. The erasure is immediate and
 	// irreversible; a subsequent read is `not_found`.
 	//
-	// An Invocation still running is stopped. No cancellation is recorded,
-	// because there is nothing left to record it against — the Invocation is
-	// removed rather than settled, and no `invocation.settled` webhook
-	// is emitted for it. A host that needs a settled record should cancel and
-	// observe the terminal state before deleting.
+	// A turn still running is stopped, but no cancellation is recorded —
+	// there is nothing left to record it against, and no
+	// `invocation.settled` webhook fires for it. If you need a record that
+	// the turn ended, cancel it and wait for its final state before
+	// deleting.
 	//
-	// Erasure is scoped like every other Session operation: an unknown or
-	// out-of-scope `session_id` returns `not_found`, so a retry after a lost
-	// response can treat `404` as already-done. The `delete_session`
-	// operation belongs to the Runtime and Operator profiles; a Viewer
-	// credential cannot erase a transcript.
+	// An unknown `session_id`, or one outside your scope, returns
+	// `not_found`. So if you lose the response and retry, you can safely
+	// treat `404` as "already deleted". Deleting requires the Runtime or
+	// Operator profile; a Viewer credential cannot erase a transcript.
 	//
-	// **This is not account deletion by itself.** nvoken keeps no account
-	// tombstone, so a host honouring a deletion request must first stop
-	// admitting work for that tenant, then page `GET /v1/sessions` and delete
-	// until the list is empty. Otherwise a concurrent request creates a new
-	// Session behind the sweep.
+	// **Deleting Sessions is not the same as deleting a user's account.**
+	// nvoken has no record that an account was deleted, so to honour a
+	// deletion request you must first stop starting new turns for that
+	// tenant, then page through `GET /v1/sessions` and delete until the list
+	// comes back empty. Otherwise a request arriving mid-sweep creates a new
+	// Session behind you.
 	//
-	// Two consequences worth planning for. Usage reporting shrinks
-	// retroactively: `GET /v1/usage/daily` is computed at read time from
-	// Invocation evidence that erasure removes, which is why the endpoint is
-	// documented as operational visibility rather than a billing ledger — a
-	// billing host records usage at settlement, keyed by Invocation id.
-	// And the erased Invocations' idempotency keys become free for reuse,
-	// consistent with the documented guarantee that deduplication holds while
-	// the original Invocation is retained.
+	// Two consequences to plan for. Past usage numbers shrink:
+	// `GET /v1/usage/daily` is calculated from the records you just erased,
+	// which is why it is operational visibility rather than a billing
+	// ledger — bill from usage you recorded yourself when each turn
+	// finished, keyed by Invocation ID. And the deleted turns' idempotency
+	// keys become reusable, since deduplication only holds while the
+	// original turn still exists.
 	//
 	// Corresponds with DELETE /v1/sessions/{session_id} (the `DeleteSession` operationId).
 	DeleteSession(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6686,16 +7263,14 @@ type ClientInterface interface {
 
 	// ListSessionCompactions Page through immutable Session compaction records
 	//
-	// Returns newest-first diagnostic records for every attempted compaction
-	// pass. `applied` records include the private summary projection and its
-	// model usage. `fell_through` records identify the failure class and may
-	// include usage when the provider returned trustworthy evidence. Only
-	// applied records change future model context; neither kind changes the
-	// canonical Session transcript.
+	// Lists every attempt nvoken made to summarize this Session's history,
+	// newest first. Use it to understand why the model's context looks the
+	// way it does.
 	//
-	// The summary is derived from the caller's own transcript and therefore
-	// uses the same authorization and Session scoping as transcript reads.
-	// The opaque cursor is bound to the authenticated app and Session.
+	// An `applied` record includes the summary that took effect and what the
+	// summarizing call cost. A `fell_through` record tells you why the
+	// attempt was not usable, and includes usage when a model call happened
+	// before it failed.
 	//
 	// Corresponds with GET /v1/sessions/{session_id}/compactions (the `ListSessionCompactions` operationId).
 	ListSessionCompactions(ctx context.Context, sessionID SessionID, params *ListSessionCompactionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6752,57 +7327,67 @@ type ClientInterface interface {
 
 	// GetSessionTranscript Drain a fixed-cut incremental transcript snapshot
 	//
-	// Projects canonical messages and append-only Invocation lifecycle
-	// changes. Supply a prior `resume_cursor` as `cursor` to drain newer
-	// durable state. Continue a multi-page fixed cut with `page_token` until
-	// `has_more` is false. Each page contains one phase: all message pages are
-	// delivered before lifecycle-change pages, so terminal state cannot
-	// precede the transcript rows committed with it. Omitting both positions
-	// starts at the beginning of the retained Session.
+	// Returns the Session's stored messages plus a running log of turn state
+	// changes.
+	//
+	// To catch up rather than re-read everything, pass a `resume_cursor` you
+	// received earlier as `cursor` and you get only what is new since then.
+	// Within one read, keep passing `page_token` until `has_more` is false —
+	// all pages come from the same consistent snapshot, so the transcript
+	// cannot shift under you mid-read.
 	//
 	// Corresponds with GET /v1/sessions/{session_id}/transcript (the `GetSessionTranscript` operationId).
 	GetSessionTranscript(ctx context.Context, sessionID SessionID, params *GetSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// StreamSessionTranscript Replay and tail one Session transcript over SSE
+	// StreamSessionTranscript Follow a Session transcript over Server-Sent Events
 	//
-	// Opens a resumable Server-Sent Events projection over the same fixed-cut
-	// transcript read model as the JSON endpoint. With deltas enabled, the
-	// server subscribes to live fan-out before its first Postgres drain. In
-	// either mode it re-drains Postgres on a bounded poll and closes after
-	// authoritative terminal reconciliation or deliberate rotation.
-	// Disconnecting never cancels the Invocation.
+	// Streams a Session's transcript as it grows, and can be resumed after a
+	// dropped connection. It covers the same messages as the JSON transcript
+	// endpoint.
 	//
-	// Every nonempty `transcript.update` frame carries
-	// `id: <resume_cursor>`; that opaque ID is the only replay position
-	// clients persist. `output_text.delta`, `thinking.delta`,
-	// `stream.resync`, and `stream.end` never carry an `id`. Deltas are
-	// ephemeral and may be lost; after `stream.resync`, discard provisional
-	// output and wait for canonical messages. `stream.end` reason `terminal`
-	// means the final Postgres drain observed no nonterminal Invocation.
-	// Reason `rotate` means reconnect with the last durable ID. An abnormal
-	// close has no terminal meaning. `deltas=false` skips preview fan-out
-	// without changing replay, polling, cursor, or terminal semantics.
+	// Every non-empty `transcript.update` frame carries
+	// `id: <resume_cursor>`. That opaque ID is your resume position and the
+	// only value you need to store — reconnect with it and you continue
+	// exactly where you left off. `output_text.delta`, `thinking.delta`,
+	// `stream.resync`, and `stream.end` never carry an `id`, because they
+	// are live previews and control frames rather than saved messages.
 	//
-	// The explicit `cursor` query parameter takes precedence over
-	// `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
-	// client that can set the `Authorization` header; the browser EventSource
-	// constructor alone cannot do so. The server emits `retry: 1000` as its
-	// default reconnect delay.
+	// Previews can be lost. If you receive `stream.resync`, discard the
+	// preview text you have accumulated and wait for the saved messages to
+	// arrive. Set `deltas=false` to skip previews entirely; nothing about
+	// replay, resumption, or how the stream ends changes.
+	//
+	// `stream.end` with reason `terminal` means no turn is still running.
+	// Reason `rotate` means the server is cycling the connection —
+	// reconnect with your last `id`. A connection that just drops carries no
+	// meaning: reconnect and resume. Disconnecting never cancels a running
+	// turn.
+	//
+	// The `cursor` query parameter wins over the `Last-Event-ID` header.
+	// Because this endpoint uses bearer authentication, you need an SSE
+	// client that can set the `Authorization` header — the browser's
+	// built-in `EventSource` cannot. The server suggests a 1000 ms
+	// reconnect delay.
 	//
 	// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
 	StreamSessionTranscript(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetDailyUsage Read daily usage rollups
 	//
-	// Aggregates durable model-call evidence — invocation checkpoints plus
-	// session compaction calls — into per-day buckets keyed by app,
-	// provider, and model, summing token counts and estimated cost. Derived
-	// at read time from the transcript record, never from a separately
-	// maintained counter.
+	// Totals your model usage by day, app, provider, and model, with token
+	// counts and estimated cost. It counts every model call nvoken made on
+	// your behalf, including the ones it makes to summarize long
+	// conversations.
 	//
-	// An app-bound credential reads its own app. An app-less presentation
-	// spans every registered app; for a console issuer token that requires
-	// the admin claim.
+	// These totals are calculated from the stored records each time you ask,
+	// not kept in a running counter. That means deleting Sessions lowers
+	// past numbers. Treat this as operational visibility into what your
+	// agents are doing, not as a billing ledger — if you bill from usage,
+	// record it yourself when each turn finishes, keyed by Invocation ID.
+	//
+	// A credential bound to an app sees only that app. A credential not
+	// bound to any app sees every registered app; a console issuer token
+	// needs its `admin` claim for that.
 	//
 	// Corresponds with GET /v1/usage/daily (the `GetDailyUsage` operationId).
 	GetDailyUsage(ctx context.Context, params *GetDailyUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6933,7 +7518,7 @@ func (c *Client) RegisterApp(ctx context.Context, body RegisterAppJSONRequestBod
 // isolation boundary.
 //
 // Corresponds with GET /v1/apps/{app_id} (the `GetApp` operationId).
-func (c *Client) GetApp(ctx context.Context, appID string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAppRequest(c.Server, appID)
 	if err != nil {
 		return nil, err
@@ -6954,7 +7539,7 @@ func (c *Client) GetApp(ctx context.Context, appID string, reqEditors ...Request
 // Takes any type of body and a specified content type.
 //
 // Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
-func (c *Client) UpdateAppWithBody(ctx context.Context, appID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateAppWithBody(ctx context.Context, appID AppID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateAppRequestWithBody(c.Server, appID, contentType, body)
 	if err != nil {
 		return nil, err
@@ -6975,7 +7560,7 @@ func (c *Client) UpdateAppWithBody(ctx context.Context, appID string, contentTyp
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
-func (c *Client) UpdateApp(ctx context.Context, appID string, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateAppRequest(c.Server, appID, body)
 	if err != nil {
 		return nil, err
@@ -7063,8 +7648,10 @@ func (c *Client) GetBudget(ctx context.Context, budgetID BudgetID, reqEditors ..
 
 // UpdateBudgetWithBody Raise or lower a Budget cap
 //
-// Replaces the cap. It cannot be lower than settled plus reserved cost.
-// Raising it reevaluates paused work in bounded batches.
+// Sets a new spending cap. It cannot be lower than what the current
+// window has already used and committed. Raising it releases turns that
+// were paused for hitting the old cap; they resume in batches rather than
+// all at once.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7083,14 +7670,144 @@ func (c *Client) UpdateBudgetWithBody(ctx context.Context, budgetID BudgetID, co
 
 // UpdateBudget Raise or lower a Budget cap
 //
-// Replaces the cap. It cannot be lower than settled plus reserved cost.
-// Raising it reevaluates paused work in bounded batches.
+// Sets a new spending cap. It cannot be lower than what the current
+// window has already used and committed. Raising it releases turns that
+// were paused for hitting the old cap; they resume in batches rather than
+// all at once.
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with PATCH /v1/budgets/{budget_id} (the `UpdateBudget` operationId).
 func (c *Client) UpdateBudget(ctx context.Context, budgetID BudgetID, body UpdateBudgetJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateBudgetRequest(c.Server, budgetID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetCurrentIdentity Explain the authenticated caller
+//
+// Corresponds with GET /v1/identity (the `GetCurrentIdentity` operationId).
+func (c *Client) GetCurrentIdentity(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCurrentIdentityRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListCredentials List safe credential metadata
+//
+// Corresponds with GET /v1/identity/credentials (the `ListCredentials` operationId).
+func (c *Client) ListCredentials(ctx context.Context, params *ListCredentialsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListCredentialsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateCredentialWithBody Create a machine credential
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
+func (c *Client) CreateCredentialWithBody(ctx context.Context, params *CreateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateCredentialRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateCredential Create a machine credential
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
+func (c *Client) CreateCredential(ctx context.Context, params *CreateCredentialParams, body CreateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateCredentialRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetCredential Read safe credential metadata
+//
+// Corresponds with GET /v1/identity/credentials/{credential_id} (the `GetCredential` operationId).
+func (c *Client) GetCredential(ctx context.Context, credentialID CredentialID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCredentialRequest(c.Server, credentialID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeCredential Revoke a credential
+//
+// Corresponds with POST /v1/identity/credentials/{credential_id}/revoke (the `RevokeCredential` operationId).
+func (c *Client) RevokeCredential(ctx context.Context, credentialID CredentialID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeCredentialRequest(c.Server, credentialID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RotateCredentialWithBody Rotate a machine credential with bounded overlap
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
+func (c *Client) RotateCredentialWithBody(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateCredentialRequestWithBody(c.Server, credentialID, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RotateCredential Rotate a machine credential with bounded overlap
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
+func (c *Client) RotateCredential(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, body RotateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateCredentialRequest(c.Server, credentialID, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7125,79 +7842,97 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 	return c.Client.Do(req)
 }
 
-// CreateInvocationWithBody Durably admit one background agent turn
+// CreateInvocationWithBody Start one background agent turn
 //
-// Resolves or creates the installation-wide Agent identity anchor,
-// resolves or creates a Session, resolves the inline or referenced
-// definition, appends exactly one caller-input message, and creates one
-// queued Invocation in a single transaction. The response is sent only
-// after that transaction commits. The request handler never executes the
-// model.
+// Starts one agent turn and returns immediately. In a single database
+// transaction nvoken finds or creates the Agent and Session, resolves
+// the agent definition you sent inline or referenced by `definition_id`,
+// appends your input as one message, and queues the turn. You get a
+// response only after that transaction commits, so a `202` means the
+// work is safely recorded and will run even if nvoken restarts. The
+// model does not run on this request — it runs in the background, and
+// you follow it with the stream or by polling.
 //
-// `session_id` and `session_key` are mutually exclusive. A Session ID must
-// belong to the named Agent, or be a Session created without one — the
-// first admitted Invocation binds the Agent permanently. An installation-wide
-// credential may omit `tenant_key` and use the Session's stored partition.
-// A tenant-constrained credential cannot cross its partition; an explicit
-// mismatch is rejected with `403 forbidden` before resource lookup.
+// Pick the Session with either `session_id` or `session_key`, not both.
+// A Session ID must belong to the Agent you named, or to a Session
+// created without an Agent — in which case this turn binds that Agent
+// permanently. An installation-wide credential may omit `tenant_key` and
+// use whichever tenant the Session already belongs to. A credential
+// locked to one tenant cannot reach another; naming a different one
+// returns `403 forbidden` without revealing whether the resource
+// exists.
 //
-// `idempotency_key` is scoped to the effective
-// tenant partition, and `agent_key`. A same-key replay is checked before
-// the Session's one-nonterminal-Invocation rule. It returns the original
-// records without appending input, even when the Invocation is terminal.
-// Material equality covers the Session selector kind and value, the
-// resolved definition, and input. A `definition_id` and its byte-identical
-// inline definition compare equal. Requested limits are compared before
-// default resolution, so an explicit default differs from omission. JSON
-// object member order is ignored, array order is significant, and strings
-// are not rewritten. A changed material field returns
-// `idempotency_conflict`.
+// ## Retrying safely
 //
-// `if_active` defaults to `reject`, preserving
-// `session_invocation_active`. Explicit `supersede` requires both create
-// and cancel authority. While holding the Session lock, it durably
-// cancels any nonterminal Invocation and admits this replacement in the
-// same transaction. With no active work it admits normally. Equal replay
-// returns the original work before supersession and never cancels newer
-// active work.
+// Send `idempotency_key` and you can retry this request without risking
+// a second turn. A repeat with the same key returns the original turn
+// and does not add your input again, even if that turn has already
+// finished. Keys are scoped to the tenant and `agent_key`.
 //
-// `interrupt` requires the same authority and keeps the same lock
-// ordering, but stops the active Invocation gracefully instead of
-// cancelling it: work already at a seam settles and the replacement is
-// admitted in the same transaction, while work under a live lease has
-// the interrupt recorded and this request waits for it to settle. If it
-// has not settled within the wait, the response is
+// A repeat counts as the same request only if the Session selector, the
+// resolved definition, and the input all match. A `definition_id` and
+// the identical inline definition count as the same. Limits are compared
+// as you sent them, so sending a value that happens to equal the default
+// is not the same as omitting it. Key order inside JSON objects does not
+// matter; array order does. Change anything that matters and you get
+// `idempotency_conflict` rather than a surprise second turn.
+//
+// ## When the Session is already busy
+//
+// A Session runs one turn at a time, and `if_active` decides what
+// happens when you start another. The default, `reject`, returns
+// `session_invocation_active`.
+//
+// `supersede` cancels the running turn and starts yours in its place,
+// atomically — there is no moment where the Session has no turn or two
+// turns. It requires permission to both create and cancel. Retrying the
+// same request returns your original turn and never cancels newer work
+// that started in the meantime.
+//
+// `interrupt` needs the same permission but stops the running turn
+// cleanly instead of discarding its work. If that turn can stop
+// immediately, yours starts in the same transaction. If it is mid-step,
+// nvoken records the interrupt and this request waits for it. If it has
+// not stopped by the time the wait is up, you get
 // `session_invocation_active` with `details.interrupt_requested = true`
-// and the request may be reissued.
+// — the interrupt is still in effect, so just send the request again.
 //
-// A cataloged model continues to admit while deprecated. On and after
-// its `retires_at` date, a new admission is refused with `422
-// model_retired`; `details` carries the refused `model`, `retires_at`,
-// the exact `replacement` provider/id pair, and the request `path`.
-// Equal idempotent replay still returns work admitted before retirement.
+// ## Retired models
 //
-// A text-only request body is limited to 1 MiB. A body carrying image or
-// document blocks is limited to 24 MiB, within which decoded media is
-// bounded separately: at most 8 media blocks, 16 MiB decoded in total,
-// 5 MiB per image, and 16 MiB per document. Requests over any of these
-// limits are rejected before admission. URL media is fetched after an
-// idempotent replay check and before any row is admitted. The guarded
-// fetch accepts public HTTPS only, enforces the item limit while reading,
-// and sniffs the returned bytes. nvoken stores those bytes and does not
-// fetch the URL again.
+// A deprecated model keeps working. On and after its `retires_at` date,
+// new turns are refused with `422 model_retired`, and `details` tells
+// you what to do about it: the `model` you asked for, its `retires_at`
+// date, the exact `replacement` provider and id to switch to, and the
+// request `path`. Retrying an idempotency key from before the retirement
+// still returns that original turn.
 //
-// The supported streaming pattern is admit-then-stream: admit with a
-// plain JSON POST, then follow the Invocation over
-// `GET /v1/invocations/{invocation_id}/stream`. It survives a dropped
-// connection without re-admitting and does not depend on front-end
-// streaming behavior. `Accept: text/event-stream` on this request is a
-// deployment-dependent convenience, not a first-class mode: the
-// committed admission is the first `invocation.accepted` frame and the
-// connection tails that Invocation through `invocation.result`, but
-// delivery requires the deployment front end to stream a non-`200`
-// POST response unbuffered. Some managed front ends (including Cloud
-// Run's) buffer it until the Invocation settles, which makes a
-// host-tool turn's `waiting` state invisible on this connection.
+// ## Size limits
+//
+// A text-only body may be up to 1 MiB. A body with images or documents
+// may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB
+// of decoded media in total, 5 MiB per image, and 16 MiB per document.
+// Anything over these is rejected before a turn is created.
+//
+// URLs are fetched after the idempotency check and before anything is
+// saved, so a retry does not download twice. nvoken accepts public HTTPS
+// only, stops reading at the size limit, and checks what the bytes
+// actually are. It stores them and never fetches the URL again.
+//
+// ## Streaming
+//
+// Start the turn with a plain JSON POST, then follow it with
+// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
+// build on: it survives a dropped connection without starting the turn
+// over, and it works the same everywhere.
+//
+// You can instead send `Accept: text/event-stream` on this request and
+// have the response stream directly, starting with `invocation.accepted`
+// and running through `invocation.result`. Treat that as a convenience,
+// not something to depend on — it needs your deployment's front end to
+// stream a non-`200` POST response without buffering. Some managed
+// platforms, Cloud Run among them, buffer it until the turn finishes.
+// On those, a turn that stops to wait for your tools appears to hang,
+// because you never see the `waiting` state.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7214,79 +7949,97 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 	return c.Client.Do(req)
 }
 
-// CreateInvocation Durably admit one background agent turn
+// CreateInvocation Start one background agent turn
 //
-// Resolves or creates the installation-wide Agent identity anchor,
-// resolves or creates a Session, resolves the inline or referenced
-// definition, appends exactly one caller-input message, and creates one
-// queued Invocation in a single transaction. The response is sent only
-// after that transaction commits. The request handler never executes the
-// model.
+// Starts one agent turn and returns immediately. In a single database
+// transaction nvoken finds or creates the Agent and Session, resolves
+// the agent definition you sent inline or referenced by `definition_id`,
+// appends your input as one message, and queues the turn. You get a
+// response only after that transaction commits, so a `202` means the
+// work is safely recorded and will run even if nvoken restarts. The
+// model does not run on this request — it runs in the background, and
+// you follow it with the stream or by polling.
 //
-// `session_id` and `session_key` are mutually exclusive. A Session ID must
-// belong to the named Agent, or be a Session created without one — the
-// first admitted Invocation binds the Agent permanently. An installation-wide
-// credential may omit `tenant_key` and use the Session's stored partition.
-// A tenant-constrained credential cannot cross its partition; an explicit
-// mismatch is rejected with `403 forbidden` before resource lookup.
+// Pick the Session with either `session_id` or `session_key`, not both.
+// A Session ID must belong to the Agent you named, or to a Session
+// created without an Agent — in which case this turn binds that Agent
+// permanently. An installation-wide credential may omit `tenant_key` and
+// use whichever tenant the Session already belongs to. A credential
+// locked to one tenant cannot reach another; naming a different one
+// returns `403 forbidden` without revealing whether the resource
+// exists.
 //
-// `idempotency_key` is scoped to the effective
-// tenant partition, and `agent_key`. A same-key replay is checked before
-// the Session's one-nonterminal-Invocation rule. It returns the original
-// records without appending input, even when the Invocation is terminal.
-// Material equality covers the Session selector kind and value, the
-// resolved definition, and input. A `definition_id` and its byte-identical
-// inline definition compare equal. Requested limits are compared before
-// default resolution, so an explicit default differs from omission. JSON
-// object member order is ignored, array order is significant, and strings
-// are not rewritten. A changed material field returns
-// `idempotency_conflict`.
+// ## Retrying safely
 //
-// `if_active` defaults to `reject`, preserving
-// `session_invocation_active`. Explicit `supersede` requires both create
-// and cancel authority. While holding the Session lock, it durably
-// cancels any nonterminal Invocation and admits this replacement in the
-// same transaction. With no active work it admits normally. Equal replay
-// returns the original work before supersession and never cancels newer
-// active work.
+// Send `idempotency_key` and you can retry this request without risking
+// a second turn. A repeat with the same key returns the original turn
+// and does not add your input again, even if that turn has already
+// finished. Keys are scoped to the tenant and `agent_key`.
 //
-// `interrupt` requires the same authority and keeps the same lock
-// ordering, but stops the active Invocation gracefully instead of
-// cancelling it: work already at a seam settles and the replacement is
-// admitted in the same transaction, while work under a live lease has
-// the interrupt recorded and this request waits for it to settle. If it
-// has not settled within the wait, the response is
+// A repeat counts as the same request only if the Session selector, the
+// resolved definition, and the input all match. A `definition_id` and
+// the identical inline definition count as the same. Limits are compared
+// as you sent them, so sending a value that happens to equal the default
+// is not the same as omitting it. Key order inside JSON objects does not
+// matter; array order does. Change anything that matters and you get
+// `idempotency_conflict` rather than a surprise second turn.
+//
+// ## When the Session is already busy
+//
+// A Session runs one turn at a time, and `if_active` decides what
+// happens when you start another. The default, `reject`, returns
+// `session_invocation_active`.
+//
+// `supersede` cancels the running turn and starts yours in its place,
+// atomically — there is no moment where the Session has no turn or two
+// turns. It requires permission to both create and cancel. Retrying the
+// same request returns your original turn and never cancels newer work
+// that started in the meantime.
+//
+// `interrupt` needs the same permission but stops the running turn
+// cleanly instead of discarding its work. If that turn can stop
+// immediately, yours starts in the same transaction. If it is mid-step,
+// nvoken records the interrupt and this request waits for it. If it has
+// not stopped by the time the wait is up, you get
 // `session_invocation_active` with `details.interrupt_requested = true`
-// and the request may be reissued.
+// — the interrupt is still in effect, so just send the request again.
 //
-// A cataloged model continues to admit while deprecated. On and after
-// its `retires_at` date, a new admission is refused with `422
-// model_retired`; `details` carries the refused `model`, `retires_at`,
-// the exact `replacement` provider/id pair, and the request `path`.
-// Equal idempotent replay still returns work admitted before retirement.
+// ## Retired models
 //
-// A text-only request body is limited to 1 MiB. A body carrying image or
-// document blocks is limited to 24 MiB, within which decoded media is
-// bounded separately: at most 8 media blocks, 16 MiB decoded in total,
-// 5 MiB per image, and 16 MiB per document. Requests over any of these
-// limits are rejected before admission. URL media is fetched after an
-// idempotent replay check and before any row is admitted. The guarded
-// fetch accepts public HTTPS only, enforces the item limit while reading,
-// and sniffs the returned bytes. nvoken stores those bytes and does not
-// fetch the URL again.
+// A deprecated model keeps working. On and after its `retires_at` date,
+// new turns are refused with `422 model_retired`, and `details` tells
+// you what to do about it: the `model` you asked for, its `retires_at`
+// date, the exact `replacement` provider and id to switch to, and the
+// request `path`. Retrying an idempotency key from before the retirement
+// still returns that original turn.
 //
-// The supported streaming pattern is admit-then-stream: admit with a
-// plain JSON POST, then follow the Invocation over
-// `GET /v1/invocations/{invocation_id}/stream`. It survives a dropped
-// connection without re-admitting and does not depend on front-end
-// streaming behavior. `Accept: text/event-stream` on this request is a
-// deployment-dependent convenience, not a first-class mode: the
-// committed admission is the first `invocation.accepted` frame and the
-// connection tails that Invocation through `invocation.result`, but
-// delivery requires the deployment front end to stream a non-`200`
-// POST response unbuffered. Some managed front ends (including Cloud
-// Run's) buffer it until the Invocation settles, which makes a
-// host-tool turn's `waiting` state invisible on this connection.
+// ## Size limits
+//
+// A text-only body may be up to 1 MiB. A body with images or documents
+// may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB
+// of decoded media in total, 5 MiB per image, and 16 MiB per document.
+// Anything over these is rejected before a turn is created.
+//
+// URLs are fetched after the idempotency check and before anything is
+// saved, so a retry does not download twice. nvoken accepts public HTTPS
+// only, stops reading at the size limit, and checks what the bytes
+// actually are. It stores them and never fetches the URL again.
+//
+// ## Streaming
+//
+// Start the turn with a plain JSON POST, then follow it with
+// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
+// build on: it survives a dropped connection without starting the turn
+// over, and it works the same everywhere.
+//
+// You can instead send `Accept: text/event-stream` on this request and
+// have the response stream directly, starting with `invocation.accepted`
+// and running through `invocation.result`. Treat that as a convenience,
+// not something to depend on — it needs your deployment's front end to
+// stream a non-`200` POST response without buffering. Some managed
+// platforms, Cloud Run among them, buffer it until the turn finishes.
+// On those, a turn that stops to wait for your tools appears to hang,
+// because you never see the `waiting` state.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7305,11 +8058,13 @@ func (c *Client) CreateInvocation(ctx context.Context, params *CreateInvocationP
 
 // GetInvocation Read authoritative Invocation identity and state
 //
-// Returns the durable current state. Post-admission failures appear here.
-// A credential authenticated for Runtime but denied this read operation
-// receives `forbidden`.
-// A resource outside the caller's tenant constraint is
-// reported as `not_found` when disclosure would reveal its existence.
+// The turn's current state, including anything that went wrong after it
+// started.
+//
+// A credential that can authenticate but lacks permission for this read
+// gets `forbidden`. A turn belonging to another tenant is reported as
+// `not_found` rather than `forbidden`, so you cannot use this endpoint to
+// discover whether an ID exists outside your scope.
 //
 // Corresponds with GET /v1/invocations/{invocation_id} (the `GetInvocation` operationId).
 func (c *Client) GetInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7324,13 +8079,19 @@ func (c *Client) GetInvocation(ctx context.Context, invocationID InvocationID, r
 	return c.Client.Do(req)
 }
 
-// CancelInvocation Idempotently cancel an Invocation
+// CancelInvocation Stop a turn and discard its work
 //
-// Atomically makes nonterminal work `cancelled`. Repeating the request,
-// or cancelling an Invocation that already completed or failed, returns
-// the unchanged authoritative terminal row. A successful response means
-// cancellation is durable; provider work stops cooperatively and may
-// have already incurred external cost. The request body must be empty.
+// Stops a turn and discards what it produced. The turn ends `cancelled`
+// and its work does not carry into the next turn — use interrupt instead
+// if you want to keep it.
+//
+// Safe to repeat. Cancelling a turn that already finished returns it
+// unchanged rather than failing. A successful response means the
+// cancellation is recorded and will stick. Work already sent to the
+// model provider stops as soon as it can, so you may still be billed for
+// what had run by then.
+//
+// Send an empty request body.
 //
 // Corresponds with POST /v1/invocations/{invocation_id}/cancel (the `CancelInvocation` operationId).
 func (c *Client) CancelInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7345,29 +8106,32 @@ func (c *Client) CancelInvocation(ctx context.Context, invocationID InvocationID
 	return c.Client.Do(req)
 }
 
-// InterruptInvocation Gracefully stop an Invocation and keep its work
+// InterruptInvocation Stop a turn but keep what it produced
 //
-// Asks the turn to stop at its next execution seam and settle
-// `completed` with `stop_reason = interrupted`, so its assistant and
-// tool messages stay in the next turn's generation context. That is the
-// whole difference from cancellation, which drops the turn's work from
-// every later turn.
+// Asks a running turn to stop at its next clean stopping point. It ends
+// `completed` with `stop_reason: interrupted`, and everything it
+// produced — the model's replies and any tool results — stays in the
+// conversation for the next turn. That is the whole difference from
+// cancelling, which throws the turn's work away.
 //
-// The request is durable and idempotent. Work already at a seam —
-// `queued`, `waiting`, or `running` with no live owner — settles before
-// this call returns, closing any pending tool calls with synthetic
-// results; a subsequently submitted tool result then gets the ordinary
-// terminal `409`. Work under a live lease records the request and
-// returns the Invocation unchanged, still `running`: its executor stops
-// at the next checkpoint boundary, at worst one provider call away.
-// Follow the Invocation stream or re-read it to observe settlement.
+// The request is recorded and safe to repeat. What happens next depends
+// on what the turn was doing:
 //
-// Interrupting terminal work is a no-op that returns the unchanged
-// terminal row. A turn whose definition carries `structured_output` and that
-// never published a validated object fails
-// `structured_output_unsatisfied` instead of completing — the
-// obligation was not met. Usage and settlement evidence are complete:
-// the work was kept, so it is charged. The request body must be empty.
+//   - Between steps (`queued`, `waiting`, or `running` with nothing
+//     actively executing) it stops before this call returns. Any tool
+//     calls you still owed results for are closed out, so submitting one
+//     afterwards returns `409`.
+//   - Mid-step, nvoken records the request and returns the turn still
+//     `running`. It stops at the next checkpoint, at worst one model call
+//     later. Watch the stream or re-read the turn to see it end.
+//
+// Interrupting a turn that has already finished changes nothing and
+// returns it as-is. A turn that was asked for structured output but
+// never produced a valid object ends `failed` with
+// `structured_output_unsatisfied` rather than `completed`. Either way
+// usage is reported in full and billed, because the work was kept.
+//
+// Send an empty request body.
 //
 // Corresponds with POST /v1/invocations/{invocation_id}/interrupt (the `InterruptInvocation` operationId).
 func (c *Client) InterruptInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7382,46 +8146,42 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID Invocatio
 	return c.Client.Do(req)
 }
 
-// NudgeInvocationWithBody Append steering to a running Invocation
+// NudgeInvocationWithBody Send extra direction to a running turn
 //
-// Stages caller guidance against a turn that is already running — "focus
-// on the marine segment" — without ending it and without discarding the
-// work being steered. This is the difference from
-// `if_active: supersede`, which rewinds: a superseded turn's assistant
-// and tool work product is dropped from the next generation, so steering
-// a long turn by supersession throws away exactly what is being steered.
-// Unlike Claude's `system.message`, a nudge is durable staged input
-// consumed at an execution seam, not an event injected immediately into
-// a managed session.
+// Sends extra direction to a turn that is already running — "focus on
+// the marine segment" — without stopping it and without losing the work
+// you are steering. Use this when a long turn is heading the wrong way
+// and you want to correct it in place.
 //
-// A nudge is not an interrupt. The earliest injection point is the next
-// execution seam: the start of the next execution segment, which is a
-// host-tool turn's park boundary, or the stop seam where a turn that
-// considers itself finished re-enters its loop to answer the input in
-// place. An in-flight provider call or tool run is never aborted for it,
-// and an Invocation that has been interrupted is never given more to do —
-// the interrupt wins the seam and the staged input expires.
+// Compare with `if_active: supersede` on a new Invocation, which
+// replaces the running turn and discards what it had produced. Steering
+// a long turn that way throws away exactly the work you were trying to
+// redirect.
 //
-// A nudge is never implicitly minted and never implicitly converted.
-// `POST /v1/invocations` against a busy Session keeps its `if_active`
-// semantics; admission is never silently turned into a nudge, and a
-// nudge is never silently turned into an Invocation. nvoken holds no
-// agent configuration — the definition travels inline on every admission — so
-// there is nothing it could legitimately run converted input with.
+// **A nudge is not an interrupt, and it is not immediate.** The turn
+// picks it up at its next clean stopping point: when it starts its next
+// step, when it pauses for you to run a tool, or when a turn that
+// thought it was finished re-enters its loop to answer you. A model call
+// or tool run already in flight is never aborted to deliver it. A turn
+// you have interrupted is never given more work — the interrupt wins and
+// the direction you staged expires unused.
 //
-// Input that the turn never takes is settled `expired` when the
-// Invocation settles, in the same transaction and under the same Session
-// lock this request takes. It never influences a later Invocation.
-// Re-sending missed direction as the next Invocation's input is the
-// host's call to make, and `GET .../pending-inputs` is where the miss is
-// visible.
+// Nudges and Invocations never turn into each other. Posting to
+// `/v1/invocations` against a busy Session behaves exactly as its
+// `if_active` setting says; it never quietly becomes a nudge, and a
+// nudge never quietly becomes a new turn.
 //
-// `content` is text: a string, or an array of text blocks. Image and
-// document blocks are accepted on an Invocation's own input but not
-// here, because the stop seam carries a continuation as text and staging
-// content one seam would silently drop is worse than refusing it.
+// If the turn ends without ever picking it up, your input is marked
+// `expired` at that moment and has no effect on any later turn. Check
+// `GET .../pending-inputs` to see whether it was used or missed. Whether
+// to re-send missed direction as the next turn's input is your call.
 //
-// Requires the same authority as cancelling the Invocation.
+// `content` must be text — a string, or an array of text blocks. Images
+// and documents are fine on a turn's own input but are refused here,
+// because a turn resuming in place carries text only, and silently
+// dropping your attachment would be worse than telling you now.
+//
+// Requires the same permission as cancelling the turn.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7438,46 +8198,42 @@ func (c *Client) NudgeInvocationWithBody(ctx context.Context, invocationID Invoc
 	return c.Client.Do(req)
 }
 
-// NudgeInvocation Append steering to a running Invocation
+// NudgeInvocation Send extra direction to a running turn
 //
-// Stages caller guidance against a turn that is already running — "focus
-// on the marine segment" — without ending it and without discarding the
-// work being steered. This is the difference from
-// `if_active: supersede`, which rewinds: a superseded turn's assistant
-// and tool work product is dropped from the next generation, so steering
-// a long turn by supersession throws away exactly what is being steered.
-// Unlike Claude's `system.message`, a nudge is durable staged input
-// consumed at an execution seam, not an event injected immediately into
-// a managed session.
+// Sends extra direction to a turn that is already running — "focus on
+// the marine segment" — without stopping it and without losing the work
+// you are steering. Use this when a long turn is heading the wrong way
+// and you want to correct it in place.
 //
-// A nudge is not an interrupt. The earliest injection point is the next
-// execution seam: the start of the next execution segment, which is a
-// host-tool turn's park boundary, or the stop seam where a turn that
-// considers itself finished re-enters its loop to answer the input in
-// place. An in-flight provider call or tool run is never aborted for it,
-// and an Invocation that has been interrupted is never given more to do —
-// the interrupt wins the seam and the staged input expires.
+// Compare with `if_active: supersede` on a new Invocation, which
+// replaces the running turn and discards what it had produced. Steering
+// a long turn that way throws away exactly the work you were trying to
+// redirect.
 //
-// A nudge is never implicitly minted and never implicitly converted.
-// `POST /v1/invocations` against a busy Session keeps its `if_active`
-// semantics; admission is never silently turned into a nudge, and a
-// nudge is never silently turned into an Invocation. nvoken holds no
-// agent configuration — the definition travels inline on every admission — so
-// there is nothing it could legitimately run converted input with.
+// **A nudge is not an interrupt, and it is not immediate.** The turn
+// picks it up at its next clean stopping point: when it starts its next
+// step, when it pauses for you to run a tool, or when a turn that
+// thought it was finished re-enters its loop to answer you. A model call
+// or tool run already in flight is never aborted to deliver it. A turn
+// you have interrupted is never given more work — the interrupt wins and
+// the direction you staged expires unused.
 //
-// Input that the turn never takes is settled `expired` when the
-// Invocation settles, in the same transaction and under the same Session
-// lock this request takes. It never influences a later Invocation.
-// Re-sending missed direction as the next Invocation's input is the
-// host's call to make, and `GET .../pending-inputs` is where the miss is
-// visible.
+// Nudges and Invocations never turn into each other. Posting to
+// `/v1/invocations` against a busy Session behaves exactly as its
+// `if_active` setting says; it never quietly becomes a nudge, and a
+// nudge never quietly becomes a new turn.
 //
-// `content` is text: a string, or an array of text blocks. Image and
-// document blocks are accepted on an Invocation's own input but not
-// here, because the stop seam carries a continuation as text and staging
-// content one seam would silently drop is worse than refusing it.
+// If the turn ends without ever picking it up, your input is marked
+// `expired` at that moment and has no effect on any later turn. Check
+// `GET .../pending-inputs` to see whether it was used or missed. Whether
+// to re-send missed direction as the next turn's input is your call.
 //
-// Requires the same authority as cancelling the Invocation.
+// `content` must be text — a string, or an array of text blocks. Images
+// and documents are fine on a turn's own input but are refused here,
+// because a turn resuming in place carries text only, and silently
+// dropping your attachment would be worse than telling you now.
+//
+// Requires the same permission as cancelling the turn.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7496,12 +8252,14 @@ func (c *Client) NudgeInvocation(ctx context.Context, invocationID InvocationID,
 
 // ListPendingInputs List staged input for an Invocation
 //
-// Returns the staged queue in `(created_at, id)` ascending order — the
-// order the turn will consume it — with settled rows retained so a
-// caller can answer "what did the user say, and did the model see it".
-// This, not an event vocabulary, is the reconciliation source for a
-// surface that shows queued direction: a drained input also appears on
-// the transcript stream as an ordinary `user` message.
+// Lists the direction you have sent to this turn with `/nudge`, in the
+// order the turn will pick it up. Entries stay listed after they are used
+// or missed, so you can answer "what did the user say, and did the model
+// ever see it?"
+//
+// Check `status` on each entry: `drained` means the turn used it,
+// `expired` means the turn ended first, `cancelled` means you withdrew
+// it.
 //
 // Corresponds with GET /v1/invocations/{invocation_id}/pending-inputs (the `ListPendingInputs` operationId).
 func (c *Client) ListPendingInputs(ctx context.Context, invocationID InvocationID, params *ListPendingInputsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7518,17 +8276,14 @@ func (c *Client) ListPendingInputs(ctx context.Context, invocationID InvocationI
 
 // CancelPendingInput Withdraw staged input the turn has not taken
 //
-// Cancels input that is still `pending`. Cancelling input that is
-// already `cancelled` returns it unchanged, so a retry is safe.
+// Withdraws direction you sent with `/nudge`, as long as the turn has not
+// picked it up yet. Cancelling something already cancelled returns it
+// unchanged, so retrying is safe.
 //
-// Cancel and drain serialize on the row, so whichever commits first
-// wins outright: a cancelled input is never seen by the model, and input
-// the executor already drained is reported `409 pending_input_settled`
-// with the current resource in `details.pending_input` rather than being
-// withdrawn from a transcript it is already part of. The request body
-// must be empty.
-//
-// Requires the same authority as cancelling the Invocation.
+// Cancelling races the turn, and whichever happens first wins outright:
+// you either withdraw it cleanly or the turn uses it. It is never
+// half-applied. If the turn got there first, you get a conflict and the
+// entry stays `drained`.
 //
 // Corresponds with POST /v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel (the `CancelPendingInput` operationId).
 func (c *Client) CancelPendingInput(ctx context.Context, invocationID InvocationID, pendingInputID PendingInputID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7543,15 +8298,19 @@ func (c *Client) CancelPendingInput(ctx context.Context, invocationID Invocation
 	return c.Client.Do(req)
 }
 
-// GetInvocationResult Read the composed Invocation result
+// GetInvocationResult Read a turn together with its messages
 //
-// Returns one InvocationResult at any status: the authoritative
-// Invocation, this Invocation's canonical messages composed at read
-// time, and the output_text convenience projection. The Invocation and
-// its messages are read in one repeatable-read snapshot, so the payload
-// never shows a terminal status with a missing message tail.
-// Authentication, tenant scoping, and the nondisclosing not_found rule
-// match the plain Invocation read exactly.
+// Returns the turn and the messages it produced, at any status. This is
+// the convenient read for "what did the agent say?" — `output_text`
+// gives you the assistant's text already joined into a single string, so
+// you do not have to walk the message blocks yourself.
+//
+// The turn and its messages are read from one consistent database
+// snapshot, so you will never see a finished turn whose last message is
+// missing.
+//
+// Authentication, tenant scoping, and the not-found behavior are the
+// same as reading the Invocation on its own.
 //
 // Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
 func (c *Client) GetInvocationResult(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7566,13 +8325,16 @@ func (c *Client) GetInvocationResult(ctx context.Context, invocationID Invocatio
 	return c.Client.Do(req)
 }
 
-// ResumeInvocationWithBody Raise the exhausted turn ceiling and resume a paused Invocation
+// ResumeInvocationWithBody Raise a paused turn's limit and continue it
 //
-// Requeues an Invocation paused on a turn-level consumption ceiling.
-// `limits` must contain only the exhausted field, raised above both its
-// prior value and the amount already consumed, and the new value must
-// remain within installation policy. A Session-budget pause resumes by
-// raising or removing the Session budget instead. Deadlines never pause.
+// Continues a turn that paused because one of its own spending limits
+// ran out. Send `limits` containing only the limit that ran out, raised
+// above both its old value and what the turn has already used, and still
+// within what your installation allows.
+//
+// If the turn paused on the Session budget rather than its own limit,
+// raise or remove that budget instead — this endpoint will not resume
+// it. Deadlines never pause a turn, so they never bring you here.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7589,13 +8351,16 @@ func (c *Client) ResumeInvocationWithBody(ctx context.Context, invocationID Invo
 	return c.Client.Do(req)
 }
 
-// ResumeInvocation Raise the exhausted turn ceiling and resume a paused Invocation
+// ResumeInvocation Raise a paused turn's limit and continue it
 //
-// Requeues an Invocation paused on a turn-level consumption ceiling.
-// `limits` must contain only the exhausted field, raised above both its
-// prior value and the amount already consumed, and the new value must
-// remain within installation policy. A Session-budget pause resumes by
-// raising or removing the Session budget instead. Deadlines never pause.
+// Continues a turn that paused because one of its own spending limits
+// ran out. Send `limits` containing only the limit that ran out, raised
+// above both its old value and what the turn has already used, and still
+// within what your installation allows.
+//
+// If the turn paused on the Session budget rather than its own limit,
+// raise or remove that budget instead — this endpoint will not resume
+// it. Deadlines never pause a turn, so they never bring you here.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7612,19 +8377,28 @@ func (c *Client) ResumeInvocation(ctx context.Context, invocationID InvocationID
 	return c.Client.Do(req)
 }
 
-// StreamInvocation Resume and tail one Invocation over SSE
+// StreamInvocation Follow one turn over Server-Sent Events
 //
-// Replays durable updates after `cursor`, optionally forwards ephemeral
-// output previews for this Invocation, and ends only when this Invocation
-// settles or the connection rotates. Durable frames carry an SSE `id`;
-// previews and control frames do not. After `stream.resync`, discard
-// provisional output and wait for durable state.
+// Follows one turn as it runs, and can be resumed after a dropped
+// connection. Pass `cursor` to pick up after a position you already
+// received; the stream replays everything saved since then, then
+// continues live until the turn finishes.
 //
-// The explicit `cursor` query parameter takes precedence over
-// `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
-// last durable ID. `deltas=false` skips preview fan-out without changing
-// replay, polling, cursor, or terminal semantics. Disconnecting never
-// cancels the Invocation.
+// Saved updates carry an SSE `id` — that is your resume position, and
+// the only value you need to store. Live text previews and control
+// frames carry no `id` because they are not saved state. If you receive
+// `stream.resync`, discard the preview text you have accumulated and
+// wait for the saved messages; previews can be lost, saved updates
+// cannot.
+//
+// The `cursor` query parameter wins over the `Last-Event-ID` header.
+// `stream.end` with reason `rotate` means the server is cycling the
+// connection — reconnect using your last saved `id`. Set `deltas=false`
+// to skip previews; nothing about replay, resumption, or how the stream
+// ends changes.
+//
+// Disconnecting never cancels the turn. It keeps running, and you can
+// reconnect or read it later.
 //
 // Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
 func (c *Client) StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7737,11 +8511,14 @@ func (c *Client) SubmitHostToolResults(ctx context.Context, invocationID Invocat
 
 // ListMCPToolsWithBody Discover and project one remote MCP server's tools
 //
-// Opens one short-lived streamable-HTTP MCP session through guarded
-// public-only egress, drains tools/list pagination, applies the same
-// allowlist and projection rules used by Invocation execution, and then
-// closes the session. Supplied headers are used only for this request,
-// are never logged or returned, and are not persisted.
+// Connects to a remote MCP server and lists the tools it offers, without
+// starting a turn. Use it to check a server works and see what the model
+// would get before you wire it into an agent.
+//
+// nvoken opens one short-lived session, reads through every page of the
+// server's tool list, applies the same filtering rules a real turn would,
+// and disconnects. Headers you supply are used for this call only and are
+// never stored.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7760,11 +8537,14 @@ func (c *Client) ListMCPToolsWithBody(ctx context.Context, contentType string, b
 
 // ListMCPTools Discover and project one remote MCP server's tools
 //
-// Opens one short-lived streamable-HTTP MCP session through guarded
-// public-only egress, drains tools/list pagination, applies the same
-// allowlist and projection rules used by Invocation execution, and then
-// closes the session. Supplied headers are used only for this request,
-// are never logged or returned, and are not persisted.
+// Connects to a remote MCP server and lists the tools it offers, without
+// starting a turn. Use it to check a server works and see what the model
+// would get before you wire it into an agent.
+//
+// nvoken opens one short-lived session, reads through every page of the
+// server's tool list, applies the same filtering rules a real turn would,
+// and disconnects. Headers you supply are used for this call only and are
+// never stored.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7958,11 +8738,12 @@ func (c *Client) RotateProviderKey(ctx context.Context, providerKeyID ProviderKe
 
 // GetProviderKeyUsage Read the token usage rollup for one provider key
 //
-// Aggregates durable checkpoint evidence across every Invocation that
-// bound the provider key: how many Invocations used it, when a model call
-// last used it, and the summed model usage. Derived at read time from the
-// transcript record, never from a separately maintained counter.
-// Authorization matches reading the provider key itself.
+// Totals usage for one provider key across every turn that used it: how
+// many turns, when a model call last used it, and the combined token and
+// cost totals.
+//
+// Calculated from stored records each time you ask, not kept in a running
+// counter, so deleting Sessions lowers these numbers.
 //
 // Corresponds with GET /v1/provider-keys/{provider_key_id}/usage (the `GetProviderKeyUsage` operationId).
 func (c *Client) GetProviderKeyUsage(ctx context.Context, providerKeyID ProviderKeyID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7979,11 +8760,10 @@ func (c *Client) GetProviderKeyUsage(ctx context.Context, providerKeyID Provider
 
 // ListSessions List authoritative Sessions
 //
-// Returns newest-first Session identity and current nonterminal
-// Invocation state. Exact filters combine with AND. Tenant filtering and
-// cursor binding follow the Invocation-list rules. `agent_id` and
-// `agent_key` are mutually exclusive and normalize to the same cursor
-// filter.
+// Lists Sessions, newest first, each with the state of its currently
+// running turn if it has one. Filters combine with AND. Tenant filtering
+// and cursors work the same as on the Invocation list. `agent_id` and
+// `agent_key` are mutually exclusive.
 //
 // Corresponds with GET /v1/sessions (the `ListSessions` operationId).
 func (c *Client) ListSessions(ctx context.Context, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8000,18 +8780,13 @@ func (c *Client) ListSessions(ctx context.Context, params *ListSessionsParams, r
 
 // CreateSessionWithBody Create or seed a Session without admitting an Invocation
 //
-// Creates a Session with zero Invocations and optional host-asserted
-// starting history. Every body field is optional. An omitted `agent_key` leaves the
-// Session unbound: `agent_id` is null until the first admitted
-// Invocation binds it, and the binding is immutable once set either way;
-// `seed_messages` therefore requires `agent_key`. A `session_key`
-// requires an `agent_key`, because key uniqueness
-// and lookup are scoped per (tenant partition, Agent); a keyed create
-// is an upsert that accepts equal supplied Session options and returns
-// `session_options_conflict` when a supplied value differs.
-// Without a `session_key`, every call creates a fresh Session.
-// Precedence for the tenant partition is credential constraint,
-// explicit `tenant_key`, then the default partition.
+// Creates an empty Session, optionally seeded with history you already
+// have. Use this when you want a conversation to exist before the first
+// turn runs — to show it in a UI, or to import messages from elsewhere.
+//
+// Every field is optional. Leave out `agent_key` and the Session starts
+// unbound: `agent_id` stays null until the first turn binds it
+// permanently.
 //
 // Takes any type of body and a specified content type.
 //
@@ -8030,18 +8805,13 @@ func (c *Client) CreateSessionWithBody(ctx context.Context, contentType string, 
 
 // CreateSession Create or seed a Session without admitting an Invocation
 //
-// Creates a Session with zero Invocations and optional host-asserted
-// starting history. Every body field is optional. An omitted `agent_key` leaves the
-// Session unbound: `agent_id` is null until the first admitted
-// Invocation binds it, and the binding is immutable once set either way;
-// `seed_messages` therefore requires `agent_key`. A `session_key`
-// requires an `agent_key`, because key uniqueness
-// and lookup are scoped per (tenant partition, Agent); a keyed create
-// is an upsert that accepts equal supplied Session options and returns
-// `session_options_conflict` when a supplied value differs.
-// Without a `session_key`, every call creates a fresh Session.
-// Precedence for the tenant partition is credential constraint,
-// explicit `tenant_key`, then the default partition.
+// Creates an empty Session, optionally seeded with history you already
+// have. Use this when you want a conversation to exist before the first
+// turn runs — to show it in a UI, or to import messages from elsewhere.
+//
+// Every field is optional. Leave out `agent_key` and the Session starts
+// unbound: `agent_id` stays null until the first turn binds it
+// permanently.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8065,32 +8835,31 @@ func (c *Client) CreateSession(ctx context.Context, body CreateSessionJSONReques
 // bindings, and undelivered webhooks. The erasure is immediate and
 // irreversible; a subsequent read is `not_found`.
 //
-// An Invocation still running is stopped. No cancellation is recorded,
-// because there is nothing left to record it against — the Invocation is
-// removed rather than settled, and no `invocation.settled` webhook
-// is emitted for it. A host that needs a settled record should cancel and
-// observe the terminal state before deleting.
+// A turn still running is stopped, but no cancellation is recorded —
+// there is nothing left to record it against, and no
+// `invocation.settled` webhook fires for it. If you need a record that
+// the turn ended, cancel it and wait for its final state before
+// deleting.
 //
-// Erasure is scoped like every other Session operation: an unknown or
-// out-of-scope `session_id` returns `not_found`, so a retry after a lost
-// response can treat `404` as already-done. The `delete_session`
-// operation belongs to the Runtime and Operator profiles; a Viewer
-// credential cannot erase a transcript.
+// An unknown `session_id`, or one outside your scope, returns
+// `not_found`. So if you lose the response and retry, you can safely
+// treat `404` as "already deleted". Deleting requires the Runtime or
+// Operator profile; a Viewer credential cannot erase a transcript.
 //
-// **This is not account deletion by itself.** nvoken keeps no account
-// tombstone, so a host honouring a deletion request must first stop
-// admitting work for that tenant, then page `GET /v1/sessions` and delete
-// until the list is empty. Otherwise a concurrent request creates a new
-// Session behind the sweep.
+// **Deleting Sessions is not the same as deleting a user's account.**
+// nvoken has no record that an account was deleted, so to honour a
+// deletion request you must first stop starting new turns for that
+// tenant, then page through `GET /v1/sessions` and delete until the list
+// comes back empty. Otherwise a request arriving mid-sweep creates a new
+// Session behind you.
 //
-// Two consequences worth planning for. Usage reporting shrinks
-// retroactively: `GET /v1/usage/daily` is computed at read time from
-// Invocation evidence that erasure removes, which is why the endpoint is
-// documented as operational visibility rather than a billing ledger — a
-// billing host records usage at settlement, keyed by Invocation id.
-// And the erased Invocations' idempotency keys become free for reuse,
-// consistent with the documented guarantee that deduplication holds while
-// the original Invocation is retained.
+// Two consequences to plan for. Past usage numbers shrink:
+// `GET /v1/usage/daily` is calculated from the records you just erased,
+// which is why it is operational visibility rather than a billing
+// ledger — bill from usage you recorded yourself when each turn
+// finished, keyed by Invocation ID. And the deleted turns' idempotency
+// keys become reusable, since deduplication only holds while the
+// original turn still exists.
 //
 // Corresponds with DELETE /v1/sessions/{session_id} (the `DeleteSession` operationId).
 func (c *Client) DeleteSession(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8196,16 +8965,14 @@ func (c *Client) UpdateSession(ctx context.Context, sessionID SessionID, body Up
 
 // ListSessionCompactions Page through immutable Session compaction records
 //
-// Returns newest-first diagnostic records for every attempted compaction
-// pass. `applied` records include the private summary projection and its
-// model usage. `fell_through` records identify the failure class and may
-// include usage when the provider returned trustworthy evidence. Only
-// applied records change future model context; neither kind changes the
-// canonical Session transcript.
+// Lists every attempt nvoken made to summarize this Session's history,
+// newest first. Use it to understand why the model's context looks the
+// way it does.
 //
-// The summary is derived from the caller's own transcript and therefore
-// uses the same authorization and Session scoping as transcript reads.
-// The opaque cursor is bound to the authenticated app and Session.
+// An `applied` record includes the summary that took effect and what the
+// summarizing call cost. A `fell_through` record tells you why the
+// attempt was not usable, and includes usage when a model call happened
+// before it failed.
 //
 // Corresponds with GET /v1/sessions/{session_id}/compactions (the `ListSessionCompactions` operationId).
 func (c *Client) ListSessionCompactions(ctx context.Context, sessionID SessionID, params *ListSessionCompactionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8302,13 +9069,14 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID SessionID, p
 
 // GetSessionTranscript Drain a fixed-cut incremental transcript snapshot
 //
-// Projects canonical messages and append-only Invocation lifecycle
-// changes. Supply a prior `resume_cursor` as `cursor` to drain newer
-// durable state. Continue a multi-page fixed cut with `page_token` until
-// `has_more` is false. Each page contains one phase: all message pages are
-// delivered before lifecycle-change pages, so terminal state cannot
-// precede the transcript rows committed with it. Omitting both positions
-// starts at the beginning of the retained Session.
+// Returns the Session's stored messages plus a running log of turn state
+// changes.
+//
+// To catch up rather than re-read everything, pass a `resume_cursor` you
+// received earlier as `cursor` and you get only what is new since then.
+// Within one read, keep passing `page_token` until `has_more` is false —
+// all pages come from the same consistent snapshot, so the transcript
+// cannot shift under you mid-read.
 //
 // Corresponds with GET /v1/sessions/{session_id}/transcript (the `GetSessionTranscript` operationId).
 func (c *Client) GetSessionTranscript(ctx context.Context, sessionID SessionID, params *GetSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8323,31 +9091,35 @@ func (c *Client) GetSessionTranscript(ctx context.Context, sessionID SessionID, 
 	return c.Client.Do(req)
 }
 
-// StreamSessionTranscript Replay and tail one Session transcript over SSE
+// StreamSessionTranscript Follow a Session transcript over Server-Sent Events
 //
-// Opens a resumable Server-Sent Events projection over the same fixed-cut
-// transcript read model as the JSON endpoint. With deltas enabled, the
-// server subscribes to live fan-out before its first Postgres drain. In
-// either mode it re-drains Postgres on a bounded poll and closes after
-// authoritative terminal reconciliation or deliberate rotation.
-// Disconnecting never cancels the Invocation.
+// Streams a Session's transcript as it grows, and can be resumed after a
+// dropped connection. It covers the same messages as the JSON transcript
+// endpoint.
 //
-// Every nonempty `transcript.update` frame carries
-// `id: <resume_cursor>`; that opaque ID is the only replay position
-// clients persist. `output_text.delta`, `thinking.delta`,
-// `stream.resync`, and `stream.end` never carry an `id`. Deltas are
-// ephemeral and may be lost; after `stream.resync`, discard provisional
-// output and wait for canonical messages. `stream.end` reason `terminal`
-// means the final Postgres drain observed no nonterminal Invocation.
-// Reason `rotate` means reconnect with the last durable ID. An abnormal
-// close has no terminal meaning. `deltas=false` skips preview fan-out
-// without changing replay, polling, cursor, or terminal semantics.
+// Every non-empty `transcript.update` frame carries
+// `id: <resume_cursor>`. That opaque ID is your resume position and the
+// only value you need to store — reconnect with it and you continue
+// exactly where you left off. `output_text.delta`, `thinking.delta`,
+// `stream.resync`, and `stream.end` never carry an `id`, because they
+// are live previews and control frames rather than saved messages.
 //
-// The explicit `cursor` query parameter takes precedence over
-// `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
-// client that can set the `Authorization` header; the browser EventSource
-// constructor alone cannot do so. The server emits `retry: 1000` as its
-// default reconnect delay.
+// Previews can be lost. If you receive `stream.resync`, discard the
+// preview text you have accumulated and wait for the saved messages to
+// arrive. Set `deltas=false` to skip previews entirely; nothing about
+// replay, resumption, or how the stream ends changes.
+//
+// `stream.end` with reason `terminal` means no turn is still running.
+// Reason `rotate` means the server is cycling the connection —
+// reconnect with your last `id`. A connection that just drops carries no
+// meaning: reconnect and resume. Disconnecting never cancels a running
+// turn.
+//
+// The `cursor` query parameter wins over the `Last-Event-ID` header.
+// Because this endpoint uses bearer authentication, you need an SSE
+// client that can set the `Authorization` header — the browser's
+// built-in `EventSource` cannot. The server suggests a 1000 ms
+// reconnect delay.
 //
 // Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
 func (c *Client) StreamSessionTranscript(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8364,15 +9136,20 @@ func (c *Client) StreamSessionTranscript(ctx context.Context, sessionID SessionI
 
 // GetDailyUsage Read daily usage rollups
 //
-// Aggregates durable model-call evidence — invocation checkpoints plus
-// session compaction calls — into per-day buckets keyed by app,
-// provider, and model, summing token counts and estimated cost. Derived
-// at read time from the transcript record, never from a separately
-// maintained counter.
+// Totals your model usage by day, app, provider, and model, with token
+// counts and estimated cost. It counts every model call nvoken made on
+// your behalf, including the ones it makes to summarize long
+// conversations.
 //
-// An app-bound credential reads its own app. An app-less presentation
-// spans every registered app; for a console issuer token that requires
-// the admin claim.
+// These totals are calculated from the stored records each time you ask,
+// not kept in a running counter. That means deleting Sessions lowers
+// past numbers. Treat this as operational visibility into what your
+// agents are doing, not as a billing ledger — if you bill from usage,
+// record it yourself when each turn finishes, keyed by Invocation ID.
+//
+// A credential bound to an app sees only that app. A credential not
+// bound to any app sees every registered app; a console issuer token
+// needs its `admin` claim for that.
 //
 // Corresponds with GET /v1/usage/daily (the `GetDailyUsage` operationId).
 func (c *Client) GetDailyUsage(ctx context.Context, params *GetDailyUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8594,7 +9371,7 @@ func NewRegisterAppRequestWithBody(server string, contentType string, body io.Re
 }
 
 // NewGetAppRequest constructs an http.Request for the GetApp method
-func NewGetAppRequest(server string, appID string) (*http.Request, error) {
+func NewGetAppRequest(server string, appID AppID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8628,7 +9405,7 @@ func NewGetAppRequest(server string, appID string) (*http.Request, error) {
 }
 
 // NewUpdateAppRequest calls the generic UpdateApp builder with application/json body
-func NewUpdateAppRequest(server string, appID string, body UpdateAppJSONRequestBody) (*http.Request, error) {
+func NewUpdateAppRequest(server string, appID AppID, body UpdateAppJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -8639,7 +9416,7 @@ func NewUpdateAppRequest(server string, appID string, body UpdateAppJSONRequestB
 }
 
 // NewUpdateAppRequestWithBody constructs an http.Request for the UpdateApp method, with any body, and a specified content type
-func NewUpdateAppRequestWithBody(server string, appID string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateAppRequestWithBody(server string, appID AppID, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8825,6 +9602,292 @@ func NewUpdateBudgetRequestWithBody(server string, budgetID BudgetID, contentTyp
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetCurrentIdentityRequest constructs an http.Request for the GetCurrentIdentity method
+func NewGetCurrentIdentityRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/identity")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListCredentialsRequest constructs an http.Request for the ListCredentials method
+func NewListCredentialsRequest(server string, params *ListCredentialsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/identity/credentials")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateCredentialRequest calls the generic CreateCredential builder with application/json body
+func NewCreateCredentialRequest(server string, params *CreateCredentialParams, body CreateCredentialJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateCredentialRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateCredentialRequestWithBody constructs an http.Request for the CreateCredential method, with any body, and a specified content type
+func NewCreateCredentialRequestWithBody(server string, params *CreateCredentialParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/identity/credentials")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewGetCredentialRequest constructs an http.Request for the GetCredential method
+func NewGetCredentialRequest(server string, credentialID CredentialID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "credential_id", credentialID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/identity/credentials/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRevokeCredentialRequest constructs an http.Request for the RevokeCredential method
+func NewRevokeCredentialRequest(server string, credentialID CredentialID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "credential_id", credentialID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/identity/credentials/%s/revoke", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRotateCredentialRequest calls the generic RotateCredential builder with application/json body
+func NewRotateCredentialRequest(server string, credentialID CredentialID, params *RotateCredentialParams, body RotateCredentialJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRotateCredentialRequestWithBody(server, credentialID, params, "application/json", bodyReader)
+}
+
+// NewRotateCredentialRequestWithBody constructs an http.Request for the RotateCredential method, with any body, and a specified content type
+func NewRotateCredentialRequestWithBody(server string, credentialID CredentialID, params *RotateCredentialParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "credential_id", credentialID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/identity/credentials/%s/rotate", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
 
 	return req, nil
 }
@@ -10999,7 +12062,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/apps/{app_id} (the `GetApp` operationId).
-	GetAppWithResponse(ctx context.Context, appID string, reqEditors ...RequestEditorFn) (*GetAppHTTPResponse, error)
+	GetAppWithResponse(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*GetAppHTTPResponse, error)
 
 	// UpdateAppWithBodyWithResponse Update an app
 	//
@@ -11010,7 +12073,7 @@ type ClientWithResponsesInterface interface {
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
-	UpdateAppWithBodyWithResponse(ctx context.Context, appID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error)
+	UpdateAppWithBodyWithResponse(ctx context.Context, appID AppID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error)
 
 	// UpdateAppWithResponse Update an app
 	//
@@ -11021,7 +12084,7 @@ type ClientWithResponsesInterface interface {
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
-	UpdateAppWithResponse(ctx context.Context, appID string, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error)
+	UpdateAppWithResponse(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error)
 
 	// CreateBudgetWithBodyWithResponse Create one fixed usage budget window
 	//
@@ -11063,8 +12126,10 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateBudgetWithBodyWithResponse Raise or lower a Budget cap
 	//
-	// Replaces the cap. It cannot be lower than settled plus reserved cost.
-	// Raising it reevaluates paused work in bounded batches.
+	// Sets a new spending cap. It cannot be lower than what the current
+	// window has already used and committed. Raising it releases turns that
+	// were paused for hitting the old cap; they resume in batches rather than
+	// all at once.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11073,13 +12138,71 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateBudgetWithResponse Raise or lower a Budget cap
 	//
-	// Replaces the cap. It cannot be lower than settled plus reserved cost.
-	// Raising it reevaluates paused work in bounded batches.
+	// Sets a new spending cap. It cannot be lower than what the current
+	// window has already used and committed. Raising it releases turns that
+	// were paused for hitting the old cap; they resume in batches rather than
+	// all at once.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /v1/budgets/{budget_id} (the `UpdateBudget` operationId).
 	UpdateBudgetWithResponse(ctx context.Context, budgetID BudgetID, body UpdateBudgetJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateBudgetHTTPResponse, error)
+
+	// GetCurrentIdentityWithResponse Explain the authenticated caller
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/identity (the `GetCurrentIdentity` operationId).
+	GetCurrentIdentityWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentIdentityHTTPResponse, error)
+
+	// ListCredentialsWithResponse List safe credential metadata
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/identity/credentials (the `ListCredentials` operationId).
+	ListCredentialsWithResponse(ctx context.Context, params *ListCredentialsParams, reqEditors ...RequestEditorFn) (*ListCredentialsHTTPResponse, error)
+
+	// CreateCredentialWithBodyWithResponse Create a machine credential
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
+	CreateCredentialWithBodyWithResponse(ctx context.Context, params *CreateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateCredentialHTTPResponse, error)
+
+	// CreateCredentialWithResponse Create a machine credential
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
+	CreateCredentialWithResponse(ctx context.Context, params *CreateCredentialParams, body CreateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateCredentialHTTPResponse, error)
+
+	// GetCredentialWithResponse Read safe credential metadata
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/identity/credentials/{credential_id} (the `GetCredential` operationId).
+	GetCredentialWithResponse(ctx context.Context, credentialID CredentialID, reqEditors ...RequestEditorFn) (*GetCredentialHTTPResponse, error)
+
+	// RevokeCredentialWithResponse Revoke a credential
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/identity/credentials/{credential_id}/revoke (the `RevokeCredential` operationId).
+	RevokeCredentialWithResponse(ctx context.Context, credentialID CredentialID, reqEditors ...RequestEditorFn) (*RevokeCredentialHTTPResponse, error)
+
+	// RotateCredentialWithBodyWithResponse Rotate a machine credential with bounded overlap
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
+	RotateCredentialWithBodyWithResponse(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateCredentialHTTPResponse, error)
+
+	// RotateCredentialWithResponse Rotate a machine credential with bounded overlap
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
+	RotateCredentialWithResponse(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, body RotateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateCredentialHTTPResponse, error)
 
 	// ListInvocationsWithResponse List authoritative Invocations
 	//
@@ -11097,158 +12220,194 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/invocations (the `ListInvocations` operationId).
 	ListInvocationsWithResponse(ctx context.Context, params *ListInvocationsParams, reqEditors ...RequestEditorFn) (*ListInvocationsHTTPResponse, error)
 
-	// CreateInvocationWithBodyWithResponse Durably admit one background agent turn
+	// CreateInvocationWithBodyWithResponse Start one background agent turn
 	//
-	// Resolves or creates the installation-wide Agent identity anchor,
-	// resolves or creates a Session, resolves the inline or referenced
-	// definition, appends exactly one caller-input message, and creates one
-	// queued Invocation in a single transaction. The response is sent only
-	// after that transaction commits. The request handler never executes the
-	// model.
+	// Starts one agent turn and returns immediately. In a single database
+	// transaction nvoken finds or creates the Agent and Session, resolves
+	// the agent definition you sent inline or referenced by `definition_id`,
+	// appends your input as one message, and queues the turn. You get a
+	// response only after that transaction commits, so a `202` means the
+	// work is safely recorded and will run even if nvoken restarts. The
+	// model does not run on this request — it runs in the background, and
+	// you follow it with the stream or by polling.
 	//
-	// `session_id` and `session_key` are mutually exclusive. A Session ID must
-	// belong to the named Agent, or be a Session created without one — the
-	// first admitted Invocation binds the Agent permanently. An installation-wide
-	// credential may omit `tenant_key` and use the Session's stored partition.
-	// A tenant-constrained credential cannot cross its partition; an explicit
-	// mismatch is rejected with `403 forbidden` before resource lookup.
+	// Pick the Session with either `session_id` or `session_key`, not both.
+	// A Session ID must belong to the Agent you named, or to a Session
+	// created without an Agent — in which case this turn binds that Agent
+	// permanently. An installation-wide credential may omit `tenant_key` and
+	// use whichever tenant the Session already belongs to. A credential
+	// locked to one tenant cannot reach another; naming a different one
+	// returns `403 forbidden` without revealing whether the resource
+	// exists.
 	//
-	// `idempotency_key` is scoped to the effective
-	// tenant partition, and `agent_key`. A same-key replay is checked before
-	// the Session's one-nonterminal-Invocation rule. It returns the original
-	// records without appending input, even when the Invocation is terminal.
-	// Material equality covers the Session selector kind and value, the
-	// resolved definition, and input. A `definition_id` and its byte-identical
-	// inline definition compare equal. Requested limits are compared before
-	// default resolution, so an explicit default differs from omission. JSON
-	// object member order is ignored, array order is significant, and strings
-	// are not rewritten. A changed material field returns
-	// `idempotency_conflict`.
+	// ## Retrying safely
 	//
-	// `if_active` defaults to `reject`, preserving
-	// `session_invocation_active`. Explicit `supersede` requires both create
-	// and cancel authority. While holding the Session lock, it durably
-	// cancels any nonterminal Invocation and admits this replacement in the
-	// same transaction. With no active work it admits normally. Equal replay
-	// returns the original work before supersession and never cancels newer
-	// active work.
+	// Send `idempotency_key` and you can retry this request without risking
+	// a second turn. A repeat with the same key returns the original turn
+	// and does not add your input again, even if that turn has already
+	// finished. Keys are scoped to the tenant and `agent_key`.
 	//
-	// `interrupt` requires the same authority and keeps the same lock
-	// ordering, but stops the active Invocation gracefully instead of
-	// cancelling it: work already at a seam settles and the replacement is
-	// admitted in the same transaction, while work under a live lease has
-	// the interrupt recorded and this request waits for it to settle. If it
-	// has not settled within the wait, the response is
+	// A repeat counts as the same request only if the Session selector, the
+	// resolved definition, and the input all match. A `definition_id` and
+	// the identical inline definition count as the same. Limits are compared
+	// as you sent them, so sending a value that happens to equal the default
+	// is not the same as omitting it. Key order inside JSON objects does not
+	// matter; array order does. Change anything that matters and you get
+	// `idempotency_conflict` rather than a surprise second turn.
+	//
+	// ## When the Session is already busy
+	//
+	// A Session runs one turn at a time, and `if_active` decides what
+	// happens when you start another. The default, `reject`, returns
+	// `session_invocation_active`.
+	//
+	// `supersede` cancels the running turn and starts yours in its place,
+	// atomically — there is no moment where the Session has no turn or two
+	// turns. It requires permission to both create and cancel. Retrying the
+	// same request returns your original turn and never cancels newer work
+	// that started in the meantime.
+	//
+	// `interrupt` needs the same permission but stops the running turn
+	// cleanly instead of discarding its work. If that turn can stop
+	// immediately, yours starts in the same transaction. If it is mid-step,
+	// nvoken records the interrupt and this request waits for it. If it has
+	// not stopped by the time the wait is up, you get
 	// `session_invocation_active` with `details.interrupt_requested = true`
-	// and the request may be reissued.
+	// — the interrupt is still in effect, so just send the request again.
 	//
-	// A cataloged model continues to admit while deprecated. On and after
-	// its `retires_at` date, a new admission is refused with `422
-	// model_retired`; `details` carries the refused `model`, `retires_at`,
-	// the exact `replacement` provider/id pair, and the request `path`.
-	// Equal idempotent replay still returns work admitted before retirement.
+	// ## Retired models
 	//
-	// A text-only request body is limited to 1 MiB. A body carrying image or
-	// document blocks is limited to 24 MiB, within which decoded media is
-	// bounded separately: at most 8 media blocks, 16 MiB decoded in total,
-	// 5 MiB per image, and 16 MiB per document. Requests over any of these
-	// limits are rejected before admission. URL media is fetched after an
-	// idempotent replay check and before any row is admitted. The guarded
-	// fetch accepts public HTTPS only, enforces the item limit while reading,
-	// and sniffs the returned bytes. nvoken stores those bytes and does not
-	// fetch the URL again.
+	// A deprecated model keeps working. On and after its `retires_at` date,
+	// new turns are refused with `422 model_retired`, and `details` tells
+	// you what to do about it: the `model` you asked for, its `retires_at`
+	// date, the exact `replacement` provider and id to switch to, and the
+	// request `path`. Retrying an idempotency key from before the retirement
+	// still returns that original turn.
 	//
-	// The supported streaming pattern is admit-then-stream: admit with a
-	// plain JSON POST, then follow the Invocation over
-	// `GET /v1/invocations/{invocation_id}/stream`. It survives a dropped
-	// connection without re-admitting and does not depend on front-end
-	// streaming behavior. `Accept: text/event-stream` on this request is a
-	// deployment-dependent convenience, not a first-class mode: the
-	// committed admission is the first `invocation.accepted` frame and the
-	// connection tails that Invocation through `invocation.result`, but
-	// delivery requires the deployment front end to stream a non-`200`
-	// POST response unbuffered. Some managed front ends (including Cloud
-	// Run's) buffer it until the Invocation settles, which makes a
-	// host-tool turn's `waiting` state invisible on this connection.
+	// ## Size limits
+	//
+	// A text-only body may be up to 1 MiB. A body with images or documents
+	// may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB
+	// of decoded media in total, 5 MiB per image, and 16 MiB per document.
+	// Anything over these is rejected before a turn is created.
+	//
+	// URLs are fetched after the idempotency check and before anything is
+	// saved, so a retry does not download twice. nvoken accepts public HTTPS
+	// only, stops reading at the size limit, and checks what the bytes
+	// actually are. It stores them and never fetches the URL again.
+	//
+	// ## Streaming
+	//
+	// Start the turn with a plain JSON POST, then follow it with
+	// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
+	// build on: it survives a dropped connection without starting the turn
+	// over, and it works the same everywhere.
+	//
+	// You can instead send `Accept: text/event-stream` on this request and
+	// have the response stream directly, starting with `invocation.accepted`
+	// and running through `invocation.result`. Treat that as a convenience,
+	// not something to depend on — it needs your deployment's front end to
+	// stream a non-`200` POST response without buffering. Some managed
+	// platforms, Cloud Run among them, buffer it until the turn finishes.
+	// On those, a turn that stops to wait for your tools appears to hang,
+	// because you never see the `waiting` state.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/invocations (the `CreateInvocation` operationId).
 	CreateInvocationWithBodyWithResponse(ctx context.Context, params *CreateInvocationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInvocationHTTPResponse, error)
 
-	// CreateInvocationWithResponse Durably admit one background agent turn
+	// CreateInvocationWithResponse Start one background agent turn
 	//
-	// Resolves or creates the installation-wide Agent identity anchor,
-	// resolves or creates a Session, resolves the inline or referenced
-	// definition, appends exactly one caller-input message, and creates one
-	// queued Invocation in a single transaction. The response is sent only
-	// after that transaction commits. The request handler never executes the
-	// model.
+	// Starts one agent turn and returns immediately. In a single database
+	// transaction nvoken finds or creates the Agent and Session, resolves
+	// the agent definition you sent inline or referenced by `definition_id`,
+	// appends your input as one message, and queues the turn. You get a
+	// response only after that transaction commits, so a `202` means the
+	// work is safely recorded and will run even if nvoken restarts. The
+	// model does not run on this request — it runs in the background, and
+	// you follow it with the stream or by polling.
 	//
-	// `session_id` and `session_key` are mutually exclusive. A Session ID must
-	// belong to the named Agent, or be a Session created without one — the
-	// first admitted Invocation binds the Agent permanently. An installation-wide
-	// credential may omit `tenant_key` and use the Session's stored partition.
-	// A tenant-constrained credential cannot cross its partition; an explicit
-	// mismatch is rejected with `403 forbidden` before resource lookup.
+	// Pick the Session with either `session_id` or `session_key`, not both.
+	// A Session ID must belong to the Agent you named, or to a Session
+	// created without an Agent — in which case this turn binds that Agent
+	// permanently. An installation-wide credential may omit `tenant_key` and
+	// use whichever tenant the Session already belongs to. A credential
+	// locked to one tenant cannot reach another; naming a different one
+	// returns `403 forbidden` without revealing whether the resource
+	// exists.
 	//
-	// `idempotency_key` is scoped to the effective
-	// tenant partition, and `agent_key`. A same-key replay is checked before
-	// the Session's one-nonterminal-Invocation rule. It returns the original
-	// records without appending input, even when the Invocation is terminal.
-	// Material equality covers the Session selector kind and value, the
-	// resolved definition, and input. A `definition_id` and its byte-identical
-	// inline definition compare equal. Requested limits are compared before
-	// default resolution, so an explicit default differs from omission. JSON
-	// object member order is ignored, array order is significant, and strings
-	// are not rewritten. A changed material field returns
-	// `idempotency_conflict`.
+	// ## Retrying safely
 	//
-	// `if_active` defaults to `reject`, preserving
-	// `session_invocation_active`. Explicit `supersede` requires both create
-	// and cancel authority. While holding the Session lock, it durably
-	// cancels any nonterminal Invocation and admits this replacement in the
-	// same transaction. With no active work it admits normally. Equal replay
-	// returns the original work before supersession and never cancels newer
-	// active work.
+	// Send `idempotency_key` and you can retry this request without risking
+	// a second turn. A repeat with the same key returns the original turn
+	// and does not add your input again, even if that turn has already
+	// finished. Keys are scoped to the tenant and `agent_key`.
 	//
-	// `interrupt` requires the same authority and keeps the same lock
-	// ordering, but stops the active Invocation gracefully instead of
-	// cancelling it: work already at a seam settles and the replacement is
-	// admitted in the same transaction, while work under a live lease has
-	// the interrupt recorded and this request waits for it to settle. If it
-	// has not settled within the wait, the response is
+	// A repeat counts as the same request only if the Session selector, the
+	// resolved definition, and the input all match. A `definition_id` and
+	// the identical inline definition count as the same. Limits are compared
+	// as you sent them, so sending a value that happens to equal the default
+	// is not the same as omitting it. Key order inside JSON objects does not
+	// matter; array order does. Change anything that matters and you get
+	// `idempotency_conflict` rather than a surprise second turn.
+	//
+	// ## When the Session is already busy
+	//
+	// A Session runs one turn at a time, and `if_active` decides what
+	// happens when you start another. The default, `reject`, returns
+	// `session_invocation_active`.
+	//
+	// `supersede` cancels the running turn and starts yours in its place,
+	// atomically — there is no moment where the Session has no turn or two
+	// turns. It requires permission to both create and cancel. Retrying the
+	// same request returns your original turn and never cancels newer work
+	// that started in the meantime.
+	//
+	// `interrupt` needs the same permission but stops the running turn
+	// cleanly instead of discarding its work. If that turn can stop
+	// immediately, yours starts in the same transaction. If it is mid-step,
+	// nvoken records the interrupt and this request waits for it. If it has
+	// not stopped by the time the wait is up, you get
 	// `session_invocation_active` with `details.interrupt_requested = true`
-	// and the request may be reissued.
+	// — the interrupt is still in effect, so just send the request again.
 	//
-	// A cataloged model continues to admit while deprecated. On and after
-	// its `retires_at` date, a new admission is refused with `422
-	// model_retired`; `details` carries the refused `model`, `retires_at`,
-	// the exact `replacement` provider/id pair, and the request `path`.
-	// Equal idempotent replay still returns work admitted before retirement.
+	// ## Retired models
 	//
-	// A text-only request body is limited to 1 MiB. A body carrying image or
-	// document blocks is limited to 24 MiB, within which decoded media is
-	// bounded separately: at most 8 media blocks, 16 MiB decoded in total,
-	// 5 MiB per image, and 16 MiB per document. Requests over any of these
-	// limits are rejected before admission. URL media is fetched after an
-	// idempotent replay check and before any row is admitted. The guarded
-	// fetch accepts public HTTPS only, enforces the item limit while reading,
-	// and sniffs the returned bytes. nvoken stores those bytes and does not
-	// fetch the URL again.
+	// A deprecated model keeps working. On and after its `retires_at` date,
+	// new turns are refused with `422 model_retired`, and `details` tells
+	// you what to do about it: the `model` you asked for, its `retires_at`
+	// date, the exact `replacement` provider and id to switch to, and the
+	// request `path`. Retrying an idempotency key from before the retirement
+	// still returns that original turn.
 	//
-	// The supported streaming pattern is admit-then-stream: admit with a
-	// plain JSON POST, then follow the Invocation over
-	// `GET /v1/invocations/{invocation_id}/stream`. It survives a dropped
-	// connection without re-admitting and does not depend on front-end
-	// streaming behavior. `Accept: text/event-stream` on this request is a
-	// deployment-dependent convenience, not a first-class mode: the
-	// committed admission is the first `invocation.accepted` frame and the
-	// connection tails that Invocation through `invocation.result`, but
-	// delivery requires the deployment front end to stream a non-`200`
-	// POST response unbuffered. Some managed front ends (including Cloud
-	// Run's) buffer it until the Invocation settles, which makes a
-	// host-tool turn's `waiting` state invisible on this connection.
+	// ## Size limits
+	//
+	// A text-only body may be up to 1 MiB. A body with images or documents
+	// may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB
+	// of decoded media in total, 5 MiB per image, and 16 MiB per document.
+	// Anything over these is rejected before a turn is created.
+	//
+	// URLs are fetched after the idempotency check and before anything is
+	// saved, so a retry does not download twice. nvoken accepts public HTTPS
+	// only, stops reading at the size limit, and checks what the bytes
+	// actually are. It stores them and never fetches the URL again.
+	//
+	// ## Streaming
+	//
+	// Start the turn with a plain JSON POST, then follow it with
+	// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
+	// build on: it survives a dropped connection without starting the turn
+	// over, and it works the same everywhere.
+	//
+	// You can instead send `Accept: text/event-stream` on this request and
+	// have the response stream directly, starting with `invocation.accepted`
+	// and running through `invocation.result`. Treat that as a convenience,
+	// not something to depend on — it needs your deployment's front end to
+	// stream a non-`200` POST response without buffering. Some managed
+	// platforms, Cloud Run among them, buffer it until the turn finishes.
+	// On those, a turn that stops to wait for your tools appears to hang,
+	// because you never see the `waiting` state.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11257,145 +12416,148 @@ type ClientWithResponsesInterface interface {
 
 	// GetInvocationWithResponse Read authoritative Invocation identity and state
 	//
-	// Returns the durable current state. Post-admission failures appear here.
-	// A credential authenticated for Runtime but denied this read operation
-	// receives `forbidden`.
-	// A resource outside the caller's tenant constraint is
-	// reported as `not_found` when disclosure would reveal its existence.
+	// The turn's current state, including anything that went wrong after it
+	// started.
+	//
+	// A credential that can authenticate but lacks permission for this read
+	// gets `forbidden`. A turn belonging to another tenant is reported as
+	// `not_found` rather than `forbidden`, so you cannot use this endpoint to
+	// discover whether an ID exists outside your scope.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id} (the `GetInvocation` operationId).
 	GetInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationHTTPResponse, error)
 
-	// CancelInvocationWithResponse Idempotently cancel an Invocation
+	// CancelInvocationWithResponse Stop a turn and discard its work
 	//
-	// Atomically makes nonterminal work `cancelled`. Repeating the request,
-	// or cancelling an Invocation that already completed or failed, returns
-	// the unchanged authoritative terminal row. A successful response means
-	// cancellation is durable; provider work stops cooperatively and may
-	// have already incurred external cost. The request body must be empty.
+	// Stops a turn and discards what it produced. The turn ends `cancelled`
+	// and its work does not carry into the next turn — use interrupt instead
+	// if you want to keep it.
+	//
+	// Safe to repeat. Cancelling a turn that already finished returns it
+	// unchanged rather than failing. A successful response means the
+	// cancellation is recorded and will stick. Work already sent to the
+	// model provider stops as soon as it can, so you may still be billed for
+	// what had run by then.
+	//
+	// Send an empty request body.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/cancel (the `CancelInvocation` operationId).
 	CancelInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*CancelInvocationHTTPResponse, error)
 
-	// InterruptInvocationWithResponse Gracefully stop an Invocation and keep its work
+	// InterruptInvocationWithResponse Stop a turn but keep what it produced
 	//
-	// Asks the turn to stop at its next execution seam and settle
-	// `completed` with `stop_reason = interrupted`, so its assistant and
-	// tool messages stay in the next turn's generation context. That is the
-	// whole difference from cancellation, which drops the turn's work from
-	// every later turn.
+	// Asks a running turn to stop at its next clean stopping point. It ends
+	// `completed` with `stop_reason: interrupted`, and everything it
+	// produced — the model's replies and any tool results — stays in the
+	// conversation for the next turn. That is the whole difference from
+	// cancelling, which throws the turn's work away.
 	//
-	// The request is durable and idempotent. Work already at a seam —
-	// `queued`, `waiting`, or `running` with no live owner — settles before
-	// this call returns, closing any pending tool calls with synthetic
-	// results; a subsequently submitted tool result then gets the ordinary
-	// terminal `409`. Work under a live lease records the request and
-	// returns the Invocation unchanged, still `running`: its executor stops
-	// at the next checkpoint boundary, at worst one provider call away.
-	// Follow the Invocation stream or re-read it to observe settlement.
+	// The request is recorded and safe to repeat. What happens next depends
+	// on what the turn was doing:
 	//
-	// Interrupting terminal work is a no-op that returns the unchanged
-	// terminal row. A turn whose definition carries `structured_output` and that
-	// never published a validated object fails
-	// `structured_output_unsatisfied` instead of completing — the
-	// obligation was not met. Usage and settlement evidence are complete:
-	// the work was kept, so it is charged. The request body must be empty.
+	// - Between steps (`queued`, `waiting`, or `running` with nothing
+	//   actively executing) it stops before this call returns. Any tool
+	//   calls you still owed results for are closed out, so submitting one
+	//   afterwards returns `409`.
+	// - Mid-step, nvoken records the request and returns the turn still
+	//   `running`. It stops at the next checkpoint, at worst one model call
+	//   later. Watch the stream or re-read the turn to see it end.
+	//
+	// Interrupting a turn that has already finished changes nothing and
+	// returns it as-is. A turn that was asked for structured output but
+	// never produced a valid object ends `failed` with
+	// `structured_output_unsatisfied` rather than `completed`. Either way
+	// usage is reported in full and billed, because the work was kept.
+	//
+	// Send an empty request body.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/interrupt (the `InterruptInvocation` operationId).
 	InterruptInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*InterruptInvocationHTTPResponse, error)
 
-	// NudgeInvocationWithBodyWithResponse Append steering to a running Invocation
+	// NudgeInvocationWithBodyWithResponse Send extra direction to a running turn
 	//
-	// Stages caller guidance against a turn that is already running — "focus
-	// on the marine segment" — without ending it and without discarding the
-	// work being steered. This is the difference from
-	// `if_active: supersede`, which rewinds: a superseded turn's assistant
-	// and tool work product is dropped from the next generation, so steering
-	// a long turn by supersession throws away exactly what is being steered.
-	// Unlike Claude's `system.message`, a nudge is durable staged input
-	// consumed at an execution seam, not an event injected immediately into
-	// a managed session.
+	// Sends extra direction to a turn that is already running — "focus on
+	// the marine segment" — without stopping it and without losing the work
+	// you are steering. Use this when a long turn is heading the wrong way
+	// and you want to correct it in place.
 	//
-	// A nudge is not an interrupt. The earliest injection point is the next
-	// execution seam: the start of the next execution segment, which is a
-	// host-tool turn's park boundary, or the stop seam where a turn that
-	// considers itself finished re-enters its loop to answer the input in
-	// place. An in-flight provider call or tool run is never aborted for it,
-	// and an Invocation that has been interrupted is never given more to do —
-	// the interrupt wins the seam and the staged input expires.
+	// Compare with `if_active: supersede` on a new Invocation, which
+	// replaces the running turn and discards what it had produced. Steering
+	// a long turn that way throws away exactly the work you were trying to
+	// redirect.
 	//
-	// A nudge is never implicitly minted and never implicitly converted.
-	// `POST /v1/invocations` against a busy Session keeps its `if_active`
-	// semantics; admission is never silently turned into a nudge, and a
-	// nudge is never silently turned into an Invocation. nvoken holds no
-	// agent configuration — the definition travels inline on every admission — so
-	// there is nothing it could legitimately run converted input with.
+	// **A nudge is not an interrupt, and it is not immediate.** The turn
+	// picks it up at its next clean stopping point: when it starts its next
+	// step, when it pauses for you to run a tool, or when a turn that
+	// thought it was finished re-enters its loop to answer you. A model call
+	// or tool run already in flight is never aborted to deliver it. A turn
+	// you have interrupted is never given more work — the interrupt wins and
+	// the direction you staged expires unused.
 	//
-	// Input that the turn never takes is settled `expired` when the
-	// Invocation settles, in the same transaction and under the same Session
-	// lock this request takes. It never influences a later Invocation.
-	// Re-sending missed direction as the next Invocation's input is the
-	// host's call to make, and `GET .../pending-inputs` is where the miss is
-	// visible.
+	// Nudges and Invocations never turn into each other. Posting to
+	// `/v1/invocations` against a busy Session behaves exactly as its
+	// `if_active` setting says; it never quietly becomes a nudge, and a
+	// nudge never quietly becomes a new turn.
 	//
-	// `content` is text: a string, or an array of text blocks. Image and
-	// document blocks are accepted on an Invocation's own input but not
-	// here, because the stop seam carries a continuation as text and staging
-	// content one seam would silently drop is worse than refusing it.
+	// If the turn ends without ever picking it up, your input is marked
+	// `expired` at that moment and has no effect on any later turn. Check
+	// `GET .../pending-inputs` to see whether it was used or missed. Whether
+	// to re-send missed direction as the next turn's input is your call.
 	//
-	// Requires the same authority as cancelling the Invocation.
+	// `content` must be text — a string, or an array of text blocks. Images
+	// and documents are fine on a turn's own input but are refused here,
+	// because a turn resuming in place carries text only, and silently
+	// dropping your attachment would be worse than telling you now.
+	//
+	// Requires the same permission as cancelling the turn.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
 	NudgeInvocationWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NudgeInvocationHTTPResponse, error)
 
-	// NudgeInvocationWithResponse Append steering to a running Invocation
+	// NudgeInvocationWithResponse Send extra direction to a running turn
 	//
-	// Stages caller guidance against a turn that is already running — "focus
-	// on the marine segment" — without ending it and without discarding the
-	// work being steered. This is the difference from
-	// `if_active: supersede`, which rewinds: a superseded turn's assistant
-	// and tool work product is dropped from the next generation, so steering
-	// a long turn by supersession throws away exactly what is being steered.
-	// Unlike Claude's `system.message`, a nudge is durable staged input
-	// consumed at an execution seam, not an event injected immediately into
-	// a managed session.
+	// Sends extra direction to a turn that is already running — "focus on
+	// the marine segment" — without stopping it and without losing the work
+	// you are steering. Use this when a long turn is heading the wrong way
+	// and you want to correct it in place.
 	//
-	// A nudge is not an interrupt. The earliest injection point is the next
-	// execution seam: the start of the next execution segment, which is a
-	// host-tool turn's park boundary, or the stop seam where a turn that
-	// considers itself finished re-enters its loop to answer the input in
-	// place. An in-flight provider call or tool run is never aborted for it,
-	// and an Invocation that has been interrupted is never given more to do —
-	// the interrupt wins the seam and the staged input expires.
+	// Compare with `if_active: supersede` on a new Invocation, which
+	// replaces the running turn and discards what it had produced. Steering
+	// a long turn that way throws away exactly the work you were trying to
+	// redirect.
 	//
-	// A nudge is never implicitly minted and never implicitly converted.
-	// `POST /v1/invocations` against a busy Session keeps its `if_active`
-	// semantics; admission is never silently turned into a nudge, and a
-	// nudge is never silently turned into an Invocation. nvoken holds no
-	// agent configuration — the definition travels inline on every admission — so
-	// there is nothing it could legitimately run converted input with.
+	// **A nudge is not an interrupt, and it is not immediate.** The turn
+	// picks it up at its next clean stopping point: when it starts its next
+	// step, when it pauses for you to run a tool, or when a turn that
+	// thought it was finished re-enters its loop to answer you. A model call
+	// or tool run already in flight is never aborted to deliver it. A turn
+	// you have interrupted is never given more work — the interrupt wins and
+	// the direction you staged expires unused.
 	//
-	// Input that the turn never takes is settled `expired` when the
-	// Invocation settles, in the same transaction and under the same Session
-	// lock this request takes. It never influences a later Invocation.
-	// Re-sending missed direction as the next Invocation's input is the
-	// host's call to make, and `GET .../pending-inputs` is where the miss is
-	// visible.
+	// Nudges and Invocations never turn into each other. Posting to
+	// `/v1/invocations` against a busy Session behaves exactly as its
+	// `if_active` setting says; it never quietly becomes a nudge, and a
+	// nudge never quietly becomes a new turn.
 	//
-	// `content` is text: a string, or an array of text blocks. Image and
-	// document blocks are accepted on an Invocation's own input but not
-	// here, because the stop seam carries a continuation as text and staging
-	// content one seam would silently drop is worse than refusing it.
+	// If the turn ends without ever picking it up, your input is marked
+	// `expired` at that moment and has no effect on any later turn. Check
+	// `GET .../pending-inputs` to see whether it was used or missed. Whether
+	// to re-send missed direction as the next turn's input is your call.
 	//
-	// Requires the same authority as cancelling the Invocation.
+	// `content` must be text — a string, or an array of text blocks. Images
+	// and documents are fine on a turn's own input but are refused here,
+	// because a turn resuming in place carries text only, and silently
+	// dropping your attachment would be worse than telling you now.
+	//
+	// Requires the same permission as cancelling the turn.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11404,12 +12566,14 @@ type ClientWithResponsesInterface interface {
 
 	// ListPendingInputsWithResponse List staged input for an Invocation
 	//
-	// Returns the staged queue in `(created_at, id)` ascending order — the
-	// order the turn will consume it — with settled rows retained so a
-	// caller can answer "what did the user say, and did the model see it".
-	// This, not an event vocabulary, is the reconciliation source for a
-	// surface that shows queued direction: a drained input also appears on
-	// the transcript stream as an ordinary `user` message.
+	// Lists the direction you have sent to this turn with `/nudge`, in the
+	// order the turn will pick it up. Entries stay listed after they are used
+	// or missed, so you can answer "what did the user say, and did the model
+	// ever see it?"
+	//
+	// Check `status` on each entry: `drained` means the turn used it,
+	// `expired` means the turn ended first, `cancelled` means you withdrew
+	// it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11418,77 +12582,93 @@ type ClientWithResponsesInterface interface {
 
 	// CancelPendingInputWithResponse Withdraw staged input the turn has not taken
 	//
-	// Cancels input that is still `pending`. Cancelling input that is
-	// already `cancelled` returns it unchanged, so a retry is safe.
+	// Withdraws direction you sent with `/nudge`, as long as the turn has not
+	// picked it up yet. Cancelling something already cancelled returns it
+	// unchanged, so retrying is safe.
 	//
-	// Cancel and drain serialize on the row, so whichever commits first
-	// wins outright: a cancelled input is never seen by the model, and input
-	// the executor already drained is reported `409 pending_input_settled`
-	// with the current resource in `details.pending_input` rather than being
-	// withdrawn from a transcript it is already part of. The request body
-	// must be empty.
-	//
-	// Requires the same authority as cancelling the Invocation.
+	// Cancelling races the turn, and whichever happens first wins outright:
+	// you either withdraw it cleanly or the turn uses it. It is never
+	// half-applied. If the turn got there first, you get a conflict and the
+	// entry stays `drained`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel (the `CancelPendingInput` operationId).
 	CancelPendingInputWithResponse(ctx context.Context, invocationID InvocationID, pendingInputID PendingInputID, reqEditors ...RequestEditorFn) (*CancelPendingInputHTTPResponse, error)
 
-	// GetInvocationResultWithResponse Read the composed Invocation result
+	// GetInvocationResultWithResponse Read a turn together with its messages
 	//
-	// Returns one InvocationResult at any status: the authoritative
-	// Invocation, this Invocation's canonical messages composed at read
-	// time, and the output_text convenience projection. The Invocation and
-	// its messages are read in one repeatable-read snapshot, so the payload
-	// never shows a terminal status with a missing message tail.
-	// Authentication, tenant scoping, and the nondisclosing not_found rule
-	// match the plain Invocation read exactly.
+	// Returns the turn and the messages it produced, at any status. This is
+	// the convenient read for "what did the agent say?" — `output_text`
+	// gives you the assistant's text already joined into a single string, so
+	// you do not have to walk the message blocks yourself.
+	//
+	// The turn and its messages are read from one consistent database
+	// snapshot, so you will never see a finished turn whose last message is
+	// missing.
+	//
+	// Authentication, tenant scoping, and the not-found behavior are the
+	// same as reading the Invocation on its own.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
 	GetInvocationResultWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationResultHTTPResponse, error)
 
-	// ResumeInvocationWithBodyWithResponse Raise the exhausted turn ceiling and resume a paused Invocation
+	// ResumeInvocationWithBodyWithResponse Raise a paused turn's limit and continue it
 	//
-	// Requeues an Invocation paused on a turn-level consumption ceiling.
-	// `limits` must contain only the exhausted field, raised above both its
-	// prior value and the amount already consumed, and the new value must
-	// remain within installation policy. A Session-budget pause resumes by
-	// raising or removing the Session budget instead. Deadlines never pause.
+	// Continues a turn that paused because one of its own spending limits
+	// ran out. Send `limits` containing only the limit that ran out, raised
+	// above both its old value and what the turn has already used, and still
+	// within what your installation allows.
+	//
+	// If the turn paused on the Session budget rather than its own limit,
+	// raise or remove that budget instead — this endpoint will not resume
+	// it. Deadlines never pause a turn, so they never bring you here.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ResumeInvocationHTTPResponse, error)
 
-	// ResumeInvocationWithResponse Raise the exhausted turn ceiling and resume a paused Invocation
+	// ResumeInvocationWithResponse Raise a paused turn's limit and continue it
 	//
-	// Requeues an Invocation paused on a turn-level consumption ceiling.
-	// `limits` must contain only the exhausted field, raised above both its
-	// prior value and the amount already consumed, and the new value must
-	// remain within installation policy. A Session-budget pause resumes by
-	// raising or removing the Session budget instead. Deadlines never pause.
+	// Continues a turn that paused because one of its own spending limits
+	// ran out. Send `limits` containing only the limit that ran out, raised
+	// above both its old value and what the turn has already used, and still
+	// within what your installation allows.
+	//
+	// If the turn paused on the Session budget rather than its own limit,
+	// raise or remove that budget instead — this endpoint will not resume
+	// it. Deadlines never pause a turn, so they never bring you here.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithResponse(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*ResumeInvocationHTTPResponse, error)
 
-	// StreamInvocationWithResponse Resume and tail one Invocation over SSE
+	// StreamInvocationWithResponse Follow one turn over Server-Sent Events
 	//
-	// Replays durable updates after `cursor`, optionally forwards ephemeral
-	// output previews for this Invocation, and ends only when this Invocation
-	// settles or the connection rotates. Durable frames carry an SSE `id`;
-	// previews and control frames do not. After `stream.resync`, discard
-	// provisional output and wait for durable state.
+	// Follows one turn as it runs, and can be resumed after a dropped
+	// connection. Pass `cursor` to pick up after a position you already
+	// received; the stream replays everything saved since then, then
+	// continues live until the turn finishes.
 	//
-	// The explicit `cursor` query parameter takes precedence over
-	// `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
-	// last durable ID. `deltas=false` skips preview fan-out without changing
-	// replay, polling, cursor, or terminal semantics. Disconnecting never
-	// cancels the Invocation.
+	// Saved updates carry an SSE `id` — that is your resume position, and
+	// the only value you need to store. Live text previews and control
+	// frames carry no `id` because they are not saved state. If you receive
+	// `stream.resync`, discard the preview text you have accumulated and
+	// wait for the saved messages; previews can be lost, saved updates
+	// cannot.
+	//
+	// The `cursor` query parameter wins over the `Last-Event-ID` header.
+	// `stream.end` with reason `rotate` means the server is cycling the
+	// connection — reconnect using your last saved `id`. Set `deltas=false`
+	// to skip previews; nothing about replay, resumption, or how the stream
+	// ends changes.
+	//
+	// Disconnecting never cancels the turn. It keeps running, and you can
+	// reconnect or read it later.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11565,11 +12745,14 @@ type ClientWithResponsesInterface interface {
 
 	// ListMCPToolsWithBodyWithResponse Discover and project one remote MCP server's tools
 	//
-	// Opens one short-lived streamable-HTTP MCP session through guarded
-	// public-only egress, drains tools/list pagination, applies the same
-	// allowlist and projection rules used by Invocation execution, and then
-	// closes the session. Supplied headers are used only for this request,
-	// are never logged or returned, and are not persisted.
+	// Connects to a remote MCP server and lists the tools it offers, without
+	// starting a turn. Use it to check a server works and see what the model
+	// would get before you wire it into an agent.
+	//
+	// nvoken opens one short-lived session, reads through every page of the
+	// server's tool list, applies the same filtering rules a real turn would,
+	// and disconnects. Headers you supply are used for this call only and are
+	// never stored.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11578,11 +12761,14 @@ type ClientWithResponsesInterface interface {
 
 	// ListMCPToolsWithResponse Discover and project one remote MCP server's tools
 	//
-	// Opens one short-lived streamable-HTTP MCP session through guarded
-	// public-only egress, drains tools/list pagination, applies the same
-	// allowlist and projection rules used by Invocation execution, and then
-	// closes the session. Supplied headers are used only for this request,
-	// are never logged or returned, and are not persisted.
+	// Connects to a remote MCP server and lists the tools it offers, without
+	// starting a turn. Use it to check a server works and see what the model
+	// would get before you wire it into an agent.
+	//
+	// nvoken opens one short-lived session, reads through every page of the
+	// server's tool list, applies the same filtering rules a real turn would,
+	// and disconnects. Headers you supply are used for this call only and are
+	// never stored.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11686,11 +12872,12 @@ type ClientWithResponsesInterface interface {
 
 	// GetProviderKeyUsageWithResponse Read the token usage rollup for one provider key
 	//
-	// Aggregates durable checkpoint evidence across every Invocation that
-	// bound the provider key: how many Invocations used it, when a model call
-	// last used it, and the summed model usage. Derived at read time from the
-	// transcript record, never from a separately maintained counter.
-	// Authorization matches reading the provider key itself.
+	// Totals usage for one provider key across every turn that used it: how
+	// many turns, when a model call last used it, and the combined token and
+	// cost totals.
+	//
+	// Calculated from stored records each time you ask, not kept in a running
+	// counter, so deleting Sessions lowers these numbers.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11699,11 +12886,10 @@ type ClientWithResponsesInterface interface {
 
 	// ListSessionsWithResponse List authoritative Sessions
 	//
-	// Returns newest-first Session identity and current nonterminal
-	// Invocation state. Exact filters combine with AND. Tenant filtering and
-	// cursor binding follow the Invocation-list rules. `agent_id` and
-	// `agent_key` are mutually exclusive and normalize to the same cursor
-	// filter.
+	// Lists Sessions, newest first, each with the state of its currently
+	// running turn if it has one. Filters combine with AND. Tenant filtering
+	// and cursors work the same as on the Invocation list. `agent_id` and
+	// `agent_key` are mutually exclusive.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11712,18 +12898,13 @@ type ClientWithResponsesInterface interface {
 
 	// CreateSessionWithBodyWithResponse Create or seed a Session without admitting an Invocation
 	//
-	// Creates a Session with zero Invocations and optional host-asserted
-	// starting history. Every body field is optional. An omitted `agent_key` leaves the
-	// Session unbound: `agent_id` is null until the first admitted
-	// Invocation binds it, and the binding is immutable once set either way;
-	// `seed_messages` therefore requires `agent_key`. A `session_key`
-	// requires an `agent_key`, because key uniqueness
-	// and lookup are scoped per (tenant partition, Agent); a keyed create
-	// is an upsert that accepts equal supplied Session options and returns
-	// `session_options_conflict` when a supplied value differs.
-	// Without a `session_key`, every call creates a fresh Session.
-	// Precedence for the tenant partition is credential constraint,
-	// explicit `tenant_key`, then the default partition.
+	// Creates an empty Session, optionally seeded with history you already
+	// have. Use this when you want a conversation to exist before the first
+	// turn runs — to show it in a UI, or to import messages from elsewhere.
+	//
+	// Every field is optional. Leave out `agent_key` and the Session starts
+	// unbound: `agent_id` stays null until the first turn binds it
+	// permanently.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11732,18 +12913,13 @@ type ClientWithResponsesInterface interface {
 
 	// CreateSessionWithResponse Create or seed a Session without admitting an Invocation
 	//
-	// Creates a Session with zero Invocations and optional host-asserted
-	// starting history. Every body field is optional. An omitted `agent_key` leaves the
-	// Session unbound: `agent_id` is null until the first admitted
-	// Invocation binds it, and the binding is immutable once set either way;
-	// `seed_messages` therefore requires `agent_key`. A `session_key`
-	// requires an `agent_key`, because key uniqueness
-	// and lookup are scoped per (tenant partition, Agent); a keyed create
-	// is an upsert that accepts equal supplied Session options and returns
-	// `session_options_conflict` when a supplied value differs.
-	// Without a `session_key`, every call creates a fresh Session.
-	// Precedence for the tenant partition is credential constraint,
-	// explicit `tenant_key`, then the default partition.
+	// Creates an empty Session, optionally seeded with history you already
+	// have. Use this when you want a conversation to exist before the first
+	// turn runs — to show it in a UI, or to import messages from elsewhere.
+	//
+	// Every field is optional. Leave out `agent_key` and the Session starts
+	// unbound: `agent_id` stays null until the first turn binds it
+	// permanently.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11757,32 +12933,31 @@ type ClientWithResponsesInterface interface {
 	// bindings, and undelivered webhooks. The erasure is immediate and
 	// irreversible; a subsequent read is `not_found`.
 	//
-	// An Invocation still running is stopped. No cancellation is recorded,
-	// because there is nothing left to record it against — the Invocation is
-	// removed rather than settled, and no `invocation.settled` webhook
-	// is emitted for it. A host that needs a settled record should cancel and
-	// observe the terminal state before deleting.
+	// A turn still running is stopped, but no cancellation is recorded —
+	// there is nothing left to record it against, and no
+	// `invocation.settled` webhook fires for it. If you need a record that
+	// the turn ended, cancel it and wait for its final state before
+	// deleting.
 	//
-	// Erasure is scoped like every other Session operation: an unknown or
-	// out-of-scope `session_id` returns `not_found`, so a retry after a lost
-	// response can treat `404` as already-done. The `delete_session`
-	// operation belongs to the Runtime and Operator profiles; a Viewer
-	// credential cannot erase a transcript.
+	// An unknown `session_id`, or one outside your scope, returns
+	// `not_found`. So if you lose the response and retry, you can safely
+	// treat `404` as "already deleted". Deleting requires the Runtime or
+	// Operator profile; a Viewer credential cannot erase a transcript.
 	//
-	// **This is not account deletion by itself.** nvoken keeps no account
-	// tombstone, so a host honouring a deletion request must first stop
-	// admitting work for that tenant, then page `GET /v1/sessions` and delete
-	// until the list is empty. Otherwise a concurrent request creates a new
-	// Session behind the sweep.
+	// **Deleting Sessions is not the same as deleting a user's account.**
+	// nvoken has no record that an account was deleted, so to honour a
+	// deletion request you must first stop starting new turns for that
+	// tenant, then page through `GET /v1/sessions` and delete until the list
+	// comes back empty. Otherwise a request arriving mid-sweep creates a new
+	// Session behind you.
 	//
-	// Two consequences worth planning for. Usage reporting shrinks
-	// retroactively: `GET /v1/usage/daily` is computed at read time from
-	// Invocation evidence that erasure removes, which is why the endpoint is
-	// documented as operational visibility rather than a billing ledger — a
-	// billing host records usage at settlement, keyed by Invocation id.
-	// And the erased Invocations' idempotency keys become free for reuse,
-	// consistent with the documented guarantee that deduplication holds while
-	// the original Invocation is retained.
+	// Two consequences to plan for. Past usage numbers shrink:
+	// `GET /v1/usage/daily` is calculated from the records you just erased,
+	// which is why it is operational visibility rather than a billing
+	// ledger — bill from usage you recorded yourself when each turn
+	// finished, keyed by Invocation ID. And the deleted turns' idempotency
+	// keys become reusable, since deduplication only holds while the
+	// original turn still exists.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11852,16 +13027,14 @@ type ClientWithResponsesInterface interface {
 
 	// ListSessionCompactionsWithResponse Page through immutable Session compaction records
 	//
-	// Returns newest-first diagnostic records for every attempted compaction
-	// pass. `applied` records include the private summary projection and its
-	// model usage. `fell_through` records identify the failure class and may
-	// include usage when the provider returned trustworthy evidence. Only
-	// applied records change future model context; neither kind changes the
-	// canonical Session transcript.
+	// Lists every attempt nvoken made to summarize this Session's history,
+	// newest first. Use it to understand why the model's context looks the
+	// way it does.
 	//
-	// The summary is derived from the caller's own transcript and therefore
-	// uses the same authorization and Session scoping as transcript reads.
-	// The opaque cursor is bound to the authenticated app and Session.
+	// An `applied` record includes the summary that took effect and what the
+	// summarizing call cost. A `fell_through` record tells you why the
+	// attempt was not usable, and includes usage when a model call happened
+	// before it failed.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11922,44 +13095,49 @@ type ClientWithResponsesInterface interface {
 
 	// GetSessionTranscriptWithResponse Drain a fixed-cut incremental transcript snapshot
 	//
-	// Projects canonical messages and append-only Invocation lifecycle
-	// changes. Supply a prior `resume_cursor` as `cursor` to drain newer
-	// durable state. Continue a multi-page fixed cut with `page_token` until
-	// `has_more` is false. Each page contains one phase: all message pages are
-	// delivered before lifecycle-change pages, so terminal state cannot
-	// precede the transcript rows committed with it. Omitting both positions
-	// starts at the beginning of the retained Session.
+	// Returns the Session's stored messages plus a running log of turn state
+	// changes.
+	//
+	// To catch up rather than re-read everything, pass a `resume_cursor` you
+	// received earlier as `cursor` and you get only what is new since then.
+	// Within one read, keep passing `page_token` until `has_more` is false —
+	// all pages come from the same consistent snapshot, so the transcript
+	// cannot shift under you mid-read.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/sessions/{session_id}/transcript (the `GetSessionTranscript` operationId).
 	GetSessionTranscriptWithResponse(ctx context.Context, sessionID SessionID, params *GetSessionTranscriptParams, reqEditors ...RequestEditorFn) (*GetSessionTranscriptHTTPResponse, error)
 
-	// StreamSessionTranscriptWithResponse Replay and tail one Session transcript over SSE
+	// StreamSessionTranscriptWithResponse Follow a Session transcript over Server-Sent Events
 	//
-	// Opens a resumable Server-Sent Events projection over the same fixed-cut
-	// transcript read model as the JSON endpoint. With deltas enabled, the
-	// server subscribes to live fan-out before its first Postgres drain. In
-	// either mode it re-drains Postgres on a bounded poll and closes after
-	// authoritative terminal reconciliation or deliberate rotation.
-	// Disconnecting never cancels the Invocation.
+	// Streams a Session's transcript as it grows, and can be resumed after a
+	// dropped connection. It covers the same messages as the JSON transcript
+	// endpoint.
 	//
-	// Every nonempty `transcript.update` frame carries
-	// `id: <resume_cursor>`; that opaque ID is the only replay position
-	// clients persist. `output_text.delta`, `thinking.delta`,
-	// `stream.resync`, and `stream.end` never carry an `id`. Deltas are
-	// ephemeral and may be lost; after `stream.resync`, discard provisional
-	// output and wait for canonical messages. `stream.end` reason `terminal`
-	// means the final Postgres drain observed no nonterminal Invocation.
-	// Reason `rotate` means reconnect with the last durable ID. An abnormal
-	// close has no terminal meaning. `deltas=false` skips preview fan-out
-	// without changing replay, polling, cursor, or terminal semantics.
+	// Every non-empty `transcript.update` frame carries
+	// `id: <resume_cursor>`. That opaque ID is your resume position and the
+	// only value you need to store — reconnect with it and you continue
+	// exactly where you left off. `output_text.delta`, `thinking.delta`,
+	// `stream.resync`, and `stream.end` never carry an `id`, because they
+	// are live previews and control frames rather than saved messages.
 	//
-	// The explicit `cursor` query parameter takes precedence over
-	// `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
-	// client that can set the `Authorization` header; the browser EventSource
-	// constructor alone cannot do so. The server emits `retry: 1000` as its
-	// default reconnect delay.
+	// Previews can be lost. If you receive `stream.resync`, discard the
+	// preview text you have accumulated and wait for the saved messages to
+	// arrive. Set `deltas=false` to skip previews entirely; nothing about
+	// replay, resumption, or how the stream ends changes.
+	//
+	// `stream.end` with reason `terminal` means no turn is still running.
+	// Reason `rotate` means the server is cycling the connection —
+	// reconnect with your last `id`. A connection that just drops carries no
+	// meaning: reconnect and resume. Disconnecting never cancels a running
+	// turn.
+	//
+	// The `cursor` query parameter wins over the `Last-Event-ID` header.
+	// Because this endpoint uses bearer authentication, you need an SSE
+	// client that can set the `Authorization` header — the browser's
+	// built-in `EventSource` cannot. The server suggests a 1000 ms
+	// reconnect delay.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11968,15 +13146,20 @@ type ClientWithResponsesInterface interface {
 
 	// GetDailyUsageWithResponse Read daily usage rollups
 	//
-	// Aggregates durable model-call evidence — invocation checkpoints plus
-	// session compaction calls — into per-day buckets keyed by app,
-	// provider, and model, summing token counts and estimated cost. Derived
-	// at read time from the transcript record, never from a separately
-	// maintained counter.
+	// Totals your model usage by day, app, provider, and model, with token
+	// counts and estimated cost. It counts every model call nvoken made on
+	// your behalf, including the ones it makes to summarize long
+	// conversations.
 	//
-	// An app-bound credential reads its own app. An app-less presentation
-	// spans every registered app; for a console issuer token that requires
-	// the admin claim.
+	// These totals are calculated from the stored records each time you ask,
+	// not kept in a running counter. That means deleting Sessions lowers
+	// past numbers. Treat this as operational visibility into what your
+	// agents are doing, not as a billing ledger — if you bill from usage,
+	// record it yourself when each turn finishes, keyed by Invocation ID.
+	//
+	// A credential bound to an app sees only that app. A credential not
+	// bound to any app sees every registered app; a console issuer token
+	// needs its `admin` claim for that.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12808,6 +13991,392 @@ func (r UpdateBudgetHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateBudgetHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetCurrentIdentityHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *CurrentIdentity
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetCurrentIdentityHTTPResponse) GetJSON200() *CurrentIdentity {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetCurrentIdentityHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetBody returns the raw response body bytes
+func (r GetCurrentIdentityHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetCurrentIdentityHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetCurrentIdentityHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetCurrentIdentityHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListCredentialsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *CredentialList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListCredentialsHTTPResponse) GetJSON200() *CredentialList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListCredentialsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListCredentialsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListCredentialsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetBody returns the raw response body bytes
+func (r ListCredentialsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListCredentialsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListCredentialsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListCredentialsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreateCredentialHTTPResponse201Headers the declared response headers of an HTTP 201 response for CreateCredential
+type CreateCredentialHTTPResponse201Headers struct {
+	CacheControl *string
+}
+
+type CreateCredentialHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *CredentialIssuance
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreateCredentialHTTPResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateCredentialHTTPResponse) GetJSON201() *CredentialIssuance {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateCredentialHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateCredentialHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateCredentialHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateCredentialHTTPResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateCredentialHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateCredentialHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateCredentialHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateCredentialHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetCredentialHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Credential
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetCredentialHTTPResponse) GetJSON200() *Credential {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetCredentialHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetCredentialHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetCredentialHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetCredentialHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetCredentialHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetCredentialHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetCredentialHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeCredentialHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Credential
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RevokeCredentialHTTPResponse) GetJSON200() *Credential {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RevokeCredentialHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RevokeCredentialHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RevokeCredentialHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeCredentialHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeCredentialHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeCredentialHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeCredentialHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RotateCredentialHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *CredentialIssuance
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r RotateCredentialHTTPResponse) GetJSON201() *CredentialIssuance {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RotateCredentialHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RotateCredentialHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RotateCredentialHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RotateCredentialHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r RotateCredentialHTTPResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r RotateCredentialHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RotateCredentialHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RotateCredentialHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RotateCredentialHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15932,7 +17501,7 @@ func (c *ClientWithResponses) RegisterAppWithResponse(ctx context.Context, body 
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /v1/apps/{app_id} (the `GetApp` operationId).
-func (c *ClientWithResponses) GetAppWithResponse(ctx context.Context, appID string, reqEditors ...RequestEditorFn) (*GetAppHTTPResponse, error) {
+func (c *ClientWithResponses) GetAppWithResponse(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*GetAppHTTPResponse, error) {
 	rsp, err := c.GetApp(ctx, appID, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -15949,7 +17518,7 @@ func (c *ClientWithResponses) GetAppWithResponse(ctx context.Context, appID stri
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
-func (c *ClientWithResponses) UpdateAppWithBodyWithResponse(ctx context.Context, appID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error) {
+func (c *ClientWithResponses) UpdateAppWithBodyWithResponse(ctx context.Context, appID AppID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error) {
 	rsp, err := c.UpdateAppWithBody(ctx, appID, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -15966,7 +17535,7 @@ func (c *ClientWithResponses) UpdateAppWithBodyWithResponse(ctx context.Context,
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
-func (c *ClientWithResponses) UpdateAppWithResponse(ctx context.Context, appID string, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error) {
+func (c *ClientWithResponses) UpdateAppWithResponse(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error) {
 	rsp, err := c.UpdateApp(ctx, appID, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -16038,8 +17607,10 @@ func (c *ClientWithResponses) GetBudgetWithResponse(ctx context.Context, budgetI
 
 // UpdateBudgetWithBodyWithResponse Raise or lower a Budget cap
 //
-// Replaces the cap. It cannot be lower than settled plus reserved cost.
-// Raising it reevaluates paused work in bounded batches.
+// Sets a new spending cap. It cannot be lower than what the current
+// window has already used and committed. Raising it releases turns that
+// were paused for hitting the old cap; they resume in batches rather than
+// all at once.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16054,8 +17625,10 @@ func (c *ClientWithResponses) UpdateBudgetWithBodyWithResponse(ctx context.Conte
 
 // UpdateBudgetWithResponse Raise or lower a Budget cap
 //
-// Replaces the cap. It cannot be lower than settled plus reserved cost.
-// Raising it reevaluates paused work in bounded batches.
+// Sets a new spending cap. It cannot be lower than what the current
+// window has already used and committed. Raising it releases turns that
+// were paused for hitting the old cap; they resume in batches rather than
+// all at once.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16066,6 +17639,110 @@ func (c *ClientWithResponses) UpdateBudgetWithResponse(ctx context.Context, budg
 		return nil, err
 	}
 	return ParseUpdateBudgetHTTPResponse(rsp)
+}
+
+// GetCurrentIdentityWithResponse Explain the authenticated caller
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/identity (the `GetCurrentIdentity` operationId).
+func (c *ClientWithResponses) GetCurrentIdentityWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentIdentityHTTPResponse, error) {
+	rsp, err := c.GetCurrentIdentity(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetCurrentIdentityHTTPResponse(rsp)
+}
+
+// ListCredentialsWithResponse List safe credential metadata
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/identity/credentials (the `ListCredentials` operationId).
+func (c *ClientWithResponses) ListCredentialsWithResponse(ctx context.Context, params *ListCredentialsParams, reqEditors ...RequestEditorFn) (*ListCredentialsHTTPResponse, error) {
+	rsp, err := c.ListCredentials(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListCredentialsHTTPResponse(rsp)
+}
+
+// CreateCredentialWithBodyWithResponse Create a machine credential
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
+func (c *ClientWithResponses) CreateCredentialWithBodyWithResponse(ctx context.Context, params *CreateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateCredentialHTTPResponse, error) {
+	rsp, err := c.CreateCredentialWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateCredentialHTTPResponse(rsp)
+}
+
+// CreateCredentialWithResponse Create a machine credential
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
+func (c *ClientWithResponses) CreateCredentialWithResponse(ctx context.Context, params *CreateCredentialParams, body CreateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateCredentialHTTPResponse, error) {
+	rsp, err := c.CreateCredential(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateCredentialHTTPResponse(rsp)
+}
+
+// GetCredentialWithResponse Read safe credential metadata
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/identity/credentials/{credential_id} (the `GetCredential` operationId).
+func (c *ClientWithResponses) GetCredentialWithResponse(ctx context.Context, credentialID CredentialID, reqEditors ...RequestEditorFn) (*GetCredentialHTTPResponse, error) {
+	rsp, err := c.GetCredential(ctx, credentialID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetCredentialHTTPResponse(rsp)
+}
+
+// RevokeCredentialWithResponse Revoke a credential
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/identity/credentials/{credential_id}/revoke (the `RevokeCredential` operationId).
+func (c *ClientWithResponses) RevokeCredentialWithResponse(ctx context.Context, credentialID CredentialID, reqEditors ...RequestEditorFn) (*RevokeCredentialHTTPResponse, error) {
+	rsp, err := c.RevokeCredential(ctx, credentialID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeCredentialHTTPResponse(rsp)
+}
+
+// RotateCredentialWithBodyWithResponse Rotate a machine credential with bounded overlap
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
+func (c *ClientWithResponses) RotateCredentialWithBodyWithResponse(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateCredentialHTTPResponse, error) {
+	rsp, err := c.RotateCredentialWithBody(ctx, credentialID, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateCredentialHTTPResponse(rsp)
+}
+
+// RotateCredentialWithResponse Rotate a machine credential with bounded overlap
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
+func (c *ClientWithResponses) RotateCredentialWithResponse(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, body RotateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateCredentialHTTPResponse, error) {
+	rsp, err := c.RotateCredential(ctx, credentialID, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateCredentialHTTPResponse(rsp)
 }
 
 // ListInvocationsWithResponse List authoritative Invocations
@@ -16090,79 +17767,97 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 	return ParseListInvocationsHTTPResponse(rsp)
 }
 
-// CreateInvocationWithBodyWithResponse Durably admit one background agent turn
+// CreateInvocationWithBodyWithResponse Start one background agent turn
 //
-// Resolves or creates the installation-wide Agent identity anchor,
-// resolves or creates a Session, resolves the inline or referenced
-// definition, appends exactly one caller-input message, and creates one
-// queued Invocation in a single transaction. The response is sent only
-// after that transaction commits. The request handler never executes the
-// model.
+// Starts one agent turn and returns immediately. In a single database
+// transaction nvoken finds or creates the Agent and Session, resolves
+// the agent definition you sent inline or referenced by `definition_id`,
+// appends your input as one message, and queues the turn. You get a
+// response only after that transaction commits, so a `202` means the
+// work is safely recorded and will run even if nvoken restarts. The
+// model does not run on this request — it runs in the background, and
+// you follow it with the stream or by polling.
 //
-// `session_id` and `session_key` are mutually exclusive. A Session ID must
-// belong to the named Agent, or be a Session created without one — the
-// first admitted Invocation binds the Agent permanently. An installation-wide
-// credential may omit `tenant_key` and use the Session's stored partition.
-// A tenant-constrained credential cannot cross its partition; an explicit
-// mismatch is rejected with `403 forbidden` before resource lookup.
+// Pick the Session with either `session_id` or `session_key`, not both.
+// A Session ID must belong to the Agent you named, or to a Session
+// created without an Agent — in which case this turn binds that Agent
+// permanently. An installation-wide credential may omit `tenant_key` and
+// use whichever tenant the Session already belongs to. A credential
+// locked to one tenant cannot reach another; naming a different one
+// returns `403 forbidden` without revealing whether the resource
+// exists.
 //
-// `idempotency_key` is scoped to the effective
-// tenant partition, and `agent_key`. A same-key replay is checked before
-// the Session's one-nonterminal-Invocation rule. It returns the original
-// records without appending input, even when the Invocation is terminal.
-// Material equality covers the Session selector kind and value, the
-// resolved definition, and input. A `definition_id` and its byte-identical
-// inline definition compare equal. Requested limits are compared before
-// default resolution, so an explicit default differs from omission. JSON
-// object member order is ignored, array order is significant, and strings
-// are not rewritten. A changed material field returns
-// `idempotency_conflict`.
+// ## Retrying safely
 //
-// `if_active` defaults to `reject`, preserving
-// `session_invocation_active`. Explicit `supersede` requires both create
-// and cancel authority. While holding the Session lock, it durably
-// cancels any nonterminal Invocation and admits this replacement in the
-// same transaction. With no active work it admits normally. Equal replay
-// returns the original work before supersession and never cancels newer
-// active work.
+// Send `idempotency_key` and you can retry this request without risking
+// a second turn. A repeat with the same key returns the original turn
+// and does not add your input again, even if that turn has already
+// finished. Keys are scoped to the tenant and `agent_key`.
 //
-// `interrupt` requires the same authority and keeps the same lock
-// ordering, but stops the active Invocation gracefully instead of
-// cancelling it: work already at a seam settles and the replacement is
-// admitted in the same transaction, while work under a live lease has
-// the interrupt recorded and this request waits for it to settle. If it
-// has not settled within the wait, the response is
+// A repeat counts as the same request only if the Session selector, the
+// resolved definition, and the input all match. A `definition_id` and
+// the identical inline definition count as the same. Limits are compared
+// as you sent them, so sending a value that happens to equal the default
+// is not the same as omitting it. Key order inside JSON objects does not
+// matter; array order does. Change anything that matters and you get
+// `idempotency_conflict` rather than a surprise second turn.
+//
+// ## When the Session is already busy
+//
+// A Session runs one turn at a time, and `if_active` decides what
+// happens when you start another. The default, `reject`, returns
+// `session_invocation_active`.
+//
+// `supersede` cancels the running turn and starts yours in its place,
+// atomically — there is no moment where the Session has no turn or two
+// turns. It requires permission to both create and cancel. Retrying the
+// same request returns your original turn and never cancels newer work
+// that started in the meantime.
+//
+// `interrupt` needs the same permission but stops the running turn
+// cleanly instead of discarding its work. If that turn can stop
+// immediately, yours starts in the same transaction. If it is mid-step,
+// nvoken records the interrupt and this request waits for it. If it has
+// not stopped by the time the wait is up, you get
 // `session_invocation_active` with `details.interrupt_requested = true`
-// and the request may be reissued.
+// — the interrupt is still in effect, so just send the request again.
 //
-// A cataloged model continues to admit while deprecated. On and after
-// its `retires_at` date, a new admission is refused with `422
-// model_retired`; `details` carries the refused `model`, `retires_at`,
-// the exact `replacement` provider/id pair, and the request `path`.
-// Equal idempotent replay still returns work admitted before retirement.
+// ## Retired models
 //
-// A text-only request body is limited to 1 MiB. A body carrying image or
-// document blocks is limited to 24 MiB, within which decoded media is
-// bounded separately: at most 8 media blocks, 16 MiB decoded in total,
-// 5 MiB per image, and 16 MiB per document. Requests over any of these
-// limits are rejected before admission. URL media is fetched after an
-// idempotent replay check and before any row is admitted. The guarded
-// fetch accepts public HTTPS only, enforces the item limit while reading,
-// and sniffs the returned bytes. nvoken stores those bytes and does not
-// fetch the URL again.
+// A deprecated model keeps working. On and after its `retires_at` date,
+// new turns are refused with `422 model_retired`, and `details` tells
+// you what to do about it: the `model` you asked for, its `retires_at`
+// date, the exact `replacement` provider and id to switch to, and the
+// request `path`. Retrying an idempotency key from before the retirement
+// still returns that original turn.
 //
-// The supported streaming pattern is admit-then-stream: admit with a
-// plain JSON POST, then follow the Invocation over
-// `GET /v1/invocations/{invocation_id}/stream`. It survives a dropped
-// connection without re-admitting and does not depend on front-end
-// streaming behavior. `Accept: text/event-stream` on this request is a
-// deployment-dependent convenience, not a first-class mode: the
-// committed admission is the first `invocation.accepted` frame and the
-// connection tails that Invocation through `invocation.result`, but
-// delivery requires the deployment front end to stream a non-`200`
-// POST response unbuffered. Some managed front ends (including Cloud
-// Run's) buffer it until the Invocation settles, which makes a
-// host-tool turn's `waiting` state invisible on this connection.
+// ## Size limits
+//
+// A text-only body may be up to 1 MiB. A body with images or documents
+// may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB
+// of decoded media in total, 5 MiB per image, and 16 MiB per document.
+// Anything over these is rejected before a turn is created.
+//
+// URLs are fetched after the idempotency check and before anything is
+// saved, so a retry does not download twice. nvoken accepts public HTTPS
+// only, stops reading at the size limit, and checks what the bytes
+// actually are. It stores them and never fetches the URL again.
+//
+// ## Streaming
+//
+// Start the turn with a plain JSON POST, then follow it with
+// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
+// build on: it survives a dropped connection without starting the turn
+// over, and it works the same everywhere.
+//
+// You can instead send `Accept: text/event-stream` on this request and
+// have the response stream directly, starting with `invocation.accepted`
+// and running through `invocation.result`. Treat that as a convenience,
+// not something to depend on — it needs your deployment's front end to
+// stream a non-`200` POST response without buffering. Some managed
+// platforms, Cloud Run among them, buffer it until the turn finishes.
+// On those, a turn that stops to wait for your tools appears to hang,
+// because you never see the `waiting` state.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16175,79 +17870,97 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 	return ParseCreateInvocationHTTPResponse(rsp)
 }
 
-// CreateInvocationWithResponse Durably admit one background agent turn
+// CreateInvocationWithResponse Start one background agent turn
 //
-// Resolves or creates the installation-wide Agent identity anchor,
-// resolves or creates a Session, resolves the inline or referenced
-// definition, appends exactly one caller-input message, and creates one
-// queued Invocation in a single transaction. The response is sent only
-// after that transaction commits. The request handler never executes the
-// model.
+// Starts one agent turn and returns immediately. In a single database
+// transaction nvoken finds or creates the Agent and Session, resolves
+// the agent definition you sent inline or referenced by `definition_id`,
+// appends your input as one message, and queues the turn. You get a
+// response only after that transaction commits, so a `202` means the
+// work is safely recorded and will run even if nvoken restarts. The
+// model does not run on this request — it runs in the background, and
+// you follow it with the stream or by polling.
 //
-// `session_id` and `session_key` are mutually exclusive. A Session ID must
-// belong to the named Agent, or be a Session created without one — the
-// first admitted Invocation binds the Agent permanently. An installation-wide
-// credential may omit `tenant_key` and use the Session's stored partition.
-// A tenant-constrained credential cannot cross its partition; an explicit
-// mismatch is rejected with `403 forbidden` before resource lookup.
+// Pick the Session with either `session_id` or `session_key`, not both.
+// A Session ID must belong to the Agent you named, or to a Session
+// created without an Agent — in which case this turn binds that Agent
+// permanently. An installation-wide credential may omit `tenant_key` and
+// use whichever tenant the Session already belongs to. A credential
+// locked to one tenant cannot reach another; naming a different one
+// returns `403 forbidden` without revealing whether the resource
+// exists.
 //
-// `idempotency_key` is scoped to the effective
-// tenant partition, and `agent_key`. A same-key replay is checked before
-// the Session's one-nonterminal-Invocation rule. It returns the original
-// records without appending input, even when the Invocation is terminal.
-// Material equality covers the Session selector kind and value, the
-// resolved definition, and input. A `definition_id` and its byte-identical
-// inline definition compare equal. Requested limits are compared before
-// default resolution, so an explicit default differs from omission. JSON
-// object member order is ignored, array order is significant, and strings
-// are not rewritten. A changed material field returns
-// `idempotency_conflict`.
+// ## Retrying safely
 //
-// `if_active` defaults to `reject`, preserving
-// `session_invocation_active`. Explicit `supersede` requires both create
-// and cancel authority. While holding the Session lock, it durably
-// cancels any nonterminal Invocation and admits this replacement in the
-// same transaction. With no active work it admits normally. Equal replay
-// returns the original work before supersession and never cancels newer
-// active work.
+// Send `idempotency_key` and you can retry this request without risking
+// a second turn. A repeat with the same key returns the original turn
+// and does not add your input again, even if that turn has already
+// finished. Keys are scoped to the tenant and `agent_key`.
 //
-// `interrupt` requires the same authority and keeps the same lock
-// ordering, but stops the active Invocation gracefully instead of
-// cancelling it: work already at a seam settles and the replacement is
-// admitted in the same transaction, while work under a live lease has
-// the interrupt recorded and this request waits for it to settle. If it
-// has not settled within the wait, the response is
+// A repeat counts as the same request only if the Session selector, the
+// resolved definition, and the input all match. A `definition_id` and
+// the identical inline definition count as the same. Limits are compared
+// as you sent them, so sending a value that happens to equal the default
+// is not the same as omitting it. Key order inside JSON objects does not
+// matter; array order does. Change anything that matters and you get
+// `idempotency_conflict` rather than a surprise second turn.
+//
+// ## When the Session is already busy
+//
+// A Session runs one turn at a time, and `if_active` decides what
+// happens when you start another. The default, `reject`, returns
+// `session_invocation_active`.
+//
+// `supersede` cancels the running turn and starts yours in its place,
+// atomically — there is no moment where the Session has no turn or two
+// turns. It requires permission to both create and cancel. Retrying the
+// same request returns your original turn and never cancels newer work
+// that started in the meantime.
+//
+// `interrupt` needs the same permission but stops the running turn
+// cleanly instead of discarding its work. If that turn can stop
+// immediately, yours starts in the same transaction. If it is mid-step,
+// nvoken records the interrupt and this request waits for it. If it has
+// not stopped by the time the wait is up, you get
 // `session_invocation_active` with `details.interrupt_requested = true`
-// and the request may be reissued.
+// — the interrupt is still in effect, so just send the request again.
 //
-// A cataloged model continues to admit while deprecated. On and after
-// its `retires_at` date, a new admission is refused with `422
-// model_retired`; `details` carries the refused `model`, `retires_at`,
-// the exact `replacement` provider/id pair, and the request `path`.
-// Equal idempotent replay still returns work admitted before retirement.
+// ## Retired models
 //
-// A text-only request body is limited to 1 MiB. A body carrying image or
-// document blocks is limited to 24 MiB, within which decoded media is
-// bounded separately: at most 8 media blocks, 16 MiB decoded in total,
-// 5 MiB per image, and 16 MiB per document. Requests over any of these
-// limits are rejected before admission. URL media is fetched after an
-// idempotent replay check and before any row is admitted. The guarded
-// fetch accepts public HTTPS only, enforces the item limit while reading,
-// and sniffs the returned bytes. nvoken stores those bytes and does not
-// fetch the URL again.
+// A deprecated model keeps working. On and after its `retires_at` date,
+// new turns are refused with `422 model_retired`, and `details` tells
+// you what to do about it: the `model` you asked for, its `retires_at`
+// date, the exact `replacement` provider and id to switch to, and the
+// request `path`. Retrying an idempotency key from before the retirement
+// still returns that original turn.
 //
-// The supported streaming pattern is admit-then-stream: admit with a
-// plain JSON POST, then follow the Invocation over
-// `GET /v1/invocations/{invocation_id}/stream`. It survives a dropped
-// connection without re-admitting and does not depend on front-end
-// streaming behavior. `Accept: text/event-stream` on this request is a
-// deployment-dependent convenience, not a first-class mode: the
-// committed admission is the first `invocation.accepted` frame and the
-// connection tails that Invocation through `invocation.result`, but
-// delivery requires the deployment front end to stream a non-`200`
-// POST response unbuffered. Some managed front ends (including Cloud
-// Run's) buffer it until the Invocation settles, which makes a
-// host-tool turn's `waiting` state invisible on this connection.
+// ## Size limits
+//
+// A text-only body may be up to 1 MiB. A body with images or documents
+// may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB
+// of decoded media in total, 5 MiB per image, and 16 MiB per document.
+// Anything over these is rejected before a turn is created.
+//
+// URLs are fetched after the idempotency check and before anything is
+// saved, so a retry does not download twice. nvoken accepts public HTTPS
+// only, stops reading at the size limit, and checks what the bytes
+// actually are. It stores them and never fetches the URL again.
+//
+// ## Streaming
+//
+// Start the turn with a plain JSON POST, then follow it with
+// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
+// build on: it survives a dropped connection without starting the turn
+// over, and it works the same everywhere.
+//
+// You can instead send `Accept: text/event-stream` on this request and
+// have the response stream directly, starting with `invocation.accepted`
+// and running through `invocation.result`. Treat that as a convenience,
+// not something to depend on — it needs your deployment's front end to
+// stream a non-`200` POST response without buffering. Some managed
+// platforms, Cloud Run among them, buffer it until the turn finishes.
+// On those, a turn that stops to wait for your tools appears to hang,
+// because you never see the `waiting` state.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16262,11 +17975,13 @@ func (c *ClientWithResponses) CreateInvocationWithResponse(ctx context.Context, 
 
 // GetInvocationWithResponse Read authoritative Invocation identity and state
 //
-// Returns the durable current state. Post-admission failures appear here.
-// A credential authenticated for Runtime but denied this read operation
-// receives `forbidden`.
-// A resource outside the caller's tenant constraint is
-// reported as `not_found` when disclosure would reveal its existence.
+// The turn's current state, including anything that went wrong after it
+// started.
+//
+// A credential that can authenticate but lacks permission for this read
+// gets `forbidden`. A turn belonging to another tenant is reported as
+// `not_found` rather than `forbidden`, so you cannot use this endpoint to
+// discover whether an ID exists outside your scope.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16279,13 +17994,19 @@ func (c *ClientWithResponses) GetInvocationWithResponse(ctx context.Context, inv
 	return ParseGetInvocationHTTPResponse(rsp)
 }
 
-// CancelInvocationWithResponse Idempotently cancel an Invocation
+// CancelInvocationWithResponse Stop a turn and discard its work
 //
-// Atomically makes nonterminal work `cancelled`. Repeating the request,
-// or cancelling an Invocation that already completed or failed, returns
-// the unchanged authoritative terminal row. A successful response means
-// cancellation is durable; provider work stops cooperatively and may
-// have already incurred external cost. The request body must be empty.
+// Stops a turn and discards what it produced. The turn ends `cancelled`
+// and its work does not carry into the next turn — use interrupt instead
+// if you want to keep it.
+//
+// Safe to repeat. Cancelling a turn that already finished returns it
+// unchanged rather than failing. A successful response means the
+// cancellation is recorded and will stick. Work already sent to the
+// model provider stops as soon as it can, so you may still be billed for
+// what had run by then.
+//
+// Send an empty request body.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16298,29 +18019,32 @@ func (c *ClientWithResponses) CancelInvocationWithResponse(ctx context.Context, 
 	return ParseCancelInvocationHTTPResponse(rsp)
 }
 
-// InterruptInvocationWithResponse Gracefully stop an Invocation and keep its work
+// InterruptInvocationWithResponse Stop a turn but keep what it produced
 //
-// Asks the turn to stop at its next execution seam and settle
-// `completed` with `stop_reason = interrupted`, so its assistant and
-// tool messages stay in the next turn's generation context. That is the
-// whole difference from cancellation, which drops the turn's work from
-// every later turn.
+// Asks a running turn to stop at its next clean stopping point. It ends
+// `completed` with `stop_reason: interrupted`, and everything it
+// produced — the model's replies and any tool results — stays in the
+// conversation for the next turn. That is the whole difference from
+// cancelling, which throws the turn's work away.
 //
-// The request is durable and idempotent. Work already at a seam —
-// `queued`, `waiting`, or `running` with no live owner — settles before
-// this call returns, closing any pending tool calls with synthetic
-// results; a subsequently submitted tool result then gets the ordinary
-// terminal `409`. Work under a live lease records the request and
-// returns the Invocation unchanged, still `running`: its executor stops
-// at the next checkpoint boundary, at worst one provider call away.
-// Follow the Invocation stream or re-read it to observe settlement.
+// The request is recorded and safe to repeat. What happens next depends
+// on what the turn was doing:
 //
-// Interrupting terminal work is a no-op that returns the unchanged
-// terminal row. A turn whose definition carries `structured_output` and that
-// never published a validated object fails
-// `structured_output_unsatisfied` instead of completing — the
-// obligation was not met. Usage and settlement evidence are complete:
-// the work was kept, so it is charged. The request body must be empty.
+//   - Between steps (`queued`, `waiting`, or `running` with nothing
+//     actively executing) it stops before this call returns. Any tool
+//     calls you still owed results for are closed out, so submitting one
+//     afterwards returns `409`.
+//   - Mid-step, nvoken records the request and returns the turn still
+//     `running`. It stops at the next checkpoint, at worst one model call
+//     later. Watch the stream or re-read the turn to see it end.
+//
+// Interrupting a turn that has already finished changes nothing and
+// returns it as-is. A turn that was asked for structured output but
+// never produced a valid object ends `failed` with
+// `structured_output_unsatisfied` rather than `completed`. Either way
+// usage is reported in full and billed, because the work was kept.
+//
+// Send an empty request body.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16333,46 +18057,42 @@ func (c *ClientWithResponses) InterruptInvocationWithResponse(ctx context.Contex
 	return ParseInterruptInvocationHTTPResponse(rsp)
 }
 
-// NudgeInvocationWithBodyWithResponse Append steering to a running Invocation
+// NudgeInvocationWithBodyWithResponse Send extra direction to a running turn
 //
-// Stages caller guidance against a turn that is already running — "focus
-// on the marine segment" — without ending it and without discarding the
-// work being steered. This is the difference from
-// `if_active: supersede`, which rewinds: a superseded turn's assistant
-// and tool work product is dropped from the next generation, so steering
-// a long turn by supersession throws away exactly what is being steered.
-// Unlike Claude's `system.message`, a nudge is durable staged input
-// consumed at an execution seam, not an event injected immediately into
-// a managed session.
+// Sends extra direction to a turn that is already running — "focus on
+// the marine segment" — without stopping it and without losing the work
+// you are steering. Use this when a long turn is heading the wrong way
+// and you want to correct it in place.
 //
-// A nudge is not an interrupt. The earliest injection point is the next
-// execution seam: the start of the next execution segment, which is a
-// host-tool turn's park boundary, or the stop seam where a turn that
-// considers itself finished re-enters its loop to answer the input in
-// place. An in-flight provider call or tool run is never aborted for it,
-// and an Invocation that has been interrupted is never given more to do —
-// the interrupt wins the seam and the staged input expires.
+// Compare with `if_active: supersede` on a new Invocation, which
+// replaces the running turn and discards what it had produced. Steering
+// a long turn that way throws away exactly the work you were trying to
+// redirect.
 //
-// A nudge is never implicitly minted and never implicitly converted.
-// `POST /v1/invocations` against a busy Session keeps its `if_active`
-// semantics; admission is never silently turned into a nudge, and a
-// nudge is never silently turned into an Invocation. nvoken holds no
-// agent configuration — the definition travels inline on every admission — so
-// there is nothing it could legitimately run converted input with.
+// **A nudge is not an interrupt, and it is not immediate.** The turn
+// picks it up at its next clean stopping point: when it starts its next
+// step, when it pauses for you to run a tool, or when a turn that
+// thought it was finished re-enters its loop to answer you. A model call
+// or tool run already in flight is never aborted to deliver it. A turn
+// you have interrupted is never given more work — the interrupt wins and
+// the direction you staged expires unused.
 //
-// Input that the turn never takes is settled `expired` when the
-// Invocation settles, in the same transaction and under the same Session
-// lock this request takes. It never influences a later Invocation.
-// Re-sending missed direction as the next Invocation's input is the
-// host's call to make, and `GET .../pending-inputs` is where the miss is
-// visible.
+// Nudges and Invocations never turn into each other. Posting to
+// `/v1/invocations` against a busy Session behaves exactly as its
+// `if_active` setting says; it never quietly becomes a nudge, and a
+// nudge never quietly becomes a new turn.
 //
-// `content` is text: a string, or an array of text blocks. Image and
-// document blocks are accepted on an Invocation's own input but not
-// here, because the stop seam carries a continuation as text and staging
-// content one seam would silently drop is worse than refusing it.
+// If the turn ends without ever picking it up, your input is marked
+// `expired` at that moment and has no effect on any later turn. Check
+// `GET .../pending-inputs` to see whether it was used or missed. Whether
+// to re-send missed direction as the next turn's input is your call.
 //
-// Requires the same authority as cancelling the Invocation.
+// `content` must be text — a string, or an array of text blocks. Images
+// and documents are fine on a turn's own input but are refused here,
+// because a turn resuming in place carries text only, and silently
+// dropping your attachment would be worse than telling you now.
+//
+// Requires the same permission as cancelling the turn.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16385,46 +18105,42 @@ func (c *ClientWithResponses) NudgeInvocationWithBodyWithResponse(ctx context.Co
 	return ParseNudgeInvocationHTTPResponse(rsp)
 }
 
-// NudgeInvocationWithResponse Append steering to a running Invocation
+// NudgeInvocationWithResponse Send extra direction to a running turn
 //
-// Stages caller guidance against a turn that is already running — "focus
-// on the marine segment" — without ending it and without discarding the
-// work being steered. This is the difference from
-// `if_active: supersede`, which rewinds: a superseded turn's assistant
-// and tool work product is dropped from the next generation, so steering
-// a long turn by supersession throws away exactly what is being steered.
-// Unlike Claude's `system.message`, a nudge is durable staged input
-// consumed at an execution seam, not an event injected immediately into
-// a managed session.
+// Sends extra direction to a turn that is already running — "focus on
+// the marine segment" — without stopping it and without losing the work
+// you are steering. Use this when a long turn is heading the wrong way
+// and you want to correct it in place.
 //
-// A nudge is not an interrupt. The earliest injection point is the next
-// execution seam: the start of the next execution segment, which is a
-// host-tool turn's park boundary, or the stop seam where a turn that
-// considers itself finished re-enters its loop to answer the input in
-// place. An in-flight provider call or tool run is never aborted for it,
-// and an Invocation that has been interrupted is never given more to do —
-// the interrupt wins the seam and the staged input expires.
+// Compare with `if_active: supersede` on a new Invocation, which
+// replaces the running turn and discards what it had produced. Steering
+// a long turn that way throws away exactly the work you were trying to
+// redirect.
 //
-// A nudge is never implicitly minted and never implicitly converted.
-// `POST /v1/invocations` against a busy Session keeps its `if_active`
-// semantics; admission is never silently turned into a nudge, and a
-// nudge is never silently turned into an Invocation. nvoken holds no
-// agent configuration — the definition travels inline on every admission — so
-// there is nothing it could legitimately run converted input with.
+// **A nudge is not an interrupt, and it is not immediate.** The turn
+// picks it up at its next clean stopping point: when it starts its next
+// step, when it pauses for you to run a tool, or when a turn that
+// thought it was finished re-enters its loop to answer you. A model call
+// or tool run already in flight is never aborted to deliver it. A turn
+// you have interrupted is never given more work — the interrupt wins and
+// the direction you staged expires unused.
 //
-// Input that the turn never takes is settled `expired` when the
-// Invocation settles, in the same transaction and under the same Session
-// lock this request takes. It never influences a later Invocation.
-// Re-sending missed direction as the next Invocation's input is the
-// host's call to make, and `GET .../pending-inputs` is where the miss is
-// visible.
+// Nudges and Invocations never turn into each other. Posting to
+// `/v1/invocations` against a busy Session behaves exactly as its
+// `if_active` setting says; it never quietly becomes a nudge, and a
+// nudge never quietly becomes a new turn.
 //
-// `content` is text: a string, or an array of text blocks. Image and
-// document blocks are accepted on an Invocation's own input but not
-// here, because the stop seam carries a continuation as text and staging
-// content one seam would silently drop is worse than refusing it.
+// If the turn ends without ever picking it up, your input is marked
+// `expired` at that moment and has no effect on any later turn. Check
+// `GET .../pending-inputs` to see whether it was used or missed. Whether
+// to re-send missed direction as the next turn's input is your call.
 //
-// Requires the same authority as cancelling the Invocation.
+// `content` must be text — a string, or an array of text blocks. Images
+// and documents are fine on a turn's own input but are refused here,
+// because a turn resuming in place carries text only, and silently
+// dropping your attachment would be worse than telling you now.
+//
+// Requires the same permission as cancelling the turn.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16439,12 +18155,14 @@ func (c *ClientWithResponses) NudgeInvocationWithResponse(ctx context.Context, i
 
 // ListPendingInputsWithResponse List staged input for an Invocation
 //
-// Returns the staged queue in `(created_at, id)` ascending order — the
-// order the turn will consume it — with settled rows retained so a
-// caller can answer "what did the user say, and did the model see it".
-// This, not an event vocabulary, is the reconciliation source for a
-// surface that shows queued direction: a drained input also appears on
-// the transcript stream as an ordinary `user` message.
+// Lists the direction you have sent to this turn with `/nudge`, in the
+// order the turn will pick it up. Entries stay listed after they are used
+// or missed, so you can answer "what did the user say, and did the model
+// ever see it?"
+//
+// Check `status` on each entry: `drained` means the turn used it,
+// `expired` means the turn ended first, `cancelled` means you withdrew
+// it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16459,17 +18177,14 @@ func (c *ClientWithResponses) ListPendingInputsWithResponse(ctx context.Context,
 
 // CancelPendingInputWithResponse Withdraw staged input the turn has not taken
 //
-// Cancels input that is still `pending`. Cancelling input that is
-// already `cancelled` returns it unchanged, so a retry is safe.
+// Withdraws direction you sent with `/nudge`, as long as the turn has not
+// picked it up yet. Cancelling something already cancelled returns it
+// unchanged, so retrying is safe.
 //
-// Cancel and drain serialize on the row, so whichever commits first
-// wins outright: a cancelled input is never seen by the model, and input
-// the executor already drained is reported `409 pending_input_settled`
-// with the current resource in `details.pending_input` rather than being
-// withdrawn from a transcript it is already part of. The request body
-// must be empty.
-//
-// Requires the same authority as cancelling the Invocation.
+// Cancelling races the turn, and whichever happens first wins outright:
+// you either withdraw it cleanly or the turn uses it. It is never
+// half-applied. If the turn got there first, you get a conflict and the
+// entry stays `drained`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16482,15 +18197,19 @@ func (c *ClientWithResponses) CancelPendingInputWithResponse(ctx context.Context
 	return ParseCancelPendingInputHTTPResponse(rsp)
 }
 
-// GetInvocationResultWithResponse Read the composed Invocation result
+// GetInvocationResultWithResponse Read a turn together with its messages
 //
-// Returns one InvocationResult at any status: the authoritative
-// Invocation, this Invocation's canonical messages composed at read
-// time, and the output_text convenience projection. The Invocation and
-// its messages are read in one repeatable-read snapshot, so the payload
-// never shows a terminal status with a missing message tail.
-// Authentication, tenant scoping, and the nondisclosing not_found rule
-// match the plain Invocation read exactly.
+// Returns the turn and the messages it produced, at any status. This is
+// the convenient read for "what did the agent say?" — `output_text`
+// gives you the assistant's text already joined into a single string, so
+// you do not have to walk the message blocks yourself.
+//
+// The turn and its messages are read from one consistent database
+// snapshot, so you will never see a finished turn whose last message is
+// missing.
+//
+// Authentication, tenant scoping, and the not-found behavior are the
+// same as reading the Invocation on its own.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16503,13 +18222,16 @@ func (c *ClientWithResponses) GetInvocationResultWithResponse(ctx context.Contex
 	return ParseGetInvocationResultHTTPResponse(rsp)
 }
 
-// ResumeInvocationWithBodyWithResponse Raise the exhausted turn ceiling and resume a paused Invocation
+// ResumeInvocationWithBodyWithResponse Raise a paused turn's limit and continue it
 //
-// Requeues an Invocation paused on a turn-level consumption ceiling.
-// `limits` must contain only the exhausted field, raised above both its
-// prior value and the amount already consumed, and the new value must
-// remain within installation policy. A Session-budget pause resumes by
-// raising or removing the Session budget instead. Deadlines never pause.
+// Continues a turn that paused because one of its own spending limits
+// ran out. Send `limits` containing only the limit that ran out, raised
+// above both its old value and what the turn has already used, and still
+// within what your installation allows.
+//
+// If the turn paused on the Session budget rather than its own limit,
+// raise or remove that budget instead — this endpoint will not resume
+// it. Deadlines never pause a turn, so they never bring you here.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16522,13 +18244,16 @@ func (c *ClientWithResponses) ResumeInvocationWithBodyWithResponse(ctx context.C
 	return ParseResumeInvocationHTTPResponse(rsp)
 }
 
-// ResumeInvocationWithResponse Raise the exhausted turn ceiling and resume a paused Invocation
+// ResumeInvocationWithResponse Raise a paused turn's limit and continue it
 //
-// Requeues an Invocation paused on a turn-level consumption ceiling.
-// `limits` must contain only the exhausted field, raised above both its
-// prior value and the amount already consumed, and the new value must
-// remain within installation policy. A Session-budget pause resumes by
-// raising or removing the Session budget instead. Deadlines never pause.
+// Continues a turn that paused because one of its own spending limits
+// ran out. Send `limits` containing only the limit that ran out, raised
+// above both its old value and what the turn has already used, and still
+// within what your installation allows.
+//
+// If the turn paused on the Session budget rather than its own limit,
+// raise or remove that budget instead — this endpoint will not resume
+// it. Deadlines never pause a turn, so they never bring you here.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16541,19 +18266,28 @@ func (c *ClientWithResponses) ResumeInvocationWithResponse(ctx context.Context, 
 	return ParseResumeInvocationHTTPResponse(rsp)
 }
 
-// StreamInvocationWithResponse Resume and tail one Invocation over SSE
+// StreamInvocationWithResponse Follow one turn over Server-Sent Events
 //
-// Replays durable updates after `cursor`, optionally forwards ephemeral
-// output previews for this Invocation, and ends only when this Invocation
-// settles or the connection rotates. Durable frames carry an SSE `id`;
-// previews and control frames do not. After `stream.resync`, discard
-// provisional output and wait for durable state.
+// Follows one turn as it runs, and can be resumed after a dropped
+// connection. Pass `cursor` to pick up after a position you already
+// received; the stream replays everything saved since then, then
+// continues live until the turn finishes.
 //
-// The explicit `cursor` query parameter takes precedence over
-// `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
-// last durable ID. `deltas=false` skips preview fan-out without changing
-// replay, polling, cursor, or terminal semantics. Disconnecting never
-// cancels the Invocation.
+// Saved updates carry an SSE `id` — that is your resume position, and
+// the only value you need to store. Live text previews and control
+// frames carry no `id` because they are not saved state. If you receive
+// `stream.resync`, discard the preview text you have accumulated and
+// wait for the saved messages; previews can be lost, saved updates
+// cannot.
+//
+// The `cursor` query parameter wins over the `Last-Event-ID` header.
+// `stream.end` with reason `rotate` means the server is cycling the
+// connection — reconnect using your last saved `id`. Set `deltas=false`
+// to skip previews; nothing about replay, resumption, or how the stream
+// ends changes.
+//
+// Disconnecting never cancels the turn. It keeps running, and you can
+// reconnect or read it later.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16654,11 +18388,14 @@ func (c *ClientWithResponses) SubmitHostToolResultsWithResponse(ctx context.Cont
 
 // ListMCPToolsWithBodyWithResponse Discover and project one remote MCP server's tools
 //
-// Opens one short-lived streamable-HTTP MCP session through guarded
-// public-only egress, drains tools/list pagination, applies the same
-// allowlist and projection rules used by Invocation execution, and then
-// closes the session. Supplied headers are used only for this request,
-// are never logged or returned, and are not persisted.
+// Connects to a remote MCP server and lists the tools it offers, without
+// starting a turn. Use it to check a server works and see what the model
+// would get before you wire it into an agent.
+//
+// nvoken opens one short-lived session, reads through every page of the
+// server's tool list, applies the same filtering rules a real turn would,
+// and disconnects. Headers you supply are used for this call only and are
+// never stored.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16673,11 +18410,14 @@ func (c *ClientWithResponses) ListMCPToolsWithBodyWithResponse(ctx context.Conte
 
 // ListMCPToolsWithResponse Discover and project one remote MCP server's tools
 //
-// Opens one short-lived streamable-HTTP MCP session through guarded
-// public-only egress, drains tools/list pagination, applies the same
-// allowlist and projection rules used by Invocation execution, and then
-// closes the session. Supplied headers are used only for this request,
-// are never logged or returned, and are not persisted.
+// Connects to a remote MCP server and lists the tools it offers, without
+// starting a turn. Use it to check a server works and see what the model
+// would get before you wire it into an agent.
+//
+// nvoken opens one short-lived session, reads through every page of the
+// server's tool list, applies the same filtering rules a real turn would,
+// and disconnects. Headers you supply are used for this call only and are
+// never stored.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16841,11 +18581,12 @@ func (c *ClientWithResponses) RotateProviderKeyWithResponse(ctx context.Context,
 
 // GetProviderKeyUsageWithResponse Read the token usage rollup for one provider key
 //
-// Aggregates durable checkpoint evidence across every Invocation that
-// bound the provider key: how many Invocations used it, when a model call
-// last used it, and the summed model usage. Derived at read time from the
-// transcript record, never from a separately maintained counter.
-// Authorization matches reading the provider key itself.
+// Totals usage for one provider key across every turn that used it: how
+// many turns, when a model call last used it, and the combined token and
+// cost totals.
+//
+// Calculated from stored records each time you ask, not kept in a running
+// counter, so deleting Sessions lowers these numbers.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16860,11 +18601,10 @@ func (c *ClientWithResponses) GetProviderKeyUsageWithResponse(ctx context.Contex
 
 // ListSessionsWithResponse List authoritative Sessions
 //
-// Returns newest-first Session identity and current nonterminal
-// Invocation state. Exact filters combine with AND. Tenant filtering and
-// cursor binding follow the Invocation-list rules. `agent_id` and
-// `agent_key` are mutually exclusive and normalize to the same cursor
-// filter.
+// Lists Sessions, newest first, each with the state of its currently
+// running turn if it has one. Filters combine with AND. Tenant filtering
+// and cursors work the same as on the Invocation list. `agent_id` and
+// `agent_key` are mutually exclusive.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16879,18 +18619,13 @@ func (c *ClientWithResponses) ListSessionsWithResponse(ctx context.Context, para
 
 // CreateSessionWithBodyWithResponse Create or seed a Session without admitting an Invocation
 //
-// Creates a Session with zero Invocations and optional host-asserted
-// starting history. Every body field is optional. An omitted `agent_key` leaves the
-// Session unbound: `agent_id` is null until the first admitted
-// Invocation binds it, and the binding is immutable once set either way;
-// `seed_messages` therefore requires `agent_key`. A `session_key`
-// requires an `agent_key`, because key uniqueness
-// and lookup are scoped per (tenant partition, Agent); a keyed create
-// is an upsert that accepts equal supplied Session options and returns
-// `session_options_conflict` when a supplied value differs.
-// Without a `session_key`, every call creates a fresh Session.
-// Precedence for the tenant partition is credential constraint,
-// explicit `tenant_key`, then the default partition.
+// Creates an empty Session, optionally seeded with history you already
+// have. Use this when you want a conversation to exist before the first
+// turn runs — to show it in a UI, or to import messages from elsewhere.
+//
+// Every field is optional. Leave out `agent_key` and the Session starts
+// unbound: `agent_id` stays null until the first turn binds it
+// permanently.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16905,18 +18640,13 @@ func (c *ClientWithResponses) CreateSessionWithBodyWithResponse(ctx context.Cont
 
 // CreateSessionWithResponse Create or seed a Session without admitting an Invocation
 //
-// Creates a Session with zero Invocations and optional host-asserted
-// starting history. Every body field is optional. An omitted `agent_key` leaves the
-// Session unbound: `agent_id` is null until the first admitted
-// Invocation binds it, and the binding is immutable once set either way;
-// `seed_messages` therefore requires `agent_key`. A `session_key`
-// requires an `agent_key`, because key uniqueness
-// and lookup are scoped per (tenant partition, Agent); a keyed create
-// is an upsert that accepts equal supplied Session options and returns
-// `session_options_conflict` when a supplied value differs.
-// Without a `session_key`, every call creates a fresh Session.
-// Precedence for the tenant partition is credential constraint,
-// explicit `tenant_key`, then the default partition.
+// Creates an empty Session, optionally seeded with history you already
+// have. Use this when you want a conversation to exist before the first
+// turn runs — to show it in a UI, or to import messages from elsewhere.
+//
+// Every field is optional. Leave out `agent_key` and the Session starts
+// unbound: `agent_id` stays null until the first turn binds it
+// permanently.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16936,32 +18666,31 @@ func (c *ClientWithResponses) CreateSessionWithResponse(ctx context.Context, bod
 // bindings, and undelivered webhooks. The erasure is immediate and
 // irreversible; a subsequent read is `not_found`.
 //
-// An Invocation still running is stopped. No cancellation is recorded,
-// because there is nothing left to record it against — the Invocation is
-// removed rather than settled, and no `invocation.settled` webhook
-// is emitted for it. A host that needs a settled record should cancel and
-// observe the terminal state before deleting.
+// A turn still running is stopped, but no cancellation is recorded —
+// there is nothing left to record it against, and no
+// `invocation.settled` webhook fires for it. If you need a record that
+// the turn ended, cancel it and wait for its final state before
+// deleting.
 //
-// Erasure is scoped like every other Session operation: an unknown or
-// out-of-scope `session_id` returns `not_found`, so a retry after a lost
-// response can treat `404` as already-done. The `delete_session`
-// operation belongs to the Runtime and Operator profiles; a Viewer
-// credential cannot erase a transcript.
+// An unknown `session_id`, or one outside your scope, returns
+// `not_found`. So if you lose the response and retry, you can safely
+// treat `404` as "already deleted". Deleting requires the Runtime or
+// Operator profile; a Viewer credential cannot erase a transcript.
 //
-// **This is not account deletion by itself.** nvoken keeps no account
-// tombstone, so a host honouring a deletion request must first stop
-// admitting work for that tenant, then page `GET /v1/sessions` and delete
-// until the list is empty. Otherwise a concurrent request creates a new
-// Session behind the sweep.
+// **Deleting Sessions is not the same as deleting a user's account.**
+// nvoken has no record that an account was deleted, so to honour a
+// deletion request you must first stop starting new turns for that
+// tenant, then page through `GET /v1/sessions` and delete until the list
+// comes back empty. Otherwise a request arriving mid-sweep creates a new
+// Session behind you.
 //
-// Two consequences worth planning for. Usage reporting shrinks
-// retroactively: `GET /v1/usage/daily` is computed at read time from
-// Invocation evidence that erasure removes, which is why the endpoint is
-// documented as operational visibility rather than a billing ledger — a
-// billing host records usage at settlement, keyed by Invocation id.
-// And the erased Invocations' idempotency keys become free for reuse,
-// consistent with the documented guarantee that deduplication holds while
-// the original Invocation is retained.
+// Two consequences to plan for. Past usage numbers shrink:
+// `GET /v1/usage/daily` is calculated from the records you just erased,
+// which is why it is operational visibility rather than a billing
+// ledger — bill from usage you recorded yourself when each turn
+// finished, keyed by Invocation ID. And the deleted turns' idempotency
+// keys become reusable, since deduplication only holds while the
+// original turn still exists.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17055,16 +18784,14 @@ func (c *ClientWithResponses) UpdateSessionWithResponse(ctx context.Context, ses
 
 // ListSessionCompactionsWithResponse Page through immutable Session compaction records
 //
-// Returns newest-first diagnostic records for every attempted compaction
-// pass. `applied` records include the private summary projection and its
-// model usage. `fell_through` records identify the failure class and may
-// include usage when the provider returned trustworthy evidence. Only
-// applied records change future model context; neither kind changes the
-// canonical Session transcript.
+// Lists every attempt nvoken made to summarize this Session's history,
+// newest first. Use it to understand why the model's context looks the
+// way it does.
 //
-// The summary is derived from the caller's own transcript and therefore
-// uses the same authorization and Session scoping as transcript reads.
-// The opaque cursor is bound to the authenticated app and Session.
+// An `applied` record includes the summary that took effect and what the
+// summarizing call cost. A `fell_through` record tells you why the
+// attempt was not usable, and includes usage when a model call happened
+// before it failed.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17149,13 +18876,14 @@ func (c *ClientWithResponses) ListSessionMessagesWithResponse(ctx context.Contex
 
 // GetSessionTranscriptWithResponse Drain a fixed-cut incremental transcript snapshot
 //
-// Projects canonical messages and append-only Invocation lifecycle
-// changes. Supply a prior `resume_cursor` as `cursor` to drain newer
-// durable state. Continue a multi-page fixed cut with `page_token` until
-// `has_more` is false. Each page contains one phase: all message pages are
-// delivered before lifecycle-change pages, so terminal state cannot
-// precede the transcript rows committed with it. Omitting both positions
-// starts at the beginning of the retained Session.
+// Returns the Session's stored messages plus a running log of turn state
+// changes.
+//
+// To catch up rather than re-read everything, pass a `resume_cursor` you
+// received earlier as `cursor` and you get only what is new since then.
+// Within one read, keep passing `page_token` until `has_more` is false —
+// all pages come from the same consistent snapshot, so the transcript
+// cannot shift under you mid-read.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17168,31 +18896,35 @@ func (c *ClientWithResponses) GetSessionTranscriptWithResponse(ctx context.Conte
 	return ParseGetSessionTranscriptHTTPResponse(rsp)
 }
 
-// StreamSessionTranscriptWithResponse Replay and tail one Session transcript over SSE
+// StreamSessionTranscriptWithResponse Follow a Session transcript over Server-Sent Events
 //
-// Opens a resumable Server-Sent Events projection over the same fixed-cut
-// transcript read model as the JSON endpoint. With deltas enabled, the
-// server subscribes to live fan-out before its first Postgres drain. In
-// either mode it re-drains Postgres on a bounded poll and closes after
-// authoritative terminal reconciliation or deliberate rotation.
-// Disconnecting never cancels the Invocation.
+// Streams a Session's transcript as it grows, and can be resumed after a
+// dropped connection. It covers the same messages as the JSON transcript
+// endpoint.
 //
-// Every nonempty `transcript.update` frame carries
-// `id: <resume_cursor>`; that opaque ID is the only replay position
-// clients persist. `output_text.delta`, `thinking.delta`,
-// `stream.resync`, and `stream.end` never carry an `id`. Deltas are
-// ephemeral and may be lost; after `stream.resync`, discard provisional
-// output and wait for canonical messages. `stream.end` reason `terminal`
-// means the final Postgres drain observed no nonterminal Invocation.
-// Reason `rotate` means reconnect with the last durable ID. An abnormal
-// close has no terminal meaning. `deltas=false` skips preview fan-out
-// without changing replay, polling, cursor, or terminal semantics.
+// Every non-empty `transcript.update` frame carries
+// `id: <resume_cursor>`. That opaque ID is your resume position and the
+// only value you need to store — reconnect with it and you continue
+// exactly where you left off. `output_text.delta`, `thinking.delta`,
+// `stream.resync`, and `stream.end` never carry an `id`, because they
+// are live previews and control frames rather than saved messages.
 //
-// The explicit `cursor` query parameter takes precedence over
-// `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
-// client that can set the `Authorization` header; the browser EventSource
-// constructor alone cannot do so. The server emits `retry: 1000` as its
-// default reconnect delay.
+// Previews can be lost. If you receive `stream.resync`, discard the
+// preview text you have accumulated and wait for the saved messages to
+// arrive. Set `deltas=false` to skip previews entirely; nothing about
+// replay, resumption, or how the stream ends changes.
+//
+// `stream.end` with reason `terminal` means no turn is still running.
+// Reason `rotate` means the server is cycling the connection —
+// reconnect with your last `id`. A connection that just drops carries no
+// meaning: reconnect and resume. Disconnecting never cancels a running
+// turn.
+//
+// The `cursor` query parameter wins over the `Last-Event-ID` header.
+// Because this endpoint uses bearer authentication, you need an SSE
+// client that can set the `Authorization` header — the browser's
+// built-in `EventSource` cannot. The server suggests a 1000 ms
+// reconnect delay.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17207,15 +18939,20 @@ func (c *ClientWithResponses) StreamSessionTranscriptWithResponse(ctx context.Co
 
 // GetDailyUsageWithResponse Read daily usage rollups
 //
-// Aggregates durable model-call evidence — invocation checkpoints plus
-// session compaction calls — into per-day buckets keyed by app,
-// provider, and model, summing token counts and estimated cost. Derived
-// at read time from the transcript record, never from a separately
-// maintained counter.
+// Totals your model usage by day, app, provider, and model, with token
+// counts and estimated cost. It counts every model call nvoken made on
+// your behalf, including the ones it makes to summarize long
+// conversations.
 //
-// An app-bound credential reads its own app. An app-less presentation
-// spans every registered app; for a console issuer token that requires
-// the admin claim.
+// These totals are calculated from the stored records each time you ask,
+// not kept in a running counter. That means deleting Sessions lowers
+// past numbers. Treat this as operational visibility into what your
+// agents are doing, not as a billing ledger — if you bill from usage,
+// record it yourself when each turn finishes, keyed by Invocation ID.
+//
+// A credential bound to an app sees only that app. A credential not
+// bound to any app sees every registered app; a console issuer token
+// needs its `admin` claim for that.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17941,6 +19678,308 @@ func ParseUpdateBudgetHTTPResponse(rsp *http.Response) (*UpdateBudgetHTTPRespons
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetCurrentIdentityHTTPResponse parses an HTTP response from a GetCurrentIdentityWithResponse call
+func ParseGetCurrentIdentityHTTPResponse(rsp *http.Response) (*GetCurrentIdentityHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetCurrentIdentityHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CurrentIdentity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListCredentialsHTTPResponse parses an HTTP response from a ListCredentialsWithResponse call
+func ParseListCredentialsHTTPResponse(rsp *http.Response) (*ListCredentialsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListCredentialsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CredentialList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateCredentialHTTPResponse parses an HTTP response from a CreateCredentialWithResponse call
+func ParseCreateCredentialHTTPResponse(rsp *http.Response) (*CreateCredentialHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateCredentialHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CredentialIssuance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers CreateCredentialHTTPResponse201Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetCredentialHTTPResponse parses an HTTP response from a GetCredentialWithResponse call
+func ParseGetCredentialHTTPResponse(rsp *http.Response) (*GetCredentialHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetCredentialHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Credential
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeCredentialHTTPResponse parses an HTTP response from a RevokeCredentialWithResponse call
+func ParseRevokeCredentialHTTPResponse(rsp *http.Response) (*RevokeCredentialHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeCredentialHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Credential
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRotateCredentialHTTPResponse parses an HTTP response from a RotateCredentialWithResponse call
+func ParseRotateCredentialHTTPResponse(rsp *http.Response) (*RotateCredentialHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RotateCredentialHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CredentialIssuance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 

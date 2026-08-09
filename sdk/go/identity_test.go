@@ -99,8 +99,8 @@ func TestIdentityLifecycleMethods(t *testing.T) {
 	if err != nil || revoked.Status != CredentialStatusRevoked {
 		t.Fatalf("RevokeCredential = %#v, %v", revoked, err)
 	}
-	if client.RawIdentity() == nil || requests != 6 {
-		t.Fatalf("raw identity = %#v, requests = %d", client.RawIdentity(), requests)
+	if client.Raw() == nil || requests != 6 {
+		t.Fatalf("raw client = %#v, requests = %d", client.Raw(), requests)
 	}
 }
 

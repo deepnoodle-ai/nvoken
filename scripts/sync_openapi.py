@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize public OpenAPI snapshots from the authoritative cloud repo."""
+"""Synchronize the public OpenAPI snapshot from the authoritative cloud repo."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OPENAPI_DIR = ROOT / "openapi"
 DEFAULT_CLOUD_REPO = ROOT.parent / "nvoken-cloud"
 UPSTREAM_REPOSITORY = "https://github.com/deepnoodle-ai/nvoken-cloud"
-CONTRACTS = ("runtime.yaml", "identity.yaml")
+CONTRACT = "nvoken.yaml"
 
 
 def git(repo: Path, *arguments: str) -> str:
@@ -30,11 +30,9 @@ def git(repo: Path, *arguments: str) -> str:
 
 
 def validate_source(repo: Path, *, allow_dirty: bool) -> tuple[str, bool]:
-    missing = [name for name in CONTRACTS if not (repo / "openapi" / name).is_file()]
-    if missing:
+    if not (repo / "openapi" / CONTRACT).is_file():
         raise ValueError(
-            f"{repo} is not an nvoken-cloud checkout; missing: "
-            + ", ".join(f"openapi/{name}" for name in missing)
+            f"{repo} is not an nvoken-cloud checkout; missing: openapi/{CONTRACT}"
         )
     commit = git(repo, "rev-parse", "HEAD")
     status = git(
@@ -42,7 +40,7 @@ def validate_source(repo: Path, *, allow_dirty: bool) -> tuple[str, bool]:
         "status",
         "--porcelain",
         "--",
-        *(f"openapi/{name}" for name in CONTRACTS),
+        f"openapi/{CONTRACT}",
     )
     dirty = bool(status)
     if dirty and not allow_dirty:
@@ -58,10 +56,7 @@ def provenance(commit: str, dirty: bool) -> dict[str, object]:
         "repository": UPSTREAM_REPOSITORY,
         "commit": commit,
         "dirty": dirty,
-        "contracts": {
-            name: f"openapi/{name}"
-            for name in CONTRACTS
-        },
+        "contract": f"openapi/{CONTRACT}",
     }
 
 
@@ -73,8 +68,7 @@ def synchronize(
 ) -> None:
     commit, dirty = validate_source(repo, allow_dirty=allow_dirty)
     destination.mkdir(parents=True, exist_ok=True)
-    for name in CONTRACTS:
-        shutil.copyfile(repo / "openapi" / name, destination / name)
+    shutil.copyfile(repo / "openapi" / CONTRACT, destination / CONTRACT)
     (destination / "SOURCE.json").write_text(
         json.dumps(provenance(commit, dirty), indent=2) + "\n",
         encoding="utf-8",
@@ -86,11 +80,10 @@ def synchronize(
 def check(repo: Path, destination: Path = OPENAPI_DIR) -> list[str]:
     commit, dirty = validate_source(repo, allow_dirty=True)
     failures: list[str] = []
-    for name in CONTRACTS:
-        local = destination / name
-        upstream = repo / "openapi" / name
-        if not local.is_file() or local.read_bytes() != upstream.read_bytes():
-            failures.append(f"openapi/{name} differs from {upstream}")
+    local = destination / CONTRACT
+    upstream = repo / "openapi" / CONTRACT
+    if not local.is_file() or local.read_bytes() != upstream.read_bytes():
+        failures.append(f"openapi/{CONTRACT} differs from {upstream}")
     source_path = destination / "SOURCE.json"
     try:
         actual = json.loads(source_path.read_text(encoding="utf-8"))
@@ -136,7 +129,7 @@ def main(argv: list[str]) -> int:
                 for failure in failures:
                     print(f"openapi sync: {failure}", file=sys.stderr)
                 return 1
-            print(f"OpenAPI snapshots match nvoken-cloud {git(repo, 'rev-parse', '--short=12', 'HEAD')}")
+            print(f"OpenAPI snapshot matches nvoken-cloud {git(repo, 'rev-parse', '--short=12', 'HEAD')}")
             return 0
         synchronize(repo, allow_dirty=args.allow_dirty)
         return 0

@@ -1,7 +1,7 @@
 """
-    nvoken Runtime API
+    nvoken API
 
-    This focused contract defines nvoken's implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion or retention-control operation. Session context compaction creates a private provider projection without mutating canonical Session messages. Authoritative records exposed by this contract, plus private compaction state, are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet's Data and retention section.  Inline and callback host tools, structured output, reusable definitions, URL media input, and reusable model provider key lifecycle are included. General administrative APIs remain outside this version.  ## Protected vocabulary  Several names deliberately converge with established agent APIs and must not be casually renamed: `metadata` uses OpenAI's bounds of 16 keys, 64-character names, and 512-byte values; `output_text` is the composed text convenience; `reasoning.effort` uses `low`, `medium`, `high`, `xhigh`, and `max`; `stop_reason: end_turn`, status `running`, and message phases `commentary` and `final_answer` are likewise intentional.  ## Echo resolved config  Every setting the runtime resolves on the caller's behalf is readable back, resolved, on the resource that used it. A host never has to reconstruct what applied from the request it sent plus its own model of nvoken's defaults — the resource says.  Concretely: an Invocation echoes `limits` after installation defaults and feature floors, alongside the `definition` it was admitted with exactly as snapshotted, and `provenance` records what actually ran. A Session echoes its compaction policy with `auto` already materialized to the integer it resolved to and the model it bound, and its retention window as accepted. New settings are expected to follow: a default the caller cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from typing_extensions import Annotated
 from nvoken_generated.models.budget import Budget
 from nvoken_generated.models.create_budget_request import CreateBudgetRequest
@@ -334,7 +334,7 @@ class BudgetsApi:
     @validate_call
     async def delete_budget(
         self,
-        budget_id: Annotated[str, Field(strict=True)],
+        budget_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -406,7 +406,7 @@ class BudgetsApi:
     @validate_call
     async def delete_budget_with_http_info(
         self,
-        budget_id: Annotated[str, Field(strict=True)],
+        budget_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -478,7 +478,7 @@ class BudgetsApi:
     @validate_call
     async def delete_budget_without_preload_content(
         self,
-        budget_id: Annotated[str, Field(strict=True)],
+        budget_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -610,7 +610,7 @@ class BudgetsApi:
     @validate_call
     async def get_budget(
         self,
-        budget_id: Annotated[str, Field(strict=True)],
+        budget_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -681,7 +681,7 @@ class BudgetsApi:
     @validate_call
     async def get_budget_with_http_info(
         self,
-        budget_id: Annotated[str, Field(strict=True)],
+        budget_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -752,7 +752,7 @@ class BudgetsApi:
     @validate_call
     async def get_budget_without_preload_content(
         self,
-        budget_id: Annotated[str, Field(strict=True)],
+        budget_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -883,7 +883,7 @@ class BudgetsApi:
     @validate_call
     async def update_budget(
         self,
-        budget_id: Annotated[str, Field(strict=True)],
+        budget_id: Annotated[str, Field(min_length=1, strict=True)],
         update_budget_request: UpdateBudgetRequest,
         _request_timeout: Union[
             None,
@@ -900,7 +900,7 @@ class BudgetsApi:
     ) -> Budget:
         """Raise or lower a Budget cap
 
-        Replaces the cap. It cannot be lower than settled plus reserved cost. Raising it reevaluates paused work in bounded batches.
+        Sets a new spending cap. It cannot be lower than what the current window has already used and committed. Raising it releases turns that were paused for hitting the old cap; they resume in batches rather than all at once.
 
         :param budget_id: (required)
         :type budget_id: str
@@ -960,7 +960,7 @@ class BudgetsApi:
     @validate_call
     async def update_budget_with_http_info(
         self,
-        budget_id: Annotated[str, Field(strict=True)],
+        budget_id: Annotated[str, Field(min_length=1, strict=True)],
         update_budget_request: UpdateBudgetRequest,
         _request_timeout: Union[
             None,
@@ -977,7 +977,7 @@ class BudgetsApi:
     ) -> ApiResponse[Budget]:
         """Raise or lower a Budget cap
 
-        Replaces the cap. It cannot be lower than settled plus reserved cost. Raising it reevaluates paused work in bounded batches.
+        Sets a new spending cap. It cannot be lower than what the current window has already used and committed. Raising it releases turns that were paused for hitting the old cap; they resume in batches rather than all at once.
 
         :param budget_id: (required)
         :type budget_id: str
@@ -1037,7 +1037,7 @@ class BudgetsApi:
     @validate_call
     async def update_budget_without_preload_content(
         self,
-        budget_id: Annotated[str, Field(strict=True)],
+        budget_id: Annotated[str, Field(min_length=1, strict=True)],
         update_budget_request: UpdateBudgetRequest,
         _request_timeout: Union[
             None,
@@ -1054,7 +1054,7 @@ class BudgetsApi:
     ) -> RESTResponseType:
         """Raise or lower a Budget cap
 
-        Replaces the cap. It cannot be lower than settled plus reserved cost. Raising it reevaluates paused work in bounded batches.
+        Sets a new spending cap. It cannot be lower than what the current window has already used and committed. Raising it releases turns that were paused for hitting the old cap; they resume in batches rather than all at once.
 
         :param budget_id: (required)
         :type budget_id: str

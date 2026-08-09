@@ -6,7 +6,7 @@ Official SDKs and command-line client for the
 This public repository contains the Go, Python, TypeScript, and Rust clients,
 the Go `nvoken` CLI, generated OpenAPI transports, shared conformance fixtures,
 and release automation. The service implementation and authoritative OpenAPI
-contracts live in the private `deepnoodle-ai/nvoken-cloud` repository.
+contract live in the private `deepnoodle-ai/nvoken-cloud` repository.
 
 ## Install an SDK
 
@@ -80,7 +80,7 @@ sdk/python/           Python package
 sdk/typescript/       TypeScript package
 sdk/rust/             Rust crate
 sdk/conformance/      Cross-language fixtures and local test server
-openapi/              Synchronized snapshots of nvoken-cloud contracts
+openapi/              Synchronized snapshot of the nvoken-cloud contract
 examples/             Executable SDK examples
 ```
 
@@ -102,10 +102,10 @@ Useful focused targets:
 make sdk-check              # all SDKs, conformance, examples, and CLI tests
 make sdk-generate           # regenerate from the committed OpenAPI snapshot
 make sdk-generate-check     # prove generated transports are current
-make openapi-sync-check     # compare snapshots with ../nvoken-cloud
+make openapi-sync-check     # compare the snapshot with ../nvoken-cloud
 ```
 
-When the authoritative contracts change, synchronize and regenerate them as
+When the authoritative contract changes, synchronize and regenerate it as
 one reviewed change:
 
 ```bash

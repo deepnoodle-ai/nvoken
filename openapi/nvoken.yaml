@@ -1,50 +1,79 @@
 openapi: 3.1.0
 info:
-  title: nvoken Runtime API
+  title: nvoken API
   version: 0.1.0
-  summary: Durable Invocation admission, execution, recovery, and live-output contract
+  summary: Run agent turns in the background, follow them live, and keep the conversation
   license:
     name: Apache-2.0
     identifier: Apache-2.0
   description: |
-    This focused contract defines nvoken's implemented background Runtime surface:
-    durable Invocation admission, authoritative Invocation and Session reads,
-    cursor-based transcript recovery, and resumable Session output streaming.
+    nvoken runs agent turns for you. You describe a turn — an agent
+    definition, a model, and some input — and nvoken queues it, runs it in the
+    background, keeps running it across restarts and failures, and lets you
+    either watch it live or come back for the result later.
 
-    The Runtime API has no deletion or retention-control operation. Session
-    context compaction creates a private provider projection without mutating
-    canonical Session messages. Authoritative records exposed by this contract,
-    plus private compaction state, are retained by default; the complete
-    inventory and any future ordered-deletion contract are governed by the
-    design packet's Data and retention section.
+    Your application stays in charge of what your agents are and when they
+    run. nvoken owns the conversation: it stores the messages, tracks the
+    state of every turn, and handles talking to the model providers.
 
-    Inline and callback host tools, structured output, reusable definitions,
-    URL media input, and reusable model provider key lifecycle are included.
-    General administrative APIs remain outside this version.
+    ## Getting started
 
-    ## Protected vocabulary
+    `POST /v1/invocations` starts a turn and returns a `202` right away.
+    From there:
 
-    Several names deliberately converge with established agent APIs and must
-    not be casually renamed: `metadata` uses OpenAI's bounds of 16 keys,
-    64-character names, and 512-byte values; `output_text` is the composed text
-    convenience; `reasoning.effort` uses `low`, `medium`, `high`, `xhigh`, and
-    `max`; `stop_reason: end_turn`, status `running`, and message phases
-    `commentary` and `final_answer` are likewise intentional.
+    - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or
+      read `GET /v1/invocations/{invocation_id}/result` whenever you want the
+      finished answer. Disconnecting never cancels anything.
+    - If your agent uses tools you run yourself, the turn stops with status
+      `waiting` and lists what it needs. Run them, post the results to
+      `/tool-results`, and the turn continues where it left off.
+    - Sessions carry conversation history from one turn to the next. They
+      last until you delete them, or until a retention window you set runs
+      out.
 
-    ## Echo resolved config
+    Also here: tools nvoken calls back to over HTTPS, remote MCP servers,
+    structured output validated against your JSON Schema, reusable agent
+    definitions, image and document input, your own model provider keys, and
+    spending limits.
 
-    Every setting the runtime resolves on the caller's behalf is readable back,
-    resolved, on the resource that used it. A host never has to reconstruct
-    what applied from the request it sent plus its own model of nvoken's
-    defaults — the resource says.
+    ## Authorization
 
-    Concretely: an Invocation echoes `limits` after installation defaults and
-    feature floors, alongside the `definition` it was admitted with exactly as
-    snapshotted, and `provenance` records what actually ran. A Session echoes
-    its compaction policy with `auto` already materialized to the integer it
-    resolved to and the model it bound, and its retention window as accepted.
-    New settings are expected to follow: a default the caller cannot read back
-    is a setting only the server knows about.
+    Machine credentials use `nvk_…` bearer API keys. A configured trusted
+    console may also present a short-lived Ed25519 issuer token; this is an
+    authentication presentation only and does not create a user identity model
+    in nvoken.
+
+    - Runtime credentials may call every Runtime operation and GET /v1/identity.
+    - Viewer credentials may call Runtime reads and GET /v1/identity.
+    - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.
+
+    Tenant, Session, operation, and expiry constraints only narrow these grants.
+
+    ## Familiar names
+
+    Where a name already means something in other agent APIs, nvoken uses it
+    the same way rather than inventing its own. `metadata` follows OpenAI's
+    limits of 16 keys, 64-character names, and 512-byte values. `output_text`
+    is the assistant's text joined into one string. `reasoning.effort` takes
+    `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`,
+    status `running`, and the `commentary` and `final_answer` message phases
+    are the same idea you have seen elsewhere. If you have integrated another
+    agent API, these should need no translation.
+
+    ## You can always read back what applied
+
+    Anything nvoken decides on your behalf is readable on the resource that
+    used it. You never have to work out what happened by combining the request
+    you sent with your own assumptions about nvoken's defaults — just read the
+    resource.
+
+    A turn reports the `limits` it is really running under, after defaults and
+    minimums; the `definition` it ran with, exactly as stored; and
+    `provenance`, which records what actually served the request. A Session
+    reports its summarization policy with `auto` already resolved to a real
+    number and a real model, and its retention window as accepted. New
+    settings will work the same way: a default you cannot read back is a
+    setting only the server knows about.
 
 servers:
   - url: /
@@ -55,7 +84,7 @@ tags:
   - name: Agents
     description: Installation-wide identity anchors; behavior remains per Invocation.
   - name: Invocations
-    description: Durable agent-turn admission and state. One Invocation is one agent turn—what OpenAI calls a Response and Cursor calls a Run.
+    description: One agent turn — what OpenAI calls a Response and Cursor calls a Run. Starting one queues background work and returns immediately.
   - name: Models
     description: Curated model discovery and exact model-selection inspection.
   - name: MCP
@@ -70,7 +99,11 @@ tags:
   - name: Apps
     description: Host applications using nvoken as their agentic backend.
   - name: Usage
-    description: Read-side token and cost analytics derived from durable evidence.
+    description: Token and cost totals, calculated from the stored record of what actually ran.
+  - name: Identity
+    description: |
+      Durable machine credential lifecycle and caller introspection. These
+      credentials authenticate every other operation in this contract.
 paths:
   /v1/apps:
     get:
@@ -147,7 +180,7 @@ paths:
           in: path
           required: true
           schema:
-            type: string
+            $ref: "#/components/schemas/AppID"
       responses:
         "200":
           description: The requested app.
@@ -173,7 +206,7 @@ paths:
           in: path
           required: true
           schema:
-            type: string
+            $ref: "#/components/schemas/AppID"
       requestBody:
         required: true
         content:
@@ -258,11 +291,14 @@ paths:
       operationId: listMCPTools
       summary: Discover and project one remote MCP server's tools
       description: |
-        Opens one short-lived streamable-HTTP MCP session through guarded
-        public-only egress, drains tools/list pagination, applies the same
-        allowlist and projection rules used by Invocation execution, and then
-        closes the session. Supplied headers are used only for this request,
-        are never logged or returned, and are not persisted.
+        Connects to a remote MCP server and lists the tools it offers, without
+        starting a turn. Use it to check a server works and see what the model
+        would get before you wire it into an agent.
+
+        nvoken opens one short-lived session, reads through every page of the
+        server's tool list, applies the same filtering rules a real turn would,
+        and disconnects. Headers you supply are used for this call only and are
+        never stored.
       requestBody:
         required: true
         content:
@@ -271,7 +307,9 @@ paths:
               $ref: "#/components/schemas/MCPListToolsRequest"
       responses:
         "200":
-          description: Stable projected tools and bounded exclusions.
+          description: |
+            The tools this server offers, named as the model will see them, plus
+            any that were excluded and why.
           content:
             application/json:
               schema:
@@ -354,79 +392,97 @@ paths:
     post:
       tags: [Invocations]
       operationId: createInvocation
-      summary: Durably admit one background agent turn
+      summary: Start one background agent turn
       description: |
-        Resolves or creates the installation-wide Agent identity anchor,
-        resolves or creates a Session, resolves the inline or referenced
-        definition, appends exactly one caller-input message, and creates one
-        queued Invocation in a single transaction. The response is sent only
-        after that transaction commits. The request handler never executes the
-        model.
+        Starts one agent turn and returns immediately. In a single database
+        transaction nvoken finds or creates the Agent and Session, resolves
+        the agent definition you sent inline or referenced by `definition_id`,
+        appends your input as one message, and queues the turn. You get a
+        response only after that transaction commits, so a `202` means the
+        work is safely recorded and will run even if nvoken restarts. The
+        model does not run on this request — it runs in the background, and
+        you follow it with the stream or by polling.
 
-        `session_id` and `session_key` are mutually exclusive. A Session ID must
-        belong to the named Agent, or be a Session created without one — the
-        first admitted Invocation binds the Agent permanently. An installation-wide
-        credential may omit `tenant_key` and use the Session's stored partition.
-        A tenant-constrained credential cannot cross its partition; an explicit
-        mismatch is rejected with `403 forbidden` before resource lookup.
+        Pick the Session with either `session_id` or `session_key`, not both.
+        A Session ID must belong to the Agent you named, or to a Session
+        created without an Agent — in which case this turn binds that Agent
+        permanently. An installation-wide credential may omit `tenant_key` and
+        use whichever tenant the Session already belongs to. A credential
+        locked to one tenant cannot reach another; naming a different one
+        returns `403 forbidden` without revealing whether the resource
+        exists.
 
-        `idempotency_key` is scoped to the effective
-        tenant partition, and `agent_key`. A same-key replay is checked before
-        the Session's one-nonterminal-Invocation rule. It returns the original
-        records without appending input, even when the Invocation is terminal.
-        Material equality covers the Session selector kind and value, the
-        resolved definition, and input. A `definition_id` and its byte-identical
-        inline definition compare equal. Requested limits are compared before
-        default resolution, so an explicit default differs from omission. JSON
-        object member order is ignored, array order is significant, and strings
-        are not rewritten. A changed material field returns
-        `idempotency_conflict`.
+        ## Retrying safely
 
-        `if_active` defaults to `reject`, preserving
-        `session_invocation_active`. Explicit `supersede` requires both create
-        and cancel authority. While holding the Session lock, it durably
-        cancels any nonterminal Invocation and admits this replacement in the
-        same transaction. With no active work it admits normally. Equal replay
-        returns the original work before supersession and never cancels newer
-        active work.
+        Send `idempotency_key` and you can retry this request without risking
+        a second turn. A repeat with the same key returns the original turn
+        and does not add your input again, even if that turn has already
+        finished. Keys are scoped to the tenant and `agent_key`.
 
-        `interrupt` requires the same authority and keeps the same lock
-        ordering, but stops the active Invocation gracefully instead of
-        cancelling it: work already at a seam settles and the replacement is
-        admitted in the same transaction, while work under a live lease has
-        the interrupt recorded and this request waits for it to settle. If it
-        has not settled within the wait, the response is
+        A repeat counts as the same request only if the Session selector, the
+        resolved definition, and the input all match. A `definition_id` and
+        the identical inline definition count as the same. Limits are compared
+        as you sent them, so sending a value that happens to equal the default
+        is not the same as omitting it. Key order inside JSON objects does not
+        matter; array order does. Change anything that matters and you get
+        `idempotency_conflict` rather than a surprise second turn.
+
+        ## When the Session is already busy
+
+        A Session runs one turn at a time, and `if_active` decides what
+        happens when you start another. The default, `reject`, returns
+        `session_invocation_active`.
+
+        `supersede` cancels the running turn and starts yours in its place,
+        atomically — there is no moment where the Session has no turn or two
+        turns. It requires permission to both create and cancel. Retrying the
+        same request returns your original turn and never cancels newer work
+        that started in the meantime.
+
+        `interrupt` needs the same permission but stops the running turn
+        cleanly instead of discarding its work. If that turn can stop
+        immediately, yours starts in the same transaction. If it is mid-step,
+        nvoken records the interrupt and this request waits for it. If it has
+        not stopped by the time the wait is up, you get
         `session_invocation_active` with `details.interrupt_requested = true`
-        and the request may be reissued.
+        — the interrupt is still in effect, so just send the request again.
 
-        A cataloged model continues to admit while deprecated. On and after
-        its `retires_at` date, a new admission is refused with `422
-        model_retired`; `details` carries the refused `model`, `retires_at`,
-        the exact `replacement` provider/id pair, and the request `path`.
-        Equal idempotent replay still returns work admitted before retirement.
+        ## Retired models
 
-        A text-only request body is limited to 1 MiB. A body carrying image or
-        document blocks is limited to 24 MiB, within which decoded media is
-        bounded separately: at most 8 media blocks, 16 MiB decoded in total,
-        5 MiB per image, and 16 MiB per document. Requests over any of these
-        limits are rejected before admission. URL media is fetched after an
-        idempotent replay check and before any row is admitted. The guarded
-        fetch accepts public HTTPS only, enforces the item limit while reading,
-        and sniffs the returned bytes. nvoken stores those bytes and does not
-        fetch the URL again.
+        A deprecated model keeps working. On and after its `retires_at` date,
+        new turns are refused with `422 model_retired`, and `details` tells
+        you what to do about it: the `model` you asked for, its `retires_at`
+        date, the exact `replacement` provider and id to switch to, and the
+        request `path`. Retrying an idempotency key from before the retirement
+        still returns that original turn.
 
-        The supported streaming pattern is admit-then-stream: admit with a
-        plain JSON POST, then follow the Invocation over
-        `GET /v1/invocations/{invocation_id}/stream`. It survives a dropped
-        connection without re-admitting and does not depend on front-end
-        streaming behavior. `Accept: text/event-stream` on this request is a
-        deployment-dependent convenience, not a first-class mode: the
-        committed admission is the first `invocation.accepted` frame and the
-        connection tails that Invocation through `invocation.result`, but
-        delivery requires the deployment front end to stream a non-`200`
-        POST response unbuffered. Some managed front ends (including Cloud
-        Run's) buffer it until the Invocation settles, which makes a
-        host-tool turn's `waiting` state invisible on this connection.
+        ## Size limits
+
+        A text-only body may be up to 1 MiB. A body with images or documents
+        may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB
+        of decoded media in total, 5 MiB per image, and 16 MiB per document.
+        Anything over these is rejected before a turn is created.
+
+        URLs are fetched after the idempotency check and before anything is
+        saved, so a retry does not download twice. nvoken accepts public HTTPS
+        only, stops reading at the size limit, and checks what the bytes
+        actually are. It stores them and never fetches the URL again.
+
+        ## Streaming
+
+        Start the turn with a plain JSON POST, then follow it with
+        `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
+        build on: it survives a dropped connection without starting the turn
+        over, and it works the same everywhere.
+
+        You can instead send `Accept: text/event-stream` on this request and
+        have the response stream directly, starting with `invocation.accepted`
+        and running through `invocation.result`. Treat that as a convenience,
+        not something to depend on — it needs your deployment's front end to
+        stream a non-`200` POST response without buffering. Some managed
+        platforms, Cloud Run among them, buffer it until the turn finishes.
+        On those, a turn that stops to wait for your tools appears to hang,
+        because you never see the `waiting` state.
       parameters:
         - name: X-Anthropic-Api-Key
           in: header
@@ -497,7 +553,7 @@ paths:
                 summary: Continue an existing Session by durable ID
                 value:
                   agent_key: support-triage
-                  session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                  session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                   idempotency_key: ticket-483:follow-up-3
                   input:
                     - type: text
@@ -539,13 +595,14 @@ paths:
       responses:
         "202":
           description: |
-            The Invocation is durably admitted, or an existing Invocation was
-            returned for an equal idempotent replay. A replay remains `202` even
-            when the returned status is terminal. `Accept: text/event-stream`
-            selects an Invocation-scoped stream with `invocation.accepted` as
-            its first frame and `invocation.result` as its terminal durable
-            frame — a deployment-dependent convenience; the supported pattern
-            is a plain JSON admission followed by
+            The turn is queued and will run, or your idempotency key matched a turn
+            that already existed and you got that one back. A repeat stays `202`
+            even when the turn it returns has already finished.
+
+            `Accept: text/event-stream` streams the turn directly on this response,
+            starting with `invocation.accepted` and ending with `invocation.result`.
+            That depends on your deployment not buffering the response — the
+            pattern to rely on is a plain JSON POST followed by
             `GET /v1/invocations/{invocation_id}/stream`.
           content:
             application/json:
@@ -555,10 +612,10 @@ paths:
                 admitted:
                   summary: New durable admission
                   value:
-                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                    session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
-                    id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                     definition: null
                     status: queued
@@ -585,10 +642,10 @@ paths:
                 replayed:
                   summary: Lost acknowledgement followed by equal replay
                   value:
-                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                    session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
-                    id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                     definition: null
                     status: running
@@ -615,10 +672,10 @@ paths:
                 terminalReplay:
                   summary: Equal replay after settlement still returns 202
                   value:
-                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                    session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
-                    id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                     definition: null
                     status: completed
@@ -689,7 +746,7 @@ paths:
                     message: This Session already has a nonterminal Invocation.
                     request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR3
                     details:
-                      invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                      invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                       status: running
                 sessionOptionsConflict:
                   summary: Supplied options differ from the stored Session
@@ -744,14 +801,16 @@ paths:
       operationId: getInvocation
       summary: Read authoritative Invocation identity and state
       description: |
-        Returns the durable current state. Post-admission failures appear here.
-        A credential authenticated for Runtime but denied this read operation
-        receives `forbidden`.
-        A resource outside the caller's tenant constraint is
-        reported as `not_found` when disclosure would reveal its existence.
+        The turn's current state, including anything that went wrong after it
+        started.
+
+        A credential that can authenticate but lacks permission for this read
+        gets `forbidden`. A turn belonging to another tenant is reported as
+        `not_found` rather than `forbidden`, so you cannot use this endpoint to
+        discover whether an ID exists outside your scope.
       responses:
         "200":
-          description: Authoritative Invocation state
+          description: The turn's current state.
           content:
             application/json:
               schema:
@@ -759,9 +818,9 @@ paths:
               examples:
                 queuedAfterEngineLoss:
                   value:
-                    id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                    session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
                     definition:
@@ -808,18 +867,22 @@ paths:
     get:
       tags: [Invocations]
       operationId: getInvocationResult
-      summary: Read the composed Invocation result
+      summary: Read a turn together with its messages
       description: |
-        Returns one InvocationResult at any status: the authoritative
-        Invocation, this Invocation's canonical messages composed at read
-        time, and the output_text convenience projection. The Invocation and
-        its messages are read in one repeatable-read snapshot, so the payload
-        never shows a terminal status with a missing message tail.
-        Authentication, tenant scoping, and the nondisclosing not_found rule
-        match the plain Invocation read exactly.
+        Returns the turn and the messages it produced, at any status. This is
+        the convenient read for "what did the agent say?" — `output_text`
+        gives you the assistant's text already joined into a single string, so
+        you do not have to walk the message blocks yourself.
+
+        The turn and its messages are read from one consistent database
+        snapshot, so you will never see a finished turn whose last message is
+        missing.
+
+        Authentication, tenant scoping, and the not-found behavior are the
+        same as reading the Invocation on its own.
       responses:
         "200":
-          description: Composed Invocation result
+          description: The turn and its messages.
           content:
             application/json:
               schema:
@@ -828,9 +891,9 @@ paths:
                 completedTextTurn:
                   value:
                     invocation:
-                      id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                      agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                      session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                      id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                      agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                      session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                       user_key: null
                       definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
                       definition:
@@ -858,10 +921,10 @@ paths:
                       updated_at: "2026-07-20T14:01:09Z"
                       ended_at: "2026-07-20T14:01:09Z"
                     messages:
-                      - id: smsg_019b0a12-9e61-7a44-bed2-0e07c1bdb333
-                        session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
-                        agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                        invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                      - id: msg_019b0a12-9e61-7a44-bed2-0e07c1bdb333
+                        session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                        agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                        invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                         user_key: null
                         sequence: 1
                         role: user
@@ -869,10 +932,10 @@ paths:
                           - type: text
                             text: Reply with a short hello.
                         created_at: "2026-07-20T14:01:02Z"
-                      - id: smsg_019b0a12-af71-7b54-9ed2-0e07c1bdb344
-                        session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
-                        agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                        invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                      - id: msg_019b0a12-af71-7b54-9ed2-0e07c1bdb344
+                        session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                        agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                        invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                         user_key: null
                         sequence: 2
                         role: assistant
@@ -925,7 +988,7 @@ paths:
                 $ref: "#/components/schemas/ToolCallList"
               example:
                 items:
-                  - id: tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325
+                  - id: call_019b0a12-8d51-7f34-aed2-0e07c1bdb325
                     mode: callback
                     name: create_ticket
                     status: completed
@@ -959,19 +1022,28 @@ paths:
     get:
       tags: [Invocations]
       operationId: streamInvocation
-      summary: Resume and tail one Invocation over SSE
+      summary: Follow one turn over Server-Sent Events
       description: |
-        Replays durable updates after `cursor`, optionally forwards ephemeral
-        output previews for this Invocation, and ends only when this Invocation
-        settles or the connection rotates. Durable frames carry an SSE `id`;
-        previews and control frames do not. After `stream.resync`, discard
-        provisional output and wait for durable state.
+        Follows one turn as it runs, and can be resumed after a dropped
+        connection. Pass `cursor` to pick up after a position you already
+        received; the stream replays everything saved since then, then
+        continues live until the turn finishes.
 
-        The explicit `cursor` query parameter takes precedence over
-        `Last-Event-ID`. `stream.end` reason `rotate` means reconnect with the
-        last durable ID. `deltas=false` skips preview fan-out without changing
-        replay, polling, cursor, or terminal semantics. Disconnecting never
-        cancels the Invocation.
+        Saved updates carry an SSE `id` — that is your resume position, and
+        the only value you need to store. Live text previews and control
+        frames carry no `id` because they are not saved state. If you receive
+        `stream.resync`, discard the preview text you have accumulated and
+        wait for the saved messages; previews can be lost, saved updates
+        cannot.
+
+        The `cursor` query parameter wins over the `Last-Event-ID` header.
+        `stream.end` with reason `rotate` means the server is cycling the
+        connection — reconnect using your last saved `id`. Set `deltas=false`
+        to skip previews; nothing about replay, resumption, or how the stream
+        ends changes.
+
+        Disconnecting never cancels the turn. It keeps running, and you can
+        reconnect or read it later.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - name: deltas
@@ -1013,16 +1085,22 @@ paths:
     post:
       tags: [Invocations]
       operationId: cancelInvocation
-      summary: Idempotently cancel an Invocation
+      summary: Stop a turn and discard its work
       description: |
-        Atomically makes nonterminal work `cancelled`. Repeating the request,
-        or cancelling an Invocation that already completed or failed, returns
-        the unchanged authoritative terminal row. A successful response means
-        cancellation is durable; provider work stops cooperatively and may
-        have already incurred external cost. The request body must be empty.
+        Stops a turn and discards what it produced. The turn ends `cancelled`
+        and its work does not carry into the next turn — use interrupt instead
+        if you want to keep it.
+
+        Safe to repeat. Cancelling a turn that already finished returns it
+        unchanged rather than failing. A successful response means the
+        cancellation is recorded and will stick. Work already sent to the
+        model provider stops as soon as it can, so you may still be billed for
+        what had run by then.
+
+        Send an empty request body.
       responses:
         "200":
-          description: Authoritative terminal Invocation state.
+          description: The turn's final state.
           content:
             application/json:
               schema:
@@ -1045,32 +1123,35 @@ paths:
     post:
       tags: [Invocations]
       operationId: interruptInvocation
-      summary: Gracefully stop an Invocation and keep its work
+      summary: Stop a turn but keep what it produced
       description: |
-        Asks the turn to stop at its next execution seam and settle
-        `completed` with `stop_reason = interrupted`, so its assistant and
-        tool messages stay in the next turn's generation context. That is the
-        whole difference from cancellation, which drops the turn's work from
-        every later turn.
+        Asks a running turn to stop at its next clean stopping point. It ends
+        `completed` with `stop_reason: interrupted`, and everything it
+        produced — the model's replies and any tool results — stays in the
+        conversation for the next turn. That is the whole difference from
+        cancelling, which throws the turn's work away.
 
-        The request is durable and idempotent. Work already at a seam —
-        `queued`, `waiting`, or `running` with no live owner — settles before
-        this call returns, closing any pending tool calls with synthetic
-        results; a subsequently submitted tool result then gets the ordinary
-        terminal `409`. Work under a live lease records the request and
-        returns the Invocation unchanged, still `running`: its executor stops
-        at the next checkpoint boundary, at worst one provider call away.
-        Follow the Invocation stream or re-read it to observe settlement.
+        The request is recorded and safe to repeat. What happens next depends
+        on what the turn was doing:
 
-        Interrupting terminal work is a no-op that returns the unchanged
-        terminal row. A turn whose definition carries `structured_output` and that
-        never published a validated object fails
-        `structured_output_unsatisfied` instead of completing — the
-        obligation was not met. Usage and settlement evidence are complete:
-        the work was kept, so it is charged. The request body must be empty.
+        - Between steps (`queued`, `waiting`, or `running` with nothing
+          actively executing) it stops before this call returns. Any tool
+          calls you still owed results for are closed out, so submitting one
+          afterwards returns `409`.
+        - Mid-step, nvoken records the request and returns the turn still
+          `running`. It stops at the next checkpoint, at worst one model call
+          later. Watch the stream or re-read the turn to see it end.
+
+        Interrupting a turn that has already finished changes nothing and
+        returns it as-is. A turn that was asked for structured output but
+        never produced a valid object ends `failed` with
+        `structured_output_unsatisfied` rather than `completed`. Either way
+        usage is reported in full and billed, because the work was kept.
+
+        Send an empty request body.
       responses:
         "200":
-          description: Authoritative Invocation state after the request.
+          description: The turn's state after the request.
           content:
             application/json:
               schema:
@@ -1093,13 +1174,16 @@ paths:
     post:
       tags: [Invocations]
       operationId: resumeInvocation
-      summary: Raise the exhausted turn ceiling and resume a paused Invocation
+      summary: Raise a paused turn's limit and continue it
       description: |
-        Requeues an Invocation paused on a turn-level consumption ceiling.
-        `limits` must contain only the exhausted field, raised above both its
-        prior value and the amount already consumed, and the new value must
-        remain within installation policy. A Session-budget pause resumes by
-        raising or removing the Session budget instead. Deadlines never pause.
+        Continues a turn that paused because one of its own spending limits
+        ran out. Send `limits` containing only the limit that ran out, raised
+        above both its old value and what the turn has already used, and still
+        within what your installation allows.
+
+        If the turn paused on the Session budget rather than its own limit,
+        raise or remove that budget instead — this endpoint will not resume
+        it. Deadlines never pause a turn, so they never bring you here.
       requestBody:
         required: true
         content:
@@ -1108,7 +1192,7 @@ paths:
               $ref: "#/components/schemas/ResumeInvocationRequest"
       responses:
         "202":
-          description: The authoritative Invocation, requeued for execution.
+          description: The turn, queued to continue.
           content:
             application/json:
               schema:
@@ -1127,46 +1211,42 @@ paths:
     post:
       tags: [Invocations]
       operationId: nudgeInvocation
-      summary: Append steering to a running Invocation
+      summary: Send extra direction to a running turn
       description: |
-        Stages caller guidance against a turn that is already running — "focus
-        on the marine segment" — without ending it and without discarding the
-        work being steered. This is the difference from
-        `if_active: supersede`, which rewinds: a superseded turn's assistant
-        and tool work product is dropped from the next generation, so steering
-        a long turn by supersession throws away exactly what is being steered.
-        Unlike Claude's `system.message`, a nudge is durable staged input
-        consumed at an execution seam, not an event injected immediately into
-        a managed session.
+        Sends extra direction to a turn that is already running — "focus on
+        the marine segment" — without stopping it and without losing the work
+        you are steering. Use this when a long turn is heading the wrong way
+        and you want to correct it in place.
 
-        A nudge is not an interrupt. The earliest injection point is the next
-        execution seam: the start of the next execution segment, which is a
-        host-tool turn's park boundary, or the stop seam where a turn that
-        considers itself finished re-enters its loop to answer the input in
-        place. An in-flight provider call or tool run is never aborted for it,
-        and an Invocation that has been interrupted is never given more to do —
-        the interrupt wins the seam and the staged input expires.
+        Compare with `if_active: supersede` on a new Invocation, which
+        replaces the running turn and discards what it had produced. Steering
+        a long turn that way throws away exactly the work you were trying to
+        redirect.
 
-        A nudge is never implicitly minted and never implicitly converted.
-        `POST /v1/invocations` against a busy Session keeps its `if_active`
-        semantics; admission is never silently turned into a nudge, and a
-        nudge is never silently turned into an Invocation. nvoken holds no
-        agent configuration — the definition travels inline on every admission — so
-        there is nothing it could legitimately run converted input with.
+        **A nudge is not an interrupt, and it is not immediate.** The turn
+        picks it up at its next clean stopping point: when it starts its next
+        step, when it pauses for you to run a tool, or when a turn that
+        thought it was finished re-enters its loop to answer you. A model call
+        or tool run already in flight is never aborted to deliver it. A turn
+        you have interrupted is never given more work — the interrupt wins and
+        the direction you staged expires unused.
 
-        Input that the turn never takes is settled `expired` when the
-        Invocation settles, in the same transaction and under the same Session
-        lock this request takes. It never influences a later Invocation.
-        Re-sending missed direction as the next Invocation's input is the
-        host's call to make, and `GET .../pending-inputs` is where the miss is
-        visible.
+        Nudges and Invocations never turn into each other. Posting to
+        `/v1/invocations` against a busy Session behaves exactly as its
+        `if_active` setting says; it never quietly becomes a nudge, and a
+        nudge never quietly becomes a new turn.
 
-        `content` is text: a string, or an array of text blocks. Image and
-        document blocks are accepted on an Invocation's own input but not
-        here, because the stop seam carries a continuation as text and staging
-        content one seam would silently drop is worse than refusing it.
+        If the turn ends without ever picking it up, your input is marked
+        `expired` at that moment and has no effect on any later turn. Check
+        `GET .../pending-inputs` to see whether it was used or missed. Whether
+        to re-send missed direction as the next turn's input is your call.
 
-        Requires the same authority as cancelling the Invocation.
+        `content` must be text — a string, or an array of text blocks. Images
+        and documents are fine on a turn's own input but are refused here,
+        because a turn resuming in place carries text only, and silently
+        dropping your attachment would be worse than telling you now.
+
+        Requires the same permission as cancelling the turn.
       requestBody:
         required: true
         content:
@@ -1178,7 +1258,7 @@ paths:
               idempotency_key: nudge-1
       responses:
         "202":
-          description: The input is staged for the next execution seam.
+          description: Your direction is queued. The turn will pick it up at its next stopping point.
           content:
             application/json:
               schema:
@@ -1214,12 +1294,14 @@ paths:
       operationId: listPendingInputs
       summary: List staged input for an Invocation
       description: |
-        Returns the staged queue in `(created_at, id)` ascending order — the
-        order the turn will consume it — with settled rows retained so a
-        caller can answer "what did the user say, and did the model see it".
-        This, not an event vocabulary, is the reconciliation source for a
-        surface that shows queued direction: a drained input also appears on
-        the transcript stream as an ordinary `user` message.
+        Lists the direction you have sent to this turn with `/nudge`, in the
+        order the turn will pick it up. Entries stay listed after they are used
+        or missed, so you can answer "what did the user say, and did the model
+        ever see it?"
+
+        Check `status` on each entry: `drained` means the turn used it,
+        `expired` means the turn ended first, `cancelled` means you withdrew
+        it.
       parameters:
         - name: status
           in: query
@@ -1263,17 +1345,14 @@ paths:
       operationId: cancelPendingInput
       summary: Withdraw staged input the turn has not taken
       description: |
-        Cancels input that is still `pending`. Cancelling input that is
-        already `cancelled` returns it unchanged, so a retry is safe.
+        Withdraws direction you sent with `/nudge`, as long as the turn has not
+        picked it up yet. Cancelling something already cancelled returns it
+        unchanged, so retrying is safe.
 
-        Cancel and drain serialize on the row, so whichever commits first
-        wins outright: a cancelled input is never seen by the model, and input
-        the executor already drained is reported `409 pending_input_settled`
-        with the current resource in `details.pending_input` rather than being
-        withdrawn from a transcript it is already part of. The request body
-        must be empty.
-
-        Requires the same authority as cancelling the Invocation.
+        Cancelling races the turn, and whichever happens first wins outright:
+        you either withdraw it cleanly or the turn uses it. It is never
+        half-applied. If the turn got there first, you get a conflict and the
+        entry stays `drained`.
       responses:
         "200":
           description: The pending input after the request.
@@ -1334,11 +1413,11 @@ paths:
               $ref: "#/components/schemas/SubmitHostToolResultsRequest"
             example:
               results:
-                - tool_call_id: tcal_019b0a12-9e61-7144-bed2-0e07c1bdb333
+                - tool_call_id: call_019b0a12-9e61-7144-bed2-0e07c1bdb333
                   content:
                     order_id: order-123
                     state: ready
-                - tool_call_id: tcal_019b0a12-af71-7254-8ed2-0e07c1bdb344
+                - tool_call_id: call_019b0a12-af71-7254-8ed2-0e07c1bdb344
                   content:
                     delivered: false
                   is_error: true
@@ -1440,8 +1519,10 @@ paths:
       operationId: updateBudget
       summary: Raise or lower a Budget cap
       description: |
-        Replaces the cap. It cannot be lower than settled plus reserved cost.
-        Raising it reevaluates paused work in bounded batches.
+        Sets a new spending cap. It cannot be lower than what the current
+        window has already used and committed. Raising it releases turns that
+        were paused for hitting the old cap; they resume in batches rather than
+        all at once.
       requestBody:
         required: true
         content:
@@ -1637,11 +1718,12 @@ paths:
       operationId: getProviderKeyUsage
       summary: Read the token usage rollup for one provider key
       description: |
-        Aggregates durable checkpoint evidence across every Invocation that
-        bound the provider key: how many Invocations used it, when a model call
-        last used it, and the summed model usage. Derived at read time from the
-        transcript record, never from a separately maintained counter.
-        Authorization matches reading the provider key itself.
+        Totals usage for one provider key across every turn that used it: how
+        many turns, when a model call last used it, and the combined token and
+        cost totals.
+
+        Calculated from stored records each time you ask, not kept in a running
+        counter, so deleting Sessions lowers these numbers.
       responses:
         "200":
           description: Aggregated usage attributed to the provider key.
@@ -1660,15 +1742,20 @@ paths:
       operationId: getDailyUsage
       summary: Read daily usage rollups
       description: |
-        Aggregates durable model-call evidence — invocation checkpoints plus
-        session compaction calls — into per-day buckets keyed by app,
-        provider, and model, summing token counts and estimated cost. Derived
-        at read time from the transcript record, never from a separately
-        maintained counter.
+        Totals your model usage by day, app, provider, and model, with token
+        counts and estimated cost. It counts every model call nvoken made on
+        your behalf, including the ones it makes to summarize long
+        conversations.
 
-        An app-bound credential reads its own app. An app-less presentation
-        spans every registered app; for a console issuer token that requires
-        the admin claim.
+        These totals are calculated from the stored records each time you ask,
+        not kept in a running counter. That means deleting Sessions lowers
+        past numbers. Treat this as operational visibility into what your
+        agents are doing, not as a billing ledger — if you bill from usage,
+        record it yourself when each turn finishes, keyed by Invocation ID.
+
+        A credential bound to an app sees only that app. A credential not
+        bound to any app sees every registered app; a console issuer token
+        needs its `admin` claim for that.
       parameters:
         - name: start_date
           in: query
@@ -1851,18 +1938,13 @@ paths:
       operationId: createSession
       summary: Create or seed a Session without admitting an Invocation
       description: |
-        Creates a Session with zero Invocations and optional host-asserted
-        starting history. Every body field is optional. An omitted `agent_key` leaves the
-        Session unbound: `agent_id` is null until the first admitted
-        Invocation binds it, and the binding is immutable once set either way;
-        `seed_messages` therefore requires `agent_key`. A `session_key`
-        requires an `agent_key`, because key uniqueness
-        and lookup are scoped per (tenant partition, Agent); a keyed create
-        is an upsert that accepts equal supplied Session options and returns
-        `session_options_conflict` when a supplied value differs.
-        Without a `session_key`, every call creates a fresh Session.
-        Precedence for the tenant partition is credential constraint,
-        explicit `tenant_key`, then the default partition.
+        Creates an empty Session, optionally seeded with history you already
+        have. Use this when you want a conversation to exist before the first
+        turn runs — to show it in a UI, or to import messages from elsewhere.
+
+        Every field is optional. Leave out `agent_key` and the Session starts
+        unbound: `agent_id` stays null until the first turn binds it
+        permanently.
       requestBody:
         required: true
         content:
@@ -1899,11 +1981,10 @@ paths:
       operationId: listSessions
       summary: List authoritative Sessions
       description: |
-        Returns newest-first Session identity and current nonterminal
-        Invocation state. Exact filters combine with AND. Tenant filtering and
-        cursor binding follow the Invocation-list rules. `agent_id` and
-        `agent_key` are mutually exclusive and normalize to the same cursor
-        filter.
+        Lists Sessions, newest first, each with the state of its currently
+        running turn if it has one. Filters combine with AND. Tenant filtering
+        and cursors work the same as on the Invocation list. `agent_id` and
+        `agent_key` are mutually exclusive.
       parameters:
         - $ref: "#/components/parameters/TenantKeyFilter"
         - $ref: "#/components/parameters/DefaultTenantFilter"
@@ -1956,7 +2037,7 @@ paths:
         `forbidden`.
       responses:
         "200":
-          description: Authoritative Session identity and state
+          description: The Session's current identity and state.
           content:
             application/json:
               schema:
@@ -1964,13 +2045,13 @@ paths:
               examples:
                 keyedTenantSession:
                   value:
-                    id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
-                    agent_id: agnt_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                     tenant_key: tenant-acme
                     session_key: ticket-483
                     user_key: null
                     forked_from: null
-                    active_invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    active_invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     active_invocation_status: running
                     blocking_budget: null
                     compaction: null
@@ -2065,32 +2146,31 @@ paths:
         bindings, and undelivered webhooks. The erasure is immediate and
         irreversible; a subsequent read is `not_found`.
 
-        An Invocation still running is stopped. No cancellation is recorded,
-        because there is nothing left to record it against — the Invocation is
-        removed rather than settled, and no `invocation.settled` webhook
-        is emitted for it. A host that needs a settled record should cancel and
-        observe the terminal state before deleting.
+        A turn still running is stopped, but no cancellation is recorded —
+        there is nothing left to record it against, and no
+        `invocation.settled` webhook fires for it. If you need a record that
+        the turn ended, cancel it and wait for its final state before
+        deleting.
 
-        Erasure is scoped like every other Session operation: an unknown or
-        out-of-scope `session_id` returns `not_found`, so a retry after a lost
-        response can treat `404` as already-done. The `delete_session`
-        operation belongs to the Runtime and Operator profiles; a Viewer
-        credential cannot erase a transcript.
+        An unknown `session_id`, or one outside your scope, returns
+        `not_found`. So if you lose the response and retry, you can safely
+        treat `404` as "already deleted". Deleting requires the Runtime or
+        Operator profile; a Viewer credential cannot erase a transcript.
 
-        **This is not account deletion by itself.** nvoken keeps no account
-        tombstone, so a host honouring a deletion request must first stop
-        admitting work for that tenant, then page `GET /v1/sessions` and delete
-        until the list is empty. Otherwise a concurrent request creates a new
-        Session behind the sweep.
+        **Deleting Sessions is not the same as deleting a user's account.**
+        nvoken has no record that an account was deleted, so to honour a
+        deletion request you must first stop starting new turns for that
+        tenant, then page through `GET /v1/sessions` and delete until the list
+        comes back empty. Otherwise a request arriving mid-sweep creates a new
+        Session behind you.
 
-        Two consequences worth planning for. Usage reporting shrinks
-        retroactively: `GET /v1/usage/daily` is computed at read time from
-        Invocation evidence that erasure removes, which is why the endpoint is
-        documented as operational visibility rather than a billing ledger — a
-        billing host records usage at settlement, keyed by Invocation id.
-        And the erased Invocations' idempotency keys become free for reuse,
-        consistent with the documented guarantee that deduplication holds while
-        the original Invocation is retained.
+        Two consequences to plan for. Past usage numbers shrink:
+        `GET /v1/usage/daily` is calculated from the records you just erased,
+        which is why it is operational visibility rather than a billing
+        ledger — bill from usage you recorded yourself when each turn
+        finished, keyed by Invocation ID. And the deleted turns' idempotency
+        keys become reusable, since deduplication only holds while the
+        original turn still exists.
       responses:
         "204":
           description: The Session and its subtree no longer exist.
@@ -2137,7 +2217,7 @@ paths:
             examples:
               byMessageID:
                 value:
-                  from_message: smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                  from_message: msg_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                   session_key: ticket-483-alt
               bySequence:
                 value:
@@ -2207,16 +2287,14 @@ paths:
       operationId: listSessionCompactions
       summary: Page through immutable Session compaction records
       description: |
-        Returns newest-first diagnostic records for every attempted compaction
-        pass. `applied` records include the private summary projection and its
-        model usage. `fell_through` records identify the failure class and may
-        include usage when the provider returned trustworthy evidence. Only
-        applied records change future model context; neither kind changes the
-        canonical Session transcript.
+        Lists every attempt nvoken made to summarize this Session's history,
+        newest first. Use it to understand why the model's context looks the
+        way it does.
 
-        The summary is derived from the caller's own transcript and therefore
-        uses the same authorization and Session scoping as transcript reads.
-        The opaque cursor is bound to the authenticated app and Session.
+        An `applied` record includes the summary that took effect and what the
+        summarizing call cost. A `fell_through` record tells you why the
+        attempt was not usable, and includes usage when a model call happened
+        before it failed.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -2249,13 +2327,14 @@ paths:
       operationId: getSessionTranscript
       summary: Drain a fixed-cut incremental transcript snapshot
       description: |
-        Projects canonical messages and append-only Invocation lifecycle
-        changes. Supply a prior `resume_cursor` as `cursor` to drain newer
-        durable state. Continue a multi-page fixed cut with `page_token` until
-        `has_more` is false. Each page contains one phase: all message pages are
-        delivered before lifecycle-change pages, so terminal state cannot
-        precede the transcript rows committed with it. Omitting both positions
-        starts at the beginning of the retained Session.
+        Returns the Session's stored messages plus a running log of turn state
+        changes.
+
+        To catch up rather than re-read everything, pass a `resume_cursor` you
+        received earlier as `cursor` and you get only what is new since then.
+        Within one read, keep passing `page_token` until `has_more` is false —
+        all pages come from the same consistent snapshot, so the transcript
+        cannot shift under you mid-read.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - name: page_token
@@ -2292,31 +2371,35 @@ paths:
     get:
       tags: [Sessions]
       operationId: streamSessionTranscript
-      summary: Replay and tail one Session transcript over SSE
+      summary: Follow a Session transcript over Server-Sent Events
       description: |
-        Opens a resumable Server-Sent Events projection over the same fixed-cut
-        transcript read model as the JSON endpoint. With deltas enabled, the
-        server subscribes to live fan-out before its first Postgres drain. In
-        either mode it re-drains Postgres on a bounded poll and closes after
-        authoritative terminal reconciliation or deliberate rotation.
-        Disconnecting never cancels the Invocation.
+        Streams a Session's transcript as it grows, and can be resumed after a
+        dropped connection. It covers the same messages as the JSON transcript
+        endpoint.
 
-        Every nonempty `transcript.update` frame carries
-        `id: <resume_cursor>`; that opaque ID is the only replay position
-        clients persist. `output_text.delta`, `thinking.delta`,
-        `stream.resync`, and `stream.end` never carry an `id`. Deltas are
-        ephemeral and may be lost; after `stream.resync`, discard provisional
-        output and wait for canonical messages. `stream.end` reason `terminal`
-        means the final Postgres drain observed no nonterminal Invocation.
-        Reason `rotate` means reconnect with the last durable ID. An abnormal
-        close has no terminal meaning. `deltas=false` skips preview fan-out
-        without changing replay, polling, cursor, or terminal semantics.
+        Every non-empty `transcript.update` frame carries
+        `id: <resume_cursor>`. That opaque ID is your resume position and the
+        only value you need to store — reconnect with it and you continue
+        exactly where you left off. `output_text.delta`, `thinking.delta`,
+        `stream.resync`, and `stream.end` never carry an `id`, because they
+        are live previews and control frames rather than saved messages.
 
-        The explicit `cursor` query parameter takes precedence over
-        `Last-Event-ID`. Bearer authentication requires an SSE-capable HTTP
-        client that can set the `Authorization` header; the browser EventSource
-        constructor alone cannot do so. The server emits `retry: 1000` as its
-        default reconnect delay.
+        Previews can be lost. If you receive `stream.resync`, discard the
+        preview text you have accumulated and wait for the saved messages to
+        arrive. Set `deltas=false` to skip previews entirely; nothing about
+        replay, resumption, or how the stream ends changes.
+
+        `stream.end` with reason `terminal` means no turn is still running.
+        Reason `rotate` means the server is cycling the connection —
+        reconnect with your last `id`. A connection that just drops carries no
+        meaning: reconnect and resume. Disconnecting never cancels a running
+        turn.
+
+        The `cursor` query parameter wins over the `Last-Event-ID` header.
+        Because this endpoint uses bearer authentication, you need an SSE
+        client that can set the `Authorization` header — the browser's
+        built-in `EventSource` cannot. The server suggests a 1000 ms
+        reconnect delay.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - name: deltas
@@ -2354,6 +2437,154 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
+  /v1/identity:
+    get:
+      tags: [Identity]
+      operationId: getCurrentIdentity
+      summary: Explain the authenticated caller
+      responses:
+        "200":
+          description: The resolved caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentIdentity"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /v1/identity/credentials:
+    get:
+      tags: [Identity]
+      operationId: listCredentials
+      summary: List safe credential metadata
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/CredentialStatus"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/CredentialLimit"
+      responses:
+        "200":
+          description: Bounded credential metadata only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Identity]
+      operationId: createCredential
+      summary: Create a machine credential
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCredentialRequest"
+      responses:
+        "201":
+          description: One-time credential secret
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialIssuance"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /v1/identity/credentials/{credential_id}:
+    parameters:
+      - $ref: "#/components/parameters/CredentialID"
+    get:
+      tags: [Identity]
+      operationId: getCredential
+      summary: Read safe credential metadata
+      responses:
+        "200":
+          description: Credential metadata without secret material
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/identity/credentials/{credential_id}/rotate:
+    parameters:
+      - $ref: "#/components/parameters/CredentialID"
+    post:
+      tags: [Identity]
+      operationId: rotateCredential
+      summary: Rotate a machine credential with bounded overlap
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [overlap_seconds]
+              properties:
+                overlap_seconds:
+                  type: integer
+                  minimum: 0
+                  maximum: 86400
+      responses:
+        "201":
+          description: One-time replacement secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialIssuance"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /v1/identity/credentials/{credential_id}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/CredentialID"
+    post:
+      tags: [Identity]
+      operationId: revokeCredential
+      summary: Revoke a credential
+      responses:
+        "200":
+          description: Revoked credential metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 webhooks:
   toolCallback:
     post:
@@ -2361,22 +2592,27 @@ webhooks:
       security: []
       summary: Receive a signed callback ToolCall delivery
       description: |
-        nvoken sends this request to the HTTPS endpoint declared by a callback
-        tool. Delivery is at least once. A receiver must deduplicate by the
-        ToolCall ID in Idempotency-Key.
+        nvoken sends this request to the HTTPS endpoint you declared on a
+        callback tool. Your endpoint runs the tool and replies with the result.
 
-        The signature is HMAC-SHA256 over
-        `v1.<delivery_id>.<timestamp>.<raw_body>`. The signing key is selected
-        by its ID and positive version headers. The signature value is lowercase
-        hex with a `sha256=` prefix. Verify the raw body in constant time before
-        parsing it. Enforce a receiver-side timestamp skew window.
+        **Expect duplicates.** Delivery is at-least-once, so the same request
+        can arrive more than once. Deduplicate on the ToolCall ID in the
+        `Idempotency-Key` header.
 
-        Delivery uses a lease, exponential backoff, and at most five attempts.
-        Retryable transport failures and HTTP 408, 425, 429, 500, 502, 503, and
-        504 are retried. The same request may arrive more than once. An invalid
-        successful reply is not retried. When delivery fails or attempts are
-        exhausted, nvoken settles the ToolCall with `is_error: true` and content
-        `{"code":"callback_delivery_failed"}`. The Invocation then continues.
+        **Verify the signature before you parse the body.** It is an
+        HMAC-SHA256 over `v1.<delivery_id>.<timestamp>.<raw_body>`, sent as
+        lowercase hex with a `sha256=` prefix. Headers tell you which signing
+        key and version to use. Compare in constant time, against the raw bytes
+        rather than re-serialized JSON, and reject timestamps too far from your
+        own clock.
+
+        **If you never reply successfully, the turn still moves on.** nvoken
+        retries with exponential backoff, up to five attempts, on connection
+        failures and on HTTP 408, 425, 429, 500, 502, 503, and 504. A reply
+        that arrives but is malformed is not retried. Once attempts run out,
+        nvoken records the tool call as failed with `is_error: true` and
+        content `{"code":"callback_delivery_failed"}`, and the turn continues
+        from there — so your agent sees a failed tool rather than hanging.
       parameters:
         - name: X-Nvoken-Signature
           in: header
@@ -2402,7 +2638,7 @@ webhooks:
           in: header
           required: true
           schema:
-            $ref: "#/components/schemas/CallbackDeliveryID"
+            $ref: "#/components/schemas/DeliveryID"
         - name: X-Nvoken-Signing-Key-Id
           in: header
           required: true
@@ -2431,10 +2667,10 @@ webhooks:
             example:
               nvoken:
                 schema_version: 1
-                delivery_id: cbdy_019b0a12-8d51-7f34-aed2-0e07c1bdb326
-                tool_call_id: tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325
-                invocation_id: invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                session_id: sesn_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                delivery_id: dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326
+                tool_call_id: call_019b0a12-8d51-7f34-aed2-0e07c1bdb325
+                invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                 agent_key: support
                 tenant_key: acme
               input:
@@ -2462,11 +2698,13 @@ components:
       scheme: bearer
       bearerFormat: API key or Ed25519 JWT
       description: |
-        Machine API keys are always accepted. When
-        `CONSOLE_ISSUER_PUBLIC_KEYS` is configured, nvoken also accepts
-        short-lived Ed25519 console issuer tokens with issuer
-        `nvoken-console`, audience `nvoken`, an app or installation scope,
-        an operator or viewer profile, and an opaque subject.
+        Present either a machine API key or, when
+        `CONSOLE_ISSUER_PUBLIC_KEYS` is configured, a JWT with `alg: EdDSA`,
+        a known `kid`, `iss: nvoken-console`, `aud: nvoken`, and required
+        `iat`, `exp`, `scope`, `profile`, and `sub` claims. `scope` is `app`
+        (with `app_id`) or `installation`; `profile` is `operator` or
+        `viewer`; `exp - iat` may not exceed five minutes. An app token's
+        `sub` must equal the app's `external_ref` unless `admin: true`.
   headers:
     ETag:
       description: Strong validator for this exact JSON representation.
@@ -2516,6 +2754,20 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/BudgetID"
+    CredentialID:
+      name: credential_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/APICredentialID"
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
     Cursor:
       name: cursor
       in: query
@@ -2531,6 +2783,17 @@ components:
         type: integer
         minimum: 1
         maximum: 200
+        default: 100
+    CredentialLimit:
+      name: limit
+      in: query
+      description: |
+        Maximum credentials in this page. Defaults to 100. Credential listing
+        caps at 100 rather than the 200 the other list operations allow.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
         default: 100
     UserKeyFilter:
       name: user_key
@@ -2570,8 +2833,8 @@ components:
   schemas:
     AgentID:
       type: string
-      pattern: "^agnt_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `agnt_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
     Agent:
       type: object
       additionalProperties: false
@@ -2596,7 +2859,7 @@ components:
       required: [id, name, external_ref, display_name, created_at]
       properties:
         id:
-          type: string
+          $ref: "#/components/schemas/AppID"
           description: The generated nvoken app identifier.
         name:
           type: string
@@ -2668,42 +2931,46 @@ components:
           oneOf:
             - type: string
             - type: "null"
+    AppID:
+      type: string
+      minLength: 1
+      description: Opaque identifier with the public `app_` prefix. Treat the body as opaque.
     SessionID:
       type: string
-      pattern: "^sesn_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `sesn_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
     SessionCompactionID:
       type: string
-      pattern: "^cmp_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7-shaped diagnostic identifier with the public `cmp_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `comp_` prefix. Treat the body as opaque.
     SessionMessageID:
       type: string
-      pattern: "^smsg_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `smsg_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
     InvocationID:
       type: string
-      pattern: "^invk_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `invk_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
     PendingInputID:
       type: string
-      pattern: "^npin_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `npin_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `input_` prefix. Treat the body as opaque.
     ProviderKeyID:
       type: string
-      pattern: "^pkey_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `pkey_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
     BudgetID:
       type: string
-      pattern: "^bdgt_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `bdgt_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
     APICredentialID:
       type: string
-      pattern: "^cred_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `cred_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
     ProviderKeyVersionID:
       type: string
-      pattern: "^pkeyv_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `pkeyv_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
     ModelProvider:
       type: string
       pattern: "^[a-z][a-z0-9_]*$"
@@ -2716,10 +2983,14 @@ components:
       additionalProperties: false
       required: [status, pricing_version]
       description: |
-        Standard local price evidence used by nvoken's estimated-cost
-        guardrail. A `priced` object also carries currency, unit, input, output,
-        and update date. `unpriced` and `unknown` carry only status and the
-        opaque pricing version. Clients compare versions for equality only.
+        The list prices nvoken uses to estimate what a turn will cost. These
+        are nvoken's own recorded prices, not a live quote from the provider.
+
+        A `priced` entry carries the currency, unit, input and output rates,
+        and when it was last updated. `unpriced` and `unknown` carry only the
+        status and a version string. Treat that version as opaque — compare
+        two versions for equality to detect a change, but do not try to order
+        or parse them.
       properties:
         status:
           type: string
@@ -2784,9 +3055,8 @@ components:
             type: string
             pattern: "^[a-z][a-z0-9_]*$"
           description: |
-            Input modalities admission accepts for this model selection. Media
-            modalities also publish their exact media types under
-            controls.input.media.
+            The kinds of input this model accepts. For images and documents, the
+            exact media types are listed under `controls.input.media`.
         recommended:
           type: boolean
           description: nvoken's suggested general-purpose starting point for this provider.
@@ -2799,7 +3069,7 @@ components:
         retires_at:
           type: string
           format: date
-          description: Date nvoken starts refusing new admission for this model.
+          description: The date nvoken stops accepting new turns on this model.
         replacement:
           $ref: "#/components/schemas/Model"
         controls:
@@ -2807,14 +3077,16 @@ components:
         pricing:
           $ref: "#/components/schemas/ModelPricing"
       description: |
-        Cataloged descriptors include all maintained metadata fields.
-        Uncataloged descriptors include only provider, id, cataloged, and
-        pricing; absent metadata is unknown rather than false or zero.
-        A cataloged descriptor's controls are the same qualified capabilities
-        used by admission; omitted controls on an uncataloged descriptor mean
-        unknown, not unsupported. Deprecated models remain admissible until
-        `retires_at`; after that date, new admission returns `model_retired`
-        with this entry's replacement.
+        What nvoken knows about one model.
+
+        For a model in nvoken's catalog you get the full picture, including the
+        capability details under `controls` — the same ones nvoken checks when
+        deciding whether to accept a turn. For a model not in the catalog you
+        get only `provider`, `id`, `cataloged`, and `pricing`. Missing
+        information there means unknown, not "unsupported" or "zero" — so treat
+        an absent capability as "nvoken cannot tell", not as false.
+
+        A deprecated model keeps working until its `retires_at` date.
     ModelControlCapabilities:
       type: object
       additionalProperties: false
@@ -2885,10 +3157,10 @@ components:
         web_search:
           type: boolean
           description: |
-            Whether this exact model supports the provider's server-side web
-            search. Admission fails closed on it, so `provider_tools` is
-            refused on a model that reports false — including any uncataloged
-            model, which reports nothing.
+            Whether this model can run the provider's own web search. If it reports
+            false, asking for `provider_tools` is refused rather than silently
+            ignored — and a model missing from nvoken's catalog reports nothing, so
+            it is refused too.
     ModelToolChoiceMode:
       type: string
       enum: [auto, none, required, named]
@@ -2940,8 +3212,8 @@ components:
           items:
             type: string
           description: |
-            Exact media types admission accepts for this model. An empty list
-            means the modality is unsupported.
+            The exact media types this model accepts. An empty list means it does
+            not accept this kind of input at all.
     ModelList:
       type: object
       additionalProperties: false
@@ -3013,56 +3285,76 @@ components:
         session_options:
           $ref: "#/components/schemas/SessionOptions"
           description: |
-            Durable options for the resolved Session. On an existing Session,
-            every supplied value is compared with the stored value: equal is
-            accepted and different returns `session_options_conflict`.
-            Compaction is the one late-installable option: when no policy is
-            stored yet, this admission installs its model-validated policy.
-            Session options are not part of the reusable execution snapshot or
-            its idempotency comparison.
+            Settings stored on the Session itself, rather than on this turn.
+
+            On a new Session these are saved. On a Session that already exists they
+            are checked rather than applied: matching values are fine, and a
+            different value returns `session_options_conflict` telling you which
+            paths disagreed. This keeps two callers from silently reconfiguring
+            each other's conversation.
+
+            Compaction is the exception — if no summarization policy is stored yet,
+            this turn can install one, because the policy needs a model to validate
+            against and only a turn supplies that.
         metadata:
           $ref: "#/components/schemas/Metadata"
           description: |
-            Opaque host correlation data recorded on this Invocation. It is
-            part of the admitted input, so it is immutable and material to
-            idempotency: a replay carrying different metadata conflicts rather
-            than updating it. A genuine retry describes the same originating
-            request and so carries the same values by construction.
+            Your own data to attach to this turn — a ticket number, a trace
+            ID, whatever helps you tie it back to your system. nvoken stores
+            it and hands it back untouched.
 
-            Session metadata is separate and mutable — see
+            It is fixed once the turn is created and counts as part of the
+            request for idempotency. Retrying with the same `idempotency_key`
+            but different metadata is treated as a different request and
+            returns a conflict rather than updating it. A genuine retry of the
+            same original request carries the same values anyway.
+
+            Session metadata is a separate thing and can be changed — see
             `session_options.metadata` and `PATCH /v1/sessions/{session_id}`.
         idempotency_key:
           type: string
           minLength: 1
           maxLength: 255
           description: |
-            Stable admission identity scoped to (effective tenant
-            partition, agent_key). Reuse an unchanged request after any 5xx,
-            timeout, disconnect, or missing acknowledgement. Deduplication is
-            guaranteed while the original Invocation is retained.
+            Your key for making retries safe. Send the same unchanged request
+            again after a 5xx, a timeout, a dropped connection, or any case
+            where you never saw the response, and you get the original turn
+            back instead of starting a second one.
+
+            Keys are scoped to the tenant and `agent_key`, so the same key
+            under a different tenant is a different request. Deduplication
+            lasts as long as the original turn still exists.
         if_active:
           type: string
           enum: [reject, supersede, interrupt]
           default: reject
           description: |
-            Policy when the resolved Session already has a nonterminal
-            Invocation. `reject` returns `session_invocation_active`.
-            `supersede` atomically applies the ordinary durable cancellation
-            transition to that Invocation before admitting this replacement,
-            dropping its work from later turns. `interrupt` stops it
-            gracefully and admits only after it has settled `completed`, so
-            the replacement builds on what the stopped turn produced: it is
-            "stop and redo" where supersede is "discard and redo". Omission
-            and explicit `reject` compare equal on replay.
+            What to do when the Session already has a turn running. A Session
+            runs one turn at a time.
+
+            - `reject` (the default) refuses this request with
+              `session_invocation_active` and leaves the running turn alone.
+            - `supersede` cancels the running turn and starts this one in its
+              place. The cancelled turn's work is discarded and does not carry
+              forward — "discard and redo".
+            - `interrupt` asks the running turn to stop cleanly and starts
+              this one only once it has, so this turn builds on what the
+              stopped one produced — "stop and redo".
+
+            Omitting the field and sending `reject` are the same request for
+            idempotency purposes.
         on_budget_exhausted:
           type: string
           enum: [settle, pause]
           default: settle
           description: |
-            `settle` ends a coherent consumption-budget stop as `incomplete`.
-            `pause` parks it as resumable `paused`. Applies to iteration,
-            output-token, per-turn estimated-cost, and Session estimated-cost
-            ceilings; deadlines always settle.
+            What to do when the turn runs out of one of its spending limits.
+            `settle` ends it as `incomplete`. `pause` leaves it as `paused` so
+            you can raise the limit and continue it.
+
+            Covers the iteration, output-token, per-turn cost, and Session
+            cost limits. Deadlines are not covered — a turn that runs out of
+            time always ends and can never be resumed.
         input:
           $ref: "#/components/schemas/InvocationInput"
         webhook:
@@ -3070,11 +3362,14 @@ components:
         definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
           description: |
-            Immutable content-addressed definition previously admitted inline
-            by this app. Unknown and foreign IDs return
-            `definition_not_found`. Mutually exclusive with every inline
-            definition field. A reference and the byte-identical inline
-            definition are equal on idempotent replay.
+            Reuse an agent definition you already sent inline on an earlier turn,
+            instead of sending it again. The ID is derived from the definition's
+            own content, so it never points at anything but that exact definition.
+
+            IDs from another app, or IDs that do not exist, return
+            `definition_not_found`. Cannot be combined with the inline definition
+            fields. Sending the ID and sending the identical definition inline
+            count as the same request when retrying with an idempotency key.
         instructions:
           type: string
           minLength: 1
@@ -3113,21 +3408,17 @@ components:
           items:
             $ref: "#/components/schemas/ProviderKeySelection"
           description: |
-            Explicit nonsecret source selection for the model provider.
-            Omission resolves the default chain at admission: the app's
-            stored key for the provider when one exists, else a
-            self-hosted installation's environment key (config_byok), else
-            platform funding when the installation enables it. The chosen
-            source is bound durably at admission; execution never falls
-            through to a different payer afterward. The selection is stored
-            outside the reusable execution snapshot; only caller_ephemeral accepts secret
-            material, and a caller may equivalently supply it with the
-            X-Anthropic-Api-Key, X-Openai-Api-Key, X-Gemini-Api-Key, or
-            X-Xai-Api-Key request header naming the model provider. Equal
-            idempotent replay never replaces the original encrypted key. The
-            field is deliberately plural even though this
-            contract currently permits one entry: future routed invocations
-            may select keys for more than one model provider.
+            Which key pays for the model on this turn. Names a source; never
+            contains a secret.
+
+            Leave it out and nvoken works down its default order: your app's stored
+            key for that provider, then a self-hosted installation's environment
+            key (`config_byok`), then platform funding if the installation allows
+            it.
+
+            Whichever source is chosen is fixed when the turn starts. A turn never
+            silently falls through to a different payer partway through, so the
+            bill cannot move once work has begun.
     SeedMessage:
       type: object
       additionalProperties: false
@@ -3198,10 +3489,10 @@ components:
           minLength: 1
           maxLength: 255
           description: |
-            Optional stable caller-controlled Agent key, resolved or created
-            exactly as invocation admission does. Omitting it creates an
-            unbound Session whose agent is set by its first admitted
-            Invocation.
+            Your own name for the agent, handled exactly as it is when starting a
+            turn: nvoken finds the matching Agent or creates one. Leave it out and
+            the Session starts with no Agent — `agent_id` stays null until the
+            first turn binds it.
         tenant_key:
           type: string
           minLength: 1
@@ -3287,14 +3578,17 @@ components:
       enum: [invocation.waiting, invocation.paused, invocation.settled]
       x-enum-varnames: [WebhookEventWaiting, WebhookEventPaused, WebhookEventSettled]
       description: |
-        `invocation.waiting` fires when the Invocation parks with at least one
-        unresolved host ToolCall the caller must satisfy; a wait made entirely
-        of callback tools emits nothing, because nvoken delivers those itself.
-        `invocation.paused` fires when an opt-in consumption budget parks the
-        turn and carries the exhausted `stop_reason`.
-        `invocation.settled` fires once when the Invocation reaches
-        `completed`, `incomplete`, `failed`, or `cancelled`; completed and
-        incomplete payloads carry `stop_reason` next to `failure_code`.
+        `invocation.waiting` fires when a turn stops and needs you to run at
+        least one tool. A turn waiting only on callback tools sends nothing,
+        because nvoken delivers those to your endpoint itself and there is
+        nothing for you to do.
+
+        `invocation.paused` fires when a spending limit you opted into stopped
+        the turn, and carries the `stop_reason` naming the limit.
+
+        `invocation.settled` fires exactly once, when the turn reaches
+        `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
+        incomplete payloads carry `stop_reason` alongside `failure_code`.
     ProviderKeySelection:
       oneOf:
         - type: object
@@ -3448,9 +3742,13 @@ components:
           type: string
           format: date-time
       description: |
-        Durable enforcement state for one fixed window. Settled and reserved
-        are stored quota facts. They do not shrink when transcript evidence is
-        erased and are not an invoice.
+        What one spending limit has used up so far in its current window.
+        `settled_estimated_cost_usd` is spend from turns that have finished;
+        `reserved_estimated_cost_usd` is spend committed to turns still
+        running; `available_estimated_cost_usd` is what is left. These are
+        nvoken's own running tally for deciding when to stop work — deleting
+        transcripts does not give quota back, and these numbers are an
+        estimate for enforcement, not a bill.
     BudgetBlock:
       type: object
       additionalProperties: false
@@ -3546,7 +3844,9 @@ components:
         version_status:
           type: string
           enum: [active, overlap, expired, revoked]
-          description: An expired current version is unusable; rotate the active provider key before any admission or model call can use it.
+          description: |
+            An expired version cannot be used. Rotate the key before any new turn
+            or model call can use it.
         expires_at:
           oneOf:
             - type: string
@@ -3600,7 +3900,7 @@ components:
         invocations:
           type: integer
           minimum: 0
-          description: Invocations that bound this provider key at admission.
+          description: How many turns used this provider key.
         last_used_at:
           oneOf:
             - type: string
@@ -3654,7 +3954,7 @@ components:
           format: date
           description: UTC calendar day of the bucket.
         app_id:
-          type: string
+          $ref: "#/components/schemas/AppID"
           description: The app whose tenants produced the usage.
         tenant_key:
           oneOf:
@@ -3740,11 +4040,13 @@ components:
         source:
           $ref: "#/components/schemas/ImageInputSource"
       description: |
-        An inline or URL image. A URL is fetched once during admission. nvoken
-        stores the fetched bytes and never fetches it again. Admission sniffs
-        the bytes, bounds them to 5242880 bytes and 8000 by 8000 pixels, and
-        requires the selected model to declare the image modality and exact
-        media type.
+        An image, sent inline or by URL. A URL is downloaded once as the turn
+        is created; nvoken stores those bytes and never fetches the URL again,
+        so the image stays stable even if the link later changes or breaks.
+        The image must be at most 5 MB and 8000 by 8000 pixels, and the model
+        you selected must support images and this exact media type. nvoken
+        determines the real type from the bytes themselves rather than
+        trusting the declared type or the file extension.
     ImageInputSource:
       type: object
       additionalProperties: false
@@ -3769,9 +4071,11 @@ components:
           maxLength: 2048
           pattern: "^https://"
           description: |
-            Public HTTPS URL fetched once during admission. The response is
-            size-bounded while reading and its bytes are sniffed. media_type is
-            optional for this form. When present it must match the sniffed type.
+            A public HTTPS URL, downloaded once as the turn is created. nvoken
+            stops reading if the response runs past the size limit, and
+            determines the real media type from the bytes it received.
+            `media_type` is optional here; if you do send it, it must match
+            what the bytes actually are.
     DocumentInputBlock:
       type: object
       additionalProperties: false
@@ -3791,11 +4095,11 @@ components:
             Optional filename supplied to providers that require one. Omission
             uses the adapter default and does not change acceptance.
       description: |
-        An inline or URL document. A URL is fetched once during admission.
-        nvoken stores the fetched bytes and never fetches it again. Admission
-        applies the same sniff rules as an image with a 16777216-byte bound.
-        Page limits are the provider's, so an oversized page count settles as
-        input_media_rejected.
+        A document, sent inline or by URL. A URL is downloaded once as the
+        turn is created; nvoken stores those bytes and never fetches the URL
+        again. Same rules as an image, with a 16 MB limit. Page count is
+        capped by the provider rather than by nvoken, so a document with too
+        many pages fails the turn with `input_media_rejected`.
     DocumentInputSource:
       type: object
       additionalProperties: false
@@ -3818,13 +4122,15 @@ components:
           maxLength: 2048
           pattern: "^https://"
           description: |
-            Public HTTPS URL fetched once during admission. The response is
-            size-bounded while reading and its bytes are sniffed. media_type is
-            optional for this form. When present it must be application/pdf.
+            A public HTTPS URL, downloaded once as the turn is created. nvoken
+            stops reading if the response runs past the size limit, and
+            determines the real media type from the bytes it received.
+            `media_type` is optional here; if you do send it, it must be
+            `application/pdf`.
     AgentDefinitionID:
       type: string
-      pattern: "^def_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-      description: UUIDv7 with the public `def_` prefix.
+      minLength: 1
+      description: Opaque identifier with the public `def_` prefix. Treat the body as opaque.
     AgentDefinition:
       type: object
       additionalProperties: false
@@ -3887,10 +4193,12 @@ components:
           minimum: 0
           maximum: 1
           description: |
-            Portable sampling temperature. Omit sampling to preserve the
-            provider default. An explicit zero remains explicit. Admission
-            fails closed unless the selected model descriptor positively
-            declares support.
+            Sampling temperature, expressed the same way across providers. Omit
+            `sampling` entirely to keep the provider's own default; an explicit `0`
+            means 0 and is not treated as absent.
+
+            If the model is not known to support temperature, the turn is refused
+            rather than run with the setting quietly dropped.
     ReasoningEffort:
       type: string
       enum: [low, medium, high, xhigh, max]
@@ -3941,20 +4249,15 @@ components:
         metadata:
           $ref: "#/components/schemas/Metadata"
       description: |
-        Durable Session options. Every member is optional and at least one must
-        be present. A new Session stores the supplied values. When a keyed
-        upsert or admission resolves an existing Session, supplied values are
-        comparison-only: equal values are accepted and different values return
-        `session_options_conflict` with `details.conflicting_paths`.
+        Settings stored on the Session. Every field is optional, but send at
+        least one.
 
-        `compaction` requires an Invocation because the policy is validated
-        against that turn's model. It may be installed on any Session that has
-        no compaction policy yet, including a Session created ahead of its first
-        Invocation or a long-running Session opting in later. An `auto` trigger
-        is materialized from the installing Invocation's context window. Once
-        set, the resolved policy is immutable. `POST /v1/sessions` therefore
-        still rejects `compaction`, while admissions may supply it with either
-        `session_id`, `session_key`, or a new Session.
+        On a new Session these are saved. When you reach an existing Session,
+        by ID or by key, they are checked rather than applied: matching values
+        are accepted, and a different value returns `session_options_conflict`
+        with `details.conflicting_paths` naming exactly what disagreed.
+        Compaction needs a turn to install it, because the policy is validated
+        against that turn's model.
     SessionBudget:
       type: object
       additionalProperties: false
@@ -3965,9 +4268,13 @@ components:
           exclusiveMinimum: 0
           multipleOf: 0.000001
       description: |
-        Mutable Session-wide USD list-price guardrail. The estimate is derived
-        from durable model-call evidence and is operational control, not a
-        billing ledger. Models without catalog pricing fail closed.
+        A spending cap in USD covering every turn in this Session. You can
+        change it at any time.
+
+        The figure is nvoken's own estimate, based on published list prices
+        and the model calls it recorded — it is a control for stopping runaway
+        work, not a bill. If a model has no price in nvoken's catalog, turns
+        using it are refused rather than run uncosted.
     UpdateSessionRequest:
       type: object
       additionalProperties: false
@@ -4029,13 +4336,13 @@ components:
           description: |
             Idle window, from one hour to thirty days.
       description: |
-        Bounds how long an idle Session is retained. Past the window nvoken
-        erases the Session and its whole subtree, exactly as
-        `DELETE /v1/sessions/{session_id}` would.
+        How long a Session can sit unused before nvoken deletes it. When the
+        window passes, the Session and everything under it are erased, exactly
+        as `DELETE /v1/sessions/{session_id}` would.
 
-        The window measures idle time, not lifetime: it restarts on every
-        Invocation admission and every settlement, so a turn that runs longer
-        than the window cannot expire underneath itself.
+        The clock measures idle time, not age: it resets every time a turn
+        starts and every time one finishes. A long-running turn can never
+        expire out from under you.
 
         **Automatic expiry never cancels running work.** A Session holding a
         queued, running, or waiting Invocation is skipped and reconsidered on
@@ -4082,38 +4389,17 @@ components:
         web_search:
           $ref: "#/components/schemas/WebSearchTool"
       description: |
-        Selects one server-side tool the provider runs inside the generation
-        call. Unlike a host tool the turn does not park for it, and unlike a
-        builtin nvoken does not execute it — the provider does, and bills it on
-        the same provider key the model runs on. That is deliberate: a
-        runtime-operated search would make nvoken hold a search vendor
-        relationship and answer "who pays per query" for every installation,
-        while this uses the billing relationship the host already has.
+        Turns on a tool the model provider runs itself, inside the model call —
+        web search, for example.
 
-        **Anthropic only, for now.** The providers' search controls differ
-        materially, and a "common" option set would either be the empty
-        intersection or would silently drop fields on some providers — which is
-        exactly what nvoken's fail-closed posture forbids. Another provider is
-        rejected at admission rather than served a degraded search. Widening is
-        per-provider capability work.
+        This behaves differently from your own tools in two ways: the turn
+        never stops to wait for it, and nvoken never executes it. The provider
+        does, and charges it to the same provider key the model is running on.
 
-        A model that does not declare `controls.tools.web_search` is refused
-        too, including any uncataloged model: a tool configuration the provider
-        quietly ignored would bill a turn that did no searching and return an
-        answer the host believes was researched.
-
-        **Cost accounting.** Search charges ride the provider's bill outside
-        nvoken's estimate. `limits.max_estimated_cost_usd` and the usage
-        reporting cover model tokens; the provider does not report a
-        per-search fee through the interface nvoken reads, so a host that needs
-        a hard ceiling on search spend should set `max_uses`.
-
-        **What appears in the transcript.** The model's `server_tool_use` block
-        is public, so a host can show what was searched for. The matching
-        `web_search_tool_result` is not: it carries the provider's encrypted
-        continuation bytes, which the next turn must echo back verbatim and
-        which mean nothing to a host. The sources behind a claim arrive as
-        citations on the visible text blocks.
+        That is deliberate. A search tool operated by nvoken would mean nvoken
+        holding a vendor relationship with a search provider and answering "who
+        pays per query" for every installation. Letting the provider run it
+        keeps one key and one bill.
     WebSearchTool:
       type: object
       additionalProperties: false
@@ -4181,8 +4467,10 @@ components:
           maxLength: 24
           pattern: "^[A-Za-z0-9_-]+$"
           description: |
-            Unique server name used as the projected tool-name prefix. Names
-            beginning with nvoken in any letter case are reserved.
+            A name for this MCP server, unique within the turn. Its tools are
+            exposed to the model as `<name>__<tool>`, so this is the prefix your
+            model will see. Names starting with `nvoken`, in any casing, are
+            reserved.
         url:
           type: string
           format: uri
@@ -4238,15 +4526,34 @@ components:
         server:
           $ref: "#/components/schemas/MCPServer"
     MCPToolAnnotations:
+      description: >-
+        What the remote server said about a tool's behavior, plus whether it
+        said anything at all. The declaration facts are reported separately
+        from the values because a server that starts declaring a hint it
+        previously omitted has changed the contract a reviewer approved, even
+        when the effective value did not move.
+
+
+        `read_only_hint` and `idempotent_hint` are non-null only when the
+        server declared them true: the MCP schema types both as bare booleans
+        with `omitempty`, so a declared false is indistinguishable from an
+        absent one. `destructive_hint` and `open_world_hint` keep the full
+        distinction. Treat a null `read_only_hint` as "potentially mutating",
+        never as "read-only unknown but probably safe" — nvoken does.
       type: object
       additionalProperties: false
-      required: [read_only_hint, idempotent_hint, destructive_hint]
+      required: [present, read_only_hint, idempotent_hint, destructive_hint, open_world_hint]
       properties:
+        present:
+          description: Whether the server sent an annotations object at all.
+          type: boolean
         read_only_hint:
           type: [boolean, "null"]
         idempotent_hint:
           type: [boolean, "null"]
         destructive_hint:
+          type: [boolean, "null"]
+        open_world_hint:
           type: [boolean, "null"]
     MCPProjectedTool:
       type: object
@@ -4262,10 +4569,23 @@ components:
           pattern: "^[A-Za-z0-9_-]+$"
         remote_name:
           type: string
+        title:
+          description: >-
+            The server's human-readable name for the tool, when it declares
+            one. nvoken does not present it to the model; it is reported
+            because it is part of the contract a host reviews.
+          type: string
+          maxLength: 4096
         description:
           type: string
           maxLength: 4096
         input_schema:
+          type: object
+          additionalProperties: true
+        output_schema:
+          description: >-
+            The server's declared result shape, when it declares one. nvoken
+            does not validate results against it.
           type: object
           additionalProperties: true
         annotations:
@@ -4335,16 +4655,19 @@ components:
           maxLength: 64
           pattern: "^[A-Za-z0-9_-]+$"
           description: |
-            Unique within the definition; the `nvoken_` prefix is reserved.
+            The tool's name, unique within this agent definition. Names starting
+            with `nvoken_` are reserved.
 
-            The charset is deliberately the strictest tool-name constraint any
-            supported provider imposes, so every admitted name reaches every
-            provider unchanged. Widening it — to dotted names, for instance —
-            would require a mangling layer whose collisions nvoken would then
-            own, and would sit ambiguously beside the `__` separator MCP tool
-            projection already uses. A host whose own permission grammar uses
-            dots should map it injectively (`naming.domain.check` becomes
-            `naming_domain_check`) and state the mapping to the model once.
+            Letters, digits, `_`, and `-` only. That is the strictest rule any
+            supported provider imposes, so a name accepted here reaches every
+            provider unchanged and your agent behaves the same wherever it runs.
+            nvoken deliberately does not rewrite names to fit — a rewriting layer
+            would own the collisions it creates, and would clash with the `__`
+            separator used for MCP tool names.
+
+            If your own permissions use dotted names, map them one-to-one
+            (`naming.domain.check` becomes `naming_domain_check`) and tell the
+            model about the mapping once in your instructions.
         description:
           type: string
           minLength: 1
@@ -4375,16 +4698,19 @@ components:
           maxLength: 64
           pattern: "^[A-Za-z0-9_-]+$"
           description: |
-            Unique within the definition; the `nvoken_` prefix is reserved.
+            The tool's name, unique within this agent definition. Names starting
+            with `nvoken_` are reserved.
 
-            The charset is deliberately the strictest tool-name constraint any
-            supported provider imposes, so every admitted name reaches every
-            provider unchanged. Widening it — to dotted names, for instance —
-            would require a mangling layer whose collisions nvoken would then
-            own, and would sit ambiguously beside the `__` separator MCP tool
-            projection already uses. A host whose own permission grammar uses
-            dots should map it injectively (`naming.domain.check` becomes
-            `naming_domain_check`) and state the mapping to the model once.
+            Letters, digits, `_`, and `-` only. That is the strictest rule any
+            supported provider imposes, so a name accepted here reaches every
+            provider unchanged and your agent behaves the same wherever it runs.
+            nvoken deliberately does not rewrite names to fit — a rewriting layer
+            would own the collisions it creates, and would clash with the `__`
+            separator used for MCP tool names.
+
+            If your own permissions use dotted names, map them one-to-one
+            (`naming.domain.check` becomes `naming_domain_check`) and tell the
+            model about the mapping once in your instructions.
         description:
           type: string
           minLength: 1
@@ -4463,14 +4789,19 @@ components:
           exclusiveMinimum: 0
           multipleOf: 0.000001
           description: |
-            nvoken's standard list-price guardrail, not preauthorization or a billing
-            ledger. Requires known USD pricing for the selected model and
-            otherwise fails closed with `budget_exceeded` and
-            `details.kind = estimated_cost_unavailable`. When pricing absence
-            is knowable before execution, nvoken rejects before a provider call.
-            Reaching the ceiling itself is not a failure when it is noticed at
-            an execution seam: the turn settles `incomplete` with
-            `stop_reason: max_estimated_cost` and keeps its work.
+            A cost ceiling for this turn, in USD, estimated from list prices.
+            It does not reserve funds and is not a bill.
+
+            The model must have a known price. If it does not, the turn fails
+            with `budget_exceeded` and
+            `details.kind = estimated_cost_unavailable` — and where nvoken can
+            tell in advance, it refuses before calling the provider at all, so
+            you are not charged for a turn it cannot police.
+
+            Hitting the ceiling is not itself a failure. If the turn can stop
+            cleanly it ends `incomplete` with
+            `stop_reason: max_estimated_cost` and keeps everything it
+            produced.
         max_iterations:
           type: integer
           minimum: 1
@@ -4510,55 +4841,64 @@ components:
           pattern: "^[^/]+/.+$"
           maxLength: 511
       description: |
-        Model selection accepted at Invocation admission. The object is
-        canonical. The `provider/id` string is caller convenience: nvoken
-        splits on the first slash and always echoes the object form.
+        Which model to use. The object form — separate `provider` and `id` — is
+        the real shape. You may also send a single `provider/id` string for
+        convenience; nvoken splits it at the first slash and always returns the
+        object form.
     InvocationStatus:
       type: string
       enum: [queued, running, waiting, paused, completed, incomplete, failed, cancelled]
       description: |
-        `completed`, `incomplete`, `failed`, and `cancelled` are terminal and
-        immutable.
+        `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+        turn reaches one of them it never changes again.
 
-        `completed` means exactly one thing: the turn ended the way it was
-        asked to — the model finished, or the caller interrupted it.
-        `incomplete` means the runtime enforced a budget at a coherent
-        execution seam. Any budget exhaustion observed at such a seam settles
-        `incomplete` with `stop_reason` naming the budget; the transcript is
-        valid and stays in the next turn's context, exactly as a completed
-        turn's does. Exhaustion that cannot reach a seam — a deadline landing
-        mid-request, reaper settlement — still settles `failed` with `error`
-        as the authority. A schema-bearing turn that never published a
-        validated object also fails, `structured_output_unsatisfied`,
-        whichever budget stopped it.
+        `completed` means the turn ended the way it was asked to: the model
+        finished on its own, or you interrupted it.
 
-        `waiting`—known elsewhere as `requires_action`—means the Invocation has
-        durable pending host ToolCalls and owns no execution lease. Final
-        result acceptance moves it back to
-        `queued`. Checkpoint recovery may also move `running` back to
-        `queued`; the `attempt` counter distinguishes a retry from tool-result
-        acceptance, and lifecycle revision orders every transition.
+        `incomplete` means a limit you set stopped the turn cleanly, between
+        steps rather than mid-request. `stop_reason` names the limit that ran
+        out. The reply so far is valid and carries into the next turn just
+        like a completed turn's does, so this is a stopping point rather than
+        an error.
 
-        `paused` is nonterminal dormant work stopped at a coherent consumption
-        ceiling. It owns no lease and its deadlines are suspended until the
-        exhausted turn limit is raised or the Session budget is raised or
-        removed. It still accepts interrupt, cancel, and staged nudges.
+        `failed` means the turn could not stop cleanly — a deadline landing in
+        the middle of a model request, for example — or that a turn you asked
+        for structured output from never produced a valid object. Read `error`
+        for the reason; the reply, if any, is not carried forward.
+
+        `waiting` — `requires_action` in some other APIs — means the turn has
+        stopped for tool calls you need to run. Nothing is executing. Send the
+        results and the turn returns to `queued` and picks up where it left
+        off. A turn can also return to `queued` on its own if nvoken had to
+        restart it after an interruption; `attempt` tells the two apart, and
+        the `revision` on each stream update tells you their order.
+
+        `paused` means an opt-in spending limit stopped the turn but left it
+        resumable. Nothing is executing, and its deadlines are on hold, so a
+        turn cannot expire while you decide. Raise the turn's limit, or raise
+        or remove the Session budget, and it continues. It still accepts
+        interrupt, cancel, and nudge.
     InvocationStopReason:
       type: string
       enum: [end_turn, interrupted, max_iterations, deadline,
              max_output_tokens, max_estimated_cost, session_budget, shared_budget]
       description: |
-        Why a turn stopped. It spans both non-failure terminals and is
-        partitioned between them.
+        Why a turn stopped. Set on turns that did not fail, and which values
+        can appear depends on the status.
 
-        A `completed` turn carries `end_turn` (the model finishing) or
-        `interrupted` (a caller's graceful stop, taken at the next execution
-        seam). An `incomplete` turn carries the budget it exhausted at a seam:
-        `max_iterations`, `deadline`, `max_output_tokens`, or
-        `max_estimated_cost`, `session_budget`, or `shared_budget`. A paused turn carries one of
-        the consumption reasons but never `deadline`. An interrupt is deliberately not `incomplete` —
-        the caller asked the turn to end there, so ending there is the
-        requested result. The vocabulary is extensible.
+        A `completed` turn carries `end_turn` (the model finished on its own)
+        or `interrupted` (you asked it to stop, and it stopped at the next
+        clean point). An `incomplete` turn carries whichever limit ran out:
+        `max_iterations`, `deadline`, `max_output_tokens`,
+        `max_estimated_cost`, `session_budget`, or `shared_budget`. A `paused`
+        turn carries one of the spending limits, never `deadline`, because a
+        paused turn's deadlines are on hold.
+
+        An interrupt is deliberately `completed` rather than `incomplete`: you
+        asked the turn to end there, so ending there is the result you wanted,
+        not a shortfall.
+
+        Expect new values here over time.
     Invocation:
       type: object
       additionalProperties: false
@@ -4579,8 +4919,10 @@ components:
             - type: string
             - type: "null"
           description: |
-            Host-owned end-user label admitted on this turn. Filtering only;
-            not an isolation boundary.
+            Your own label for the end user this turn belongs to. Useful for
+            filtering lists. It is not a security boundary — no request is
+            ever refused because of it, so do not rely on it to keep one
+            user's data away from another.
         definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
         definition:
@@ -4588,17 +4930,18 @@ components:
             - $ref: "#/components/schemas/AgentDefinition"
             - type: "null"
           description: |
-            The admitted definition, returned exactly as snapshotted. Remote MCP
-            request headers were never stored and never appear here. Present
-            on `GET /v1/invocations/{id}` and on the result; null in list
-            items, where `definition_id` identifies it. `definition.limits` is what the
-            host requested; `limits` is what the installation resolved.
+            The agent definition this turn actually ran with, stored when the turn
+            started and returned exactly as it was. Request headers for remote MCP
+            servers are never stored and never appear here.
+
+            Present on `GET /v1/invocations/{id}` and on the result. Null in list
+            items, where `definition_id` identifies it instead.
         deduplicated:
           type: boolean
           description: |
-            Present only in the `POST /v1/invocations` response. False for a
-            new durable admission and true when the idempotency key returned
-            an existing Invocation.
+            Only present on the `POST /v1/invocations` response. False when this
+            call created a new turn, true when your idempotency key matched one
+            that already existed and you got that one back.
         status:
           $ref: "#/components/schemas/InvocationStatus"
         stop_reason:
@@ -4644,9 +4987,9 @@ components:
               additionalProperties: true
             - type: "null"
           description: |
-            Server-validated terminal object for a schema-bearing Invocation.
-            Null until successful terminal settlement and always null when no
-            output contract was admitted.
+            The object the model produced, already checked against the schema
+            you asked for. Null until the turn finishes successfully, and
+            always null if you did not ask for structured output.
         structured_output_provenance:
           oneOf:
             - $ref: "#/components/schemas/StructuredOutputProvenance"
@@ -4656,7 +4999,8 @@ components:
             - $ref: "#/components/schemas/Metadata"
             - type: "null"
           description: |
-            Host correlation data recorded at admission, returned verbatim.
+            Your own data, stored when the turn was created and returned exactly as
+            you sent it.
         limits:
           $ref: "#/components/schemas/ResolvedLimits"
         active_execution_ms:
@@ -4723,12 +5067,13 @@ components:
             - type: string
             - type: "null"
           description: |
-            The text content blocks of this Invocation's assistant-role
-            messages concatenated in transcript order without separators.
-            Non-null only when the Invocation is completed and at least one
-            assistant text block exists. Failed and cancelled Invocations
-            keep their messages readable as evidence while output_text stays
-            null.
+            The assistant's text from this turn, joined together in order with
+            nothing between the pieces. This is the convenience field for "what did
+            the agent say?"
+
+            Non-null only when the turn completed and produced at least one piece
+            of text. Failed and cancelled turns leave it null even if some text was
+            produced, so read the messages directly if you need those.
     ModelUsage:
       type: object
       additionalProperties: false
@@ -4752,7 +5097,9 @@ components:
         model_calls:
           type: integer
           minimum: 0
-          description: Model requests represented by this aggregate. Older retained evidence may omit it.
+          description: |
+            How many model requests these totals cover. Older records may not have
+            it.
         estimated_cost:
           $ref: "#/components/schemas/ModelCost"
     ModelCost:
@@ -4811,20 +5158,36 @@ components:
           enum: [tool_call]
           x-enum-varnames: [SourceToolCall]
         tool_call_id:
-          type: string
-          pattern: "^tcal_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          $ref: "#/components/schemas/ToolCallID"
         schema_sha256:
           type: string
           pattern: "^[0-9a-f]{64}$"
+          description: |
+            SHA-256 of the JSON Schema this object was checked against. Compare
+            it with your own schema's hash to confirm the model answered the
+            version you sent.
       description: |
-        Immutable proof that output equals the accepted reserved durable
-        ToolCall request under the admitted schema digest.
+        Shows where `structured_output` came from and what it was checked
+        against, so you can verify the object rather than trust it. It records
+        the tool call the model produced the object in and the exact schema
+        that object was validated against. It never changes after the turn
+        ends.
     ToolCallID:
       type: string
-      pattern: "^tcal_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    CallbackDeliveryID:
+      minLength: 1
+      description: |
+        Identifies one durable ToolCall. Treat it as opaque: read it from a
+        transcript `tool_use` block or from the pending host tool calls, and
+        pass it back verbatim as `tool_call_id` when submitting results. The
+        same value is the `Idempotency-Key` on a callback delivery.
+    DeliveryID:
       type: string
-      pattern: "^cbdy_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      minLength: 1
+      description: |
+        Identifies one delivery nvoken sent you, callback or webhook alike —
+        both are the same durable record and carry the same `dlvr_` prefix.
+        Treat it as opaque; it appears in the signed payload and identifies the
+        attempt when you report a delivery problem.
     ToolCallMode:
       type: string
       enum: [builtin, host, callback, mcp]
@@ -4914,7 +5277,7 @@ components:
           type: integer
           enum: [1]
         delivery_id:
-          $ref: "#/components/schemas/CallbackDeliveryID"
+          $ref: "#/components/schemas/DeliveryID"
         tool_call_id:
           $ref: "#/components/schemas/ToolCallID"
         invocation_id:
@@ -5043,44 +5406,46 @@ components:
           type: object
           additionalProperties: true
       description: |
-        Failed Invocations may carry paired usage and provenance when a model
-        response produced safe normalized evidence before deadline or limit
-        settlement. Cancellation carries any checkpointed usage and
-        provenance accumulated before it was requested; a pre-response
-        failure carries neither.
+        A failed turn still reports `usage` and `provenance` if the model
+        answered at least once before it stopped, so you can see what you were
+        charged for. A cancelled turn reports whatever it had used up to the
+        moment you cancelled. A turn that failed before any model reply
+        reports neither.
 
-        `details` is a bounded, code-specific object. Each code names its own
-        keys and nothing else reads them:
+        `details` is a small object whose keys depend on `code`. Each code
+        below lists the only keys it sets:
 
-        - `deadline_exceeded` carries `details.scope`, the deadline that was
-          breached, drawn from `total | active_execution | execution_segment
-          | waiting`. One condition has one code: a deadline reports this
-          wherever the runtime noticed it.
-        - `budget_exceeded` carries `details.kind`, the consumption ceiling
-          the turn overran, drawn from `output_tokens | estimated_cost |
-          estimated_cost_unavailable`. A ceiling only lands here when no
-          coherent seam absorbed it; at a seam the same ceiling settles
-          `incomplete` with the matching `stop_reason` instead.
-          `estimated_cost_unavailable` is always a failure — nothing was
-          exhausted, nvoken simply cannot price the model.
-        - `structured_output_unsatisfied` carries `details.reason`, drawn from
-          `missing | invalid | oversized`.
-        - `context_window_exceeded` carries the integer keys
-          `input_tokens`, `context_window_tokens`, and
-          `requested_output_tokens`, each present only when known.
-        - `input_media_rejected` carries `modality`, `media_type`, and
-          `reason` as the provider reported them, each present only when
-          known.
+        - `deadline_exceeded` sets `details.scope` to the deadline that ran
+          out: `total`, `active_execution`, `execution_segment`, or `waiting`.
+        - `budget_exceeded` sets `details.kind` to the limit the turn went
+          over: `output_tokens`, `estimated_cost`, or
+          `estimated_cost_unavailable`. A limit only shows up as a failure
+          when the turn could not stop cleanly; when it could, the turn ends
+          `incomplete` with a matching `stop_reason` instead.
+          `estimated_cost_unavailable` always means failure, and it does not
+          mean you overspent — it means nvoken has no price for the model and
+          so cannot enforce the cost limit you set.
+        - `structured_output_unsatisfied` sets `details.reason` to `missing`,
+          `invalid`, or `oversized`.
+        - `context_window_exceeded` sets the integer keys `input_tokens`,
+          `context_window_tokens`, and `requested_output_tokens`, each only
+          when nvoken knows it.
+        - `input_media_rejected` sets `modality`, `media_type`, and `reason`
+          as the provider reported them, each only when known.
 
-        A `provider_error` failure carries
-        `details.provider_failure_class`, nvoken's own classification of the
-        provider failure, drawn from `configuration | canceled | throttled |
-        upstream_rejected | upstream_unavailable | timeout_or_transport |
-        invalid_response | unknown`. `upstream_rejected` means the provider
-        refused this request — do not retry it as-is. `upstream_unavailable`
-        and `throttled` mean the provider could not serve it — retry with
-        backoff. No raw provider error material ever crosses into this
-        payload.
+        A `provider_error` sets `details.provider_failure_class`, which is
+        nvoken's summary of what went wrong at the provider and is the field
+        to branch your retry logic on:
+
+        - `upstream_rejected` — the provider refused this request. Do not
+          retry it unchanged; fix the request first.
+        - `upstream_unavailable` or `throttled` — the provider could not serve
+          it right now. Retry with backoff.
+        - `configuration`, `canceled`, `timeout_or_transport`,
+          `invalid_response`, or `unknown` — everything else.
+
+        Provider error text is never passed through here, so nothing in this
+        object leaks another vendor's wording or your key material.
     ResolvedLimits:
       type: object
       additionalProperties: false
@@ -5123,9 +5488,10 @@ components:
           format: int64
           minimum: 0
           description: |
-            Estimated tokens in the retained generation context: the latest
-            applied summary plus the generation-eligible messages after its
-            watermark. This is the same estimate the compaction trigger uses.
+            Roughly how many tokens the model will see on the next turn: the
+            most recent summary, plus the messages that came after it. This is
+            the same number nvoken checks when deciding whether to summarize
+            again.
         context_window_tokens:
           oneOf:
             - type: integer
@@ -5152,9 +5518,8 @@ components:
             - $ref: "#/components/schemas/AgentID"
             - type: "null"
           description: |
-            Null only for a Session created ahead of its first Invocation.
-            The first admitted Invocation binds it; once set the binding is
-            immutable.
+            Null only while a Session created ahead of time has not run a turn yet.
+            The first turn binds the Agent, and after that it never changes.
         tenant_key:
           oneOf:
             - type: string
@@ -5207,10 +5572,10 @@ components:
               format: date-time
             - type: "null"
           description: |
-            When this Session becomes eligible for automatic erasure, or null
-            when it has no retention window. It moves forward on every
-            Invocation admission and settlement, so a Session in use stays
-            ahead of it.
+            When nvoken may automatically delete this Session, or null if it
+            has no retention window. The date moves forward every time a turn
+            starts and every time one finishes, so a Session in active use
+            never reaches it.
         metadata:
           oneOf:
             - $ref: "#/components/schemas/Metadata"
@@ -5313,11 +5678,13 @@ components:
           tool_result: "#/components/schemas/ToolResultBlock"
           redacted: "#/components/schemas/RedactedBlock"
       description: |
-        One public, provider-neutral transcript block. Stored media bytes are
-        projected on reads as `type`, `media_type`, optional `title`, byte
-        count in `bytes`, and a `sha256:` digest.
+        One block of a stored message, in nvoken's own shape rather than any
+        provider's. Images and documents come back described rather than
+        inlined — type, media type, optional title, size in `bytes`, and a
+        `sha256:` checksum — so reading a transcript never ships the original
+        bytes back to you.
 
-        New block types will appear as features ship. Render the types you know
+        New block types will appear as features ship. Render the ones you know
         and skip the rest.
     TextBlock:
       type: object
@@ -5436,7 +5803,9 @@ components:
           type: string
           format: uri
           description: Original URL when the image arrived by URL.
-      description: A bounded read projection of a stored input image.
+      description: |
+        A stored input image, described rather than sent back. You get its
+        media type, size, and checksum, but not the bytes.
     DocumentReferenceBlock:
       type: object
       additionalProperties: false
@@ -5465,7 +5834,9 @@ components:
           type: string
           format: uri
           description: Original URL when the document arrived by URL.
-      description: A bounded read projection of a stored input document.
+      description: |
+        A stored input document, described rather than sent back. You get its
+        media type, size, and checksum, but not the bytes.
     ToolUseBlock:
       type: object
       additionalProperties: false
@@ -5476,8 +5847,7 @@ components:
           enum: [tool_use]
           x-enum-varnames: [TypeToolUse]
         id:
-          type: string
-          minLength: 1
+          $ref: "#/components/schemas/ToolCallID"
         name:
           type: string
           minLength: 1
@@ -5495,6 +5865,11 @@ components:
         id:
           type: string
           minLength: 1
+          description: |
+            The provider's own ID for a tool it ran itself, such as web
+            search. This is not a ToolCall ID: you never send a result for
+            it, and it never appears in your pending tool calls. It is here
+            so you can show the user what the model looked up.
         name:
           type: string
           minLength: 1
@@ -5510,8 +5885,11 @@ components:
           enum: [tool_result]
           x-enum-varnames: [TypeToolResult]
         tool_use_id:
-          type: string
-          minLength: 1
+          $ref: "#/components/schemas/ToolCallID"
+          description: |
+            The `id` of the `tool_use` block this result answers. The name comes
+            from the provider message format nvoken stores and replays; the value
+            is a ToolCall ID.
         content:
           description: |
             The host's own JSON, retained verbatim. Its canonical encoding is
@@ -5582,16 +5960,12 @@ components:
           allOf:
             - $ref: "#/components/schemas/MessagePhase"
           description: |
-            What this assistant message was in its turn. Absent on user and
-            tool messages, which have no phase.
+            Whether this assistant message is the turn's actual answer or something
+            along the way. Absent on user and tool messages, which have no phase.
 
-            Derived at read time from the settling facts on an
-            Invocation-owned message and frozen onto a fork copy. It never
-            takes host input. One consequence: a live source message read
-            before its turn settles reads `commentary`, because nothing had
-            settled yet. The same source message read after settlement reads
-            its final phase, and the stream's `invocation_changes` are what
-            announce the settlement in between.
+            It is worked out when you read, from how the turn ended, and it is
+            frozen onto forked copies so a fork keeps the phases it had. Your own
+            input never carries a phase.
         created_at:
           type: string
           format: date-time
@@ -5599,12 +5973,15 @@ components:
       type: string
       enum: [commentary, final_answer]
       description: |
-        `final_answer` is the assistant message that settled its turn
-        `completed` with `stop_reason: end_turn` — the reply. `commentary` is
-        everything else: narration between tool calls, and every message of an
-        interrupted or `incomplete` turn, none of which was ever an answer. A
-        turn with no `final_answer` is visibly unfinished, which is what makes
-        `incomplete` directly renderable.
+        Tells you which assistant message is the actual answer, so you can
+        render a turn without guessing.
+
+        `final_answer` is the message the model ended the turn with — the
+        reply you would show a user. `commentary` is everything else: the
+        model thinking out loud between tool calls, and every message of a
+        turn that was interrupted or stopped early, none of which was ever an
+        answer. A turn with no `final_answer` was left unfinished, and you can
+        show it as such.
     NudgeInvocationRequest:
       type: object
       additionalProperties: false
@@ -5649,10 +6026,10 @@ components:
       type: string
       enum: [pending, drained, expired, cancelled]
       description: |
-        `pending` is the only state the turn consumes. `drained` means the
-        executor promoted the content into the transcript, `expired` that the
-        Invocation settled without taking it, and `cancelled` that the caller
-        withdrew it first.
+        `pending` is the only state a turn will still pick up. `drained` means
+        the turn took it and it is now in the transcript. `expired` means the
+        turn ended without ever taking it. `cancelled` means you withdrew it
+        before the turn got to it.
     PendingInput:
       type: object
       additionalProperties: false
@@ -5717,9 +6094,11 @@ components:
       type: string
       enum: [applied, fell_through]
       description: |
-        `applied` means the summary became the Session's private context
-        projection. `fell_through` means the turn continued with the prior
-        projection after a failed or invalid summary pass.
+        `applied` means the new summary took effect and is what the model now
+        sees in place of the older messages. `fell_through` means the summary
+        attempt failed or came back unusable, so the turn carried on with the
+        previous summary. Either way the turn keeps running — a failed summary
+        is not a failed turn.
     SessionCompaction:
       type: object
       additionalProperties: false
@@ -5750,18 +6129,19 @@ components:
             - $ref: "#/components/schemas/ModelUsage"
             - type: "null"
           description: |
-            Summary-model usage when trustworthy evidence exists. This counts
-            toward Session usage but never toward the creating Invocation's
-            usage.
+            What the summarizing model call cost, when it was recorded reliably.
+            This counts toward the Session's usage but never toward the usage of
+            the turn that triggered it.
         summary:
           oneOf:
             - type: string
               minLength: 1
             - type: "null"
           description: |
-            Diagnostic private context projection for an applied pass; null
-            for a fell-through pass. It is derived from the host transcript
-            and is not a canonical Session message.
+            The summary text itself, for an attempt that took effect; null for one
+            that did not. It is shown here so you can see what the model is working
+            from. It is not a message in the conversation and never appears in the
+            transcript.
         created_at:
           type: string
           format: date-time
@@ -5841,7 +6221,7 @@ components:
         resume_cursor:
           type: string
           minLength: 1
-          description: Delivered composite message-sequence and lifecycle-revision watermark.
+          description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
         next_page_token:
           oneOf:
             - type: string
@@ -5868,7 +6248,7 @@ components:
         resume_cursor:
           type: string
           minLength: 1
-          description: Delivered composite message-sequence and lifecycle-revision watermark.
+          description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
     OutputTextDeltaEvent:
       type: object
       additionalProperties: false
@@ -5973,9 +6353,10 @@ components:
           type: string
           enum: [terminal, rotate]
           description: |
-            `rotate` means reconnect with `resume_cursor`. `terminal` means
-            the scoped Invocation settled, or the Session became idle for a
-            Session-scoped stream.
+            `rotate` means the server is cycling the connection — reconnect with
+            your last `resume_cursor`. `terminal` means there is nothing more
+            coming: the turn finished, or for a Session stream, nothing is running
+            any more.
         resume_cursor:
           type: string
           minLength: 1
@@ -6016,11 +6397,11 @@ components:
           allOf:
             - $ref: "#/components/schemas/ResolvedLimits"
           description: |
-            The effective budgets this Invocation was admitted with, after
-            installation defaults and feature floors were applied. Echoed here
-            so a host sees what it actually got without a second read — an
-            omitted `max_iterations` in particular resolves to a value the
-            request never named.
+            The limits this turn is actually running under, after your
+            installation's defaults and minimums were applied. Repeated here so you
+            can see what you got without a second request — worth checking when you
+            left `max_iterations` out, since the default may be lower than you
+            expect.
     InvocationUpdateEvent:
       type: object
       additionalProperties: false
@@ -6105,6 +6486,159 @@ components:
         details:
           type: object
           additionalProperties: true
+    Profile:
+      type: string
+      enum: [Runtime, Viewer, Operator]
+    Operation:
+      type: string
+      enum: [create_invocation, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_budgets, write_budgets, register_app, list_apps, get_app, update_app]
+    CredentialStatus:
+      type: string
+      enum: [active, revoked]
+    Credential:
+      type: object
+      required: [id, name, prefix, status, profile, operations, created_at, updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/APICredentialID"
+        name:
+          type: string
+        prefix:
+          type: string
+        status:
+          $ref: "#/components/schemas/CredentialStatus"
+        profile:
+          $ref: "#/components/schemas/Profile"
+        app_id:
+          oneOf:
+            - $ref: "#/components/schemas/AppID"
+            - type: "null"
+        creator_credential_id:
+          oneOf:
+            - $ref: "#/components/schemas/APICredentialID"
+            - type: "null"
+        creator_subject:
+          type: [string, "null"]
+          description: Opaque issuer subject when the credential was created by an issuer token.
+        tenant_key:
+          type: [string, "null"]
+        session_id:
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        operations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Operation"
+        expires_at:
+          type: [string, "null"]
+          format: date-time
+        rotated_from_id:
+          oneOf:
+            - $ref: "#/components/schemas/APICredentialID"
+            - type: "null"
+        rotation_overlap_ends_at:
+          type: [string, "null"]
+          format: date-time
+        revoked_at:
+          type: [string, "null"]
+          format: date-time
+        last_used_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CredentialList:
+      type: object
+      additionalProperties: false
+      required: [items, has_more, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Credential"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: [string, "null"]
+    CreateCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [name, profile]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        profile:
+          $ref: "#/components/schemas/Profile"
+        app_id:
+          $ref: "#/components/schemas/AppID"
+          description: |
+            Target App for an app-less Operator provisioning an app credential.
+            Omit to issue another app-less credential. An app-bound Operator
+            may omit this field or repeat its own App ID, but cannot name a
+            different App.
+        tenant_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        operations:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/Operation"
+        expires_at:
+          type: string
+          format: date-time
+    CredentialIssuance:
+      type: object
+      required: [credential, secret, delivery_expires_at, replayed]
+      properties:
+        credential:
+          $ref: "#/components/schemas/Credential"
+        secret:
+          type: string
+          writeOnly: true
+        delivery_expires_at:
+          type: string
+          format: date-time
+        replayed:
+          type: boolean
+    CurrentIdentity:
+      type: object
+      required: [authentication]
+      properties:
+        authentication:
+          type: object
+          required: [credential_id, effective_profile, operations, method, assurance]
+          properties:
+            credential_id:
+              $ref: "#/components/schemas/APICredentialID"
+            effective_profile:
+              $ref: "#/components/schemas/Profile"
+            tenant_key:
+              type: [string, "null"]
+            session_id:
+              oneOf:
+                - $ref: "#/components/schemas/SessionID"
+                - type: "null"
+            operations:
+              type: array
+              items:
+                $ref: "#/components/schemas/Operation"
+            method:
+              type: string
+              enum: [api_key, issuer_token]
+            assurance:
+              type: string
+              const: bearer
   responses:
     InvalidRequest:
       description: The request is invalid or contains a deferred field.
@@ -6185,7 +6719,7 @@ components:
             message: The request could not be completed.
             request_id: req_01K0NVB8MJPBPQY0WXFJGCXEH3
     Unavailable:
-      description: The service cannot currently complete admission or the read.
+      description: nvoken cannot serve this request right now. Retry with backoff.
       content:
         application/json:
           schema:
@@ -6195,7 +6729,7 @@ components:
             message: The service is temporarily unavailable.
             request_id: req_01K0NVBGWQ1V6JJBVH0Q4WZRS1
     MCPDiscoveryFailed:
-      description: The remote MCP server could not be safely discovered or projected.
+      description: nvoken could not safely reach the remote MCP server or read its tool list.
       content:
         application/json:
           schema:

@@ -30,49 +30,33 @@ fi
 
 go run "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@${OAPI_CODEGEN_VERSION}" \
   --config sdk/go/oapi-codegen.yaml \
-  --o "$WORK/runtime.gen.go" \
-  openapi/runtime.yaml
-
-go run "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@${OAPI_CODEGEN_VERSION}" \
-  --config sdk/go/oapi-codegen.identity.yaml \
-  --o "$WORK/identity.gen.go" \
-  openapi/identity.yaml
+  --o "$WORK/nvoken.gen.go" \
+  openapi/nvoken.yaml
 
 java -jar "$JAR" generate \
   --generator-name typescript-fetch \
-  --input-spec openapi/runtime.yaml \
+  --input-spec openapi/nvoken.yaml \
   --output "$WORK/typescript" \
   --additional-properties "npmName=@deepnoodle/nvoken,npmVersion=${TYPESCRIPT_VERSION},supportsES6=true,useSingleRequestParameter=true,importFileExtension=.js,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 java -jar "$JAR" generate \
-  --generator-name typescript-fetch \
-  --input-spec openapi/identity.yaml \
-  --output "$WORK/typescript-identity" \
-  --additional-properties "npmName=@deepnoodle/nvoken,npmVersion=${TYPESCRIPT_VERSION},supportsES6=true,useSingleRequestParameter=true,importFileExtension=.js,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false" \
-  --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
-
-java -jar "$JAR" generate \
   --generator-name python \
-  --input-spec openapi/runtime.yaml \
+  --input-spec openapi/nvoken.yaml \
   --output "$WORK/python" \
   --additional-properties "packageName=nvoken_generated,projectName=nvoken,packageVersion=${PYTHON_VERSION},library=httpx,supportHttpxSync=true,generateSourceCodeOnly=true,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 java -jar "$JAR" generate \
   --generator-name rust \
-  --input-spec openapi/runtime.yaml \
+  --input-spec openapi/nvoken.yaml \
   --output "$WORK/rust" \
   --additional-properties "packageName=nvoken,packageVersion=${RUST_VERSION},library=reqwest,supportAsync=true,supportMiddleware=true,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false,preferUnsignedInt=true" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 rm -rf sdk/go/generated
 mkdir -p sdk/go/generated
-cp "$WORK/runtime.gen.go" sdk/go/generated/runtime.gen.go
-
-rm -rf sdk/go/identitygenerated
-mkdir -p sdk/go/identitygenerated
-cp "$WORK/identity.gen.go" sdk/go/identitygenerated/identity.gen.go
+cp "$WORK/nvoken.gen.go" sdk/go/generated/nvoken.gen.go
 
 rm -rf sdk/typescript/src/generated
 mkdir -p sdk/typescript/src/generated
@@ -83,10 +67,6 @@ cp -R "$WORK/typescript/src/." sdk/typescript/src/generated/
 # they do not invoke the receiver. Keep the generated callback models, but drop
 # this synthetic client surface.
 rm -f sdk/typescript/src/generated/apis/DefaultApi.ts
-
-rm -rf sdk/typescript/src/identity-generated
-mkdir -p sdk/typescript/src/identity-generated
-cp -R "$WORK/typescript-identity/src/." sdk/typescript/src/identity-generated/
 
 # openapi-generator's typescript-fetch templates assume every oneOf array
 # element type exports an `instanceOf*` discriminator guard, but a oneOf with
@@ -128,12 +108,10 @@ done
 
 find \
   sdk/typescript/src/generated \
-  sdk/typescript/src/identity-generated \
   sdk/python/src/nvoken_generated \
   -type f \
   -exec perl -0pi -e 's/[ \t]+$//mg; s/\n+\z/\n/' {} +
 
 go run ./sdk/internal/genmanifest
-gofmt -w sdk/go/generated/runtime.gen.go
-gofmt -w sdk/go/identitygenerated/identity.gen.go
+gofmt -w sdk/go/generated/nvoken.gen.go
 cargo fmt --manifest-path sdk/rust/Cargo.toml

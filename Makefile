@@ -20,8 +20,7 @@ fmt-check:
 generate: sdk-generate
 
 openapi-check:
-	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint openapi/runtime.yaml
-	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint openapi/identity.yaml
+	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint openapi/nvoken.yaml
 
 openapi-sync:
 	python3 scripts/sync_openapi.py --repo "$(NVOKEN_CLOUD_REPO)"

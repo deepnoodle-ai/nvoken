@@ -1,8 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * nvoken Runtime API
- * This focused contract defines nvoken\'s implemented background Runtime surface: durable Invocation admission, authoritative Invocation and Session reads, cursor-based transcript recovery, and resumable Session output streaming.  The Runtime API has no deletion or retention-control operation. Session context compaction creates a private provider projection without mutating canonical Session messages. Authoritative records exposed by this contract, plus private compaction state, are retained by default; the complete inventory and any future ordered-deletion contract are governed by the design packet\'s Data and retention section.  Inline and callback host tools, structured output, reusable definitions, URL media input, and reusable model provider key lifecycle are included. General administrative APIs remain outside this version.  ## Protected vocabulary  Several names deliberately converge with established agent APIs and must not be casually renamed: `metadata` uses OpenAI\'s bounds of 16 keys, 64-character names, and 512-byte values; `output_text` is the composed text convenience; `reasoning.effort` uses `low`, `medium`, `high`, `xhigh`, and `max`; `stop_reason: end_turn`, status `running`, and message phases `commentary` and `final_answer` are likewise intentional.  ## Echo resolved config  Every setting the runtime resolves on the caller\'s behalf is readable back, resolved, on the resource that used it. A host never has to reconstruct what applied from the request it sent plus its own model of nvoken\'s defaults — the resource says.  Concretely: an Invocation echoes `limits` after installation defaults and feature floors, alongside the `definition` it was admitted with exactly as snapshotted, and `provenance` records what actually ran. A Session echoes its compaction policy with `auto` already materialized to the integer it resolved to and the model it bound, and its retention window as accepted. New settings are expected to follow: a default the caller cannot read back is a setting only the server knows about.
+ * nvoken API
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -22,38 +22,17 @@ import {
 } from './WebSearchTool.js';
 
 /**
- * Selects one server-side tool the provider runs inside the generation
- * call. Unlike a host tool the turn does not park for it, and unlike a
- * builtin nvoken does not execute it — the provider does, and bills it on
- * the same provider key the model runs on. That is deliberate: a
- * runtime-operated search would make nvoken hold a search vendor
- * relationship and answer "who pays per query" for every installation,
- * while this uses the billing relationship the host already has.
+ * Turns on a tool the model provider runs itself, inside the model call —
+ * web search, for example.
  *
- * **Anthropic only, for now.** The providers' search controls differ
- * materially, and a "common" option set would either be the empty
- * intersection or would silently drop fields on some providers — which is
- * exactly what nvoken's fail-closed posture forbids. Another provider is
- * rejected at admission rather than served a degraded search. Widening is
- * per-provider capability work.
+ * This behaves differently from your own tools in two ways: the turn
+ * never stops to wait for it, and nvoken never executes it. The provider
+ * does, and charges it to the same provider key the model is running on.
  *
- * A model that does not declare `controls.tools.web_search` is refused
- * too, including any uncataloged model: a tool configuration the provider
- * quietly ignored would bill a turn that did no searching and return an
- * answer the host believes was researched.
- *
- * **Cost accounting.** Search charges ride the provider's bill outside
- * nvoken's estimate. `limits.max_estimated_cost_usd` and the usage
- * reporting cover model tokens; the provider does not report a
- * per-search fee through the interface nvoken reads, so a host that needs
- * a hard ceiling on search spend should set `max_uses`.
- *
- * **What appears in the transcript.** The model's `server_tool_use` block
- * is public, so a host can show what was searched for. The matching
- * `web_search_tool_result` is not: it carries the provider's encrypted
- * continuation bytes, which the next turn must echo back verbatim and
- * which mean nothing to a host. The sources behind a claim arrive as
- * citations on the visible text blocks.
+ * That is deliberate. A search tool operated by nvoken would mean nvoken
+ * holding a vendor relationship with a search provider and answering "who
+ * pays per query" for every installation. Letting the provider run it
+ * keeps one key and one bill.
  *
  * @export
  * @interface ProviderTool

@@ -8,6 +8,9 @@ without republishing every artifact.
 
 ## Unreleased
 
+- Generate every SDK and the CLI from the single authoritative
+  `openapi/nvoken.yaml` contract, including the Identity API.
+
 ## 0.9.1 - 2026-08-09
 
 - Establish this repository as the public home of the Go, Python, TypeScript,

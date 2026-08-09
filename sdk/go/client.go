@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
-	"github.com/deepnoodle-ai/nvoken/sdk/go/identitygenerated"
 )
 
 type RetryPolicy struct {
@@ -38,7 +37,6 @@ func (p RetryPolicy) normalized() RetryPolicy {
 
 type Client struct {
 	raw          *generated.ClientWithResponses
-	identityRaw  *identitygenerated.ClientWithResponses
 	retry        RetryPolicy
 	DefaultModel *Model
 	sessionMu    sync.Mutex
@@ -90,19 +88,10 @@ func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error)
 		generated.WithRequestEditorFn(requestEditor),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create generated Runtime client: %w", err)
-	}
-	identityRaw, err := identitygenerated.NewClientWithResponses(
-		baseURL,
-		identitygenerated.WithHTTPClient(config.httpClient),
-		identitygenerated.WithRequestEditorFn(requestEditor),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create generated Identity client: %w", err)
+		return nil, fmt.Errorf("create generated client: %w", err)
 	}
 	return &Client{
 		raw:          raw,
-		identityRaw:  identityRaw,
 		retry:        config.retry.normalized(),
 		DefaultModel: config.defaultModel,
 		sessionLocks: make(map[string]*sync.Mutex),
@@ -110,8 +99,6 @@ func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error)
 }
 
 func (c *Client) Raw() *generated.ClientWithResponses { return c.raw }
-
-func (c *Client) RawIdentity() *identitygenerated.ClientWithResponses { return c.identityRaw }
 
 type callResult[T any] struct {
 	Value  *T
@@ -562,12 +549,12 @@ func (c *Client) SubmitToolResults(ctx context.Context, invocationID string, res
 }
 
 func (c *Client) GetCurrentIdentity(ctx context.Context) (*CurrentIdentity, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.CurrentIdentity], error) {
-		response, err := c.identityRaw.GetCurrentIdentityWithResponse(ctx)
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.CurrentIdentity], error) {
+		response, err := c.raw.GetCurrentIdentityWithResponse(ctx)
 		if err != nil {
-			return callResult[identitygenerated.CurrentIdentity]{}, err
+			return callResult[generated.CurrentIdentity]{}, err
 		}
-		return callResult[identitygenerated.CurrentIdentity]{
+		return callResult[generated.CurrentIdentity]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -580,16 +567,16 @@ func (c *Client) ListCredentials(
 	ctx context.Context,
 	options ListCredentialsOptions,
 ) (*CredentialList, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.CredentialList], error) {
-		response, err := c.identityRaw.ListCredentialsWithResponse(ctx, &identitygenerated.ListCredentialsParams{
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.CredentialList], error) {
+		response, err := c.raw.ListCredentialsWithResponse(ctx, &generated.ListCredentialsParams{
 			Status: options.Status,
 			Cursor: options.Cursor,
 			Limit:  options.Limit,
 		})
 		if err != nil {
-			return callResult[identitygenerated.CredentialList]{}, err
+			return callResult[generated.CredentialList]{}, err
 		}
-		return callResult[identitygenerated.CredentialList]{
+		return callResult[generated.CredentialList]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -605,7 +592,7 @@ func (c *Client) CreateCredential(
 	if input.Name == "" || !input.Profile.Valid() || input.IdempotencyKey == "" {
 		return nil, &Error{Category: ErrorValidation, Message: "credential name, profile, and idempotency key are required"}
 	}
-	body := identitygenerated.CreateCredentialRequest{
+	body := generated.CreateCredentialRequest{
 		AppID:     input.AppID,
 		ExpiresAt: input.ExpiresAt,
 		Name:      input.Name,
@@ -617,16 +604,16 @@ func (c *Client) CreateCredential(
 		operations := append([]RuntimeOperation(nil), input.Operations...)
 		body.Operations = &operations
 	}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.CredentialIssuance], error) {
-		response, err := c.identityRaw.CreateCredentialWithResponse(
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.CredentialIssuance], error) {
+		response, err := c.raw.CreateCredentialWithResponse(
 			ctx,
-			&identitygenerated.CreateCredentialParams{IdempotencyKey: input.IdempotencyKey},
+			&generated.CreateCredentialParams{IdempotencyKey: input.IdempotencyKey},
 			body,
 		)
 		if err != nil {
-			return callResult[identitygenerated.CredentialIssuance]{}, err
+			return callResult[generated.CredentialIssuance]{}, err
 		}
-		return callResult[identitygenerated.CredentialIssuance]{
+		return callResult[generated.CredentialIssuance]{
 			Value:  response.JSON201,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -640,12 +627,12 @@ func (c *Client) CreateCredential(
 }
 
 func (c *Client) GetCredential(ctx context.Context, credentialID string) (*Credential, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.Credential], error) {
-		response, err := c.identityRaw.GetCredentialWithResponse(ctx, credentialID)
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Credential], error) {
+		response, err := c.raw.GetCredentialWithResponse(ctx, credentialID)
 		if err != nil {
-			return callResult[identitygenerated.Credential]{}, err
+			return callResult[generated.Credential]{}, err
 		}
-		return callResult[identitygenerated.Credential]{
+		return callResult[generated.Credential]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -662,17 +649,17 @@ func (c *Client) RotateCredential(
 	if credentialID == "" || input.IdempotencyKey == "" || input.OverlapSeconds < 0 || input.OverlapSeconds > 86400 {
 		return nil, &Error{Category: ErrorValidation, Message: "credential ID and idempotency key are required, and overlap seconds must be between 0 and 86400"}
 	}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.CredentialIssuance], error) {
-		response, err := c.identityRaw.RotateCredentialWithResponse(
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.CredentialIssuance], error) {
+		response, err := c.raw.RotateCredentialWithResponse(
 			ctx,
 			credentialID,
-			&identitygenerated.RotateCredentialParams{IdempotencyKey: input.IdempotencyKey},
-			identitygenerated.RotateCredentialJSONRequestBody{OverlapSeconds: input.OverlapSeconds},
+			&generated.RotateCredentialParams{IdempotencyKey: input.IdempotencyKey},
+			generated.RotateCredentialJSONRequestBody{OverlapSeconds: input.OverlapSeconds},
 		)
 		if err != nil {
-			return callResult[identitygenerated.CredentialIssuance]{}, err
+			return callResult[generated.CredentialIssuance]{}, err
 		}
-		return callResult[identitygenerated.CredentialIssuance]{
+		return callResult[generated.CredentialIssuance]{
 			Value:  response.JSON201,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -686,12 +673,12 @@ func (c *Client) RotateCredential(
 }
 
 func (c *Client) RevokeCredential(ctx context.Context, credentialID string) (*Credential, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[identitygenerated.Credential], error) {
-		response, err := c.identityRaw.RevokeCredentialWithResponse(ctx, credentialID)
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Credential], error) {
+		response, err := c.raw.RevokeCredentialWithResponse(ctx, credentialID)
 		if err != nil {
-			return callResult[identitygenerated.Credential]{}, err
+			return callResult[generated.Credential]{}, err
 		}
-		return callResult[identitygenerated.Credential]{
+		return callResult[generated.Credential]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -700,7 +687,7 @@ func (c *Client) RevokeCredential(ctx context.Context, credentialID string) (*Cr
 	})
 }
 
-func credentialIssuance(value *identitygenerated.CredentialIssuance) (*CredentialIssuance, error) {
+func credentialIssuance(value *generated.CredentialIssuance) (*CredentialIssuance, error) {
 	if value == nil || value.Secret == nil || *value.Secret == "" {
 		return nil, &Error{Category: ErrorUnexpectedResponse, Message: "nvoken returned credential issuance without one-time secret material"}
 	}

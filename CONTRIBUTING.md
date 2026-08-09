@@ -5,7 +5,7 @@
 This repository owns SDK ergonomics, generated client artifacts, conformance
 fixtures, examples, the `nvoken` CLI, and package releases. The private
 `deepnoodle-ai/nvoken-cloud` repository owns server behavior and the
-authoritative OpenAPI contracts.
+authoritative OpenAPI contract.
 
 Change the server contract in `nvoken-cloud` first. Then synchronize the public
 snapshot, regenerate all clients, and review the complete cross-language diff:
@@ -19,9 +19,7 @@ make check
 Do not hand-edit these generated paths:
 
 - `sdk/go/generated/`
-- `sdk/go/identitygenerated/`
 - `sdk/typescript/src/generated/`
-- `sdk/typescript/src/identity-generated/`
 - `sdk/python/src/nvoken_generated/`
 - `sdk/rust/src/apis/`
 - `sdk/rust/src/models/`

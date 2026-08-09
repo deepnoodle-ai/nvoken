@@ -33,7 +33,7 @@ type manifestOperation struct {
 }
 
 func main() {
-	contents, err := os.ReadFile("openapi/runtime.yaml")
+	contents, err := os.ReadFile("openapi/nvoken.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -68,7 +68,7 @@ func main() {
 		GeneratedBy string              `json:"generated_by"`
 		Operations  []manifestOperation `json:"operations"`
 	}{
-		GeneratedBy: "openapi/runtime.yaml; do not edit",
+		GeneratedBy: "openapi/nvoken.yaml; do not edit",
 		Operations:  operations,
 	}, "", "  ")
 	if err != nil {
@@ -92,7 +92,7 @@ func main() {
 		panic("stream operations are missing")
 	}
 	routes := fmt.Sprintf(
-		"// Code generated from openapi/runtime.yaml; DO NOT EDIT.\n\npub const STREAM_SESSION_TRANSCRIPT: &str = %q;\npub const STREAM_INVOCATION: &str = %q;\n",
+		"// Code generated from openapi/nvoken.yaml; DO NOT EDIT.\n\npub const STREAM_SESSION_TRANSCRIPT: &str = %q;\npub const STREAM_INVOCATION: &str = %q;\n",
 		sessionStreamPath,
 		invocationStreamPath,
 	)

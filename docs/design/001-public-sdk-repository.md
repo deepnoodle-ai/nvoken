@@ -8,7 +8,7 @@
 ## Context
 
 The private `deepnoodle-ai/nvoken-cloud` repository now owns the nvoken service,
-including the authoritative OpenAPI contracts. The public
+including the authoritative OpenAPI contract. The public
 `deepnoodle-ai/nvoken` repository needs to become the distribution and
 development home for the Go, Python, TypeScript, and Rust SDKs and the Go
 `nvoken` client CLI. Mature implementations of those clients already exist in
@@ -26,8 +26,8 @@ generated artifacts, conformance tests, packaging, and releases.
   `nvoken` CLI.
 - Port the current Go, Python, TypeScript, and Rust clients without losing their
   reliability facades, tests, examples, or package metadata.
-- Generate low-level transports and models from synchronized snapshots of the
-  authoritative `nvoken-cloud/openapi` contracts.
+- Generate low-level transports and models from a synchronized snapshot of the
+  authoritative `nvoken-cloud/openapi/nvoken.yaml` contract.
 - Make generation reproducible in public CI without requiring access to the
   private service repository.
 - Give contributors one local gate that verifies generated drift,
@@ -61,7 +61,7 @@ nvoken/
 │   ├── conformance/            # shared fixtures and local HTTP test server
 │   ├── scripts/                # generation and validation orchestration
 │   └── operations.json         # generated operation-coverage manifest
-├── openapi/                    # synchronized, non-authoritative snapshots
+├── openapi/                    # synchronized, non-authoritative snapshot
 ├── examples/                   # executable SDK examples
 ├── docs/                       # repository and SDK development guidance
 └── scripts/                    # contract sync and CLI release tooling
@@ -75,14 +75,14 @@ and one private local-storage package. It does not import service internals.
 
 ### Contract ownership and synchronization
 
-`nvoken-cloud/openapi/runtime.yaml` and `identity.yaml` are authoritative. This
-repository commits byte-for-byte snapshots under `openapi/` so a public pull
+`nvoken-cloud/openapi/nvoken.yaml` is authoritative. This repository commits a
+byte-for-byte snapshot under `openapi/` so a public pull
 request can regenerate and test clients without access to a private repository.
 `openapi/SOURCE.json` records the upstream repository and commit.
 
-`make openapi-sync` copies the two contracts from `NVOKEN_CLOUD_REPO`
+`make openapi-sync` copies the contract from `NVOKEN_CLOUD_REPO`
 (defaulting to `../nvoken-cloud`) and refreshes provenance. `make
-openapi-sync-check` proves that the committed snapshots match a local upstream
+openapi-sync-check` proves that the committed snapshot matches a local upstream
 checkout. The normal public CI gate validates generation from the committed
 snapshot. Synchronization is intentionally manual for now: a maintainer with
 both repositories checked out runs the sync and generation targets, reviews the
