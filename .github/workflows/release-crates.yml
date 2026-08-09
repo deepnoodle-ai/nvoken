@@ -1,0 +1,60 @@
+name: release-crates
+
+on:
+  push:
+    tags:
+      - crates-v*
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # crates.io's trusted publisher is bound to this environment. Configure it
+    # on the `nvoken` crate with workflow `release-crates.yml` and environment
+    # `crates-io`, or the auth action cannot exchange the OIDC token and the job
+    # fails before it uploads anything.
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/nvoken
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify release tag matches crate version
+        run: |
+          version="$(cargo metadata --manifest-path sdk/rust/Cargo.toml --format-version 1 --no-deps \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["packages"][0]["version"])')"
+          if [ "${GITHUB_REF_NAME}" != "crates-v${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match crate version ${version}" >&2
+            exit 1
+          fi
+      - name: Package the crate
+        # The SDK's own suite needs the Go conformance server and already ran in
+        # `check` on the commit this tag points at. This step compiles the crate
+        # exactly as it will be unpacked from the registry, which is where a file
+        # left out of the published archive shows up.
+        run: cargo package --manifest-path sdk/rust/Cargo.toml --locked
+      - id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --manifest-path sdk/rust/Cargo.toml --locked --no-verify
+      - name: Verify the public registry artifact
+        run: |
+          # Publish succeeds before the index catches up, so a single read right
+          # after it can miss a version that is live. Retry with backoff rather
+          # than failing the release on that lag.
+          version="$(cargo metadata --manifest-path sdk/rust/Cargo.toml --format-version 1 --no-deps \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["packages"][0]["version"])')"
+          for attempt in 1 2 3 4 5 6; do
+            if curl --silent --fail "https://crates.io/api/v1/crates/nvoken/${version}" >/dev/null; then
+              echo "crates.io serves nvoken ${version}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: registry not serving ${version} yet; retrying in 10s"
+            sleep 10
+          done
+          echo "crates.io never served nvoken ${version} after retries" >&2
+          exit 1

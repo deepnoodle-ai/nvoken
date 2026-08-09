@@ -1,0 +1,70 @@
+{
+  "terminal_statuses": ["completed", "incomplete", "failed", "cancelled"],
+  "stop_reason": {
+    "values": [
+      "end_turn",
+      "interrupted",
+      "max_iterations",
+      "deadline",
+      "max_output_tokens",
+      "max_estimated_cost",
+      "session_budget",
+      "shared_budget"
+    ],
+    "present_only_on_statuses": ["completed", "incomplete", "paused"],
+    "by_status": {
+      "completed": ["end_turn", "interrupted"],
+      "incomplete": [
+        "max_iterations",
+        "deadline",
+        "max_output_tokens",
+        "max_estimated_cost",
+        "session_budget",
+        "shared_budget"
+      ],
+      "paused": [
+        "max_iterations",
+        "max_output_tokens",
+        "max_estimated_cost",
+        "session_budget",
+        "shared_budget"
+      ]
+    },
+    "note": "`completed` means the turn ended the way it was asked to. A budget enforced at a coherent seam settles `incomplete` by default or `paused` when the caller opted into resumable exhaustion; deadlines never pause. An interrupt stays `completed` because the caller asked the turn to end there.",
+    "seam_exhaustion_incomplete": {
+      "iterations": "max_iterations",
+      "total": "deadline",
+      "active_execution": "deadline",
+      "execution_segment": "deadline",
+      "output_tokens": "max_output_tokens",
+      "estimated_cost": "max_estimated_cost",
+      "session_budget": "session_budget",
+      "shared_budget": "shared_budget"
+    }
+  },
+  "message_phase": {
+    "values": ["commentary", "final_answer"],
+    "present_only_on_role": "assistant",
+    "final_answer_requires": {
+      "status": "completed",
+      "stop_reason": "end_turn",
+      "position": "last assistant message of the turn"
+    },
+    "note": "Every assistant message of an interrupted, incomplete, or paused turn is commentary, so a turn with no final_answer is visibly unfinished."
+  },
+  "failure_details": {
+    "deadline_exceeded": {
+      "key": "scope",
+      "values": ["total", "active_execution", "execution_segment", "waiting"]
+    },
+    "budget_exceeded": {
+      "key": "kind",
+      "values": ["output_tokens", "estimated_cost", "estimated_cost_unavailable"],
+      "note": "A ceiling reaches this code only when no coherent seam absorbed it. `estimated_cost_unavailable` is always a failure: nothing was exhausted, nvoken cannot price the model."
+    },
+    "structured_output_unsatisfied": {
+      "key": "reason",
+      "values": ["missing", "invalid", "oversized"]
+    }
+  }
+}

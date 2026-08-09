@@ -1,0 +1,650 @@
+import type { Client, InvocationHandle, JsonObject, TypedInvocationResult } from "./client.js";
+import { NvokenError, normalizeError, SessionBusyError } from "./client.js";
+import type {
+  CreateInvocationRequest,
+  InvocationAcceptedEvent,
+  InvocationResultEvent,
+  InvocationStreamEvent as GeneratedInvocationStreamEvent,
+  InvocationUpdateEvent,
+  OutputTextDeltaEvent,
+  StreamEndEvent,
+  StreamResyncEvent,
+  ThinkingDeltaEvent,
+  InvocationChange,
+  SessionMessage,
+} from "./generated/models/index.js";
+import {
+  InvocationAcceptedEventFromJSON,
+  InvocationResultEventFromJSON,
+  InvocationUpdateEventFromJSON,
+  OutputTextDeltaEventFromJSON,
+  StreamEndEventFromJSON,
+  StreamResyncEventFromJSON,
+  ThinkingDeltaEventFromJSON,
+  TranscriptUpdateFromJSON,
+} from "./generated/models/index.js";
+
+export interface StreamEvent {
+  id?: string;
+  type: string;
+  data: unknown;
+  retryMs?: number;
+}
+
+export interface StreamOptions {
+  deltas?: boolean;
+}
+
+export interface ReducedSnapshot {
+  messages: SessionMessage[];
+  invocationChanges: InvocationChange[];
+  previews: StreamPreview[];
+  resumeCursor?: string;
+}
+
+export interface StreamPreview {
+  invocationId: string;
+  attempt: number;
+  iteration: number;
+  contentIndex: number;
+  outputText: string;
+  thinking: string;
+}
+
+export interface StreamUpdate {
+  event: StreamEvent;
+  snapshot: ReducedSnapshot;
+}
+
+export interface StreamMetadata {
+  /** SSE cursor on durable frames. Persist this to resume after a disconnect. */
+  sseId?: string;
+  /** Server-selected reconnect delay, when present. */
+  retryMs?: number;
+}
+
+type TypedInvocationUpdateEvent<TOutput extends object> =
+  Omit<InvocationUpdateEvent, "invocation"> & {
+    invocation: InvocationUpdateEvent["invocation"] & {
+      structuredOutput: TOutput | null;
+    };
+  };
+
+type TypedInvocationResultEvent<TOutput extends object> =
+  Omit<InvocationResultEvent, "result"> & {
+    result: TypedInvocationResult<TOutput>;
+  };
+
+export type InvocationStreamEvent<TOutput extends object = JsonObject> = StreamMetadata & (
+  | InvocationAcceptedEvent
+  | TypedInvocationUpdateEvent<TOutput>
+  | TypedInvocationResultEvent<TOutput>
+  | OutputTextDeltaEvent
+  | ThinkingDeltaEvent
+  | StreamResyncEvent
+  | StreamEndEvent
+);
+
+export class Reducer {
+  private readonly messages = new Map<number, SessionMessage>();
+  private readonly changes = new Map<string, InvocationChange>();
+  private readonly previews = new Map<string, StreamPreview>();
+  private readonly latestAttempts = new Map<string, number>();
+  private readonly terminalInvocations = new Set<string>();
+  private cursor?: string;
+
+  apply(event: StreamEvent): void {
+    if (event.type === "output_text.delta") {
+      const delta = OutputTextDeltaEventFromJSON(event.data);
+      this.appendPreview(
+        delta.invocationId,
+        delta.attempt,
+        delta.iteration,
+        delta.contentIndex,
+        delta.text,
+        "",
+      );
+      return;
+    }
+    if (event.type === "thinking.delta") {
+      const delta = ThinkingDeltaEventFromJSON(event.data);
+      this.appendPreview(
+        delta.invocationId,
+        delta.attempt,
+        delta.iteration,
+        delta.contentIndex,
+        "",
+        delta.thinking,
+      );
+      return;
+    }
+    if (event.type === "stream.resync") {
+      const resync = StreamResyncEventFromJSON(event.data);
+      if (resync.invocationId) {
+        this.discardPreviews(resync.invocationId);
+      } else {
+        this.previews.clear();
+        this.latestAttempts.clear();
+      }
+      return;
+    }
+    if (event.type !== "transcript.update") return;
+    const update = TranscriptUpdateFromJSON(event.data);
+    for (const message of update.messages) {
+      this.messages.set(message.sequence, message);
+      if (message.role === "assistant" && message.invocationId !== null) {
+        this.discardPreviews(message.invocationId);
+      }
+    }
+    for (const change of update.invocationChanges) {
+      this.changes.set(`${change.invocationId}:${change.revision}`, change);
+      if (["completed", "incomplete", "failed", "cancelled"].includes(change.status)) {
+        this.terminalInvocations.add(change.invocationId);
+        this.discardPreviews(change.invocationId);
+      }
+    }
+    const cursor = event.id || update.resumeCursor;
+    if (cursor) this.cursor = cursor;
+  }
+
+  snapshot(): ReducedSnapshot {
+    return {
+      messages: [...this.messages.values()].sort((left, right) => left.sequence - right.sequence),
+      invocationChanges: [...this.changes.values()].sort((left, right) => {
+        const invocationOrder = left.invocationId.localeCompare(right.invocationId);
+        return invocationOrder || left.revision - right.revision;
+      }),
+      previews: [...this.previews.values()]
+        .map((preview) => ({ ...preview }))
+        .sort((left, right) =>
+          left.invocationId.localeCompare(right.invocationId)
+          || left.attempt - right.attempt
+          || left.iteration - right.iteration
+          || left.contentIndex - right.contentIndex),
+      resumeCursor: this.cursor,
+    };
+  }
+
+  private appendPreview(
+    invocationId: string,
+    attempt: number,
+    iteration: number,
+    contentIndex: number,
+    outputText: string,
+    thinking: string,
+  ): void {
+    if (this.terminalInvocations.has(invocationId)) return;
+    const latestAttempt = this.latestAttempts.get(invocationId);
+    if (latestAttempt !== undefined && attempt < latestAttempt) return;
+    if (latestAttempt === undefined || attempt > latestAttempt) {
+      this.discardPreviews(invocationId);
+      this.latestAttempts.set(invocationId, attempt);
+    }
+    const key = `${invocationId}:${attempt}:${iteration}:${contentIndex}`;
+    const preview = this.previews.get(key) ?? {
+      invocationId,
+      attempt,
+      iteration,
+      contentIndex,
+      outputText: "",
+      thinking: "",
+    };
+    preview.outputText += outputText;
+    preview.thinking += thinking;
+    this.previews.set(key, preview);
+  }
+
+  private discardPreviews(invocationId: string): void {
+    for (const [key, preview] of this.previews) {
+      if (preview.invocationId === invocationId) this.previews.delete(key);
+    }
+    this.latestAttempts.delete(invocationId);
+  }
+}
+
+export async function* streamSession<TOutput extends object>(
+  client: Client,
+  handle: InvocationHandle<TOutput>,
+  reducer: Reducer,
+  signal?: AbortSignal,
+): AsyncGenerator<StreamUpdate> {
+  yield* streamSessionWithOptions(client, handle, reducer, {}, signal);
+}
+
+export async function* streamSessionWithOptions<TOutput extends object>(
+  client: Client,
+  handle: InvocationHandle<TOutput>,
+  reducer: Reducer,
+  options: StreamOptions,
+  signal?: AbortSignal,
+): AsyncGenerator<StreamUpdate> {
+  const sessionId = await handle.requireSessionId(signal);
+  yield* streamSessionByID(client, sessionId, reducer, options, signal);
+}
+
+/**
+ * Stream a Session transcript by id, without an InvocationHandle. Connecting
+ * with a fresh Reducer replays the durable transcript from the start, so the
+ * stream doubles as the bootstrap. Reconnects on rotation using the Reducer's
+ * resume cursor; returns once the Session settles (`stream.end` terminal).
+ */
+export async function* streamSessionByID(
+  client: Client,
+  sessionId: string,
+  reducer: Reducer,
+  options: StreamOptions = {},
+  signal?: AbortSignal,
+): AsyncGenerator<StreamUpdate> {
+  let retryMs = 1_000;
+  for (;;) {
+    const request = await client.sessions.streamSessionTranscriptRequestOpts({
+      sessionId,
+      deltas: options.deltas,
+      lastEventID: reducer.snapshot().resumeCursor,
+    });
+    const response = await fetchStream(client, request, signal);
+    let terminalEnd = false;
+    for await (const event of parseSSE(response.body!)) {
+      if (event.retryMs !== undefined) retryMs = Math.min(event.retryMs, 30_000);
+      // A frame carrying only `retry:` is a control frame, not an event. The
+      // runtime opens every stream with one. Its bookkeeping is applied above;
+      // the frame itself has no payload to decode or reduce.
+      if (event.data === undefined) continue;
+      reducer.apply(event);
+      yield { event, snapshot: reducer.snapshot() };
+      if (
+        event.type === "stream.end"
+        && StreamEndEventFromJSON(event.data).reason === "terminal"
+      ) {
+        terminalEnd = true;
+      }
+    }
+    if (terminalEnd) return;
+    await delay(retryMs, signal);
+  }
+}
+
+/**
+ * Admit and stream one Invocation. Admission is a plain POST retried with the
+ * exact serialized request; the events are read from the Invocation stream,
+ * and reconnects use the Invocation-scoped durable cursor.
+ */
+export function streamInvocation<TOutput extends object>(
+  client: Client,
+  request: CreateInvocationRequest,
+  signal?: AbortSignal,
+): AsyncGenerator<InvocationStreamEvent<TOutput>> {
+  return streamInvocationLoop(client, request, undefined, undefined, signal, undefined);
+}
+
+/** Resume an existing Invocation stream without re-admitting work. */
+export function streamInvocationByID<TOutput extends object>(
+  client: Client,
+  invocationId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<InvocationStreamEvent<TOutput>> {
+  return streamInvocationLoop(client, undefined, invocationId, undefined, signal, undefined);
+}
+
+/** Resume an existing Invocation stream with per-connection delivery options. */
+export function streamInvocationByIDWithOptions<TOutput extends object>(
+  client: Client,
+  invocationId: string,
+  options: StreamOptions,
+  signal?: AbortSignal,
+): AsyncGenerator<InvocationStreamEvent<TOutput>> {
+  return streamInvocationLoop(
+    client,
+    undefined,
+    invocationId,
+    undefined,
+    signal,
+    options.deltas,
+  );
+}
+
+async function* streamInvocationLoop<TOutput extends object>(
+  client: Client,
+  admission: CreateInvocationRequest | undefined,
+  initialInvocationId: string | undefined,
+  initialCursor: string | undefined,
+  signal?: AbortSignal,
+  deltas?: boolean,
+): AsyncGenerator<InvocationStreamEvent<TOutput>> {
+  let invocationId = initialInvocationId;
+  let cursor = initialCursor;
+  let retryMs = 1_000;
+  if (invocationId === undefined) {
+    const accepted = await admitInvocation(client, admission!, signal);
+    invocationId = accepted.invocationId;
+    yield accepted as InvocationStreamEvent<TOutput>;
+  }
+  for (;;) {
+    const request = await client.invocations.streamInvocationRequestOpts({
+      invocationId,
+      deltas,
+      lastEventID: cursor,
+    });
+    request.headers = { ...request.headers, Accept: "text/event-stream" };
+
+    let response: Response;
+    try {
+      response = await fetchStream(client, request, signal);
+    } catch (error) {
+      const normalized = await normalizeError(error);
+      if (!streamRetryable(normalized)) throw normalized;
+      // Reconnecting is unbounded — the Invocation is already durable, so
+      // there is nothing to re-admit and nothing an attempt cap would protect.
+      await delay(streamDelay(client, 1, retryMs, normalized), signal);
+      continue;
+    }
+
+    for await (const raw of parseSSE(response.body!)) {
+      if (raw.retryMs !== undefined) retryMs = Math.min(raw.retryMs, 30_000);
+      if (raw.id) cursor = raw.id;
+      // A frame carrying only `retry:` is a control frame, not an event. The
+      // runtime opens every stream with one, so decoding it as an event failed
+      // every stream against the real runtime before the first real frame.
+      if (raw.data === undefined) continue;
+      const event = decodeInvocationEvent(raw);
+      yield event as InvocationStreamEvent<TOutput>;
+      if (event.type === "invocation.result") return;
+    }
+    await delay(retryMs, signal);
+  }
+}
+
+/**
+ * Admits with a plain POST and synthesizes the `invocation.accepted` frame the
+ * stream begins with, so the caller sees the same first event either way.
+ *
+ * Reading SSE off the `202` instead is a documented convenience rather than
+ * the supported pattern, and it depends on the deployment front end streaming
+ * a non-`200` POST response — Cloud Run buffers it until the Invocation
+ * settles, which strands every host-tool turn at `waiting` with nobody
+ * watching. Admitting separately also survives a dropped connection without
+ * re-admitting, and is what the Go, Python, and Rust SDKs already do.
+ */
+async function admitInvocation(
+  client: Client,
+  request: CreateInvocationRequest,
+  signal?: AbortSignal,
+): Promise<InvocationAcceptedEvent> {
+  let attempts = 0;
+  for (;;) {
+    attempts += 1;
+    try {
+      const invocation = await client.invocations.createInvocation(
+        { createInvocationRequest: request },
+        { signal },
+      );
+      return {
+        type: "invocation.accepted",
+        agentId: invocation.agentId,
+        sessionId: invocation.sessionId,
+        invocationId: invocation.id,
+        status: invocation.status,
+        deduplicated: invocation.deduplicated ?? false,
+        deadlineAt: invocation.deadlineAt!,
+        limits: invocation.limits,
+      };
+    } catch (error) {
+      const normalized = await normalizeError(error);
+      if (!streamRetryable(normalized) || attempts >= client.retry.maxAttempts) {
+        throw normalized;
+      }
+      await delay(streamDelay(client, attempts, 1_000, normalized), signal);
+    }
+  }
+}
+
+function streamDelay(
+  client: Client,
+  attempt: number,
+  serverDelayMs: number,
+  error: NvokenError,
+): number {
+  if (error.retryAfterMs !== undefined) {
+    return Math.min(error.retryAfterMs, client.retry.maxDelayMs);
+  }
+  return Math.min(
+    client.retry.maxDelayMs,
+    Math.max(serverDelayMs, client.retry.minDelayMs * 2 ** Math.max(0, attempt - 1)),
+  );
+}
+
+function decodeInvocationEvent(raw: StreamEvent): InvocationStreamEvent<object> {
+  if (!raw.data || typeof raw.data !== "object") {
+    throw new NvokenError(
+      "unexpected_response",
+      `Invocation stream event ${raw.type} had no object payload`,
+    );
+  }
+  let event: GeneratedInvocationStreamEvent;
+  switch (raw.type) {
+  case "invocation.accepted":
+    event = InvocationAcceptedEventFromJSON(raw.data);
+    break;
+  case "invocation.update":
+    event = InvocationUpdateEventFromJSON(raw.data);
+    break;
+  case "invocation.result":
+    event = InvocationResultEventFromJSON(raw.data);
+    break;
+  case "output_text.delta":
+    event = OutputTextDeltaEventFromJSON(raw.data);
+    break;
+  case "thinking.delta":
+    event = ThinkingDeltaEventFromJSON(raw.data);
+    break;
+  case "stream.resync":
+    event = StreamResyncEventFromJSON(raw.data);
+    break;
+  case "stream.end":
+    event = StreamEndEventFromJSON(raw.data);
+    break;
+  default:
+    throw new NvokenError(
+      "unexpected_response",
+      `Unknown Invocation stream event ${raw.type}`,
+    );
+  }
+  return { ...event, sseId: raw.id, retryMs: raw.retryMs } as InvocationStreamEvent<object>;
+}
+
+async function fetchStream(
+  client: Client,
+  request: { path: string; method: string; headers: Record<string, string>; query?: unknown; body?: unknown },
+  signal?: AbortSignal,
+): Promise<Response> {
+  const url = new URL(client.configuration.basePath + request.path);
+  for (const [name, value] of Object.entries(request.query ?? {})) {
+    if (value !== undefined && value !== null) url.searchParams.set(name, String(value));
+  }
+  let response: Response;
+  try {
+    const contentType = request.headers["Content-Type"] ?? request.headers["content-type"];
+    const body = request.body !== undefined
+      && request.body !== null
+      && typeof request.body === "object"
+      && contentType?.includes("application/json")
+      ? JSON.stringify(request.body)
+      : request.body as BodyInit | null | undefined;
+    response = await client.fetch(url, {
+      method: request.method,
+      headers: request.headers,
+      body,
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted) {
+      throw new NvokenError(
+        "cancelled",
+        "local stream was cancelled",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+  if (!response.ok) {
+    throw await responseError(response);
+  }
+  if (!response.body) {
+    throw new NvokenError("unexpected_response", "stream response had no body");
+  }
+  return response;
+}
+
+async function responseError(response: Response): Promise<NvokenError> {
+  let body: {
+    message?: string;
+    code?: string;
+    request_id?: string;
+    details?: Record<string, unknown>;
+  } = {};
+  try {
+    body = await response.clone().json() as typeof body;
+  } catch {
+    // Status and headers still produce a useful error.
+  }
+  const requestId = body.request_id ?? response.headers.get("x-request-id") ?? undefined;
+  if (body.code === "session_invocation_active") {
+    return new SessionBusyError(
+      body.message ?? "This Session already has a nonterminal Invocation.",
+      typeof body.details?.invocation_id === "string"
+        ? body.details.invocation_id
+        : undefined,
+      invocationStatus(body.details?.status),
+      requestId,
+      body.details,
+    );
+  }
+  return new NvokenError(
+    response.status === 401 || response.status === 403
+      ? "authentication"
+      : response.status === 404
+        ? "not_found"
+        : response.status === 409
+          ? "conflict"
+          : response.status === 429
+            ? "rate_limit"
+            : response.status >= 500
+              ? "server"
+              : "unexpected_response",
+    body.message ?? `nvoken returned HTTP ${response.status}`,
+    response.status,
+    body.code,
+    requestId,
+    parseRetryAfter(response.headers.get("retry-after")),
+    body.details,
+  );
+}
+
+function invocationStatus(value: unknown) {
+  return value === "queued"
+    || value === "running"
+    || value === "waiting"
+    || value === "completed"
+    || value === "incomplete"
+    || value === "failed"
+    || value === "cancelled"
+    ? value
+    : undefined;
+}
+
+export async function* parseSSE(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<StreamEvent> {
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  let event: Partial<StreamEvent> = {};
+  let data: string[] = [];
+  const dispatch = (): StreamEvent | undefined => {
+    if (!event.type && !event.id && data.length === 0 && event.retryMs === undefined) {
+      return undefined;
+    }
+    let decoded: unknown = undefined;
+    if (data.length > 0) decoded = JSON.parse(data.join("\n"));
+    const value: StreamEvent = {
+      type: event.type ?? "message",
+      id: event.id,
+      retryMs: event.retryMs,
+      data: decoded,
+    };
+    event = {};
+    data = [];
+    return value;
+  };
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      buffer += value ?? "";
+      let newline = buffer.indexOf("\n");
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).replace(/\r$/, "");
+        buffer = buffer.slice(newline + 1);
+        if (line === "") {
+          const value = dispatch();
+          if (value) yield value;
+        } else if (!line.startsWith(":")) {
+          const separator = line.indexOf(":");
+          const field = separator < 0 ? line : line.slice(0, separator);
+          const raw = separator < 0 ? "" : line.slice(separator + 1).replace(/^ /, "");
+          if (field === "event") event.type = raw;
+          else if (field === "id") event.id = raw;
+          else if (field === "retry" && /^\d+$/.test(raw)) event.retryMs = Number(raw);
+          else if (field === "data") data.push(raw);
+        }
+        newline = buffer.indexOf("\n");
+      }
+      if (done) break;
+    }
+    if (buffer) data.push(buffer);
+    const final = dispatch();
+    if (final) yield final;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function streamRetryable(error: NvokenError): boolean {
+  return error.category === "transport"
+    || error.status === 408
+    || error.status === 425
+    || error.status === 429
+    || error.status === 500
+    || error.status === 502
+    || error.status === 503
+    || error.status === 504;
+}
+
+function parseRetryAfter(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
+  const when = Date.parse(value);
+  return Number.isNaN(when) ? undefined : Math.max(0, when - Date.now());
+}
+
+function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolvePromise, reject) => {
+    if (signal?.aborted) {
+      reject(new NvokenError("cancelled", "local stream was cancelled"));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new NvokenError("cancelled", "local stream was cancelled"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolvePromise();
+    }, milliseconds);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}

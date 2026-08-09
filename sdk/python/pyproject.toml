@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nvoken"
+version = "0.9.0"
+description = "Python SDK for the nvoken durable agent runtime"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = ["ai", "agents", "durable-execution", "llm", "nvoken"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Libraries",
+  "Typing :: Typed",
+]
+dependencies = [
+  "httpx>=0.27,<1",
+  "pydantic>=2,<3",
+  "python-dateutil>=2.8,<3",
+  "typing-extensions>=4.7",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1", "pytest-asyncio==1.4.0"]
+
+[project.urls]
+Homepage = "https://github.com/deepnoodle-ai/nvoken/tree/main/sdk/python"
+Repository = "https://github.com/deepnoodle-ai/nvoken"
+Changelog = "https://github.com/deepnoodle-ai/nvoken/blob/main/CHANGELOG.md"
+Issues = "https://github.com/deepnoodle-ai/nvoken/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nvoken", "src/nvoken_generated"]
+
+[tool.hatch.build.targets.sdist]
+# The default sdist is the whole directory. Naming the contents keeps a stray
+# local artifact — a virtualenv, a __pycache__, a .env — out of a published
+# archive that cannot be taken back.
+include = ["src", "tests", "examples", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -1,0 +1,30 @@
+{
+  "auto": {
+    "compaction": {
+      "trigger_tokens": "auto"
+    }
+  },
+  "explicit": {
+    "compaction": {
+      "trigger_tokens": 32768,
+      "model": {
+        "provider": "anthropic",
+        "id": "claude-sonnet-4-6"
+      }
+    }
+  },
+  "materialized_auto_trigger_tokens": 120000,
+  "errors": [
+    {
+      "kind": "session_compaction_trigger_invalid",
+      "field": "session_options.compaction.trigger_tokens"
+    },
+    {
+      "kind": "session_compaction_model_provider_mismatch",
+      "fields": [
+        "model.provider",
+        "session_options.compaction.model.provider"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+name: release-pypi
+
+on:
+  push:
+    tags:
+      - pypi-v*
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # PyPI's trusted publisher is bound to this environment. Configure the
+    # publisher for project `nvoken` with workflow `release-pypi.yml` and
+    # environment `pypi`, or the OIDC exchange is refused and the job fails
+    # before it uploads anything.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/nvoken/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Verify release tag matches package version
+        working-directory: sdk/python
+        run: |
+          version="$(python -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+          if [ "${GITHUB_REF_NAME}" != "pypi-v${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match package version ${version}" >&2
+            exit 1
+          fi
+      - run: python -m pip install --upgrade build twine
+      - run: python -m build
+        working-directory: sdk/python
+      - run: python -m twine check dist/*
+        working-directory: sdk/python
+      - name: Smoke the built wheel
+        # The SDK's own suite needs the Go conformance server and already ran in
+        # `check` on the commit this tag points at. What that run cannot catch is
+        # a packaging mistake: a subpackage missing from the wheel imports fine
+        # from the source tree and fails for everyone who installs it.
+        working-directory: sdk/python
+        run: |
+          python -m venv "${RUNNER_TEMP}/smoke"
+          "${RUNNER_TEMP}/smoke/bin/python" -m pip install --quiet dist/*.whl
+          "${RUNNER_TEMP}/smoke/bin/python" - <<'PY'
+          from importlib.metadata import version
+
+          import nvoken
+
+          assert nvoken.Client is not None
+          assert nvoken.ask_user_tool is not None
+          print(f"installed nvoken {version('nvoken')}")
+          PY
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist
+      - name: Verify the public index artifact
+        working-directory: sdk/python
+        run: |
+          # Upload succeeds before the index catches up, so a single read right
+          # after publish can 404 on a version that is live. Retry with backoff
+          # rather than failing the release on that lag.
+          version="$(python -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+          for attempt in 1 2 3 4 5 6; do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              "https://pypi.org/pypi/nvoken/${version}/json")"
+            if [ "${status}" = "200" ]; then
+              echo "PyPI serves nvoken ${version}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: index not serving ${version} yet; retrying in 10s"
+            sleep 10
+          done
+          echo "PyPI never served nvoken ${version} after retries" >&2
+          exit 1

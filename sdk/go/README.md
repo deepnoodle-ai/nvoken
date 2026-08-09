@@ -1,0 +1,267 @@
+# nvoken Go SDK
+
+An Invocation is one durable agent turn. The host supplies `agent_key`,
+optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
+model, and tools travel inline with the turn.
+
+The package has three deliberate levels:
+
+- `Agent` is the ordinary workflow facade: `Text`, `Run`, `Invoke`, `Stream`,
+  and locally serialized bound Sessions.
+- `Client` and `InvocationHandle` expose durable operations, facade-owned
+  collection types, transcript drains, configurable waits, and resumable
+  streams.
+- `Client.Raw()` is the complete generated Runtime transport and low-level
+  escape hatch.
+
+```bash
+go get github.com/deepnoodle-ai/nvoken/sdk/go
+NVOKEN_BASE_URL=http://localhost:8080 NVOKEN_API_KEY=... \
+  go run ./examples/quickstart
+```
+
+The SDK is a separate Go module and does not bring the daemon's database,
+provider, or deployment dependencies into host applications.
+
+Resolve the identity-only Agent anchor without admitting work:
+
+```go
+key := "support"
+agents, err := client.ListAgents(ctx, nvoken.ListAgentsOptions{AgentKey: &key})
+identity, err := client.GetAgent(ctx, agents.Items[0].ID)
+```
+
+`AgentIdentity` contains only the nvoken ID, host-owned key, and creation time.
+Instructions, models, tools, and provider keys remain per Invocation.
+
+Opt into the fixed guarded public-web reader with `nvoken.FetchTool()`:
+
+```go
+request := nvoken.InvokeRequest{
+	AgentKey: "public-summary",
+	Input:    "Summarize the supplied URL.",
+	Model: nvoken.Model{
+		Provider: "anthropic",
+		ID:       "claude-sonnet-5",
+	},
+	Tools: []nvoken.Tool{nvoken.FetchTool()},
+}
+```
+
+The Runtime accepts only `{"name":"nvoken_fetch","mode":"builtin"}`. It owns
+public-address checks, up to five guarded redirects, one transient retry,
+HTML-to-Markdown conversion, and the ten-second and 64 KiB limits.
+
+Use an Agent for the common path:
+
+```go
+agent, err := client.Agent(nvoken.AgentOptions{
+	AgentKey:    "support",
+	Instructions: "Help with billing questions.",
+	Model: nvoken.Model{
+		Provider: "anthropic",
+		ID:       "claude-sonnet-5",
+	},
+})
+answer, err := agent.Text(ctx, "Why was I charged twice?", nvoken.AgentInvocationOptions{})
+```
+
+`ToolModeHost` tools may carry a local `ToolHandler`; the Agent automatically
+executes parked calls and submits results. A missing handler cancels before
+returning `MissingToolHandlerError` by default. Set
+`LeaveWaitingOnMissingHandler` only when another worker deliberately owns the
+call. `NoOutputTextError.ResultKind` distinguishes structured, tool-only, and
+empty completions. `DecodeStructuredOutput[T]` decodes an `AgentResult` while
+`AgentResult.StructuredOutput` keeps the raw JSON.
+
+A bound Session serializes admission only within the local client:
+
+```go
+session, err := agent.Session(nvoken.SessionBinding{SessionKey: "customer-123"})
+answer, err = session.Text(ctx, "What should I do next?", nvoken.AgentInvocationOptions{})
+```
+
+The Runtime remains authoritative across processes and rejects a second
+nonterminal turn. Context cancellation or `WaitOptions.Timeout` stops only the
+local operation; use `handle.Cancel` for durable cancellation.
+
+Recovery reads can select several states at once and streams can omit
+provisional previews:
+
+```go
+page, err := client.ListInvocations(ctx, nvoken.ListInvocationsOptions{
+	Statuses: []nvoken.InvocationStatus{
+		nvoken.InvocationQueued,
+		nvoken.InvocationRunning,
+		nvoken.InvocationWaiting,
+	},
+})
+deltas := false
+err = handle.StreamWithOptions(ctx, nvoken.StreamOptions{Deltas: &deltas}, consume)
+```
+
+Equivalent status sets share cursor identity regardless of input order.
+Session get/list values expose typed nullable `Usage`, computed from durable
+Invocation usage; it is an estimate, not a billing ledger.
+
+For an intentional replace/regenerate action, use a new idempotency key and
+the typed policy:
+
+```go
+handle, err := agent.Invoke(ctx, "Try that answer again.", nvoken.AgentInvocationOptions{
+	IdempotencyKey: "customer-123:regenerate-2",
+	IfActive:       nvoken.IfActiveSupersede,
+})
+```
+
+Omission or `IfActiveReject` preserves the default conflict response.
+Low-level callers set the same policy on `InvokeRequest.IfActive`.
+
+`IfActiveInterrupt` is the keep-the-work variant: the active Invocation stops
+at its next execution seam and settles `completed` with `StopReason`
+`interrupted`, so the replacement turn builds on what it already produced.
+`handle.Interrupt(ctx)` asks for the same graceful stop without admitting a
+replacement, and `Invocation.StopReason` names why any turn ended.
+
+A turn can also stop without ending: `InvocationIncomplete` means the Runtime
+enforced a budget at a seam, with `StopReason` naming which one. It is
+terminal — the wait helpers stop there — and its work is kept, so treat it as
+an unfinished answer rather than an error. `SessionMessage.Phase` says which
+assistant message was the reply: `MessagePhaseFinalAnswer` on the one that
+settled a completed turn, `MessagePhaseCommentary` on everything else, so an
+incomplete turn has none.
+
+Select a stored or one-turn provider-key source without dropping to generated
+types:
+
+```go
+request.ProviderKeys = []nvoken.ProviderKeySelection{{
+	Provider: "openai",
+	Source:   nvoken.ProviderKeyCallerEphemeral,
+	APIKey:   providerKey,
+}}
+```
+
+Use `ProviderKeyAppBYOK`, `ProviderKeyTenantBYOK`, or
+`ProviderKeyPlatform` for nonsecret stored selections.
+
+Manage nvoken API credentials with an Operator key through the same client:
+
+```go
+issued, err := client.CreateCredential(ctx, nvoken.CreateCredentialInput{
+    Name:           "production worker",
+    Profile:        nvoken.CredentialProfileRuntime,
+    Operations:     []nvoken.RuntimeOperation{nvoken.OperationCreateInvocation},
+    IdempotencyKey: "production-worker-v1",
+})
+page, err := client.ListCredentials(ctx, nvoken.ListCredentialsOptions{})
+```
+
+`GetCurrentIdentity`, `GetCredential`, `RotateCredential`, and
+`RevokeCredential` complete the lifecycle. Create and rotate return the secret
+only through `CredentialIssuance`, alongside `DeliveryExpiresAt` and `Replayed`;
+store it before the delivery deadline. `RawIdentity()` exposes the generated
+Identity transport when the facade is intentionally too narrow.
+
+## Structured-output schema preflight
+
+`Client.Invoke` and Agent operations call
+`nvoken.PreflightOutputSchema(schema)` before transport when
+`InvokeRequest.OutputSchema` is present. Rejection is an `*nvoken.Error` with
+code `schema_preflight_failed`; `Details` contain the portable issue `code`,
+RFC 6901 `path`, and optional `keyword`. A successful local check means
+eligible for admission. `Client.Raw()` remains the exact-wire escape hatch and
+relies on the authoritative Runtime check.
+
+## Context compaction
+
+Install restart-stable Session compaction on a new or existing Session:
+
+```go
+options.SessionKey = &sessionKey
+options.SessionOptions = &nvoken.SessionOptions{
+	Compaction: &nvoken.ContextCompaction{
+		TriggerTokens: nvoken.AutoContextCompaction(),
+	},
+}
+```
+
+Use `nvoken.ContextCompactionAt(32768)` for an exact trigger and optionally set
+a same-provider summary model. A Session without a policy accepts late opt-in;
+once installed, the policy is immutable. Supplied options on an existing
+Session must equal stored values or admission returns
+`session_options_conflict`.
+
+Summary usage appears in Session usage, not Invocation usage; transcript,
+stream, and result reads remain canonical. Read applied and fell-through pass
+diagnostics with `client.ListSessionCompactions(ctx, sessionID, options)`.
+
+`AgentInvocationOptions.Metadata` correlates a turn with your own records. It is
+part of the admitted input, so it is immutable and material to idempotency: a
+replay carrying different metadata conflicts rather than updating it. That is
+why it is per-call rather than an `AgentOptions` default.
+
+## Remote MCP tools
+
+Probe the exact projected catalog, then reuse the same declaration on an
+Invocation:
+
+```go
+server := nvoken.MCPServer{
+	Name:         "support",
+	URL:          "https://mcp.example.com/rpc",
+	AllowedTools: []string{"lookup_order"},
+	Headers: map[string]string{
+		"Authorization": "Bearer " + mcpToken,
+	},
+}
+catalog, err := client.ListMCPTools(ctx, server)
+
+request.MCPServers = []nvoken.MCPServer{server}
+handle, err := client.Invoke(ctx, request)
+```
+
+Headers are one-Invocation secret material and never appear in durable specs or
+public reads. The
+[recovery example](examples/mcp-recovery/README.md) exercises discovery,
+executor replacement, composed result recovery, and fixed-cut transcript
+recovery.
+
+Discover models through the same facade:
+
+```go
+catalog, err := client.ListModels(ctx, nvoken.ListModelsOptions{})
+selected, err := client.GetModel(ctx, nvoken.Model{
+	Provider: "openai",
+	ID:       catalog.Items[0].ID,
+})
+```
+
+`ListModels` returns nvoken's curated catalog; `GetModel` also tolerantly
+inspects uncataloged exact IDs. Catalog membership does not prove provider
+account access.
+
+Set an explicit portable temperature on the request:
+
+```go
+request.Sampling = &nvoken.Sampling{Temperature: 0}
+```
+
+Omit `Sampling` to preserve the provider default. Before setting it, check
+`selected.Controls.Sampling.Temperature`; absent controls are unknown and an
+unsupported or unknown selection is rejected before durable admission.
+Temperature is limited to `[0,1]`. `top_p` and stop sequences are intentionally
+absent, while `Limits.MaxOutputTokens` remains the output guardrail.
+
+Reasoning is also typed and fail closed:
+
+```go
+effort := nvoken.ReasoningEffortHigh
+request.Reasoning = &nvoken.Reasoning{Effort: &effort}
+```
+
+Check `selected.Controls.Reasoning` before admission. A manual
+`BudgetTokens` requires a larger explicit `Limits.MaxOutputTokens`. Omission
+preserves provider defaults; unsupported values and combinations are rejected
+without aliasing. OpenAI reasoning is intentionally unavailable until its
+complete continuation representation is durable.

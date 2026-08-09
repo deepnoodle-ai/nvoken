@@ -1,0 +1,21 @@
+{
+  "choices": [
+    {"mode": "auto"},
+    {"mode": "none"},
+    {"mode": "required"},
+    {"mode": "named", "name": "lookup"}
+  ],
+  "reasoning_combination_error": {
+    "category": "validation",
+    "status": 400,
+    "code": "invalid_request",
+    "message": "The invocation request is invalid.",
+    "details": {
+      "kind": "model_control_combination_unsupported",
+      "fields": [
+        "reasoning.effort",
+        "tool_choice.mode"
+      ]
+    }
+  }
+}

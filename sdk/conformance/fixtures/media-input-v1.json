@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "limits": {
+    "media_blocks": 8,
+    "image_bytes": 5242880,
+    "document_bytes": 16777216,
+    "media_bytes": 16777216,
+    "title_characters": 255
+  },
+  "media_types": {
+    "image": ["image/gif", "image/jpeg", "image/png", "image/webp"],
+    "document": ["application/pdf"]
+  },
+  "unrepresentable_note": "A case listed in unrepresentable_in cannot be constructed in that SDK's types at all, which is a stronger guarantee than a runtime check.",
+  "runtime_only_checks": [
+    "The declared media type must match the format sniffed from the decoded bytes.",
+    "An image must be at most 8000 by 8000 pixels.",
+    "The selected model must declare the modality and the exact media type.",
+    "URL targets must resolve to public addresses.",
+    "URL responses are bounded while reading and fetched only once."
+  ],
+  "accepted": [
+    {
+      "id": "text-and-image",
+      "content": [
+        {
+          "type": "text",
+          "text": "Which line item changed?"
+        },
+        {
+          "type": "image",
+          "source": {
+            "media_type": "image/png",
+            "data": "iVBORw0KGgo="
+          }
+        }
+      ]
+    },
+    {
+      "id": "document-with-title",
+      "content": [
+        {
+          "type": "document",
+          "source": {
+            "media_type": "application/pdf",
+            "data": "JVBERi0xLg=="
+          },
+          "title": "q3-invoice.pdf"
+        }
+      ]
+    },
+    {
+      "id": "image-url",
+      "content": [
+        {
+          "type": "image",
+          "source": {
+            "url": "https://media.example.test/chart.png"
+          }
+        }
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "id": "unsupported-image-media-type",
+      "content": [
+        {
+          "type": "image",
+          "source": {
+            "media_type": "image/heic",
+            "data": "AAAAGGZ0eXA="
+          }
+        }
+      ],
+      "issue": {
+        "code": "unsupported_media_type",
+        "path": "input.content[0].source.media_type",
+        "message": "media_type must be one of image/gif, image/jpeg, image/png, image/webp"
+      },
+      "unrepresentable_in": ["rust"]
+    },
+    {
+      "id": "non-base64-data",
+      "content": [
+        {
+          "type": "image",
+          "source": {
+            "media_type": "image/png",
+            "data": "iVBORw0KGgo*"
+          }
+        }
+      ],
+      "issue": {
+        "code": "invalid_media",
+        "path": "input.content[0].source.data",
+        "message": "data must be standard padded base64 without whitespace"
+      }
+    },
+    {
+      "id": "empty-data",
+      "content": [
+        {
+          "type": "image",
+          "source": {
+            "media_type": "image/png",
+            "data": ""
+          }
+        }
+      ],
+      "issue": {
+        "code": "invalid_media",
+        "path": "input.content[0].source.data",
+        "message": "data must be standard padded base64 without whitespace"
+      }
+    },
+    {
+      "id": "title-on-image",
+      "content": [
+        {
+          "type": "image",
+          "source": {
+            "media_type": "image/png",
+            "data": "iVBORw0KGgo="
+          },
+          "title": "chart.png"
+        }
+      ],
+      "issue": {
+        "code": "invalid_media",
+        "path": "input.content[0].title",
+        "message": "title is allowed only for document blocks"
+      },
+      "unrepresentable_in": ["python", "rust"]
+    },
+    {
+      "id": "blank-text",
+      "content": [
+        {
+          "type": "text",
+          "text": " "
+        }
+      ],
+      "issue": {
+        "code": "invalid_media",
+        "path": "input.content[0].text",
+        "message": "text must not be blank"
+      }
+    },
+    {
+      "id": "url-and-data",
+      "content": [
+        {
+          "type": "image",
+          "source": {
+            "media_type": "image/png",
+            "data": "iVBORw0KGgo=",
+            "url": "https://media.example.test/chart.png"
+          }
+        }
+      ],
+      "issue": {
+        "code": "invalid_media",
+        "path": "input.content[0].source",
+        "message": "source requires exactly one of data or url"
+      }
+    },
+    {
+      "id": "non-https-url",
+      "content": [
+        {
+          "type": "document",
+          "source": {
+            "url": "http://media.example.test/report.pdf"
+          }
+        }
+      ],
+      "issue": {
+        "code": "invalid_media",
+        "path": "input.content[0].source.url",
+        "message": "url must be an HTTPS URL"
+      }
+    }
+  ],
+  "acceptance_refusals": [
+    {
+      "id": "private-address",
+      "url": "https://127.0.0.1/image.png",
+      "status": 422,
+      "code": "media_fetch_failed",
+      "reason": "nonpublic_target"
+    },
+    {
+      "id": "oversize-response",
+      "url": "https://media.example.test/oversize.png",
+      "status": 422,
+      "code": "media_fetch_failed",
+      "reason": "response_too_large"
+    },
+    {
+      "id": "wrong-type",
+      "url": "https://media.example.test/not-an-image",
+      "status": 422,
+      "code": "media_fetch_failed",
+      "reason": "content_type"
+    },
+    {
+      "id": "dead-url",
+      "url": "https://dead.example.test/image.png",
+      "status": 422,
+      "code": "media_fetch_failed",
+      "reason": "transport"
+    }
+  ],
+  "modality_error": {
+    "category": "validation",
+    "status": 400,
+    "code": "invalid_request",
+    "message": "The invocation request is invalid.",
+    "details": {
+      "kind": "input_modality_unsupported",
+      "field": "input.content[0]",
+      "modality": "image",
+      "media_type": "image/png",
+      "provider": "openai",
+      "model": "gpt-5.4-nano"
+    }
+  },
+  "rejection_failure": {
+    "code": "input_media_rejected",
+    "message": "The model provider rejected the supplied input media.",
+    "details": {
+      "modality": "image",
+      "media_type": "image/png",
+      "reason": "payload_too_large"
+    }
+  },
+  "media_reference": {
+    "type": "image",
+    "media_type": "image/png",
+    "bytes": 8,
+    "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "url": "https://media.example.test/chart.png"
+  }
+}

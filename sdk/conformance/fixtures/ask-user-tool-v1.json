@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "name": "ask_user",
+  "description": "Ask the user a question and wait for their answer. Use it when a decision is genuinely theirs to make, not to confirm work you can verify yourself.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "question": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000,
+        "description": "The question to put to the user."
+      },
+      "type": {
+        "type": "string",
+        "enum": ["confirm", "select", "multiselect", "input"],
+        "description": "How the user answers."
+      },
+      "options": {
+        "type": "array",
+        "maxItems": 20,
+        "description": "Choices for select and multiselect. Ignored otherwise.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "value": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "description": { "type": "string", "maxLength": 500 },
+            "default": { "type": "boolean" }
+          },
+          "required": ["value", "label"],
+          "additionalProperties": false
+        }
+      },
+      "default": {
+        "type": "string",
+        "maxLength": 2000,
+        "description": "Pre-filled answer: \"true\"/\"false\" for confirm, text for input."
+      },
+      "min_select": { "type": "integer", "minimum": 0, "maximum": 20 },
+      "max_select": { "type": "integer", "minimum": 0, "maximum": 20 },
+      "multiline": { "type": "boolean" }
+    },
+    "required": ["question", "type"],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,10 @@
+# Generated SDK transports are committed for reproducible public builds.
+sdk/go/generated/** linguist-generated=true
+sdk/go/identitygenerated/** linguist-generated=true
+sdk/python/src/nvoken_generated/** linguist-generated=true
+sdk/rust/src/apis/** linguist-generated=true
+sdk/rust/src/models/** linguist-generated=true
+sdk/rust/src/routes.rs linguist-generated=true
+sdk/typescript/src/generated/** linguist-generated=true
+sdk/typescript/src/identity-generated/** linguist-generated=true
+sdk/operations.json linguist-generated=true

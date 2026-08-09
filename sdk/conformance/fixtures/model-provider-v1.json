@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "note": "Provider identity is an extensible lowercase string, not a generated enum. Every SDK must be able to express a provider it was not compiled against, and must transmit the value unchanged rather than normalizing it. The Runtime is the only component that decides which providers an installation accepts.",
+  "canonical": [
+    "anthropic",
+    "openai",
+    "xai",
+    "google"
+  ],
+  "aliases_normalized_by_the_runtime_only": {
+    "open-ai": "openai",
+    "open_ai": "openai",
+    "x-ai": "xai",
+    "x_ai": "xai",
+    "google-ai": "google",
+    "google_ai": "google"
+  },
+  "rejected_by_the_runtime": [
+    "claude",
+    "grok",
+    "gemini",
+    "vertex"
+  ],
+  "rejected_note": "A model family is never a provider. These reach the Runtime unchanged and are refused before durable admission with the existing unsupported-provider error, which is also how a provider whose adapter this deployment does not install is refused.",
+  "forward_compatible": "provider_added_after_this_sdk",
+  "example_model": {
+    "provider": "xai",
+    "id": "grok-4.5"
+  }
+}
