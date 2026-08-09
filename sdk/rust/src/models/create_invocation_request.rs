@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -28,7 +28,7 @@ pub struct CreateInvocationRequest {
     /// Caller key resolved within (effective tenant partition, Agent, session_key). Mutually exclusive with session_id.
     #[serde(rename = "session_key", skip_serializing_if = "Option::is_none")]
     pub session_key: Option<String>,
-    /// Settings stored on the Session itself, rather than on this turn.  On a new Session these are saved. On a Session that already exists they are checked rather than applied: matching values are fine, and a different value returns `session_options_conflict` telling you which paths disagreed. This keeps two callers from silently reconfiguring each other's conversation.  Compaction is the exception — if no summarization policy is stored yet, this turn can install one, because the policy needs a model to validate against and only a turn supplies that.
+    /// Settings stored on the Session itself, rather than on this turn.  On a new Session these are saved. On a Session that already exists they are checked rather than applied: matching values are fine, and a different value returns `session_options_conflict` telling you which paths disagreed. This keeps two callers from silently reconfiguring each other's conversation.  Compaction is the exception — if no compaction policy is stored yet, this turn can install one, because the policy needs a model to validate against and only a turn supplies that.
     #[serde(rename = "session_options", skip_serializing_if = "Option::is_none")]
     pub session_options: Option<Box<models::SessionOptions>>,
     /// Your own data to attach to this turn — a ticket number, a trace ID, whatever helps you tie it back to your system. nvoken stores it and hands it back untouched.  It is fixed once the turn is created and counts as part of the request for idempotency. Retrying with the same `idempotency_key` but different metadata is treated as a different request and returns a conflict rather than updating it. A genuine retry of the same original request carries the same values anyway.  Session metadata is a separate thing and can be changed — see `session_options.metadata` and `PATCH /v1/sessions/{session_id}`.
@@ -40,7 +40,7 @@ pub struct CreateInvocationRequest {
     /// What to do when the Session already has a turn running. A Session runs one turn at a time.  - `reject` (the default) refuses this request with   `session_invocation_active` and leaves the running turn alone. - `supersede` cancels the running turn and starts this one in its   place. The cancelled turn's work is discarded and does not carry   forward — \"discard and redo\". - `interrupt` asks the running turn to stop cleanly and starts   this one only once it has, so this turn builds on what the   stopped one produced — \"stop and redo\".  Omitting the field and sending `reject` are the same request for idempotency purposes.
     #[serde(rename = "if_active", skip_serializing_if = "Option::is_none")]
     pub if_active: Option<IfActive>,
-    /// What to do when the turn runs out of one of its spending limits. `settle` ends it as `incomplete`. `pause` leaves it as `paused` so you can raise the limit and continue it.  Covers the iteration, output-token, per-turn cost, and Session cost limits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
+    /// What to do when the turn runs out of one of its spending limits. `stop` ends it as `incomplete`. `pause` leaves it as `paused` so you can raise the limit and continue it.  Covers the iteration, output-token, per-turn cost, and Session cost limits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
     #[serde(
         rename = "on_budget_exhausted",
         skip_serializing_if = "Option::is_none"
@@ -66,8 +66,9 @@ pub struct CreateInvocationRequest {
     pub tool_choice: Option<Box<models::ToolChoice>>,
     #[serde(rename = "limits", skip_serializing_if = "Option::is_none")]
     pub limits: Option<Box<models::Limits>>,
-    #[serde(rename = "structured_output", skip_serializing_if = "Option::is_none")]
-    pub structured_output: Option<Box<models::StructuredOutput>>,
+    /// Self-contained JSON Schema for an object result. Compact canonical JSON is limited to 32 KiB and 16 schema positions. Supported keywords are type, title, description, properties, required, additionalProperties, items, enum, pattern, minLength, maxLength, minItems, maxItems, uniqueItems, minimum, and maximum. Every schema position has one string type; pattern values are limited to 1,024 UTF-8 bytes; references and other keywords are rejected. Numeric bounds are read as values, not spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken exposes a reserved durable submit tool and publishes only a server-validated terminal object. This does not enable host-defined tools.
+    #[serde(rename = "output_schema", skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<std::collections::HashMap<String, serde_json::Value>>,
     #[serde(rename = "tools", skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<models::ToolDeclaration>>,
     #[serde(rename = "mcp_servers", skip_serializing_if = "Option::is_none")]
@@ -105,7 +106,7 @@ impl CreateInvocationRequest {
             reasoning: None,
             tool_choice: None,
             limits: None,
-            structured_output: None,
+            output_schema: None,
             tools: None,
             mcp_servers: None,
             provider_tools: None,
@@ -129,17 +130,17 @@ impl Default for IfActive {
         Self::Reject
     }
 }
-/// What to do when the turn runs out of one of its spending limits. `settle` ends it as `incomplete`. `pause` leaves it as `paused` so you can raise the limit and continue it.  Covers the iteration, output-token, per-turn cost, and Session cost limits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
+/// What to do when the turn runs out of one of its spending limits. `stop` ends it as `incomplete`. `pause` leaves it as `paused` so you can raise the limit and continue it.  Covers the iteration, output-token, per-turn cost, and Session cost limits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum OnBudgetExhausted {
-    #[serde(rename = "settle")]
-    Settle,
+    #[serde(rename = "stop")]
+    Stop,
     #[serde(rename = "pause")]
     Pause,
 }
 
 impl Default for OnBudgetExhausted {
     fn default() -> OnBudgetExhausted {
-        Self::Settle
+        Self::Stop
     }
 }

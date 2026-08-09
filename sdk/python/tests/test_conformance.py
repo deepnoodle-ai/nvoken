@@ -19,9 +19,9 @@ from nvoken_generated import (
 )
 from nvoken_generated.models.invocation_input import InvocationInput
 from nvoken_generated.models.nudge_acknowledgement import NudgeAcknowledgement
-from nvoken_generated.models.nudge_invocation_request import NudgeInvocationRequest
-from nvoken_generated.models.pending_input import PendingInput
-from nvoken_generated.models.pending_input_status import PendingInputStatus
+from nvoken_generated.models.create_nudge_request import CreateNudgeRequest
+from nvoken_generated.models.nudge import Nudge
+from nvoken_generated.models.nudge_status import NudgeStatus
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
 from nvoken_generated.models.tool_declaration import ToolDeclaration as GeneratedToolDeclaration
 
@@ -63,7 +63,6 @@ from nvoken import (
     Reasoning,
     Sampling,
     SessionOptions,
-    SessionBudget,
     Reducer,
     StreamEvent,
     ToolResult,
@@ -212,7 +211,7 @@ def test_shared_agent_request_fixture() -> None:
         metadata={"board": "brand-2026", "surface": "web"},
         session_options=SessionOptions(
             retention=SessionRetention(ttl_seconds=86400),
-            budget=SessionBudget(max_estimated_cost_usd=0.25),
+            max_estimated_cost_usd=0.25,
         ),
     )
     assert client._invocation_body(agent._request("hello", options)).to_dict() == expected
@@ -1150,7 +1149,7 @@ def test_shared_invocation_webhook_fixture_is_expressible_and_stays_a_pointer() 
     # The payload stays a pointer: nothing the fixture lists as absent may appear
     # in either documented example.
     for name in (
-        "example_settled_payload",
+        "example_ended_payload",
         "example_waiting_payload",
         "example_paused_payload",
     ):
@@ -1196,41 +1195,41 @@ def test_shared_invocation_nudge_fixture_pins_the_steering_contract() -> None:
             Path(__file__).parents[2] / "conformance/fixtures/invocation-nudge-v1.json"
         ).read_text()
     )
-    assert sorted(fixture["pending_input_status"]["values"]) == sorted(
-        member.value for member in PendingInputStatus
+    assert sorted(fixture["nudge_status"]["values"]) == sorted(
+        member.value for member in NudgeStatus
     )
     assert (
-        fixture["pending_input_status"]["consumed_state"] == PendingInputStatus.PENDING.value
+        fixture["nudge_status"]["consumed_state"] == NudgeStatus.PENDING.value
     )
 
-    content_only = NudgeInvocationRequest(
+    content_only = CreateNudgeRequest(
         content=InvocationInput("focus on the marine segment"),
     )
     assert content_only.to_dict() == fixture["request"]["content_only"]
-    with_key = NudgeInvocationRequest(
+    with_key = CreateNudgeRequest(
         content=InvocationInput("focus on the marine segment"),
         idempotency_key="nudge-1",
     )
     assert with_key.to_dict() == fixture["request"]["with_idempotency_key"]
 
     acknowledgement = NudgeAcknowledgement(
-        pending_input_id="npin_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
-        state=PendingInputStatus.PENDING,
-        deduped=False,
+        nudge_id="nudge_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+        status=NudgeStatus.PENDING,
+        deduplicated=False,
         after_sequence=6,
     )
     assert sorted(acknowledgement.to_dict()) == sorted(fixture["acknowledgement"]["fields"])
 
     # The drained receipt is what tells a host the model actually saw the input.
-    drained = PendingInput.from_dict(
+    drained = Nudge.from_dict(
         {
-            "id": "npin_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+            "id": "nudge_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
             "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-            "status": PendingInputStatus.DRAINED.value,
+            "status": NudgeStatus.DRAINED.value,
             "content": "focus on the marine segment",
             "created_at": "2026-08-02T09:15:00Z",
             "drained_message_sequence": 7,
         }
     )
     assert drained is not None
-    assert getattr(drained, fixture["pending_input_status"]["drained_carries"]) == 7
+    assert getattr(drained, fixture["nudge_status"]["drained_carries"]) == 7

@@ -176,7 +176,7 @@ func budget(cap float64) map[string]any {
 		"window_start":                 "2026-08-01T00:00:00Z",
 		"window_end":                   "2026-09-01T00:00:00Z",
 		"max_estimated_cost_usd":       cap,
-		"settled_estimated_cost_usd":   3.25,
+		"spent_estimated_cost_usd":     3.25,
 		"reserved_estimated_cost_usd":  1.5,
 		"available_estimated_cost_usd": cap - 4.75,
 		"paused_invocations":           2,
@@ -569,23 +569,23 @@ func toolCallRecords() map[string]any {
 			map[string]any{
 				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb324", "mode": "builtin",
 				"name": "nvoken_fetch", "status": "completed", "iteration": 1,
-				"created_at": "2026-08-08T17:02:11Z", "settled_at": "2026-08-08T17:02:12Z", "attempts": 1,
+				"created_at": "2026-08-08T17:02:11Z", "ended_at": "2026-08-08T17:02:12Z", "attempts": 1,
 			},
 			map[string]any{
 				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325", "mode": "host",
 				"name": "ask_user", "status": "running", "iteration": 1,
-				"created_at": "2026-08-08T17:02:13Z", "settled_at": nil, "attempts": 0,
+				"created_at": "2026-08-08T17:02:13Z", "ended_at": nil, "attempts": 0,
 			},
 			map[string]any{
 				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb326", "mode": "callback",
 				"name": "create_ticket", "status": "completed", "iteration": 2,
-				"created_at": "2026-08-08T17:02:14Z", "settled_at": "2026-08-08T17:02:19Z", "attempts": 0,
+				"created_at": "2026-08-08T17:02:14Z", "ended_at": "2026-08-08T17:02:19Z", "attempts": 0,
 				"delivery": map[string]any{"outcome": "succeeded", "attempts": 2, "last_http_status": 200},
 			},
 			map[string]any{
 				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb327", "mode": "mcp",
 				"name": "support__lookup", "status": "failed", "iteration": 2,
-				"created_at": "2026-08-08T17:02:20Z", "settled_at": "2026-08-08T17:02:22Z", "attempts": 1,
+				"created_at": "2026-08-08T17:02:20Z", "ended_at": "2026-08-08T17:02:22Z", "attempts": 1,
 			},
 		},
 		"has_more":    false,
@@ -867,8 +867,8 @@ func session() map[string]any {
 		"retention": map[string]any{
 			"ttl_seconds": 86400,
 		},
-		"budget":     nil,
-		"expires_at": "2026-07-22T12:00:03Z",
+		"max_estimated_cost_usd": nil,
+		"expires_at":             "2026-07-22T12:00:03Z",
 		"metadata": map[string]any{
 			"title": "Refund policy",
 		},

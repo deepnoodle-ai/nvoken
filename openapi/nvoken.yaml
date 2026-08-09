@@ -70,7 +70,7 @@ info:
     A turn reports the `limits` it is really running under, after defaults and
     minimums; the `definition` it ran with, exactly as stored; and
     `provenance`, which records what actually served the request. A Session
-    reports its summarization policy with `auto` already resolved to a real
+    reports its compaction (summarization) policy with `auto` already resolved to a real
     number and a real model, and its retention window as accepted. New
     settings will work the same way: a default you cannot read back is a
     setting only the server knows about.
@@ -141,7 +141,12 @@ paths:
       summary: Register an app
       description: |
         Registers one host application and creates its default tenant,
-        returning the generated `app_id`.
+        returning the generated `app_id` and independent callback and webhook
+        HMAC keys. The plaintext signing keys are returned only in this
+        response; store them in the receiver's secret manager. nvoken stores
+        only authenticated ciphertext and selects a key from the durable App
+        scope of each delivery. Registration is unavailable when the service's
+        encryption keyring is not configured.
 
         Registration is installation management rather than work inside an app,
         so it requires a credential that is *not* associated with an app; a
@@ -156,16 +161,18 @@ paths:
               $ref: "#/components/schemas/RegisterAppRequest"
       responses:
         "201":
-          description: The registered app.
+          description: |
+            The registered app and its one-time receiver signing credentials.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/App"
+                $ref: "#/components/schemas/AppRegistration"
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /v1/apps/{app_id}:
     get:
       tags: [Apps]
@@ -233,14 +240,14 @@ paths:
       summary: List Agent identity anchors
       description: |
         Returns newest-first identity anchors scoped to the caller's app. An
-        Agent stores only its nvoken ID, the host-owned `agent_key`, and
-        creation time; instructions, models, tools, and provider keys still
-        travel on each Invocation. An exact `agent_key` filter returns zero or
-        one item.
+        Agent belongs to one app and stores only its nvoken ID, the host-owned
+        `agent_key`, and creation time; instructions, models, tools, and
+        provider keys still travel on each Invocation. An exact `agent_key`
+        filter returns zero or one item within that app.
 
-        Unconstrained credentials see the anchors referenced by a Session in
-        one of their app's tenants. Tenant-constrained credentials see only
-        anchors referenced by a Session in their effective partition.
+        Unconstrained credentials see their app's anchors. Tenant-constrained
+        credentials see only anchors referenced by a Session in their
+        effective partition.
         Session-constrained credentials see only that Session's anchor. The
         opaque cursor is bound to the authenticated caller, credential
         constraint, and exact key filter.
@@ -563,14 +570,14 @@ paths:
                     provider: openai
                     id: gpt-5.4
               reusedDefinition:
-                summary: Reuse an immutable definition already admitted by this app
+                summary: Reuse an immutable Definition already created for this App
                 value:
                   agent_key: support-triage
                   session_key: ticket-483
                   idempotency_key: ticket-483:follow-up-4
                   definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                   input: Please draft the reply.
-              structuredOutput:
+              outputSchema:
                 summary: Require one validated machine-readable object
                 value:
                   agent_key: support-triage
@@ -583,15 +590,14 @@ paths:
                   model:
                     provider: anthropic
                     id: claude-sonnet-5
-                  structured_output:
-                    schema:
-                      type: object
-                      properties:
-                        category:
-                          type: string
-                          enum: [duplicate_charge, refund, other]
-                      required: [category]
-                      additionalProperties: false
+                  output_schema:
+                    type: object
+                    properties:
+                      category:
+                        type: string
+                        enum: [duplicate_charge, refund, other]
+                    required: [category]
+                    additionalProperties: false
       responses:
         "202":
           description: |
@@ -609,8 +615,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/Invocation"
               examples:
-                admitted:
-                  summary: New durable admission
+                queued:
+                  summary: New queued Invocation
                   value:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
@@ -670,7 +676,7 @@ paths:
                     updated_at: "2026-07-20T14:16:04Z"
                     ended_at: null
                 terminalReplay:
-                  summary: Equal replay after settlement still returns 202
+                  summary: Equal replay of an ended Invocation still returns 202
                   value:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
@@ -994,7 +1000,7 @@ paths:
                     status: completed
                     iteration: 3
                     created_at: "2026-08-08T17:02:11Z"
-                    settled_at: "2026-08-08T17:02:19Z"
+                    ended_at: "2026-08-08T17:02:19Z"
                     attempts: 0
                     delivery:
                       outcome: succeeded
@@ -1181,9 +1187,10 @@ paths:
         above both its old value and what the turn has already used, and still
         within what your installation allows.
 
-        If the turn paused on the Session budget rather than its own limit,
-        raise or remove that budget instead — this endpoint will not resume
-        it. Deadlines never pause a turn, so they never bring you here.
+        If the turn paused on the Session maximum estimated cost rather than
+        its own limit, raise or remove that Session cap instead — this endpoint
+        will not resume it. Deadlines never pause a turn, so they never bring
+        you here.
       requestBody:
         required: true
         content:
@@ -1205,12 +1212,12 @@ paths:
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
-  /v1/invocations/{invocation_id}/nudge:
+  /v1/invocations/{invocation_id}/nudges:
     parameters:
       - $ref: "#/components/parameters/InvocationID"
     post:
       tags: [Invocations]
-      operationId: nudgeInvocation
+      operationId: createNudge
       summary: Send extra direction to a running turn
       description: |
         Sends extra direction to a turn that is already running — "focus on
@@ -1236,9 +1243,9 @@ paths:
         `if_active` setting says; it never quietly becomes a nudge, and a
         nudge never quietly becomes a new turn.
 
-        If the turn ends without ever picking it up, your input is marked
+        If the turn ends without ever picking it up, your Nudge is marked
         `expired` at that moment and has no effect on any later turn. Check
-        `GET .../pending-inputs` to see whether it was used or missed. Whether
+        `GET .../nudges` to see whether it was used or missed. Whether
         to re-send missed direction as the next turn's input is your call.
 
         `content` must be text — a string, or an array of text blocks. Images
@@ -1252,7 +1259,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NudgeInvocationRequest"
+              $ref: "#/components/schemas/CreateNudgeRequest"
             example:
               content: Focus on the marine segment for the rest of this pass.
               idempotency_key: nudge-1
@@ -1276,7 +1283,7 @@ paths:
             `invocation_not_active` when the Invocation is already terminal;
             `idempotency_conflict` when `idempotency_key` was already used with
             different content; `nudge_queue_full` when the Invocation already
-            holds the maximum pending inputs, with the bound in
+            holds the maximum nudges, with the bound in
             `details.limit`.
           content:
             application/json:
@@ -1286,15 +1293,12 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
-  /v1/invocations/{invocation_id}/pending-inputs:
-    parameters:
-      - $ref: "#/components/parameters/InvocationID"
     get:
       tags: [Invocations]
-      operationId: listPendingInputs
-      summary: List staged input for an Invocation
+      operationId: listNudges
+      summary: List Nudges for an Invocation
       description: |
-        Lists the direction you have sent to this turn with `/nudge`, in the
+        Lists the direction you have sent to this turn with `/nudges`, in the
         order the turn will pick it up. Entries stay listed after they are used
         or missed, so you can answer "what did the user say, and did the model
         ever see it?"
@@ -1307,7 +1311,7 @@ paths:
           in: query
           description: Restrict to one status.
           schema:
-            $ref: "#/components/schemas/PendingInputStatus"
+            $ref: "#/components/schemas/NudgeStatus"
         - $ref: "#/components/parameters/Cursor"
         - name: limit
           in: query
@@ -1319,11 +1323,11 @@ paths:
             default: 20
       responses:
         "200":
-          description: One page of staged input in consumption order.
+          description: One page of Nudges in consumption order.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PendingInputList"
+                $ref: "#/components/schemas/NudgeList"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1336,16 +1340,16 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
-  /v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel:
+  /v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel:
     parameters:
       - $ref: "#/components/parameters/InvocationID"
-      - $ref: "#/components/parameters/PendingInputID"
+      - $ref: "#/components/parameters/NudgeID"
     post:
       tags: [Invocations]
-      operationId: cancelPendingInput
-      summary: Withdraw staged input the turn has not taken
+      operationId: cancelNudge
+      summary: Withdraw a Nudge the turn has not taken
       description: |
-        Withdraws direction you sent with `/nudge`, as long as the turn has not
+        Withdraws direction you sent with `/nudges`, as long as the turn has not
         picked it up yet. Cancelling something already cancelled returns it
         unchanged, so retrying is safe.
 
@@ -1355,11 +1359,11 @@ paths:
         entry stays `drained`.
       responses:
         "200":
-          description: The pending input after the request.
+          description: The nudge after the request.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PendingInput"
+                $ref: "#/components/schemas/Nudge"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1370,8 +1374,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: |
-            `pending_input_settled` when the input was already drained or
-            expired. `details.pending_input` carries its current state.
+            `nudge_already_closed` when the nudge was already drained or
+            expired. `details.nudge` carries its current state.
           content:
             application/json:
               schema:
@@ -1392,7 +1396,7 @@ paths:
         first committed result for each ToolCall wins. An equal replay is
         acknowledged as deduplicated; a changed replay conflicts. Partial
         batches leave the Invocation waiting. Closing the final pending call
-        queues the same Invocation and its successor execution dispatch before
+        queues the same Invocation and its successor dispatch before
         returning `202`.
 
         This command accepts only host-mode calls owned by the path
@@ -1466,7 +1470,7 @@ paths:
     post:
       tags: [Budgets]
       operationId: createBudget
-      summary: Create one fixed usage budget window
+      summary: Create one fixed Budget window
       description: |
         Creates an estimated-list-price guardrail inside the authenticated App.
         Windows for the same scope identity cannot overlap. The idempotency key
@@ -1501,7 +1505,7 @@ paths:
     get:
       tags: [Budgets]
       operationId: getBudget
-      summary: Read one usage Budget
+      summary: Read one Budget
       responses:
         "200":
           description: Current cap, accounting state, and paused work count.
@@ -1753,9 +1757,10 @@ paths:
         agents are doing, not as a billing ledger — if you bill from usage,
         record it yourself when each turn finishes, keyed by Invocation ID.
 
-        A credential bound to an app sees only that app. A credential not
-        bound to any app sees every registered app; a console issuer token
-        needs its `admin` claim for that.
+        A credential bound to an app sees only that app. Only an app-less
+        issuer token with the `admin` claim can read across every registered
+        app. App-less API credentials are installation-management credentials
+        and cannot read usage or other runtime data.
       parameters:
         - name: start_date
           in: query
@@ -1777,7 +1782,7 @@ paths:
             type: string
             minLength: 1
             maxLength: 255
-          description: Return only usage attributed to this host customer.
+          description: Return only usage attributed to this host tenant.
         - name: user_key
           in: query
           schema:
@@ -1790,7 +1795,7 @@ paths:
           schema:
             type: string
             enum: [tenant_key]
-          description: Split otherwise identical buckets by host customer.
+          description: Split otherwise identical buckets by host tenant.
       responses:
         "200":
           description: Daily usage buckets ordered by day, app, provider, and model.
@@ -2056,7 +2061,7 @@ paths:
                     blocking_budget: null
                     compaction: null
                     retention: null
-                    budget: null
+                    max_estimated_cost_usd: null
                     expires_at: null
                     metadata: null
                     context:
@@ -2085,9 +2090,13 @@ paths:
     patch:
       tags: [Sessions]
       operationId: updateSession
-      summary: Merge host metadata into a Session
+      summary: Update a Session
       description: |
-        Merges a metadata patch: a present key replaces its value, an explicit
+        Replaces or removes the Session lifetime estimated-cost cap, and merges
+        host metadata when present. Raising or removing an exhausted cap
+        requeues the paused turn when every first-class Budget admits it.
+
+        For metadata, a present key replaces its value, an explicit
         `null` deletes that key, and a key the patch does not mention survives.
 
         Merge rather than replace, because independent writers share this map —
@@ -2117,7 +2126,7 @@ paths:
                     trace_id: null
       responses:
         "200":
-          description: The Session after the merge.
+          description: The Session after the update.
           content:
             application/json:
               schema:
@@ -2148,7 +2157,7 @@ paths:
 
         A turn still running is stopped, but no cancellation is recorded —
         there is nothing left to record it against, and no
-        `invocation.settled` webhook fires for it. If you need a record that
+        `invocation.ended` webhook fires for it. If you need a record that
         the turn ended, cancel it and wait for its final state before
         deleting.
 
@@ -2724,12 +2733,12 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/InvocationID"
-    PendingInputID:
-      name: pending_input_id
+    NudgeID:
+      name: nudge_id
       in: path
       required: true
       schema:
-        $ref: "#/components/schemas/PendingInputID"
+        $ref: "#/components/schemas/NudgeID"
     AgentID:
       name: agent_id
       in: path
@@ -2759,7 +2768,7 @@ components:
       in: path
       required: true
       schema:
-        $ref: "#/components/schemas/APICredentialID"
+        $ref: "#/components/schemas/CredentialID"
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -2886,6 +2895,47 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/App"
+    AppSigningKeyPurpose:
+      type: string
+      enum: [callback, webhook]
+      description: The only delivery class this HMAC key may sign.
+    AppSigningKeySecret:
+      type: object
+      additionalProperties: false
+      required: [purpose, key_id, version, secret]
+      properties:
+        purpose:
+          $ref: "#/components/schemas/AppSigningKeyPurpose"
+        key_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Value sent in `X-Nvoken-Signing-Key-Id`.
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Value sent in `X-Nvoken-Signing-Key-Version`.
+        secret:
+          type: string
+          minLength: 32
+          description: |
+            Receiver HMAC secret. This plaintext is returned only during App
+            registration and is omitted from every later App response.
+    AppRegistration:
+      type: object
+      additionalProperties: false
+      required: [app, signing_keys]
+      properties:
+        app:
+          $ref: "#/components/schemas/App"
+        signing_keys:
+          type: array
+          minItems: 2
+          maxItems: 2
+          description: One callback key and one webhook key.
+          items:
+            $ref: "#/components/schemas/AppSigningKeySecret"
     RegisterAppRequest:
       type: object
       additionalProperties: false
@@ -2951,10 +3001,10 @@ components:
       type: string
       minLength: 1
       description: Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-    PendingInputID:
+    NudgeID:
       type: string
       minLength: 1
-      description: Opaque identifier with the public `input_` prefix. Treat the body as opaque.
+      description: Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.
     ProviderKeyID:
       type: string
       minLength: 1
@@ -2963,7 +3013,7 @@ components:
       type: string
       minLength: 1
       description: Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
-    APICredentialID:
+    CredentialID:
       type: string
       minLength: 1
       description: Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
@@ -3293,7 +3343,7 @@ components:
             paths disagreed. This keeps two callers from silently reconfiguring
             each other's conversation.
 
-            Compaction is the exception — if no summarization policy is stored yet,
+            Compaction is the exception — if no compaction policy is stored yet,
             this turn can install one, because the policy needs a model to validate
             against and only a turn supplies that.
         metadata:
@@ -3345,11 +3395,11 @@ components:
             idempotency purposes.
         on_budget_exhausted:
           type: string
-          enum: [settle, pause]
-          default: settle
+          enum: [stop, pause]
+          default: stop
           description: |
             What to do when the turn runs out of one of its spending limits.
-            `settle` ends it as `incomplete`. `pause` leaves it as `paused` so
+            `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
             you can raise the limit and continue it.
 
             Covers the iteration, output-token, per-turn cost, and Session
@@ -3360,7 +3410,7 @@ components:
         webhook:
           $ref: "#/components/schemas/WebhookTarget"
         definition_id:
-          $ref: "#/components/schemas/AgentDefinitionID"
+          $ref: "#/components/schemas/DefinitionID"
           description: |
             Reuse an agent definition you already sent inline on an earlier turn,
             instead of sending it again. The ID is derived from the definition's
@@ -3384,8 +3434,8 @@ components:
           $ref: "#/components/schemas/ToolChoice"
         limits:
           $ref: "#/components/schemas/Limits"
-        structured_output:
-          $ref: "#/components/schemas/StructuredOutput"
+        output_schema:
+          $ref: "#/components/schemas/OutputSchema"
         tools:
           type: array
           maxItems: 32
@@ -3537,8 +3587,8 @@ components:
         Optional endpoint nvoken posts a signed webhook to when this
         Invocation parks awaiting host tool results or reaches a terminal
         status. It is delivery configuration rather than model input, so it is
-        excluded from the reusable execution snapshot. Two otherwise identical
-        turns that differ only in endpoint therefore share one snapshot.
+        excluded from the reusable Definition. Two otherwise identical turns
+        that differ only in endpoint therefore share one Definition.
 
         Delivery is at least once and ordered within one Invocation, and the
         webhook ID is repeated in `Idempotency-Key` on every attempt. nvoken
@@ -3548,9 +3598,9 @@ components:
 
         The endpoint is part of the request, so replaying an idempotency key
         with a changed endpoint or event set is a conflict rather than a
-        silent adoption of either value. An installation without a configured
-        webhook signing key rejects this field instead of accepting it and
-        never delivering it.
+        silent adoption of either value. An App without a webhook-purpose
+        signing key rejects this field instead of accepting it and never
+        delivering it.
       properties:
         url:
           type: string
@@ -3575,8 +3625,8 @@ components:
             listening. Order does not affect replay comparison.
     WebhookEvent:
       type: string
-      enum: [invocation.waiting, invocation.paused, invocation.settled]
-      x-enum-varnames: [WebhookEventWaiting, WebhookEventPaused, WebhookEventSettled]
+      enum: [invocation.waiting, invocation.paused, invocation.ended]
+      x-enum-varnames: [WebhookEventWaiting, WebhookEventPaused, WebhookEventEnded]
       description: |
         `invocation.waiting` fires when a turn stops and needs you to run at
         least one tool. A turn waiting only on callback tools sends nothing,
@@ -3586,7 +3636,7 @@ components:
         `invocation.paused` fires when a spending limit you opted into stopped
         the turn, and carries the `stop_reason` naming the limit.
 
-        `invocation.settled` fires exactly once, when the turn reaches
+        `invocation.ended` fires exactly once, when the turn reaches
         `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
         incomplete payloads carry `stop_reason` alongside `failure_code`.
     ProviderKeySelection:
@@ -3620,7 +3670,7 @@ components:
         when the installation enables it.
     BudgetScope:
       type: string
-      enum: [app, customer, user, agent, provider_key, api_credential]
+      enum: [app, tenant, user, agent, provider_key, credential]
     CreateBudgetRequest:
       type: object
       additionalProperties: false
@@ -3644,7 +3694,7 @@ components:
         provider_key_id:
           $ref: "#/components/schemas/ProviderKeyID"
         credential_id:
-          $ref: "#/components/schemas/APICredentialID"
+          $ref: "#/components/schemas/CredentialID"
         window_start:
           type: string
           format: date-time
@@ -3663,9 +3713,9 @@ components:
           maxLength: 255
       description: |
         The selected scope requires only its identity fields. `app` requires
-        none. `customer` requires exactly one of `tenant_key` or
+        none. `tenant` requires exactly one of `tenant_key` or
         `default_tenant: true`. `user` also requires `user_key`. `agent`,
-        `provider_key`, and `api_credential` require `agent_id`,
+        `provider_key`, and `credential` require `agent_id`,
         `provider_key_id`, and `credential_id` respectively. A credential ID
         resolves to its stable rotation family.
     UpdateBudgetRequest:
@@ -3682,7 +3732,7 @@ components:
       additionalProperties: false
       required: [id, scope, tenant_key, user_key, agent_id, provider_key_id,
                  credential_family_id, window_start, window_end,
-                 max_estimated_cost_usd, settled_estimated_cost_usd,
+                 max_estimated_cost_usd, spent_estimated_cost_usd,
                  reserved_estimated_cost_usd, available_estimated_cost_usd,
                  paused_invocations, created_at, updated_at]
       properties:
@@ -3708,7 +3758,7 @@ components:
             - type: "null"
         credential_family_id:
           oneOf:
-            - $ref: "#/components/schemas/APICredentialID"
+            - $ref: "#/components/schemas/CredentialID"
             - type: "null"
           description: Root API credential ID shared by its rotation chain.
         window_start:
@@ -3720,7 +3770,7 @@ components:
         max_estimated_cost_usd:
           type: number
           multipleOf: 0.000001
-        settled_estimated_cost_usd:
+        spent_estimated_cost_usd:
           type: number
           minimum: 0
           multipleOf: 0.000001
@@ -3743,7 +3793,7 @@ components:
           format: date-time
       description: |
         What one spending limit has used up so far in its current window.
-        `settled_estimated_cost_usd` is spend from turns that have finished;
+        `spent_estimated_cost_usd` is spend from model calls whose cost is final;
         `reserved_estimated_cost_usd` is spend committed to turns still
         running; `available_estimated_cost_usd` is what is left. These are
         nvoken's own running tally for deciding when to stop work — deleting
@@ -3757,9 +3807,8 @@ components:
         id:
           $ref: "#/components/schemas/BudgetID"
         scope:
-          type: string
-          enum: [app, customer, user, agent, provider_key, api_credential, session]
-      description: Exact durable budget that refused or paused work.
+          $ref: "#/components/schemas/BudgetScope"
+      description: Exact first-class Budget that refused or paused work.
     ProviderStaticKey:
       type: object
       additionalProperties: false
@@ -3946,7 +3995,7 @@ components:
           cache_creation_input_tokens,
           cache_read_input_tokens,
           reasoning_tokens,
-          estimated_cost,
+          estimated_cost_usd,
         ]
       properties:
         day:
@@ -3960,7 +4009,7 @@ components:
           oneOf:
             - type: string
             - type: "null"
-          description: Host customer group when `group_by=tenant_key`; omitted otherwise.
+          description: Host tenant group when `group_by=tenant_key`; omitted otherwise.
         provider:
           type: string
           description: Provider from checkpoint provenance; empty when provenance omitted it.
@@ -3990,7 +4039,7 @@ components:
         reasoning_tokens:
           type: integer
           minimum: 0
-        estimated_cost:
+        estimated_cost_usd:
           type: number
           description: Summed list-price estimate in USD; zero when every call in the bucket was unpriced.
     InvocationInput:
@@ -4127,11 +4176,11 @@ components:
             determines the real media type from the bytes it received.
             `media_type` is optional here; if you do send it, it must be
             `application/pdf`.
-    AgentDefinitionID:
+    DefinitionID:
       type: string
       minLength: 1
       description: Opaque identifier with the public `def_` prefix. Treat the body as opaque.
-    AgentDefinition:
+    Definition:
       type: object
       additionalProperties: false
       required: [model]
@@ -4150,8 +4199,8 @@ components:
           $ref: "#/components/schemas/ToolChoice"
         limits:
           $ref: "#/components/schemas/Limits"
-        structured_output:
-          $ref: "#/components/schemas/StructuredOutput"
+        output_schema:
+          $ref: "#/components/schemas/OutputSchema"
         tools:
           type: array
           maxItems: 32
@@ -4168,18 +4217,17 @@ components:
           items:
             $ref: "#/components/schemas/ProviderTool"
       description: |
-        Immutable launch snapshot returned on detailed Invocation reads. The
+        Immutable Definition returned on detailed Invocation reads. The
         host owns the agent definition; nvoken only records the definition
-        each turn ran with. The
-        create request exposes these execution fields at its top level; nvoken
-        selects them, stores them as one immutable snapshot row, and re-reads
-        the snapshot unchanged on every model iteration and recovery. Two
-        Invocations with byte-identical execution fields share one snapshot.
+        each turn ran with. The create request exposes these execution fields
+        at its top level; nvoken selects them, stores one immutable Definition,
+        and re-reads it unchanged on every model iteration and recovery. Two
+        Invocations with byte-identical execution fields share one Definition.
         Identity, session selection, input, idempotency, `if_active`, `webhook`,
         metadata, and provider key selection are durable elsewhere and
         never appear here. Callback declarations require installation callback
         signing configuration. Remote MCP authentication headers are encrypted
-        outside this snapshot and never returned. Tools or structured output
+        outside this Definition and never returned. Tools or structured output
         require at least two model iterations; omission resolves to three or
         the lower installation maximum.
     Sampling:
@@ -4244,8 +4292,13 @@ components:
           $ref: "#/components/schemas/CompactionPolicy"
         retention:
           $ref: "#/components/schemas/RetentionPolicy"
-        budget:
-          $ref: "#/components/schemas/SessionBudget"
+        max_estimated_cost_usd:
+          type: number
+          exclusiveMinimum: 0
+          multipleOf: 0.000001
+          description: |
+            Lifetime estimated-list-price cap across model calls committed to
+            this Session. This is a Session setting, not a Budget resource.
         metadata:
           $ref: "#/components/schemas/Metadata"
       description: |
@@ -4258,23 +4311,6 @@ components:
         with `details.conflicting_paths` naming exactly what disagreed.
         Compaction needs a turn to install it, because the policy is validated
         against that turn's model.
-    SessionBudget:
-      type: object
-      additionalProperties: false
-      required: [max_estimated_cost_usd]
-      properties:
-        max_estimated_cost_usd:
-          type: number
-          exclusiveMinimum: 0
-          multipleOf: 0.000001
-      description: |
-        A spending cap in USD covering every turn in this Session. You can
-        change it at any time.
-
-        The figure is nvoken's own estimate, based on published list prices
-        and the model calls it recorded — it is a control for stopping runaway
-        work, not a bill. If a model has no price in nvoken's catalog, turns
-        using it are refused rather than run uncosted.
     UpdateSessionRequest:
       type: object
       additionalProperties: false
@@ -4295,14 +4331,16 @@ components:
             Metadata merge patch. A string value sets the key, `null` deletes
             it, and an absent key is left alone. Bounds are enforced on the
             merged result.
-        budget:
+        max_estimated_cost_usd:
           oneOf:
-            - $ref: "#/components/schemas/SessionBudget"
+            - type: number
+              exclusiveMinimum: 0
+              multipleOf: 0.000001
             - type: "null"
           description: |
-            Replaces the Session budget; null removes it. A finite ceiling may
-            not be lower than estimated cost already consumed. Raising or
-            removing the ceiling atomically requeues a turn paused on it.
+            Replaces the Session lifetime cost cap; null removes it. A finite
+            cap may not be lower than estimated cost already consumed. Raising
+            or removing it atomically requeues a turn paused on it.
     Metadata:
       type: object
       additionalProperties:
@@ -4742,28 +4780,21 @@ components:
           description: |
             Public HTTPS endpoint. Userinfo and fragments are rejected. Every
             dial revalidates resolved addresses and refuses redirects.
-    StructuredOutput:
+    OutputSchema:
       type: object
-      additionalProperties: false
-      required: [schema]
-      properties:
-        schema:
-          type: object
-          additionalProperties: true
-          description: |
-            Self-contained JSON Schema for an object result. Compact canonical
-            JSON is limited to 32 KiB and 16 schema positions. Supported
-            keywords are type, title, description, properties, required,
-            additionalProperties, items, enum, pattern, minLength, maxLength,
-            minItems, maxItems, uniqueItems, minimum, and maximum. Every schema
-            position has one string type; pattern values are limited to 1,024
-            UTF-8 bytes; references and other keywords are rejected. Numeric
-            bounds are read as values, not spellings: 10, 10.0, and 1e1 are the
-            same bound.
+      additionalProperties: true
       description: |
-        Optional per-Invocation structured-output contract. nvoken exposes a
-        reserved durable submit tool and publishes only a server-validated
-        terminal object. This does not enable host-defined tools.
+        Self-contained JSON Schema for an object result. Compact canonical JSON
+        is limited to 32 KiB and 16 schema positions. Supported keywords are
+        type, title, description, properties, required, additionalProperties,
+        items, enum, pattern, minLength, maxLength, minItems, maxItems,
+        uniqueItems, minimum, and maximum. Every schema position has one string
+        type; pattern values are limited to 1,024 UTF-8 bytes; references and
+        other keywords are rejected. Numeric bounds are read as values, not
+        spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
+        exposes a reserved durable submit tool and publishes only a
+        server-validated terminal object. This does not enable host-defined
+        tools.
     Limits:
       type: object
       additionalProperties: false
@@ -4876,12 +4907,12 @@ components:
         `paused` means an opt-in spending limit stopped the turn but left it
         resumable. Nothing is executing, and its deadlines are on hold, so a
         turn cannot expire while you decide. Raise the turn's limit, or raise
-        or remove the Session budget, and it continues. It still accepts
+        or remove the Session cost cap, and it continues. It still accepts
         interrupt, cancel, and nudge.
     InvocationStopReason:
       type: string
       enum: [end_turn, interrupted, max_iterations, deadline,
-             max_output_tokens, max_estimated_cost, session_budget, shared_budget]
+             max_output_tokens, max_estimated_cost, session_max_estimated_cost, shared_budget]
       description: |
         Why a turn stopped. Set on turns that did not fail, and which values
         can appear depends on the status.
@@ -4890,7 +4921,7 @@ components:
         or `interrupted` (you asked it to stop, and it stopped at the next
         clean point). An `incomplete` turn carries whichever limit ran out:
         `max_iterations`, `deadline`, `max_output_tokens`,
-        `max_estimated_cost`, `session_budget`, or `shared_budget`. A `paused`
+        `max_estimated_cost`, `session_max_estimated_cost`, or `shared_budget`. A `paused`
         turn carries one of the spending limits, never `deadline`, because a
         paused turn's deadlines are on hold.
 
@@ -4924,10 +4955,10 @@ components:
             ever refused because of it, so do not rely on it to keep one
             user's data away from another.
         definition_id:
-          $ref: "#/components/schemas/AgentDefinitionID"
+          $ref: "#/components/schemas/DefinitionID"
         definition:
           oneOf:
-            - $ref: "#/components/schemas/AgentDefinition"
+            - $ref: "#/components/schemas/Definition"
             - type: "null"
           description: |
             The agent definition this turn actually ran with, stored when the turn
@@ -4957,7 +4988,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/BudgetBlock"
             - type: "null"
-          description: Exact Session or shared Budget for a budget stop, otherwise null.
+          description: Exact first-class Budget for a shared-budget stop, otherwise null.
         attempt:
           type: integer
           minimum: 0
@@ -5198,7 +5229,7 @@ components:
       type: string
       enum: [pending, succeeded, failed, abandoned]
       description: |
-        `pending` covers a blocked, available, or currently leased delivery.
+        `pending` means nvoken has not reached a final transport outcome.
         The other values are terminal transport outcomes.
     ToolCallDelivery:
       type: object
@@ -5222,7 +5253,7 @@ components:
     ToolCall:
       type: object
       additionalProperties: false
-      required: [id, mode, name, status, iteration, created_at, settled_at, attempts]
+      required: [id, mode, name, status, iteration, created_at, ended_at, attempts]
       properties:
         id:
           $ref: "#/components/schemas/ToolCallID"
@@ -5240,7 +5271,7 @@ components:
         created_at:
           type: string
           format: date-time
-        settled_at:
+        ended_at:
           oneOf:
             - type: string
               format: date-time
@@ -5509,7 +5540,7 @@ components:
     Session:
       type: object
       additionalProperties: false
-      required: [id, agent_id, tenant_key, session_key, user_key, forked_from, compaction, retention, budget, expires_at, metadata, active_invocation_id, active_invocation_status, blocking_budget, context, usage, created_at, updated_at]
+      required: [id, agent_id, tenant_key, session_key, user_key, forked_from, compaction, retention, max_estimated_cost_usd, expires_at, metadata, active_invocation_id, active_invocation_status, blocking_budget, context, usage, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/SessionID"
@@ -5561,11 +5592,13 @@ components:
             when it is retained until deleted explicitly. A window outside the
             supported range is refused at creation rather than clamped, so
             what is read back is always exactly what applies.
-        budget:
+        max_estimated_cost_usd:
           oneOf:
-            - $ref: "#/components/schemas/SessionBudget"
+            - type: number
+              exclusiveMinimum: 0
+              multipleOf: 0.000001
             - type: "null"
-          description: The current mutable Session-wide estimated-cost guardrail.
+          description: The current mutable Session lifetime estimated-cost cap.
         expires_at:
           oneOf:
             - type: string
@@ -5599,7 +5632,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/BudgetBlock"
             - type: "null"
-          description: Budget blocking the active paused Invocation, otherwise null.
+          description: First-class Budget blocking the active paused Invocation, otherwise null.
         context:
           oneOf:
             - $ref: "#/components/schemas/SessionContext"
@@ -5982,7 +6015,7 @@ components:
         turn that was interrupted or stopped early, none of which was ever an
         answer. A turn with no `final_answer` was left unfinished, and you can
         show it as such.
-    NudgeInvocationRequest:
+    CreateNudgeRequest:
       type: object
       additionalProperties: false
       required: [content]
@@ -5999,30 +6032,30 @@ components:
           maxLength: 255
           description: |
             Per-Invocation retry key. The same key with the same content
-            returns the original acknowledgement with `deduped: true`; the
+            returns the original acknowledgement with `deduplicated: true`; the
             same key with different content is refused, so a key is never
             reused with different words.
     NudgeAcknowledgement:
       type: object
       additionalProperties: false
-      required: [pending_input_id, state, deduped, after_sequence]
+      required: [nudge_id, status, deduplicated, after_sequence]
       properties:
-        pending_input_id:
-          $ref: "#/components/schemas/PendingInputID"
-        state:
-          $ref: "#/components/schemas/PendingInputStatus"
-        deduped:
+        nudge_id:
+          $ref: "#/components/schemas/NudgeID"
+        status:
+          $ref: "#/components/schemas/NudgeStatus"
+        deduplicated:
           type: boolean
         after_sequence:
           type: integer
           format: int64
           description: |
             Transcript position to watch from for the promoted message. It is
-            the Session cursor as of this call for input that has not been
+            the Session cursor as of this call for a Nudge that has not been
             drained, and the position immediately before the promoted message
-            for input that already has, so reading after it finds the message
+            for a Nudge that already has, so reading after it finds the message
             either way.
-    PendingInputStatus:
+    NudgeStatus:
       type: string
       enum: [pending, drained, expired, cancelled]
       description: |
@@ -6030,17 +6063,17 @@ components:
         the turn took it and it is now in the transcript. `expired` means the
         turn ended without ever taking it. `cancelled` means you withdrew it
         before the turn got to it.
-    PendingInput:
+    Nudge:
       type: object
       additionalProperties: false
       required: [id, invocation_id, status, content, created_at]
       properties:
         id:
-          $ref: "#/components/schemas/PendingInputID"
+          $ref: "#/components/schemas/NudgeID"
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
         status:
-          $ref: "#/components/schemas/PendingInputStatus"
+          $ref: "#/components/schemas/NudgeStatus"
         content:
           $ref: "#/components/schemas/InvocationInput"
         idempotency_key:
@@ -6051,16 +6084,18 @@ components:
         drained_at:
           type: string
           format: date-time
+          description: When the Nudge was promoted into the transcript. Present only when drained.
         drained_message_sequence:
           type: integer
           format: int64
           description: |
             Transcript sequence the content was promoted into. Present only on
-            a drained input, and the receipt that the model saw it.
-        settled_at:
+            a drained Nudge, and the receipt that the model saw it.
+        ended_at:
           type: string
           format: date-time
-    PendingInputList:
+          description: When the Nudge left pending for any terminal status.
+    NudgeList:
       type: object
       additionalProperties: false
       required: [items, has_more, next_cursor]
@@ -6068,7 +6103,7 @@ components:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/PendingInput"
+            $ref: "#/components/schemas/Nudge"
         has_more:
           type: boolean
         next_cursor:
@@ -6486,9 +6521,9 @@ components:
         details:
           type: object
           additionalProperties: true
-    Profile:
+    CredentialProfile:
       type: string
-      enum: [Runtime, Viewer, Operator]
+      enum: [runtime, viewer, operator]
     Operation:
       type: string
       enum: [create_invocation, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_budgets, write_budgets, register_app, list_apps, get_app, update_app]
@@ -6500,7 +6535,7 @@ components:
       required: [id, name, prefix, status, profile, operations, created_at, updated_at]
       properties:
         id:
-          $ref: "#/components/schemas/APICredentialID"
+          $ref: "#/components/schemas/CredentialID"
         name:
           type: string
         prefix:
@@ -6508,14 +6543,14 @@ components:
         status:
           $ref: "#/components/schemas/CredentialStatus"
         profile:
-          $ref: "#/components/schemas/Profile"
+          $ref: "#/components/schemas/CredentialProfile"
         app_id:
           oneOf:
             - $ref: "#/components/schemas/AppID"
             - type: "null"
         creator_credential_id:
           oneOf:
-            - $ref: "#/components/schemas/APICredentialID"
+            - $ref: "#/components/schemas/CredentialID"
             - type: "null"
         creator_subject:
           type: [string, "null"]
@@ -6535,7 +6570,7 @@ components:
           format: date-time
         rotated_from_id:
           oneOf:
-            - $ref: "#/components/schemas/APICredentialID"
+            - $ref: "#/components/schemas/CredentialID"
             - type: "null"
         rotation_overlap_ends_at:
           type: [string, "null"]
@@ -6575,7 +6610,7 @@ components:
           minLength: 1
           maxLength: 100
         profile:
-          $ref: "#/components/schemas/Profile"
+          $ref: "#/components/schemas/CredentialProfile"
         app_id:
           $ref: "#/components/schemas/AppID"
           description: |
@@ -6620,9 +6655,9 @@ components:
           required: [credential_id, effective_profile, operations, method, assurance]
           properties:
             credential_id:
-              $ref: "#/components/schemas/APICredentialID"
+              $ref: "#/components/schemas/CredentialID"
             effective_profile:
-              $ref: "#/components/schemas/Profile"
+              $ref: "#/components/schemas/CredentialProfile"
             tenant_key:
               type: [string, "null"]
             session_id:

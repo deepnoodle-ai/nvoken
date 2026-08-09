@@ -73,7 +73,7 @@ func runUsageDaily(command *cli.Context) error {
 				bucket.ModelCalls,
 				bucket.InputTokens,
 				bucket.OutputTokens,
-				bucket.EstimatedCost,
+				bucket.EstimatedCostUsd,
 			); err != nil {
 				return err
 			}

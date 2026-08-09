@@ -101,7 +101,7 @@ A turn can also stop without ending: `"incomplete"` means the Runtime enforced
 a budget at a seam, with `stop_reason` naming which one. It is terminal — the
 wait helpers stop there — and its work is kept, so treat it as an unfinished
 answer rather than an error. `SessionMessage.phase` says which assistant
-message was the reply: `"final_answer"` on the one that settled a completed
+message was the reply: `"final_answer"` on the one that ended a completed
 turn, `"commentary"` on everything else, so an incomplete turn has none.
 
 `InvocationOptions(timeout=...)` is one overall local deadline. Cancelling the

@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -26,10 +26,10 @@ pub enum CancelInvocationError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`cancel_pending_input`]
+/// struct for typed errors of method [`cancel_nudge`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum CancelPendingInputError {
+pub enum CancelNudgeError {
     Status400(models::ErrorResponse),
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
@@ -51,6 +51,20 @@ pub enum CreateInvocationError {
     Status409(models::ErrorResponse),
     Status422(models::ErrorResponse),
     Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`create_nudge`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CreateNudgeError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status409(models::ErrorResponse),
     Status500(models::ErrorResponse),
     Status503(models::ErrorResponse),
     UnknownValue(serde_json::Value),
@@ -110,10 +124,10 @@ pub enum ListInvocationsError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`list_pending_inputs`]
+/// struct for typed errors of method [`list_nudges`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ListPendingInputsError {
+pub enum ListNudgesError {
     Status400(models::ErrorResponse),
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
@@ -132,20 +146,6 @@ pub enum ListToolCallsError {
     Status403(models::ErrorResponse),
     Status404(models::ErrorResponse),
     Status429(models::ErrorResponse),
-    Status500(models::ErrorResponse),
-    Status503(models::ErrorResponse),
-    UnknownValue(serde_json::Value),
-}
-
-/// struct for typed errors of method [`nudge_invocation`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum NudgeInvocationError {
-    Status400(models::ErrorResponse),
-    Status401(models::ErrorResponse),
-    Status403(models::ErrorResponse),
-    Status404(models::ErrorResponse),
-    Status409(models::ErrorResponse),
     Status500(models::ErrorResponse),
     Status503(models::ErrorResponse),
     UnknownValue(serde_json::Value),
@@ -247,21 +247,21 @@ pub async fn cancel_invocation(
     }
 }
 
-/// Withdraws direction you sent with `/nudge`, as long as the turn has not picked it up yet. Cancelling something already cancelled returns it unchanged, so retrying is safe.  Cancelling races the turn, and whichever happens first wins outright: you either withdraw it cleanly or the turn uses it. It is never half-applied. If the turn got there first, you get a conflict and the entry stays `drained`.
-pub async fn cancel_pending_input(
+/// Withdraws direction you sent with `/nudges`, as long as the turn has not picked it up yet. Cancelling something already cancelled returns it unchanged, so retrying is safe.  Cancelling races the turn, and whichever happens first wins outright: you either withdraw it cleanly or the turn uses it. It is never half-applied. If the turn got there first, you get a conflict and the entry stays `drained`.
+pub async fn cancel_nudge(
     configuration: &configuration::Configuration,
     invocation_id: &str,
-    pending_input_id: &str,
-) -> Result<models::PendingInput, Error<CancelPendingInputError>> {
+    nudge_id: &str,
+) -> Result<models::Nudge, Error<CancelNudgeError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_invocation_id = invocation_id;
-    let p_path_pending_input_id = pending_input_id;
+    let p_path_nudge_id = nudge_id;
 
     let uri_str = format!(
-        "{}/v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel",
+        "{}/v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel",
         configuration.base_path,
         invocation_id = crate::apis::urlencode(p_path_invocation_id),
-        pending_input_id = crate::apis::urlencode(p_path_pending_input_id)
+        nudge_id = crate::apis::urlencode(p_path_nudge_id)
     );
     let mut req_builder = configuration
         .client
@@ -289,12 +289,12 @@ pub async fn cancel_pending_input(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::PendingInput`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::PendingInput`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::Nudge`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::Nudge`")))),
         }
     } else {
         let content = resp.text().await?;
-        let entity: Option<CancelPendingInputError> = serde_json::from_str(&content).ok();
+        let entity: Option<CancelNudgeError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
@@ -365,6 +365,62 @@ pub async fn create_invocation(
     } else {
         let content = resp.text().await?;
         let entity: Option<CreateInvocationError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
+pub async fn create_nudge(
+    configuration: &configuration::Configuration,
+    invocation_id: &str,
+    create_nudge_request: models::CreateNudgeRequest,
+) -> Result<models::NudgeAcknowledgement, Error<CreateNudgeError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_invocation_id = invocation_id;
+    let p_body_create_nudge_request = create_nudge_request;
+
+    let uri_str = format!(
+        "{}/v1/invocations/{invocation_id}/nudges",
+        configuration.base_path,
+        invocation_id = crate::apis::urlencode(p_path_invocation_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+    req_builder = req_builder.json(&p_body_create_nudge_request);
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::NudgeAcknowledgement`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::NudgeAcknowledgement`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<CreateNudgeError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
@@ -634,14 +690,14 @@ pub async fn list_invocations(
     }
 }
 
-/// Lists the direction you have sent to this turn with `/nudge`, in the order the turn will pick it up. Entries stay listed after they are used or missed, so you can answer \"what did the user say, and did the model ever see it?\"  Check `status` on each entry: `drained` means the turn used it, `expired` means the turn ended first, `cancelled` means you withdrew it.
-pub async fn list_pending_inputs(
+/// Lists the direction you have sent to this turn with `/nudges`, in the order the turn will pick it up. Entries stay listed after they are used or missed, so you can answer \"what did the user say, and did the model ever see it?\"  Check `status` on each entry: `drained` means the turn used it, `expired` means the turn ended first, `cancelled` means you withdrew it.
+pub async fn list_nudges(
     configuration: &configuration::Configuration,
     invocation_id: &str,
-    status: Option<models::PendingInputStatus>,
+    status: Option<models::NudgeStatus>,
     cursor: Option<&str>,
     limit: Option<u32>,
-) -> Result<models::PendingInputList, Error<ListPendingInputsError>> {
+) -> Result<models::NudgeList, Error<ListNudgesError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_invocation_id = invocation_id;
     let p_query_status = status;
@@ -649,7 +705,7 @@ pub async fn list_pending_inputs(
     let p_query_limit = limit;
 
     let uri_str = format!(
-        "{}/v1/invocations/{invocation_id}/pending-inputs",
+        "{}/v1/invocations/{invocation_id}/nudges",
         configuration.base_path,
         invocation_id = crate::apis::urlencode(p_path_invocation_id)
     );
@@ -686,12 +742,12 @@ pub async fn list_pending_inputs(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::PendingInputList`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::PendingInputList`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::NudgeList`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::NudgeList`")))),
         }
     } else {
         let content = resp.text().await?;
-        let entity: Option<ListPendingInputsError> = serde_json::from_str(&content).ok();
+        let entity: Option<ListNudgesError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
@@ -761,63 +817,7 @@ pub async fn list_tool_calls(
     }
 }
 
-/// Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your input is marked `expired` at that moment and has no effect on any later turn. Check `GET .../pending-inputs` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
-pub async fn nudge_invocation(
-    configuration: &configuration::Configuration,
-    invocation_id: &str,
-    nudge_invocation_request: models::NudgeInvocationRequest,
-) -> Result<models::NudgeAcknowledgement, Error<NudgeInvocationError>> {
-    // add a prefix to parameters to efficiently prevent name collisions
-    let p_path_invocation_id = invocation_id;
-    let p_body_nudge_invocation_request = nudge_invocation_request;
-
-    let uri_str = format!(
-        "{}/v1/invocations/{invocation_id}/nudge",
-        configuration.base_path,
-        invocation_id = crate::apis::urlencode(p_path_invocation_id)
-    );
-    let mut req_builder = configuration
-        .client
-        .request(reqwest::Method::POST, &uri_str);
-
-    if let Some(ref user_agent) = configuration.user_agent {
-        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
-    }
-    if let Some(ref token) = configuration.bearer_access_token {
-        req_builder = req_builder.bearer_auth(token.to_owned());
-    };
-    req_builder = req_builder.json(&p_body_nudge_invocation_request);
-
-    let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
-
-    let status = resp.status();
-    let content_type = resp
-        .headers()
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("application/octet-stream");
-    let content_type = super::ContentType::from(content_type);
-
-    if !status.is_client_error() && !status.is_server_error() {
-        let content = resp.text().await?;
-        match content_type {
-            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::NudgeAcknowledgement`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::NudgeAcknowledgement`")))),
-        }
-    } else {
-        let content = resp.text().await?;
-        let entity: Option<NudgeInvocationError> = serde_json::from_str(&content).ok();
-        Err(Error::ResponseError(ResponseContent {
-            status,
-            content,
-            entity,
-        }))
-    }
-}
-
-/// Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused on the Session budget rather than its own limit, raise or remove that budget instead — this endpoint will not resume it. Deadlines never pause a turn, so they never bring you here.
+/// Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused on the Session maximum estimated cost rather than its own limit, raise or remove that Session cap instead — this endpoint will not resume it. Deadlines never pause a turn, so they never bring you here.
 pub async fn resume_invocation(
     configuration: &configuration::Configuration,
     invocation_id: &str,
@@ -939,7 +939,7 @@ pub async fn stream_invocation(
     }
 }
 
-/// Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor execution dispatch before returning `202`.  This command accepts only host-mode calls owned by the path Invocation and authenticated tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.  `content` accepts any JSON value and the stored transcript retains it verbatim. Before a result reaches the model, a string or an array of content blocks passes through unchanged; any other value is serialized to its compact JSON text and sent as a string, so the model sees the same bytes a host that pre-stringifies would send.
+/// Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor dispatch before returning `202`.  This command accepts only host-mode calls owned by the path Invocation and authenticated tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.  `content` accepts any JSON value and the stored transcript retains it verbatim. Before a result reaches the model, a string or an array of content blocks passes through unchanged; any other value is serialized to its compact JSON text and sent as a string, so the model sees the same bytes a host that pre-stringifies would send.
 pub async fn submit_host_tool_results(
     configuration: &configuration::Configuration,
     invocation_id: &str,

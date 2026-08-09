@@ -3,7 +3,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -26,16 +26,15 @@ from nvoken_generated.models.model import Model
 from nvoken_generated.models.provider_tool import ProviderTool
 from nvoken_generated.models.reasoning import Reasoning
 from nvoken_generated.models.sampling import Sampling
-from nvoken_generated.models.structured_output import StructuredOutput
 from nvoken_generated.models.tool_choice import ToolChoice
 from nvoken_generated.models.tool_declaration import ToolDeclaration
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class AgentDefinition(BaseModel):
+class Definition(BaseModel):
     """
-    Immutable launch snapshot returned on detailed Invocation reads. The host owns the agent definition; nvoken only records the definition each turn ran with. The create request exposes these execution fields at its top level; nvoken selects them, stores them as one immutable snapshot row, and re-reads the snapshot unchanged on every model iteration and recovery. Two Invocations with byte-identical execution fields share one snapshot. Identity, session selection, input, idempotency, `if_active`, `webhook`, metadata, and provider key selection are durable elsewhere and never appear here. Callback declarations require installation callback signing configuration. Remote MCP authentication headers are encrypted outside this snapshot and never returned. Tools or structured output require at least two model iterations; omission resolves to three or the lower installation maximum.
+    Immutable Definition returned on detailed Invocation reads. The host owns the agent definition; nvoken only records the definition each turn ran with. The create request exposes these execution fields at its top level; nvoken selects them, stores one immutable Definition, and re-reads it unchanged on every model iteration and recovery. Two Invocations with byte-identical execution fields share one Definition. Identity, session selection, input, idempotency, `if_active`, `webhook`, metadata, and provider key selection are durable elsewhere and never appear here. Callback declarations require installation callback signing configuration. Remote MCP authentication headers are encrypted outside this Definition and never returned. Tools or structured output require at least two model iterations; omission resolves to three or the lower installation maximum.
     """ # noqa: E501
     instructions: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Optional model instructions. Omission adds no hidden default.")
     model: Model
@@ -43,11 +42,11 @@ class AgentDefinition(BaseModel):
     reasoning: Optional[Reasoning] = None
     tool_choice: Optional[ToolChoice] = None
     limits: Optional[Limits] = None
-    structured_output: Optional[StructuredOutput] = None
+    output_schema: Optional[Dict[str, Any]] = Field(default=None, description="Self-contained JSON Schema for an object result. Compact canonical JSON is limited to 32 KiB and 16 schema positions. Supported keywords are type, title, description, properties, required, additionalProperties, items, enum, pattern, minLength, maxLength, minItems, maxItems, uniqueItems, minimum, and maximum. Every schema position has one string type; pattern values are limited to 1,024 UTF-8 bytes; references and other keywords are rejected. Numeric bounds are read as values, not spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken exposes a reserved durable submit tool and publishes only a server-validated terminal object. This does not enable host-defined tools. ")
     tools: Optional[Annotated[List[ToolDeclaration], Field(max_length=32)]] = None
     mcp_servers: Optional[Annotated[List[MCPServer], Field(max_length=8)]] = None
     provider_tools: Optional[Annotated[List[ProviderTool], Field(max_length=4)]] = None
-    __properties: ClassVar[List[str]] = ["instructions", "model", "sampling", "reasoning", "tool_choice", "limits", "structured_output", "tools", "mcp_servers", "provider_tools"]
+    __properties: ClassVar[List[str]] = ["instructions", "model", "sampling", "reasoning", "tool_choice", "limits", "output_schema", "tools", "mcp_servers", "provider_tools"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -67,7 +66,7 @@ class AgentDefinition(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of AgentDefinition from a JSON string"""
+        """Create an instance of Definition from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -103,9 +102,6 @@ class AgentDefinition(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of limits
         if self.limits:
             _dict['limits'] = self.limits.to_dict()
-        # override the default output from pydantic by calling `to_dict()` of structured_output
-        if self.structured_output:
-            _dict['structured_output'] = self.structured_output.to_dict()
         # override the default output from pydantic by calling `to_dict()` of each item in tools (list)
         _items = []
         if self.tools:
@@ -131,7 +127,7 @@ class AgentDefinition(BaseModel):
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of AgentDefinition from a dict"""
+        """Create an instance of Definition from a dict"""
         if obj is None:
             return None
 
@@ -145,7 +141,7 @@ class AgentDefinition(BaseModel):
             "reasoning": Reasoning.from_dict(obj["reasoning"]) if obj.get("reasoning") is not None else None,
             "tool_choice": ToolChoice.from_dict(obj["tool_choice"]) if obj.get("tool_choice") is not None else None,
             "limits": Limits.from_dict(obj["limits"]) if obj.get("limits") is not None else None,
-            "structured_output": StructuredOutput.from_dict(obj["structured_output"]) if obj.get("structured_output") is not None else None,
+            "output_schema": obj.get("output_schema"),
             "tools": [ToolDeclaration.from_dict(_item) for _item in obj["tools"]] if obj.get("tools") is not None else None,
             "mcp_servers": [MCPServer.from_dict(_item) for _item in obj["mcp_servers"]] if obj.get("mcp_servers") is not None else None,
             "provider_tools": [ProviderTool.from_dict(_item) for _item in obj["provider_tools"]] if obj.get("provider_tools") is not None else None

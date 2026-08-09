@@ -25,7 +25,7 @@
     "window_start": "2026-08-01T00:00:00Z",
     "window_end": "2026-09-01T00:00:00Z",
     "max_estimated_cost_usd": 25,
-    "settled_estimated_cost_usd": 3.25,
+    "spent_estimated_cost_usd": 3.25,
     "reserved_estimated_cost_usd": 1.5,
     "available_estimated_cost_usd": 20.25,
     "paused_invocations": 2,

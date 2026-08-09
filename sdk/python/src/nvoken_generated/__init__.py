@@ -5,7 +5,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -38,10 +38,12 @@ __all__ = [
     "ApiAttributeError",
     "ApiException",
     "Agent",
-    "AgentDefinition",
     "AgentList",
     "App",
     "AppList",
+    "AppRegistration",
+    "AppSigningKeyPurpose",
+    "AppSigningKeySecret",
     "Budget",
     "BudgetBlock",
     "BudgetScope",
@@ -56,16 +58,19 @@ __all__ = [
     "CreateBudgetRequest",
     "CreateCredentialRequest",
     "CreateInvocationRequest",
+    "CreateNudgeRequest",
     "CreateProviderKeyRequest",
     "CreateSessionRequest",
     "Credential",
     "CredentialIssuance",
     "CredentialList",
+    "CredentialProfile",
     "CredentialStatus",
     "CurrentIdentity",
     "CurrentIdentityAuthentication",
     "DailyUsage",
     "DailyUsageBucket",
+    "Definition",
     "DocumentInputBlock",
     "DocumentInputSource",
     "DocumentReferenceBlock",
@@ -120,15 +125,13 @@ __all__ = [
     "ModelToolChoiceCapabilities",
     "ModelToolChoiceMode",
     "ModelUsage",
+    "Nudge",
     "NudgeAcknowledgement",
-    "NudgeInvocationRequest",
+    "NudgeList",
+    "NudgeStatus",
     "Operation",
     "OutputTextDeltaEvent",
     "PendingHostToolCall",
-    "PendingInput",
-    "PendingInputList",
-    "PendingInputStatus",
-    "Profile",
     "ProviderKey",
     "ProviderKeyList",
     "ProviderKeyScope",
@@ -152,7 +155,6 @@ __all__ = [
     "SeedMessageContent",
     "ServerToolUseBlock",
     "Session",
-    "SessionBudget",
     "SessionCompaction",
     "SessionCompactionList",
     "SessionCompactionStatus",
@@ -166,7 +168,6 @@ __all__ = [
     "SessionOptions",
     "StreamEndEvent",
     "StreamResyncEvent",
-    "StructuredOutput",
     "StructuredOutputProvenance",
     "SubmitHostToolResultsRequest",
     "SubmitHostToolResultsRequestResultsInner",
@@ -226,10 +227,12 @@ from nvoken_generated.exceptions import ApiException as ApiException
 
 # import models into sdk package
 from nvoken_generated.models.agent import Agent as Agent
-from nvoken_generated.models.agent_definition import AgentDefinition as AgentDefinition
 from nvoken_generated.models.agent_list import AgentList as AgentList
 from nvoken_generated.models.app import App as App
 from nvoken_generated.models.app_list import AppList as AppList
+from nvoken_generated.models.app_registration import AppRegistration as AppRegistration
+from nvoken_generated.models.app_signing_key_purpose import AppSigningKeyPurpose as AppSigningKeyPurpose
+from nvoken_generated.models.app_signing_key_secret import AppSigningKeySecret as AppSigningKeySecret
 from nvoken_generated.models.budget import Budget as Budget
 from nvoken_generated.models.budget_block import BudgetBlock as BudgetBlock
 from nvoken_generated.models.budget_scope import BudgetScope as BudgetScope
@@ -244,16 +247,19 @@ from nvoken_generated.models.compaction_policy_trigger_tokens import CompactionP
 from nvoken_generated.models.create_budget_request import CreateBudgetRequest as CreateBudgetRequest
 from nvoken_generated.models.create_credential_request import CreateCredentialRequest as CreateCredentialRequest
 from nvoken_generated.models.create_invocation_request import CreateInvocationRequest as CreateInvocationRequest
+from nvoken_generated.models.create_nudge_request import CreateNudgeRequest as CreateNudgeRequest
 from nvoken_generated.models.create_provider_key_request import CreateProviderKeyRequest as CreateProviderKeyRequest
 from nvoken_generated.models.create_session_request import CreateSessionRequest as CreateSessionRequest
 from nvoken_generated.models.credential import Credential as Credential
 from nvoken_generated.models.credential_issuance import CredentialIssuance as CredentialIssuance
 from nvoken_generated.models.credential_list import CredentialList as CredentialList
+from nvoken_generated.models.credential_profile import CredentialProfile as CredentialProfile
 from nvoken_generated.models.credential_status import CredentialStatus as CredentialStatus
 from nvoken_generated.models.current_identity import CurrentIdentity as CurrentIdentity
 from nvoken_generated.models.current_identity_authentication import CurrentIdentityAuthentication as CurrentIdentityAuthentication
 from nvoken_generated.models.daily_usage import DailyUsage as DailyUsage
 from nvoken_generated.models.daily_usage_bucket import DailyUsageBucket as DailyUsageBucket
+from nvoken_generated.models.definition import Definition as Definition
 from nvoken_generated.models.document_input_block import DocumentInputBlock as DocumentInputBlock
 from nvoken_generated.models.document_input_source import DocumentInputSource as DocumentInputSource
 from nvoken_generated.models.document_reference_block import DocumentReferenceBlock as DocumentReferenceBlock
@@ -308,15 +314,13 @@ from nvoken_generated.models.model_tool_capabilities import ModelToolCapabilitie
 from nvoken_generated.models.model_tool_choice_capabilities import ModelToolChoiceCapabilities as ModelToolChoiceCapabilities
 from nvoken_generated.models.model_tool_choice_mode import ModelToolChoiceMode as ModelToolChoiceMode
 from nvoken_generated.models.model_usage import ModelUsage as ModelUsage
+from nvoken_generated.models.nudge import Nudge as Nudge
 from nvoken_generated.models.nudge_acknowledgement import NudgeAcknowledgement as NudgeAcknowledgement
-from nvoken_generated.models.nudge_invocation_request import NudgeInvocationRequest as NudgeInvocationRequest
+from nvoken_generated.models.nudge_list import NudgeList as NudgeList
+from nvoken_generated.models.nudge_status import NudgeStatus as NudgeStatus
 from nvoken_generated.models.operation import Operation as Operation
 from nvoken_generated.models.output_text_delta_event import OutputTextDeltaEvent as OutputTextDeltaEvent
 from nvoken_generated.models.pending_host_tool_call import PendingHostToolCall as PendingHostToolCall
-from nvoken_generated.models.pending_input import PendingInput as PendingInput
-from nvoken_generated.models.pending_input_list import PendingInputList as PendingInputList
-from nvoken_generated.models.pending_input_status import PendingInputStatus as PendingInputStatus
-from nvoken_generated.models.profile import Profile as Profile
 from nvoken_generated.models.provider_key import ProviderKey as ProviderKey
 from nvoken_generated.models.provider_key_list import ProviderKeyList as ProviderKeyList
 from nvoken_generated.models.provider_key_scope import ProviderKeyScope as ProviderKeyScope
@@ -340,7 +344,6 @@ from nvoken_generated.models.seed_message import SeedMessage as SeedMessage
 from nvoken_generated.models.seed_message_content import SeedMessageContent as SeedMessageContent
 from nvoken_generated.models.server_tool_use_block import ServerToolUseBlock as ServerToolUseBlock
 from nvoken_generated.models.session import Session as Session
-from nvoken_generated.models.session_budget import SessionBudget as SessionBudget
 from nvoken_generated.models.session_compaction import SessionCompaction as SessionCompaction
 from nvoken_generated.models.session_compaction_list import SessionCompactionList as SessionCompactionList
 from nvoken_generated.models.session_compaction_status import SessionCompactionStatus as SessionCompactionStatus
@@ -354,7 +357,6 @@ from nvoken_generated.models.session_message_role import SessionMessageRole as S
 from nvoken_generated.models.session_options import SessionOptions as SessionOptions
 from nvoken_generated.models.stream_end_event import StreamEndEvent as StreamEndEvent
 from nvoken_generated.models.stream_resync_event import StreamResyncEvent as StreamResyncEvent
-from nvoken_generated.models.structured_output import StructuredOutput as StructuredOutput
 from nvoken_generated.models.structured_output_provenance import StructuredOutputProvenance as StructuredOutputProvenance
 from nvoken_generated.models.submit_host_tool_results_request import SubmitHostToolResultsRequest as SubmitHostToolResultsRequest
 from nvoken_generated.models.submit_host_tool_results_request_results_inner import SubmitHostToolResultsRequestResultsInner as SubmitHostToolResultsRequestResultsInner

@@ -128,7 +128,7 @@ enforced a budget at a seam, with `StopReason` naming which one. It is
 terminal — the wait helpers stop there — and its work is kept, so treat it as
 an unfinished answer rather than an error. `SessionMessage.Phase` says which
 assistant message was the reply: `MessagePhaseFinalAnswer` on the one that
-settled a completed turn, `MessagePhaseCommentary` on everything else, so an
+ended a completed turn, `MessagePhaseCommentary` on everything else, so an
 incomplete turn has none.
 
 Select a stored or one-turn provider-key source without dropping to generated

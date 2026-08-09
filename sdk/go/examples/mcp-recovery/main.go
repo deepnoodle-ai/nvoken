@@ -159,7 +159,7 @@ func run(ctx context.Context) error {
 
 	invocation, err := handle.Wait(ctx, nvoken.WaitOptions{Until: nvoken.WaitUntilTerminal})
 	if err != nil {
-		return fmt.Errorf("wait for durable settlement: %w", err)
+		return fmt.Errorf("wait for invocation to end: %w", err)
 	}
 	result, err := handle.Result(ctx)
 	if err != nil {

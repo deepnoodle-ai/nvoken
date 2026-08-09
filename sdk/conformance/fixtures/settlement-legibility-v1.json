@@ -8,7 +8,7 @@
       "deadline",
       "max_output_tokens",
       "max_estimated_cost",
-      "session_budget",
+      "session_max_estimated_cost",
       "shared_budget"
     ],
     "present_only_on_statuses": ["completed", "incomplete", "paused"],
@@ -19,14 +19,14 @@
         "deadline",
         "max_output_tokens",
         "max_estimated_cost",
-        "session_budget",
+        "session_max_estimated_cost",
         "shared_budget"
       ],
       "paused": [
         "max_iterations",
         "max_output_tokens",
         "max_estimated_cost",
-        "session_budget",
+        "session_max_estimated_cost",
         "shared_budget"
       ]
     },
@@ -38,7 +38,7 @@
       "execution_segment": "deadline",
       "output_tokens": "max_output_tokens",
       "estimated_cost": "max_estimated_cost",
-      "session_budget": "session_budget",
+      "session_max_estimated_cost": "session_max_estimated_cost",
       "shared_budget": "shared_budget"
     }
   },

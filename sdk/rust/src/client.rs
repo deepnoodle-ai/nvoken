@@ -460,7 +460,7 @@ pub struct ContextCompaction {
 
 /// Bounds how long an idle Session is retained. The window measures idle time
 /// rather than lifetime: it restarts on every Invocation admission and
-/// settlement, so a turn outlasting the window cannot expire underneath itself.
+/// completion, so a turn outlasting the window cannot expire underneath itself.
 /// Automatic expiry never cancels running work.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct SessionRetention {
@@ -480,15 +480,9 @@ pub struct SessionOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retention: Option<SessionRetention>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub budget: Option<SessionBudget>,
+    pub max_estimated_cost_usd: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
-}
-
-/// Mutable Session-wide USD list-price guardrail, not a billing ledger.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct SessionBudget {
-    pub max_estimated_cost_usd: f64,
 }
 
 impl SessionOptions {
@@ -502,10 +496,8 @@ impl SessionOptions {
         self
     }
 
-    pub fn budget(mut self, max_estimated_cost_usd: f64) -> Self {
-        self.budget = Some(SessionBudget {
-            max_estimated_cost_usd,
-        });
+    pub fn max_estimated_cost_usd(mut self, max_estimated_cost_usd: f64) -> Self {
+        self.max_estimated_cost_usd = Some(max_estimated_cost_usd);
         self
     }
 
@@ -632,7 +624,7 @@ pub struct InvokeRequest {
     pub output_schema: Option<HashMap<String, Value>>,
     pub provider_keys: Vec<ProviderKeySelection>,
     /// Endpoint nvoken posts a signed webhook to when this Invocation
-    /// parks awaiting host tool results or settles. An empty event list selects
+    /// parks awaiting host tool results or ends. An empty event list selects
     /// every event, which is the safe default: dropping the waiting event would
     /// leave a parked host tool loop with nobody listening.
     pub webhook: Option<WebhookTarget>,
@@ -814,7 +806,7 @@ impl WebhookTarget {
 pub enum WebhookEvent {
     Waiting,
     Paused,
-    Settled,
+    Ended,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -826,7 +818,7 @@ pub enum IfActivePolicy {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BudgetExhaustionBehavior {
-    Settle,
+    Stop,
     Pause,
 }
 
@@ -1171,10 +1163,7 @@ impl Client {
             .transpose()
             .map_err(|error| NvokenError::validation(error.to_string()))?
             .map(Box::new);
-        let structured_output = request
-            .output_schema
-            .map(models::StructuredOutput::new)
-            .map(Box::new);
+        let output_schema = request.output_schema;
         let mut tools = Vec::with_capacity(request.tools.len());
         for tool in request.tools {
             let mode = match tool.mode {
@@ -1247,7 +1236,7 @@ impl Client {
         body.reasoning = reasoning;
         body.tool_choice = tool_choice;
         body.limits = limits;
-        body.structured_output = structured_output;
+        body.output_schema = output_schema;
         body.tools = tools;
         body.mcp_servers = mcp_servers;
         body.provider_tools = provider_tools;
@@ -1259,7 +1248,7 @@ impl Client {
             .map(|value| {
                 if value.compaction.is_none()
                     && value.retention.is_none()
-                    && value.budget.is_none()
+                    && value.max_estimated_cost_usd.is_none()
                     && value.metadata.is_none()
                 {
                     return Err(NvokenError::validation(
@@ -1296,9 +1285,7 @@ impl Client {
                 options.retention = value
                     .retention
                     .map(|retention| Box::new(models::RetentionPolicy::new(retention.ttl_seconds)));
-                options.budget = value.budget.map(|budget| {
-                    Box::new(models::SessionBudget::new(budget.max_estimated_cost_usd))
-                });
+                options.max_estimated_cost_usd = value.max_estimated_cost_usd;
                 options.metadata = value.metadata;
                 Ok::<_, NvokenError>(Box::new(options))
             })
@@ -1310,8 +1297,8 @@ impl Client {
             IfActivePolicy::Interrupt => models::create_invocation_request::IfActive::Interrupt,
         });
         body.on_budget_exhausted = request.on_budget_exhausted.map(|behavior| match behavior {
-            BudgetExhaustionBehavior::Settle => {
-                models::create_invocation_request::OnBudgetExhausted::Settle
+            BudgetExhaustionBehavior::Stop => {
+                models::create_invocation_request::OnBudgetExhausted::Stop
             }
             BudgetExhaustionBehavior::Pause => {
                 models::create_invocation_request::OnBudgetExhausted::Pause
@@ -1354,7 +1341,7 @@ impl Client {
                             .map(|event| match event {
                                 WebhookEvent::Waiting => models::WebhookEvent::WebhookEventWaiting,
                                 WebhookEvent::Paused => models::WebhookEvent::WebhookEventPaused,
-                                WebhookEvent::Settled => models::WebhookEvent::WebhookEventSettled,
+                                WebhookEvent::Ended => models::WebhookEvent::WebhookEventEnded,
                             })
                             .collect(),
                     )
@@ -1484,38 +1471,37 @@ impl Client {
     /// supersession, which rewinds — and the model sees the input at its next
     /// execution seam rather than immediately.
     ///
-    /// Input the turn never reaches is settled `expired` when the Invocation
+    /// Input the turn never reaches is marked `expired` when the Invocation
     /// settles; nvoken never re-homes it onto a later turn, so re-sending
     /// missed direction as the next Invocation's input is the caller's call.
     ///
     /// `idempotency_key` makes a retry safe: the same key with the same
-    /// content returns the original acknowledgement with `deduped` set, and
+    /// content returns the original acknowledgement with `deduplicated` set, and
     /// the same key with different content is refused.
-    pub async fn nudge_invocation(
+    pub async fn create_nudge(
         &self,
         invocation_id: &str,
         content: &str,
         idempotency_key: Option<&str>,
     ) -> Result<models::NudgeAcknowledgement, NvokenError> {
-        let mut request = models::NudgeInvocationRequest::new(models::InvocationInput::String(
-            content.to_string(),
-        ));
+        let mut request =
+            models::CreateNudgeRequest::new(models::InvocationInput::String(content.to_string()));
         request.idempotency_key = idempotency_key.map(str::to_string);
-        apis::invocations_api::nudge_invocation(&self.configuration, invocation_id, request)
+        apis::invocations_api::create_nudge(&self.configuration, invocation_id, request)
             .await
             .map_err(|error| self.normalize_generated_error(error))
     }
 
-    /// Reads the staged queue in the order the turn will consume it, settled
+    /// Reads the staged queue in the order the turn will consume it, ended
     /// rows included.
-    pub async fn list_pending_inputs(
+    pub async fn list_nudges(
         &self,
         invocation_id: &str,
-        status: Option<models::PendingInputStatus>,
+        status: Option<models::NudgeStatus>,
         cursor: Option<&str>,
         limit: Option<u32>,
-    ) -> Result<models::PendingInputList, NvokenError> {
-        apis::invocations_api::list_pending_inputs(
+    ) -> Result<models::NudgeList, NvokenError> {
+        apis::invocations_api::list_nudges(
             &self.configuration,
             invocation_id,
             status,
@@ -1545,18 +1531,14 @@ impl Client {
     /// Withdraws staged input the turn has not taken. Input the executor
     /// already drained is reported as a conflict rather than removed from a
     /// transcript it is already part of.
-    pub async fn cancel_pending_input(
+    pub async fn cancel_nudge(
         &self,
         invocation_id: &str,
-        pending_input_id: &str,
-    ) -> Result<models::PendingInput, NvokenError> {
-        apis::invocations_api::cancel_pending_input(
-            &self.configuration,
-            invocation_id,
-            pending_input_id,
-        )
-        .await
-        .map_err(|error| self.normalize_generated_error(error))
+        nudge_id: &str,
+    ) -> Result<models::Nudge, NvokenError> {
+        apis::invocations_api::cancel_nudge(&self.configuration, invocation_id, nudge_id)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn submit_tool_results(
@@ -1617,8 +1599,8 @@ impl Client {
     /// erasure is immediate and irreversible.
     ///
     /// A running Invocation is stopped, and no cancellation is recorded — the
-    /// Invocation is removed rather than settled, so no `invocation.settled`
-    /// webhook is emitted for it. Cancel first if you need a settled
+    /// Invocation is removed rather than ended, so no `invocation.ended`
+    /// webhook is emitted for it. Cancel first if you need an ended
     /// record.
     ///
     /// An unknown or out-of-scope Session is not found, so a retry after a lost
@@ -1918,7 +1900,7 @@ impl InvocationHandle {
     /// the input at the next execution seam, and nothing in flight is aborted.
     pub async fn nudge(&self, content: &str) -> Result<models::NudgeAcknowledgement, NvokenError> {
         self.client
-            .nudge_invocation(&self.invocation_id, content, None)
+            .create_nudge(&self.invocation_id, content, None)
             .await
     }
 
@@ -1930,18 +1912,18 @@ impl InvocationHandle {
         idempotency_key: &str,
     ) -> Result<models::NudgeAcknowledgement, NvokenError> {
         self.client
-            .nudge_invocation(&self.invocation_id, content, Some(idempotency_key))
+            .create_nudge(&self.invocation_id, content, Some(idempotency_key))
             .await
     }
 
-    pub async fn list_pending_inputs(
+    pub async fn list_nudges(
         &self,
-        status: Option<models::PendingInputStatus>,
+        status: Option<models::NudgeStatus>,
         cursor: Option<&str>,
         limit: Option<u32>,
-    ) -> Result<models::PendingInputList, NvokenError> {
+    ) -> Result<models::NudgeList, NvokenError> {
         self.client
-            .list_pending_inputs(&self.invocation_id, status, cursor, limit)
+            .list_nudges(&self.invocation_id, status, cursor, limit)
             .await
     }
 
@@ -1954,12 +1936,9 @@ impl InvocationHandle {
             .await
     }
 
-    pub async fn cancel_pending_input(
-        &self,
-        pending_input_id: &str,
-    ) -> Result<models::PendingInput, NvokenError> {
+    pub async fn cancel_nudge(&self, nudge_id: &str) -> Result<models::Nudge, NvokenError> {
         self.client
-            .cancel_pending_input(&self.invocation_id, pending_input_id)
+            .cancel_nudge(&self.invocation_id, nudge_id)
             .await
     }
 

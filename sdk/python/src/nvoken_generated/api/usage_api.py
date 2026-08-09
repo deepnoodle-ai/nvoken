@@ -1,7 +1,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -44,9 +44,9 @@ class UsageApi:
         self,
         start_date: Annotated[Optional[date], Field(description="Inclusive first UTC day. Defaults to 29 days before `end_date`.")] = None,
         end_date: Annotated[Optional[date], Field(description="Inclusive last UTC day. Defaults to the current UTC day.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only usage attributed to this host customer.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only usage attributed to this host tenant.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only usage attributed to this host end user.")] = None,
-        group_by: Annotated[Optional[StrictStr], Field(description="Split otherwise identical buckets by host customer.")] = None,
+        group_by: Annotated[Optional[StrictStr], Field(description="Split otherwise identical buckets by host tenant.")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -62,17 +62,17 @@ class UsageApi:
     ) -> DailyUsage:
         """Read daily usage rollups
 
-        Totals your model usage by day, app, provider, and model, with token counts and estimated cost. It counts every model call nvoken made on your behalf, including the ones it makes to summarize long conversations.  These totals are calculated from the stored records each time you ask, not kept in a running counter. That means deleting Sessions lowers past numbers. Treat this as operational visibility into what your agents are doing, not as a billing ledger — if you bill from usage, record it yourself when each turn finishes, keyed by Invocation ID.  A credential bound to an app sees only that app. A credential not bound to any app sees every registered app; a console issuer token needs its `admin` claim for that.
+        Totals your model usage by day, app, provider, and model, with token counts and estimated cost. It counts every model call nvoken made on your behalf, including the ones it makes to summarize long conversations.  These totals are calculated from the stored records each time you ask, not kept in a running counter. That means deleting Sessions lowers past numbers. Treat this as operational visibility into what your agents are doing, not as a billing ledger — if you bill from usage, record it yourself when each turn finishes, keyed by Invocation ID.  A credential bound to an app sees only that app. Only an app-less issuer token with the `admin` claim can read across every registered app. App-less API credentials are installation-management credentials and cannot read usage or other runtime data.
 
         :param start_date: Inclusive first UTC day. Defaults to 29 days before `end_date`.
         :type start_date: date
         :param end_date: Inclusive last UTC day. Defaults to the current UTC day.
         :type end_date: date
-        :param tenant_key: Return only usage attributed to this host customer.
+        :param tenant_key: Return only usage attributed to this host tenant.
         :type tenant_key: str
         :param user_key: Return only usage attributed to this host end user.
         :type user_key: str
-        :param group_by: Split otherwise identical buckets by host customer.
+        :param group_by: Split otherwise identical buckets by host tenant.
         :type group_by: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -132,9 +132,9 @@ class UsageApi:
         self,
         start_date: Annotated[Optional[date], Field(description="Inclusive first UTC day. Defaults to 29 days before `end_date`.")] = None,
         end_date: Annotated[Optional[date], Field(description="Inclusive last UTC day. Defaults to the current UTC day.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only usage attributed to this host customer.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only usage attributed to this host tenant.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only usage attributed to this host end user.")] = None,
-        group_by: Annotated[Optional[StrictStr], Field(description="Split otherwise identical buckets by host customer.")] = None,
+        group_by: Annotated[Optional[StrictStr], Field(description="Split otherwise identical buckets by host tenant.")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -150,17 +150,17 @@ class UsageApi:
     ) -> ApiResponse[DailyUsage]:
         """Read daily usage rollups
 
-        Totals your model usage by day, app, provider, and model, with token counts and estimated cost. It counts every model call nvoken made on your behalf, including the ones it makes to summarize long conversations.  These totals are calculated from the stored records each time you ask, not kept in a running counter. That means deleting Sessions lowers past numbers. Treat this as operational visibility into what your agents are doing, not as a billing ledger — if you bill from usage, record it yourself when each turn finishes, keyed by Invocation ID.  A credential bound to an app sees only that app. A credential not bound to any app sees every registered app; a console issuer token needs its `admin` claim for that.
+        Totals your model usage by day, app, provider, and model, with token counts and estimated cost. It counts every model call nvoken made on your behalf, including the ones it makes to summarize long conversations.  These totals are calculated from the stored records each time you ask, not kept in a running counter. That means deleting Sessions lowers past numbers. Treat this as operational visibility into what your agents are doing, not as a billing ledger — if you bill from usage, record it yourself when each turn finishes, keyed by Invocation ID.  A credential bound to an app sees only that app. Only an app-less issuer token with the `admin` claim can read across every registered app. App-less API credentials are installation-management credentials and cannot read usage or other runtime data.
 
         :param start_date: Inclusive first UTC day. Defaults to 29 days before `end_date`.
         :type start_date: date
         :param end_date: Inclusive last UTC day. Defaults to the current UTC day.
         :type end_date: date
-        :param tenant_key: Return only usage attributed to this host customer.
+        :param tenant_key: Return only usage attributed to this host tenant.
         :type tenant_key: str
         :param user_key: Return only usage attributed to this host end user.
         :type user_key: str
-        :param group_by: Split otherwise identical buckets by host customer.
+        :param group_by: Split otherwise identical buckets by host tenant.
         :type group_by: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -220,9 +220,9 @@ class UsageApi:
         self,
         start_date: Annotated[Optional[date], Field(description="Inclusive first UTC day. Defaults to 29 days before `end_date`.")] = None,
         end_date: Annotated[Optional[date], Field(description="Inclusive last UTC day. Defaults to the current UTC day.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only usage attributed to this host customer.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only usage attributed to this host tenant.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only usage attributed to this host end user.")] = None,
-        group_by: Annotated[Optional[StrictStr], Field(description="Split otherwise identical buckets by host customer.")] = None,
+        group_by: Annotated[Optional[StrictStr], Field(description="Split otherwise identical buckets by host tenant.")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -238,17 +238,17 @@ class UsageApi:
     ) -> RESTResponseType:
         """Read daily usage rollups
 
-        Totals your model usage by day, app, provider, and model, with token counts and estimated cost. It counts every model call nvoken made on your behalf, including the ones it makes to summarize long conversations.  These totals are calculated from the stored records each time you ask, not kept in a running counter. That means deleting Sessions lowers past numbers. Treat this as operational visibility into what your agents are doing, not as a billing ledger — if you bill from usage, record it yourself when each turn finishes, keyed by Invocation ID.  A credential bound to an app sees only that app. A credential not bound to any app sees every registered app; a console issuer token needs its `admin` claim for that.
+        Totals your model usage by day, app, provider, and model, with token counts and estimated cost. It counts every model call nvoken made on your behalf, including the ones it makes to summarize long conversations.  These totals are calculated from the stored records each time you ask, not kept in a running counter. That means deleting Sessions lowers past numbers. Treat this as operational visibility into what your agents are doing, not as a billing ledger — if you bill from usage, record it yourself when each turn finishes, keyed by Invocation ID.  A credential bound to an app sees only that app. Only an app-less issuer token with the `admin` claim can read across every registered app. App-less API credentials are installation-management credentials and cannot read usage or other runtime data.
 
         :param start_date: Inclusive first UTC day. Defaults to 29 days before `end_date`.
         :type start_date: date
         :param end_date: Inclusive last UTC day. Defaults to the current UTC day.
         :type end_date: date
-        :param tenant_key: Return only usage attributed to this host customer.
+        :param tenant_key: Return only usage attributed to this host tenant.
         :type tenant_key: str
         :param user_key: Return only usage attributed to this host end user.
         :type user_key: str
-        :param group_by: Split otherwise identical buckets by host customer.
+        :param group_by: Split otherwise identical buckets by host tenant.
         :type group_by: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request

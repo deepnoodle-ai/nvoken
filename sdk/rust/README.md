@@ -146,7 +146,7 @@ Runtime enforced a budget at a seam, with `stop_reason` naming which one. It is
 terminal — the wait helpers stop there — and its work is kept, so treat it as
 an unfinished answer rather than an error. `SessionMessage::phase` says which
 assistant message was the reply: `MessagePhase::FinalAnswer` on the one that
-settled a completed turn, `MessagePhase::Commentary` on everything else, so an
+ended a completed turn, `MessagePhase::Commentary` on everything else, so an
 incomplete turn has none.
 
 `Agent` fixes one identity and execution controls, and admits through it:

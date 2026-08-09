@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -18,6 +18,11 @@ import {
     CreateInvocationRequestFromJSON,
     CreateInvocationRequestToJSON,
 } from '../models/CreateInvocationRequest.js';
+import {
+    type CreateNudgeRequest,
+    CreateNudgeRequestFromJSON,
+    CreateNudgeRequestToJSON,
+} from '../models/CreateNudgeRequest.js';
 import {
     type ErrorResponse,
     ErrorResponseFromJSON,
@@ -49,30 +54,25 @@ import {
     InvocationStreamEventToJSON,
 } from '../models/InvocationStreamEvent.js';
 import {
+    type Nudge,
+    NudgeFromJSON,
+    NudgeToJSON,
+} from '../models/Nudge.js';
+import {
     type NudgeAcknowledgement,
     NudgeAcknowledgementFromJSON,
     NudgeAcknowledgementToJSON,
 } from '../models/NudgeAcknowledgement.js';
 import {
-    type NudgeInvocationRequest,
-    NudgeInvocationRequestFromJSON,
-    NudgeInvocationRequestToJSON,
-} from '../models/NudgeInvocationRequest.js';
+    type NudgeList,
+    NudgeListFromJSON,
+    NudgeListToJSON,
+} from '../models/NudgeList.js';
 import {
-    type PendingInput,
-    PendingInputFromJSON,
-    PendingInputToJSON,
-} from '../models/PendingInput.js';
-import {
-    type PendingInputList,
-    PendingInputListFromJSON,
-    PendingInputListToJSON,
-} from '../models/PendingInputList.js';
-import {
-    type PendingInputStatus,
-    PendingInputStatusFromJSON,
-    PendingInputStatusToJSON,
-} from '../models/PendingInputStatus.js';
+    type NudgeStatus,
+    NudgeStatusFromJSON,
+    NudgeStatusToJSON,
+} from '../models/NudgeStatus.js';
 import {
     type ResumeInvocationRequest,
     ResumeInvocationRequestFromJSON,
@@ -98,9 +98,9 @@ export interface CancelInvocationRequest {
     invocationId: string;
 }
 
-export interface CancelPendingInputRequest {
+export interface CancelNudgeRequest {
     invocationId: string;
-    pendingInputId: string;
+    nudgeId: string;
 }
 
 export interface CreateInvocationOperationRequest {
@@ -109,6 +109,11 @@ export interface CreateInvocationOperationRequest {
     xOpenaiApiKey?: string;
     xGeminiApiKey?: string;
     xXaiApiKey?: string;
+}
+
+export interface CreateNudgeOperationRequest {
+    invocationId: string;
+    createNudgeRequest: CreateNudgeRequest;
 }
 
 export interface GetInvocationRequest {
@@ -135,9 +140,9 @@ export interface ListInvocationsRequest {
     limit?: number;
 }
 
-export interface ListPendingInputsRequest {
+export interface ListNudgesRequest {
     invocationId: string;
-    status?: PendingInputStatus;
+    status?: NudgeStatus;
     cursor?: string;
     limit?: number;
 }
@@ -146,11 +151,6 @@ export interface ListToolCallsRequest {
     invocationId: string;
     cursor?: string;
     limit?: number;
-}
-
-export interface NudgeInvocationOperationRequest {
-    invocationId: string;
-    nudgeInvocationRequest: NudgeInvocationRequest;
 }
 
 export interface ResumeInvocationOperationRequest {
@@ -231,20 +231,20 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Creates request options for cancelPendingInput without sending the request
+     * Creates request options for cancelNudge without sending the request
      */
-    async cancelPendingInputRequestOpts(requestParameters: CancelPendingInputRequest): Promise<runtime.RequestOpts> {
+    async cancelNudgeRequestOpts(requestParameters: CancelNudgeRequest): Promise<runtime.RequestOpts> {
         if (requestParameters['invocationId'] == null) {
             throw new runtime.RequiredError(
                 'invocationId',
-                'Required parameter "invocationId" was null or undefined when calling cancelPendingInput().'
+                'Required parameter "invocationId" was null or undefined when calling cancelNudge().'
             );
         }
 
-        if (requestParameters['pendingInputId'] == null) {
+        if (requestParameters['nudgeId'] == null) {
             throw new runtime.RequiredError(
-                'pendingInputId',
-                'Required parameter "pendingInputId" was null or undefined when calling cancelPendingInput().'
+                'nudgeId',
+                'Required parameter "nudgeId" was null or undefined when calling cancelNudge().'
             );
         }
 
@@ -261,9 +261,9 @@ export class InvocationsApi extends runtime.BaseAPI {
             }
         }
 
-        let urlPath = `/v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel`;
+        let urlPath = `/v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel`;
         urlPath = urlPath.replace('{invocation_id}', encodeURIComponent(String(requestParameters['invocationId'])));
-        urlPath = urlPath.replace('{pending_input_id}', encodeURIComponent(String(requestParameters['pendingInputId'])));
+        urlPath = urlPath.replace('{nudge_id}', encodeURIComponent(String(requestParameters['nudgeId'])));
 
         return {
             path: urlPath,
@@ -274,22 +274,22 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Withdraws direction you sent with `/nudge`, as long as the turn has not picked it up yet. Cancelling something already cancelled returns it unchanged, so retrying is safe.  Cancelling races the turn, and whichever happens first wins outright: you either withdraw it cleanly or the turn uses it. It is never half-applied. If the turn got there first, you get a conflict and the entry stays `drained`.
-     * Withdraw staged input the turn has not taken
+     * Withdraws direction you sent with `/nudges`, as long as the turn has not picked it up yet. Cancelling something already cancelled returns it unchanged, so retrying is safe.  Cancelling races the turn, and whichever happens first wins outright: you either withdraw it cleanly or the turn uses it. It is never half-applied. If the turn got there first, you get a conflict and the entry stays `drained`.
+     * Withdraw a Nudge the turn has not taken
      */
-    async cancelPendingInputRaw(requestParameters: CancelPendingInputRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PendingInput>> {
-        const requestOptions = await this.cancelPendingInputRequestOpts(requestParameters);
+    async cancelNudgeRaw(requestParameters: CancelNudgeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Nudge>> {
+        const requestOptions = await this.cancelNudgeRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => PendingInputFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => NudgeFromJSON(jsonValue));
     }
 
     /**
-     * Withdraws direction you sent with `/nudge`, as long as the turn has not picked it up yet. Cancelling something already cancelled returns it unchanged, so retrying is safe.  Cancelling races the turn, and whichever happens first wins outright: you either withdraw it cleanly or the turn uses it. It is never half-applied. If the turn got there first, you get a conflict and the entry stays `drained`.
-     * Withdraw staged input the turn has not taken
+     * Withdraws direction you sent with `/nudges`, as long as the turn has not picked it up yet. Cancelling something already cancelled returns it unchanged, so retrying is safe.  Cancelling races the turn, and whichever happens first wins outright: you either withdraw it cleanly or the turn uses it. It is never half-applied. If the turn got there first, you get a conflict and the entry stays `drained`.
+     * Withdraw a Nudge the turn has not taken
      */
-    async cancelPendingInput(requestParameters: CancelPendingInputRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PendingInput> {
-        const response = await this.cancelPendingInputRaw(requestParameters, initOverrides);
+    async cancelNudge(requestParameters: CancelNudgeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Nudge> {
+        const response = await this.cancelNudgeRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -363,6 +363,71 @@ export class InvocationsApi extends runtime.BaseAPI {
      */
     async createInvocation(requestParameters: CreateInvocationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Invocation> {
         const response = await this.createInvocationRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for createNudge without sending the request
+     */
+    async createNudgeRequestOpts(requestParameters: CreateNudgeOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['invocationId'] == null) {
+            throw new runtime.RequiredError(
+                'invocationId',
+                'Required parameter "invocationId" was null or undefined when calling createNudge().'
+            );
+        }
+
+        if (requestParameters['createNudgeRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createNudgeRequest',
+                'Required parameter "createNudgeRequest" was null or undefined when calling createNudge().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/invocations/{invocation_id}/nudges`;
+        urlPath = urlPath.replace('{invocation_id}', encodeURIComponent(String(requestParameters['invocationId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateNudgeRequestToJSON(requestParameters['createNudgeRequest']),
+        };
+    }
+
+    /**
+     * Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn\'s input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn\'s own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
+     * Send extra direction to a running turn
+     */
+    async createNudgeRaw(requestParameters: CreateNudgeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<NudgeAcknowledgement>> {
+        const requestOptions = await this.createNudgeRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => NudgeAcknowledgementFromJSON(jsonValue));
+    }
+
+    /**
+     * Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn\'s input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn\'s own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
+     * Send extra direction to a running turn
+     */
+    async createNudge(requestParameters: CreateNudgeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<NudgeAcknowledgement> {
+        const response = await this.createNudgeRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -615,13 +680,13 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Creates request options for listPendingInputs without sending the request
+     * Creates request options for listNudges without sending the request
      */
-    async listPendingInputsRequestOpts(requestParameters: ListPendingInputsRequest): Promise<runtime.RequestOpts> {
+    async listNudgesRequestOpts(requestParameters: ListNudgesRequest): Promise<runtime.RequestOpts> {
         if (requestParameters['invocationId'] == null) {
             throw new runtime.RequiredError(
                 'invocationId',
-                'Required parameter "invocationId" was null or undefined when calling listPendingInputs().'
+                'Required parameter "invocationId" was null or undefined when calling listNudges().'
             );
         }
 
@@ -650,7 +715,7 @@ export class InvocationsApi extends runtime.BaseAPI {
             }
         }
 
-        let urlPath = `/v1/invocations/{invocation_id}/pending-inputs`;
+        let urlPath = `/v1/invocations/{invocation_id}/nudges`;
         urlPath = urlPath.replace('{invocation_id}', encodeURIComponent(String(requestParameters['invocationId'])));
 
         return {
@@ -662,22 +727,22 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Lists the direction you have sent to this turn with `/nudge`, in the order the turn will pick it up. Entries stay listed after they are used or missed, so you can answer \"what did the user say, and did the model ever see it?\"  Check `status` on each entry: `drained` means the turn used it, `expired` means the turn ended first, `cancelled` means you withdrew it.
-     * List staged input for an Invocation
+     * Lists the direction you have sent to this turn with `/nudges`, in the order the turn will pick it up. Entries stay listed after they are used or missed, so you can answer \"what did the user say, and did the model ever see it?\"  Check `status` on each entry: `drained` means the turn used it, `expired` means the turn ended first, `cancelled` means you withdrew it.
+     * List Nudges for an Invocation
      */
-    async listPendingInputsRaw(requestParameters: ListPendingInputsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PendingInputList>> {
-        const requestOptions = await this.listPendingInputsRequestOpts(requestParameters);
+    async listNudgesRaw(requestParameters: ListNudgesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<NudgeList>> {
+        const requestOptions = await this.listNudgesRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => PendingInputListFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => NudgeListFromJSON(jsonValue));
     }
 
     /**
-     * Lists the direction you have sent to this turn with `/nudge`, in the order the turn will pick it up. Entries stay listed after they are used or missed, so you can answer \"what did the user say, and did the model ever see it?\"  Check `status` on each entry: `drained` means the turn used it, `expired` means the turn ended first, `cancelled` means you withdrew it.
-     * List staged input for an Invocation
+     * Lists the direction you have sent to this turn with `/nudges`, in the order the turn will pick it up. Entries stay listed after they are used or missed, so you can answer \"what did the user say, and did the model ever see it?\"  Check `status` on each entry: `drained` means the turn used it, `expired` means the turn ended first, `cancelled` means you withdrew it.
+     * List Nudges for an Invocation
      */
-    async listPendingInputs(requestParameters: ListPendingInputsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PendingInputList> {
-        const response = await this.listPendingInputsRaw(requestParameters, initOverrides);
+    async listNudges(requestParameters: ListNudgesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<NudgeList> {
+        const response = await this.listNudgesRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -745,71 +810,6 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Creates request options for nudgeInvocation without sending the request
-     */
-    async nudgeInvocationRequestOpts(requestParameters: NudgeInvocationOperationRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['invocationId'] == null) {
-            throw new runtime.RequiredError(
-                'invocationId',
-                'Required parameter "invocationId" was null or undefined when calling nudgeInvocation().'
-            );
-        }
-
-        if (requestParameters['nudgeInvocationRequest'] == null) {
-            throw new runtime.RequiredError(
-                'nudgeInvocationRequest',
-                'Required parameter "nudgeInvocationRequest" was null or undefined when calling nudgeInvocation().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        headerParameters['Content-Type'] = 'application/json';
-
-        if (this.configuration && this.configuration.accessToken) {
-            const token = this.configuration.accessToken;
-            const tokenString = await token("bearerAuth", []);
-
-            if (tokenString) {
-                headerParameters["Authorization"] = `Bearer ${tokenString}`;
-            }
-        }
-
-        let urlPath = `/v1/invocations/{invocation_id}/nudge`;
-        urlPath = urlPath.replace('{invocation_id}', encodeURIComponent(String(requestParameters['invocationId'])));
-
-        return {
-            path: urlPath,
-            method: 'POST',
-            headers: headerParameters,
-            query: queryParameters,
-            body: NudgeInvocationRequestToJSON(requestParameters['nudgeInvocationRequest']),
-        };
-    }
-
-    /**
-     * Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your input is marked `expired` at that moment and has no effect on any later turn. Check `GET .../pending-inputs` to see whether it was used or missed. Whether to re-send missed direction as the next turn\'s input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn\'s own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
-     * Send extra direction to a running turn
-     */
-    async nudgeInvocationRaw(requestParameters: NudgeInvocationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<NudgeAcknowledgement>> {
-        const requestOptions = await this.nudgeInvocationRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => NudgeAcknowledgementFromJSON(jsonValue));
-    }
-
-    /**
-     * Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your input is marked `expired` at that moment and has no effect on any later turn. Check `GET .../pending-inputs` to see whether it was used or missed. Whether to re-send missed direction as the next turn\'s input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn\'s own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
-     * Send extra direction to a running turn
-     */
-    async nudgeInvocation(requestParameters: NudgeInvocationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<NudgeAcknowledgement> {
-        const response = await this.nudgeInvocationRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
      * Creates request options for resumeInvocation without sending the request
      */
     async resumeInvocationRequestOpts(requestParameters: ResumeInvocationOperationRequest): Promise<runtime.RequestOpts> {
@@ -855,7 +855,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused on the Session budget rather than its own limit, raise or remove that budget instead — this endpoint will not resume it. Deadlines never pause a turn, so they never bring you here.
+     * Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused on the Session maximum estimated cost rather than its own limit, raise or remove that Session cap instead — this endpoint will not resume it. Deadlines never pause a turn, so they never bring you here.
      * Raise a paused turn\'s limit and continue it
      */
     async resumeInvocationRaw(requestParameters: ResumeInvocationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Invocation>> {
@@ -866,7 +866,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused on the Session budget rather than its own limit, raise or remove that budget instead — this endpoint will not resume it. Deadlines never pause a turn, so they never bring you here.
+     * Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused on the Session maximum estimated cost rather than its own limit, raise or remove that Session cap instead — this endpoint will not resume it. Deadlines never pause a turn, so they never bring you here.
      * Raise a paused turn\'s limit and continue it
      */
     async resumeInvocation(requestParameters: ResumeInvocationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Invocation> {
@@ -987,7 +987,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor execution dispatch before returning `202`.  This command accepts only host-mode calls owned by the path Invocation and authenticated tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.  `content` accepts any JSON value and the stored transcript retains it verbatim. Before a result reaches the model, a string or an array of content blocks passes through unchanged; any other value is serialized to its compact JSON text and sent as a string, so the model sees the same bytes a host that pre-stringifies would send.
+     * Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor dispatch before returning `202`.  This command accepts only host-mode calls owned by the path Invocation and authenticated tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.  `content` accepts any JSON value and the stored transcript retains it verbatim. Before a result reaches the model, a string or an array of content blocks passes through unchanged; any other value is serialized to its compact JSON text and sent as a string, so the model sees the same bytes a host that pre-stringifies would send.
      * Submit durable results for pending host ToolCalls
      */
     async submitHostToolResultsRaw(requestParameters: SubmitHostToolResultsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SubmitHostToolResultsResponse>> {
@@ -998,7 +998,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor execution dispatch before returning `202`.  This command accepts only host-mode calls owned by the path Invocation and authenticated tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.  `content` accepts any JSON value and the stored transcript retains it verbatim. Before a result reaches the model, a string or an array of content blocks passes through unchanged; any other value is serialized to its compact JSON text and sent as a string, so the model sees the same bytes a host that pre-stringifies would send.
+     * Atomically accepts one bounded batch for a waiting Invocation. The first committed result for each ToolCall wins. An equal replay is acknowledged as deduplicated; a changed replay conflicts. Partial batches leave the Invocation waiting. Closing the final pending call queues the same Invocation and its successor dispatch before returning `202`.  This command accepts only host-mode calls owned by the path Invocation and authenticated tenant scope. It is not a generic Session append endpoint. The body is limited to 1 MiB; each result content value is valid JSON limited to 256 KiB and 32 nesting levels.  `content` accepts any JSON value and the stored transcript retains it verbatim. Before a result reaches the model, a string or an array of content blocks passes through unchanged; any other value is serialized to its compact JSON text and sent as a string, so the model sees the same bytes a host that pre-stringifies would send.
      * Submit durable results for pending host ToolCalls
      */
     async submitHostToolResults(requestParameters: SubmitHostToolResultsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SubmitHostToolResultsResponse> {

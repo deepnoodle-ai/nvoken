@@ -39,7 +39,6 @@ from nvoken_generated.models.compaction_policy_trigger_tokens import (
     CompactionPolicyTriggerTokens,
 )
 from nvoken_generated.models.session_options import SessionOptions as GeneratedSessionOptions
-from nvoken_generated.models.session_budget import SessionBudget as GeneratedSessionBudget
 from nvoken_generated.models.retention_policy import (
     RetentionPolicy as GeneratedRetentionPolicy,
 )
@@ -94,10 +93,10 @@ from nvoken_generated.models.sampling import Sampling as GeneratedSampling
 from nvoken_generated.models.reasoning_effort import ReasoningEffort
 from nvoken_generated.models.reasoning import Reasoning as GeneratedReasoning
 from nvoken_generated.models.nudge_acknowledgement import NudgeAcknowledgement
-from nvoken_generated.models.nudge_invocation_request import NudgeInvocationRequest
-from nvoken_generated.models.pending_input import PendingInput
-from nvoken_generated.models.pending_input_list import PendingInputList
-from nvoken_generated.models.pending_input_status import PendingInputStatus
+from nvoken_generated.models.create_nudge_request import CreateNudgeRequest
+from nvoken_generated.models.nudge import Nudge
+from nvoken_generated.models.nudge_list import NudgeList
+from nvoken_generated.models.nudge_status import NudgeStatus
 from nvoken_generated.models.tool_call_list import ToolCallList
 from nvoken_generated.models.session import Session
 from nvoken_generated.models.session_compaction import SessionCompaction
@@ -107,7 +106,6 @@ from nvoken_generated.models.update_session_request import UpdateSessionRequest
 from nvoken_generated.models.update_budget_request import UpdateBudgetRequest
 from nvoken_generated.models.session_message import SessionMessage
 from nvoken_generated.models.session_message_list import SessionMessageList
-from nvoken_generated.models.structured_output import StructuredOutput
 from nvoken_generated.models.submit_host_tool_results_request import SubmitHostToolResultsRequest
 from nvoken_generated.models.submit_host_tool_results_request_results_inner import (
     SubmitHostToolResultsRequestResultsInner,
@@ -144,7 +142,7 @@ from .schema_preflight import (
 )
 
 IfActivePolicy = Literal["reject", "supersede", "interrupt"]
-BudgetExhaustionBehavior = Literal["settle", "pause"]
+BudgetExhaustionBehavior = Literal["stop", "pause"]
 
 ErrorCategory = Literal[
     "authentication",
@@ -293,7 +291,7 @@ class SessionRetention:
     """Bounds how long an idle Session is retained.
 
     The window measures idle time rather than lifetime: it restarts on every
-    Invocation admission and settlement, so a turn outlasting the window cannot
+    Invocation acceptance and completion, so a turn outlasting the window cannot
     expire underneath itself. Automatic expiry never cancels running work.
     """
 
@@ -315,15 +313,8 @@ class SessionOptions:
     # but create_session still cannot set it.
     compaction: ContextCompaction | None = None
     retention: SessionRetention | None = None
-    budget: SessionBudget | None = None
+    max_estimated_cost_usd: float | None = None
     metadata: dict[str, str] | None = None
-
-
-@dataclass(frozen=True)
-class SessionBudget:
-    """Mutable Session-wide USD list-price guardrail, not a billing ledger."""
-
-    max_estimated_cost_usd: float
 
 
 @dataclass(frozen=True)
@@ -392,7 +383,7 @@ class MCPServer:
     timeouts: MCPTimeouts | None = None
 
 
-WebhookEvent = Literal["invocation.waiting", "invocation.settled"]
+WebhookEvent = Literal["invocation.waiting", "invocation.paused", "invocation.ended"]
 
 
 @dataclass(frozen=True)
@@ -640,10 +631,10 @@ class Client:
                 "validation",
                 "if_active must be reject, supersede, or interrupt",
             )
-        if request.on_budget_exhausted not in (None, "settle", "pause"):
+        if request.on_budget_exhausted not in (None, "stop", "pause"):
             raise NvokenError(
                 "validation",
-                "on_budget_exhausted must be settle or pause",
+                "on_budget_exhausted must be stop or pause",
             )
         if request.output_schema is not None:
             preflight_output_schema(request.output_schema)
@@ -735,9 +726,7 @@ class Client:
                     _generated_provider_tool(tool)
                     for tool in request.provider_tools
                 ] or None,
-            structured_output=StructuredOutput(schema=request.output_schema)
-                if request.output_schema is not None
-                else None,
+            output_schema=request.output_schema,
             provider_keys=[
                 _provider_key_selection(selection)
                 for selection in request.provider_keys
@@ -769,7 +758,7 @@ class Client:
             lambda: self.invocations.interrupt_invocation(invocation_id)
         )
 
-    async def nudge_invocation(
+    async def create_nudge(
         self,
         invocation_id: str,
         content: str,
@@ -781,37 +770,37 @@ class Client:
         The turn keeps everything it has already produced — the difference from
         supersession, which rewinds — and the model sees the input at its next
         execution seam rather than immediately. Input the turn never reaches is
-        settled ``expired`` when the Invocation settles; nvoken never re-homes
+        marked ``expired`` when the Invocation ends; nvoken never re-homes
         it onto a later turn, so re-sending missed direction as the next
         Invocation's input is the caller's decision.
 
         Passing ``idempotency_key`` makes a retry safe: the same key with the
-        same content returns the original acknowledgement with ``deduped``
+        same content returns the original acknowledgement with ``deduplicated``
         set, and the same key with different content is refused.
         """
-        body = NudgeInvocationRequest(
+        body = CreateNudgeRequest(
             content=InvocationInput(content),
             idempotency_key=idempotency_key,
         )
-        call = lambda: self.invocations.nudge_invocation(invocation_id, body)
+        call = lambda: self.invocations.create_nudge(invocation_id, body)
         if idempotency_key is None:
             # Without a key a retried POST would stage the same direction twice.
             return await call()
         return await self._replay_safe(call)
 
-    async def list_pending_inputs(
+    async def list_nudges(
         self,
         invocation_id: str,
         *,
         status: str | None = None,
         cursor: str | None = None,
         limit: int | None = None,
-    ) -> PendingInputList:
+    ) -> NudgeList:
         """Read the staged queue in the order the turn will consume it."""
         return await self._replay_safe(
-            lambda: self.invocations.list_pending_inputs(
+            lambda: self.invocations.list_nudges(
                 invocation_id,
-                status=PendingInputStatus(status) if status is not None else None,
+                status=NudgeStatus(status) if status is not None else None,
                 cursor=cursor,
                 limit=limit,
             )
@@ -833,18 +822,18 @@ class Client:
             )
         )
 
-    async def cancel_pending_input(
+    async def cancel_nudge(
         self,
         invocation_id: str,
-        pending_input_id: str,
-    ) -> PendingInput:
+        nudge_id: str,
+    ) -> Nudge:
         """Withdraw staged input the turn has not taken.
 
         Input the executor already drained is reported as a conflict rather
         than removed from a transcript it is already part of.
         """
         return await self._replay_safe(
-            lambda: self.invocations.cancel_pending_input(invocation_id, pending_input_id)
+            lambda: self.invocations.cancel_nudge(invocation_id, nudge_id)
         )
 
     async def submit_tool_results(
@@ -979,8 +968,8 @@ class Client:
         irreversible.
 
         A running Invocation is stopped, and no cancellation is recorded — the
-        Invocation is removed rather than settled, so no ``invocation.settled``
-        webhook is emitted for it. Cancel first if you need a settled
+        Invocation is removed rather than ended, so no ``invocation.ended``
+        webhook is emitted for it. Cancel first if you need an ended
         record.
 
         An unknown or out-of-scope Session is not found, so a retry after a
@@ -1388,7 +1377,7 @@ def _generated_session_options(
     if (
         options.compaction is None
         and options.retention is None
-        and options.budget is None
+        and options.max_estimated_cost_usd is None
         and not options.metadata
     ):
         raise NvokenError("validation", "session_options requires at least one member")
@@ -1404,9 +1393,7 @@ def _generated_session_options(
         retention=GeneratedRetentionPolicy(ttl_seconds=options.retention.ttl_seconds)
         if options.retention is not None
         else None,
-        budget=GeneratedSessionBudget(
-            max_estimated_cost_usd=options.budget.max_estimated_cost_usd,
-        ) if options.budget is not None else None,
+        max_estimated_cost_usd=options.max_estimated_cost_usd,
         metadata=dict(options.metadata) if options.metadata else None,
     )
 
@@ -1600,20 +1587,20 @@ class InvocationHandle:
         Not an interrupt: the model sees the input at the next execution seam,
         and nothing in flight is aborted for it.
         """
-        return await self.client.nudge_invocation(
+        return await self.client.create_nudge(
             self.invocation_id,
             content,
             idempotency_key=idempotency_key,
         )
 
-    async def list_pending_inputs(
+    async def list_nudges(
         self,
         *,
         status: str | None = None,
         cursor: str | None = None,
         limit: int | None = None,
-    ) -> PendingInputList:
-        return await self.client.list_pending_inputs(
+    ) -> NudgeList:
+        return await self.client.list_nudges(
             self.invocation_id,
             status=status,
             cursor=cursor,
@@ -1632,8 +1619,8 @@ class InvocationHandle:
             limit=limit,
         )
 
-    async def cancel_pending_input(self, pending_input_id: str) -> PendingInput:
-        return await self.client.cancel_pending_input(self.invocation_id, pending_input_id)
+    async def cancel_nudge(self, nudge_id: str) -> Nudge:
+        return await self.client.cancel_nudge(self.invocation_id, nudge_id)
 
     async def wait_for_action(
         self,

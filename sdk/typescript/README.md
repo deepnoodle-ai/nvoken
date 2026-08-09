@@ -264,7 +264,7 @@ surface:
 ```ts
 const issued = await client.createCredential({
   name: "production worker",
-  profile: "Runtime",
+  profile: "runtime",
   operations: ["create_invocation"],
 });
 const page = await client.listCredentials({ status: "active", limit: 100 });
@@ -354,7 +354,7 @@ A turn can also stop without ending: `"incomplete"` means the Runtime enforced
 a budget at a seam, with `stopReason` naming which one. It is terminal — the
 wait helpers stop there — and its work is kept, so treat it as an unfinished
 answer rather than an error. `SessionMessage.phase` says which assistant
-message was the reply: `"final_answer"` on the one that settled a completed
+message was the reply: `"final_answer"` on the one that ended a completed
 turn, `"commentary"` on everything else, so an incomplete turn has none.
 
 ## Host tools
@@ -491,7 +491,7 @@ Use `handle.stream()` to reconnect to one already-admitted Invocation. The
 lower-level Session stream and its `Reducer` remain available for applications
 that need to follow every turn in a conversation. The
 [streaming and recovery guide](https://nvoken.com/docs/guides/streaming-and-recovery)
-states the preview, resync, cursor, and authoritative-settlement guarantees.
+states the preview, resync, cursor, and authoritative-ending guarantees.
 
 Use `handle.streamWithOptions({ deltas: false })` for durable frames only.
 List several states as one union with

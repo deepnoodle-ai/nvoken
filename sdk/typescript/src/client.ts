@@ -32,11 +32,11 @@ import type {
   MCPTimeouts,
   ModelDescriptor,
   ModelList,
+  Nudge,
   NudgeAcknowledgement,
+  NudgeList,
+  NudgeStatus,
   PendingHostToolCall,
-  PendingInput,
-  PendingInputList,
-  PendingInputStatus,
   ProviderKey,
   ProviderKeyList,
   ProviderKeyScope,
@@ -72,7 +72,7 @@ import type {
   CredentialStatus,
   CurrentIdentity,
   Operation as RuntimeOperation,
-  Profile as CredentialProfile,
+  CredentialProfile,
 } from "./generated/models/index.js";
 export type {
   Credential,
@@ -81,7 +81,7 @@ export type {
   CredentialStatus,
   CurrentIdentity,
   Operation as RuntimeOperation,
-  Profile as CredentialProfile,
+  CredentialProfile,
 } from "./generated/models/index.js";
 import { Configuration, FetchError, ResponseError } from "./generated/runtime.js";
 import { invocationFailureMessage } from "./invocation-error.js";
@@ -592,7 +592,7 @@ export interface ContextCompaction {
 /**
  * Bounds how long an idle Session is retained. The window measures idle time
  * rather than lifetime: it restarts on every Invocation admission and
- * settlement, so a turn outlasting the window cannot expire underneath itself.
+ * completion, so a turn outlasting the window cannot expire underneath itself.
  * Automatic expiry never cancels running work.
  */
 export interface SessionRetention {
@@ -616,13 +616,8 @@ export interface SessionOptions {
    */
   compaction?: ContextCompaction;
   retention?: SessionRetention;
-  budget?: SessionBudget;
+  maxEstimatedCostUsd?: number;
   metadata?: Metadata;
-}
-
-/** Mutable Session-wide USD list-price guardrail, not a billing ledger. */
-export interface SessionBudget {
-  maxEstimatedCostUsd: number;
 }
 
 /** Execution controls admitted with an Invocation. */
@@ -716,7 +711,7 @@ export function mcpServer(options: MCPServerOptions): MCPServer {
 
 export type InvokeInput = string | readonly InputBlock[];
 export type IfActivePolicy = "reject" | "supersede" | "interrupt";
-export type BudgetExhaustionBehavior = "settle" | "pause";
+export type BudgetExhaustionBehavior = "stop" | "pause";
 
 /**
  * Endpoint nvoken posts a signed webhook to when this Invocation parks
@@ -845,7 +840,7 @@ export type SessionBinding = SessionBindingByID | SessionBindingByKey;
 export type BoundInvocationOptions = Omit<InvocationOptions, "sessionId" | "sessionKey" | "tenantKey">;
 
 export interface AgentResult<TOutput extends object = JsonObject> {
-  handle: SettledInvocationHandle<TOutput>;
+  handle: EndedInvocationHandle<TOutput>;
   invocation: TypedInvocation<TOutput>;
   messages: SessionMessage[];
   text: string | null;
@@ -856,7 +851,7 @@ export interface AgentResult<TOutput extends object = JsonObject> {
   deduplicated: boolean;
 }
 
-export type SettledInvocationHandle<TOutput extends object = JsonObject> =
+export type EndedInvocationHandle<TOutput extends object = JsonObject> =
   InvocationHandle<TOutput> & {
     readonly idempotencyKey: string;
     readonly deduplicated: boolean;
@@ -1451,11 +1446,11 @@ export class Client {
       );
     }
     if (request.onBudgetExhausted !== undefined
-      && request.onBudgetExhausted !== "settle"
+      && request.onBudgetExhausted !== "stop"
       && request.onBudgetExhausted !== "pause") {
       throw new NvokenError(
         "validation",
-        "onBudgetExhausted must be settle or pause",
+        "onBudgetExhausted must be stop or pause",
       );
     }
     if (request.definitionId !== undefined) {
@@ -1558,24 +1553,24 @@ export class Client {
    * which rewinds — and the model sees the input at its next execution seam
    * rather than immediately.
    *
-   * Input the turn never reaches is settled `expired` when the Invocation
+   * Input the turn never reaches is marked `expired` when the Invocation
    * settles; nvoken never re-homes it onto a later turn, so re-sending missed
    * direction as the next Invocation's input is the caller's decision.
    *
    * Supplying `idempotencyKey` makes a retry safe: the same key with the same
-   * content returns the original acknowledgement with `deduped` set, and the
+   * content returns the original acknowledgement with `deduplicated` set, and the
    * same key with different content is refused.
    */
-  nudgeInvocation(
+  createNudge(
     invocationId: string,
     content: string,
     options: { idempotencyKey?: string } = {},
     signal?: AbortSignal,
   ): Promise<NudgeAcknowledgement> {
-    const call = () => this.invocations.nudgeInvocation(
+    const call = () => this.invocations.createNudge(
       {
         invocationId,
-        nudgeInvocationRequest: { content, idempotencyKey: options.idempotencyKey },
+        createNudgeRequest: { content, idempotencyKey: options.idempotencyKey },
       },
       { signal },
     );
@@ -1584,17 +1579,17 @@ export class Client {
   }
 
   /**
-   * Reads the staged queue in the order the turn will consume it, settled rows
+   * Reads the staged queue in the order the turn will consume it, ended rows
    * included. This is the reconciliation source for a surface that shows
    * queued direction.
    */
-  listPendingInputs(
+  listNudges(
     invocationId: string,
-    options: { status?: PendingInputStatus; cursor?: string; limit?: number } = {},
+    options: { status?: NudgeStatus; cursor?: string; limit?: number } = {},
     signal?: AbortSignal,
-  ): Promise<PendingInputList> {
+  ): Promise<NudgeList> {
     return this.replaySafe(
-      () => this.invocations.listPendingInputs(
+      () => this.invocations.listNudges(
         {
           invocationId,
           status: options.status,
@@ -1627,13 +1622,13 @@ export class Client {
    * drained is reported as a conflict rather than removed from a transcript it
    * is already part of.
    */
-  cancelPendingInput(
+  cancelNudge(
     invocationId: string,
-    pendingInputId: string,
+    nudgeId: string,
     signal?: AbortSignal,
-  ): Promise<PendingInput> {
+  ): Promise<Nudge> {
     return this.replaySafe(
-      () => this.invocations.cancelPendingInput({ invocationId, pendingInputId }, { signal }),
+      () => this.invocations.cancelNudge({ invocationId, nudgeId }, { signal }),
       signal,
     );
   }
@@ -1762,8 +1757,8 @@ export class Client {
    * erasure is immediate and irreversible.
    *
    * A running Invocation is stopped, and no cancellation is recorded — the
-   * Invocation is removed rather than settled, so no `invocation.settled`
-   * webhook is emitted for it. Cancel first if you need a settled record.
+   * Invocation is removed rather than ended, so no `invocation.ended`
+   * webhook is emitted for it. Cancel first if you need an ended record.
    *
    * An unknown or out-of-scope Session is not found, so a retry after a lost
    * response can treat that as already-done.
@@ -2171,17 +2166,17 @@ export class Agent<TOutput extends object = JsonObject> {
   ): AgentResult<TOutput> {
     const { invocation } = result;
     handle.applyInvocation(invocation);
-    const settledHandle = asSettledHandle(handle);
+    const endedHandle = asEndedHandle(handle);
     return {
-      handle: settledHandle,
+      handle: endedHandle,
       invocation,
       messages: result.messages,
       text: result.outputText,
       structuredOutput: invocation.structuredOutput,
-      idempotencyKey: settledHandle.idempotencyKey,
+      idempotencyKey: endedHandle.idempotencyKey,
       agentId: invocation.agentId,
       sessionId: invocation.sessionId,
-      deduplicated: settledHandle.deduplicated,
+      deduplicated: endedHandle.deduplicated,
     };
   }
 
@@ -2527,14 +2522,14 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     options: { idempotencyKey?: string } = {},
     signal?: AbortSignal,
   ): Promise<NudgeAcknowledgement> {
-    return this.client.nudgeInvocation(this.invocationId, content, options, signal);
+    return this.client.createNudge(this.invocationId, content, options, signal);
   }
 
-  listPendingInputs(
-    options: { status?: PendingInputStatus; cursor?: string; limit?: number } = {},
+  listNudges(
+    options: { status?: NudgeStatus; cursor?: string; limit?: number } = {},
     signal?: AbortSignal,
-  ): Promise<PendingInputList> {
-    return this.client.listPendingInputs(this.invocationId, options, signal);
+  ): Promise<NudgeList> {
+    return this.client.listNudges(this.invocationId, options, signal);
   }
 
   listToolCalls(
@@ -2544,8 +2539,8 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     return this.client.listToolCalls(this.invocationId, options, signal);
   }
 
-  cancelPendingInput(pendingInputId: string, signal?: AbortSignal): Promise<PendingInput> {
-    return this.client.cancelPendingInput(this.invocationId, pendingInputId, signal);
+  cancelNudge(nudgeId: string, signal?: AbortSignal): Promise<Nudge> {
+    return this.client.cancelNudge(this.invocationId, nudgeId, signal);
   }
 
   stream(signal?: AbortSignal): AsyncGenerator<InvocationStreamEvent<TOutput>> {
@@ -2597,7 +2592,7 @@ function sessionOptionsToWire(
 ): GeneratedSessionOptions | undefined {
   if (options === undefined) return undefined;
   if (options.compaction === undefined && options.retention === undefined
-    && options.budget === undefined
+    && options.maxEstimatedCostUsd === undefined
     && options.metadata === undefined) {
     throw new NvokenError("validation", "sessionOptions requires at least one member");
   }
@@ -2611,9 +2606,7 @@ function sessionOptionsToWire(
     retention: options.retention === undefined
       ? undefined
       : { ttlSeconds: options.retention.ttlSeconds },
-    budget: options.budget === undefined
-      ? undefined
-      : { maxEstimatedCostUsd: options.budget.maxEstimatedCostUsd },
+    maxEstimatedCostUsd: options.maxEstimatedCostUsd,
     metadata: options.metadata === undefined ? undefined : { ...options.metadata },
   };
 }
@@ -2695,7 +2688,7 @@ function invocationRequestToWire<TOutput extends object>(
             : { ...tool.webSearch.userLocation },
         },
       })),
-    structuredOutput: outputSchema ? { schema: outputSchema } : undefined,
+    outputSchema,
     providerKeys: request.providerKeys,
     webhook: request.webhook === undefined ? undefined : {
       url: request.webhook.url,
@@ -2725,9 +2718,9 @@ function outputTextOrThrow<TOutput extends object>(result: AgentResult<TOutput>)
   return result.text;
 }
 
-function asSettledHandle<TOutput extends object>(
+function asEndedHandle<TOutput extends object>(
   handle: InvocationHandle<TOutput>,
-): SettledInvocationHandle<TOutput> {
+): EndedInvocationHandle<TOutput> {
   if (
     !handle.idempotencyKey
     || !handle.sessionId
@@ -2737,10 +2730,10 @@ function asSettledHandle<TOutput extends object>(
   ) {
     throw new NvokenError(
       "unexpected_response",
-      `Invocation ${handle.invocationId} completed without settled handle identity`,
+      `Invocation ${handle.invocationId} completed without ended handle identity`,
     );
   }
-  return handle as SettledInvocationHandle<TOutput>;
+  return handle as EndedInvocationHandle<TOutput>;
 }
 
 function streamFallbackAllowed(error: unknown): boolean {

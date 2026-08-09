@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -27,13 +27,6 @@ import {
     ModelUsageToJSON,
     ModelUsageToJSONTyped,
 } from './ModelUsage.js';
-import type { SessionBudget } from './SessionBudget.js';
-import {
-    SessionBudgetFromJSON,
-    SessionBudgetFromJSONTyped,
-    SessionBudgetToJSON,
-    SessionBudgetToJSONTyped,
-} from './SessionBudget.js';
 import type { SessionContext } from './SessionContext.js';
 import {
     SessionContextFromJSON,
@@ -139,11 +132,11 @@ export interface Session {
      */
     retention: RetentionPolicy | null;
     /**
-     * The current mutable Session-wide estimated-cost guardrail.
-     * @type {SessionBudget}
+     * The current mutable Session lifetime estimated-cost cap.
+     * @type {number}
      * @memberof Session
      */
-    budget: SessionBudget | null;
+    maxEstimatedCostUsd: number | null;
     /**
      * When nvoken may automatically delete this Session, or null if it
      * has no retention window. The date moves forward every time a turn
@@ -176,7 +169,7 @@ export interface Session {
      */
     activeInvocationStatus: SessionActiveInvocationStatusEnum | null;
     /**
-     * Budget blocking the active paused Invocation, otherwise null.
+     * First-class Budget blocking the active paused Invocation, otherwise null.
      * @type {BudgetBlock}
      * @memberof Session
      */
@@ -245,7 +238,7 @@ export function instanceOfSession(value: object): value is Session {
     if (!('forkedFrom' in value) || value['forkedFrom'] === undefined) return false;
     if (!('compaction' in value) || value['compaction'] === undefined) return false;
     if (!('retention' in value) || value['retention'] === undefined) return false;
-    if (!('budget' in value) || value['budget'] === undefined) return false;
+    if (!('maxEstimatedCostUsd' in value) || value['maxEstimatedCostUsd'] === undefined) return false;
     if (!('expiresAt' in value) || value['expiresAt'] === undefined) return false;
     if (!('metadata' in value) || value['metadata'] === undefined) return false;
     if (!('activeInvocationId' in value) || value['activeInvocationId'] === undefined) return false;
@@ -276,7 +269,7 @@ export function SessionFromJSONTyped(json: any, ignoreDiscriminator: boolean): S
         'forkedFrom': SessionForkLineageFromJSON(json['forked_from']),
         'compaction': CompactionPolicyFromJSON(json['compaction']),
         'retention': RetentionPolicyFromJSON(json['retention']),
-        'budget': SessionBudgetFromJSON(json['budget']),
+        'maxEstimatedCostUsd': json['max_estimated_cost_usd'],
         'expiresAt': (json['expires_at'] == null ? null : new Date(json['expires_at'])),
         'metadata': json['metadata'],
         'activeInvocationId': json['active_invocation_id'],
@@ -309,7 +302,7 @@ export function SessionToJSONTyped(value?: Session | null, ignoreDiscriminator: 
         'forked_from': SessionForkLineageToJSON(value['forkedFrom']),
         'compaction': CompactionPolicyToJSON(value['compaction']),
         'retention': RetentionPolicyToJSON(value['retention']),
-        'budget': SessionBudgetToJSON(value['budget']),
+        'max_estimated_cost_usd': value['maxEstimatedCostUsd'],
         'expires_at': value['expiresAt'] == null ? value['expiresAt'] : value['expiresAt'].toISOString(),
         'metadata': value['metadata'],
         'active_invocation_id': value['activeInvocationId'],

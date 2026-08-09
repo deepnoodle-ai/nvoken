@@ -19,7 +19,7 @@ func TestIdentityLifecycleMethods(t *testing.T) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/identity":
-			_, _ = writer.Write([]byte(`{"authentication":{"credential_id":"` + credentialID + `","effective_profile":"Operator","tenant_key":null,"session_id":null,"operations":["get_identity"],"method":"api_key","assurance":"bearer"}}`))
+			_, _ = writer.Write([]byte(`{"authentication":{"credential_id":"` + credentialID + `","effective_profile":"operator","tenant_key":null,"session_id":null,"operations":["get_identity"],"method":"api_key","assurance":"bearer"}}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/identity/credentials":
 			if request.URL.Query().Get("status") != "active" || request.URL.Query().Get("cursor") != "page-2" || request.URL.Query().Get("limit") != "10" {
 				t.Errorf("list query = %q", request.URL.RawQuery)
@@ -31,7 +31,7 @@ func TestIdentityLifecycleMethods(t *testing.T) {
 			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 				t.Errorf("decode create body: %v", err)
 			}
-			if body["name"] != "worker" || body["profile"] != "Runtime" {
+			if body["name"] != "worker" || body["profile"] != "runtime" {
 				t.Errorf("create body = %#v", body)
 			}
 			writer.WriteHeader(http.StatusCreated)
@@ -117,7 +117,7 @@ func credentialFixture(id, status string) string {
 		"name":       "worker",
 		"prefix":     "nvk_public",
 		"status":     status,
-		"profile":    "Runtime",
+		"profile":    "runtime",
 		"operations": []string{"create_invocation"},
 		"created_at": "2026-08-08T12:00:00Z",
 		"updated_at": "2026-08-08T12:00:00Z",

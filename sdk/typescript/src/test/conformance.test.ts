@@ -482,7 +482,7 @@ test("identity facade covers the credential lifecycle", async () => {
     name: "worker",
     prefix: "nvk_public",
     status,
-    profile: "Runtime",
+    profile: "runtime",
     operations: ["create_invocation"],
     created_at: "2026-08-08T12:00:00Z",
     updated_at: "2026-08-08T12:00:00Z",
@@ -515,7 +515,7 @@ test("identity facade covers the credential lifecycle", async () => {
         return Response.json({
           authentication: {
             credential_id: credentialId,
-            effective_profile: "Operator",
+            effective_profile: "operator",
             tenant_key: null,
             session_id: null,
             operations: ["get_identity"],
@@ -575,7 +575,7 @@ test("identity facade covers the credential lifecycle", async () => {
   });
   const created = await client.createCredential({
     name: "worker",
-    profile: "Runtime",
+    profile: "runtime",
     operations: ["create_invocation"],
     idempotencyKey: "create-once",
   });
@@ -600,7 +600,7 @@ test("identity facade covers the credential lifecycle", async () => {
   assert.equal(requests[2]?.idempotencyKey, "create-once");
   assert.deepEqual(requests[2]?.body, {
     name: "worker",
-    profile: "Runtime",
+    profile: "runtime",
     operations: ["create_invocation"],
   });
   assert.equal(requests[4]?.idempotencyKey, "rotate-once");
@@ -883,7 +883,7 @@ test("agent-issued requests carry every field the shared fixture pins", async ()
     // short retention window matters most.
     sessionOptions: {
       retention: { ttlSeconds: 86400 },
-      budget: { maxEstimatedCostUsd: 0.25 },
+      maxEstimatedCostUsd: 0.25,
     },
   });
   assert.deepEqual(body, expected);
@@ -1150,11 +1150,11 @@ test("shared fault server semantics", async (context) => {
   assert.equal(handle.deduplicated, true);
   const toolCalls = JSON.parse(JSON.stringify(
     raw.ToolCallListToJSON(await handle.listToolCalls({ limit: 4 })),
-  )) as { items: Array<{ created_at: string; settled_at: string | null }> };
+  )) as { items: Array<{ created_at: string; ended_at: string | null }> };
   for (const call of toolCalls.items) {
     call.created_at = call.created_at.replace(".000Z", "Z");
-    if (call.settled_at !== null) {
-      call.settled_at = call.settled_at.replace(".000Z", "Z");
+    if (call.ended_at !== null) {
+      call.ended_at = call.ended_at.replace(".000Z", "Z");
     }
   }
   assert.deepEqual(toolCalls, toolCallFixture.tool_calls);
@@ -1554,12 +1554,12 @@ test("agent run converts standard schemas, retries one admission, and dispatches
   const admittedRequest = admissionBodies[0] as {
     model: { id: string };
     tools: Array<{ mode: string; input_schema: Record<string, unknown> }>;
-    structured_output: { schema: Record<string, unknown> };
+    output_schema: Record<string, unknown>;
   };
   assert.equal(admittedRequest.model.id, "gpt-test");
   assert.equal(admittedRequest.tools[0]?.mode, "host");
   assert.equal(admittedRequest.tools[0]?.input_schema.$schema, undefined);
-  assert.equal(admittedRequest.structured_output.schema.$schema, undefined);
+  assert.equal(admittedRequest.output_schema.$schema, undefined);
 });
 
 test("agent run falls back from a broken stream to authoritative reads", async () => {
@@ -2106,7 +2106,7 @@ test("shared invocation webhook fixture stays expressible and stays a pointer", 
     payload_fields: { nvoken: string[]; invocation: string[] };
     payload_absent_fields: string[];
     example_request: { webhook: { url: string; events: string[] } };
-    example_settled_payload: Record<string, Record<string, unknown>>;
+    example_ended_payload: Record<string, Record<string, unknown>>;
     example_waiting_payload: Record<string, Record<string, unknown>>;
     example_paused_payload: Record<string, Record<string, unknown>>;
   };
@@ -2140,7 +2140,7 @@ test("shared invocation webhook fixture stays expressible and stays a pointer", 
   // either documented example, so a future field cannot widen the payload
   // without a deliberate schema version.
   for (const payload of [
-    fixture.example_settled_payload,
+    fixture.example_ended_payload,
     fixture.example_waiting_payload,
     fixture.example_paused_payload,
   ]) {
@@ -2230,7 +2230,7 @@ test("shared invocation-nudge fixture pins the steering contract", async () => {
   )) as {
     request: { content_only: object; with_idempotency_key: object };
     acknowledgement: { status: number; fields: string[] };
-    pending_input_status: {
+    nudge_status: {
       values: string[];
       consumed_state: string;
       drained_carries: string;
@@ -2238,12 +2238,12 @@ test("shared invocation-nudge fixture pins the steering contract", async () => {
   };
 
   assert.deepEqual(
-    [...fixture.pending_input_status.values].sort(),
-    Object.values(raw.PendingInputStatus).sort(),
+    [...fixture.nudge_status.values].sort(),
+    Object.values(raw.NudgeStatus).sort(),
   );
   assert.equal(
-    fixture.pending_input_status.consumed_state,
-    raw.PendingInputStatus.Pending,
+    fixture.nudge_status.consumed_state,
+    raw.NudgeStatus.Pending,
   );
 
   // Serialized, because the wire body is what the fixture pins: the generated
@@ -2251,13 +2251,13 @@ test("shared invocation-nudge fixture pins the steering contract", async () => {
   // runtime as `undefined` that JSON.stringify drops.
   assert.deepEqual(
     JSON.parse(JSON.stringify(
-      raw.NudgeInvocationRequestToJSON({ content: "focus on the marine segment" }),
+      raw.CreateNudgeRequestToJSON({ content: "focus on the marine segment" }),
     )),
     fixture.request.content_only,
   );
   assert.deepEqual(
     JSON.parse(JSON.stringify(
-      raw.NudgeInvocationRequestToJSON({
+      raw.CreateNudgeRequestToJSON({
         content: "focus on the marine segment",
         idempotencyKey: "nudge-1",
       }),
@@ -2266,9 +2266,9 @@ test("shared invocation-nudge fixture pins the steering contract", async () => {
   );
 
   const acknowledgement = raw.NudgeAcknowledgementToJSON({
-    pendingInputId: "npin_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
-    state: raw.PendingInputStatus.Pending,
-    deduped: false,
+    nudgeId: "nudge_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+    status: raw.NudgeStatus.Pending,
+    deduplicated: false,
     afterSequence: 6,
   });
   assert.deepEqual(
@@ -2277,14 +2277,14 @@ test("shared invocation-nudge fixture pins the steering contract", async () => {
   );
 
   // The drained receipt is what tells a host the model actually saw the input.
-  const drained = raw.PendingInputFromJSON({
-    id: "npin_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+  const drained = raw.NudgeFromJSON({
+    id: "nudge_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
     invocation_id: "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-    status: raw.PendingInputStatus.Drained,
+    status: raw.NudgeStatus.Drained,
     content: "focus on the marine segment",
     created_at: "2026-08-02T09:15:00Z",
     drained_message_sequence: 7,
   });
-  const drainedWire = raw.PendingInputToJSON(drained) as unknown as Record<string, unknown>;
-  assert.equal(drainedWire[fixture.pending_input_status.drained_carries], 7);
+  const drainedWire = raw.NudgeToJSON(drained) as unknown as Record<string, unknown>;
+  assert.equal(drainedWire[fixture.nudge_status.drained_carries], 7);
 });

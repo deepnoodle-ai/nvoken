@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -20,34 +20,6 @@ import {
     MCPServerToJSON,
     MCPServerToJSONTyped,
 } from './MCPServer.js';
-import type { StructuredOutput } from './StructuredOutput.js';
-import {
-    StructuredOutputFromJSON,
-    StructuredOutputFromJSONTyped,
-    StructuredOutputToJSON,
-    StructuredOutputToJSONTyped,
-} from './StructuredOutput.js';
-import type { WebhookTarget } from './WebhookTarget.js';
-import {
-    WebhookTargetFromJSON,
-    WebhookTargetFromJSONTyped,
-    WebhookTargetToJSON,
-    WebhookTargetToJSONTyped,
-} from './WebhookTarget.js';
-import type { SessionOptions } from './SessionOptions.js';
-import {
-    SessionOptionsFromJSON,
-    SessionOptionsFromJSONTyped,
-    SessionOptionsToJSON,
-    SessionOptionsToJSONTyped,
-} from './SessionOptions.js';
-import type { ToolDeclaration } from './ToolDeclaration.js';
-import {
-    ToolDeclarationFromJSON,
-    ToolDeclarationFromJSONTyped,
-    ToolDeclarationToJSON,
-    ToolDeclarationToJSONTyped,
-} from './ToolDeclaration.js';
 import type { ModelInput } from './ModelInput.js';
 import {
     ModelInputFromJSON,
@@ -69,6 +41,13 @@ import {
     ToolChoiceToJSON,
     ToolChoiceToJSONTyped,
 } from './ToolChoice.js';
+import type { WebhookTarget } from './WebhookTarget.js';
+import {
+    WebhookTargetFromJSON,
+    WebhookTargetFromJSONTyped,
+    WebhookTargetToJSON,
+    WebhookTargetToJSONTyped,
+} from './WebhookTarget.js';
 import type { Reasoning } from './Reasoning.js';
 import {
     ReasoningFromJSON,
@@ -90,6 +69,13 @@ import {
     ProviderKeySelectionToJSON,
     ProviderKeySelectionToJSONTyped,
 } from './ProviderKeySelection.js';
+import type { SessionOptions } from './SessionOptions.js';
+import {
+    SessionOptionsFromJSON,
+    SessionOptionsFromJSONTyped,
+    SessionOptionsToJSON,
+    SessionOptionsToJSONTyped,
+} from './SessionOptions.js';
 import type { ProviderTool } from './ProviderTool.js';
 import {
     ProviderToolFromJSON,
@@ -97,6 +83,13 @@ import {
     ProviderToolToJSON,
     ProviderToolToJSONTyped,
 } from './ProviderTool.js';
+import type { ToolDeclaration } from './ToolDeclaration.js';
+import {
+    ToolDeclarationFromJSON,
+    ToolDeclarationFromJSONTyped,
+    ToolDeclarationToJSON,
+    ToolDeclarationToJSONTyped,
+} from './ToolDeclaration.js';
 import type { Sampling } from './Sampling.js';
 import {
     SamplingFromJSON,
@@ -163,7 +156,7 @@ export interface CreateInvocationRequest {
      * paths disagreed. This keeps two callers from silently reconfiguring
      * each other's conversation.
      *
-     * Compaction is the exception — if no summarization policy is stored yet,
+     * Compaction is the exception — if no compaction policy is stored yet,
      * this turn can install one, because the policy needs a model to validate
      * against and only a turn supplies that.
      *
@@ -225,7 +218,7 @@ export interface CreateInvocationRequest {
     ifActive?: CreateInvocationRequestIfActiveEnum;
     /**
      * What to do when the turn runs out of one of its spending limits.
-     * `settle` ends it as `incomplete`. `pause` leaves it as `paused` so
+     * `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
      * you can raise the limit and continue it.
      *
      * Covers the iteration, output-token, per-turn cost, and Session
@@ -299,11 +292,22 @@ export interface CreateInvocationRequest {
      */
     limits?: Limits;
     /**
+     * Self-contained JSON Schema for an object result. Compact canonical JSON
+     * is limited to 32 KiB and 16 schema positions. Supported keywords are
+     * type, title, description, properties, required, additionalProperties,
+     * items, enum, pattern, minLength, maxLength, minItems, maxItems,
+     * uniqueItems, minimum, and maximum. Every schema position has one string
+     * type; pattern values are limited to 1,024 UTF-8 bytes; references and
+     * other keywords are rejected. Numeric bounds are read as values, not
+     * spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
+     * exposes a reserved durable submit tool and publishes only a
+     * server-validated terminal object. This does not enable host-defined
+     * tools.
      *
-     * @type {StructuredOutput}
+     * @type {{ [key: string]: any; }}
      * @memberof CreateInvocationRequest
      */
-    structuredOutput?: StructuredOutput;
+    outputSchema?: { [key: string]: any; };
     /**
      *
      * @type {Array<ToolDeclaration>}
@@ -356,7 +360,7 @@ export type CreateInvocationRequestIfActiveEnum = typeof CreateInvocationRequest
  * @export
  */
 export const CreateInvocationRequestOnBudgetExhaustedEnum = {
-    Settle: 'settle',
+    Stop: 'stop',
     Pause: 'pause'
 } as const;
 export type CreateInvocationRequestOnBudgetExhaustedEnum = typeof CreateInvocationRequestOnBudgetExhaustedEnum[keyof typeof CreateInvocationRequestOnBudgetExhaustedEnum];
@@ -401,7 +405,7 @@ export function CreateInvocationRequestFromJSONTyped(json: any, ignoreDiscrimina
         'reasoning': json['reasoning'] == null ? undefined : ReasoningFromJSON(json['reasoning']),
         'toolChoice': json['tool_choice'] == null ? undefined : ToolChoiceFromJSON(json['tool_choice']),
         'limits': json['limits'] == null ? undefined : LimitsFromJSON(json['limits']),
-        'structuredOutput': json['structured_output'] == null ? undefined : StructuredOutputFromJSON(json['structured_output']),
+        'outputSchema': json['output_schema'] == null ? undefined : json['output_schema'],
         'tools': json['tools'] == null ? undefined : ((json['tools'] as Array<any>).map(ToolDeclarationFromJSON)),
         'mcpServers': json['mcp_servers'] == null ? undefined : ((json['mcp_servers'] as Array<any>).map(MCPServerFromJSON)),
         'providerTools': json['provider_tools'] == null ? undefined : ((json['provider_tools'] as Array<any>).map(ProviderToolFromJSON)),
@@ -439,7 +443,7 @@ export function CreateInvocationRequestToJSONTyped(value?: CreateInvocationReque
         'reasoning': ReasoningToJSON(value['reasoning']),
         'tool_choice': ToolChoiceToJSON(value['toolChoice']),
         'limits': LimitsToJSON(value['limits']),
-        'structured_output': StructuredOutputToJSON(value['structuredOutput']),
+        'output_schema': value['outputSchema'],
         'tools': value['tools'] == null ? undefined : ((value['tools'] as Array<any>).map(ToolDeclarationToJSON)),
         'mcp_servers': value['mcpServers'] == null ? undefined : ((value['mcpServers'] as Array<any>).map(MCPServerToJSON)),
         'provider_tools': value['providerTools'] == null ? undefined : ((value['providerTools'] as Array<any>).map(ProviderToolToJSON)),

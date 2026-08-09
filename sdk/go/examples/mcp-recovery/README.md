@@ -58,7 +58,7 @@ The client first calls stateless discovery, then prints the accepted
 When the scripted server logs `scripted MCP call 1 started`, terminate the
 current nvokend process before the 20-second response and restart it against
 the same Postgres database. This injects process loss after the fenced attempt
-but before settlement. Because the tool advertises positive read-only and
+but before the turn ends. Because the tool advertises positive read-only and
 idempotent annotations, a replacement owner may make at most one recovery
 attempt. The scripted server's monotonically increasing call count makes that
 visible.
@@ -72,7 +72,7 @@ go run ./examples/mcp-recovery run
 ```
 
 The final JSON is assembled from `GET /v1/invocations/{id}/result` and the
-fixed-cut Session transcript. It includes the settled tool message, assistant
+fixed-cut Session transcript. It includes the ended tool message, assistant
 answer, terminal Invocation, transcript count, and durable resume cursor.
 Changing `NVOKEN_INVOCATION_ID` never creates work.
 

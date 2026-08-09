@@ -385,7 +385,7 @@ func (s *onboardingState) getSession(response http.ResponseWriter, request *http
 		"active_invocation_status": nil,
 		"compaction":               nil,
 		"retention":                nil,
-		"budget":                   nil,
+		"max_estimated_cost_usd":   nil,
 		"expires_at":               nil,
 		"metadata":                 nil,
 		"usage":                    nil,
