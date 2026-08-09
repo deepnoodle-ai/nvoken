@@ -19,33 +19,18 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for BudgetBlockScope.
+// Defines values for AppSigningKeyPurpose.
 const (
-	BudgetBlockScopeAPICredential BudgetBlockScope = "api_credential"
-	BudgetBlockScopeAgent         BudgetBlockScope = "agent"
-	BudgetBlockScopeApp           BudgetBlockScope = "app"
-	BudgetBlockScopeCustomer      BudgetBlockScope = "customer"
-	BudgetBlockScopeProviderKey   BudgetBlockScope = "provider_key"
-	BudgetBlockScopeSession       BudgetBlockScope = "session"
-	BudgetBlockScopeUser          BudgetBlockScope = "user"
+	AppSigningKeyPurposeCallback AppSigningKeyPurpose = "callback"
+	AppSigningKeyPurposeWebhook  AppSigningKeyPurpose = "webhook"
 )
 
-// Valid indicates whether the value is a known member of the BudgetBlockScope enum.
-func (e BudgetBlockScope) Valid() bool {
+// Valid indicates whether the value is a known member of the AppSigningKeyPurpose enum.
+func (e AppSigningKeyPurpose) Valid() bool {
 	switch e {
-	case BudgetBlockScopeAPICredential:
+	case AppSigningKeyPurposeCallback:
 		return true
-	case BudgetBlockScopeAgent:
-		return true
-	case BudgetBlockScopeApp:
-		return true
-	case BudgetBlockScopeCustomer:
-		return true
-	case BudgetBlockScopeProviderKey:
-		return true
-	case BudgetBlockScopeSession:
-		return true
-	case BudgetBlockScopeUser:
+	case AppSigningKeyPurposeWebhook:
 		return true
 	default:
 		return false
@@ -54,26 +39,26 @@ func (e BudgetBlockScope) Valid() bool {
 
 // Defines values for BudgetScope.
 const (
-	BudgetScopeAPICredential BudgetScope = "api_credential"
-	BudgetScopeAgent         BudgetScope = "agent"
-	BudgetScopeApp           BudgetScope = "app"
-	BudgetScopeCustomer      BudgetScope = "customer"
-	BudgetScopeProviderKey   BudgetScope = "provider_key"
-	BudgetScopeUser          BudgetScope = "user"
+	BudgetScopeAgent       BudgetScope = "agent"
+	BudgetScopeApp         BudgetScope = "app"
+	BudgetScopeCredential  BudgetScope = "credential"
+	BudgetScopeProviderKey BudgetScope = "provider_key"
+	BudgetScopeTenant      BudgetScope = "tenant"
+	BudgetScopeUser        BudgetScope = "user"
 )
 
 // Valid indicates whether the value is a known member of the BudgetScope enum.
 func (e BudgetScope) Valid() bool {
 	switch e {
-	case BudgetScopeAPICredential:
-		return true
 	case BudgetScopeAgent:
 		return true
 	case BudgetScopeApp:
 		return true
-	case BudgetScopeCustomer:
+	case BudgetScopeCredential:
 		return true
 	case BudgetScopeProviderKey:
+		return true
+	case BudgetScopeTenant:
 		return true
 	case BudgetScopeUser:
 		return true
@@ -204,8 +189,8 @@ func (e CreateInvocationRequestIfActive) Valid() bool {
 
 // Defines values for CreateInvocationRequestOnBudgetExhausted.
 const (
-	Pause  CreateInvocationRequestOnBudgetExhausted = "pause"
-	Settle CreateInvocationRequestOnBudgetExhausted = "settle"
+	Pause CreateInvocationRequestOnBudgetExhausted = "pause"
+	Stop  CreateInvocationRequestOnBudgetExhausted = "stop"
 )
 
 // Valid indicates whether the value is a known member of the CreateInvocationRequestOnBudgetExhausted enum.
@@ -213,7 +198,28 @@ func (e CreateInvocationRequestOnBudgetExhausted) Valid() bool {
 	switch e {
 	case Pause:
 		return true
-	case Settle:
+	case Stop:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CredentialProfile.
+const (
+	Operator CredentialProfile = "operator"
+	Runtime  CredentialProfile = "runtime"
+	Viewer   CredentialProfile = "viewer"
+)
+
+// Valid indicates whether the value is a known member of the CredentialProfile enum.
+func (e CredentialProfile) Valid() bool {
+	switch e {
+	case Operator:
+		return true
+	case Runtime:
+		return true
+	case Viewer:
 		return true
 	default:
 		return false
@@ -624,34 +630,34 @@ func (e InvocationStatus) Valid() bool {
 
 // Defines values for InvocationStopReason.
 const (
-	InvocationStopReasonDeadline         InvocationStopReason = "deadline"
-	InvocationStopReasonEndTurn          InvocationStopReason = "end_turn"
-	InvocationStopReasonInterrupted      InvocationStopReason = "interrupted"
-	InvocationStopReasonMaxEstimatedCost InvocationStopReason = "max_estimated_cost"
-	InvocationStopReasonMaxIterations    InvocationStopReason = "max_iterations"
-	InvocationStopReasonMaxOutputTokens  InvocationStopReason = "max_output_tokens"
-	InvocationStopReasonSessionBudget    InvocationStopReason = "session_budget"
-	InvocationStopReasonSharedBudget     InvocationStopReason = "shared_budget"
+	Deadline                InvocationStopReason = "deadline"
+	EndTurn                 InvocationStopReason = "end_turn"
+	Interrupted             InvocationStopReason = "interrupted"
+	MaxEstimatedCost        InvocationStopReason = "max_estimated_cost"
+	MaxIterations           InvocationStopReason = "max_iterations"
+	MaxOutputTokens         InvocationStopReason = "max_output_tokens"
+	SessionMaxEstimatedCost InvocationStopReason = "session_max_estimated_cost"
+	SharedBudget            InvocationStopReason = "shared_budget"
 )
 
 // Valid indicates whether the value is a known member of the InvocationStopReason enum.
 func (e InvocationStopReason) Valid() bool {
 	switch e {
-	case InvocationStopReasonDeadline:
+	case Deadline:
 		return true
-	case InvocationStopReasonEndTurn:
+	case EndTurn:
 		return true
-	case InvocationStopReasonInterrupted:
+	case Interrupted:
 		return true
-	case InvocationStopReasonMaxEstimatedCost:
+	case MaxEstimatedCost:
 		return true
-	case InvocationStopReasonMaxIterations:
+	case MaxIterations:
 		return true
-	case InvocationStopReasonMaxOutputTokens:
+	case MaxOutputTokens:
 		return true
-	case InvocationStopReasonSessionBudget:
+	case SessionMaxEstimatedCost:
 		return true
-	case InvocationStopReasonSharedBudget:
+	case SharedBudget:
 		return true
 	default:
 		return false
@@ -838,6 +844,30 @@ func (e ModelToolChoiceMode) Valid() bool {
 	}
 }
 
+// Defines values for NudgeStatus.
+const (
+	NudgeStatusCancelled NudgeStatus = "cancelled"
+	NudgeStatusDrained   NudgeStatus = "drained"
+	NudgeStatusExpired   NudgeStatus = "expired"
+	NudgeStatusPending   NudgeStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the NudgeStatus enum.
+func (e NudgeStatus) Valid() bool {
+	switch e {
+	case NudgeStatusCancelled:
+		return true
+	case NudgeStatusDrained:
+		return true
+	case NudgeStatusExpired:
+		return true
+	case NudgeStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Operation.
 const (
 	CancelInvocation     Operation = "cancel_invocation"
@@ -958,51 +988,6 @@ const (
 func (e OutputTextDeltaEventType) Valid() bool {
 	switch e {
 	case EventOutputTextDelta:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for PendingInputStatus.
-const (
-	PendingInputStatusCancelled PendingInputStatus = "cancelled"
-	PendingInputStatusDrained   PendingInputStatus = "drained"
-	PendingInputStatusExpired   PendingInputStatus = "expired"
-	PendingInputStatusPending   PendingInputStatus = "pending"
-)
-
-// Valid indicates whether the value is a known member of the PendingInputStatus enum.
-func (e PendingInputStatus) Valid() bool {
-	switch e {
-	case PendingInputStatusCancelled:
-		return true
-	case PendingInputStatusDrained:
-		return true
-	case PendingInputStatusExpired:
-		return true
-	case PendingInputStatusPending:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for Profile.
-const (
-	Operator Profile = "Operator"
-	Runtime  Profile = "Runtime"
-	Viewer   Profile = "Viewer"
-)
-
-// Valid indicates whether the value is a known member of the Profile enum.
-func (e Profile) Valid() bool {
-	switch e {
-	case Operator:
-		return true
-	case Runtime:
-		return true
-	case Viewer:
 		return true
 	default:
 		return false
@@ -1398,22 +1383,22 @@ func (e ThinkingDeltaEventType) Valid() bool {
 
 // Defines values for ToolCallMode.
 const (
-	Builtin  ToolCallMode = "builtin"
-	Callback ToolCallMode = "callback"
-	Host     ToolCallMode = "host"
-	Mcp      ToolCallMode = "mcp"
+	ToolCallModeBuiltin  ToolCallMode = "builtin"
+	ToolCallModeCallback ToolCallMode = "callback"
+	ToolCallModeHost     ToolCallMode = "host"
+	ToolCallModeMcp      ToolCallMode = "mcp"
 )
 
 // Valid indicates whether the value is a known member of the ToolCallMode enum.
 func (e ToolCallMode) Valid() bool {
 	switch e {
-	case Builtin:
+	case ToolCallModeBuiltin:
 		return true
-	case Callback:
+	case ToolCallModeCallback:
 		return true
-	case Host:
+	case ToolCallModeHost:
 		return true
-	case Mcp:
+	case ToolCallModeMcp:
 		return true
 	default:
 		return false
@@ -1539,17 +1524,17 @@ func (e WebSearchResultLocationCitationType) Valid() bool {
 
 // Defines values for WebhookEvent.
 const (
+	WebhookEventEnded   WebhookEvent = "invocation.ended"
 	WebhookEventPaused  WebhookEvent = "invocation.paused"
-	WebhookEventSettled WebhookEvent = "invocation.settled"
 	WebhookEventWaiting WebhookEvent = "invocation.waiting"
 )
 
 // Valid indicates whether the value is a known member of the WebhookEvent enum.
 func (e WebhookEvent) Valid() bool {
 	switch e {
-	case WebhookEventPaused:
+	case WebhookEventEnded:
 		return true
-	case WebhookEventSettled:
+	case WebhookEventPaused:
 		return true
 	case WebhookEventWaiting:
 		return true
@@ -1606,67 +1591,16 @@ func (e ReceiveToolCallbackParamsXNvokenSignatureVersion) Valid() bool {
 	}
 }
 
-// APICredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
-type APICredentialID = string
-
-// Agent Installation-wide identity anchor only. Agent behavior is not registered;
+// Agent App-scoped identity anchor only. Agent behavior is not registered;
 // instructions, model, tools, and provider keys travel per Invocation.
 type Agent struct {
-	// AgentKey Stable host-owned key, unique within the installation.
+	// AgentKey Stable host-owned key, unique within the App.
 	AgentKey  string    `json:"agent_key"`
 	CreatedAt time.Time `json:"created_at"`
 
 	// ID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	ID AgentID `json:"id"`
 }
-
-// AgentDefinition Immutable launch snapshot returned on detailed Invocation reads. The
-// host owns the agent definition; nvoken only records the definition
-// each turn ran with. The
-// create request exposes these execution fields at its top level; nvoken
-// selects them, stores them as one immutable snapshot row, and re-reads
-// the snapshot unchanged on every model iteration and recovery. Two
-// Invocations with byte-identical execution fields share one snapshot.
-// Identity, session selection, input, idempotency, `if_active`, `webhook`,
-// metadata, and provider key selection are durable elsewhere and
-// never appear here. Callback declarations require installation callback
-// signing configuration. Remote MCP authentication headers are encrypted
-// outside this snapshot and never returned. Tools or structured output
-// require at least two model iterations; omission resolves to three or
-// the lower installation maximum.
-type AgentDefinition struct {
-	// Instructions Optional model instructions. Omission adds no hidden default.
-	Instructions *string `json:"instructions,omitempty"`
-
-	// Limits Optional requested limits. Total time bounds the entire turn, active
-	// time bounds model and tool execution, and waiting time bounds the
-	// cumulative time parked for host or callback tool results. Installation
-	// defaults supply all three time limits and the iteration limit.
-	// Output-token and estimated-cost limits are unlimited when omitted.
-	// Installation maxima may be lower than the schema's numeric range.
-	Limits        *Limits         `json:"limits,omitempty"`
-	McpServers    *[]MCPServer    `json:"mcp_servers,omitempty"`
-	Model         Model           `json:"model"`
-	ProviderTools *[]ProviderTool `json:"provider_tools,omitempty"`
-	Reasoning     *Reasoning      `json:"reasoning,omitempty"`
-	Sampling      *Sampling       `json:"sampling,omitempty"`
-
-	// StructuredOutput Optional per-Invocation structured-output contract. nvoken exposes a
-	// reserved durable submit tool and publishes only a server-validated
-	// terminal object. This does not enable host-defined tools.
-	StructuredOutput *StructuredOutput `json:"structured_output,omitempty"`
-
-	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
-	// none disables tools for the Invocation; required and named apply only
-	// to the first durable model iteration, then return to auto. name is
-	// required only for named mode. The final bounded iteration always
-	// disables tools.
-	ToolChoice *ToolChoice        `json:"tool_choice,omitempty"`
-	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
-}
-
-// AgentDefinitionID Opaque identifier with the public `def_` prefix. Treat the body as opaque.
-type AgentDefinitionID = string
 
 // AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 type AgentID = string
@@ -1704,8 +1638,35 @@ type AppList struct {
 	Items []App `json:"items"`
 }
 
+// AppRegistration defines model for AppRegistration.
+type AppRegistration struct {
+	App App `json:"app"`
+
+	// SigningKeys One callback key and one webhook key.
+	SigningKeys []AppSigningKeySecret `json:"signing_keys"`
+}
+
+// AppSigningKeyPurpose The only delivery class this HMAC key may sign.
+type AppSigningKeyPurpose string
+
+// AppSigningKeySecret defines model for AppSigningKeySecret.
+type AppSigningKeySecret struct {
+	// KeyID Value sent in `X-Nvoken-Signing-Key-Id`.
+	KeyID string `json:"key_id"`
+
+	// Purpose The only delivery class this HMAC key may sign.
+	Purpose AppSigningKeyPurpose `json:"purpose"`
+
+	// Secret Receiver HMAC secret. This plaintext is returned only during App
+	// registration and is omitted from every later App response.
+	Secret string `json:"secret"`
+
+	// Version Value sent in `X-Nvoken-Signing-Key-Version`.
+	Version int64 `json:"version"`
+}
+
 // Budget What one spending limit has used up so far in its current window.
-// `settled_estimated_cost_usd` is spend from turns that have finished;
+// `spent_estimated_cost_usd` is spend from model calls whose cost is final;
 // `reserved_estimated_cost_usd` is spend committed to turns still
 // running; `available_estimated_cost_usd` is what is left. These are
 // nvoken's own running tally for deciding when to stop work — deleting
@@ -1717,7 +1678,7 @@ type Budget struct {
 	CreatedAt                 time.Time `json:"created_at"`
 
 	// CredentialFamilyID Root API credential ID shared by its rotation chain.
-	CredentialFamilyID *APICredentialID `json:"credential_family_id"`
+	CredentialFamilyID *CredentialID `json:"credential_family_id"`
 
 	// ID Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
 	ID                       BudgetID       `json:"id"`
@@ -1726,7 +1687,7 @@ type Budget struct {
 	ProviderKeyID            *ProviderKeyID `json:"provider_key_id"`
 	ReservedEstimatedCostUsd float32        `json:"reserved_estimated_cost_usd"`
 	Scope                    BudgetScope    `json:"scope"`
-	SettledEstimatedCostUsd  float32        `json:"settled_estimated_cost_usd"`
+	SpentEstimatedCostUsd    float32        `json:"spent_estimated_cost_usd"`
 	TenantKey                *string        `json:"tenant_key"`
 	UpdatedAt                time.Time      `json:"updated_at"`
 	UserKey                  *string        `json:"user_key"`
@@ -1734,15 +1695,12 @@ type Budget struct {
 	WindowStart              time.Time      `json:"window_start"`
 }
 
-// BudgetBlock Exact durable budget that refused or paused work.
+// BudgetBlock Exact first-class Budget that refused or paused work.
 type BudgetBlock struct {
 	// ID Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
-	ID    BudgetID         `json:"id"`
-	Scope BudgetBlockScope `json:"scope"`
+	ID    BudgetID    `json:"id"`
+	Scope BudgetScope `json:"scope"`
 }
-
-// BudgetBlockScope defines model for BudgetBlock.Scope.
-type BudgetBlockScope string
 
 // BudgetID Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
 type BudgetID = string
@@ -1764,7 +1722,7 @@ type BuiltinToolDeclarationMode string
 // BuiltinToolDeclarationName Fixed runtime-owned public-web fetch capability.
 type BuiltinToolDeclarationName string
 
-// CallbackDeliveryOutcome `pending` covers a blocked, available, or currently leased delivery.
+// CallbackDeliveryOutcome `pending` means nvoken has not reached a final transport outcome.
 // The other values are terminal transport outcomes.
 type CallbackDeliveryOutcome string
 
@@ -1856,9 +1814,9 @@ type CompactionPolicy_TriggerTokens struct {
 }
 
 // CreateBudgetRequest The selected scope requires only its identity fields. `app` requires
-// none. `customer` requires exactly one of `tenant_key` or
+// none. `tenant` requires exactly one of `tenant_key` or
 // `default_tenant: true`. `user` also requires `user_key`. `agent`,
-// `provider_key`, and `api_credential` require `agent_id`,
+// `provider_key`, and `credential` require `agent_id`,
 // `provider_key_id`, and `credential_id` respectively. A credential ID
 // resolves to its stable rotation family.
 type CreateBudgetRequest struct {
@@ -1866,10 +1824,10 @@ type CreateBudgetRequest struct {
 	AgentID *AgentID `json:"agent_id,omitempty"`
 
 	// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
-	CredentialID        *APICredentialID `json:"credential_id,omitempty"`
-	DefaultTenant       *bool            `json:"default_tenant,omitempty"`
-	IdempotencyKey      string           `json:"idempotency_key"`
-	MaxEstimatedCostUsd float32          `json:"max_estimated_cost_usd"`
+	CredentialID        *CredentialID `json:"credential_id,omitempty"`
+	DefaultTenant       *bool         `json:"default_tenant,omitempty"`
+	IdempotencyKey      string        `json:"idempotency_key"`
+	MaxEstimatedCostUsd float32       `json:"max_estimated_cost_usd"`
 
 	// ProviderKeyID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
 	ProviderKeyID *ProviderKeyID `json:"provider_key_id,omitempty"`
@@ -1890,11 +1848,11 @@ type CreateCredentialRequest struct {
 	// Omit to issue another app-less credential. An app-bound Operator
 	// may omit this field or repeat its own App ID, but cannot name a
 	// different App.
-	AppID      *AppID       `json:"app_id,omitempty"`
-	ExpiresAt  *time.Time   `json:"expires_at,omitempty"`
-	Name       string       `json:"name"`
-	Operations *[]Operation `json:"operations,omitempty"`
-	Profile    Profile      `json:"profile"`
+	AppID      *AppID            `json:"app_id,omitempty"`
+	ExpiresAt  *time.Time        `json:"expires_at,omitempty"`
+	Name       string            `json:"name"`
+	Operations *[]Operation      `json:"operations,omitempty"`
+	Profile    CredentialProfile `json:"profile"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID *SessionID `json:"session_id,omitempty"`
@@ -1906,8 +1864,8 @@ type CreateCredentialRequest struct {
 // mutually exclusive.
 type CreateInvocationRequest struct {
 	// AgentKey Stable caller-controlled Agent key, unique within the
-	// installation. The resulting Agent anchor stores identity
-	// only and is shared across tenant partitions.
+	// authenticated App. The resulting Agent anchor stores identity
+	// only and is shared across that App's tenant partitions.
 	AgentKey string `json:"agent_key"`
 
 	// DefinitionID Reuse an agent definition you already sent inline on an earlier turn,
@@ -1918,7 +1876,7 @@ type CreateInvocationRequest struct {
 	// `definition_not_found`. Cannot be combined with the inline definition
 	// fields. Sending the ID and sending the identical definition inline
 	// count as the same request when retrying with an idempotency key.
-	DefinitionID *AgentDefinitionID `json:"definition_id,omitempty"`
+	DefinitionID *DefinitionID `json:"definition_id,omitempty"`
 
 	// IdempotencyKey Your key for making retries safe. Send the same unchanged request
 	// again after a 5xx, a timeout, a dropped connection, or any case
@@ -1986,13 +1944,26 @@ type CreateInvocationRequest struct {
 	Model *ModelInput `json:"model,omitempty"`
 
 	// OnBudgetExhausted What to do when the turn runs out of one of its spending limits.
-	// `settle` ends it as `incomplete`. `pause` leaves it as `paused` so
+	// `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
 	// you can raise the limit and continue it.
 	//
 	// Covers the iteration, output-token, per-turn cost, and Session
 	// cost limits. Deadlines are not covered — a turn that runs out of
 	// time always ends and can never be resumed.
 	OnBudgetExhausted *CreateInvocationRequestOnBudgetExhausted `json:"on_budget_exhausted,omitempty"`
+
+	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
+	// is limited to 32 KiB and 16 schema positions. Supported keywords are
+	// type, title, description, properties, required, additionalProperties,
+	// items, enum, pattern, minLength, maxLength, minItems, maxItems,
+	// uniqueItems, minimum, and maximum. Every schema position has one string
+	// type; pattern values are limited to 1,024 UTF-8 bytes; references and
+	// other keywords are rejected. Numeric bounds are read as values, not
+	// spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
+	// exposes a reserved durable submit tool and publishes only a
+	// server-validated terminal object. This does not enable host-defined
+	// tools.
+	OutputSchema *OutputSchema `json:"output_schema,omitempty"`
 
 	// ProviderKeys Which key pays for the model on this turn. Names a source; never
 	// contains a secret.
@@ -2025,20 +1996,16 @@ type CreateInvocationRequest struct {
 	// paths disagreed. This keeps two callers from silently reconfiguring
 	// each other's conversation.
 	//
-	// Compaction is the exception — if no summarization policy is stored yet,
+	// Compaction is the exception — if no compaction policy is stored yet,
 	// this turn can install one, because the policy needs a model to validate
 	// against and only a turn supplies that.
 	SessionOptions *SessionOptions `json:"session_options,omitempty"`
 
-	// StructuredOutput Optional per-Invocation structured-output contract. nvoken exposes a
-	// reserved durable submit tool and publishes only a server-validated
-	// terminal object. This does not enable host-defined tools.
-	StructuredOutput *StructuredOutput `json:"structured_output,omitempty"`
-
 	// TenantKey Optional tenant partition. For Session-key resolution or a new
 	// Session, precedence is credential constraint, this explicit value,
-	// then the default partition. For Session-ID resolution, an
-	// installation-wide caller may omit it and use the stored partition.
+	// then the default partition. For Session-ID resolution, an App
+	// credential without a tenant constraint may omit it and use the
+	// stored partition.
 	TenantKey *string `json:"tenant_key,omitempty"`
 
 	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
@@ -2058,8 +2025,8 @@ type CreateInvocationRequest struct {
 	// Webhook Optional endpoint nvoken posts a signed webhook to when this
 	// Invocation parks awaiting host tool results or reaches a terminal
 	// status. It is delivery configuration rather than model input, so it is
-	// excluded from the reusable execution snapshot. Two otherwise identical
-	// turns that differ only in endpoint therefore share one snapshot.
+	// excluded from the reusable Definition. Two otherwise identical turns
+	// that differ only in endpoint therefore share one Definition.
 	//
 	// Delivery is at least once and ordered within one Invocation, and the
 	// webhook ID is repeated in `Idempotency-Key` on every attempt. nvoken
@@ -2069,9 +2036,9 @@ type CreateInvocationRequest struct {
 	//
 	// The endpoint is part of the request, so replaying an idempotency key
 	// with a changed endpoint or event set is a conflict rather than a
-	// silent adoption of either value. An installation without a configured
-	// webhook signing key rejects this field instead of accepting it and
-	// never delivering it.
+	// silent adoption of either value. An App without a webhook-purpose
+	// signing key rejects this field instead of accepting it and never
+	// delivering it.
 	Webhook *WebhookTarget `json:"webhook,omitempty"`
 }
 
@@ -2092,13 +2059,26 @@ type CreateInvocationRequest struct {
 type CreateInvocationRequestIfActive string
 
 // CreateInvocationRequestOnBudgetExhausted What to do when the turn runs out of one of its spending limits.
-// `settle` ends it as `incomplete`. `pause` leaves it as `paused` so
+// `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
 // you can raise the limit and continue it.
 //
 // Covers the iteration, output-token, per-turn cost, and Session
 // cost limits. Deadlines are not covered — a turn that runs out of
 // time always ends and can never be resumed.
 type CreateInvocationRequestOnBudgetExhausted string
+
+// CreateNudgeRequest defines model for CreateNudgeRequest.
+type CreateNudgeRequest struct {
+	// Content Text guidance for the running turn: a string, or an array of text
+	// blocks. Media blocks are refused here.
+	Content InvocationInput `json:"content"`
+
+	// IdempotencyKey Per-Invocation retry key. The same key with the same content
+	// returns the original acknowledgement with `deduplicated: true`; the
+	// same key with different content is refused, so a key is never
+	// reused with different words.
+	IdempotencyKey *string `json:"idempotency_key,omitempty"`
+}
 
 // CreateProviderKeyRequest defines model for CreateProviderKeyRequest.
 type CreateProviderKeyRequest struct {
@@ -2162,29 +2142,32 @@ type CreateSessionRequest struct {
 
 // Credential defines model for Credential.
 type Credential struct {
-	AppID               *AppID           `json:"app_id,omitempty"`
-	CreatedAt           time.Time        `json:"created_at"`
-	CreatorCredentialID *APICredentialID `json:"creator_credential_id,omitempty"`
+	AppID               *AppID        `json:"app_id,omitempty"`
+	CreatedAt           time.Time     `json:"created_at"`
+	CreatorCredentialID *CredentialID `json:"creator_credential_id,omitempty"`
 
 	// CreatorSubject Opaque issuer subject when the credential was created by an issuer token.
 	CreatorSubject *string    `json:"creator_subject,omitempty"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 
 	// ID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
-	ID                    APICredentialID  `json:"id"`
-	LastUsedAt            *time.Time       `json:"last_used_at,omitempty"`
-	Name                  string           `json:"name"`
-	Operations            []Operation      `json:"operations"`
-	Prefix                string           `json:"prefix"`
-	Profile               Profile          `json:"profile"`
-	RevokedAt             *time.Time       `json:"revoked_at,omitempty"`
-	RotatedFromID         *APICredentialID `json:"rotated_from_id,omitempty"`
-	RotationOverlapEndsAt *time.Time       `json:"rotation_overlap_ends_at,omitempty"`
-	SessionID             *SessionID       `json:"session_id,omitempty"`
-	Status                CredentialStatus `json:"status"`
-	TenantKey             *string          `json:"tenant_key,omitempty"`
-	UpdatedAt             time.Time        `json:"updated_at"`
+	ID                    CredentialID      `json:"id"`
+	LastUsedAt            *time.Time        `json:"last_used_at,omitempty"`
+	Name                  string            `json:"name"`
+	Operations            []Operation       `json:"operations"`
+	Prefix                string            `json:"prefix"`
+	Profile               CredentialProfile `json:"profile"`
+	RevokedAt             *time.Time        `json:"revoked_at,omitempty"`
+	RotatedFromID         *CredentialID     `json:"rotated_from_id,omitempty"`
+	RotationOverlapEndsAt *time.Time        `json:"rotation_overlap_ends_at,omitempty"`
+	SessionID             *SessionID        `json:"session_id,omitempty"`
+	Status                CredentialStatus  `json:"status"`
+	TenantKey             *string           `json:"tenant_key,omitempty"`
+	UpdatedAt             time.Time         `json:"updated_at"`
 }
+
+// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+type CredentialID = string
 
 // CredentialIssuance defines model for CredentialIssuance.
 type CredentialIssuance struct {
@@ -2201,6 +2184,9 @@ type CredentialList struct {
 	NextCursor *string      `json:"next_cursor"`
 }
 
+// CredentialProfile defines model for CredentialProfile.
+type CredentialProfile string
+
 // CredentialStatus defines model for CredentialStatus.
 type CredentialStatus string
 
@@ -2210,8 +2196,8 @@ type CurrentIdentity struct {
 		Assurance CurrentIdentityAuthenticationAssurance `json:"assurance"`
 
 		// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
-		CredentialID     APICredentialID                     `json:"credential_id"`
-		EffectiveProfile Profile                             `json:"effective_profile"`
+		CredentialID     CredentialID                        `json:"credential_id"`
+		EffectiveProfile CredentialProfile                   `json:"effective_profile"`
 		Method           CurrentIdentityAuthenticationMethod `json:"method"`
 		Operations       []Operation                         `json:"operations"`
 		SessionID        *SessionID                          `json:"session_id,omitempty"`
@@ -2247,9 +2233,9 @@ type DailyUsageBucket struct {
 	// Day UTC calendar day of the bucket.
 	Day openapi_types.Date `json:"day"`
 
-	// EstimatedCost Summed list-price estimate in USD; zero when every call in the bucket was unpriced.
-	EstimatedCost float32 `json:"estimated_cost"`
-	InputTokens   int     `json:"input_tokens"`
+	// EstimatedCostUsd Summed list-price estimate in USD; zero when every call in the bucket was unpriced.
+	EstimatedCostUsd float32 `json:"estimated_cost_usd"`
+	InputTokens      int     `json:"input_tokens"`
 
 	// Invocations Distinct Invocations with at least one model call in the bucket. Compaction calls carry no Invocation.
 	Invocations int `json:"invocations"`
@@ -2265,9 +2251,64 @@ type DailyUsageBucket struct {
 	Provider        string `json:"provider"`
 	ReasoningTokens int    `json:"reasoning_tokens"`
 
-	// TenantKey Host customer group when `group_by=tenant_key`; omitted otherwise.
+	// TenantKey Host tenant group when `group_by=tenant_key`; omitted otherwise.
 	TenantKey *string `json:"tenant_key,omitempty"`
 }
+
+// Definition Immutable Definition returned on detailed Invocation reads. The
+// host owns the agent definition; nvoken only records the definition
+// each turn ran with. The create request exposes these execution fields
+// at its top level; nvoken selects them, stores one immutable Definition,
+// and re-reads it unchanged on every model iteration and recovery. Two
+// Invocations with byte-identical execution fields share one Definition.
+// Identity, session selection, input, idempotency, `if_active`, `webhook`,
+// metadata, and provider key selection are durable elsewhere and
+// never appear here. Callback declarations require installation callback
+// signing configuration. Remote MCP authentication headers are encrypted
+// outside this Definition and never returned. Tools or structured output
+// require at least two model iterations; omission resolves to three or
+// the lower installation maximum.
+type Definition struct {
+	// Instructions Optional model instructions. Omission adds no hidden default.
+	Instructions *string `json:"instructions,omitempty"`
+
+	// Limits Optional requested limits. Total time bounds the entire turn, active
+	// time bounds model and tool execution, and waiting time bounds the
+	// cumulative time parked for host or callback tool results. Installation
+	// defaults supply all three time limits and the iteration limit.
+	// Output-token and estimated-cost limits are unlimited when omitted.
+	// Installation maxima may be lower than the schema's numeric range.
+	Limits     *Limits      `json:"limits,omitempty"`
+	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
+	Model      Model        `json:"model"`
+
+	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
+	// is limited to 32 KiB and 16 schema positions. Supported keywords are
+	// type, title, description, properties, required, additionalProperties,
+	// items, enum, pattern, minLength, maxLength, minItems, maxItems,
+	// uniqueItems, minimum, and maximum. Every schema position has one string
+	// type; pattern values are limited to 1,024 UTF-8 bytes; references and
+	// other keywords are rejected. Numeric bounds are read as values, not
+	// spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
+	// exposes a reserved durable submit tool and publishes only a
+	// server-validated terminal object. This does not enable host-defined
+	// tools.
+	OutputSchema  *OutputSchema   `json:"output_schema,omitempty"`
+	ProviderTools *[]ProviderTool `json:"provider_tools,omitempty"`
+	Reasoning     *Reasoning      `json:"reasoning,omitempty"`
+	Sampling      *Sampling       `json:"sampling,omitempty"`
+
+	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
+	// none disables tools for the Invocation; required and named apply only
+	// to the first durable model iteration, then return to auto. name is
+	// required only for named mode. The final bounded iteration always
+	// disables tools.
+	ToolChoice *ToolChoice        `json:"tool_choice,omitempty"`
+	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
+}
+
+// DefinitionID Opaque identifier with the public `def_` prefix. Treat the body as opaque.
+type DefinitionID = string
 
 // DeliveryID Identifies one delivery nvoken sent you, callback or webhook alike —
 // both are the same durable record and carry the same `dlvr_` prefix.
@@ -2529,7 +2570,7 @@ type Invocation struct {
 	// before the first claim.
 	Attempt int `json:"attempt"`
 
-	// BlockingBudget Exact Session or shared Budget for a budget stop, otherwise null.
+	// BlockingBudget Exact first-class Budget for a shared-budget stop, otherwise null.
 	BlockingBudget *BudgetBlock `json:"blocking_budget"`
 	CreatedAt      time.Time    `json:"created_at"`
 
@@ -2550,10 +2591,10 @@ type Invocation struct {
 	//
 	// Present on `GET /v1/invocations/{id}` and on the result. Null in list
 	// items, where `definition_id` identifies it instead.
-	Definition *AgentDefinition `json:"definition"`
+	Definition *Definition `json:"definition"`
 
 	// DefinitionID Opaque identifier with the public `def_` prefix. Treat the body as opaque.
-	DefinitionID AgentDefinitionID  `json:"definition_id"`
+	DefinitionID DefinitionID       `json:"definition_id"`
 	EndedAt      *time.Time         `json:"ended_at"`
 	Error        *InvocationFailure `json:"error"`
 
@@ -2599,7 +2640,7 @@ type Invocation struct {
 	// `paused` means an opt-in spending limit stopped the turn but left it
 	// resumable. Nothing is executing, and its deadlines are on hold, so a
 	// turn cannot expire while you decide. Raise the turn's limit, or raise
-	// or remove the Session budget, and it continues. It still accepts
+	// or remove the Session cost cap, and it continues. It still accepts
 	// interrupt, cancel, and nudge.
 	Status InvocationStatus `json:"status"`
 
@@ -2673,7 +2714,7 @@ type InvocationAcceptedEvent struct {
 	// `paused` means an opt-in spending limit stopped the turn but left it
 	// resumable. Nothing is executing, and its deadlines are on hold, so a
 	// turn cannot expire while you decide. Raise the turn's limit, or raise
-	// or remove the Session budget, and it continues. It still accepts
+	// or remove the Session cost cap, and it continues. It still accepts
 	// interrupt, cancel, and nudge.
 	Status InvocationStatus            `json:"status"`
 	Type   InvocationAcceptedEventType `json:"type"`
@@ -2719,7 +2760,7 @@ type InvocationChange struct {
 	// `paused` means an opt-in spending limit stopped the turn but left it
 	// resumable. Nothing is executing, and its deadlines are on hold, so a
 	// turn cannot expire while you decide. Raise the turn's limit, or raise
-	// or remove the Session budget, and it continues. It still accepts
+	// or remove the Session cost cap, and it continues. It still accepts
 	// interrupt, cancel, and nudge.
 	Status                     InvocationStatus            `json:"status"`
 	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
@@ -2862,7 +2903,7 @@ type InvocationResultEventType string
 // `paused` means an opt-in spending limit stopped the turn but left it
 // resumable. Nothing is executing, and its deadlines are on hold, so a
 // turn cannot expire while you decide. Raise the turn's limit, or raise
-// or remove the Session budget, and it continues. It still accepts
+// or remove the Session cost cap, and it continues. It still accepts
 // interrupt, cancel, and nudge.
 type InvocationStatus string
 
@@ -2873,7 +2914,7 @@ type InvocationStatus string
 // or `interrupted` (you asked it to stop, and it stopped at the next
 // clean point). An `incomplete` turn carries whichever limit ran out:
 // `max_iterations`, `deadline`, `max_output_tokens`,
-// `max_estimated_cost`, `session_budget`, or `shared_budget`. A `paused`
+// `max_estimated_cost`, `session_max_estimated_cost`, or `shared_budget`. A `paused`
 // turn carries one of the spending limits, never `deadline`, because a
 // paused turn's deadlines are on hold.
 //
@@ -3284,41 +3325,91 @@ type ModelUsage struct {
 	ReasoningTokens *int `json:"reasoning_tokens,omitempty"`
 }
 
-// NudgeAcknowledgement defines model for NudgeAcknowledgement.
-type NudgeAcknowledgement struct {
-	// AfterSequence Transcript position to watch from for the promoted message. It is
-	// the Session cursor as of this call for input that has not been
-	// drained, and the position immediately before the promoted message
-	// for input that already has, so reading after it finds the message
-	// either way.
-	AfterSequence int64 `json:"after_sequence"`
-	Deduped       bool  `json:"deduped"`
+// Nudge defines model for Nudge.
+type Nudge struct {
+	// Content A plain string is shorthand for one text block; an array is ordered
+	// multi-block input mixing text, images, and documents. Both normalize
+	// to the same stored message and are therefore equal for idempotency.
+	// At most 8 blocks may carry media, and their decoded payloads must
+	// total at most 16777216 bytes.
+	Content   InvocationInput `json:"content"`
+	CreatedAt time.Time       `json:"created_at"`
 
-	// PendingInputID Opaque identifier with the public `input_` prefix. Treat the body as opaque.
-	PendingInputID PendingInputID `json:"pending_input_id"`
+	// DrainedAt When the Nudge was promoted into the transcript. Present only when drained.
+	DrainedAt *time.Time `json:"drained_at,omitempty"`
 
-	// State `pending` is the only state a turn will still pick up. `drained` means
+	// DrainedMessageSequence Transcript sequence the content was promoted into. Present only on
+	// a drained Nudge, and the receipt that the model saw it.
+	DrainedMessageSequence *int64 `json:"drained_message_sequence,omitempty"`
+
+	// EndedAt When the Nudge left pending for any terminal status.
+	EndedAt *time.Time `json:"ended_at,omitempty"`
+
+	// ID Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.
+	ID             NudgeID `json:"id"`
+	IdempotencyKey *string `json:"idempotency_key,omitempty"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID `json:"invocation_id"`
+
+	// Status `pending` is the only state a turn will still pick up. `drained` means
 	// the turn took it and it is now in the transcript. `expired` means the
 	// turn ended without ever taking it. `cancelled` means you withdrew it
 	// before the turn got to it.
-	State PendingInputStatus `json:"state"`
+	Status NudgeStatus `json:"status"`
 }
 
-// NudgeInvocationRequest defines model for NudgeInvocationRequest.
-type NudgeInvocationRequest struct {
-	// Content Text guidance for the running turn: a string, or an array of text
-	// blocks. Media blocks are refused here.
-	Content InvocationInput `json:"content"`
+// NudgeAcknowledgement defines model for NudgeAcknowledgement.
+type NudgeAcknowledgement struct {
+	// AfterSequence Transcript position to watch from for the promoted message. It is
+	// the Session cursor as of this call for a Nudge that has not been
+	// drained, and the position immediately before the promoted message
+	// for a Nudge that already has, so reading after it finds the message
+	// either way.
+	AfterSequence int64 `json:"after_sequence"`
+	Deduplicated  bool  `json:"deduplicated"`
 
-	// IdempotencyKey Per-Invocation retry key. The same key with the same content
-	// returns the original acknowledgement with `deduped: true`; the
-	// same key with different content is refused, so a key is never
-	// reused with different words.
-	IdempotencyKey *string `json:"idempotency_key,omitempty"`
+	// NudgeID Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.
+	NudgeID NudgeID `json:"nudge_id"`
+
+	// Status `pending` is the only state a turn will still pick up. `drained` means
+	// the turn took it and it is now in the transcript. `expired` means the
+	// turn ended without ever taking it. `cancelled` means you withdrew it
+	// before the turn got to it.
+	Status NudgeStatus `json:"status"`
 }
+
+// NudgeID Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.
+type NudgeID = string
+
+// NudgeList defines model for NudgeList.
+type NudgeList struct {
+	HasMore    bool    `json:"has_more"`
+	Items      []Nudge `json:"items"`
+	NextCursor *string `json:"next_cursor"`
+}
+
+// NudgeStatus `pending` is the only state a turn will still pick up. `drained` means
+// the turn took it and it is now in the transcript. `expired` means the
+// turn ended without ever taking it. `cancelled` means you withdrew it
+// before the turn got to it.
+type NudgeStatus string
 
 // Operation defines model for Operation.
 type Operation string
+
+// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
+// is limited to 32 KiB and 16 schema positions. Supported keywords are
+// type, title, description, properties, required, additionalProperties,
+// items, enum, pattern, minLength, maxLength, minItems, maxItems,
+// uniqueItems, minimum, and maximum. Every schema position has one string
+// type; pattern values are limited to 1,024 UTF-8 bytes; references and
+// other keywords are rejected. Numeric bounds are read as values, not
+// spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
+// exposes a reserved durable submit tool and publishes only a
+// server-validated terminal object. This does not enable host-defined
+// tools.
+type OutputSchema map[string]interface{}
 
 // OutputTextDeltaEvent defines model for OutputTextDeltaEvent.
 type OutputTextDeltaEvent struct {
@@ -3357,55 +3448,6 @@ type PendingHostToolCall struct {
 	Input interface{} `json:"input"`
 	Name  string      `json:"name"`
 }
-
-// PendingInput defines model for PendingInput.
-type PendingInput struct {
-	// Content A plain string is shorthand for one text block; an array is ordered
-	// multi-block input mixing text, images, and documents. Both normalize
-	// to the same stored message and are therefore equal for idempotency.
-	// At most 8 blocks may carry media, and their decoded payloads must
-	// total at most 16777216 bytes.
-	Content   InvocationInput `json:"content"`
-	CreatedAt time.Time       `json:"created_at"`
-	DrainedAt *time.Time      `json:"drained_at,omitempty"`
-
-	// DrainedMessageSequence Transcript sequence the content was promoted into. Present only on
-	// a drained input, and the receipt that the model saw it.
-	DrainedMessageSequence *int64 `json:"drained_message_sequence,omitempty"`
-
-	// ID Opaque identifier with the public `input_` prefix. Treat the body as opaque.
-	ID             PendingInputID `json:"id"`
-	IdempotencyKey *string        `json:"idempotency_key,omitempty"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-	SettledAt    *time.Time   `json:"settled_at,omitempty"`
-
-	// Status `pending` is the only state a turn will still pick up. `drained` means
-	// the turn took it and it is now in the transcript. `expired` means the
-	// turn ended without ever taking it. `cancelled` means you withdrew it
-	// before the turn got to it.
-	Status PendingInputStatus `json:"status"`
-}
-
-// PendingInputID Opaque identifier with the public `input_` prefix. Treat the body as opaque.
-type PendingInputID = string
-
-// PendingInputList defines model for PendingInputList.
-type PendingInputList struct {
-	HasMore    bool           `json:"has_more"`
-	Items      []PendingInput `json:"items"`
-	NextCursor *string        `json:"next_cursor"`
-}
-
-// PendingInputStatus `pending` is the only state a turn will still pick up. `drained` means
-// the turn took it and it is now in the transcript. `expired` means the
-// turn ended without ever taking it. `cancelled` means you withdrew it
-// before the turn got to it.
-type PendingInputStatus string
-
-// Profile defines model for Profile.
-type Profile string
 
 // ProviderKey Safe metadata only; secret material is never represented.
 type ProviderKey struct {
@@ -3707,11 +3749,8 @@ type Session struct {
 	// The first turn binds the Agent, and after that it never changes.
 	AgentID *AgentID `json:"agent_id"`
 
-	// BlockingBudget Budget blocking the active paused Invocation, otherwise null.
+	// BlockingBudget First-class Budget blocking the active paused Invocation, otherwise null.
 	BlockingBudget *BudgetBlock `json:"blocking_budget"`
-
-	// Budget The current mutable Session-wide estimated-cost guardrail.
-	Budget *SessionBudget `json:"budget"`
 
 	// Compaction The automatic compaction policy this Session actually applies, or
 	// null when it compacts nothing. It is echoed resolved: a request
@@ -3739,6 +3778,9 @@ type Session struct {
 
 	// ID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	ID SessionID `json:"id"`
+
+	// MaxEstimatedCostUsd The current mutable Session lifetime estimated-cost cap.
+	MaxEstimatedCostUsd *float32 `json:"max_estimated_cost_usd"`
 
 	// Metadata Host correlation data, returned verbatim. Set at creation through
 	// `session_options.metadata` and changed with
@@ -3771,17 +3813,6 @@ type Session struct {
 
 // SessionActiveInvocationStatus defines model for Session.ActiveInvocationStatus.
 type SessionActiveInvocationStatus string
-
-// SessionBudget A spending cap in USD covering every turn in this Session. You can
-// change it at any time.
-//
-// The figure is nvoken's own estimate, based on published list prices
-// and the model calls it recorded — it is a control for stopping runaway
-// work, not a bill. If a model has no price in nvoken's catalog, turns
-// using it are refused rather than run uncosted.
-type SessionBudget struct {
-	MaxEstimatedCostUsd float32 `json:"max_estimated_cost_usd"`
-}
 
 // SessionCompaction defines model for SessionCompaction.
 type SessionCompaction struct {
@@ -3953,20 +3984,15 @@ type SessionMessageRole string
 // Compaction needs a turn to install it, because the policy is validated
 // against that turn's model.
 type SessionOptions struct {
-	// Budget A spending cap in USD covering every turn in this Session. You can
-	// change it at any time.
-	//
-	// The figure is nvoken's own estimate, based on published list prices
-	// and the model calls it recorded — it is a control for stopping runaway
-	// work, not a bill. If a model has no price in nvoken's catalog, turns
-	// using it are refused rather than run uncosted.
-	Budget *SessionBudget `json:"budget,omitempty"`
-
 	// Compaction Durable Session context-compaction policy. Omission of model uses the
 	// installing Invocation's primary model. An explicit model must be
 	// cataloged and use the same provider. Later Invocations automatically
 	// use this resolved policy and the latest Session summary.
 	Compaction *CompactionPolicy `json:"compaction,omitempty"`
+
+	// MaxEstimatedCostUsd Lifetime estimated-list-price cap across model calls committed to
+	// this Session. This is a Session setting, not a Budget resource.
+	MaxEstimatedCostUsd *float32 `json:"max_estimated_cost_usd,omitempty"`
 
 	// Metadata Opaque host correlation data. nvoken stores it, returns it verbatim,
 	// and never interprets it — it exists so a support engineer holding an
@@ -4039,22 +4065,6 @@ type StreamResyncEventReason string
 
 // StreamResyncEventType defines model for StreamResyncEvent.Type.
 type StreamResyncEventType string
-
-// StructuredOutput Optional per-Invocation structured-output contract. nvoken exposes a
-// reserved durable submit tool and publishes only a server-validated
-// terminal object. This does not enable host-defined tools.
-type StructuredOutput struct {
-	// Schema Self-contained JSON Schema for an object result. Compact canonical
-	// JSON is limited to 32 KiB and 16 schema positions. Supported
-	// keywords are type, title, description, properties, required,
-	// additionalProperties, items, enum, pattern, minLength, maxLength,
-	// minItems, maxItems, uniqueItems, minimum, and maximum. Every schema
-	// position has one string type; pattern values are limited to 1,024
-	// UTF-8 bytes; references and other keywords are rejected. Numeric
-	// bounds are read as values, not spellings: 10, 10.0, and 1e1 are the
-	// same bound.
-	Schema map[string]interface{} `json:"schema"`
-}
 
 // StructuredOutputProvenance Shows where `structured_output` came from and what it was checked
 // against, so you can verify the object rather than trust it. It records
@@ -4129,7 +4139,7 @@ type SubmitHostToolResultsResponse struct {
 	// `paused` means an opt-in spending limit stopped the turn but left it
 	// resumable. Nothing is executing, and its deadlines are on hold, so a
 	// turn cannot expire while you decide. Raise the turn's limit, or raise
-	// or remove the Session budget, and it continues. It still accepts
+	// or remove the Session cost cap, and it continues. It still accepts
 	// interrupt, cancel, and nudge.
 	Status InvocationStatus `json:"status"`
 }
@@ -4185,6 +4195,7 @@ type ToolCall struct {
 
 	// Delivery Present only when mode is callback.
 	Delivery *ToolCallDelivery `json:"delivery,omitempty"`
+	EndedAt  *time.Time        `json:"ended_at"`
 
 	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
 	// transcript `tool_use` block or from the pending host tool calls, and
@@ -4194,7 +4205,6 @@ type ToolCall struct {
 	Iteration int            `json:"iteration"`
 	Mode      ToolCallMode   `json:"mode"`
 	Name      string         `json:"name"`
-	SettledAt *time.Time     `json:"settled_at"`
 	Status    ToolCallStatus `json:"status"`
 }
 
@@ -4206,7 +4216,7 @@ type ToolCallDelivery struct {
 	// LastHTTPStatus Last HTTP status returned by the endpoint, or null before any response.
 	LastHTTPStatus *int `json:"last_http_status"`
 
-	// Outcome `pending` covers a blocked, available, or currently leased delivery.
+	// Outcome `pending` means nvoken has not reached a final transport outcome.
 	// The other values are terminal transport outcomes.
 	Outcome CallbackDeliveryOutcome `json:"outcome"`
 }
@@ -4380,10 +4390,10 @@ type UpdateBudgetRequest struct {
 
 // UpdateSessionRequest defines model for UpdateSessionRequest.
 type UpdateSessionRequest struct {
-	// Budget Replaces the Session budget; null removes it. A finite ceiling may
-	// not be lower than estimated cost already consumed. Raising or
-	// removing the ceiling atomically requeues a turn paused on it.
-	Budget *SessionBudget `json:"budget,omitempty"`
+	// MaxEstimatedCostUsd Replaces the Session lifetime cost cap; null removes it. A finite
+	// cap may not be lower than estimated cost already consumed. Raising
+	// or removing it atomically requeues a turn paused on it.
+	MaxEstimatedCostUsd *float32 `json:"max_estimated_cost_usd,omitempty"`
 
 	// Metadata Metadata merge patch. A string value sets the key, `null` deletes
 	// it, and an absent key is left alone. Bounds are enforced on the
@@ -4442,7 +4452,7 @@ type WebSearchTool struct {
 // `invocation.paused` fires when a spending limit you opted into stopped
 // the turn, and carries the `stop_reason` naming the limit.
 //
-// `invocation.settled` fires exactly once, when the turn reaches
+// `invocation.ended` fires exactly once, when the turn reaches
 // `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
 // incomplete payloads carry `stop_reason` alongside `failure_code`.
 type WebhookEvent string
@@ -4450,8 +4460,8 @@ type WebhookEvent string
 // WebhookTarget Optional endpoint nvoken posts a signed webhook to when this
 // Invocation parks awaiting host tool results or reaches a terminal
 // status. It is delivery configuration rather than model input, so it is
-// excluded from the reusable execution snapshot. Two otherwise identical
-// turns that differ only in endpoint therefore share one snapshot.
+// excluded from the reusable Definition. Two otherwise identical turns
+// that differ only in endpoint therefore share one Definition.
 //
 // Delivery is at least once and ordered within one Invocation, and the
 // webhook ID is repeated in `Idempotency-Key` on every attempt. nvoken
@@ -4461,9 +4471,9 @@ type WebhookEvent string
 //
 // The endpoint is part of the request, so replaying an idempotency key
 // with a changed endpoint or event set is a conflict rather than a
-// silent adoption of either value. An installation without a configured
-// webhook signing key rejects this field instead of accepting it and
-// never delivering it.
+// silent adoption of either value. An App without a webhook-purpose
+// signing key rejects this field instead of accepting it and never
+// delivering it.
 type WebhookTarget struct {
 	// Events Events to deliver. Omission selects every event, because the
 	// harmful default is the one that quietly drops
@@ -4479,9 +4489,6 @@ type WebhookTarget struct {
 
 // AgentKeyFilter defines model for AgentKeyFilter.
 type AgentKeyFilter = string
-
-// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
-type CredentialID = APICredentialID
 
 // CredentialLimit defines model for CredentialLimit.
 type CredentialLimit = int
@@ -4624,10 +4631,10 @@ type CreateInvocationParams struct {
 	XXaiAPIKey       *string `json:"X-Xai-Api-Key,omitempty"`
 }
 
-// ListPendingInputsParams defines parameters for ListPendingInputs.
-type ListPendingInputsParams struct {
+// ListNudgesParams defines parameters for ListNudges.
+type ListNudgesParams struct {
 	// Status Restrict to one status.
-	Status *PendingInputStatus `form:"status,omitempty" json:"status,omitempty"`
+	Status *NudgeStatus `form:"status,omitempty" json:"status,omitempty"`
 
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -4767,13 +4774,13 @@ type GetDailyUsageParams struct {
 	// EndDate Inclusive last UTC day. Defaults to the current UTC day.
 	EndDate *openapi_types.Date `form:"end_date,omitempty" json:"end_date,omitempty"`
 
-	// TenantKey Return only usage attributed to this host customer.
+	// TenantKey Return only usage attributed to this host tenant.
 	TenantKey *string `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
 	// UserKey Return only usage attributed to this host end user.
 	UserKey *string `form:"user_key,omitempty" json:"user_key,omitempty"`
 
-	// GroupBy Split otherwise identical buckets by host customer.
+	// GroupBy Split otherwise identical buckets by host tenant.
 	GroupBy *GetDailyUsageParamsGroupBy `form:"group_by,omitempty" json:"group_by,omitempty"`
 }
 
@@ -4820,8 +4827,8 @@ type RotateCredentialJSONRequestBody RotateCredentialJSONBody
 // CreateInvocationJSONRequestBody defines body for CreateInvocation for application/json ContentType.
 type CreateInvocationJSONRequestBody = CreateInvocationRequest
 
-// NudgeInvocationJSONRequestBody defines body for NudgeInvocation for application/json ContentType.
-type NudgeInvocationJSONRequestBody = NudgeInvocationRequest
+// CreateNudgeJSONRequestBody defines body for CreateNudge for application/json ContentType.
+type CreateNudgeJSONRequestBody = CreateNudgeRequest
 
 // ResumeInvocationJSONRequestBody defines body for ResumeInvocation for application/json ContentType.
 type ResumeInvocationJSONRequestBody = ResumeInvocationRequest
@@ -6274,14 +6281,14 @@ type ClientInterface interface {
 	// ListAgents List Agent identity anchors
 	//
 	// Returns newest-first identity anchors scoped to the caller's app. An
-	// Agent stores only its nvoken ID, the host-owned `agent_key`, and
-	// creation time; instructions, models, tools, and provider keys still
-	// travel on each Invocation. An exact `agent_key` filter returns zero or
-	// one item.
+	// Agent belongs to one app and stores only its nvoken ID, the host-owned
+	// `agent_key`, and creation time; instructions, models, tools, and
+	// provider keys still travel on each Invocation. An exact `agent_key`
+	// filter returns zero or one item within that app.
 	//
-	// Unconstrained credentials see the anchors referenced by a Session in
-	// one of their app's tenants. Tenant-constrained credentials see only
-	// anchors referenced by a Session in their effective partition.
+	// Unconstrained credentials see their app's anchors. Tenant-constrained
+	// credentials see only anchors referenced by a Session in their
+	// effective partition.
 	// Session-constrained credentials see only that Session's anchor. The
 	// opaque cursor is bound to the authenticated caller, credential
 	// constraint, and exact key filter.
@@ -6291,7 +6298,7 @@ type ClientInterface interface {
 
 	// GetAgent Read one Agent identity anchor
 	//
-	// Reads identity without admitting work. Out-of-scope and undisclosable
+	// Reads identity without creating work. Out-of-scope and undisclosable
 	// constrained resources use `not_found`.
 	//
 	// Corresponds with GET /v1/agents/{agent_id} (the `GetAgent` operationId).
@@ -6310,7 +6317,12 @@ type ClientInterface interface {
 	// RegisterAppWithBody Register an app
 	//
 	// Registers one host application and creates its default tenant,
-	// returning the generated `app_id`.
+	// returning the generated `app_id` and independent callback and webhook
+	// HMAC keys. The plaintext signing keys are returned only in this
+	// response; store them in the receiver's secret manager. nvoken stores
+	// only authenticated ciphertext and selects a key from the durable App
+	// scope of each delivery. Registration is unavailable when the service's
+	// encryption keyring is not configured.
 	//
 	// Registration is installation management rather than work inside an app,
 	// so it requires a credential that is *not* associated with an app; a
@@ -6326,7 +6338,12 @@ type ClientInterface interface {
 	// RegisterApp Register an app
 	//
 	// Registers one host application and creates its default tenant,
-	// returning the generated `app_id`.
+	// returning the generated `app_id` and independent callback and webhook
+	// HMAC keys. The plaintext signing keys are returned only in this
+	// response; store them in the receiver's secret manager. nvoken stores
+	// only authenticated ciphertext and selects a key from the durable App
+	// scope of each delivery. Registration is unavailable when the service's
+	// encryption keyring is not configured.
 	//
 	// Registration is installation management rather than work inside an app,
 	// so it requires a credential that is *not* associated with an app; a
@@ -6370,7 +6387,7 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
 	UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateBudgetWithBody Create one fixed usage budget window
+	// CreateBudgetWithBody Create one fixed Budget window
 	//
 	// Creates an estimated-list-price guardrail inside the authenticated App.
 	// Windows for the same scope identity cannot overlap. The idempotency key
@@ -6381,7 +6398,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/budgets (the `CreateBudget` operationId).
 	CreateBudgetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateBudget Create one fixed usage budget window
+	// CreateBudget Create one fixed Budget window
 	//
 	// Creates an estimated-list-price guardrail inside the authenticated App.
 	// Windows for the same scope identity cannot overlap. The idempotency key
@@ -6399,7 +6416,7 @@ type ClientInterface interface {
 	// Corresponds with DELETE /v1/budgets/{budget_id} (the `DeleteBudget` operationId).
 	DeleteBudget(ctx context.Context, budgetID BudgetID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetBudget Read one usage Budget
+	// GetBudget Read one Budget
 	//
 	// Corresponds with GET /v1/budgets/{budget_id} (the `GetBudget` operationId).
 	GetBudget(ctx context.Context, budgetID BudgetID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6479,11 +6496,12 @@ type ClientInterface interface {
 	// ListInvocations List authoritative Invocations
 	//
 	// Returns newest-first durable Invocation state. Exact filters combine
-	// with AND. An installation-wide caller may list all tenant partitions, one
-	// named partition with `tenant_key`, or the default partition with
-	// `default_tenant=true`. A tenant-constrained credential is always scoped
-	// to its partition. The opaque cursor is bound to the normalized filter
-	// set and credential tenant scope. `agent_id` and `agent_key` are
+	// with AND. An App credential without a tenant constraint may list all
+	// tenant partitions in that App, one named partition with `tenant_key`,
+	// or the default partition with `default_tenant=true`. A
+	// tenant-constrained credential is always scoped to its partition. The
+	// opaque cursor is bound to the normalized filter set and credential
+	// tenant scope. `agent_id` and `agent_key` are
 	// mutually exclusive; both normalize to the resolved Agent ID for cursor
 	// binding, so an equivalent cursor may resume under either spelling.
 	//
@@ -6504,9 +6522,9 @@ type ClientInterface interface {
 	// Pick the Session with either `session_id` or `session_key`, not both.
 	// A Session ID must belong to the Agent you named, or to a Session
 	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An installation-wide credential may omit `tenant_key` and
-	// use whichever tenant the Session already belongs to. A credential
-	// locked to one tenant cannot reach another; naming a different one
+	// permanently. An App credential without a tenant constraint may omit
+	// `tenant_key` and use whichever tenant the Session already belongs to.
+	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
 	// exists.
 	//
@@ -6601,9 +6619,9 @@ type ClientInterface interface {
 	// Pick the Session with either `session_id` or `session_key`, not both.
 	// A Session ID must belong to the Agent you named, or to a Session
 	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An installation-wide credential may omit `tenant_key` and
-	// use whichever tenant the Session already belongs to. A credential
-	// locked to one tenant cannot reach another; naming a different one
+	// permanently. An App credential without a tenant constraint may omit
+	// `tenant_key` and use whichever tenant the Session already belongs to.
+	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
 	// exists.
 	//
@@ -6744,7 +6762,21 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/interrupt (the `InterruptInvocation` operationId).
 	InterruptInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// NudgeInvocationWithBody Send extra direction to a running turn
+	// ListNudges List Nudges for an Invocation
+	//
+	// Lists the direction you have sent to this turn with `/nudges`, in the
+	// order the turn will pick it up. Entries stay listed after they are used
+	// or missed, so you can answer "what did the user say, and did the model
+	// ever see it?"
+	//
+	// Check `status` on each entry: `drained` means the turn used it,
+	// `expired` means the turn ended first, `cancelled` means you withdrew
+	// it.
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/nudges (the `ListNudges` operationId).
+	ListNudges(ctx context.Context, invocationID InvocationID, params *ListNudgesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateNudgeWithBody Send extra direction to a running turn
 	//
 	// Sends extra direction to a turn that is already running — "focus on
 	// the marine segment" — without stopping it and without losing the work
@@ -6769,9 +6801,9 @@ type ClientInterface interface {
 	// `if_active` setting says; it never quietly becomes a nudge, and a
 	// nudge never quietly becomes a new turn.
 	//
-	// If the turn ends without ever picking it up, your input is marked
+	// If the turn ends without ever picking it up, your Nudge is marked
 	// `expired` at that moment and has no effect on any later turn. Check
-	// `GET .../pending-inputs` to see whether it was used or missed. Whether
+	// `GET .../nudges` to see whether it was used or missed. Whether
 	// to re-send missed direction as the next turn's input is your call.
 	//
 	// `content` must be text — a string, or an array of text blocks. Images
@@ -6783,10 +6815,10 @@ type ClientInterface interface {
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
-	NudgeInvocationWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
+	CreateNudgeWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// NudgeInvocation Send extra direction to a running turn
+	// CreateNudge Send extra direction to a running turn
 	//
 	// Sends extra direction to a turn that is already running — "focus on
 	// the marine segment" — without stopping it and without losing the work
@@ -6811,9 +6843,9 @@ type ClientInterface interface {
 	// `if_active` setting says; it never quietly becomes a nudge, and a
 	// nudge never quietly becomes a new turn.
 	//
-	// If the turn ends without ever picking it up, your input is marked
+	// If the turn ends without ever picking it up, your Nudge is marked
 	// `expired` at that moment and has no effect on any later turn. Check
-	// `GET .../pending-inputs` to see whether it was used or missed. Whether
+	// `GET .../nudges` to see whether it was used or missed. Whether
 	// to re-send missed direction as the next turn's input is your call.
 	//
 	// `content` must be text — a string, or an array of text blocks. Images
@@ -6825,26 +6857,12 @@ type ClientInterface interface {
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
-	NudgeInvocation(ctx context.Context, invocationID InvocationID, body NudgeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
+	CreateNudge(ctx context.Context, invocationID InvocationID, body CreateNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListPendingInputs List staged input for an Invocation
+	// CancelNudge Withdraw a Nudge the turn has not taken
 	//
-	// Lists the direction you have sent to this turn with `/nudge`, in the
-	// order the turn will pick it up. Entries stay listed after they are used
-	// or missed, so you can answer "what did the user say, and did the model
-	// ever see it?"
-	//
-	// Check `status` on each entry: `drained` means the turn used it,
-	// `expired` means the turn ended first, `cancelled` means you withdrew
-	// it.
-	//
-	// Corresponds with GET /v1/invocations/{invocation_id}/pending-inputs (the `ListPendingInputs` operationId).
-	ListPendingInputs(ctx context.Context, invocationID InvocationID, params *ListPendingInputsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CancelPendingInput Withdraw staged input the turn has not taken
-	//
-	// Withdraws direction you sent with `/nudge`, as long as the turn has not
+	// Withdraws direction you sent with `/nudges`, as long as the turn has not
 	// picked it up yet. Cancelling something already cancelled returns it
 	// unchanged, so retrying is safe.
 	//
@@ -6853,8 +6871,8 @@ type ClientInterface interface {
 	// half-applied. If the turn got there first, you get a conflict and the
 	// entry stays `drained`.
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel (the `CancelPendingInput` operationId).
-	CancelPendingInput(ctx context.Context, invocationID InvocationID, pendingInputID PendingInputID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel (the `CancelNudge` operationId).
+	CancelNudge(ctx context.Context, invocationID InvocationID, nudgeID NudgeID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetInvocationResult Read a turn together with its messages
 	//
@@ -6880,9 +6898,10 @@ type ClientInterface interface {
 	// above both its old value and what the turn has already used, and still
 	// within what your installation allows.
 	//
-	// If the turn paused on the Session budget rather than its own limit,
-	// raise or remove that budget instead — this endpoint will not resume
-	// it. Deadlines never pause a turn, so they never bring you here.
+	// If the turn paused on the Session maximum estimated cost rather than
+	// its own limit, raise or remove that Session cap instead — this endpoint
+	// will not resume it. Deadlines never pause a turn, so they never bring
+	// you here.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6896,9 +6915,10 @@ type ClientInterface interface {
 	// above both its old value and what the turn has already used, and still
 	// within what your installation allows.
 	//
-	// If the turn paused on the Session budget rather than its own limit,
-	// raise or remove that budget instead — this endpoint will not resume
-	// it. Deadlines never pause a turn, so they never bring you here.
+	// If the turn paused on the Session maximum estimated cost rather than
+	// its own limit, raise or remove that Session cap instead — this endpoint
+	// will not resume it. Deadlines never pause a turn, so they never bring
+	// you here.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6953,7 +6973,7 @@ type ClientInterface interface {
 	// first committed result for each ToolCall wins. An equal replay is
 	// acknowledged as deduplicated; a changed replay conflicts. Partial
 	// batches leave the Invocation waiting. Closing the final pending call
-	// queues the same Invocation and its successor execution dispatch before
+	// queues the same Invocation and its successor dispatch before
 	// returning `202`.
 	//
 	// This command accepts only host-mode calls owned by the path
@@ -6978,7 +6998,7 @@ type ClientInterface interface {
 	// first committed result for each ToolCall wins. An equal replay is
 	// acknowledged as deduplicated; a changed replay conflicts. Partial
 	// batches leave the Invocation waiting. Closing the final pending call
-	// queues the same Invocation and its successor execution dispatch before
+	// queues the same Invocation and its successor dispatch before
 	// returning `202`.
 	//
 	// This command accepts only host-mode calls owned by the path
@@ -7136,7 +7156,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/sessions (the `ListSessions` operationId).
 	ListSessions(ctx context.Context, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateSessionWithBody Create or seed a Session without admitting an Invocation
+	// CreateSessionWithBody Create or seed a Session without creating an Invocation
 	//
 	// Creates an empty Session, optionally seeded with history you already
 	// have. Use this when you want a conversation to exist before the first
@@ -7151,7 +7171,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/sessions (the `CreateSession` operationId).
 	CreateSessionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateSession Create or seed a Session without admitting an Invocation
+	// CreateSession Create or seed a Session without creating an Invocation
 	//
 	// Creates an empty Session, optionally seeded with history you already
 	// have. Use this when you want a conversation to exist before the first
@@ -7175,7 +7195,7 @@ type ClientInterface interface {
 	//
 	// A turn still running is stopped, but no cancellation is recorded —
 	// there is nothing left to record it against, and no
-	// `invocation.settled` webhook fires for it. If you need a record that
+	// `invocation.ended` webhook fires for it. If you need a record that
 	// the turn ended, cancel it and wait for its final state before
 	// deleting.
 	//
@@ -7204,18 +7224,23 @@ type ClientInterface interface {
 
 	// GetSession Read authoritative Session identity and current state
 	//
-	// An installation-wide credential may resolve a Session in any tenant
-	// partition. A tenant-constrained credential resolves only Sessions
-	// in its partition. Missing, incompatible, and undisclosable resources use
+	// An App credential without a tenant constraint may resolve a Session in
+	// any tenant partition in that App. A tenant-constrained credential
+	// resolves only Sessions in its partition. Missing, incompatible, and
+	// undisclosable resources use
 	// `not_found`; a credential denied the read operation itself receives
 	// `forbidden`.
 	//
 	// Corresponds with GET /v1/sessions/{session_id} (the `GetSession` operationId).
 	GetSession(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateSessionWithBody Merge host metadata into a Session
+	// UpdateSessionWithBody Update a Session
 	//
-	// Merges a metadata patch: a present key replaces its value, an explicit
+	// Replaces or removes the Session lifetime estimated-cost cap, and merges
+	// host metadata when present. Raising or removing an exhausted cap
+	// requeues the paused turn when every first-class Budget allows it.
+	//
+	// For metadata, a present key replaces its value, an explicit
 	// `null` deletes that key, and a key the patch does not mention survives.
 	//
 	// Merge rather than replace, because independent writers share this map —
@@ -7237,9 +7262,13 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/sessions/{session_id} (the `UpdateSession` operationId).
 	UpdateSessionWithBody(ctx context.Context, sessionID SessionID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateSession Merge host metadata into a Session
+	// UpdateSession Update a Session
 	//
-	// Merges a metadata patch: a present key replaces its value, an explicit
+	// Replaces or removes the Session lifetime estimated-cost cap, and merges
+	// host metadata when present. Raising or removing an exhausted cap
+	// requeues the paused turn when every first-class Budget allows it.
+	//
+	// For metadata, a present key replaces its value, an explicit
 	// `null` deletes that key, and a key the patch does not mention survives.
 	//
 	// Merge rather than replace, because independent writers share this map —
@@ -7385,9 +7414,10 @@ type ClientInterface interface {
 	// agents are doing, not as a billing ledger — if you bill from usage,
 	// record it yourself when each turn finishes, keyed by Invocation ID.
 	//
-	// A credential bound to an app sees only that app. A credential not
-	// bound to any app sees every registered app; a console issuer token
-	// needs its `admin` claim for that.
+	// A credential bound to an app sees only that app. Only an app-less
+	// issuer token with the `admin` claim can read across every registered
+	// app. App-less API credentials are installation-management credentials
+	// and cannot read usage or other runtime data.
 	//
 	// Corresponds with GET /v1/usage/daily (the `GetDailyUsage` operationId).
 	GetDailyUsage(ctx context.Context, params *GetDailyUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7396,14 +7426,14 @@ type ClientInterface interface {
 // ListAgents List Agent identity anchors
 //
 // Returns newest-first identity anchors scoped to the caller's app. An
-// Agent stores only its nvoken ID, the host-owned `agent_key`, and
-// creation time; instructions, models, tools, and provider keys still
-// travel on each Invocation. An exact `agent_key` filter returns zero or
-// one item.
+// Agent belongs to one app and stores only its nvoken ID, the host-owned
+// `agent_key`, and creation time; instructions, models, tools, and
+// provider keys still travel on each Invocation. An exact `agent_key`
+// filter returns zero or one item within that app.
 //
-// Unconstrained credentials see the anchors referenced by a Session in
-// one of their app's tenants. Tenant-constrained credentials see only
-// anchors referenced by a Session in their effective partition.
+// Unconstrained credentials see their app's anchors. Tenant-constrained
+// credentials see only anchors referenced by a Session in their
+// effective partition.
 // Session-constrained credentials see only that Session's anchor. The
 // opaque cursor is bound to the authenticated caller, credential
 // constraint, and exact key filter.
@@ -7423,7 +7453,7 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 
 // GetAgent Read one Agent identity anchor
 //
-// Reads identity without admitting work. Out-of-scope and undisclosable
+// Reads identity without creating work. Out-of-scope and undisclosable
 // constrained resources use `not_found`.
 //
 // Corresponds with GET /v1/agents/{agent_id} (the `GetAgent` operationId).
@@ -7462,7 +7492,12 @@ func (c *Client) ListApps(ctx context.Context, params *ListAppsParams, reqEditor
 // RegisterAppWithBody Register an app
 //
 // Registers one host application and creates its default tenant,
-// returning the generated `app_id`.
+// returning the generated `app_id` and independent callback and webhook
+// HMAC keys. The plaintext signing keys are returned only in this
+// response; store them in the receiver's secret manager. nvoken stores
+// only authenticated ciphertext and selects a key from the durable App
+// scope of each delivery. Registration is unavailable when the service's
+// encryption keyring is not configured.
 //
 // Registration is installation management rather than work inside an app,
 // so it requires a credential that is *not* associated with an app; a
@@ -7488,7 +7523,12 @@ func (c *Client) RegisterAppWithBody(ctx context.Context, contentType string, bo
 // RegisterApp Register an app
 //
 // Registers one host application and creates its default tenant,
-// returning the generated `app_id`.
+// returning the generated `app_id` and independent callback and webhook
+// HMAC keys. The plaintext signing keys are returned only in this
+// response; store them in the receiver's secret manager. nvoken stores
+// only authenticated ciphertext and selects a key from the durable App
+// scope of each delivery. Registration is unavailable when the service's
+// encryption keyring is not configured.
 //
 // Registration is installation management rather than work inside an app,
 // so it requires a credential that is *not* associated with an app; a
@@ -7572,7 +7612,7 @@ func (c *Client) UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONR
 	return c.Client.Do(req)
 }
 
-// CreateBudgetWithBody Create one fixed usage budget window
+// CreateBudgetWithBody Create one fixed Budget window
 //
 // Creates an estimated-list-price guardrail inside the authenticated App.
 // Windows for the same scope identity cannot overlap. The idempotency key
@@ -7593,7 +7633,7 @@ func (c *Client) CreateBudgetWithBody(ctx context.Context, contentType string, b
 	return c.Client.Do(req)
 }
 
-// CreateBudget Create one fixed usage budget window
+// CreateBudget Create one fixed Budget window
 //
 // Creates an estimated-list-price guardrail inside the authenticated App.
 // Windows for the same scope identity cannot overlap. The idempotency key
@@ -7631,7 +7671,7 @@ func (c *Client) DeleteBudget(ctx context.Context, budgetID BudgetID, reqEditors
 	return c.Client.Do(req)
 }
 
-// GetBudget Read one usage Budget
+// GetBudget Read one Budget
 //
 // Corresponds with GET /v1/budgets/{budget_id} (the `GetBudget` operationId).
 func (c *Client) GetBudget(ctx context.Context, budgetID BudgetID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7821,11 +7861,12 @@ func (c *Client) RotateCredential(ctx context.Context, credentialID CredentialID
 // ListInvocations List authoritative Invocations
 //
 // Returns newest-first durable Invocation state. Exact filters combine
-// with AND. An installation-wide caller may list all tenant partitions, one
-// named partition with `tenant_key`, or the default partition with
-// `default_tenant=true`. A tenant-constrained credential is always scoped
-// to its partition. The opaque cursor is bound to the normalized filter
-// set and credential tenant scope. `agent_id` and `agent_key` are
+// with AND. An App credential without a tenant constraint may list all
+// tenant partitions in that App, one named partition with `tenant_key`,
+// or the default partition with `default_tenant=true`. A
+// tenant-constrained credential is always scoped to its partition. The
+// opaque cursor is bound to the normalized filter set and credential
+// tenant scope. `agent_id` and `agent_key` are
 // mutually exclusive; both normalize to the resolved Agent ID for cursor
 // binding, so an equivalent cursor may resume under either spelling.
 //
@@ -7856,9 +7897,9 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 // Pick the Session with either `session_id` or `session_key`, not both.
 // A Session ID must belong to the Agent you named, or to a Session
 // created without an Agent — in which case this turn binds that Agent
-// permanently. An installation-wide credential may omit `tenant_key` and
-// use whichever tenant the Session already belongs to. A credential
-// locked to one tenant cannot reach another; naming a different one
+// permanently. An App credential without a tenant constraint may omit
+// `tenant_key` and use whichever tenant the Session already belongs to.
+// A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
 // exists.
 //
@@ -7963,9 +8004,9 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 // Pick the Session with either `session_id` or `session_key`, not both.
 // A Session ID must belong to the Agent you named, or to a Session
 // created without an Agent — in which case this turn binds that Agent
-// permanently. An installation-wide credential may omit `tenant_key` and
-// use whichever tenant the Session already belongs to. A credential
-// locked to one tenant cannot reach another; naming a different one
+// permanently. An App credential without a tenant constraint may omit
+// `tenant_key` and use whichever tenant the Session already belongs to.
+// A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
 // exists.
 //
@@ -8146,7 +8187,31 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID Invocatio
 	return c.Client.Do(req)
 }
 
-// NudgeInvocationWithBody Send extra direction to a running turn
+// ListNudges List Nudges for an Invocation
+//
+// Lists the direction you have sent to this turn with `/nudges`, in the
+// order the turn will pick it up. Entries stay listed after they are used
+// or missed, so you can answer "what did the user say, and did the model
+// ever see it?"
+//
+// Check `status` on each entry: `drained` means the turn used it,
+// `expired` means the turn ended first, `cancelled` means you withdrew
+// it.
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/nudges (the `ListNudges` operationId).
+func (c *Client) ListNudges(ctx context.Context, invocationID InvocationID, params *ListNudgesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListNudgesRequest(c.Server, invocationID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateNudgeWithBody Send extra direction to a running turn
 //
 // Sends extra direction to a turn that is already running — "focus on
 // the marine segment" — without stopping it and without losing the work
@@ -8171,9 +8236,9 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID Invocatio
 // `if_active` setting says; it never quietly becomes a nudge, and a
 // nudge never quietly becomes a new turn.
 //
-// If the turn ends without ever picking it up, your input is marked
+// If the turn ends without ever picking it up, your Nudge is marked
 // `expired` at that moment and has no effect on any later turn. Check
-// `GET .../pending-inputs` to see whether it was used or missed. Whether
+// `GET .../nudges` to see whether it was used or missed. Whether
 // to re-send missed direction as the next turn's input is your call.
 //
 // `content` must be text — a string, or an array of text blocks. Images
@@ -8185,9 +8250,9 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID Invocatio
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
-func (c *Client) NudgeInvocationWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewNudgeInvocationRequestWithBody(c.Server, invocationID, contentType, body)
+// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
+func (c *Client) CreateNudgeWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateNudgeRequestWithBody(c.Server, invocationID, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8198,7 +8263,7 @@ func (c *Client) NudgeInvocationWithBody(ctx context.Context, invocationID Invoc
 	return c.Client.Do(req)
 }
 
-// NudgeInvocation Send extra direction to a running turn
+// CreateNudge Send extra direction to a running turn
 //
 // Sends extra direction to a turn that is already running — "focus on
 // the marine segment" — without stopping it and without losing the work
@@ -8223,9 +8288,9 @@ func (c *Client) NudgeInvocationWithBody(ctx context.Context, invocationID Invoc
 // `if_active` setting says; it never quietly becomes a nudge, and a
 // nudge never quietly becomes a new turn.
 //
-// If the turn ends without ever picking it up, your input is marked
+// If the turn ends without ever picking it up, your Nudge is marked
 // `expired` at that moment and has no effect on any later turn. Check
-// `GET .../pending-inputs` to see whether it was used or missed. Whether
+// `GET .../nudges` to see whether it was used or missed. Whether
 // to re-send missed direction as the next turn's input is your call.
 //
 // `content` must be text — a string, or an array of text blocks. Images
@@ -8237,9 +8302,9 @@ func (c *Client) NudgeInvocationWithBody(ctx context.Context, invocationID Invoc
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
-func (c *Client) NudgeInvocation(ctx context.Context, invocationID InvocationID, body NudgeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewNudgeInvocationRequest(c.Server, invocationID, body)
+// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
+func (c *Client) CreateNudge(ctx context.Context, invocationID InvocationID, body CreateNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateNudgeRequest(c.Server, invocationID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8250,33 +8315,9 @@ func (c *Client) NudgeInvocation(ctx context.Context, invocationID InvocationID,
 	return c.Client.Do(req)
 }
 
-// ListPendingInputs List staged input for an Invocation
+// CancelNudge Withdraw a Nudge the turn has not taken
 //
-// Lists the direction you have sent to this turn with `/nudge`, in the
-// order the turn will pick it up. Entries stay listed after they are used
-// or missed, so you can answer "what did the user say, and did the model
-// ever see it?"
-//
-// Check `status` on each entry: `drained` means the turn used it,
-// `expired` means the turn ended first, `cancelled` means you withdrew
-// it.
-//
-// Corresponds with GET /v1/invocations/{invocation_id}/pending-inputs (the `ListPendingInputs` operationId).
-func (c *Client) ListPendingInputs(ctx context.Context, invocationID InvocationID, params *ListPendingInputsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListPendingInputsRequest(c.Server, invocationID, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CancelPendingInput Withdraw staged input the turn has not taken
-//
-// Withdraws direction you sent with `/nudge`, as long as the turn has not
+// Withdraws direction you sent with `/nudges`, as long as the turn has not
 // picked it up yet. Cancelling something already cancelled returns it
 // unchanged, so retrying is safe.
 //
@@ -8285,9 +8326,9 @@ func (c *Client) ListPendingInputs(ctx context.Context, invocationID InvocationI
 // half-applied. If the turn got there first, you get a conflict and the
 // entry stays `drained`.
 //
-// Corresponds with POST /v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel (the `CancelPendingInput` operationId).
-func (c *Client) CancelPendingInput(ctx context.Context, invocationID InvocationID, pendingInputID PendingInputID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCancelPendingInputRequest(c.Server, invocationID, pendingInputID)
+// Corresponds with POST /v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel (the `CancelNudge` operationId).
+func (c *Client) CancelNudge(ctx context.Context, invocationID InvocationID, nudgeID NudgeID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelNudgeRequest(c.Server, invocationID, nudgeID)
 	if err != nil {
 		return nil, err
 	}
@@ -8332,9 +8373,10 @@ func (c *Client) GetInvocationResult(ctx context.Context, invocationID Invocatio
 // above both its old value and what the turn has already used, and still
 // within what your installation allows.
 //
-// If the turn paused on the Session budget rather than its own limit,
-// raise or remove that budget instead — this endpoint will not resume
-// it. Deadlines never pause a turn, so they never bring you here.
+// If the turn paused on the Session maximum estimated cost rather than
+// its own limit, raise or remove that Session cap instead — this endpoint
+// will not resume it. Deadlines never pause a turn, so they never bring
+// you here.
 //
 // Takes any type of body and a specified content type.
 //
@@ -8358,9 +8400,10 @@ func (c *Client) ResumeInvocationWithBody(ctx context.Context, invocationID Invo
 // above both its old value and what the turn has already used, and still
 // within what your installation allows.
 //
-// If the turn paused on the Session budget rather than its own limit,
-// raise or remove that budget instead — this endpoint will not resume
-// it. Deadlines never pause a turn, so they never bring you here.
+// If the turn paused on the Session maximum estimated cost rather than
+// its own limit, raise or remove that Session cap instead — this endpoint
+// will not resume it. Deadlines never pause a turn, so they never bring
+// you here.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8445,7 +8488,7 @@ func (c *Client) ListToolCalls(ctx context.Context, invocationID InvocationID, p
 // first committed result for each ToolCall wins. An equal replay is
 // acknowledged as deduplicated; a changed replay conflicts. Partial
 // batches leave the Invocation waiting. Closing the final pending call
-// queues the same Invocation and its successor execution dispatch before
+// queues the same Invocation and its successor dispatch before
 // returning `202`.
 //
 // This command accepts only host-mode calls owned by the path
@@ -8480,7 +8523,7 @@ func (c *Client) SubmitHostToolResultsWithBody(ctx context.Context, invocationID
 // first committed result for each ToolCall wins. An equal replay is
 // acknowledged as deduplicated; a changed replay conflicts. Partial
 // batches leave the Invocation waiting. Closing the final pending call
-// queues the same Invocation and its successor execution dispatch before
+// queues the same Invocation and its successor dispatch before
 // returning `202`.
 //
 // This command accepts only host-mode calls owned by the path
@@ -8778,7 +8821,7 @@ func (c *Client) ListSessions(ctx context.Context, params *ListSessionsParams, r
 	return c.Client.Do(req)
 }
 
-// CreateSessionWithBody Create or seed a Session without admitting an Invocation
+// CreateSessionWithBody Create or seed a Session without creating an Invocation
 //
 // Creates an empty Session, optionally seeded with history you already
 // have. Use this when you want a conversation to exist before the first
@@ -8803,7 +8846,7 @@ func (c *Client) CreateSessionWithBody(ctx context.Context, contentType string, 
 	return c.Client.Do(req)
 }
 
-// CreateSession Create or seed a Session without admitting an Invocation
+// CreateSession Create or seed a Session without creating an Invocation
 //
 // Creates an empty Session, optionally seeded with history you already
 // have. Use this when you want a conversation to exist before the first
@@ -8837,7 +8880,7 @@ func (c *Client) CreateSession(ctx context.Context, body CreateSessionJSONReques
 //
 // A turn still running is stopped, but no cancellation is recorded —
 // there is nothing left to record it against, and no
-// `invocation.settled` webhook fires for it. If you need a record that
+// `invocation.ended` webhook fires for it. If you need a record that
 // the turn ended, cancel it and wait for its final state before
 // deleting.
 //
@@ -8876,9 +8919,10 @@ func (c *Client) DeleteSession(ctx context.Context, sessionID SessionID, reqEdit
 
 // GetSession Read authoritative Session identity and current state
 //
-// An installation-wide credential may resolve a Session in any tenant
-// partition. A tenant-constrained credential resolves only Sessions
-// in its partition. Missing, incompatible, and undisclosable resources use
+// An App credential without a tenant constraint may resolve a Session in
+// any tenant partition in that App. A tenant-constrained credential
+// resolves only Sessions in its partition. Missing, incompatible, and
+// undisclosable resources use
 // `not_found`; a credential denied the read operation itself receives
 // `forbidden`.
 //
@@ -8895,9 +8939,13 @@ func (c *Client) GetSession(ctx context.Context, sessionID SessionID, reqEditors
 	return c.Client.Do(req)
 }
 
-// UpdateSessionWithBody Merge host metadata into a Session
+// UpdateSessionWithBody Update a Session
 //
-// Merges a metadata patch: a present key replaces its value, an explicit
+// Replaces or removes the Session lifetime estimated-cost cap, and merges
+// host metadata when present. Raising or removing an exhausted cap
+// requeues the paused turn when every first-class Budget allows it.
+//
+// For metadata, a present key replaces its value, an explicit
 // `null` deletes that key, and a key the patch does not mention survives.
 //
 // Merge rather than replace, because independent writers share this map —
@@ -8929,9 +8977,13 @@ func (c *Client) UpdateSessionWithBody(ctx context.Context, sessionID SessionID,
 	return c.Client.Do(req)
 }
 
-// UpdateSession Merge host metadata into a Session
+// UpdateSession Update a Session
 //
-// Merges a metadata patch: a present key replaces its value, an explicit
+// Replaces or removes the Session lifetime estimated-cost cap, and merges
+// host metadata when present. Raising or removing an exhausted cap
+// requeues the paused turn when every first-class Budget allows it.
+//
+// For metadata, a present key replaces its value, an explicit
 // `null` deletes that key, and a key the patch does not mention survives.
 //
 // Merge rather than replace, because independent writers share this map —
@@ -9147,9 +9199,10 @@ func (c *Client) StreamSessionTranscript(ctx context.Context, sessionID SessionI
 // agents are doing, not as a billing ledger — if you bill from usage,
 // record it yourself when each turn finishes, keyed by Invocation ID.
 //
-// A credential bound to an app sees only that app. A credential not
-// bound to any app sees every registered app; a console issuer token
-// needs its `admin` claim for that.
+// A credential bound to an app sees only that app. Only an app-less
+// issuer token with the `admin` claim can read across every registered
+// app. App-less API credentials are installation-management credentials
+// and cannot read usage or other runtime data.
 //
 // Corresponds with GET /v1/usage/daily (the `GetDailyUsage` operationId).
 func (c *Client) GetDailyUsage(ctx context.Context, params *GetDailyUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10232,19 +10285,8 @@ func NewInterruptInvocationRequest(server string, invocationID InvocationID) (*h
 	return req, nil
 }
 
-// NewNudgeInvocationRequest calls the generic NudgeInvocation builder with application/json body
-func NewNudgeInvocationRequest(server string, invocationID InvocationID, body NudgeInvocationJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewNudgeInvocationRequestWithBody(server, invocationID, "application/json", bodyReader)
-}
-
-// NewNudgeInvocationRequestWithBody constructs an http.Request for the NudgeInvocation method, with any body, and a specified content type
-func NewNudgeInvocationRequestWithBody(server string, invocationID InvocationID, contentType string, body io.Reader) (*http.Request, error) {
+// NewListNudgesRequest constructs an http.Request for the ListNudges method
+func NewListNudgesRequest(server string, invocationID InvocationID, params *ListNudgesParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10259,43 +10301,7 @@ func NewNudgeInvocationRequestWithBody(server string, invocationID InvocationID,
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1/invocations/%s/nudge", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewListPendingInputsRequest constructs an http.Request for the ListPendingInputs method
-func NewListPendingInputsRequest(server string, invocationID InvocationID, params *ListPendingInputsParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/invocations/%s/pending-inputs", pathParam0)
+	operationPath := fmt.Sprintf("/v1/invocations/%s/nudges", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -10364,8 +10370,55 @@ func NewListPendingInputsRequest(server string, invocationID InvocationID, param
 	return req, nil
 }
 
-// NewCancelPendingInputRequest constructs an http.Request for the CancelPendingInput method
-func NewCancelPendingInputRequest(server string, invocationID InvocationID, pendingInputID PendingInputID) (*http.Request, error) {
+// NewCreateNudgeRequest calls the generic CreateNudge builder with application/json body
+func NewCreateNudgeRequest(server string, invocationID InvocationID, body CreateNudgeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateNudgeRequestWithBody(server, invocationID, "application/json", bodyReader)
+}
+
+// NewCreateNudgeRequestWithBody constructs an http.Request for the CreateNudge method, with any body, and a specified content type
+func NewCreateNudgeRequestWithBody(server string, invocationID InvocationID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/invocations/%s/nudges", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCancelNudgeRequest constructs an http.Request for the CancelNudge method
+func NewCancelNudgeRequest(server string, invocationID InvocationID, nudgeID NudgeID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10377,7 +10430,7 @@ func NewCancelPendingInputRequest(server string, invocationID InvocationID, pend
 
 	var pathParam1 string
 
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "pending_input_id", pendingInputID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "nudge_id", nudgeID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -10387,7 +10440,7 @@ func NewCancelPendingInputRequest(server string, invocationID InvocationID, pend
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1/invocations/%s/pending-inputs/%s/cancel", pathParam0, pathParam1)
+	operationPath := fmt.Sprintf("/v1/invocations/%s/nudges/%s/cancel", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -11982,14 +12035,14 @@ type ClientWithResponsesInterface interface {
 	// ListAgentsWithResponse List Agent identity anchors
 	//
 	// Returns newest-first identity anchors scoped to the caller's app. An
-	// Agent stores only its nvoken ID, the host-owned `agent_key`, and
-	// creation time; instructions, models, tools, and provider keys still
-	// travel on each Invocation. An exact `agent_key` filter returns zero or
-	// one item.
+	// Agent belongs to one app and stores only its nvoken ID, the host-owned
+	// `agent_key`, and creation time; instructions, models, tools, and
+	// provider keys still travel on each Invocation. An exact `agent_key`
+	// filter returns zero or one item within that app.
 	//
-	// Unconstrained credentials see the anchors referenced by a Session in
-	// one of their app's tenants. Tenant-constrained credentials see only
-	// anchors referenced by a Session in their effective partition.
+	// Unconstrained credentials see their app's anchors. Tenant-constrained
+	// credentials see only anchors referenced by a Session in their
+	// effective partition.
 	// Session-constrained credentials see only that Session's anchor. The
 	// opaque cursor is bound to the authenticated caller, credential
 	// constraint, and exact key filter.
@@ -12001,7 +12054,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetAgentWithResponse Read one Agent identity anchor
 	//
-	// Reads identity without admitting work. Out-of-scope and undisclosable
+	// Reads identity without creating work. Out-of-scope and undisclosable
 	// constrained resources use `not_found`.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -12024,7 +12077,12 @@ type ClientWithResponsesInterface interface {
 	// RegisterAppWithBodyWithResponse Register an app
 	//
 	// Registers one host application and creates its default tenant,
-	// returning the generated `app_id`.
+	// returning the generated `app_id` and independent callback and webhook
+	// HMAC keys. The plaintext signing keys are returned only in this
+	// response; store them in the receiver's secret manager. nvoken stores
+	// only authenticated ciphertext and selects a key from the durable App
+	// scope of each delivery. Registration is unavailable when the service's
+	// encryption keyring is not configured.
 	//
 	// Registration is installation management rather than work inside an app,
 	// so it requires a credential that is *not* associated with an app; a
@@ -12040,7 +12098,12 @@ type ClientWithResponsesInterface interface {
 	// RegisterAppWithResponse Register an app
 	//
 	// Registers one host application and creates its default tenant,
-	// returning the generated `app_id`.
+	// returning the generated `app_id` and independent callback and webhook
+	// HMAC keys. The plaintext signing keys are returned only in this
+	// response; store them in the receiver's secret manager. nvoken stores
+	// only authenticated ciphertext and selects a key from the durable App
+	// scope of each delivery. Registration is unavailable when the service's
+	// encryption keyring is not configured.
 	//
 	// Registration is installation management rather than work inside an app,
 	// so it requires a credential that is *not* associated with an app; a
@@ -12086,7 +12149,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
 	UpdateAppWithResponse(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error)
 
-	// CreateBudgetWithBodyWithResponse Create one fixed usage budget window
+	// CreateBudgetWithBodyWithResponse Create one fixed Budget window
 	//
 	// Creates an estimated-list-price guardrail inside the authenticated App.
 	// Windows for the same scope identity cannot overlap. The idempotency key
@@ -12097,7 +12160,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/budgets (the `CreateBudget` operationId).
 	CreateBudgetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBudgetHTTPResponse, error)
 
-	// CreateBudgetWithResponse Create one fixed usage budget window
+	// CreateBudgetWithResponse Create one fixed Budget window
 	//
 	// Creates an estimated-list-price guardrail inside the authenticated App.
 	// Windows for the same scope identity cannot overlap. The idempotency key
@@ -12117,7 +12180,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /v1/budgets/{budget_id} (the `DeleteBudget` operationId).
 	DeleteBudgetWithResponse(ctx context.Context, budgetID BudgetID, reqEditors ...RequestEditorFn) (*DeleteBudgetHTTPResponse, error)
 
-	// GetBudgetWithResponse Read one usage Budget
+	// GetBudgetWithResponse Read one Budget
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12207,11 +12270,12 @@ type ClientWithResponsesInterface interface {
 	// ListInvocationsWithResponse List authoritative Invocations
 	//
 	// Returns newest-first durable Invocation state. Exact filters combine
-	// with AND. An installation-wide caller may list all tenant partitions, one
-	// named partition with `tenant_key`, or the default partition with
-	// `default_tenant=true`. A tenant-constrained credential is always scoped
-	// to its partition. The opaque cursor is bound to the normalized filter
-	// set and credential tenant scope. `agent_id` and `agent_key` are
+	// with AND. An App credential without a tenant constraint may list all
+	// tenant partitions in that App, one named partition with `tenant_key`,
+	// or the default partition with `default_tenant=true`. A
+	// tenant-constrained credential is always scoped to its partition. The
+	// opaque cursor is bound to the normalized filter set and credential
+	// tenant scope. `agent_id` and `agent_key` are
 	// mutually exclusive; both normalize to the resolved Agent ID for cursor
 	// binding, so an equivalent cursor may resume under either spelling.
 	//
@@ -12234,9 +12298,9 @@ type ClientWithResponsesInterface interface {
 	// Pick the Session with either `session_id` or `session_key`, not both.
 	// A Session ID must belong to the Agent you named, or to a Session
 	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An installation-wide credential may omit `tenant_key` and
-	// use whichever tenant the Session already belongs to. A credential
-	// locked to one tenant cannot reach another; naming a different one
+	// permanently. An App credential without a tenant constraint may omit
+	// `tenant_key` and use whichever tenant the Session already belongs to.
+	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
 	// exists.
 	//
@@ -12331,9 +12395,9 @@ type ClientWithResponsesInterface interface {
 	// Pick the Session with either `session_id` or `session_key`, not both.
 	// A Session ID must belong to the Agent you named, or to a Session
 	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An installation-wide credential may omit `tenant_key` and
-	// use whichever tenant the Session already belongs to. A credential
-	// locked to one tenant cannot reach another; naming a different one
+	// permanently. An App credential without a tenant constraint may omit
+	// `tenant_key` and use whichever tenant the Session already belongs to.
+	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
 	// exists.
 	//
@@ -12480,7 +12544,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/interrupt (the `InterruptInvocation` operationId).
 	InterruptInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*InterruptInvocationHTTPResponse, error)
 
-	// NudgeInvocationWithBodyWithResponse Send extra direction to a running turn
+	// ListNudgesWithResponse List Nudges for an Invocation
+	//
+	// Lists the direction you have sent to this turn with `/nudges`, in the
+	// order the turn will pick it up. Entries stay listed after they are used
+	// or missed, so you can answer "what did the user say, and did the model
+	// ever see it?"
+	//
+	// Check `status` on each entry: `drained` means the turn used it,
+	// `expired` means the turn ended first, `cancelled` means you withdrew
+	// it.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/nudges (the `ListNudges` operationId).
+	ListNudgesWithResponse(ctx context.Context, invocationID InvocationID, params *ListNudgesParams, reqEditors ...RequestEditorFn) (*ListNudgesHTTPResponse, error)
+
+	// CreateNudgeWithBodyWithResponse Send extra direction to a running turn
 	//
 	// Sends extra direction to a turn that is already running — "focus on
 	// the marine segment" — without stopping it and without losing the work
@@ -12505,9 +12585,9 @@ type ClientWithResponsesInterface interface {
 	// `if_active` setting says; it never quietly becomes a nudge, and a
 	// nudge never quietly becomes a new turn.
 	//
-	// If the turn ends without ever picking it up, your input is marked
+	// If the turn ends without ever picking it up, your Nudge is marked
 	// `expired` at that moment and has no effect on any later turn. Check
-	// `GET .../pending-inputs` to see whether it was used or missed. Whether
+	// `GET .../nudges` to see whether it was used or missed. Whether
 	// to re-send missed direction as the next turn's input is your call.
 	//
 	// `content` must be text — a string, or an array of text blocks. Images
@@ -12519,10 +12599,10 @@ type ClientWithResponsesInterface interface {
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
-	NudgeInvocationWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NudgeInvocationHTTPResponse, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
+	CreateNudgeWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateNudgeHTTPResponse, error)
 
-	// NudgeInvocationWithResponse Send extra direction to a running turn
+	// CreateNudgeWithResponse Send extra direction to a running turn
 	//
 	// Sends extra direction to a turn that is already running — "focus on
 	// the marine segment" — without stopping it and without losing the work
@@ -12547,9 +12627,9 @@ type ClientWithResponsesInterface interface {
 	// `if_active` setting says; it never quietly becomes a nudge, and a
 	// nudge never quietly becomes a new turn.
 	//
-	// If the turn ends without ever picking it up, your input is marked
+	// If the turn ends without ever picking it up, your Nudge is marked
 	// `expired` at that moment and has no effect on any later turn. Check
-	// `GET .../pending-inputs` to see whether it was used or missed. Whether
+	// `GET .../nudges` to see whether it was used or missed. Whether
 	// to re-send missed direction as the next turn's input is your call.
 	//
 	// `content` must be text — a string, or an array of text blocks. Images
@@ -12561,28 +12641,12 @@ type ClientWithResponsesInterface interface {
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
-	NudgeInvocationWithResponse(ctx context.Context, invocationID InvocationID, body NudgeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*NudgeInvocationHTTPResponse, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
+	CreateNudgeWithResponse(ctx context.Context, invocationID InvocationID, body CreateNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateNudgeHTTPResponse, error)
 
-	// ListPendingInputsWithResponse List staged input for an Invocation
+	// CancelNudgeWithResponse Withdraw a Nudge the turn has not taken
 	//
-	// Lists the direction you have sent to this turn with `/nudge`, in the
-	// order the turn will pick it up. Entries stay listed after they are used
-	// or missed, so you can answer "what did the user say, and did the model
-	// ever see it?"
-	//
-	// Check `status` on each entry: `drained` means the turn used it,
-	// `expired` means the turn ended first, `cancelled` means you withdrew
-	// it.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/invocations/{invocation_id}/pending-inputs (the `ListPendingInputs` operationId).
-	ListPendingInputsWithResponse(ctx context.Context, invocationID InvocationID, params *ListPendingInputsParams, reqEditors ...RequestEditorFn) (*ListPendingInputsHTTPResponse, error)
-
-	// CancelPendingInputWithResponse Withdraw staged input the turn has not taken
-	//
-	// Withdraws direction you sent with `/nudge`, as long as the turn has not
+	// Withdraws direction you sent with `/nudges`, as long as the turn has not
 	// picked it up yet. Cancelling something already cancelled returns it
 	// unchanged, so retrying is safe.
 	//
@@ -12593,8 +12657,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel (the `CancelPendingInput` operationId).
-	CancelPendingInputWithResponse(ctx context.Context, invocationID InvocationID, pendingInputID PendingInputID, reqEditors ...RequestEditorFn) (*CancelPendingInputHTTPResponse, error)
+	// Corresponds with POST /v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel (the `CancelNudge` operationId).
+	CancelNudgeWithResponse(ctx context.Context, invocationID InvocationID, nudgeID NudgeID, reqEditors ...RequestEditorFn) (*CancelNudgeHTTPResponse, error)
 
 	// GetInvocationResultWithResponse Read a turn together with its messages
 	//
@@ -12622,9 +12686,10 @@ type ClientWithResponsesInterface interface {
 	// above both its old value and what the turn has already used, and still
 	// within what your installation allows.
 	//
-	// If the turn paused on the Session budget rather than its own limit,
-	// raise or remove that budget instead — this endpoint will not resume
-	// it. Deadlines never pause a turn, so they never bring you here.
+	// If the turn paused on the Session maximum estimated cost rather than
+	// its own limit, raise or remove that Session cap instead — this endpoint
+	// will not resume it. Deadlines never pause a turn, so they never bring
+	// you here.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12638,9 +12703,10 @@ type ClientWithResponsesInterface interface {
 	// above both its old value and what the turn has already used, and still
 	// within what your installation allows.
 	//
-	// If the turn paused on the Session budget rather than its own limit,
-	// raise or remove that budget instead — this endpoint will not resume
-	// it. Deadlines never pause a turn, so they never bring you here.
+	// If the turn paused on the Session maximum estimated cost rather than
+	// its own limit, raise or remove that Session cap instead — this endpoint
+	// will not resume it. Deadlines never pause a turn, so they never bring
+	// you here.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12699,7 +12765,7 @@ type ClientWithResponsesInterface interface {
 	// first committed result for each ToolCall wins. An equal replay is
 	// acknowledged as deduplicated; a changed replay conflicts. Partial
 	// batches leave the Invocation waiting. Closing the final pending call
-	// queues the same Invocation and its successor execution dispatch before
+	// queues the same Invocation and its successor dispatch before
 	// returning `202`.
 	//
 	// This command accepts only host-mode calls owned by the path
@@ -12724,7 +12790,7 @@ type ClientWithResponsesInterface interface {
 	// first committed result for each ToolCall wins. An equal replay is
 	// acknowledged as deduplicated; a changed replay conflicts. Partial
 	// batches leave the Invocation waiting. Closing the final pending call
-	// queues the same Invocation and its successor execution dispatch before
+	// queues the same Invocation and its successor dispatch before
 	// returning `202`.
 	//
 	// This command accepts only host-mode calls owned by the path
@@ -12896,7 +12962,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/sessions (the `ListSessions` operationId).
 	ListSessionsWithResponse(ctx context.Context, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*ListSessionsHTTPResponse, error)
 
-	// CreateSessionWithBodyWithResponse Create or seed a Session without admitting an Invocation
+	// CreateSessionWithBodyWithResponse Create or seed a Session without creating an Invocation
 	//
 	// Creates an empty Session, optionally seeded with history you already
 	// have. Use this when you want a conversation to exist before the first
@@ -12911,7 +12977,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/sessions (the `CreateSession` operationId).
 	CreateSessionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSessionHTTPResponse, error)
 
-	// CreateSessionWithResponse Create or seed a Session without admitting an Invocation
+	// CreateSessionWithResponse Create or seed a Session without creating an Invocation
 	//
 	// Creates an empty Session, optionally seeded with history you already
 	// have. Use this when you want a conversation to exist before the first
@@ -12935,7 +13001,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// A turn still running is stopped, but no cancellation is recorded —
 	// there is nothing left to record it against, and no
-	// `invocation.settled` webhook fires for it. If you need a record that
+	// `invocation.ended` webhook fires for it. If you need a record that
 	// the turn ended, cancel it and wait for its final state before
 	// deleting.
 	//
@@ -12966,9 +13032,10 @@ type ClientWithResponsesInterface interface {
 
 	// GetSessionWithResponse Read authoritative Session identity and current state
 	//
-	// An installation-wide credential may resolve a Session in any tenant
-	// partition. A tenant-constrained credential resolves only Sessions
-	// in its partition. Missing, incompatible, and undisclosable resources use
+	// An App credential without a tenant constraint may resolve a Session in
+	// any tenant partition in that App. A tenant-constrained credential
+	// resolves only Sessions in its partition. Missing, incompatible, and
+	// undisclosable resources use
 	// `not_found`; a credential denied the read operation itself receives
 	// `forbidden`.
 	//
@@ -12977,9 +13044,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/sessions/{session_id} (the `GetSession` operationId).
 	GetSessionWithResponse(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*GetSessionHTTPResponse, error)
 
-	// UpdateSessionWithBodyWithResponse Merge host metadata into a Session
+	// UpdateSessionWithBodyWithResponse Update a Session
 	//
-	// Merges a metadata patch: a present key replaces its value, an explicit
+	// Replaces or removes the Session lifetime estimated-cost cap, and merges
+	// host metadata when present. Raising or removing an exhausted cap
+	// requeues the paused turn when every first-class Budget allows it.
+	//
+	// For metadata, a present key replaces its value, an explicit
 	// `null` deletes that key, and a key the patch does not mention survives.
 	//
 	// Merge rather than replace, because independent writers share this map —
@@ -13001,9 +13072,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/sessions/{session_id} (the `UpdateSession` operationId).
 	UpdateSessionWithBodyWithResponse(ctx context.Context, sessionID SessionID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSessionHTTPResponse, error)
 
-	// UpdateSessionWithResponse Merge host metadata into a Session
+	// UpdateSessionWithResponse Update a Session
 	//
-	// Merges a metadata patch: a present key replaces its value, an explicit
+	// Replaces or removes the Session lifetime estimated-cost cap, and merges
+	// host metadata when present. Raising or removing an exhausted cap
+	// requeues the paused turn when every first-class Budget allows it.
+	//
+	// For metadata, a present key replaces its value, an explicit
 	// `null` deletes that key, and a key the patch does not mention survives.
 	//
 	// Merge rather than replace, because independent writers share this map —
@@ -13157,9 +13232,10 @@ type ClientWithResponsesInterface interface {
 	// agents are doing, not as a billing ledger — if you bill from usage,
 	// record it yourself when each turn finishes, keyed by Invocation ID.
 	//
-	// A credential bound to an app sees only that app. A credential not
-	// bound to any app sees every registered app; a console issuer token
-	// needs its `admin` claim for that.
+	// A credential bound to an app sees only that app. Only an app-less
+	// issuer token with the `admin` claim can read across every registered
+	// app. App-less API credentials are installation-management credentials
+	// and cannot read usage or other runtime data.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -13439,7 +13515,7 @@ type RegisterAppHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *App
+	JSON201 *AppRegistration
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -13450,12 +13526,14 @@ type RegisterAppHTTPResponse struct {
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
 	// Headers429 the parsed response headers for an HTTP 429 response
 	Headers429 *RegisterAppHTTPResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r RegisterAppHTTPResponse) GetJSON201() *App {
+func (r RegisterAppHTTPResponse) GetJSON201() *AppRegistration {
 	return r.JSON201
 }
 
@@ -13482,6 +13560,11 @@ func (r RegisterAppHTTPResponse) GetJSON429() *RateLimited {
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
 func (r RegisterAppHTTPResponse) GetJSON500() *Internal {
 	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r RegisterAppHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -14847,7 +14930,90 @@ func (r InterruptInvocationHTTPResponse) ContentType() string {
 	return ""
 }
 
-type NudgeInvocationHTTPResponse struct {
+type ListNudgesHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *NudgeList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListNudgesHTTPResponse) GetJSON200() *NudgeList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListNudgesHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListNudgesHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListNudgesHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListNudgesHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListNudgesHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListNudgesHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListNudgesHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListNudgesHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListNudgesHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListNudgesHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateNudgeHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON202 the response for an HTTP 202 `application/json` response
@@ -14869,52 +15035,52 @@ type NudgeInvocationHTTPResponse struct {
 }
 
 // GetJSON202 returns the response for an HTTP 202 `application/json` response
-func (r NudgeInvocationHTTPResponse) GetJSON202() *NudgeAcknowledgement {
+func (r CreateNudgeHTTPResponse) GetJSON202() *NudgeAcknowledgement {
 	return r.JSON202
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r NudgeInvocationHTTPResponse) GetJSON400() *InvalidRequest {
+func (r CreateNudgeHTTPResponse) GetJSON400() *InvalidRequest {
 	return r.JSON400
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r NudgeInvocationHTTPResponse) GetJSON401() *Unauthenticated {
+func (r CreateNudgeHTTPResponse) GetJSON401() *Unauthenticated {
 	return r.JSON401
 }
 
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r NudgeInvocationHTTPResponse) GetJSON403() *Forbidden {
+func (r CreateNudgeHTTPResponse) GetJSON403() *Forbidden {
 	return r.JSON403
 }
 
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r NudgeInvocationHTTPResponse) GetJSON404() *NotFound {
+func (r CreateNudgeHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r NudgeInvocationHTTPResponse) GetJSON409() *ErrorResponse {
+func (r CreateNudgeHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r NudgeInvocationHTTPResponse) GetJSON500() *Internal {
+func (r CreateNudgeHTTPResponse) GetJSON500() *Internal {
 	return r.JSON500
 }
 
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
-func (r NudgeInvocationHTTPResponse) GetJSON503() *Unavailable {
+func (r CreateNudgeHTTPResponse) GetJSON503() *Unavailable {
 	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
-func (r NudgeInvocationHTTPResponse) GetBody() []byte {
+func (r CreateNudgeHTTPResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r NudgeInvocationHTTPResponse) Status() string {
+func (r CreateNudgeHTTPResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -14922,7 +15088,7 @@ func (r NudgeInvocationHTTPResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r NudgeInvocationHTTPResponse) StatusCode() int {
+func (r CreateNudgeHTTPResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -14930,101 +15096,18 @@ func (r NudgeInvocationHTTPResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r NudgeInvocationHTTPResponse) ContentType() string {
+func (r CreateNudgeHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
 	return ""
 }
 
-type ListPendingInputsHTTPResponse struct {
+type CancelNudgeHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *PendingInputList
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *InvalidRequest
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Unauthenticated
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Forbidden
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *Internal
-	// JSON503 the response for an HTTP 503 `application/json` response
-	JSON503 *Unavailable
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListPendingInputsHTTPResponse) GetJSON200() *PendingInputList {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r ListPendingInputsHTTPResponse) GetJSON400() *InvalidRequest {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ListPendingInputsHTTPResponse) GetJSON401() *Unauthenticated {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r ListPendingInputsHTTPResponse) GetJSON403() *Forbidden {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r ListPendingInputsHTTPResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r ListPendingInputsHTTPResponse) GetJSON500() *Internal {
-	return r.JSON500
-}
-
-// GetJSON503 returns the response for an HTTP 503 `application/json` response
-func (r ListPendingInputsHTTPResponse) GetJSON503() *Unavailable {
-	return r.JSON503
-}
-
-// GetBody returns the raw response body bytes
-func (r ListPendingInputsHTTPResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListPendingInputsHTTPResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListPendingInputsHTTPResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListPendingInputsHTTPResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type CancelPendingInputHTTPResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *PendingInput
+	JSON200 *Nudge
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -15042,52 +15125,52 @@ type CancelPendingInputHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r CancelPendingInputHTTPResponse) GetJSON200() *PendingInput {
+func (r CancelNudgeHTTPResponse) GetJSON200() *Nudge {
 	return r.JSON200
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r CancelPendingInputHTTPResponse) GetJSON400() *InvalidRequest {
+func (r CancelNudgeHTTPResponse) GetJSON400() *InvalidRequest {
 	return r.JSON400
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r CancelPendingInputHTTPResponse) GetJSON401() *Unauthenticated {
+func (r CancelNudgeHTTPResponse) GetJSON401() *Unauthenticated {
 	return r.JSON401
 }
 
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r CancelPendingInputHTTPResponse) GetJSON403() *Forbidden {
+func (r CancelNudgeHTTPResponse) GetJSON403() *Forbidden {
 	return r.JSON403
 }
 
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r CancelPendingInputHTTPResponse) GetJSON404() *NotFound {
+func (r CancelNudgeHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r CancelPendingInputHTTPResponse) GetJSON409() *ErrorResponse {
+func (r CancelNudgeHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r CancelPendingInputHTTPResponse) GetJSON500() *Internal {
+func (r CancelNudgeHTTPResponse) GetJSON500() *Internal {
 	return r.JSON500
 }
 
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
-func (r CancelPendingInputHTTPResponse) GetJSON503() *Unavailable {
+func (r CancelNudgeHTTPResponse) GetJSON503() *Unavailable {
 	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
-func (r CancelPendingInputHTTPResponse) GetBody() []byte {
+func (r CancelNudgeHTTPResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r CancelPendingInputHTTPResponse) Status() string {
+func (r CancelNudgeHTTPResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -15095,7 +15178,7 @@ func (r CancelPendingInputHTTPResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r CancelPendingInputHTTPResponse) StatusCode() int {
+func (r CancelNudgeHTTPResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -15103,7 +15186,7 @@ func (r CancelPendingInputHTTPResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CancelPendingInputHTTPResponse) ContentType() string {
+func (r CancelNudgeHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17391,14 +17474,14 @@ func (r GetDailyUsageHTTPResponse) ContentType() string {
 // ListAgentsWithResponse List Agent identity anchors
 //
 // Returns newest-first identity anchors scoped to the caller's app. An
-// Agent stores only its nvoken ID, the host-owned `agent_key`, and
-// creation time; instructions, models, tools, and provider keys still
-// travel on each Invocation. An exact `agent_key` filter returns zero or
-// one item.
+// Agent belongs to one app and stores only its nvoken ID, the host-owned
+// `agent_key`, and creation time; instructions, models, tools, and
+// provider keys still travel on each Invocation. An exact `agent_key`
+// filter returns zero or one item within that app.
 //
-// Unconstrained credentials see the anchors referenced by a Session in
-// one of their app's tenants. Tenant-constrained credentials see only
-// anchors referenced by a Session in their effective partition.
+// Unconstrained credentials see their app's anchors. Tenant-constrained
+// credentials see only anchors referenced by a Session in their
+// effective partition.
 // Session-constrained credentials see only that Session's anchor. The
 // opaque cursor is bound to the authenticated caller, credential
 // constraint, and exact key filter.
@@ -17416,7 +17499,7 @@ func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params
 
 // GetAgentWithResponse Read one Agent identity anchor
 //
-// Reads identity without admitting work. Out-of-scope and undisclosable
+// Reads identity without creating work. Out-of-scope and undisclosable
 // constrained resources use `not_found`.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -17451,7 +17534,12 @@ func (c *ClientWithResponses) ListAppsWithResponse(ctx context.Context, params *
 // RegisterAppWithBodyWithResponse Register an app
 //
 // Registers one host application and creates its default tenant,
-// returning the generated `app_id`.
+// returning the generated `app_id` and independent callback and webhook
+// HMAC keys. The plaintext signing keys are returned only in this
+// response; store them in the receiver's secret manager. nvoken stores
+// only authenticated ciphertext and selects a key from the durable App
+// scope of each delivery. Registration is unavailable when the service's
+// encryption keyring is not configured.
 //
 // Registration is installation management rather than work inside an app,
 // so it requires a credential that is *not* associated with an app; a
@@ -17473,7 +17561,12 @@ func (c *ClientWithResponses) RegisterAppWithBodyWithResponse(ctx context.Contex
 // RegisterAppWithResponse Register an app
 //
 // Registers one host application and creates its default tenant,
-// returning the generated `app_id`.
+// returning the generated `app_id` and independent callback and webhook
+// HMAC keys. The plaintext signing keys are returned only in this
+// response; store them in the receiver's secret manager. nvoken stores
+// only authenticated ciphertext and selects a key from the durable App
+// scope of each delivery. Registration is unavailable when the service's
+// encryption keyring is not configured.
 //
 // Registration is installation management rather than work inside an app,
 // so it requires a credential that is *not* associated with an app; a
@@ -17543,7 +17636,7 @@ func (c *ClientWithResponses) UpdateAppWithResponse(ctx context.Context, appID A
 	return ParseUpdateAppHTTPResponse(rsp)
 }
 
-// CreateBudgetWithBodyWithResponse Create one fixed usage budget window
+// CreateBudgetWithBodyWithResponse Create one fixed Budget window
 //
 // Creates an estimated-list-price guardrail inside the authenticated App.
 // Windows for the same scope identity cannot overlap. The idempotency key
@@ -17560,7 +17653,7 @@ func (c *ClientWithResponses) CreateBudgetWithBodyWithResponse(ctx context.Conte
 	return ParseCreateBudgetHTTPResponse(rsp)
 }
 
-// CreateBudgetWithResponse Create one fixed usage budget window
+// CreateBudgetWithResponse Create one fixed Budget window
 //
 // Creates an estimated-list-price guardrail inside the authenticated App.
 // Windows for the same scope identity cannot overlap. The idempotency key
@@ -17592,7 +17685,7 @@ func (c *ClientWithResponses) DeleteBudgetWithResponse(ctx context.Context, budg
 	return ParseDeleteBudgetHTTPResponse(rsp)
 }
 
-// GetBudgetWithResponse Read one usage Budget
+// GetBudgetWithResponse Read one Budget
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17748,11 +17841,12 @@ func (c *ClientWithResponses) RotateCredentialWithResponse(ctx context.Context, 
 // ListInvocationsWithResponse List authoritative Invocations
 //
 // Returns newest-first durable Invocation state. Exact filters combine
-// with AND. An installation-wide caller may list all tenant partitions, one
-// named partition with `tenant_key`, or the default partition with
-// `default_tenant=true`. A tenant-constrained credential is always scoped
-// to its partition. The opaque cursor is bound to the normalized filter
-// set and credential tenant scope. `agent_id` and `agent_key` are
+// with AND. An App credential without a tenant constraint may list all
+// tenant partitions in that App, one named partition with `tenant_key`,
+// or the default partition with `default_tenant=true`. A
+// tenant-constrained credential is always scoped to its partition. The
+// opaque cursor is bound to the normalized filter set and credential
+// tenant scope. `agent_id` and `agent_key` are
 // mutually exclusive; both normalize to the resolved Agent ID for cursor
 // binding, so an equivalent cursor may resume under either spelling.
 //
@@ -17781,9 +17875,9 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 // Pick the Session with either `session_id` or `session_key`, not both.
 // A Session ID must belong to the Agent you named, or to a Session
 // created without an Agent — in which case this turn binds that Agent
-// permanently. An installation-wide credential may omit `tenant_key` and
-// use whichever tenant the Session already belongs to. A credential
-// locked to one tenant cannot reach another; naming a different one
+// permanently. An App credential without a tenant constraint may omit
+// `tenant_key` and use whichever tenant the Session already belongs to.
+// A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
 // exists.
 //
@@ -17884,9 +17978,9 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 // Pick the Session with either `session_id` or `session_key`, not both.
 // A Session ID must belong to the Agent you named, or to a Session
 // created without an Agent — in which case this turn binds that Agent
-// permanently. An installation-wide credential may omit `tenant_key` and
-// use whichever tenant the Session already belongs to. A credential
-// locked to one tenant cannot reach another; naming a different one
+// permanently. An App credential without a tenant constraint may omit
+// `tenant_key` and use whichever tenant the Session already belongs to.
+// A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
 // exists.
 //
@@ -18057,7 +18151,29 @@ func (c *ClientWithResponses) InterruptInvocationWithResponse(ctx context.Contex
 	return ParseInterruptInvocationHTTPResponse(rsp)
 }
 
-// NudgeInvocationWithBodyWithResponse Send extra direction to a running turn
+// ListNudgesWithResponse List Nudges for an Invocation
+//
+// Lists the direction you have sent to this turn with `/nudges`, in the
+// order the turn will pick it up. Entries stay listed after they are used
+// or missed, so you can answer "what did the user say, and did the model
+// ever see it?"
+//
+// Check `status` on each entry: `drained` means the turn used it,
+// `expired` means the turn ended first, `cancelled` means you withdrew
+// it.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/nudges (the `ListNudges` operationId).
+func (c *ClientWithResponses) ListNudgesWithResponse(ctx context.Context, invocationID InvocationID, params *ListNudgesParams, reqEditors ...RequestEditorFn) (*ListNudgesHTTPResponse, error) {
+	rsp, err := c.ListNudges(ctx, invocationID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListNudgesHTTPResponse(rsp)
+}
+
+// CreateNudgeWithBodyWithResponse Send extra direction to a running turn
 //
 // Sends extra direction to a turn that is already running — "focus on
 // the marine segment" — without stopping it and without losing the work
@@ -18082,9 +18198,9 @@ func (c *ClientWithResponses) InterruptInvocationWithResponse(ctx context.Contex
 // `if_active` setting says; it never quietly becomes a nudge, and a
 // nudge never quietly becomes a new turn.
 //
-// If the turn ends without ever picking it up, your input is marked
+// If the turn ends without ever picking it up, your Nudge is marked
 // `expired` at that moment and has no effect on any later turn. Check
-// `GET .../pending-inputs` to see whether it was used or missed. Whether
+// `GET .../nudges` to see whether it was used or missed. Whether
 // to re-send missed direction as the next turn's input is your call.
 //
 // `content` must be text — a string, or an array of text blocks. Images
@@ -18096,16 +18212,16 @@ func (c *ClientWithResponses) InterruptInvocationWithResponse(ctx context.Contex
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
-func (c *ClientWithResponses) NudgeInvocationWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NudgeInvocationHTTPResponse, error) {
-	rsp, err := c.NudgeInvocationWithBody(ctx, invocationID, contentType, body, reqEditors...)
+// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
+func (c *ClientWithResponses) CreateNudgeWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateNudgeHTTPResponse, error) {
+	rsp, err := c.CreateNudgeWithBody(ctx, invocationID, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseNudgeInvocationHTTPResponse(rsp)
+	return ParseCreateNudgeHTTPResponse(rsp)
 }
 
-// NudgeInvocationWithResponse Send extra direction to a running turn
+// CreateNudgeWithResponse Send extra direction to a running turn
 //
 // Sends extra direction to a turn that is already running — "focus on
 // the marine segment" — without stopping it and without losing the work
@@ -18130,9 +18246,9 @@ func (c *ClientWithResponses) NudgeInvocationWithBodyWithResponse(ctx context.Co
 // `if_active` setting says; it never quietly becomes a nudge, and a
 // nudge never quietly becomes a new turn.
 //
-// If the turn ends without ever picking it up, your input is marked
+// If the turn ends without ever picking it up, your Nudge is marked
 // `expired` at that moment and has no effect on any later turn. Check
-// `GET .../pending-inputs` to see whether it was used or missed. Whether
+// `GET .../nudges` to see whether it was used or missed. Whether
 // to re-send missed direction as the next turn's input is your call.
 //
 // `content` must be text — a string, or an array of text blocks. Images
@@ -18144,40 +18260,18 @@ func (c *ClientWithResponses) NudgeInvocationWithBodyWithResponse(ctx context.Co
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /v1/invocations/{invocation_id}/nudge (the `NudgeInvocation` operationId).
-func (c *ClientWithResponses) NudgeInvocationWithResponse(ctx context.Context, invocationID InvocationID, body NudgeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*NudgeInvocationHTTPResponse, error) {
-	rsp, err := c.NudgeInvocation(ctx, invocationID, body, reqEditors...)
+// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
+func (c *ClientWithResponses) CreateNudgeWithResponse(ctx context.Context, invocationID InvocationID, body CreateNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateNudgeHTTPResponse, error) {
+	rsp, err := c.CreateNudge(ctx, invocationID, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseNudgeInvocationHTTPResponse(rsp)
+	return ParseCreateNudgeHTTPResponse(rsp)
 }
 
-// ListPendingInputsWithResponse List staged input for an Invocation
+// CancelNudgeWithResponse Withdraw a Nudge the turn has not taken
 //
-// Lists the direction you have sent to this turn with `/nudge`, in the
-// order the turn will pick it up. Entries stay listed after they are used
-// or missed, so you can answer "what did the user say, and did the model
-// ever see it?"
-//
-// Check `status` on each entry: `drained` means the turn used it,
-// `expired` means the turn ended first, `cancelled` means you withdrew
-// it.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/invocations/{invocation_id}/pending-inputs (the `ListPendingInputs` operationId).
-func (c *ClientWithResponses) ListPendingInputsWithResponse(ctx context.Context, invocationID InvocationID, params *ListPendingInputsParams, reqEditors ...RequestEditorFn) (*ListPendingInputsHTTPResponse, error) {
-	rsp, err := c.ListPendingInputs(ctx, invocationID, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListPendingInputsHTTPResponse(rsp)
-}
-
-// CancelPendingInputWithResponse Withdraw staged input the turn has not taken
-//
-// Withdraws direction you sent with `/nudge`, as long as the turn has not
+// Withdraws direction you sent with `/nudges`, as long as the turn has not
 // picked it up yet. Cancelling something already cancelled returns it
 // unchanged, so retrying is safe.
 //
@@ -18188,13 +18282,13 @@ func (c *ClientWithResponses) ListPendingInputsWithResponse(ctx context.Context,
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel (the `CancelPendingInput` operationId).
-func (c *ClientWithResponses) CancelPendingInputWithResponse(ctx context.Context, invocationID InvocationID, pendingInputID PendingInputID, reqEditors ...RequestEditorFn) (*CancelPendingInputHTTPResponse, error) {
-	rsp, err := c.CancelPendingInput(ctx, invocationID, pendingInputID, reqEditors...)
+// Corresponds with POST /v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel (the `CancelNudge` operationId).
+func (c *ClientWithResponses) CancelNudgeWithResponse(ctx context.Context, invocationID InvocationID, nudgeID NudgeID, reqEditors ...RequestEditorFn) (*CancelNudgeHTTPResponse, error) {
+	rsp, err := c.CancelNudge(ctx, invocationID, nudgeID, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCancelPendingInputHTTPResponse(rsp)
+	return ParseCancelNudgeHTTPResponse(rsp)
 }
 
 // GetInvocationResultWithResponse Read a turn together with its messages
@@ -18229,9 +18323,10 @@ func (c *ClientWithResponses) GetInvocationResultWithResponse(ctx context.Contex
 // above both its old value and what the turn has already used, and still
 // within what your installation allows.
 //
-// If the turn paused on the Session budget rather than its own limit,
-// raise or remove that budget instead — this endpoint will not resume
-// it. Deadlines never pause a turn, so they never bring you here.
+// If the turn paused on the Session maximum estimated cost rather than
+// its own limit, raise or remove that Session cap instead — this endpoint
+// will not resume it. Deadlines never pause a turn, so they never bring
+// you here.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18251,9 +18346,10 @@ func (c *ClientWithResponses) ResumeInvocationWithBodyWithResponse(ctx context.C
 // above both its old value and what the turn has already used, and still
 // within what your installation allows.
 //
-// If the turn paused on the Session budget rather than its own limit,
-// raise or remove that budget instead — this endpoint will not resume
-// it. Deadlines never pause a turn, so they never bring you here.
+// If the turn paused on the Session maximum estimated cost rather than
+// its own limit, raise or remove that Session cap instead — this endpoint
+// will not resume it. Deadlines never pause a turn, so they never bring
+// you here.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18330,7 +18426,7 @@ func (c *ClientWithResponses) ListToolCallsWithResponse(ctx context.Context, inv
 // first committed result for each ToolCall wins. An equal replay is
 // acknowledged as deduplicated; a changed replay conflicts. Partial
 // batches leave the Invocation waiting. Closing the final pending call
-// queues the same Invocation and its successor execution dispatch before
+// queues the same Invocation and its successor dispatch before
 // returning `202`.
 //
 // This command accepts only host-mode calls owned by the path
@@ -18361,7 +18457,7 @@ func (c *ClientWithResponses) SubmitHostToolResultsWithBodyWithResponse(ctx cont
 // first committed result for each ToolCall wins. An equal replay is
 // acknowledged as deduplicated; a changed replay conflicts. Partial
 // batches leave the Invocation waiting. Closing the final pending call
-// queues the same Invocation and its successor execution dispatch before
+// queues the same Invocation and its successor dispatch before
 // returning `202`.
 //
 // This command accepts only host-mode calls owned by the path
@@ -18617,7 +18713,7 @@ func (c *ClientWithResponses) ListSessionsWithResponse(ctx context.Context, para
 	return ParseListSessionsHTTPResponse(rsp)
 }
 
-// CreateSessionWithBodyWithResponse Create or seed a Session without admitting an Invocation
+// CreateSessionWithBodyWithResponse Create or seed a Session without creating an Invocation
 //
 // Creates an empty Session, optionally seeded with history you already
 // have. Use this when you want a conversation to exist before the first
@@ -18638,7 +18734,7 @@ func (c *ClientWithResponses) CreateSessionWithBodyWithResponse(ctx context.Cont
 	return ParseCreateSessionHTTPResponse(rsp)
 }
 
-// CreateSessionWithResponse Create or seed a Session without admitting an Invocation
+// CreateSessionWithResponse Create or seed a Session without creating an Invocation
 //
 // Creates an empty Session, optionally seeded with history you already
 // have. Use this when you want a conversation to exist before the first
@@ -18668,7 +18764,7 @@ func (c *ClientWithResponses) CreateSessionWithResponse(ctx context.Context, bod
 //
 // A turn still running is stopped, but no cancellation is recorded —
 // there is nothing left to record it against, and no
-// `invocation.settled` webhook fires for it. If you need a record that
+// `invocation.ended` webhook fires for it. If you need a record that
 // the turn ended, cancel it and wait for its final state before
 // deleting.
 //
@@ -18705,9 +18801,10 @@ func (c *ClientWithResponses) DeleteSessionWithResponse(ctx context.Context, ses
 
 // GetSessionWithResponse Read authoritative Session identity and current state
 //
-// An installation-wide credential may resolve a Session in any tenant
-// partition. A tenant-constrained credential resolves only Sessions
-// in its partition. Missing, incompatible, and undisclosable resources use
+// An App credential without a tenant constraint may resolve a Session in
+// any tenant partition in that App. A tenant-constrained credential
+// resolves only Sessions in its partition. Missing, incompatible, and
+// undisclosable resources use
 // `not_found`; a credential denied the read operation itself receives
 // `forbidden`.
 //
@@ -18722,9 +18819,13 @@ func (c *ClientWithResponses) GetSessionWithResponse(ctx context.Context, sessio
 	return ParseGetSessionHTTPResponse(rsp)
 }
 
-// UpdateSessionWithBodyWithResponse Merge host metadata into a Session
+// UpdateSessionWithBodyWithResponse Update a Session
 //
-// Merges a metadata patch: a present key replaces its value, an explicit
+// Replaces or removes the Session lifetime estimated-cost cap, and merges
+// host metadata when present. Raising or removing an exhausted cap
+// requeues the paused turn when every first-class Budget allows it.
+//
+// For metadata, a present key replaces its value, an explicit
 // `null` deletes that key, and a key the patch does not mention survives.
 //
 // Merge rather than replace, because independent writers share this map —
@@ -18752,9 +18853,13 @@ func (c *ClientWithResponses) UpdateSessionWithBodyWithResponse(ctx context.Cont
 	return ParseUpdateSessionHTTPResponse(rsp)
 }
 
-// UpdateSessionWithResponse Merge host metadata into a Session
+// UpdateSessionWithResponse Update a Session
 //
-// Merges a metadata patch: a present key replaces its value, an explicit
+// Replaces or removes the Session lifetime estimated-cost cap, and merges
+// host metadata when present. Raising or removing an exhausted cap
+// requeues the paused turn when every first-class Budget allows it.
+//
+// For metadata, a present key replaces its value, an explicit
 // `null` deletes that key, and a key the patch does not mention survives.
 //
 // Merge rather than replace, because independent writers share this map —
@@ -18950,9 +19055,10 @@ func (c *ClientWithResponses) StreamSessionTranscriptWithResponse(ctx context.Co
 // agents are doing, not as a billing ledger — if you bill from usage,
 // record it yourself when each turn finishes, keyed by Invocation ID.
 //
-// A credential bound to an app sees only that app. A credential not
-// bound to any app sees every registered app; a console issuer token
-// needs its `admin` claim for that.
+// A credential bound to an app sees only that app. Only an app-less
+// issuer token with the `admin` claim can read across every registered
+// app. App-less API credentials are installation-management credentials
+// and cannot read usage or other runtime data.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19216,7 +19322,7 @@ func ParseRegisterAppHTTPResponse(rsp *http.Response) (*RegisterAppHTTPResponse,
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest App
+		var dest AppRegistration
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -19256,6 +19362,13 @@ func ParseRegisterAppHTTPResponse(rsp *http.Response) (*RegisterAppHTTPResponse,
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -20396,15 +20509,83 @@ func ParseInterruptInvocationHTTPResponse(rsp *http.Response) (*InterruptInvocat
 	return response, nil
 }
 
-// ParseNudgeInvocationHTTPResponse parses an HTTP response from a NudgeInvocationWithResponse call
-func ParseNudgeInvocationHTTPResponse(rsp *http.Response) (*NudgeInvocationHTTPResponse, error) {
+// ParseListNudgesHTTPResponse parses an HTTP response from a ListNudgesWithResponse call
+func ParseListNudgesHTTPResponse(rsp *http.Response) (*ListNudgesHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &NudgeInvocationHTTPResponse{
+	response := &ListNudgesHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NudgeList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateNudgeHTTPResponse parses an HTTP response from a CreateNudgeWithResponse call
+func ParseCreateNudgeHTTPResponse(rsp *http.Response) (*CreateNudgeHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateNudgeHTTPResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -20471,90 +20652,22 @@ func ParseNudgeInvocationHTTPResponse(rsp *http.Response) (*NudgeInvocationHTTPR
 	return response, nil
 }
 
-// ParseListPendingInputsHTTPResponse parses an HTTP response from a ListPendingInputsWithResponse call
-func ParseListPendingInputsHTTPResponse(rsp *http.Response) (*ListPendingInputsHTTPResponse, error) {
+// ParseCancelNudgeHTTPResponse parses an HTTP response from a CancelNudgeWithResponse call
+func ParseCancelNudgeHTTPResponse(rsp *http.Response) (*CancelNudgeHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &ListPendingInputsHTTPResponse{
+	response := &CancelNudgeHTTPResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest PendingInputList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest InvalidRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthenticated
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Forbidden
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Internal
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
-		var dest Unavailable
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON503 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCancelPendingInputHTTPResponse parses an HTTP response from a CancelPendingInputWithResponse call
-func ParseCancelPendingInputHTTPResponse(rsp *http.Response) (*CancelPendingInputHTTPResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CancelPendingInputHTTPResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest PendingInput
+		var dest Nudge
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

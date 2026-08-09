@@ -20,7 +20,7 @@ func registerCredentialCommands(app *cli.App) {
 	).Run(runCredentialList)
 	group.Command("create").Description("Create a machine credential").Use(requireAuth()).Flags(
 		cli.String("name", "").Help("credential name"),
-		cli.String("credential-profile", "").Default("Runtime").Enum("Runtime", "Viewer", "Operator").Help("fixed authorization profile"),
+		cli.String("credential-profile", "").Default("runtime").Enum("runtime", "viewer", "operator").Help("fixed authorization profile"),
 		cli.String("app-id", "").Help("target App when provisioning from an app-less Operator"),
 		cli.String("tenant-ref", "").Help("optional tenant constraint"),
 		cli.String("session-id", "").Help("optional Session constraint"),
@@ -77,7 +77,7 @@ func runCredentialCreate(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	body := generated.CreateCredentialRequest{Name: name, Profile: generated.Profile(ctx.String("credential-profile"))}
+	body := generated.CreateCredentialRequest{Name: name, Profile: generated.CredentialProfile(ctx.String("credential-profile"))}
 	if value := strings.TrimSpace(ctx.String("app-id")); value != "" {
 		body.AppID = &value
 	}

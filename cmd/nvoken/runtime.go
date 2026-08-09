@@ -38,10 +38,10 @@ var operationCommands = map[string]string{
 	"cancelInvocation":        "invocation cancel",
 	"interruptInvocation":     "invocation interrupt",
 	"resumeInvocation":        "invocation resume",
-	"nudgeInvocation":         "invocation nudge",
-	"listPendingInputs":       "invocation pending-inputs",
+	"createNudge":             "invocation nudge",
+	"listNudges":              "invocation nudges",
 	"listToolCalls":           "invocation tool-calls",
-	"cancelPendingInput":      "invocation cancel-pending-input",
+	"cancelNudge":             "invocation cancel-nudge",
 	"createCredential":        "credentials create",
 	"createInvocation":        "invoke",
 	"createSession":           "session create",
@@ -107,7 +107,7 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("session-key").Help("Caller Session key; one turn may be active at a time"),
 			cli.String("if-active").Default("reject").Enum("reject", "supersede", "interrupt").Help("Reject active work, atomically replace it, or stop it gracefully and keep what it produced"),
 			cli.String("webhook-url").Help("HTTPS endpoint for signed Invocation webhooks"),
-			cli.Strings("webhook-event").Help("Restrict webhooks to invocation.waiting or invocation.settled; repeatable, default both"),
+			cli.Strings("webhook-event").Help("Restrict webhooks to invocation.waiting, invocation.paused, or invocation.ended; repeatable, default all"),
 			cli.Strings("image").Help("Attach a local image file; repeatable"),
 			cli.Strings("document").Help("Attach a local PDF file; repeatable"),
 			cli.Strings("image-url").Help("Attach a public HTTPS image URL; repeatable"),
@@ -192,15 +192,15 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("idempotency-key").Help("Per-Invocation retry key; the same key and content stages once"),
 		).
 		Run(runInvocationNudge)
-	invocations.Command("pending-inputs").
-		Description("List staged input in the order the turn will consume it").
+	invocations.Command("nudges").
+		Description("List nudges in the order the turn will consume them").
 		Args("invocation-id").
 		Flags(
 			cli.String("status").Enum("pending", "drained", "expired", "cancelled").Help("Restrict to one status"),
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
 		).
-		Run(runInvocationPendingInputs)
+		Run(runInvocationNudges)
 	invocations.Command("tool-calls").
 		Description("List durable ToolCall lifecycle records in discovery order").
 		Args("invocation-id").
@@ -209,10 +209,10 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.Int("limit").Help("Maximum page size"),
 		).
 		Run(runInvocationToolCalls)
-	invocations.Command("cancel-pending-input").
-		Description("Withdraw staged input the turn has not taken yet").
-		Args("invocation-id", "pending-input-id").
-		Run(runInvocationCancelPendingInput)
+	invocations.Command("cancel-nudge").
+		Description("Withdraw a nudge the turn has not taken yet").
+		Args("invocation-id", "nudge-id").
+		Run(runInvocationCancelNudge)
 	invocations.Command("list").
 		Flags(
 			cli.String("cursor").Help("Opaque continuation cursor"),
@@ -834,7 +834,7 @@ func runInvocationNudge(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	acknowledgement, err := client.NudgeInvocation(command.Context(), command.Arg(0), nvoken.NudgeRequest{
+	acknowledgement, err := client.CreateNudge(command.Context(), command.Arg(0), nvoken.NudgeRequest{
 		Content:        command.Arg(1),
 		IdempotencyKey: command.String("idempotency-key"),
 	})
@@ -845,28 +845,28 @@ func runInvocationNudge(command *cli.Context) error {
 		_, err := fmt.Fprintf(
 			writer,
 			"%s\t%s\t%d\n",
-			acknowledgement.PendingInputID,
-			acknowledgement.State,
+			acknowledgement.NudgeID,
+			acknowledgement.Status,
 			acknowledgement.AfterSequence,
 		)
 		return err
 	})
 }
 
-func runInvocationPendingInputs(command *cli.Context) error {
+func runInvocationNudges(command *cli.Context) error {
 	client, err := runtimeClient(command)
 	if err != nil {
 		return err
 	}
-	options := nvoken.ListPendingInputsOptions{
+	options := nvoken.ListNudgesOptions{
 		Cursor: optionalString(command.String("cursor")),
 		Limit:  optionalInt(command.Int("limit")),
 	}
 	if status := command.String("status"); status != "" {
-		value := nvoken.PendingInputStatus(status)
+		value := nvoken.NudgeStatus(status)
 		options.Status = &value
 	}
-	page, err := client.ListPendingInputs(command.Context(), command.Arg(0), options)
+	page, err := client.ListNudges(command.Context(), command.Arg(0), options)
 	if err != nil {
 		return err
 	}
@@ -914,12 +914,12 @@ func runInvocationToolCalls(command *cli.Context) error {
 	})
 }
 
-func runInvocationCancelPendingInput(command *cli.Context) error {
+func runInvocationCancelNudge(command *cli.Context) error {
 	client, err := runtimeClient(command)
 	if err != nil {
 		return err
 	}
-	cancelled, err := client.CancelPendingInput(command.Context(), command.Arg(0), command.Arg(1))
+	cancelled, err := client.CancelNudge(command.Context(), command.Arg(0), command.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -942,8 +942,15 @@ func runAppRegister(command *cli.Context) error {
 		return err
 	}
 	return writeOutput(command, registered, func(writer io.Writer) error {
-		_, err := fmt.Fprintf(writer, "%s\t%s\n", registered.ID, registered.Name)
-		return err
+		if _, err := fmt.Fprintf(writer, "%s\t%s\n", registered.App.ID, registered.App.Name); err != nil {
+			return err
+		}
+		for _, key := range registered.SigningKeys {
+			if _, err := fmt.Fprintf(writer, "signing-key\t%s\t%s\tv%d\t%s\n", key.Purpose, key.KeyID, key.Version, key.Secret); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

@@ -8,8 +8,14 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.10.0 - 2026-08-09
+
 - Generate every SDK and the CLI from the single authoritative
   `openapi/nvoken.yaml` contract, including the Identity API.
+- **Adopt the breaking concept-freeze contract.** Replace pending inputs with
+  nudges, settled lifecycle names with ended, and nested Session budgets with
+  `max_estimated_cost_usd`; expose lowercase credential profiles and one-time
+  app signing keys.
 
 ## 0.9.1 - 2026-08-09
 

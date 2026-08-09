@@ -3,7 +3,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its summarization policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -19,14 +19,13 @@ import json
 
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Union
 from typing_extensions import Annotated
 from nvoken_generated.models.budget_block import BudgetBlock
 from nvoken_generated.models.compaction_policy import CompactionPolicy
 from nvoken_generated.models.model_usage import ModelUsage
 from nvoken_generated.models.pending_host_tool_call import PendingHostToolCall
 from nvoken_generated.models.retention_policy import RetentionPolicy
-from nvoken_generated.models.session_budget import SessionBudget
 from nvoken_generated.models.session_context import SessionContext
 from nvoken_generated.models.session_fork_lineage import SessionForkLineage
 from typing import Optional, Set
@@ -45,18 +44,18 @@ class Session(BaseModel):
     forked_from: Optional[SessionForkLineage] = Field(description="Durable source prefix lineage, or null for an original Session.")
     compaction: Optional[CompactionPolicy] = Field(description="The automatic compaction policy this Session actually applies, or null when it compacts nothing. It is echoed resolved: a request that asked for `trigger_tokens: auto` reads back the integer that resolved to, and a request that named no model reads back the model the policy bound. Nothing here is ever the unresolved request. ")
     retention: Optional[RetentionPolicy] = Field(description="The idle retention window this Session was created with, or null when it is retained until deleted explicitly. A window outside the supported range is refused at creation rather than clamped, so what is read back is always exactly what applies. ")
-    budget: Optional[SessionBudget] = Field(description="The current mutable Session-wide estimated-cost guardrail.")
+    max_estimated_cost_usd: Optional[Union[Annotated[float, Field(multiple_of=0.0000010, strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = Field(description="The current mutable Session lifetime estimated-cost cap.")
     expires_at: Optional[datetime] = Field(description="When nvoken may automatically delete this Session, or null if it has no retention window. The date moves forward every time a turn starts and every time one finishes, so a Session in active use never reaches it. ")
     metadata: Optional[Dict[str, Annotated[str, Field(strict=True, max_length=512)]]] = Field(description="Host correlation data, returned verbatim. Set at creation through `session_options.metadata` and changed with `PATCH /v1/sessions/{session_id}`. ")
     active_invocation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="The queued, running, waiting, or paused Invocation, if one exists.")
     active_invocation_status: Optional[StrictStr] = Field(description="Status of active_invocation_id; null exactly when that ID is null.")
-    blocking_budget: Optional[BudgetBlock] = Field(description="Budget blocking the active paused Invocation, otherwise null.")
+    blocking_budget: Optional[BudgetBlock] = Field(description="First-class Budget blocking the active paused Invocation, otherwise null.")
     context: Optional[SessionContext] = Field(description="Read-time retained-context estimate and the model window it is measured against. Null until the Session has either a compaction model or an Invocation primary model. The object remains present for an uncataloged model, with `context_window_tokens: null`. ")
     usage: Optional[ModelUsage] = Field(description="Read-time sum of this Session's non-null Invocation usage and committed private compaction usage. Null until either exists. This normalized estimate is not a billing ledger. ")
     created_at: datetime
     updated_at: datetime
     pending_tool_calls: Optional[List[PendingHostToolCall]] = Field(default=None, description="Pending host calls for the active waiting Invocation.")
-    __properties: ClassVar[List[str]] = ["id", "agent_id", "tenant_key", "session_key", "user_key", "forked_from", "compaction", "retention", "budget", "expires_at", "metadata", "active_invocation_id", "active_invocation_status", "blocking_budget", "context", "usage", "created_at", "updated_at", "pending_tool_calls"]
+    __properties: ClassVar[List[str]] = ["id", "agent_id", "tenant_key", "session_key", "user_key", "forked_from", "compaction", "retention", "max_estimated_cost_usd", "expires_at", "metadata", "active_invocation_id", "active_invocation_status", "blocking_budget", "context", "usage", "created_at", "updated_at", "pending_tool_calls"]
 
     @field_validator('active_invocation_status')
     def active_invocation_status_validate_enum(cls, value):
@@ -116,9 +115,6 @@ class Session(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of retention
         if self.retention:
             _dict['retention'] = self.retention.to_dict()
-        # override the default output from pydantic by calling `to_dict()` of budget
-        if self.budget:
-            _dict['budget'] = self.budget.to_dict()
         # override the default output from pydantic by calling `to_dict()` of blocking_budget
         if self.blocking_budget:
             _dict['blocking_budget'] = self.blocking_budget.to_dict()
@@ -170,10 +166,10 @@ class Session(BaseModel):
         if self.retention is None and "retention" in self.model_fields_set:
             _dict['retention'] = None
 
-        # set to None if budget (nullable) is None
+        # set to None if max_estimated_cost_usd (nullable) is None
         # and model_fields_set contains the field
-        if self.budget is None and "budget" in self.model_fields_set:
-            _dict['budget'] = None
+        if self.max_estimated_cost_usd is None and "max_estimated_cost_usd" in self.model_fields_set:
+            _dict['max_estimated_cost_usd'] = None
 
         # set to None if expires_at (nullable) is None
         # and model_fields_set contains the field
@@ -230,7 +226,7 @@ class Session(BaseModel):
             "forked_from": SessionForkLineage.from_dict(obj["forked_from"]) if obj.get("forked_from") is not None else None,
             "compaction": CompactionPolicy.from_dict(obj["compaction"]) if obj.get("compaction") is not None else None,
             "retention": RetentionPolicy.from_dict(obj["retention"]) if obj.get("retention") is not None else None,
-            "budget": SessionBudget.from_dict(obj["budget"]) if obj.get("budget") is not None else None,
+            "max_estimated_cost_usd": obj.get("max_estimated_cost_usd"),
             "expires_at": obj.get("expires_at"),
             "metadata": obj.get("metadata"),
             "active_invocation_id": obj.get("active_invocation_id"),

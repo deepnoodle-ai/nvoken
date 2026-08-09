@@ -150,7 +150,7 @@ func TestAuthLoginVerifiesAPIKeyAndSavesNamedProfile(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"authentication": map[string]any{
 				"credential_id":     "cred_machine",
-				"effective_profile": "Operator",
+				"effective_profile": "operator",
 				"method":            "api_key",
 				"assurance":         "bearer",
 				"operations":        []string{},
@@ -218,7 +218,7 @@ func TestLogoutIsLocalAndRevokeCleansUpAfterRemoteSuccess(t *testing.T) {
 			"name":       "saved",
 			"prefix":     "nvk_saved",
 			"status":     "revoked",
-			"profile":    "Operator",
+			"profile":    "operator",
 			"operations": []string{},
 			"created_at": "2026-07-21T12:00:00Z",
 			"updated_at": "2026-07-21T12:00:01Z",
@@ -269,6 +269,6 @@ func writeIdentityFixture(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"id": "acct_test", "created_at": "2026-07-21T12:00:00Z",
-		"authentication": map[string]any{"credential_id": "cred_test", "effective_profile": "Runtime", "method": "api_key", "assurance": "bearer", "operations": []string{}},
+		"authentication": map[string]any{"credential_id": "cred_test", "effective_profile": "runtime", "method": "api_key", "assurance": "bearer", "operations": []string{}},
 	})
 }

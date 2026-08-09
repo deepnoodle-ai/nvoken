@@ -1,8 +1,8 @@
 {
   "routes": {
-    "nudge": "/v1/invocations/{invocation_id}/nudge",
-    "list": "/v1/invocations/{invocation_id}/pending-inputs",
-    "cancel": "/v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel"
+    "create": "/v1/invocations/{invocation_id}/nudges",
+    "list": "/v1/invocations/{invocation_id}/nudges",
+    "cancel": "/v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel"
   },
   "request": {
     "content_only": { "content": "focus on the marine segment" },
@@ -13,9 +13,9 @@
   },
   "acknowledgement": {
     "status": 202,
-    "fields": ["pending_input_id", "state", "deduped", "after_sequence"]
+    "fields": ["nudge_id", "status", "deduplicated", "after_sequence"]
   },
-  "pending_input_status": {
+  "nudge_status": {
     "values": ["pending", "drained", "expired", "cancelled"],
     "consumed_state": "pending",
     "drained_carries": "drained_message_sequence"
@@ -25,6 +25,6 @@
     "terminal_invocation": "invocation_not_active",
     "reused_key_different_content": "idempotency_conflict",
     "queue_full": { "code": "nudge_queue_full", "details_key": "limit", "limit": 8 },
-    "already_settled": { "code": "pending_input_settled", "details_key": "pending_input" }
+    "already_closed": { "code": "nudge_already_closed", "details_key": "nudge" }
   }
 }

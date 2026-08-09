@@ -300,15 +300,15 @@ func (c *Client) ResumeInvocation(
 	})
 }
 
-// NudgeInvocation appends steering to a running Invocation without ending it.
+// CreateNudge appends steering to a running Invocation without ending it.
 // The turn keeps everything it has already produced — the difference from
 // supersession, which rewinds — and the model sees the input at its next
 // execution seam rather than immediately.
 //
-// Input the turn never reaches is settled `expired` when the Invocation
+// Input the turn never reaches is marked `expired` when the Invocation
 // settles; nvoken never re-homes it onto a later turn, so re-sending missed
 // direction as the next Invocation's input is the caller's decision to make.
-func (c *Client) NudgeInvocation(
+func (c *Client) CreateNudge(
 	ctx context.Context,
 	invocationID string,
 	request NudgeRequest,
@@ -327,7 +327,7 @@ func (c *Client) NudgeInvocation(
 	// same direction twice.
 	replaySafe := request.IdempotencyKey != ""
 	return callReplaySafe(ctx, c.retry, replaySafe, func() (callResult[generated.NudgeAcknowledgement], error) {
-		response, callErr := c.raw.NudgeInvocationWithBodyWithResponse(
+		response, callErr := c.raw.CreateNudgeWithBodyWithResponse(
 			ctx,
 			invocationID,
 			"application/json",
@@ -345,25 +345,25 @@ func (c *Client) NudgeInvocation(
 	})
 }
 
-// ListPendingInputs reads the staged queue in the order the turn will consume
-// it, settled rows included. It is the reconciliation source for a surface
+// ListNudges reads the staged queue in the order the turn will consume
+// it, ended rows included. It is the reconciliation source for a surface
 // that shows queued direction.
-func (c *Client) ListPendingInputs(
+func (c *Client) ListNudges(
 	ctx context.Context,
 	invocationID string,
-	options ListPendingInputsOptions,
-) (*PendingInputList, error) {
-	params := &generated.ListPendingInputsParams{
+	options ListNudgesOptions,
+) (*NudgeList, error) {
+	params := &generated.ListNudgesParams{
 		Status: options.Status,
 		Cursor: options.Cursor,
 		Limit:  options.Limit,
 	}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.PendingInputList], error) {
-		response, callErr := c.raw.ListPendingInputsWithResponse(ctx, invocationID, params)
+	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.NudgeList], error) {
+		response, callErr := c.raw.ListNudgesWithResponse(ctx, invocationID, params)
 		if callErr != nil {
-			return callResult[generated.PendingInputList]{}, callErr
+			return callResult[generated.NudgeList]{}, callErr
 		}
-		return callResult[generated.PendingInputList]{
+		return callResult[generated.NudgeList]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -373,11 +373,7 @@ func (c *Client) ListPendingInputs(
 	if err != nil {
 		return nil, err
 	}
-	return &PendingInputList{
-		HasMore:    result.HasMore,
-		Items:      result.Items,
-		NextCursor: result.NextCursor,
-	}, nil
+	return result, nil
 }
 
 // ListToolCalls reads durable execution records in discovery order. Inputs and
@@ -406,20 +402,20 @@ func (c *Client) ListToolCalls(
 	})
 }
 
-// CancelPendingInput withdraws staged input the turn has not taken. Input the
+// CancelNudge withdraws staged input the turn has not taken. Input the
 // executor already drained is reported as a conflict rather than removed from
 // a transcript it is already part of.
-func (c *Client) CancelPendingInput(
+func (c *Client) CancelNudge(
 	ctx context.Context,
 	invocationID string,
-	pendingInputID string,
-) (*PendingInput, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.PendingInput], error) {
-		response, err := c.raw.CancelPendingInputWithResponse(ctx, invocationID, pendingInputID)
+	nudgeID string,
+) (*Nudge, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Nudge], error) {
+		response, err := c.raw.CancelNudgeWithResponse(ctx, invocationID, nudgeID)
 		if err != nil {
-			return callResult[generated.PendingInput]{}, err
+			return callResult[generated.Nudge]{}, err
 		}
-		return callResult[generated.PendingInput]{
+		return callResult[generated.Nudge]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -943,17 +939,17 @@ func (c *Client) RevokeProviderKey(ctx context.Context, id string) (*ProviderKey
 
 // RegisterApp registers one host application and returns its generated app_id.
 // It requires a credential that is not associated with an app.
-func (c *Client) RegisterApp(ctx context.Context, name string, options RegisterAppOptions) (*App, error) {
-	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.App], error) {
+func (c *Client) RegisterApp(ctx context.Context, name string, options RegisterAppOptions) (*AppRegistration, error) {
+	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.AppRegistration], error) {
 		response, err := c.raw.RegisterAppWithResponse(ctx, generated.RegisterAppJSONRequestBody{
 			Name:        name,
 			ExternalRef: options.ExternalRef,
 			DisplayName: options.DisplayName,
 		})
 		if err != nil {
-			return callResult[generated.App]{}, err
+			return callResult[generated.AppRegistration]{}, err
 		}
-		return callResult[generated.App]{
+		return callResult[generated.AppRegistration]{
 			Value:  response.JSON201,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -1211,8 +1207,8 @@ func (c *Client) ForkSession(
 // webhooks. The erasure is immediate and irreversible.
 //
 // A running Invocation is stopped, and no cancellation is recorded — the
-// Invocation is removed rather than settled, so no invocation.settled
-// webhook is emitted for it. Cancel first if you need a settled record.
+// Invocation is removed rather than ended, so no invocation.ended webhook is
+// emitted for it. Cancel first if you need an ended record.
 //
 // An unknown or out-of-scope Session is not found, so a retry after a lost
 // response can treat that as already-done.
@@ -1678,25 +1674,25 @@ func (h *InvocationHandle) Interrupt(ctx context.Context) (*Invocation, error) {
 // model sees the input at the next execution seam, and nothing in flight is
 // aborted for it.
 func (h *InvocationHandle) Nudge(ctx context.Context, content string) (*NudgeAcknowledgement, error) {
-	return h.client.NudgeInvocation(ctx, h.InvocationID, NudgeRequest{Content: content})
+	return h.client.CreateNudge(ctx, h.InvocationID, NudgeRequest{Content: content})
 }
 
 // NudgeWith is Nudge with an idempotency key, so a retried call stages the
 // direction once.
 func (h *InvocationHandle) NudgeWith(ctx context.Context, request NudgeRequest) (*NudgeAcknowledgement, error) {
-	return h.client.NudgeInvocation(ctx, h.InvocationID, request)
+	return h.client.CreateNudge(ctx, h.InvocationID, request)
 }
 
-func (h *InvocationHandle) ListPendingInputs(ctx context.Context, options ListPendingInputsOptions) (*PendingInputList, error) {
-	return h.client.ListPendingInputs(ctx, h.InvocationID, options)
+func (h *InvocationHandle) ListNudges(ctx context.Context, options ListNudgesOptions) (*NudgeList, error) {
+	return h.client.ListNudges(ctx, h.InvocationID, options)
 }
 
 func (h *InvocationHandle) ListToolCalls(ctx context.Context, options ListToolCallsOptions) (*ToolCallList, error) {
 	return h.client.ListToolCalls(ctx, h.InvocationID, options)
 }
 
-func (h *InvocationHandle) CancelPendingInput(ctx context.Context, pendingInputID string) (*PendingInput, error) {
-	return h.client.CancelPendingInput(ctx, h.InvocationID, pendingInputID)
+func (h *InvocationHandle) CancelNudge(ctx context.Context, nudgeID string) (*Nudge, error) {
+	return h.client.CancelNudge(ctx, h.InvocationID, nudgeID)
 }
 
 func (h *InvocationHandle) WaitForAction(ctx context.Context, options WaitOptions) (*Invocation, error) {

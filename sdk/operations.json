@@ -7,9 +7,9 @@
       "path": "/v1/invocations/{invocation_id}/cancel"
     },
     {
-      "operation_id": "cancelPendingInput",
+      "operation_id": "cancelNudge",
       "method": "POST",
-      "path": "/v1/invocations/{invocation_id}/pending-inputs/{pending_input_id}/cancel"
+      "path": "/v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel"
     },
     {
       "operation_id": "createBudget",
@@ -25,6 +25,11 @@
       "operation_id": "createInvocation",
       "method": "POST",
       "path": "/v1/invocations"
+    },
+    {
+      "operation_id": "createNudge",
+      "method": "POST",
+      "path": "/v1/invocations/{invocation_id}/nudges"
     },
     {
       "operation_id": "createProviderKey",
@@ -152,9 +157,9 @@
       "path": "/v1/models"
     },
     {
-      "operation_id": "listPendingInputs",
+      "operation_id": "listNudges",
       "method": "GET",
-      "path": "/v1/invocations/{invocation_id}/pending-inputs"
+      "path": "/v1/invocations/{invocation_id}/nudges"
     },
     {
       "operation_id": "listProviderKeys",
@@ -180,11 +185,6 @@
       "operation_id": "listToolCalls",
       "method": "GET",
       "path": "/v1/invocations/{invocation_id}/tool-calls"
-    },
-    {
-      "operation_id": "nudgeInvocation",
-      "method": "POST",
-      "path": "/v1/invocations/{invocation_id}/nudge"
     },
     {
       "operation_id": "registerApp",

@@ -1,11 +1,11 @@
 {
   "scopes": [
     "app",
-    "customer",
+    "tenant",
     "user",
     "agent",
     "provider_key",
-    "api_credential"
+    "credential"
   ],
   "app_create": {
     "scope": "app",
@@ -15,7 +15,7 @@
     "idempotency_key": "budget-conformance-1"
   },
   "budget": {
-    "id": "bdgt_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+    "id": "budg_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
     "scope": "app",
     "tenant_key": null,
     "user_key": null,
@@ -25,7 +25,7 @@
     "window_start": "2026-08-01T00:00:00Z",
     "window_end": "2026-09-01T00:00:00Z",
     "max_estimated_cost_usd": 25,
-    "settled_estimated_cost_usd": 3.25,
+    "spent_estimated_cost_usd": 3.25,
     "reserved_estimated_cost_usd": 1.5,
     "available_estimated_cost_usd": 20.25,
     "paused_invocations": 2,
@@ -33,14 +33,14 @@
     "updated_at": "2026-08-08T12:00:00Z"
   },
   "blocking_budget": {
-    "id": "bdgt_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+    "id": "budg_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
     "scope": "app"
   },
   "unbounded_error": {
     "code": "budget_exceeded",
     "details": {
       "kind": "estimated_cost_unavailable",
-      "budget_id": "bdgt_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+      "budget_id": "budg_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
       "budget_scope": "app"
     }
   }

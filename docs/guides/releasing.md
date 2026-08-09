@@ -38,7 +38,7 @@ The OpenAPI documents keep their independent contract version. Do not change
 Create annotated tags on the same verified `main` commit, then push them:
 
 ```bash
-version=0.9.1
+version=0.10.0
 git tag -a "v${version}" -m "nvoken CLI ${version}"
 git tag -a "sdk/go/v${version}" -m "nvoken Go SDK ${version}"
 git tag -a "npm-v${version}" -m "nvoken TypeScript SDK ${version}"

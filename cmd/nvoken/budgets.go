@@ -12,9 +12,9 @@ import (
 func registerBudgetCommands(app *cli.App) {
 	budgets := app.Group("budget").Description("Manage shared estimated-cost guardrails")
 	budgets.Command("create").Flags(
-		cli.String("scope").Required().Enum("app", "customer", "user", "agent", "provider_key", "api_credential").Help("Budget scope"),
-		cli.String("tenant-key").Help("Customer key for customer or user scope"),
-		cli.Bool("default-tenant").Help("Select the App default customer"),
+		cli.String("scope").Required().Enum("app", "tenant", "user", "agent", "provider_key", "credential").Help("Budget scope"),
+		cli.String("tenant-key").Help("Tenant key for tenant or user scope"),
+		cli.Bool("default-tenant").Help("Select the App default tenant"),
 		cli.String("user-key").Help("End-user key for user scope"),
 		cli.String("agent-id").Help("Agent ID for agent scope"),
 		cli.String("provider-key-id").Help("Stored provider key ID"),
@@ -115,13 +115,13 @@ func writeBudget(command *cli.Context, budget *nvoken.Budget) error {
 	return writeOutput(command, budget, func(writer io.Writer) error {
 		_, err := fmt.Fprintf(
 			writer,
-			"%s\t%s\t%s..%s\tcap=%.6f\tsettled=%.6f\treserved=%.6f\tavailable=%.6f\tpaused=%d\n",
+			"%s\t%s\t%s..%s\tcap=%.6f\tspent=%.6f\treserved=%.6f\tavailable=%.6f\tpaused=%d\n",
 			budget.ID,
 			budget.Scope,
 			budget.WindowStart.UTC().Format(time.RFC3339),
 			budget.WindowEnd.UTC().Format(time.RFC3339),
 			budget.MaxEstimatedCostUsd,
-			budget.SettledEstimatedCostUsd,
+			budget.SpentEstimatedCostUsd,
 			budget.ReservedEstimatedCostUsd,
 			budget.AvailableEstimatedCostUsd,
 			budget.PausedInvocations,

@@ -46,7 +46,7 @@ pub fn preflight_output_schema(schema: &HashMap<String, Value>) -> Result<(), Nv
 
 fn schema_error(issue: SchemaIssue) -> NvokenError {
     let mut details = json!({
-        "kind": "structured_output_schema",
+        "kind": "output_schema",
         "code": issue.code,
         "path": issue.path,
     });

@@ -256,13 +256,14 @@ func TestSharedAgentRequestFixture(t *testing.T) {
 	}
 	// Durable options apply on a new anonymous Session too, which is where a
 	// short retention window matters most.
+	sessionMaxEstimatedCost := float32(0.25)
 	body, err := agent.request("hello", AgentInvocationOptions{
 		IdempotencyKey:    "conformance",
 		OnBudgetExhausted: BudgetExhaustionPause,
 		Metadata:          map[string]string{"board": "brand-2026", "surface": "web"},
 		SessionOptions: &SessionOptions{
-			Retention: &SessionRetention{TTLSeconds: 86400},
-			Budget:    &SessionBudget{MaxEstimatedCostUSD: 0.25},
+			Retention:           &SessionRetention{TTLSeconds: 86400},
+			MaxEstimatedCostUSD: &sessionMaxEstimatedCost,
 		},
 	}).encoded()
 	if err != nil {
@@ -1108,7 +1109,7 @@ func TestSharedInvocationWebhookFixture(t *testing.T) {
 				Events []string `json:"events"`
 			} `json:"webhook"`
 		} `json:"example_request"`
-		SettledPayload map[string]map[string]any `json:"example_settled_payload"`
+		EndedPayload   map[string]map[string]any `json:"example_ended_payload"`
 		WaitingPayload map[string]map[string]any `json:"example_waiting_payload"`
 		PausedPayload  map[string]map[string]any `json:"example_paused_payload"`
 	}
@@ -1190,7 +1191,7 @@ func TestSharedInvocationWebhookFixture(t *testing.T) {
 	// The payload stays a pointer: nothing the fixture lists as absent may appear
 	// in either documented example.
 	for name, payload := range map[string]map[string]map[string]any{
-		"settled": fixture.SettledPayload,
+		"ended":   fixture.EndedPayload,
 		"waiting": fixture.WaitingPayload,
 		"paused":  fixture.PausedPayload,
 	} {
@@ -1300,27 +1301,27 @@ func TestSharedInvocationNudgeFixture(t *testing.T) {
 			Status int      `json:"status"`
 			Fields []string `json:"fields"`
 		} `json:"acknowledgement"`
-		PendingInputStatus struct {
+		NudgeStatus struct {
 			Values         []string `json:"values"`
 			ConsumedState  string   `json:"consumed_state"`
 			DrainedCarries string   `json:"drained_carries"`
-		} `json:"pending_input_status"`
+		} `json:"nudge_status"`
 	}
 	decodeFile(t, "../conformance/fixtures/invocation-nudge-v1.json", &fixture)
 
-	known := map[string]PendingInputStatus{
-		"pending":   PendingInputPending,
-		"drained":   PendingInputDrained,
-		"expired":   PendingInputExpired,
-		"cancelled": PendingInputCancelled,
+	known := map[string]NudgeStatus{
+		"pending":   NudgePending,
+		"drained":   NudgeDrained,
+		"expired":   NudgeExpired,
+		"cancelled": NudgeCancelled,
 	}
-	for _, value := range fixture.PendingInputStatus.Values {
-		if known[value] != PendingInputStatus(value) {
-			t.Fatalf("pending input status %q is not a known member", value)
+	for _, value := range fixture.NudgeStatus.Values {
+		if known[value] != NudgeStatus(value) {
+			t.Fatalf("nudge status %q is not a known member", value)
 		}
 	}
-	if PendingInputStatus(fixture.PendingInputStatus.ConsumedState) != PendingInputPending {
-		t.Fatalf("consumed state = %q", fixture.PendingInputStatus.ConsumedState)
+	if NudgeStatus(fixture.NudgeStatus.ConsumedState) != NudgePending {
+		t.Fatalf("consumed state = %q", fixture.NudgeStatus.ConsumedState)
 	}
 
 	// The request builder is the one place a field name can drift from the
@@ -1363,19 +1364,19 @@ func TestSharedInvocationNudgeFixture(t *testing.T) {
 
 	// The drained receipt is what tells a host the model actually saw the
 	// input, so its spelling is pinned too.
-	drained, err := json.Marshal(PendingInput{Status: PendingInputDrained})
+	drained, err := json.Marshal(Nudge{Status: NudgeDrained})
 	if err != nil {
-		t.Fatalf("encode pending input: %v", err)
+		t.Fatalf("encode nudge: %v", err)
 	}
 	var pending map[string]any
 	if err := json.Unmarshal(drained, &pending); err != nil {
-		t.Fatalf("decode pending input: %v", err)
+		t.Fatalf("decode nudge: %v", err)
 	}
-	if _, ok := pending[fixture.PendingInputStatus.DrainedCarries]; !ok {
-		var typed PendingInput
+	if _, ok := pending[fixture.NudgeStatus.DrainedCarries]; !ok {
+		var typed Nudge
 		if err := json.Unmarshal([]byte(`{"drained_message_sequence":7}`), &typed); err != nil ||
 			typed.DrainedMessageSequence == nil || *typed.DrainedMessageSequence != 7 {
-			t.Fatalf("pending input does not carry %q", fixture.PendingInputStatus.DrainedCarries)
+			t.Fatalf("nudge does not carry %q", fixture.NudgeStatus.DrainedCarries)
 		}
 	}
 }

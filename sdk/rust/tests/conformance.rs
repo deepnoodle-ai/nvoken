@@ -177,7 +177,11 @@ fn shared_agent_request_fixture_is_expressible() {
             .into_iter()
             .collect(),
         ),
-        session_options: Some(SessionOptions::default().retention(86400).budget(0.25)),
+        session_options: Some(
+            SessionOptions::default()
+                .retention(86400)
+                .max_estimated_cost_usd(0.25),
+        ),
         ..AgentInvocationOptions::default()
     };
     let body = client
@@ -480,6 +484,7 @@ fn shared_output_schema_preflight_fixtures() {
             "{id}"
         );
         let details = error.details.unwrap();
+        assert_eq!(details["kind"], "output_schema", "{id}");
         assert_eq!(details["code"], expected.code, "{id}");
         assert_eq!(details["path"], expected.path, "{id}");
         assert_eq!(
@@ -696,7 +701,17 @@ async fn shared_fault_server_semantics() {
         "../../conformance/fixtures/shared-usage-budgets-v1.json"
     ))
     .unwrap();
-    assert_eq!(budget_fixture["scopes"].as_array().unwrap().len(), 6);
+    assert_eq!(
+        budget_fixture["scopes"],
+        json!([
+            "app",
+            "tenant",
+            "user",
+            "agent",
+            "provider_key",
+            "credential"
+        ])
+    );
     let mut request = models::CreateBudgetRequest::new(
         models::BudgetScope::App,
         chrono::DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z").unwrap(),
@@ -1000,7 +1015,7 @@ fn shared_settlement_legibility_fixture_pins_the_stop_reasons() {
             nvoken::models::InvocationStopReason::Deadline,
             nvoken::models::InvocationStopReason::MaxOutputTokens,
             nvoken::models::InvocationStopReason::MaxEstimatedCost,
-            nvoken::models::InvocationStopReason::SessionBudget,
+            nvoken::models::InvocationStopReason::SessionMaxEstimatedCost,
             nvoken::models::InvocationStopReason::SharedBudget,
         ]
     );
@@ -1248,7 +1263,7 @@ fn shared_invocation_webhook_fixture_is_expressible_and_stays_a_pointer() {
         .unwrap();
 
     let target = WebhookTarget::new(url)
-        .event(WebhookEvent::Settled)
+        .event(WebhookEvent::Ended)
         .event(WebhookEvent::Waiting)
         .event(WebhookEvent::Paused);
     assert_eq!(target.url, url);
@@ -1256,7 +1271,7 @@ fn shared_invocation_webhook_fixture_is_expressible_and_stays_a_pointer() {
 
     let mut generated = models::WebhookTarget::new(url.to_string());
     generated.events = Some(vec![
-        models::WebhookEvent::WebhookEventSettled,
+        models::WebhookEvent::WebhookEventEnded,
         models::WebhookEvent::WebhookEventWaiting,
         models::WebhookEvent::WebhookEventPaused,
     ]);
@@ -1296,7 +1311,7 @@ fn shared_invocation_webhook_fixture_is_expressible_and_stays_a_pointer() {
 
     // The payload stays a pointer: nothing the fixture lists as absent may
     // appear in either documented example.
-    for name in ["example_settled_payload", "example_waiting_payload"] {
+    for name in ["example_ended_payload", "example_waiting_payload"] {
         let payload = fixture[name].as_object().unwrap();
         let mut keys: Vec<&String> = payload.keys().collect();
         keys.sort();
@@ -1384,15 +1399,15 @@ fn shared_invocation_nudge_fixture_pins_the_steering_contract() {
     }
     #[derive(Deserialize)]
     struct StatusFixture {
-        values: Vec<models::PendingInputStatus>,
-        consumed_state: models::PendingInputStatus,
+        values: Vec<models::NudgeStatus>,
+        consumed_state: models::NudgeStatus,
         drained_carries: String,
     }
     #[derive(Deserialize)]
     struct NudgeFixture {
         request: RequestFixture,
         acknowledgement: AcknowledgementFixture,
-        pending_input_status: StatusFixture,
+        nudge_status: StatusFixture,
     }
 
     let fixture: NudgeFixture = serde_json::from_str(
@@ -1400,27 +1415,27 @@ fn shared_invocation_nudge_fixture_pins_the_steering_contract() {
     )
     .unwrap();
     assert_eq!(
-        fixture.pending_input_status.values,
+        fixture.nudge_status.values,
         vec![
-            models::PendingInputStatus::Pending,
-            models::PendingInputStatus::Drained,
-            models::PendingInputStatus::Expired,
-            models::PendingInputStatus::Cancelled,
+            models::NudgeStatus::Pending,
+            models::NudgeStatus::Drained,
+            models::NudgeStatus::Expired,
+            models::NudgeStatus::Cancelled,
         ]
     );
     assert_eq!(
-        fixture.pending_input_status.consumed_state,
-        models::PendingInputStatus::Pending
+        fixture.nudge_status.consumed_state,
+        models::NudgeStatus::Pending
     );
 
-    let content_only = models::NudgeInvocationRequest::new(models::InvocationInput::String(
+    let content_only = models::CreateNudgeRequest::new(models::InvocationInput::String(
         "focus on the marine segment".to_string(),
     ));
     assert_eq!(
         serde_json::to_value(&content_only).unwrap(),
         fixture.request.content_only
     );
-    let mut with_key = models::NudgeInvocationRequest::new(models::InvocationInput::String(
+    let mut with_key = models::CreateNudgeRequest::new(models::InvocationInput::String(
         "focus on the marine segment".to_string(),
     ));
     with_key.idempotency_key = Some("nudge-1".to_string());
@@ -1430,8 +1445,8 @@ fn shared_invocation_nudge_fixture_pins_the_steering_contract() {
     );
 
     let acknowledgement = models::NudgeAcknowledgement::new(
-        "npin_019b0a12-8d51-7f34-aed2-0e07c1bdb330".to_string(),
-        models::PendingInputStatus::Pending,
+        "nudge_019b0a12-8d51-7f34-aed2-0e07c1bdb330".to_string(),
+        models::NudgeStatus::Pending,
         false,
         6,
     );
@@ -1443,8 +1458,8 @@ fn shared_invocation_nudge_fixture_pins_the_steering_contract() {
     assert_eq!(encoded_fields, expected_fields);
 
     // The drained receipt is what tells a host the model actually saw the input.
-    let drained: models::PendingInput = serde_json::from_value(json!({
-        "id": "npin_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+    let drained: models::Nudge = serde_json::from_value(json!({
+        "id": "nudge_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
         "invocation_id": INVOCATION_ID,
         "status": "drained",
         "content": "focus on the marine segment",
@@ -1454,7 +1469,7 @@ fn shared_invocation_nudge_fixture_pins_the_steering_contract() {
     .unwrap();
     let encoded_drained = serde_json::to_value(&drained).unwrap();
     assert_eq!(
-        encoded_drained[&fixture.pending_input_status.drained_carries],
+        encoded_drained[&fixture.nudge_status.drained_carries],
         json!(7)
     );
 }

@@ -16,6 +16,9 @@ type InvocationStatus = generated.InvocationStatus
 type InvocationStopReason = generated.InvocationStopReason
 type App = generated.App
 type AppList = generated.AppList
+type AppRegistration = generated.AppRegistration
+type AppSigningKeyPurpose = generated.AppSigningKeyPurpose
+type AppSigningKeySecret = generated.AppSigningKeySecret
 type AgentIdentity = generated.Agent
 type Session = generated.Session
 type SessionContext = generated.SessionContext
@@ -42,8 +45,8 @@ type InvocationChange = generated.InvocationChange
 type MCPListToolsResponse = generated.MCPListToolsResponse
 type MCPProjectedTool = generated.MCPProjectedTool
 type MCPToolExclusion = generated.MCPToolExclusion
-type PendingInput = generated.PendingInput
-type PendingInputStatus = generated.PendingInputStatus
+type Nudge = generated.Nudge
+type NudgeStatus = generated.NudgeStatus
 type NudgeAcknowledgement = generated.NudgeAcknowledgement
 type ToolCall = generated.ToolCall
 type ToolCallDelivery = generated.ToolCallDelivery
@@ -52,7 +55,7 @@ type ToolCallStatus = generated.ToolCallStatus
 type CallbackDeliveryOutcome = generated.CallbackDeliveryOutcome
 type Credential = generated.Credential
 type CredentialList = generated.CredentialList
-type CredentialProfile = generated.Profile
+type CredentialProfile = generated.CredentialProfile
 type CredentialStatus = generated.CredentialStatus
 type CurrentIdentity = generated.CurrentIdentity
 type RuntimeOperation = generated.Operation
@@ -65,83 +68,83 @@ type CredentialIssuance struct {
 }
 
 const (
-	InvocationQueued                            = generated.InvocationStatusQueued
-	InvocationRunning                           = generated.InvocationStatusRunning
-	InvocationWaiting                           = generated.InvocationStatusWaiting
-	InvocationPaused                            = generated.InvocationStatusPaused
-	InvocationCompleted                         = generated.InvocationStatusCompleted
-	InvocationIncomplete                        = generated.InvocationStatusIncomplete
-	InvocationFailed                            = generated.InvocationStatusFailed
-	InvocationCancelled                         = generated.InvocationStatusCancelled
-	StopReasonEndTurn                           = generated.InvocationStopReasonEndTurn
-	StopReasonInterrupted                       = generated.InvocationStopReasonInterrupted
-	StopReasonMaxIterations                     = generated.InvocationStopReasonMaxIterations
-	StopReasonDeadline                          = generated.InvocationStopReasonDeadline
-	StopReasonMaxOutputTokens                   = generated.InvocationStopReasonMaxOutputTokens
-	StopReasonMaxEstimatedCost                  = generated.InvocationStopReasonMaxEstimatedCost
-	StopReasonSessionBudget                     = generated.InvocationStopReasonSessionBudget
-	StopReasonSharedBudget                      = generated.InvocationStopReasonSharedBudget
-	MessagePhaseCommentary                      = generated.Commentary
-	MessagePhaseFinalAnswer                     = generated.FinalAnswer
-	SeedMessageRoleUser                         = generated.SeedMessageRoleUser
-	SeedMessageRoleAssistant                    = generated.SeedMessageRoleAssistant
-	ModelProviderAnthropic        ModelProvider = "anthropic"
-	ModelProviderOpenAI           ModelProvider = "openai"
-	ModelProviderXAI              ModelProvider = "xai"
-	ModelProviderGoogle           ModelProvider = "google"
-	ProviderKeyScopeApp                         = generated.ProviderKeyScopeApp
-	ProviderKeyScopeTenant                      = generated.ProviderKeyScopeTenant
-	ProviderKeyStatusActive                     = generated.ProviderKeyStatusActive
-	ProviderKeyStatusRevoked                    = generated.ProviderKeyStatusRevoked
-	BudgetScopeApp                              = generated.BudgetScopeApp
-	BudgetScopeCustomer                         = generated.BudgetScopeCustomer
-	BudgetScopeUser                             = generated.BudgetScopeUser
-	BudgetScopeAgent                            = generated.BudgetScopeAgent
-	BudgetScopeProviderKey                      = generated.BudgetScopeProviderKey
-	BudgetScopeAPICredential                    = generated.BudgetScopeAPICredential
-	PendingInputPending                         = generated.PendingInputStatusPending
-	PendingInputDrained                         = generated.PendingInputStatusDrained
-	PendingInputExpired                         = generated.PendingInputStatusExpired
-	PendingInputCancelled                       = generated.PendingInputStatusCancelled
-	DailyUsageGroupByTenantKey                  = generated.TenantKey
-	CredentialProfileRuntime                    = generated.Runtime
-	CredentialProfileViewer                     = generated.Viewer
-	CredentialProfileOperator                   = generated.Operator
-	CredentialStatusActive                      = generated.CredentialStatusActive
-	CredentialStatusRevoked                     = generated.CredentialStatusRevoked
-	OperationCreateInvocation                   = generated.CreateInvocation
-	OperationCreateSession                      = generated.CreateSession
-	OperationGetAgent                           = generated.GetAgent
-	OperationListAgents                         = generated.ListAgents
-	OperationGetInvocation                      = generated.GetInvocation
-	OperationSubmitToolResults                  = generated.SubmitToolResults
-	OperationCancelInvocation                   = generated.CancelInvocation
-	OperationResumeInvocation                   = generated.ResumeInvocation
-	OperationListInvocations                    = generated.ListInvocations
-	OperationGetSession                         = generated.GetSession
-	OperationUpdateSession                      = generated.UpdateSession
-	OperationDeleteSession                      = generated.DeleteSession
-	OperationListSessions                       = generated.ListSessions
-	OperationListSessionMessages                = generated.ListSessionMessages
-	OperationGetSessionTranscript               = generated.GetSessionTranscript
-	OperationGetIdentity                        = generated.GetIdentity
-	OperationListCredentials                    = generated.ListCredentials
-	OperationCreateCredential                   = generated.CreateCredential
-	OperationGetCredential                      = generated.GetCredential
-	OperationRotateCredential                   = generated.RotateCredential
-	OperationRevokeCredential                   = generated.RevokeCredential
-	OperationListProviderKeys                   = generated.ListProviderKeys
-	OperationCreateProviderKey                  = generated.CreateProviderKey
-	OperationGetProviderKey                     = generated.GetProviderKey
-	OperationRotateProviderKey                  = generated.RotateProviderKey
-	OperationRevokeProviderKey                  = generated.RevokeProviderKey
-	OperationReadUsage                          = generated.ReadUsage
-	OperationReadBudgets                        = generated.ReadBudgets
-	OperationWriteBudgets                       = generated.WriteBudgets
-	OperationRegisterApp                        = generated.RegisterApp
-	OperationListApps                           = generated.ListApps
-	OperationGetApp                             = generated.GetApp
-	OperationUpdateApp                          = generated.UpdateApp
+	InvocationQueued                                = generated.InvocationStatusQueued
+	InvocationRunning                               = generated.InvocationStatusRunning
+	InvocationWaiting                               = generated.InvocationStatusWaiting
+	InvocationPaused                                = generated.InvocationStatusPaused
+	InvocationCompleted                             = generated.InvocationStatusCompleted
+	InvocationIncomplete                            = generated.InvocationStatusIncomplete
+	InvocationFailed                                = generated.InvocationStatusFailed
+	InvocationCancelled                             = generated.InvocationStatusCancelled
+	StopReasonEndTurn                               = generated.EndTurn
+	StopReasonInterrupted                           = generated.Interrupted
+	StopReasonMaxIterations                         = generated.MaxIterations
+	StopReasonDeadline                              = generated.Deadline
+	StopReasonMaxOutputTokens                       = generated.MaxOutputTokens
+	StopReasonMaxEstimatedCost                      = generated.MaxEstimatedCost
+	StopReasonSessionMaxEstimatedCost               = generated.SessionMaxEstimatedCost
+	StopReasonSharedBudget                          = generated.SharedBudget
+	MessagePhaseCommentary                          = generated.Commentary
+	MessagePhaseFinalAnswer                         = generated.FinalAnswer
+	SeedMessageRoleUser                             = generated.SeedMessageRoleUser
+	SeedMessageRoleAssistant                        = generated.SeedMessageRoleAssistant
+	ModelProviderAnthropic            ModelProvider = "anthropic"
+	ModelProviderOpenAI               ModelProvider = "openai"
+	ModelProviderXAI                  ModelProvider = "xai"
+	ModelProviderGoogle               ModelProvider = "google"
+	ProviderKeyScopeApp                             = generated.ProviderKeyScopeApp
+	ProviderKeyScopeTenant                          = generated.ProviderKeyScopeTenant
+	ProviderKeyStatusActive                         = generated.ProviderKeyStatusActive
+	ProviderKeyStatusRevoked                        = generated.ProviderKeyStatusRevoked
+	BudgetScopeApp                                  = generated.BudgetScopeApp
+	BudgetScopeTenant                               = generated.BudgetScopeTenant
+	BudgetScopeUser                                 = generated.BudgetScopeUser
+	BudgetScopeAgent                                = generated.BudgetScopeAgent
+	BudgetScopeProviderKey                          = generated.BudgetScopeProviderKey
+	BudgetScopeCredential                           = generated.BudgetScopeCredential
+	NudgePending                                    = generated.NudgeStatusPending
+	NudgeDrained                                    = generated.NudgeStatusDrained
+	NudgeExpired                                    = generated.NudgeStatusExpired
+	NudgeCancelled                                  = generated.NudgeStatusCancelled
+	DailyUsageGroupByTenantKey                      = generated.TenantKey
+	CredentialProfileRuntime                        = generated.Runtime
+	CredentialProfileViewer                         = generated.Viewer
+	CredentialProfileOperator                       = generated.Operator
+	CredentialStatusActive                          = generated.CredentialStatusActive
+	CredentialStatusRevoked                         = generated.CredentialStatusRevoked
+	OperationCreateInvocation                       = generated.CreateInvocation
+	OperationCreateSession                          = generated.CreateSession
+	OperationGetAgent                               = generated.GetAgent
+	OperationListAgents                             = generated.ListAgents
+	OperationGetInvocation                          = generated.GetInvocation
+	OperationSubmitToolResults                      = generated.SubmitToolResults
+	OperationCancelInvocation                       = generated.CancelInvocation
+	OperationResumeInvocation                       = generated.ResumeInvocation
+	OperationListInvocations                        = generated.ListInvocations
+	OperationGetSession                             = generated.GetSession
+	OperationUpdateSession                          = generated.UpdateSession
+	OperationDeleteSession                          = generated.DeleteSession
+	OperationListSessions                           = generated.ListSessions
+	OperationListSessionMessages                    = generated.ListSessionMessages
+	OperationGetSessionTranscript                   = generated.GetSessionTranscript
+	OperationGetIdentity                            = generated.GetIdentity
+	OperationListCredentials                        = generated.ListCredentials
+	OperationCreateCredential                       = generated.CreateCredential
+	OperationGetCredential                          = generated.GetCredential
+	OperationRotateCredential                       = generated.RotateCredential
+	OperationRevokeCredential                       = generated.RevokeCredential
+	OperationListProviderKeys                       = generated.ListProviderKeys
+	OperationCreateProviderKey                      = generated.CreateProviderKey
+	OperationGetProviderKey                         = generated.GetProviderKey
+	OperationRotateProviderKey                      = generated.RotateProviderKey
+	OperationRevokeProviderKey                      = generated.RevokeProviderKey
+	OperationReadUsage                              = generated.ReadUsage
+	OperationReadBudgets                            = generated.ReadBudgets
+	OperationWriteBudgets                           = generated.WriteBudgets
+	OperationRegisterApp                            = generated.RegisterApp
+	OperationListApps                               = generated.ListApps
+	OperationGetApp                                 = generated.GetApp
+	OperationUpdateApp                              = generated.UpdateApp
 )
 
 type ModelList struct {
@@ -179,11 +182,7 @@ type SessionCompactionList struct {
 	NextCursor *string             `json:"next_cursor"`
 }
 
-type PendingInputList struct {
-	HasMore    bool           `json:"has_more"`
-	Items      []PendingInput `json:"items"`
-	NextCursor *string        `json:"next_cursor"`
-}
+type NudgeList = generated.NudgeList
 
 type ToolCallList = generated.ToolCallList
 
@@ -193,10 +192,10 @@ type ListToolCallsOptions struct {
 	Limit  *int
 }
 
-// ListPendingInputsOptions filters and pages the staged-input queue. A nil
+// ListNudgesOptions filters and pages the staged-input queue. A nil
 // Status returns every status, in the order the turn consumes them.
-type ListPendingInputsOptions struct {
-	Status *PendingInputStatus
+type ListNudgesOptions struct {
+	Status *NudgeStatus
 	Cursor *string
 	Limit  *int
 }
@@ -206,7 +205,7 @@ type ListPendingInputsOptions struct {
 // document blocks belong on an Invocation's own input rather than here.
 //
 // IdempotencyKey makes a retry safe: the same key with the same content
-// returns the original acknowledgement with Deduped set, and the same key with
+// returns the original acknowledgement with Deduplicated set, and the same key with
 // different content is refused rather than silently reused.
 type NudgeRequest struct {
 	Content        string
@@ -346,16 +345,10 @@ type SessionOptions struct {
 	// Compaction requires an Invocation because the policy is validated against
 	// that turn's model. It may be installed on any Session that has no policy
 	// yet, but CreateSession still cannot set it.
-	Compaction *ContextCompaction `json:"compaction,omitempty"`
-	Retention  *SessionRetention  `json:"retention,omitempty"`
-	Budget     *SessionBudget     `json:"budget,omitempty"`
-	Metadata   map[string]string  `json:"metadata,omitempty"`
-}
-
-// SessionBudget is a mutable Session-wide USD list-price guardrail, not a
-// billing ledger. Models without catalog pricing fail closed.
-type SessionBudget struct {
-	MaxEstimatedCostUSD float32 `json:"max_estimated_cost_usd"`
+	Compaction          *ContextCompaction `json:"compaction,omitempty"`
+	Retention           *SessionRetention  `json:"retention,omitempty"`
+	MaxEstimatedCostUSD *float32           `json:"max_estimated_cost_usd,omitempty"`
+	Metadata            map[string]string  `json:"metadata,omitempty"`
 }
 
 // generated converts creation-only options for POST /v1/sessions. Compaction is
@@ -369,15 +362,15 @@ func (o *SessionOptions) generated() (*generated.SessionOptions, error) {
 			"compaction requires an Invocation to validate its model against: " +
 				"set it on an Invocation admission for the Session")
 	}
-	if o.Retention == nil && o.Budget == nil && len(o.Metadata) == 0 {
+	if o.Retention == nil && o.MaxEstimatedCostUSD == nil && len(o.Metadata) == 0 {
 		return nil, fmt.Errorf("session options require at least one member")
 	}
 	options := &generated.SessionOptions{}
 	if o.Retention != nil {
 		options.Retention = &generated.RetentionPolicy{TTLSeconds: o.Retention.TTLSeconds}
 	}
-	if o.Budget != nil {
-		options.Budget = &generated.SessionBudget{MaxEstimatedCostUsd: o.Budget.MaxEstimatedCostUSD}
+	if o.MaxEstimatedCostUSD != nil {
+		options.MaxEstimatedCostUsd = o.MaxEstimatedCostUSD
 	}
 	if len(o.Metadata) > 0 {
 		metadata := generated.Metadata(o.Metadata)
@@ -390,8 +383,8 @@ func (o *SessionOptions) generatedFork() (*generated.ForkSessionOptions, error) 
 	if o.Compaction != nil {
 		return nil, fmt.Errorf("forked Sessions start uncompacted; set compaction on the child Session's first invocation")
 	}
-	if o.Budget != nil {
-		return nil, fmt.Errorf("forked Sessions cannot set a budget at creation; update the child after forking")
+	if o.MaxEstimatedCostUSD != nil {
+		return nil, fmt.Errorf("forked Sessions cannot set max estimated cost at creation; update the child after forking")
 	}
 	if o.Retention == nil && len(o.Metadata) == 0 {
 		return nil, fmt.Errorf("session options require at least one member")
@@ -409,7 +402,7 @@ func (o *SessionOptions) generatedFork() (*generated.ForkSessionOptions, error) 
 
 // SessionRetention bounds how long an idle Session is retained. The window
 // measures idle time rather than lifetime: it restarts on every Invocation
-// admission and settlement, so a turn outlasting the window cannot expire
+// acceptance and completion, so a turn outlasting the window cannot expire
 // underneath itself. Automatic expiry never cancels running work.
 type SessionRetention struct {
 	// TTLSeconds is the idle window, from one hour to thirty days.
@@ -569,11 +562,11 @@ type WebhookEvent string
 const (
 	WebhookEventWaiting WebhookEvent = "invocation.waiting"
 	WebhookEventPaused  WebhookEvent = "invocation.paused"
-	WebhookEventSettled WebhookEvent = "invocation.settled"
+	WebhookEventEnded   WebhookEvent = "invocation.ended"
 )
 
 func (e WebhookEvent) valid() bool {
-	return e == WebhookEventWaiting || e == WebhookEventPaused || e == WebhookEventSettled
+	return e == WebhookEventWaiting || e == WebhookEventPaused || e == WebhookEventEnded
 }
 
 type IfActivePolicy string
@@ -587,8 +580,8 @@ const (
 type BudgetExhaustionBehavior string
 
 const (
-	BudgetExhaustionSettle BudgetExhaustionBehavior = "settle"
-	BudgetExhaustionPause  BudgetExhaustionBehavior = "pause"
+	BudgetExhaustionStop  BudgetExhaustionBehavior = "stop"
+	BudgetExhaustionPause BudgetExhaustionBehavior = "pause"
 )
 
 type ProviderKeySelection struct {
@@ -896,7 +889,7 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 		wire["provider_tools"] = r.ProviderTools
 	}
 	if r.OutputSchema != nil {
-		wire["structured_output"] = map[string]any{"schema": r.OutputSchema}
+		wire["output_schema"] = r.OutputSchema
 	}
 	if r.TenantKey != nil {
 		wire["tenant_key"] = *r.TenantKey
@@ -929,10 +922,10 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 	}
 	switch r.OnBudgetExhausted {
 	case "":
-	case BudgetExhaustionSettle, BudgetExhaustionPause:
+	case BudgetExhaustionStop, BudgetExhaustionPause:
 		wire["on_budget_exhausted"] = r.OnBudgetExhausted
 	default:
-		return nil, fmt.Errorf("on budget exhausted must be settle or pause")
+		return nil, fmt.Errorf("on budget exhausted must be stop or pause")
 	}
 	if r.Webhook != nil {
 		if r.Webhook.URL == "" {
