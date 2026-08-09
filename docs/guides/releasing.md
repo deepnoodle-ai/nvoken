@@ -17,9 +17,7 @@ the corresponding trusted publishers:
   `release-crates.yml`, environment `crates-io` as its trusted publisher.
 
 Add `TAP_GITHUB_TOKEN` with write access to `deepnoodle-ai/homebrew-tap` as a
-repository Actions secret. Ensure the organization Actions secret
-`DN_REPO_READ` is available to this repository; the OpenAPI synchronization
-workflow uses it to read `deepnoodle-ai/nvoken-cloud`.
+repository Actions secret.
 
 ## Prepare a release
 

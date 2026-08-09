@@ -84,8 +84,10 @@ request can regenerate and test clients without access to a private repository.
 (defaulting to `../nvoken-cloud`) and refreshes provenance. `make
 openapi-sync-check` proves that the committed snapshots match a local upstream
 checkout. The normal public CI gate validates generation from the committed
-snapshot. A separate authenticated sync workflow can update the snapshot and
-open a pull request when the private contract changes.
+snapshot. Synchronization is intentionally manual for now: a maintainer with
+both repositories checked out runs the sync and generation targets, reviews the
+result, and opens a public pull request. The public repository does not receive
+a credential that can read private repositories.
 
 The invariant is:
 
@@ -186,15 +188,11 @@ pull requests. The current team and release volume do not justify that cost.
    synchronized snapshot boundary.
 3. Run the complete local gate, then stop changing SDK and CLI sources in
    `nvoken-cloud`.
-4. Configure registry trusted publishers and the Homebrew token, and make the
-   organization secret `DN_REPO_READ` available to the optional sync workflow.
+4. Configure registry trusted publishers and the Homebrew token.
 5. Publish the first aligned release from this repository after review.
 
 ## Open questions
 
-- Whether the private backend should dispatch the public sync workflow on every
-  OpenAPI change or only from an explicit release job. Start with explicit
-  dispatch; automate after the ownership handoff is proven.
 - Whether future hosted-only identity endpoints should remain in the same SDK
   package or become a separate operator package. Keep the current combined
   client until real consumers demonstrate that the extra surface is confusing.
