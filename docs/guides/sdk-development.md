@@ -4,8 +4,8 @@
 
 The service contract is authored in the private `nvoken-cloud` repository. The
 `openapi/nvoken.yaml` file in this repository is a synchronized snapshot, not a
-second source of truth. Its exact upstream commit is recorded in
-`openapi/SOURCE.json`.
+second source of truth. `openapi/SOURCE.json` records the upstream commit that
+last changed the contract, so unrelated cloud commits leave provenance alone.
 
 The generated transports are intentionally committed. A contributor can build,
 test, and package every public client without access to `nvoken-cloud` or an

@@ -10,6 +10,9 @@ without republishing every artifact.
 
 - Clean up Budget conformance naming, CLI tenant terminology, and registry
   release guidance after the 0.10.0 migration.
+- Track OpenAPI provenance by the commit that last changed the contract, so
+  unrelated `nvoken-cloud` commits no longer fail `make openapi-sync-check`
+  against a byte-identical snapshot.
 
 ## 0.10.0 - 2026-08-09
 
