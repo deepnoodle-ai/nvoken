@@ -25,6 +25,17 @@ func registerBudgetCommands(app *cli.App) {
 		cli.String("idempotency-key").Required().Help("Stable create request identity"),
 	).Run(runBudgetCreate)
 	budgets.Command("get").Args("budget-id").Run(runBudgetGet)
+	budgets.Command("list").Flags(
+		cli.String("scope").Enum("app", "tenant", "user", "agent", "provider_key", "credential").Help("Filter by Budget scope"),
+		cli.String("status").Enum("upcoming", "active", "expired", "removed").Help("Filter by lifecycle status"),
+		cli.String("tenant-key").Help("Filter by tenant key"),
+		cli.String("user-key").Help("Filter by end-user key"),
+		cli.String("agent-id").Help("Filter by Agent ID"),
+		cli.String("provider-key-id").Help("Filter by stored provider key ID"),
+		cli.String("credential-family-id").Help("Filter by credential rotation family"),
+		cli.String("cursor").Help("Opaque continuation cursor"),
+		cli.Int("limit").Help("Maximum page size"),
+	).Run(runBudgetList)
 	budgets.Command("update").Args("budget-id").Flags(
 		cli.Float64("max-estimated-cost-usd").Required().Help("Replacement estimated cost cap in USD"),
 	).Run(runBudgetUpdate)
@@ -80,6 +91,42 @@ func runBudgetGet(command *cli.Context) error {
 	return writeBudget(command, budget)
 }
 
+func runBudgetList(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	params := &nvoken.ListBudgetsParams{
+		TenantKey:          optionalString(command.String("tenant-key")),
+		UserKey:            optionalString(command.String("user-key")),
+		AgentID:            optionalString(command.String("agent-id")),
+		ProviderKeyID:      optionalString(command.String("provider-key-id")),
+		CredentialFamilyID: optionalString(command.String("credential-family-id")),
+		Cursor:             optionalString(command.String("cursor")),
+		Limit:              optionalInt(command.Int("limit")),
+	}
+	if value := command.String("scope"); value != "" {
+		scope := nvoken.BudgetScope(value)
+		params.Scope = &scope
+	}
+	if value := command.String("status"); value != "" {
+		status := nvoken.ListBudgetsParamsStatus(value)
+		params.Status = &status
+	}
+	list, err := client.ListBudgets(command.Context(), params)
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, list, func(writer io.Writer) error {
+		for index := range list.Items {
+			if err := writeBudgetText(writer, &list.Items[index]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func runBudgetUpdate(command *cli.Context) error {
 	client, err := runtimeClient(command)
 	if err != nil {
@@ -113,21 +160,25 @@ func runBudgetDelete(command *cli.Context) error {
 
 func writeBudget(command *cli.Context, budget *nvoken.Budget) error {
 	return writeOutput(command, budget, func(writer io.Writer) error {
-		_, err := fmt.Fprintf(
-			writer,
-			"%s\t%s\t%s..%s\tcap=%.6f\tspent=%.6f\treserved=%.6f\tavailable=%.6f\tpaused=%d\n",
-			budget.ID,
-			budget.Scope,
-			budget.WindowStart.UTC().Format(time.RFC3339),
-			budget.WindowEnd.UTC().Format(time.RFC3339),
-			budget.MaxEstimatedCostUsd,
-			budget.SpentEstimatedCostUsd,
-			budget.ReservedEstimatedCostUsd,
-			budget.AvailableEstimatedCostUsd,
-			budget.PausedInvocations,
-		)
-		return err
+		return writeBudgetText(writer, budget)
 	})
+}
+
+func writeBudgetText(writer io.Writer, budget *nvoken.Budget) error {
+	_, err := fmt.Fprintf(
+		writer,
+		"%s\t%s\t%s..%s\tcap=%.6f\tspent=%.6f\treserved=%.6f\tavailable=%.6f\tpaused=%d\n",
+		budget.ID,
+		budget.Scope,
+		budget.WindowStart.UTC().Format(time.RFC3339),
+		budget.WindowEnd.UTC().Format(time.RFC3339),
+		budget.MaxEstimatedCostUsd,
+		budget.SpentEstimatedCostUsd,
+		budget.ReservedEstimatedCostUsd,
+		budget.AvailableEstimatedCostUsd,
+		budget.PausedInvocations,
+	)
+	return err
 }
 
 func utcRFC3339(value, name string) (time.Time, error) {

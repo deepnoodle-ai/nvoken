@@ -49,6 +49,7 @@ var operationCommands = map[string]string{
 	"createProviderKey":       "provider-key create",
 	"createBudget":            "budget create",
 	"getBudget":               "budget get",
+	"listBudgets":             "budget list",
 	"getCredential":           "credentials get",
 	"getCurrentIdentity":      "auth status",
 	"updateBudget":            "budget update",
@@ -60,9 +61,12 @@ var operationCommands = map[string]string{
 	"updateApp":               "app update",
 	"getInvocation":           "invocation get",
 	"getInvocationResult":     "invocation result",
+	"getInvocationTimeline":   "invocation timeline",
 	"getModel":                "model get",
+	"getOrg":                  "org get",
 	"getProviderKey":          "provider-key get",
-	"getDailyUsage":           "usage daily",
+	"getUsageBreakdown":       "usage breakdown",
+	"getUsageTimeseries":      "usage timeseries",
 	"getProviderKeyUsage":     "provider-key usage",
 	"getSession":              "session get",
 	"deleteSession":           "session delete",
@@ -73,10 +77,13 @@ var operationCommands = map[string]string{
 	"listInvocations":         "invocation list",
 	"listMCPTools":            "mcp list-tools",
 	"listModels":              "model list",
+	"listOrgs":                "org list",
 	"listProviderKeys":        "provider-key list",
 	"listSessionCompactions":  "session compactions",
 	"listSessionMessages":     "session messages",
 	"listSessions":            "session list",
+	"listUsageRecords":        "usage records",
+	"registerOrg":             "org register",
 	"revokeProviderKey":       "provider-key revoke",
 	"revokeCredential":        "credentials revoke",
 	"rotateCredential":        "credentials rotate",
@@ -84,6 +91,7 @@ var operationCommands = map[string]string{
 	"streamInvocation":        "invocation stream",
 	"streamSessionTranscript": "session stream",
 	"submitHostToolResults":   "tool-result submit",
+	"updateOrg":               "org update",
 }
 
 type runtimeConfig struct {
@@ -123,6 +131,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Flags(
 			cli.String("external-ref").Help("Opaque owner reference grounding console issuer tokens"),
 			cli.String("display-name").Help("Human-facing label; name stays the unique handle"),
+			cli.String("org-id").Help("Owning Org; Org-scoped callers may omit this to use their own"),
 		).
 		Run(runAppRegister)
 	apps.Command("get").Args("app-id").Run(runAppGet)
@@ -133,8 +142,12 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runAppList)
 	apps.Command("update").
-		Description("Update an app's display name; name and external_ref are immutable").
-		Args("app-id", "display-name").
+		Description("Update an app's display name or transfer its owning Org").
+		Args("app-id").
+		Flags(
+			cli.String("display-name").Help("Replacement human-facing label"),
+			cli.String("org-id").Help("Replacement owning Org; installation administrators only"),
+		).
 		Run(runAppUpdate)
 
 	agents := app.Group("agent").Description("Read installation-wide Agent identity anchors")
@@ -156,6 +169,10 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Read the composed result: Invocation, messages, and assistant text").
 		Args("invocation-id").
 		Run(runInvocationResult)
+	invocations.Command("timeline").
+		Description("Read the durable execution waterfall without prompts or tool payloads").
+		Args("invocation-id").
+		Run(runInvocationTimeline)
 	invocations.Command("wait").
 		Description("Wait until terminal or actionable; waiting requires a tool result or cancellation").
 		Args("invocation-id").
@@ -720,6 +737,37 @@ func runInvocationResult(command *cli.Context) error {
 	})
 }
 
+func runInvocationTimeline(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	timeline, err := client.GetInvocationTimeline(command.Context(), command.Arg(0))
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, timeline, func(writer io.Writer) error {
+		for _, step := range timeline.Steps {
+			duration := 0
+			if step.DurationMs != nil {
+				duration = *step.DurationMs
+			}
+			if _, err := fmt.Fprintf(
+				writer,
+				"%s\t%s\t%s\t%s\t%dms\n",
+				step.StartedAt.UTC().Format(time.RFC3339Nano),
+				step.Kind,
+				step.Status,
+				step.DetailID,
+				duration,
+			); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func runInvocationWait(command *cli.Context) error {
 	client, err := runtimeClient(command)
 	if err != nil {
@@ -937,6 +985,7 @@ func runAppRegister(command *cli.Context) error {
 	registered, err := client.RegisterApp(command.Context(), command.Arg(0), nvoken.RegisterAppOptions{
 		ExternalRef: optionalString(command.String("external-ref")),
 		DisplayName: optionalString(command.String("display-name")),
+		OrgID:       optionalString(command.String("org-id")),
 	})
 	if err != nil {
 		return err
@@ -974,7 +1023,10 @@ func runAppUpdate(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	updated, err := client.UpdateApp(command.Context(), command.Arg(0), command.Arg(1))
+	updated, err := client.UpdateApp(command.Context(), command.Arg(0), nvoken.UpdateAppOptions{
+		DisplayName: optionalString(command.String("display-name")),
+		OrgID:       optionalString(command.String("org-id")),
+	})
 	if err != nil {
 		return err
 	}

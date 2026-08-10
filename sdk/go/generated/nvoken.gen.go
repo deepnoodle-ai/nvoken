@@ -166,6 +166,30 @@ func (e CompactionPolicyTriggerTokens1) Valid() bool {
 	}
 }
 
+// Defines values for CostMetricsCostCoverage.
+const (
+	CostMetricsCostCoverageComplete      CostMetricsCostCoverage = "complete"
+	CostMetricsCostCoverageNone          CostMetricsCostCoverage = "none"
+	CostMetricsCostCoverageNotApplicable CostMetricsCostCoverage = "not_applicable"
+	CostMetricsCostCoveragePartial       CostMetricsCostCoverage = "partial"
+)
+
+// Valid indicates whether the value is a known member of the CostMetricsCostCoverage enum.
+func (e CostMetricsCostCoverage) Valid() bool {
+	switch e {
+	case CostMetricsCostCoverageComplete:
+		return true
+	case CostMetricsCostCoverageNone:
+		return true
+	case CostMetricsCostCoverageNotApplicable:
+		return true
+	case CostMetricsCostCoveragePartial:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateInvocationRequestIfActive.
 const (
 	Interrupt CreateInvocationRequestIfActive = "interrupt"
@@ -664,6 +688,30 @@ func (e InvocationStopReason) Valid() bool {
 	}
 }
 
+// Defines values for InvocationTimelineStepKind.
+const (
+	InvocationTimelineStepKindLifecycle InvocationTimelineStepKind = "lifecycle"
+	InvocationTimelineStepKindModelCall InvocationTimelineStepKind = "model_call"
+	InvocationTimelineStepKindNudge     InvocationTimelineStepKind = "nudge"
+	InvocationTimelineStepKindToolCall  InvocationTimelineStepKind = "tool_call"
+)
+
+// Valid indicates whether the value is a known member of the InvocationTimelineStepKind enum.
+func (e InvocationTimelineStepKind) Valid() bool {
+	switch e {
+	case InvocationTimelineStepKindLifecycle:
+		return true
+	case InvocationTimelineStepKindModelCall:
+		return true
+	case InvocationTimelineStepKindNudge:
+		return true
+	case InvocationTimelineStepKindToolCall:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvocationUpdateEventType.
 const (
 	EventInvocationUpdate InvocationUpdateEventType = "invocation.update"
@@ -742,15 +790,108 @@ func (e MessagePhase) Valid() bool {
 	}
 }
 
+// Defines values for ModelCallFactStatus.
+const (
+	NotStarted ModelCallFactStatus = "not_started"
+	Prepared   ModelCallFactStatus = "prepared"
+	Settled    ModelCallFactStatus = "settled"
+	Started    ModelCallFactStatus = "started"
+	Uncertain  ModelCallFactStatus = "uncertain"
+)
+
+// Valid indicates whether the value is a known member of the ModelCallFactStatus enum.
+func (e ModelCallFactStatus) Valid() bool {
+	switch e {
+	case NotStarted:
+		return true
+	case Prepared:
+		return true
+	case Settled:
+		return true
+	case Started:
+		return true
+	case Uncertain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCallKind.
+const (
+	Compaction ModelCallKind = "compaction"
+	Direct     ModelCallKind = "direct"
+	Generation ModelCallKind = "generation"
+)
+
+// Valid indicates whether the value is a known member of the ModelCallKind enum.
+func (e ModelCallKind) Valid() bool {
+	switch e {
+	case Compaction:
+		return true
+	case Direct:
+		return true
+	case Generation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCallRecordCostCoverage.
+const (
+	ModelCallRecordCostCoverageComplete      ModelCallRecordCostCoverage = "complete"
+	ModelCallRecordCostCoverageNone          ModelCallRecordCostCoverage = "none"
+	ModelCallRecordCostCoverageNotApplicable ModelCallRecordCostCoverage = "not_applicable"
+)
+
+// Valid indicates whether the value is a known member of the ModelCallRecordCostCoverage enum.
+func (e ModelCallRecordCostCoverage) Valid() bool {
+	switch e {
+	case ModelCallRecordCostCoverageComplete:
+		return true
+	case ModelCallRecordCostCoverageNone:
+		return true
+	case ModelCallRecordCostCoverageNotApplicable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCallRecordOutcome.
+const (
+	ModelCallRecordOutcomeCancelled   ModelCallRecordOutcome = "cancelled"
+	ModelCallRecordOutcomeFailed      ModelCallRecordOutcome = "failed"
+	ModelCallRecordOutcomeLessThanNil ModelCallRecordOutcome = "<nil>"
+	ModelCallRecordOutcomeSucceeded   ModelCallRecordOutcome = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the ModelCallRecordOutcome enum.
+func (e ModelCallRecordOutcome) Valid() bool {
+	switch e {
+	case ModelCallRecordOutcomeCancelled:
+		return true
+	case ModelCallRecordOutcomeFailed:
+		return true
+	case ModelCallRecordOutcomeLessThanNil:
+		return true
+	case ModelCallRecordOutcomeSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ModelPricingCurrency.
 const (
-	USD ModelPricingCurrency = "USD"
+	ModelPricingCurrencyUSD ModelPricingCurrency = "USD"
 )
 
 // Valid indicates whether the value is a known member of the ModelPricingCurrency enum.
 func (e ModelPricingCurrency) Valid() bool {
 	switch e {
-	case USD:
+	case ModelPricingCurrencyUSD:
 		return true
 	default:
 		return false
@@ -844,6 +985,21 @@ func (e ModelToolChoiceMode) Valid() bool {
 	}
 }
 
+// Defines values for MoneyCurrency.
+const (
+	MoneyCurrencyUSD MoneyCurrency = "USD"
+)
+
+// Valid indicates whether the value is a known member of the MoneyCurrency enum.
+func (e MoneyCurrency) Valid() bool {
+	switch e {
+	case MoneyCurrencyUSD:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NudgeStatus.
 const (
 	NudgeStatusCancelled NudgeStatus = "cancelled"
@@ -881,6 +1037,7 @@ const (
 	GetCredential        Operation = "get_credential"
 	GetIdentity          Operation = "get_identity"
 	GetInvocation        Operation = "get_invocation"
+	GetOrg               Operation = "get_org"
 	GetProviderKey       Operation = "get_provider_key"
 	GetSession           Operation = "get_session"
 	GetSessionTranscript Operation = "get_session_transcript"
@@ -888,12 +1045,14 @@ const (
 	ListApps             Operation = "list_apps"
 	ListCredentials      Operation = "list_credentials"
 	ListInvocations      Operation = "list_invocations"
+	ListOrgs             Operation = "list_orgs"
 	ListProviderKeys     Operation = "list_provider_keys"
 	ListSessionMessages  Operation = "list_session_messages"
 	ListSessions         Operation = "list_sessions"
 	ReadBudgets          Operation = "read_budgets"
 	ReadUsage            Operation = "read_usage"
 	RegisterApp          Operation = "register_app"
+	RegisterOrg          Operation = "register_org"
 	ResumeInvocation     Operation = "resume_invocation"
 	RevokeCredential     Operation = "revoke_credential"
 	RevokeProviderKey    Operation = "revoke_provider_key"
@@ -901,6 +1060,7 @@ const (
 	RotateProviderKey    Operation = "rotate_provider_key"
 	SubmitToolResults    Operation = "submit_tool_results"
 	UpdateApp            Operation = "update_app"
+	UpdateOrg            Operation = "update_org"
 	UpdateSession        Operation = "update_session"
 	WriteBudgets         Operation = "write_budgets"
 )
@@ -930,6 +1090,8 @@ func (e Operation) Valid() bool {
 		return true
 	case GetInvocation:
 		return true
+	case GetOrg:
+		return true
 	case GetProviderKey:
 		return true
 	case GetSession:
@@ -944,6 +1106,8 @@ func (e Operation) Valid() bool {
 		return true
 	case ListInvocations:
 		return true
+	case ListOrgs:
+		return true
 	case ListProviderKeys:
 		return true
 	case ListSessionMessages:
@@ -955,6 +1119,8 @@ func (e Operation) Valid() bool {
 	case ReadUsage:
 		return true
 	case RegisterApp:
+		return true
+	case RegisterOrg:
 		return true
 	case ResumeInvocation:
 		return true
@@ -969,6 +1135,8 @@ func (e Operation) Valid() bool {
 	case SubmitToolResults:
 		return true
 	case UpdateApp:
+		return true
+	case UpdateOrg:
 		return true
 	case UpdateSession:
 		return true
@@ -1084,6 +1252,33 @@ func (e ProviderKeySelection1Source) Valid() bool {
 	case ProviderKeySelection1SourcePlatform:
 		return true
 	case ProviderKeySelection1SourceTenantByok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderKeySource.
+const (
+	ProviderKeySourceAppByok         ProviderKeySource = "app_byok"
+	ProviderKeySourceCallerEphemeral ProviderKeySource = "caller_ephemeral"
+	ProviderKeySourceConfigByok      ProviderKeySource = "config_byok"
+	ProviderKeySourcePlatform        ProviderKeySource = "platform"
+	ProviderKeySourceTenantByok      ProviderKeySource = "tenant_byok"
+)
+
+// Valid indicates whether the value is a known member of the ProviderKeySource enum.
+func (e ProviderKeySource) Valid() bool {
+	switch e {
+	case ProviderKeySourceAppByok:
+		return true
+	case ProviderKeySourceCallerEphemeral:
+		return true
+	case ProviderKeySourceConfigByok:
+		return true
+	case ProviderKeySourcePlatform:
+		return true
+	case ProviderKeySourceTenantByok:
 		return true
 	default:
 		return false
@@ -1507,6 +1702,51 @@ func (e URLCitationType) Valid() bool {
 	}
 }
 
+// Defines values for UsageInterval.
+const (
+	Day   UsageInterval = "day"
+	Month UsageInterval = "month"
+	Week  UsageInterval = "week"
+)
+
+// Valid indicates whether the value is a known member of the UsageInterval enum.
+func (e UsageInterval) Valid() bool {
+	switch e {
+	case Day:
+		return true
+	case Month:
+		return true
+	case Week:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UsageTimeseriesGroupBy.
+const (
+	UsageTimeseriesGroupByAgentID   UsageTimeseriesGroupBy = "agent_id"
+	UsageTimeseriesGroupByModel     UsageTimeseriesGroupBy = "model"
+	UsageTimeseriesGroupByTenantKey UsageTimeseriesGroupBy = "tenant_key"
+	UsageTimeseriesGroupByToolName  UsageTimeseriesGroupBy = "tool_name"
+)
+
+// Valid indicates whether the value is a known member of the UsageTimeseriesGroupBy enum.
+func (e UsageTimeseriesGroupBy) Valid() bool {
+	switch e {
+	case UsageTimeseriesGroupByAgentID:
+		return true
+	case UsageTimeseriesGroupByModel:
+		return true
+	case UsageTimeseriesGroupByTenantKey:
+		return true
+	case UsageTimeseriesGroupByToolName:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WebSearchResultLocationCitationType.
 const (
 	TypeWebSearchResultLocation WebSearchResultLocationCitationType = "web_search_result_location"
@@ -1543,6 +1783,30 @@ func (e WebhookEvent) Valid() bool {
 	}
 }
 
+// Defines values for ListBudgetsParamsStatus.
+const (
+	ListBudgetsParamsStatusActive   ListBudgetsParamsStatus = "active"
+	ListBudgetsParamsStatusExpired  ListBudgetsParamsStatus = "expired"
+	ListBudgetsParamsStatusRemoved  ListBudgetsParamsStatus = "removed"
+	ListBudgetsParamsStatusUpcoming ListBudgetsParamsStatus = "upcoming"
+)
+
+// Valid indicates whether the value is a known member of the ListBudgetsParamsStatus enum.
+func (e ListBudgetsParamsStatus) Valid() bool {
+	switch e {
+	case ListBudgetsParamsStatusActive:
+		return true
+	case ListBudgetsParamsStatusExpired:
+		return true
+	case ListBudgetsParamsStatusRemoved:
+		return true
+	case ListBudgetsParamsStatusUpcoming:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListProviderKeysParamsStatus.
 const (
 	ListProviderKeysParamsStatusActive  ListProviderKeysParamsStatus = "active"
@@ -1561,15 +1825,111 @@ func (e ListProviderKeysParamsStatus) Valid() bool {
 	}
 }
 
-// Defines values for GetDailyUsageParamsGroupBy.
+// Defines values for GetUsageBreakdownParamsGroupBy.
 const (
-	TenantKey GetDailyUsageParamsGroupBy = "tenant_key"
+	GetUsageBreakdownParamsGroupByAgentID            GetUsageBreakdownParamsGroupBy = "agent_id"
+	GetUsageBreakdownParamsGroupByAppID              GetUsageBreakdownParamsGroupBy = "app_id"
+	GetUsageBreakdownParamsGroupByCredentialFamilyID GetUsageBreakdownParamsGroupBy = "credential_family_id"
+	GetUsageBreakdownParamsGroupByFailureClass       GetUsageBreakdownParamsGroupBy = "failure_class"
+	GetUsageBreakdownParamsGroupByModel              GetUsageBreakdownParamsGroupBy = "model"
+	GetUsageBreakdownParamsGroupByProvider           GetUsageBreakdownParamsGroupBy = "provider"
+	GetUsageBreakdownParamsGroupByProviderKeyID      GetUsageBreakdownParamsGroupBy = "provider_key_id"
+	GetUsageBreakdownParamsGroupByProviderKeySource  GetUsageBreakdownParamsGroupBy = "provider_key_source"
+	GetUsageBreakdownParamsGroupByTenantKey          GetUsageBreakdownParamsGroupBy = "tenant_key"
+	GetUsageBreakdownParamsGroupByToolName           GetUsageBreakdownParamsGroupBy = "tool_name"
+	GetUsageBreakdownParamsGroupByUserKey            GetUsageBreakdownParamsGroupBy = "user_key"
 )
 
-// Valid indicates whether the value is a known member of the GetDailyUsageParamsGroupBy enum.
-func (e GetDailyUsageParamsGroupBy) Valid() bool {
+// Valid indicates whether the value is a known member of the GetUsageBreakdownParamsGroupBy enum.
+func (e GetUsageBreakdownParamsGroupBy) Valid() bool {
 	switch e {
-	case TenantKey:
+	case GetUsageBreakdownParamsGroupByAgentID:
+		return true
+	case GetUsageBreakdownParamsGroupByAppID:
+		return true
+	case GetUsageBreakdownParamsGroupByCredentialFamilyID:
+		return true
+	case GetUsageBreakdownParamsGroupByFailureClass:
+		return true
+	case GetUsageBreakdownParamsGroupByModel:
+		return true
+	case GetUsageBreakdownParamsGroupByProvider:
+		return true
+	case GetUsageBreakdownParamsGroupByProviderKeyID:
+		return true
+	case GetUsageBreakdownParamsGroupByProviderKeySource:
+		return true
+	case GetUsageBreakdownParamsGroupByTenantKey:
+		return true
+	case GetUsageBreakdownParamsGroupByToolName:
+		return true
+	case GetUsageBreakdownParamsGroupByUserKey:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetUsageBreakdownParamsSort.
+const (
+	GetUsageBreakdownParamsSortInvocations GetUsageBreakdownParamsSort = "invocations"
+	GetUsageBreakdownParamsSortModelCalls  GetUsageBreakdownParamsSort = "model_calls"
+	GetUsageBreakdownParamsSortModelCost   GetUsageBreakdownParamsSort = "model_cost"
+	GetUsageBreakdownParamsSortToolCalls   GetUsageBreakdownParamsSort = "tool_calls"
+)
+
+// Valid indicates whether the value is a known member of the GetUsageBreakdownParamsSort enum.
+func (e GetUsageBreakdownParamsSort) Valid() bool {
+	switch e {
+	case GetUsageBreakdownParamsSortInvocations:
+		return true
+	case GetUsageBreakdownParamsSortModelCalls:
+		return true
+	case GetUsageBreakdownParamsSortModelCost:
+		return true
+	case GetUsageBreakdownParamsSortToolCalls:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListUsageRecordsParamsFormat.
+const (
+	Csv  ListUsageRecordsParamsFormat = "csv"
+	JSON ListUsageRecordsParamsFormat = "json"
+)
+
+// Valid indicates whether the value is a known member of the ListUsageRecordsParamsFormat enum.
+func (e ListUsageRecordsParamsFormat) Valid() bool {
+	switch e {
+	case Csv:
+		return true
+	case JSON:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetUsageTimeseriesParamsGroupBy.
+const (
+	GetUsageTimeseriesParamsGroupByAgentID   GetUsageTimeseriesParamsGroupBy = "agent_id"
+	GetUsageTimeseriesParamsGroupByModel     GetUsageTimeseriesParamsGroupBy = "model"
+	GetUsageTimeseriesParamsGroupByTenantKey GetUsageTimeseriesParamsGroupBy = "tenant_key"
+	GetUsageTimeseriesParamsGroupByToolName  GetUsageTimeseriesParamsGroupBy = "tool_name"
+)
+
+// Valid indicates whether the value is a known member of the GetUsageTimeseriesParamsGroupBy enum.
+func (e GetUsageTimeseriesParamsGroupBy) Valid() bool {
+	switch e {
+	case GetUsageTimeseriesParamsGroupByAgentID:
+		return true
+	case GetUsageTimeseriesParamsGroupByModel:
+		return true
+	case GetUsageTimeseriesParamsGroupByTenantKey:
+		return true
+	case GetUsageTimeseriesParamsGroupByToolName:
 		return true
 	default:
 		return false
@@ -1589,6 +1949,22 @@ func (e ReceiveToolCallbackParamsXNvokenSignatureVersion) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// ActivityMetrics defines model for ActivityMetrics.
+type ActivityMetrics struct {
+	ActiveAgents  int `json:"active_agents"`
+	ActiveTenants int `json:"active_tenants"`
+
+	// ActiveUsers Exact distinct non-null user identities over this row's window.
+	ActiveUsers             int `json:"active_users"`
+	CancelledInvocations    int `json:"cancelled_invocations"`
+	CompletedInvocations    int `json:"completed_invocations"`
+	FailedInvocations       int `json:"failed_invocations"`
+	IncompleteInvocations   int `json:"incomplete_invocations"`
+	Invocations             int `json:"invocations"`
+	OpenInvocations         int `json:"open_invocations"`
+	UnattributedInvocations int `json:"unattributed_invocations"`
 }
 
 // Agent App-scoped identity anchor only. Agent behavior is not registered;
@@ -1619,8 +1995,9 @@ type App struct {
 	// DisplayName Human-facing label; `name` stays the unique handle.
 	DisplayName *string `json:"display_name"`
 
-	// ExternalRef Opaque owner reference used to ground console issuer tokens. One
-	// reference may own many apps.
+	// ExternalRef Transitional console-owner reference retained only to stamp
+	// existing Apps into Orgs during rollout. It is not an authorization
+	// boundary and is removed by the gated cleanup migration.
 	ExternalRef *string `json:"external_ref"`
 
 	// ID The generated nvoken app identifier.
@@ -1628,6 +2005,10 @@ type App struct {
 
 	// Name The unique host-chosen name for this app.
 	Name string `json:"name"`
+
+	// OrgID Durable owning Org. Nullable only during the staged console
+	// migration and tightened after every existing App is claimed.
+	OrgID *OrgID `json:"org_id"`
 }
 
 // AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
@@ -1704,6 +2085,12 @@ type BudgetBlock struct {
 
 // BudgetID Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
 type BudgetID = string
+
+// BudgetList defines model for BudgetList.
+type BudgetList struct {
+	Items      []Budget `json:"items"`
+	NextCursor *string  `json:"next_cursor"`
+}
 
 // BudgetScope defines model for BudgetScope.
 type BudgetScope string
@@ -1813,6 +2200,20 @@ type CompactionPolicy_TriggerTokens struct {
 	union json.RawMessage
 }
 
+// CostMetrics defines model for CostMetrics.
+type CostMetrics struct {
+	CostCoverage                 CostMetricsCostCoverage `json:"cost_coverage"`
+	MaxCostAtRisk                Money                   `json:"max_cost_at_risk"`
+	ModelCost                    Money                   `json:"model_cost"`
+	PricedModelCalls             int                     `json:"priced_model_calls"`
+	UnboundedUncertainModelCalls int                     `json:"unbounded_uncertain_model_calls"`
+	UncertainModelCalls          int                     `json:"uncertain_model_calls"`
+	UnpricedModelCalls           int                     `json:"unpriced_model_calls"`
+}
+
+// CostMetricsCostCoverage defines model for CostMetrics.CostCoverage.
+type CostMetricsCostCoverage string
+
 // CreateBudgetRequest The selected scope requires only its identity fields. `app` requires
 // none. `tenant` requires exactly one of `tenant_key` or
 // `default_tenant: true`. `user` also requires `user_key`. `agent`,
@@ -1844,15 +2245,23 @@ type CreateBudgetRequest struct {
 
 // CreateCredentialRequest defines model for CreateCredentialRequest.
 type CreateCredentialRequest struct {
-	// AppID Target App for an app-less Operator provisioning an app credential.
-	// Omit to issue another app-less credential. An app-bound Operator
-	// may omit this field or repeat its own App ID, but cannot name a
-	// different App.
-	AppID      *AppID            `json:"app_id,omitempty"`
-	ExpiresAt  *time.Time        `json:"expires_at,omitempty"`
-	Name       string            `json:"name"`
-	Operations *[]Operation      `json:"operations,omitempty"`
-	Profile    CredentialProfile `json:"profile"`
+	// AppID Target App for an Org or installation Operator provisioning an App
+	// credential. Org callers may name only Apps contained by their Org.
+	// App callers may omit this field or repeat their own App ID.
+	AppID      *AppID       `json:"app_id,omitempty"`
+	ExpiresAt  *time.Time   `json:"expires_at,omitempty"`
+	Name       string       `json:"name"`
+	Operations *[]Operation `json:"operations,omitempty"`
+
+	// OrgID Target Org for an installation Operator provisioning an Org
+	// credential. Installation issuer tokens require `admin: true`.
+	// Mutually exclusive with `app_id`. Org and App callers cannot mint
+	// Org credentials.
+	OrgID *OrgID `json:"org_id,omitempty"`
+
+	// Profile Fixed authorization profile. Runtime is meaningful for App-bound
+	// execution and cannot be selected for an Org credential.
+	Profile CredentialProfile `json:"profile"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID *SessionID `json:"session_id,omitempty"`
@@ -2151,11 +2560,15 @@ type Credential struct {
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 
 	// ID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
-	ID                    CredentialID      `json:"id"`
-	LastUsedAt            *time.Time        `json:"last_used_at,omitempty"`
-	Name                  string            `json:"name"`
-	Operations            []Operation       `json:"operations"`
-	Prefix                string            `json:"prefix"`
+	ID         CredentialID `json:"id"`
+	LastUsedAt *time.Time   `json:"last_used_at,omitempty"`
+	Name       string       `json:"name"`
+	Operations []Operation  `json:"operations"`
+	OrgID      *OrgID       `json:"org_id,omitempty"`
+	Prefix     string       `json:"prefix"`
+
+	// Profile Fixed authorization profile. Runtime is meaningful for App-bound
+	// execution and cannot be selected for an Org credential.
 	Profile               CredentialProfile `json:"profile"`
 	RevokedAt             *time.Time        `json:"revoked_at,omitempty"`
 	RotatedFromID         *CredentialID     `json:"rotated_from_id,omitempty"`
@@ -2184,7 +2597,8 @@ type CredentialList struct {
 	NextCursor *string      `json:"next_cursor"`
 }
 
-// CredentialProfile defines model for CredentialProfile.
+// CredentialProfile Fixed authorization profile. Runtime is meaningful for App-bound
+// execution and cannot be selected for an Org credential.
 type CredentialProfile string
 
 // CredentialStatus defines model for CredentialStatus.
@@ -2193,13 +2607,18 @@ type CredentialStatus string
 // CurrentIdentity defines model for CurrentIdentity.
 type CurrentIdentity struct {
 	Authentication struct {
+		AppID     *AppID                                 `json:"app_id"`
 		Assurance CurrentIdentityAuthenticationAssurance `json:"assurance"`
 
 		// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
-		CredentialID     CredentialID                        `json:"credential_id"`
+		CredentialID CredentialID `json:"credential_id"`
+
+		// EffectiveProfile Fixed authorization profile. Runtime is meaningful for App-bound
+		// execution and cannot be selected for an Org credential.
 		EffectiveProfile CredentialProfile                   `json:"effective_profile"`
 		Method           CurrentIdentityAuthenticationMethod `json:"method"`
 		Operations       []Operation                         `json:"operations"`
+		OrgID            *OrgID                              `json:"org_id"`
 		SessionID        *SessionID                          `json:"session_id,omitempty"`
 		TenantKey        *string                             `json:"tenant_key,omitempty"`
 	} `json:"authentication"`
@@ -2210,50 +2629,6 @@ type CurrentIdentityAuthenticationAssurance string
 
 // CurrentIdentityAuthenticationMethod defines model for CurrentIdentity.Authentication.Method.
 type CurrentIdentityAuthenticationMethod string
-
-// DailyUsage defines model for DailyUsage.
-type DailyUsage struct {
-	// EndDate Inclusive last UTC day of the served window.
-	EndDate openapi_types.Date `json:"end_date"`
-
-	// Items Buckets ordered by day, app, provider, and model. Days with no usage produce no bucket.
-	Items []DailyUsageBucket `json:"items"`
-
-	// StartDate Inclusive first UTC day of the served window.
-	StartDate openapi_types.Date `json:"start_date"`
-}
-
-// DailyUsageBucket defines model for DailyUsageBucket.
-type DailyUsageBucket struct {
-	// AppID The app whose tenants produced the usage.
-	AppID                    AppID `json:"app_id"`
-	CacheCreationInputTokens int   `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int   `json:"cache_read_input_tokens"`
-
-	// Day UTC calendar day of the bucket.
-	Day openapi_types.Date `json:"day"`
-
-	// EstimatedCostUsd Summed list-price estimate in USD; zero when every call in the bucket was unpriced.
-	EstimatedCostUsd float32 `json:"estimated_cost_usd"`
-	InputTokens      int     `json:"input_tokens"`
-
-	// Invocations Distinct Invocations with at least one model call in the bucket. Compaction calls carry no Invocation.
-	Invocations int `json:"invocations"`
-
-	// Model Served model from provenance, falling back to the requested model.
-	Model string `json:"model"`
-
-	// ModelCalls Individual provider calls in the bucket.
-	ModelCalls   int `json:"model_calls"`
-	OutputTokens int `json:"output_tokens"`
-
-	// Provider Provider from checkpoint provenance; empty when provenance omitted it.
-	Provider        string `json:"provider"`
-	ReasoningTokens int    `json:"reasoning_tokens"`
-
-	// TenantKey Host tenant group when `group_by=tenant_key`; omitted otherwise.
-	TenantKey *string `json:"tenant_key,omitempty"`
-}
 
 // Definition Immutable Definition returned on detailed Invocation reads. The
 // host owns the agent definition; nvoken only records the definition
@@ -2931,6 +3306,61 @@ type InvocationStreamEvent struct {
 	union json.RawMessage
 }
 
+// InvocationTimeline defines model for InvocationTimeline.
+type InvocationTimeline struct {
+	AcceptedAt        time.Time `json:"accepted_at"`
+	ActiveExecutionMs int       `json:"active_execution_ms"`
+
+	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	AgentID AgentID `json:"agent_id"`
+
+	// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+	AppID        AppID      `json:"app_id"`
+	AttemptCount int        `json:"attempt_count"`
+	EndedAt      *time.Time `json:"ended_at"`
+	ErasedAt     *time.Time `json:"erased_at"`
+	FailureCode  *string    `json:"failure_code"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID `json:"invocation_id"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID          SessionID                `json:"session_id"`
+	Status             *string                  `json:"status"`
+	Steps              []InvocationTimelineStep `json:"steps"`
+	StopReason         *string                  `json:"stop_reason"`
+	TenantKey          *string                  `json:"tenant_key"`
+	UserKey            *string                  `json:"user_key"`
+	WaitingExecutionMs int                      `json:"waiting_execution_ms"`
+}
+
+// InvocationTimelineStep defines model for InvocationTimelineStep.
+type InvocationTimelineStep struct {
+	CacheCreationInputTokens *int                       `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     *int                       `json:"cache_read_input_tokens,omitempty"`
+	CallKind                 *string                    `json:"call_kind,omitempty"`
+	DetailID                 string                     `json:"detail_id"`
+	DurationMs               *int                       `json:"duration_ms,omitempty"`
+	EndedAt                  *time.Time                 `json:"ended_at,omitempty"`
+	FirstOutputAt            *time.Time                 `json:"first_output_at,omitempty"`
+	ID                       string                     `json:"id"`
+	InputTokens              *int                       `json:"input_tokens,omitempty"`
+	Kind                     InvocationTimelineStepKind `json:"kind"`
+	Mode                     *string                    `json:"mode,omitempty"`
+	Model                    *string                    `json:"model,omitempty"`
+	ModelCost                *Money                     `json:"model_cost,omitempty"`
+	Name                     *string                    `json:"name,omitempty"`
+	OutputTokens             *int                       `json:"output_tokens,omitempty"`
+	Provider                 *string                    `json:"provider,omitempty"`
+	ReasoningTokens          *int                       `json:"reasoning_tokens,omitempty"`
+	StartedAt                time.Time                  `json:"started_at"`
+	Status                   string                     `json:"status"`
+	TimeToFirstOutputMs      *int                       `json:"time_to_first_output_ms,omitempty"`
+}
+
+// InvocationTimelineStepKind defines model for InvocationTimelineStep.Kind.
+type InvocationTimelineStepKind string
+
 // InvocationUpdateEvent defines model for InvocationUpdateEvent.
 type InvocationUpdateEvent struct {
 	Invocation Invocation `json:"invocation"`
@@ -3098,6 +3528,63 @@ type Model struct {
 	Provider ModelProvider `json:"provider"`
 }
 
+// ModelCallFactStatus defines model for ModelCallFactStatus.
+type ModelCallFactStatus string
+
+// ModelCallKind defines model for ModelCallKind.
+type ModelCallKind string
+
+// ModelCallRecord defines model for ModelCallRecord.
+type ModelCallRecord struct {
+	AgentID *string `json:"agent_id"`
+
+	// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+	AppID                    AppID                       `json:"app_id"`
+	CacheCreationInputTokens *int                        `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     *int                        `json:"cache_read_input_tokens"`
+	CallKind                 ModelCallKind               `json:"call_kind"`
+	CallOrdinal              int                         `json:"call_ordinal"`
+	CostCoverage             ModelCallRecordCostCoverage `json:"cost_coverage"`
+	CreatedAt                time.Time                   `json:"created_at"`
+	CredentialFamilyID       *string                     `json:"credential_family_id"`
+	FailureClass             *string                     `json:"failure_class"`
+	FirstOutputAt            *time.Time                  `json:"first_output_at"`
+
+	// ID Opaque model-call fact ID with the mcall_ prefix.
+	ID                     string                  `json:"id"`
+	InputTokens            *int                    `json:"input_tokens"`
+	InvocationID           *string                 `json:"invocation_id"`
+	LeaseAttempt           int                     `json:"lease_attempt"`
+	MaxCostAtRisk          *Money                  `json:"max_cost_at_risk"`
+	ModelCost              *Money                  `json:"model_cost"`
+	Outcome                *ModelCallRecordOutcome `json:"outcome"`
+	OutputTokens           *int                    `json:"output_tokens"`
+	PricingVersion         *string                 `json:"pricing_version"`
+	ProviderAttemptOrdinal int                     `json:"provider_attempt_ordinal"`
+	ProviderKeyID          *string                 `json:"provider_key_id"`
+	ProviderKeySource      ProviderKeySource       `json:"provider_key_source"`
+	ProviderKeyVersionID   *string                 `json:"provider_key_version_id"`
+	ReasoningTokens        *int                    `json:"reasoning_tokens"`
+	RequestedModel         string                  `json:"requested_model"`
+	RequestedProvider      string                  `json:"requested_provider"`
+	ServedModel            *string                 `json:"served_model"`
+	ServedProvider         *string                 `json:"served_provider"`
+	SessionID              *string                 `json:"session_id"`
+	SettledAt              *time.Time              `json:"settled_at"`
+	StartedAt              *time.Time              `json:"started_at"`
+	Status                 ModelCallFactStatus     `json:"status"`
+	TenantKey              *string                 `json:"tenant_key"`
+
+	// UserKey Null after user erasure.
+	UserKey *string `json:"user_key"`
+}
+
+// ModelCallRecordCostCoverage defines model for ModelCallRecord.CostCoverage.
+type ModelCallRecordCostCoverage string
+
+// ModelCallRecordOutcome defines model for ModelCallRecord.Outcome.
+type ModelCallRecordOutcome string
+
 // ModelControlCapabilities defines model for ModelControlCapabilities.
 type ModelControlCapabilities struct {
 	Input     ModelInputCapabilities     `json:"input"`
@@ -3203,6 +3690,24 @@ type ModelMediaKindCapabilities struct {
 	// not accept this kind of input at all.
 	MediaTypes []string `json:"media_types"`
 	Supported  bool     `json:"supported"`
+}
+
+// ModelMetrics defines model for ModelMetrics.
+type ModelMetrics struct {
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CompactionCalls          int `json:"compaction_calls"`
+	DirectCalls              int `json:"direct_calls"`
+	FailedModelCalls         int `json:"failed_model_calls"`
+	GenerationCalls          int `json:"generation_calls"`
+	InputTokens              int `json:"input_tokens"`
+	ModelCalls               int `json:"model_calls"`
+	OutputTokens             int `json:"output_tokens"`
+	ReasoningTokens          int `json:"reasoning_tokens"`
+	ReportedModelCalls       int `json:"reported_model_calls"`
+
+	// RuntimeSteps Model results durably committed to an Invocation transcript.
+	RuntimeSteps int `json:"runtime_steps"`
 }
 
 // ModelPricing The list prices nvoken uses to estimate what a turn will cost. These
@@ -3325,6 +3830,16 @@ type ModelUsage struct {
 	ReasoningTokens *int `json:"reasoning_tokens,omitempty"`
 }
 
+// Money defines model for Money.
+type Money struct {
+	// Amount Exact decimal amount with six fractional digits.
+	Amount   string        `json:"amount"`
+	Currency MoneyCurrency `json:"currency"`
+}
+
+// MoneyCurrency defines model for Money.Currency.
+type MoneyCurrency string
+
 // Nudge defines model for Nudge.
 type Nudge struct {
 	// Content A plain string is shorthand for one text block; an array is ordered
@@ -3397,6 +3912,29 @@ type NudgeStatus string
 
 // Operation defines model for Operation.
 type Operation string
+
+// Org Thin customer ownership boundary. Membership, roles, invitations,
+// policy, and runtime state deliberately live elsewhere.
+type Org struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// DisplayName Human-facing label for the customer Org.
+	DisplayName string `json:"display_name"`
+
+	// ExternalRef Optional unique identity-provider Org identifier.
+	ExternalRef *string `json:"external_ref"`
+
+	// ID Opaque identifier with the public `org_` prefix. Treat the body as opaque.
+	ID OrgID `json:"id"`
+}
+
+// OrgID Opaque identifier with the public `org_` prefix. Treat the body as opaque.
+type OrgID = string
+
+// OrgList defines model for OrgList.
+type OrgList struct {
+	Items []Org `json:"items"`
+}
 
 // OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
 // is limited to 32 KiB and 16 schema positions. Supported keywords are
@@ -3542,6 +4080,9 @@ type ProviderKeySelection1 struct {
 // ProviderKeySelection1Source defines model for ProviderKeySelection.1.Source.
 type ProviderKeySelection1Source string
 
+// ProviderKeySource defines model for ProviderKeySource.
+type ProviderKeySource string
+
 // ProviderKeyUsage defines model for ProviderKeyUsage.
 type ProviderKeyUsage struct {
 	// ID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
@@ -3629,6 +4170,20 @@ type RegisterAppRequest struct {
 	// Name The unique name identifying this app. Registering a name that
 	// already exists is rejected.
 	Name string `json:"name"`
+
+	// OrgID Owning Org. Org-scoped callers may omit this to use their own Org
+	// and cannot name another. Installation callers may name any
+	// registered Org or omit it during the staged migration.
+	OrgID *OrgID `json:"org_id,omitempty"`
+}
+
+// RegisterOrgRequest defines model for RegisterOrgRequest.
+type RegisterOrgRequest struct {
+	DisplayName string `json:"display_name"`
+
+	// ExternalRef Optional unique identity-provider Org identifier. Reusing it
+	// returns the existing Org unchanged.
+	ExternalRef *string `json:"external_ref,omitempty"`
 }
 
 // ResolvedLimits defines model for ResolvedLimits.
@@ -4298,6 +4853,14 @@ type ToolDeclaration struct {
 	union json.RawMessage
 }
 
+// ToolMetrics defines model for ToolMetrics.
+type ToolMetrics struct {
+	CancelledToolCalls int `json:"cancelled_tool_calls"`
+	CompletedToolCalls int `json:"completed_tool_calls"`
+	FailedToolCalls    int `json:"failed_tool_calls"`
+	ToolCalls          int `json:"tool_calls"`
+}
+
 // ToolResultBlock The durable result of one tool call.
 type ToolResultBlock struct {
 	// Content The host's own JSON, retained verbatim. Its canonical encoding is
@@ -4380,12 +4943,21 @@ type URLCitationType string
 // UpdateAppRequest defines model for UpdateAppRequest.
 type UpdateAppRequest struct {
 	// DisplayName New human-facing label for the app.
-	DisplayName string `json:"display_name"`
+	DisplayName *string `json:"display_name,omitempty"`
+
+	// OrgID New owning Org. Supplying this field transfers ownership and is
+	// restricted to installation administrators.
+	OrgID *OrgID `json:"org_id,omitempty"`
 }
 
 // UpdateBudgetRequest defines model for UpdateBudgetRequest.
 type UpdateBudgetRequest struct {
 	MaxEstimatedCostUsd float32 `json:"max_estimated_cost_usd"`
+}
+
+// UpdateOrgRequest defines model for UpdateOrgRequest.
+type UpdateOrgRequest struct {
+	DisplayName string `json:"display_name"`
 }
 
 // UpdateSessionRequest defines model for UpdateSessionRequest.
@@ -4399,6 +4971,62 @@ type UpdateSessionRequest struct {
 	// it, and an absent key is left alone. Bounds are enforced on the
 	// merged result.
 	Metadata *map[string]*string `json:"metadata,omitempty"`
+}
+
+// UsageBreakdown defines model for UsageBreakdown.
+type UsageBreakdown struct {
+	EndAt      time.Time            `json:"end_at"`
+	GroupBy    string               `json:"group_by"`
+	Items      []UsageBreakdownItem `json:"items"`
+	NextCursor *string              `json:"next_cursor"`
+	Sort       string               `json:"sort"`
+	StartAt    time.Time            `json:"start_at"`
+	Totals     UsageMetrics         `json:"totals"`
+}
+
+// UsageBreakdownItem defines model for UsageBreakdownItem.
+type UsageBreakdownItem struct {
+	Key     string       `json:"key"`
+	Metrics UsageMetrics `json:"metrics"`
+}
+
+// UsageInterval defines model for UsageInterval.
+type UsageInterval string
+
+// UsageMetrics defines model for UsageMetrics.
+type UsageMetrics struct {
+	Activity ActivityMetrics `json:"activity"`
+	Cost     CostMetrics     `json:"cost"`
+	Model    ModelMetrics    `json:"model"`
+	Tools    ToolMetrics     `json:"tools"`
+}
+
+// UsageRecords defines model for UsageRecords.
+type UsageRecords struct {
+	Items      []ModelCallRecord `json:"items"`
+	NextCursor *string           `json:"next_cursor"`
+}
+
+// UsageTimeseries defines model for UsageTimeseries.
+type UsageTimeseries struct {
+	Buckets  []UsageTimeseriesBucket `json:"buckets"`
+	EndAt    time.Time               `json:"end_at"`
+	GroupBy  *UsageTimeseriesGroupBy `json:"group_by,omitempty"`
+	Interval UsageInterval           `json:"interval"`
+	StartAt  time.Time               `json:"start_at"`
+	Timezone string                  `json:"timezone"`
+	Totals   UsageMetrics            `json:"totals"`
+}
+
+// UsageTimeseriesGroupBy defines model for UsageTimeseries.GroupBy.
+type UsageTimeseriesGroupBy string
+
+// UsageTimeseriesBucket defines model for UsageTimeseriesBucket.
+type UsageTimeseriesBucket struct {
+	EndAt     time.Time    `json:"end_at"`
+	Metrics   UsageMetrics `json:"metrics"`
+	SeriesKey *string      `json:"series_key,omitempty"`
+	StartAt   time.Time    `json:"start_at"`
 }
 
 // WebSearchLocation Approximate location used to bias results. Every member is optional;
@@ -4511,6 +5139,42 @@ type Limit = int
 // TenantKeyFilter defines model for TenantKeyFilter.
 type TenantKeyFilter = string
 
+// UsageAgentIDFilter Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+type UsageAgentIDFilter = AgentID
+
+// UsageAppIDFilter Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+type UsageAppIDFilter = AppID
+
+// UsageCallKindFilter defines model for UsageCallKindFilter.
+type UsageCallKindFilter = ModelCallKind
+
+// UsageCredentialFamilyIDFilter Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+type UsageCredentialFamilyIDFilter = CredentialID
+
+// UsageEndAt defines model for UsageEndAt.
+type UsageEndAt = time.Time
+
+// UsageModelFilter defines model for UsageModelFilter.
+type UsageModelFilter = string
+
+// UsageProviderFilter defines model for UsageProviderFilter.
+type UsageProviderFilter = string
+
+// UsageProviderKeyIDFilter Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
+type UsageProviderKeyIDFilter = ProviderKeyID
+
+// UsageProviderKeySourceFilter defines model for UsageProviderKeySourceFilter.
+type UsageProviderKeySourceFilter = ProviderKeySource
+
+// UsageStartAt defines model for UsageStartAt.
+type UsageStartAt = time.Time
+
+// UsageToolModeFilter defines model for UsageToolModeFilter.
+type UsageToolModeFilter = ToolCallMode
+
+// UsageToolNameFilter defines model for UsageToolNameFilter.
+type UsageToolNameFilter = string
+
 // UserKeyFilter defines model for UserKeyFilter.
 type UserKeyFilter = string
 
@@ -4559,6 +5223,31 @@ type ListAppsParams struct {
 	// ExternalRef Return only apps whose `external_ref` equals this value.
 	ExternalRef *string `form:"external_ref,omitempty" json:"external_ref,omitempty"`
 }
+
+// ListBudgetsParams defines parameters for ListBudgets.
+type ListBudgetsParams struct {
+	Scope *BudgetScope `form:"scope,omitempty" json:"scope,omitempty"`
+
+	// TenantKey Exact non-default tenant partition reference.
+	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
+
+	// UserKey Exact host-owned end-user reference. Filters to rows whose Session
+	// carries this label.
+	UserKey            *UserKeyFilter                 `form:"user_key,omitempty" json:"user_key,omitempty"`
+	AgentID            *UsageAgentIDFilter            `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	ProviderKeyID      *UsageProviderKeyIDFilter      `form:"provider_key_id,omitempty" json:"provider_key_id,omitempty"`
+	CredentialFamilyID *UsageCredentialFamilyIDFilter `form:"credential_family_id,omitempty" json:"credential_family_id,omitempty"`
+	Status             *ListBudgetsParamsStatus       `form:"status,omitempty" json:"status,omitempty"`
+	WindowStart        *time.Time                     `form:"window_start,omitempty" json:"window_start,omitempty"`
+	WindowEnd          *time.Time                     `form:"window_end,omitempty" json:"window_end,omitempty"`
+
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListBudgetsParamsStatus defines parameters for ListBudgets.
+type ListBudgetsParamsStatus string
 
 // ListCredentialsParams defines parameters for ListCredentials.
 type ListCredentialsParams struct {
@@ -4766,26 +5455,121 @@ type StreamSessionTranscriptParams struct {
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
-// GetDailyUsageParams defines parameters for GetDailyUsage.
-type GetDailyUsageParams struct {
-	// StartDate Inclusive first UTC day. Defaults to 29 days before `end_date`.
-	StartDate *openapi_types.Date `form:"start_date,omitempty" json:"start_date,omitempty"`
+// GetUsageBreakdownParams defines parameters for GetUsageBreakdown.
+type GetUsageBreakdownParams struct {
+	// StartAt Inclusive RFC 3339 start of the half-open reporting window.
+	StartAt UsageStartAt `form:"start_at" json:"start_at"`
 
-	// EndDate Inclusive last UTC day. Defaults to the current UTC day.
-	EndDate *openapi_types.Date `form:"end_date,omitempty" json:"end_date,omitempty"`
+	// EndAt Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.
+	EndAt UsageEndAt `form:"end_at" json:"end_at"`
 
-	// TenantKey Return only usage attributed to this host tenant.
-	TenantKey *string `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
+	// AppID Exact App within the caller's App, Org, or installation reporting scope.
+	AppID *UsageAppIDFilter `form:"app_id,omitempty" json:"app_id,omitempty"`
 
-	// UserKey Return only usage attributed to this host end user.
-	UserKey *string `form:"user_key,omitempty" json:"user_key,omitempty"`
+	// TenantKey Exact non-default tenant partition reference.
+	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
-	// GroupBy Split otherwise identical buckets by host tenant.
-	GroupBy *GetDailyUsageParamsGroupBy `form:"group_by,omitempty" json:"group_by,omitempty"`
+	// UserKey Exact host-owned end-user reference. Filters to rows whose Session
+	// carries this label.
+	UserKey            *UserKeyFilter                 `form:"user_key,omitempty" json:"user_key,omitempty"`
+	AgentID            *UsageAgentIDFilter            `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	Provider           *UsageProviderFilter           `form:"provider,omitempty" json:"provider,omitempty"`
+	Model              *UsageModelFilter              `form:"model,omitempty" json:"model,omitempty"`
+	ProviderKeySource  *UsageProviderKeySourceFilter  `form:"provider_key_source,omitempty" json:"provider_key_source,omitempty"`
+	ProviderKeyID      *UsageProviderKeyIDFilter      `form:"provider_key_id,omitempty" json:"provider_key_id,omitempty"`
+	CredentialFamilyID *UsageCredentialFamilyIDFilter `form:"credential_family_id,omitempty" json:"credential_family_id,omitempty"`
+	CallKind           *UsageCallKindFilter           `form:"call_kind,omitempty" json:"call_kind,omitempty"`
+	ToolName           *UsageToolNameFilter           `form:"tool_name,omitempty" json:"tool_name,omitempty"`
+	ToolMode           *UsageToolModeFilter           `form:"tool_mode,omitempty" json:"tool_mode,omitempty"`
+	GroupBy            GetUsageBreakdownParamsGroupBy `form:"group_by" json:"group_by"`
+	Sort               *GetUsageBreakdownParamsSort   `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// GetDailyUsageParamsGroupBy defines parameters for GetDailyUsage.
-type GetDailyUsageParamsGroupBy string
+// GetUsageBreakdownParamsGroupBy defines parameters for GetUsageBreakdown.
+type GetUsageBreakdownParamsGroupBy string
+
+// GetUsageBreakdownParamsSort defines parameters for GetUsageBreakdown.
+type GetUsageBreakdownParamsSort string
+
+// ListUsageRecordsParams defines parameters for ListUsageRecords.
+type ListUsageRecordsParams struct {
+	// StartAt Inclusive RFC 3339 start of the half-open reporting window.
+	StartAt UsageStartAt `form:"start_at" json:"start_at"`
+
+	// EndAt Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.
+	EndAt UsageEndAt `form:"end_at" json:"end_at"`
+
+	// AppID Exact App within the caller's App, Org, or installation reporting scope.
+	AppID *UsageAppIDFilter `form:"app_id,omitempty" json:"app_id,omitempty"`
+
+	// TenantKey Exact non-default tenant partition reference.
+	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
+
+	// UserKey Exact host-owned end-user reference. Filters to rows whose Session
+	// carries this label.
+	UserKey            *UserKeyFilter                 `form:"user_key,omitempty" json:"user_key,omitempty"`
+	AgentID            *UsageAgentIDFilter            `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	Provider           *UsageProviderFilter           `form:"provider,omitempty" json:"provider,omitempty"`
+	Model              *UsageModelFilter              `form:"model,omitempty" json:"model,omitempty"`
+	ProviderKeySource  *UsageProviderKeySourceFilter  `form:"provider_key_source,omitempty" json:"provider_key_source,omitempty"`
+	ProviderKeyID      *UsageProviderKeyIDFilter      `form:"provider_key_id,omitempty" json:"provider_key_id,omitempty"`
+	CredentialFamilyID *UsageCredentialFamilyIDFilter `form:"credential_family_id,omitempty" json:"credential_family_id,omitempty"`
+	CallKind           *UsageCallKindFilter           `form:"call_kind,omitempty" json:"call_kind,omitempty"`
+	ToolName           *UsageToolNameFilter           `form:"tool_name,omitempty" json:"tool_name,omitempty"`
+	ToolMode           *UsageToolModeFilter           `form:"tool_mode,omitempty" json:"tool_mode,omitempty"`
+
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor                       `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int                          `form:"limit,omitempty" json:"limit,omitempty"`
+	Format *ListUsageRecordsParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// ListUsageRecordsParamsFormat defines parameters for ListUsageRecords.
+type ListUsageRecordsParamsFormat string
+
+// GetUsageTimeseriesParams defines parameters for GetUsageTimeseries.
+type GetUsageTimeseriesParams struct {
+	// StartAt Inclusive RFC 3339 start of the half-open reporting window.
+	StartAt UsageStartAt `form:"start_at" json:"start_at"`
+
+	// EndAt Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.
+	EndAt    UsageEndAt    `form:"end_at" json:"end_at"`
+	Interval UsageInterval `form:"interval" json:"interval"`
+
+	// Timezone IANA timezone used for bucket boundaries.
+	Timezone *string `form:"timezone,omitempty" json:"timezone,omitempty"`
+
+	// AppID Exact App within the caller's App, Org, or installation reporting scope.
+	AppID *UsageAppIDFilter `form:"app_id,omitempty" json:"app_id,omitempty"`
+
+	// TenantKey Exact non-default tenant partition reference.
+	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
+
+	// UserKey Exact host-owned end-user reference. Filters to rows whose Session
+	// carries this label.
+	UserKey            *UserKeyFilter                   `form:"user_key,omitempty" json:"user_key,omitempty"`
+	AgentID            *UsageAgentIDFilter              `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	Provider           *UsageProviderFilter             `form:"provider,omitempty" json:"provider,omitempty"`
+	Model              *UsageModelFilter                `form:"model,omitempty" json:"model,omitempty"`
+	ProviderKeySource  *UsageProviderKeySourceFilter    `form:"provider_key_source,omitempty" json:"provider_key_source,omitempty"`
+	ProviderKeyID      *UsageProviderKeyIDFilter        `form:"provider_key_id,omitempty" json:"provider_key_id,omitempty"`
+	CredentialFamilyID *UsageCredentialFamilyIDFilter   `form:"credential_family_id,omitempty" json:"credential_family_id,omitempty"`
+	CallKind           *UsageCallKindFilter             `form:"call_kind,omitempty" json:"call_kind,omitempty"`
+	ToolName           *UsageToolNameFilter             `form:"tool_name,omitempty" json:"tool_name,omitempty"`
+	ToolMode           *UsageToolModeFilter             `form:"tool_mode,omitempty" json:"tool_mode,omitempty"`
+	GroupBy            *GetUsageTimeseriesParamsGroupBy `form:"group_by,omitempty" json:"group_by,omitempty"`
+	Top                *int                             `form:"top,omitempty" json:"top,omitempty"`
+
+	// Keys Comma-separated explicit series keys, maximum ten; mutually exclusive with top.
+	Keys *string `form:"keys,omitempty" json:"keys,omitempty"`
+}
+
+// GetUsageTimeseriesParamsGroupBy defines parameters for GetUsageTimeseries.
+type GetUsageTimeseriesParamsGroupBy string
 
 // ReceiveToolCallbackParams defines parameters for ReceiveToolCallback.
 type ReceiveToolCallbackParams struct {
@@ -4838,6 +5622,12 @@ type SubmitHostToolResultsJSONRequestBody = SubmitHostToolResultsRequest
 
 // ListMCPToolsJSONRequestBody defines body for ListMCPTools for application/json ContentType.
 type ListMCPToolsJSONRequestBody = MCPListToolsRequest
+
+// RegisterOrgJSONRequestBody defines body for RegisterOrg for application/json ContentType.
+type RegisterOrgJSONRequestBody = RegisterOrgRequest
+
+// UpdateOrgJSONRequestBody defines body for UpdateOrg for application/json ContentType.
+type UpdateOrgJSONRequestBody = UpdateOrgRequest
 
 // CreateProviderKeyJSONRequestBody defines body for CreateProviderKey for application/json ContentType.
 type CreateProviderKeyJSONRequestBody = CreateProviderKeyRequest
@@ -6306,10 +7096,11 @@ type ClientInterface interface {
 
 	// ListApps List registered apps
 	//
-	// Returns the apps this credential can see. A credential associated with
-	// an app sees only that app; a credential with no app association sees
-	// every registered app. An exact `external_ref` filter narrows either
-	// view to apps owned by that reference.
+	// Returns the Apps this credential can see. An App-scoped credential
+	// sees only that App, an Org-scoped credential sees the Apps contained
+	// by its Org, and an installation credential sees every registered App.
+	// An exact `external_ref` filter narrows that visible set during the
+	// staged console migration.
 	//
 	// Corresponds with GET /v1/apps (the `ListApps` operationId).
 	ListApps(ctx context.Context, params *ListAppsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6324,11 +7115,13 @@ type ClientInterface interface {
 	// scope of each delivery. Registration is unavailable when the service's
 	// encryption keyring is not configured.
 	//
-	// Registration is installation management rather than work inside an app,
-	// so it requires a credential that is *not* associated with an app; a
-	// credential bound to one app cannot mint siblings for itself. Names
-	// identify apps and are unique, so re-registering an existing name is
-	// rejected rather than returning the existing app.
+	// Registration requires an Org or installation Operator credential; an
+	// App-scoped credential cannot mint siblings. Org callers always create
+	// Apps in their own Org and may omit `org_id`. Installation machine
+	// credentials may choose any registered Org or temporarily leave
+	// ownership unset during the staged console migration. An installation
+	// issuer token requires `admin: true` to assign an Org. Names identify
+	// Apps and are unique, so re-registering an existing name is rejected.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6345,11 +7138,13 @@ type ClientInterface interface {
 	// scope of each delivery. Registration is unavailable when the service's
 	// encryption keyring is not configured.
 	//
-	// Registration is installation management rather than work inside an app,
-	// so it requires a credential that is *not* associated with an app; a
-	// credential bound to one app cannot mint siblings for itself. Names
-	// identify apps and are unique, so re-registering an existing name is
-	// rejected rather than returning the existing app.
+	// Registration requires an Org or installation Operator credential; an
+	// App-scoped credential cannot mint siblings. Org callers always create
+	// Apps in their own Org and may omit `org_id`. Installation machine
+	// credentials may choose any registered Org or temporarily leave
+	// ownership unset during the staged console migration. An installation
+	// issuer token requires `admin: true` to assign an Org. Names identify
+	// Apps and are unique, so re-registering an existing name is rejected.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6358,18 +7153,19 @@ type ClientInterface interface {
 
 	// GetApp Get one app
 	//
-	// Returns one registered app. A credential associated with a different
-	// app receives `404`, so an app identifier cannot be probed across the
-	// isolation boundary.
+	// Returns one registered App. App- and Org-scoped credentials receive
+	// `404` for Apps outside their durable containment boundary.
 	//
 	// Corresponds with GET /v1/apps/{app_id} (the `GetApp` operationId).
 	GetApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateAppWithBody Update an app
 	//
-	// Updates an app's mutable presentation fields. The unique `name` and the
-	// ownership-grounding `external_ref` cannot be changed. A credential
-	// associated with a different app receives `404`.
+	// Updates an App's display name. An installation administrator may also
+	// transfer the App to another registered Org by changing `org_id`.
+	// Org- and App-scoped callers receive `404` outside their containment
+	// boundary, and cannot move an App. The unique `name` and transitional
+	// `external_ref` cannot be changed.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6378,14 +7174,23 @@ type ClientInterface interface {
 
 	// UpdateApp Update an app
 	//
-	// Updates an app's mutable presentation fields. The unique `name` and the
-	// ownership-grounding `external_ref` cannot be changed. A credential
-	// associated with a different app receives `404`.
+	// Updates an App's display name. An installation administrator may also
+	// transfer the App to another registered Org by changing `org_id`.
+	// Org- and App-scoped callers receive `404` outside their containment
+	// boundary, and cannot move an App. The unique `name` and transitional
+	// `external_ref` cannot be changed.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
 	UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListBudgets List Budget windows
+	//
+	// Returns cursor-paginated Budget guardrails inside the authenticated App and tenant constraint.
+	//
+	// Corresponds with GET /v1/budgets (the `ListBudgets` operationId).
+	ListBudgets(ctx context.Context, params *ListBudgetsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateBudgetWithBody Create one fixed Budget window
 	//
@@ -6457,12 +7262,20 @@ type ClientInterface interface {
 
 	// CreateCredentialWithBody Create a machine credential
 	//
+	// Creates a credential within the caller's durable boundary. A non-admin
+	// installation issuer token may create App credentials, but cannot mint
+	// Org or installation credentials.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
 	CreateCredentialWithBody(ctx context.Context, params *CreateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateCredential Create a machine credential
+	//
+	// Creates a credential within the caller's durable boundary. A non-admin
+	// installation issuer token may create App credentials, but cannot mint
+	// Org or installation credentials.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6951,6 +7764,16 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
 	StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetInvocationTimeline Read the durable execution waterfall for one turn
+	//
+	// Assembles lifecycle waits, model calls, tool calls, nudges, and
+	// compactions from one database snapshot. It contains timings and usage,
+	// never prompts, responses, tool arguments, results, or error text. After
+	// Session erasure it degrades to the retained facts-only skeleton.
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/timeline (the `GetInvocationTimeline` operationId).
+	GetInvocationTimeline(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListToolCalls Page through durable ToolCall execution records
 	//
 	// Returns ToolCalls in execution discovery order. Every execution mode is
@@ -7071,6 +7894,71 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/models/{provider}/{model_id} (the `GetModel` operationId).
 	GetModel(ctx context.Context, provider ModelProvider, modelID string, params *GetModelParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListOrgs List registered orgs
+	//
+	// Returns the Orgs visible to the caller. Installation machine
+	// credentials and admin issuer tokens see every Org; an Org-scoped
+	// credential sees only its own Org. App-scoped credentials and
+	// non-admin installation issuer tokens cannot list Orgs.
+	//
+	// Corresponds with GET /v1/orgs (the `ListOrgs` operationId).
+	ListOrgs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RegisterOrgWithBody Register an org
+	//
+	// Registers a thin customer ownership boundary. This requires an
+	// installation Operator credential or an admin issuer token. When
+	// `external_ref` names an existing Org, the existing resource is
+	// returned unchanged so register-on-first-login is race-safe and
+	// idempotent.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
+	RegisterOrgWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RegisterOrg Register an org
+	//
+	// Registers a thin customer ownership boundary. This requires an
+	// installation Operator credential or an admin issuer token. When
+	// `external_ref` names an existing Org, the existing resource is
+	// returned unchanged so register-on-first-login is race-safe and
+	// idempotent.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
+	RegisterOrg(ctx context.Context, body RegisterOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrg Get one org
+	//
+	// Returns one registered Org. An Org-scoped caller receives `404` for
+	// any other Org, so identifiers cannot be probed across the ownership
+	// boundary. Installation issuer tokens require `admin: true`.
+	//
+	// Corresponds with GET /v1/orgs/{org_id} (the `GetOrg` operationId).
+	GetOrg(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateOrgWithBody Update an org
+	//
+	// Updates the Org's human-facing display name. Installation issuer
+	// tokens require `admin: true`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
+	UpdateOrgWithBody(ctx context.Context, orgID OrgID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateOrg Update an org
+	//
+	// Updates the Org's human-facing display name. Installation issuer
+	// tokens require `admin: true`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
+	UpdateOrg(ctx context.Context, orgID OrgID, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListProviderKeys List reusable provider key metadata
 	//
 	// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
@@ -7140,8 +8028,8 @@ type ClientInterface interface {
 	// many turns, when a model call last used it, and the combined token and
 	// cost totals.
 	//
-	// Calculated from stored records each time you ask, not kept in a running
-	// counter, so deleting Sessions lowers these numbers.
+	// Calculated from retained model-call facts each time you ask, so
+	// deleting Sessions does not lower historical numbers.
 	//
 	// Corresponds with GET /v1/provider-keys/{provider_key_id}/usage (the `GetProviderKeyUsage` operationId).
 	GetProviderKeyUsage(ctx context.Context, providerKeyID ProviderKeyID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7211,13 +8099,11 @@ type ClientInterface interface {
 	// comes back empty. Otherwise a request arriving mid-sweep creates a new
 	// Session behind you.
 	//
-	// Two consequences to plan for. Past usage numbers shrink:
-	// `GET /v1/usage/daily` is calculated from the records you just erased,
-	// which is why it is operational visibility rather than a billing
-	// ledger — bill from usage you recorded yourself when each turn
-	// finished, keyed by Invocation ID. And the deleted turns' idempotency
-	// keys become reusable, since deduplication only holds while the
-	// original turn still exists.
+	// Two consequences to plan for. Content-free Invocation, model-call,
+	// and tool-call facts remain for usage reporting, with the Invocation
+	// marked erased; prompts, responses, and tool payloads do not. The
+	// deleted turns' idempotency keys become reusable, since deduplication
+	// only holds while the original turn still exists.
 	//
 	// Corresponds with DELETE /v1/sessions/{session_id} (the `DeleteSession` operationId).
 	DeleteSession(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7401,26 +8287,30 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
 	StreamSessionTranscript(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetDailyUsage Read daily usage rollups
+	// GetUsageBreakdown Rank usage by one dimension
 	//
-	// Totals your model usage by day, app, provider, and model, with token
-	// counts and estimated cost. It counts every model call nvoken made on
-	// your behalf, including the ones it makes to summarize long
-	// conversations.
+	// Corresponds with GET /v1/usage/breakdown (the `GetUsageBreakdown` operationId).
+	GetUsageBreakdown(ctx context.Context, params *GetUsageBreakdownParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListUsageRecords Export itemized model-call facts
 	//
-	// These totals are calculated from the stored records each time you ask,
-	// not kept in a running counter. That means deleting Sessions lowers
-	// past numbers. Treat this as operational visibility into what your
-	// agents are doing, not as a billing ledger — if you bill from usage,
-	// record it yourself when each turn finishes, keyed by Invocation ID.
+	// Stable ascending `(started_at, id)` order; JSON and CSV contain the same logical columns and never content.
 	//
-	// A credential bound to an app sees only that app. Only an app-less
-	// issuer token with the `admin` claim can read across every registered
-	// app. App-less API credentials are installation-management credentials
-	// and cannot read usage or other runtime data.
+	// Corresponds with GET /v1/usage/records (the `ListUsageRecords` operationId).
+	ListUsageRecords(ctx context.Context, params *ListUsageRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUsageTimeseries Read usage totals and sparse time buckets
 	//
-	// Corresponds with GET /v1/usage/daily (the `GetDailyUsage` operationId).
-	GetDailyUsage(ctx context.Context, params *GetDailyUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Returns activity, model, tool, and model-cost metrics from retained,
+	// content-free facts. The half-open window totals use exact distinct
+	// counts and are not sums of bucket distincts. Grouping is bounded to ten
+	// selected series plus `other`. Session deletion does not rewrite history.
+	// An App credential is forced to its App, an Org credential to Apps
+	// currently owned by its Org, and only an installation-scoped admin
+	// issuer token can span every App.
+	//
+	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
+	GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListAgents List Agent identity anchors
@@ -7471,10 +8361,11 @@ func (c *Client) GetAgent(ctx context.Context, agentID AgentID, reqEditors ...Re
 
 // ListApps List registered apps
 //
-// Returns the apps this credential can see. A credential associated with
-// an app sees only that app; a credential with no app association sees
-// every registered app. An exact `external_ref` filter narrows either
-// view to apps owned by that reference.
+// Returns the Apps this credential can see. An App-scoped credential
+// sees only that App, an Org-scoped credential sees the Apps contained
+// by its Org, and an installation credential sees every registered App.
+// An exact `external_ref` filter narrows that visible set during the
+// staged console migration.
 //
 // Corresponds with GET /v1/apps (the `ListApps` operationId).
 func (c *Client) ListApps(ctx context.Context, params *ListAppsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7499,11 +8390,13 @@ func (c *Client) ListApps(ctx context.Context, params *ListAppsParams, reqEditor
 // scope of each delivery. Registration is unavailable when the service's
 // encryption keyring is not configured.
 //
-// Registration is installation management rather than work inside an app,
-// so it requires a credential that is *not* associated with an app; a
-// credential bound to one app cannot mint siblings for itself. Names
-// identify apps and are unique, so re-registering an existing name is
-// rejected rather than returning the existing app.
+// Registration requires an Org or installation Operator credential; an
+// App-scoped credential cannot mint siblings. Org callers always create
+// Apps in their own Org and may omit `org_id`. Installation machine
+// credentials may choose any registered Org or temporarily leave
+// ownership unset during the staged console migration. An installation
+// issuer token requires `admin: true` to assign an Org. Names identify
+// Apps and are unique, so re-registering an existing name is rejected.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7530,11 +8423,13 @@ func (c *Client) RegisterAppWithBody(ctx context.Context, contentType string, bo
 // scope of each delivery. Registration is unavailable when the service's
 // encryption keyring is not configured.
 //
-// Registration is installation management rather than work inside an app,
-// so it requires a credential that is *not* associated with an app; a
-// credential bound to one app cannot mint siblings for itself. Names
-// identify apps and are unique, so re-registering an existing name is
-// rejected rather than returning the existing app.
+// Registration requires an Org or installation Operator credential; an
+// App-scoped credential cannot mint siblings. Org callers always create
+// Apps in their own Org and may omit `org_id`. Installation machine
+// credentials may choose any registered Org or temporarily leave
+// ownership unset during the staged console migration. An installation
+// issuer token requires `admin: true` to assign an Org. Names identify
+// Apps and are unique, so re-registering an existing name is rejected.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7553,9 +8448,8 @@ func (c *Client) RegisterApp(ctx context.Context, body RegisterAppJSONRequestBod
 
 // GetApp Get one app
 //
-// Returns one registered app. A credential associated with a different
-// app receives `404`, so an app identifier cannot be probed across the
-// isolation boundary.
+// Returns one registered App. App- and Org-scoped credentials receive
+// `404` for Apps outside their durable containment boundary.
 //
 // Corresponds with GET /v1/apps/{app_id} (the `GetApp` operationId).
 func (c *Client) GetApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7572,9 +8466,11 @@ func (c *Client) GetApp(ctx context.Context, appID AppID, reqEditors ...RequestE
 
 // UpdateAppWithBody Update an app
 //
-// Updates an app's mutable presentation fields. The unique `name` and the
-// ownership-grounding `external_ref` cannot be changed. A credential
-// associated with a different app receives `404`.
+// Updates an App's display name. An installation administrator may also
+// transfer the App to another registered Org by changing `org_id`.
+// Org- and App-scoped callers receive `404` outside their containment
+// boundary, and cannot move an App. The unique `name` and transitional
+// `external_ref` cannot be changed.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7593,15 +8489,34 @@ func (c *Client) UpdateAppWithBody(ctx context.Context, appID AppID, contentType
 
 // UpdateApp Update an app
 //
-// Updates an app's mutable presentation fields. The unique `name` and the
-// ownership-grounding `external_ref` cannot be changed. A credential
-// associated with a different app receives `404`.
+// Updates an App's display name. An installation administrator may also
+// transfer the App to another registered Org by changing `org_id`.
+// Org- and App-scoped callers receive `404` outside their containment
+// boundary, and cannot move an App. The unique `name` and transitional
+// `external_ref` cannot be changed.
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
 func (c *Client) UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateAppRequest(c.Server, appID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListBudgets List Budget windows
+//
+// Returns cursor-paginated Budget guardrails inside the authenticated App and tenant constraint.
+//
+// Corresponds with GET /v1/budgets (the `ListBudgets` operationId).
+func (c *Client) ListBudgets(ctx context.Context, params *ListBudgetsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListBudgetsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -7762,6 +8677,10 @@ func (c *Client) ListCredentials(ctx context.Context, params *ListCredentialsPar
 
 // CreateCredentialWithBody Create a machine credential
 //
+// Creates a credential within the caller's durable boundary. A non-admin
+// installation issuer token may create App credentials, but cannot mint
+// Org or installation credentials.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
@@ -7778,6 +8697,10 @@ func (c *Client) CreateCredentialWithBody(ctx context.Context, params *CreateCre
 }
 
 // CreateCredential Create a machine credential
+//
+// Creates a credential within the caller's durable boundary. A non-admin
+// installation issuer token may create App credentials, but cannot mint
+// Org or installation credentials.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8456,6 +9379,26 @@ func (c *Client) StreamInvocation(ctx context.Context, invocationID InvocationID
 	return c.Client.Do(req)
 }
 
+// GetInvocationTimeline Read the durable execution waterfall for one turn
+//
+// Assembles lifecycle waits, model calls, tool calls, nudges, and
+// compactions from one database snapshot. It contains timings and usage,
+// never prompts, responses, tool arguments, results, or error text. After
+// Session erasure it degrades to the retained facts-only skeleton.
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/timeline (the `GetInvocationTimeline` operationId).
+func (c *Client) GetInvocationTimeline(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInvocationTimelineRequest(c.Server, invocationID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListToolCalls Page through durable ToolCall execution records
 //
 // Returns ToolCalls in execution discovery order. Every execution mode is
@@ -8646,6 +9589,131 @@ func (c *Client) GetModel(ctx context.Context, provider ModelProvider, modelID s
 	return c.Client.Do(req)
 }
 
+// ListOrgs List registered orgs
+//
+// Returns the Orgs visible to the caller. Installation machine
+// credentials and admin issuer tokens see every Org; an Org-scoped
+// credential sees only its own Org. App-scoped credentials and
+// non-admin installation issuer tokens cannot list Orgs.
+//
+// Corresponds with GET /v1/orgs (the `ListOrgs` operationId).
+func (c *Client) ListOrgs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOrgsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RegisterOrgWithBody Register an org
+//
+// Registers a thin customer ownership boundary. This requires an
+// installation Operator credential or an admin issuer token. When
+// `external_ref` names an existing Org, the existing resource is
+// returned unchanged so register-on-first-login is race-safe and
+// idempotent.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
+func (c *Client) RegisterOrgWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterOrgRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RegisterOrg Register an org
+//
+// Registers a thin customer ownership boundary. This requires an
+// installation Operator credential or an admin issuer token. When
+// `external_ref` names an existing Org, the existing resource is
+// returned unchanged so register-on-first-login is race-safe and
+// idempotent.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
+func (c *Client) RegisterOrg(ctx context.Context, body RegisterOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterOrgRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrg Get one org
+//
+// Returns one registered Org. An Org-scoped caller receives `404` for
+// any other Org, so identifiers cannot be probed across the ownership
+// boundary. Installation issuer tokens require `admin: true`.
+//
+// Corresponds with GET /v1/orgs/{org_id} (the `GetOrg` operationId).
+func (c *Client) GetOrg(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgRequest(c.Server, orgID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateOrgWithBody Update an org
+//
+// Updates the Org's human-facing display name. Installation issuer
+// tokens require `admin: true`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
+func (c *Client) UpdateOrgWithBody(ctx context.Context, orgID OrgID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrgRequestWithBody(c.Server, orgID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateOrg Update an org
+//
+// Updates the Org's human-facing display name. Installation issuer
+// tokens require `admin: true`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
+func (c *Client) UpdateOrg(ctx context.Context, orgID OrgID, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrgRequest(c.Server, orgID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListProviderKeys List reusable provider key metadata
 //
 // Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
@@ -8785,8 +9853,8 @@ func (c *Client) RotateProviderKey(ctx context.Context, providerKeyID ProviderKe
 // many turns, when a model call last used it, and the combined token and
 // cost totals.
 //
-// Calculated from stored records each time you ask, not kept in a running
-// counter, so deleting Sessions lowers these numbers.
+// Calculated from retained model-call facts each time you ask, so
+// deleting Sessions does not lower historical numbers.
 //
 // Corresponds with GET /v1/provider-keys/{provider_key_id}/usage (the `GetProviderKeyUsage` operationId).
 func (c *Client) GetProviderKeyUsage(ctx context.Context, providerKeyID ProviderKeyID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8896,13 +9964,11 @@ func (c *Client) CreateSession(ctx context.Context, body CreateSessionJSONReques
 // comes back empty. Otherwise a request arriving mid-sweep creates a new
 // Session behind you.
 //
-// Two consequences to plan for. Past usage numbers shrink:
-// `GET /v1/usage/daily` is calculated from the records you just erased,
-// which is why it is operational visibility rather than a billing
-// ledger — bill from usage you recorded yourself when each turn
-// finished, keyed by Invocation ID. And the deleted turns' idempotency
-// keys become reusable, since deduplication only holds while the
-// original turn still exists.
+// Two consequences to plan for. Content-free Invocation, model-call,
+// and tool-call facts remain for usage reporting, with the Invocation
+// marked erased; prompts, responses, and tool payloads do not. The
+// deleted turns' idempotency keys become reusable, since deduplication
+// only holds while the original turn still exists.
 //
 // Corresponds with DELETE /v1/sessions/{session_id} (the `DeleteSession` operationId).
 func (c *Client) DeleteSession(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9186,27 +10252,51 @@ func (c *Client) StreamSessionTranscript(ctx context.Context, sessionID SessionI
 	return c.Client.Do(req)
 }
 
-// GetDailyUsage Read daily usage rollups
+// GetUsageBreakdown Rank usage by one dimension
 //
-// Totals your model usage by day, app, provider, and model, with token
-// counts and estimated cost. It counts every model call nvoken made on
-// your behalf, including the ones it makes to summarize long
-// conversations.
+// Corresponds with GET /v1/usage/breakdown (the `GetUsageBreakdown` operationId).
+func (c *Client) GetUsageBreakdown(ctx context.Context, params *GetUsageBreakdownParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUsageBreakdownRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListUsageRecords Export itemized model-call facts
 //
-// These totals are calculated from the stored records each time you ask,
-// not kept in a running counter. That means deleting Sessions lowers
-// past numbers. Treat this as operational visibility into what your
-// agents are doing, not as a billing ledger — if you bill from usage,
-// record it yourself when each turn finishes, keyed by Invocation ID.
+// Stable ascending `(started_at, id)` order; JSON and CSV contain the same logical columns and never content.
 //
-// A credential bound to an app sees only that app. Only an app-less
-// issuer token with the `admin` claim can read across every registered
-// app. App-less API credentials are installation-management credentials
-// and cannot read usage or other runtime data.
+// Corresponds with GET /v1/usage/records (the `ListUsageRecords` operationId).
+func (c *Client) ListUsageRecords(ctx context.Context, params *ListUsageRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListUsageRecordsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUsageTimeseries Read usage totals and sparse time buckets
 //
-// Corresponds with GET /v1/usage/daily (the `GetDailyUsage` operationId).
-func (c *Client) GetDailyUsage(ctx context.Context, params *GetDailyUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetDailyUsageRequest(c.Server, params)
+// Returns activity, model, tool, and model-cost metrics from retained,
+// content-free facts. The half-open window totals use exact distinct
+// counts and are not sums of bucket distincts. Grouping is bounded to ten
+// selected series plus `other`. Session deletion does not rewrite history.
+// An App credential is forced to its App, an Org credential to Apps
+// currently owned by its Org, and only an installation-scoped admin
+// issuer token can span every App.
+//
+// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
+func (c *Client) GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUsageTimeseriesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9500,6 +10590,180 @@ func NewUpdateAppRequestWithBody(server string, appID AppID, contentType string,
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListBudgetsRequest constructs an http.Request for the ListBudgets method
+func NewListBudgetsRequest(server string, params *ListBudgetsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/budgets")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Scope != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "scope", *params.Scope, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TenantKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.UserKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "user_key", *params.UserKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AgentID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "agent_id", *params.AgentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProviderKeyID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider_key_id", *params.ProviderKeyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CredentialFamilyID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "credential_family_id", *params.CredentialFamilyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.WindowStart != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "window_start", *params.WindowStart, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.WindowEnd != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "window_end", *params.WindowEnd, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -10627,6 +11891,40 @@ func NewStreamInvocationRequest(server string, invocationID InvocationID, params
 	return req, nil
 }
 
+// NewGetInvocationTimelineRequest constructs an http.Request for the GetInvocationTimeline method
+func NewGetInvocationTimelineRequest(server string, invocationID InvocationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/invocations/%s/timeline", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListToolCallsRequest constructs an http.Request for the ListToolCalls method
 func NewListToolCallsRequest(server string, invocationID InvocationID, params *ListToolCallsParams) (*http.Request, error) {
 	var err error
@@ -10920,6 +12218,154 @@ func NewGetModelRequest(server string, provider ModelProvider, modelID string, p
 		}
 
 	}
+
+	return req, nil
+}
+
+// NewListOrgsRequest constructs an http.Request for the ListOrgs method
+func NewListOrgsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/orgs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRegisterOrgRequest calls the generic RegisterOrg builder with application/json body
+func NewRegisterOrgRequest(server string, body RegisterOrgJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRegisterOrgRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRegisterOrgRequestWithBody constructs an http.Request for the RegisterOrg method, with any body, and a specified content type
+func NewRegisterOrgRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/orgs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetOrgRequest constructs an http.Request for the GetOrg method
+func NewGetOrgRequest(server string, orgID OrgID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org_id", orgID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/orgs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateOrgRequest calls the generic UpdateOrg builder with application/json body
+func NewUpdateOrgRequest(server string, orgID OrgID, body UpdateOrgJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateOrgRequestWithBody(server, orgID, "application/json", bodyReader)
+}
+
+// NewUpdateOrgRequestWithBody constructs an http.Request for the UpdateOrg method, with any body, and a specified content type
+func NewUpdateOrgRequestWithBody(server string, orgID OrgID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org_id", orgID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/orgs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -11886,8 +13332,8 @@ func NewStreamSessionTranscriptRequest(server string, sessionID SessionID, param
 	return req, nil
 }
 
-// NewGetDailyUsageRequest constructs an http.Request for the GetDailyUsage method
-func NewGetDailyUsageRequest(server string, params *GetDailyUsageParams) (*http.Request, error) {
+// NewGetUsageBreakdownRequest constructs an http.Request for the GetUsageBreakdown method
+func NewGetUsageBreakdownRequest(server string, params *GetUsageBreakdownParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -11895,7 +13341,7 @@ func NewGetDailyUsageRequest(server string, params *GetDailyUsageParams) (*http.
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1/usage/daily")
+	operationPath := fmt.Sprintf("/v1/usage/breakdown")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -11914,21 +13360,25 @@ func NewGetDailyUsageRequest(server string, params *GetDailyUsageParams) (*http.
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if params.StartDate != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "start_date", *params.StartDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "start_at", params.StartAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
 			}
-
 		}
 
-		if params.EndDate != nil {
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "end_at", params.EndAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "end_date", *params.EndDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+		if params.AppID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "app_id", *params.AppID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -11962,9 +13412,645 @@ func NewGetDailyUsageRequest(server string, params *GetDailyUsageParams) (*http.
 
 		}
 
+		if params.AgentID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "agent_id", *params.AgentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Provider != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider", *params.Provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Model != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "model", *params.Model, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProviderKeySource != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider_key_source", *params.ProviderKeySource, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProviderKeyID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider_key_id", *params.ProviderKeyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CredentialFamilyID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "credential_family_id", *params.CredentialFamilyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CallKind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "call_kind", *params.CallKind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ToolName != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tool_name", *params.ToolName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ToolMode != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tool_mode", *params.ToolMode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "group_by", params.GroupBy, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListUsageRecordsRequest constructs an http.Request for the ListUsageRecords method
+func NewListUsageRecordsRequest(server string, params *ListUsageRecordsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/usage/records")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "start_at", params.StartAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "end_at", params.EndAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.AppID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "app_id", *params.AppID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TenantKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.UserKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "user_key", *params.UserKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AgentID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "agent_id", *params.AgentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Provider != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider", *params.Provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Model != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "model", *params.Model, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProviderKeySource != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider_key_source", *params.ProviderKeySource, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProviderKeyID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider_key_id", *params.ProviderKeyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CredentialFamilyID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "credential_family_id", *params.CredentialFamilyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CallKind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "call_kind", *params.CallKind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ToolName != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tool_name", *params.ToolName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ToolMode != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tool_mode", *params.ToolMode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Format != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "format", *params.Format, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetUsageTimeseriesRequest constructs an http.Request for the GetUsageTimeseries method
+func NewGetUsageTimeseriesRequest(server string, params *GetUsageTimeseriesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/usage/timeseries")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "start_at", params.StartAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "end_at", params.EndAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "interval", params.Interval, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Timezone != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "timezone", *params.Timezone, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AppID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "app_id", *params.AppID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TenantKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.UserKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "user_key", *params.UserKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AgentID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "agent_id", *params.AgentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Provider != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider", *params.Provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Model != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "model", *params.Model, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProviderKeySource != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider_key_source", *params.ProviderKeySource, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProviderKeyID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "provider_key_id", *params.ProviderKeyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CredentialFamilyID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "credential_family_id", *params.CredentialFamilyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CallKind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "call_kind", *params.CallKind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ToolName != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tool_name", *params.ToolName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ToolMode != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tool_mode", *params.ToolMode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.GroupBy != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "group_by", *params.GroupBy, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Top != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "top", *params.Top, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Keys != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "keys", *params.Keys, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -12064,10 +14150,11 @@ type ClientWithResponsesInterface interface {
 
 	// ListAppsWithResponse List registered apps
 	//
-	// Returns the apps this credential can see. A credential associated with
-	// an app sees only that app; a credential with no app association sees
-	// every registered app. An exact `external_ref` filter narrows either
-	// view to apps owned by that reference.
+	// Returns the Apps this credential can see. An App-scoped credential
+	// sees only that App, an Org-scoped credential sees the Apps contained
+	// by its Org, and an installation credential sees every registered App.
+	// An exact `external_ref` filter narrows that visible set during the
+	// staged console migration.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12084,11 +14171,13 @@ type ClientWithResponsesInterface interface {
 	// scope of each delivery. Registration is unavailable when the service's
 	// encryption keyring is not configured.
 	//
-	// Registration is installation management rather than work inside an app,
-	// so it requires a credential that is *not* associated with an app; a
-	// credential bound to one app cannot mint siblings for itself. Names
-	// identify apps and are unique, so re-registering an existing name is
-	// rejected rather than returning the existing app.
+	// Registration requires an Org or installation Operator credential; an
+	// App-scoped credential cannot mint siblings. Org callers always create
+	// Apps in their own Org and may omit `org_id`. Installation machine
+	// credentials may choose any registered Org or temporarily leave
+	// ownership unset during the staged console migration. An installation
+	// issuer token requires `admin: true` to assign an Org. Names identify
+	// Apps and are unique, so re-registering an existing name is rejected.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12105,11 +14194,13 @@ type ClientWithResponsesInterface interface {
 	// scope of each delivery. Registration is unavailable when the service's
 	// encryption keyring is not configured.
 	//
-	// Registration is installation management rather than work inside an app,
-	// so it requires a credential that is *not* associated with an app; a
-	// credential bound to one app cannot mint siblings for itself. Names
-	// identify apps and are unique, so re-registering an existing name is
-	// rejected rather than returning the existing app.
+	// Registration requires an Org or installation Operator credential; an
+	// App-scoped credential cannot mint siblings. Org callers always create
+	// Apps in their own Org and may omit `org_id`. Installation machine
+	// credentials may choose any registered Org or temporarily leave
+	// ownership unset during the staged console migration. An installation
+	// issuer token requires `admin: true` to assign an Org. Names identify
+	// Apps and are unique, so re-registering an existing name is rejected.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12118,9 +14209,8 @@ type ClientWithResponsesInterface interface {
 
 	// GetAppWithResponse Get one app
 	//
-	// Returns one registered app. A credential associated with a different
-	// app receives `404`, so an app identifier cannot be probed across the
-	// isolation boundary.
+	// Returns one registered App. App- and Org-scoped credentials receive
+	// `404` for Apps outside their durable containment boundary.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12129,9 +14219,11 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateAppWithBodyWithResponse Update an app
 	//
-	// Updates an app's mutable presentation fields. The unique `name` and the
-	// ownership-grounding `external_ref` cannot be changed. A credential
-	// associated with a different app receives `404`.
+	// Updates an App's display name. An installation administrator may also
+	// transfer the App to another registered Org by changing `org_id`.
+	// Org- and App-scoped callers receive `404` outside their containment
+	// boundary, and cannot move an App. The unique `name` and transitional
+	// `external_ref` cannot be changed.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12140,14 +14232,25 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateAppWithResponse Update an app
 	//
-	// Updates an app's mutable presentation fields. The unique `name` and the
-	// ownership-grounding `external_ref` cannot be changed. A credential
-	// associated with a different app receives `404`.
+	// Updates an App's display name. An installation administrator may also
+	// transfer the App to another registered Org by changing `org_id`.
+	// Org- and App-scoped callers receive `404` outside their containment
+	// boundary, and cannot move an App. The unique `name` and transitional
+	// `external_ref` cannot be changed.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
 	UpdateAppWithResponse(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error)
+
+	// ListBudgetsWithResponse List Budget windows
+	//
+	// Returns cursor-paginated Budget guardrails inside the authenticated App and tenant constraint.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/budgets (the `ListBudgets` operationId).
+	ListBudgetsWithResponse(ctx context.Context, params *ListBudgetsParams, reqEditors ...RequestEditorFn) (*ListBudgetsHTTPResponse, error)
 
 	// CreateBudgetWithBodyWithResponse Create one fixed Budget window
 	//
@@ -12227,12 +14330,20 @@ type ClientWithResponsesInterface interface {
 
 	// CreateCredentialWithBodyWithResponse Create a machine credential
 	//
+	// Creates a credential within the caller's durable boundary. A non-admin
+	// installation issuer token may create App credentials, but cannot mint
+	// Org or installation credentials.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
 	CreateCredentialWithBodyWithResponse(ctx context.Context, params *CreateCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateCredentialHTTPResponse, error)
 
 	// CreateCredentialWithResponse Create a machine credential
+	//
+	// Creates a credential within the caller's durable boundary. A non-admin
+	// installation issuer token may create App credentials, but cannot mint
+	// Org or installation credentials.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12741,6 +14852,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
 	StreamInvocationWithResponse(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*StreamInvocationHTTPResponse, error)
 
+	// GetInvocationTimelineWithResponse Read the durable execution waterfall for one turn
+	//
+	// Assembles lifecycle waits, model calls, tool calls, nudges, and
+	// compactions from one database snapshot. It contains timings and usage,
+	// never prompts, responses, tool arguments, results, or error text. After
+	// Session erasure it degrades to the retained facts-only skeleton.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/timeline (the `GetInvocationTimeline` operationId).
+	GetInvocationTimelineWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationTimelineHTTPResponse, error)
+
 	// ListToolCallsWithResponse Page through durable ToolCall execution records
 	//
 	// Returns ToolCalls in execution discovery order. Every execution mode is
@@ -12867,6 +14990,75 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/models/{provider}/{model_id} (the `GetModel` operationId).
 	GetModelWithResponse(ctx context.Context, provider ModelProvider, modelID string, params *GetModelParams, reqEditors ...RequestEditorFn) (*GetModelHTTPResponse, error)
 
+	// ListOrgsWithResponse List registered orgs
+	//
+	// Returns the Orgs visible to the caller. Installation machine
+	// credentials and admin issuer tokens see every Org; an Org-scoped
+	// credential sees only its own Org. App-scoped credentials and
+	// non-admin installation issuer tokens cannot list Orgs.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/orgs (the `ListOrgs` operationId).
+	ListOrgsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOrgsHTTPResponse, error)
+
+	// RegisterOrgWithBodyWithResponse Register an org
+	//
+	// Registers a thin customer ownership boundary. This requires an
+	// installation Operator credential or an admin issuer token. When
+	// `external_ref` names an existing Org, the existing resource is
+	// returned unchanged so register-on-first-login is race-safe and
+	// idempotent.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
+	RegisterOrgWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterOrgHTTPResponse, error)
+
+	// RegisterOrgWithResponse Register an org
+	//
+	// Registers a thin customer ownership boundary. This requires an
+	// installation Operator credential or an admin issuer token. When
+	// `external_ref` names an existing Org, the existing resource is
+	// returned unchanged so register-on-first-login is race-safe and
+	// idempotent.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
+	RegisterOrgWithResponse(ctx context.Context, body RegisterOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterOrgHTTPResponse, error)
+
+	// GetOrgWithResponse Get one org
+	//
+	// Returns one registered Org. An Org-scoped caller receives `404` for
+	// any other Org, so identifiers cannot be probed across the ownership
+	// boundary. Installation issuer tokens require `admin: true`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/orgs/{org_id} (the `GetOrg` operationId).
+	GetOrgWithResponse(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*GetOrgHTTPResponse, error)
+
+	// UpdateOrgWithBodyWithResponse Update an org
+	//
+	// Updates the Org's human-facing display name. Installation issuer
+	// tokens require `admin: true`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
+	UpdateOrgWithBodyWithResponse(ctx context.Context, orgID OrgID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrgHTTPResponse, error)
+
+	// UpdateOrgWithResponse Update an org
+	//
+	// Updates the Org's human-facing display name. Installation issuer
+	// tokens require `admin: true`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
+	UpdateOrgWithResponse(ctx context.Context, orgID OrgID, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgHTTPResponse, error)
+
 	// ListProviderKeysWithResponse List reusable provider key metadata
 	//
 	// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
@@ -12942,8 +15134,8 @@ type ClientWithResponsesInterface interface {
 	// many turns, when a model call last used it, and the combined token and
 	// cost totals.
 	//
-	// Calculated from stored records each time you ask, not kept in a running
-	// counter, so deleting Sessions lowers these numbers.
+	// Calculated from retained model-call facts each time you ask, so
+	// deleting Sessions does not lower historical numbers.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -13017,13 +15209,11 @@ type ClientWithResponsesInterface interface {
 	// comes back empty. Otherwise a request arriving mid-sweep creates a new
 	// Session behind you.
 	//
-	// Two consequences to plan for. Past usage numbers shrink:
-	// `GET /v1/usage/daily` is calculated from the records you just erased,
-	// which is why it is operational visibility rather than a billing
-	// ledger — bill from usage you recorded yourself when each turn
-	// finished, keyed by Invocation ID. And the deleted turns' idempotency
-	// keys become reusable, since deduplication only holds while the
-	// original turn still exists.
+	// Two consequences to plan for. Content-free Invocation, model-call,
+	// and tool-call facts remain for usage reporting, with the Invocation
+	// marked erased; prompts, responses, and tool payloads do not. The
+	// deleted turns' idempotency keys become reusable, since deduplication
+	// only holds while the original turn still exists.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -13219,28 +15409,36 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
 	StreamSessionTranscriptWithResponse(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*StreamSessionTranscriptHTTPResponse, error)
 
-	// GetDailyUsageWithResponse Read daily usage rollups
-	//
-	// Totals your model usage by day, app, provider, and model, with token
-	// counts and estimated cost. It counts every model call nvoken made on
-	// your behalf, including the ones it makes to summarize long
-	// conversations.
-	//
-	// These totals are calculated from the stored records each time you ask,
-	// not kept in a running counter. That means deleting Sessions lowers
-	// past numbers. Treat this as operational visibility into what your
-	// agents are doing, not as a billing ledger — if you bill from usage,
-	// record it yourself when each turn finishes, keyed by Invocation ID.
-	//
-	// A credential bound to an app sees only that app. Only an app-less
-	// issuer token with the `admin` claim can read across every registered
-	// app. App-less API credentials are installation-management credentials
-	// and cannot read usage or other runtime data.
+	// GetUsageBreakdownWithResponse Rank usage by one dimension
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /v1/usage/daily (the `GetDailyUsage` operationId).
-	GetDailyUsageWithResponse(ctx context.Context, params *GetDailyUsageParams, reqEditors ...RequestEditorFn) (*GetDailyUsageHTTPResponse, error)
+	// Corresponds with GET /v1/usage/breakdown (the `GetUsageBreakdown` operationId).
+	GetUsageBreakdownWithResponse(ctx context.Context, params *GetUsageBreakdownParams, reqEditors ...RequestEditorFn) (*GetUsageBreakdownHTTPResponse, error)
+
+	// ListUsageRecordsWithResponse Export itemized model-call facts
+	//
+	// Stable ascending `(started_at, id)` order; JSON and CSV contain the same logical columns and never content.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/usage/records (the `ListUsageRecords` operationId).
+	ListUsageRecordsWithResponse(ctx context.Context, params *ListUsageRecordsParams, reqEditors ...RequestEditorFn) (*ListUsageRecordsHTTPResponse, error)
+
+	// GetUsageTimeseriesWithResponse Read usage totals and sparse time buckets
+	//
+	// Returns activity, model, tool, and model-cost metrics from retained,
+	// content-free facts. The half-open window totals use exact distinct
+	// counts and are not sums of bucket distincts. Grouping is bounded to ten
+	// selected series plus `other`. Session deletion does not rewrite history.
+	// An App credential is forced to its App, an Org credential to Apps
+	// currently owned by its Org, and only an installation-scoped admin
+	// issuer token can span every App.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
+	GetUsageTimeseriesWithResponse(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*GetUsageTimeseriesHTTPResponse, error)
 }
 
 // ListAgentsHTTPResponse429Headers the declared response headers of an HTTP 429 response for ListAgents
@@ -13763,6 +15961,82 @@ func (r UpdateAppHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateAppHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListBudgetsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BudgetList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListBudgetsHTTPResponse) GetJSON200() *BudgetList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListBudgetsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListBudgetsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListBudgetsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListBudgetsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListBudgetsHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListBudgetsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListBudgetsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListBudgetsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListBudgetsHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15484,6 +17758,89 @@ func (r StreamInvocationHTTPResponse) ContentType() string {
 	return ""
 }
 
+type GetInvocationTimelineHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *InvocationTimeline
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetInvocationTimelineHTTPResponse) GetJSON200() *InvocationTimeline {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetInvocationTimelineHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetInvocationTimelineHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetInvocationTimelineHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetInvocationTimelineHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetInvocationTimelineHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetInvocationTimelineHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInvocationTimelineHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInvocationTimelineHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInvocationTimelineHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInvocationTimelineHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListToolCallsHTTPResponse429Headers the declared response headers of an HTTP 429 response for ListToolCalls
 type ListToolCallsHTTPResponse429Headers struct {
 	RetryAfter *int
@@ -15956,6 +18313,345 @@ func (r GetModelHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetModelHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListOrgsHTTPResponse429Headers the declared response headers of an HTTP 429 response for ListOrgs
+type ListOrgsHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type ListOrgsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgList
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *ListOrgsHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListOrgsHTTPResponse) GetJSON200() *OrgList {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListOrgsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListOrgsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r ListOrgsHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListOrgsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListOrgsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListOrgsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOrgsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListOrgsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// RegisterOrgHTTPResponse429Headers the declared response headers of an HTTP 429 response for RegisterOrg
+type RegisterOrgHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type RegisterOrgHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Org
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Org
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *RegisterOrgHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RegisterOrgHTTPResponse) GetJSON200() *Org {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r RegisterOrgHTTPResponse) GetJSON201() *Org {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RegisterOrgHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RegisterOrgHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RegisterOrgHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r RegisterOrgHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r RegisterOrgHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RegisterOrgHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RegisterOrgHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RegisterOrgHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RegisterOrgHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetOrgHTTPResponse429Headers the declared response headers of an HTTP 429 response for GetOrg
+type GetOrgHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type GetOrgHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Org
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetOrgHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgHTTPResponse) GetJSON200() *Org {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetOrgHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetOrgHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetOrgHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetOrgHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetOrgHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// UpdateOrgHTTPResponse429Headers the declared response headers of an HTTP 429 response for UpdateOrg
+type UpdateOrgHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type UpdateOrgHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Org
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *UpdateOrgHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateOrgHTTPResponse) GetJSON200() *Org {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r UpdateOrgHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r UpdateOrgHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r UpdateOrgHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r UpdateOrgHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r UpdateOrgHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r UpdateOrgHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateOrgHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateOrgHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateOrgHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateOrgHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17395,11 +20091,11 @@ func (r StreamSessionTranscriptHTTPResponse) ContentType() string {
 	return ""
 }
 
-type GetDailyUsageHTTPResponse struct {
+type GetUsageBreakdownHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *DailyUsage
+	JSON200 *UsageBreakdown
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -17413,42 +20109,42 @@ type GetDailyUsageHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetDailyUsageHTTPResponse) GetJSON200() *DailyUsage {
+func (r GetUsageBreakdownHTTPResponse) GetJSON200() *UsageBreakdown {
 	return r.JSON200
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r GetDailyUsageHTTPResponse) GetJSON400() *InvalidRequest {
+func (r GetUsageBreakdownHTTPResponse) GetJSON400() *InvalidRequest {
 	return r.JSON400
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r GetDailyUsageHTTPResponse) GetJSON401() *Unauthenticated {
+func (r GetUsageBreakdownHTTPResponse) GetJSON401() *Unauthenticated {
 	return r.JSON401
 }
 
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r GetDailyUsageHTTPResponse) GetJSON403() *Forbidden {
+func (r GetUsageBreakdownHTTPResponse) GetJSON403() *Forbidden {
 	return r.JSON403
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r GetDailyUsageHTTPResponse) GetJSON500() *Internal {
+func (r GetUsageBreakdownHTTPResponse) GetJSON500() *Internal {
 	return r.JSON500
 }
 
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
-func (r GetDailyUsageHTTPResponse) GetJSON503() *Unavailable {
+func (r GetUsageBreakdownHTTPResponse) GetJSON503() *Unavailable {
 	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
-func (r GetDailyUsageHTTPResponse) GetBody() []byte {
+func (r GetUsageBreakdownHTTPResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r GetDailyUsageHTTPResponse) Status() string {
+func (r GetUsageBreakdownHTTPResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -17456,7 +20152,7 @@ func (r GetDailyUsageHTTPResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetDailyUsageHTTPResponse) StatusCode() int {
+func (r GetUsageBreakdownHTTPResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -17464,7 +20160,166 @@ func (r GetDailyUsageHTTPResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetDailyUsageHTTPResponse) ContentType() string {
+func (r GetUsageBreakdownHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListUsageRecordsHTTPResponse200Headers the declared response headers of an HTTP 200 response for ListUsageRecords
+type ListUsageRecordsHTTPResponse200Headers struct {
+	XNvokenNextCursor *string
+}
+
+type ListUsageRecordsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *UsageRecords
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListUsageRecordsHTTPResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListUsageRecordsHTTPResponse) GetJSON200() *UsageRecords {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListUsageRecordsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListUsageRecordsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListUsageRecordsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListUsageRecordsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListUsageRecordsHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListUsageRecordsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListUsageRecordsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListUsageRecordsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListUsageRecordsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetUsageTimeseriesHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *UsageTimeseries
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUsageTimeseriesHTTPResponse) GetJSON200() *UsageTimeseries {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetUsageTimeseriesHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUsageTimeseriesHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetUsageTimeseriesHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUsageTimeseriesHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetUsageTimeseriesHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUsageTimeseriesHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUsageTimeseriesHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUsageTimeseriesHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUsageTimeseriesHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17515,10 +20370,11 @@ func (c *ClientWithResponses) GetAgentWithResponse(ctx context.Context, agentID 
 
 // ListAppsWithResponse List registered apps
 //
-// Returns the apps this credential can see. A credential associated with
-// an app sees only that app; a credential with no app association sees
-// every registered app. An exact `external_ref` filter narrows either
-// view to apps owned by that reference.
+// Returns the Apps this credential can see. An App-scoped credential
+// sees only that App, an Org-scoped credential sees the Apps contained
+// by its Org, and an installation credential sees every registered App.
+// An exact `external_ref` filter narrows that visible set during the
+// staged console migration.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17541,11 +20397,13 @@ func (c *ClientWithResponses) ListAppsWithResponse(ctx context.Context, params *
 // scope of each delivery. Registration is unavailable when the service's
 // encryption keyring is not configured.
 //
-// Registration is installation management rather than work inside an app,
-// so it requires a credential that is *not* associated with an app; a
-// credential bound to one app cannot mint siblings for itself. Names
-// identify apps and are unique, so re-registering an existing name is
-// rejected rather than returning the existing app.
+// Registration requires an Org or installation Operator credential; an
+// App-scoped credential cannot mint siblings. Org callers always create
+// Apps in their own Org and may omit `org_id`. Installation machine
+// credentials may choose any registered Org or temporarily leave
+// ownership unset during the staged console migration. An installation
+// issuer token requires `admin: true` to assign an Org. Names identify
+// Apps and are unique, so re-registering an existing name is rejected.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17568,11 +20426,13 @@ func (c *ClientWithResponses) RegisterAppWithBodyWithResponse(ctx context.Contex
 // scope of each delivery. Registration is unavailable when the service's
 // encryption keyring is not configured.
 //
-// Registration is installation management rather than work inside an app,
-// so it requires a credential that is *not* associated with an app; a
-// credential bound to one app cannot mint siblings for itself. Names
-// identify apps and are unique, so re-registering an existing name is
-// rejected rather than returning the existing app.
+// Registration requires an Org or installation Operator credential; an
+// App-scoped credential cannot mint siblings. Org callers always create
+// Apps in their own Org and may omit `org_id`. Installation machine
+// credentials may choose any registered Org or temporarily leave
+// ownership unset during the staged console migration. An installation
+// issuer token requires `admin: true` to assign an Org. Names identify
+// Apps and are unique, so re-registering an existing name is rejected.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17587,9 +20447,8 @@ func (c *ClientWithResponses) RegisterAppWithResponse(ctx context.Context, body 
 
 // GetAppWithResponse Get one app
 //
-// Returns one registered app. A credential associated with a different
-// app receives `404`, so an app identifier cannot be probed across the
-// isolation boundary.
+// Returns one registered App. App- and Org-scoped credentials receive
+// `404` for Apps outside their durable containment boundary.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17604,9 +20463,11 @@ func (c *ClientWithResponses) GetAppWithResponse(ctx context.Context, appID AppI
 
 // UpdateAppWithBodyWithResponse Update an app
 //
-// Updates an app's mutable presentation fields. The unique `name` and the
-// ownership-grounding `external_ref` cannot be changed. A credential
-// associated with a different app receives `404`.
+// Updates an App's display name. An installation administrator may also
+// transfer the App to another registered Org by changing `org_id`.
+// Org- and App-scoped callers receive `404` outside their containment
+// boundary, and cannot move an App. The unique `name` and transitional
+// `external_ref` cannot be changed.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17621,9 +20482,11 @@ func (c *ClientWithResponses) UpdateAppWithBodyWithResponse(ctx context.Context,
 
 // UpdateAppWithResponse Update an app
 //
-// Updates an app's mutable presentation fields. The unique `name` and the
-// ownership-grounding `external_ref` cannot be changed. A credential
-// associated with a different app receives `404`.
+// Updates an App's display name. An installation administrator may also
+// transfer the App to another registered Org by changing `org_id`.
+// Org- and App-scoped callers receive `404` outside their containment
+// boundary, and cannot move an App. The unique `name` and transitional
+// `external_ref` cannot be changed.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17634,6 +20497,21 @@ func (c *ClientWithResponses) UpdateAppWithResponse(ctx context.Context, appID A
 		return nil, err
 	}
 	return ParseUpdateAppHTTPResponse(rsp)
+}
+
+// ListBudgetsWithResponse List Budget windows
+//
+// Returns cursor-paginated Budget guardrails inside the authenticated App and tenant constraint.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/budgets (the `ListBudgets` operationId).
+func (c *ClientWithResponses) ListBudgetsWithResponse(ctx context.Context, params *ListBudgetsParams, reqEditors ...RequestEditorFn) (*ListBudgetsHTTPResponse, error) {
+	rsp, err := c.ListBudgets(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListBudgetsHTTPResponse(rsp)
 }
 
 // CreateBudgetWithBodyWithResponse Create one fixed Budget window
@@ -17762,6 +20640,10 @@ func (c *ClientWithResponses) ListCredentialsWithResponse(ctx context.Context, p
 
 // CreateCredentialWithBodyWithResponse Create a machine credential
 //
+// Creates a credential within the caller's durable boundary. A non-admin
+// installation issuer token may create App credentials, but cannot mint
+// Org or installation credentials.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /v1/identity/credentials (the `CreateCredential` operationId).
@@ -17774,6 +20656,10 @@ func (c *ClientWithResponses) CreateCredentialWithBodyWithResponse(ctx context.C
 }
 
 // CreateCredentialWithResponse Create a machine credential
+//
+// Creates a credential within the caller's durable boundary. A non-admin
+// installation issuer token may create App credentials, but cannot mint
+// Org or installation credentials.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18396,6 +21282,24 @@ func (c *ClientWithResponses) StreamInvocationWithResponse(ctx context.Context, 
 	return ParseStreamInvocationHTTPResponse(rsp)
 }
 
+// GetInvocationTimelineWithResponse Read the durable execution waterfall for one turn
+//
+// Assembles lifecycle waits, model calls, tool calls, nudges, and
+// compactions from one database snapshot. It contains timings and usage,
+// never prompts, responses, tool arguments, results, or error text. After
+// Session erasure it degrades to the retained facts-only skeleton.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/timeline (the `GetInvocationTimeline` operationId).
+func (c *ClientWithResponses) GetInvocationTimelineWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationTimelineHTTPResponse, error) {
+	rsp, err := c.GetInvocationTimeline(ctx, invocationID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInvocationTimelineHTTPResponse(rsp)
+}
+
 // ListToolCallsWithResponse Page through durable ToolCall execution records
 //
 // Returns ToolCalls in execution discovery order. Every execution mode is
@@ -18564,6 +21468,111 @@ func (c *ClientWithResponses) GetModelWithResponse(ctx context.Context, provider
 	return ParseGetModelHTTPResponse(rsp)
 }
 
+// ListOrgsWithResponse List registered orgs
+//
+// Returns the Orgs visible to the caller. Installation machine
+// credentials and admin issuer tokens see every Org; an Org-scoped
+// credential sees only its own Org. App-scoped credentials and
+// non-admin installation issuer tokens cannot list Orgs.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/orgs (the `ListOrgs` operationId).
+func (c *ClientWithResponses) ListOrgsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOrgsHTTPResponse, error) {
+	rsp, err := c.ListOrgs(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListOrgsHTTPResponse(rsp)
+}
+
+// RegisterOrgWithBodyWithResponse Register an org
+//
+// Registers a thin customer ownership boundary. This requires an
+// installation Operator credential or an admin issuer token. When
+// `external_ref` names an existing Org, the existing resource is
+// returned unchanged so register-on-first-login is race-safe and
+// idempotent.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
+func (c *ClientWithResponses) RegisterOrgWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterOrgHTTPResponse, error) {
+	rsp, err := c.RegisterOrgWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRegisterOrgHTTPResponse(rsp)
+}
+
+// RegisterOrgWithResponse Register an org
+//
+// Registers a thin customer ownership boundary. This requires an
+// installation Operator credential or an admin issuer token. When
+// `external_ref` names an existing Org, the existing resource is
+// returned unchanged so register-on-first-login is race-safe and
+// idempotent.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
+func (c *ClientWithResponses) RegisterOrgWithResponse(ctx context.Context, body RegisterOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterOrgHTTPResponse, error) {
+	rsp, err := c.RegisterOrg(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRegisterOrgHTTPResponse(rsp)
+}
+
+// GetOrgWithResponse Get one org
+//
+// Returns one registered Org. An Org-scoped caller receives `404` for
+// any other Org, so identifiers cannot be probed across the ownership
+// boundary. Installation issuer tokens require `admin: true`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/orgs/{org_id} (the `GetOrg` operationId).
+func (c *ClientWithResponses) GetOrgWithResponse(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*GetOrgHTTPResponse, error) {
+	rsp, err := c.GetOrg(ctx, orgID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgHTTPResponse(rsp)
+}
+
+// UpdateOrgWithBodyWithResponse Update an org
+//
+// Updates the Org's human-facing display name. Installation issuer
+// tokens require `admin: true`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
+func (c *ClientWithResponses) UpdateOrgWithBodyWithResponse(ctx context.Context, orgID OrgID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrgHTTPResponse, error) {
+	rsp, err := c.UpdateOrgWithBody(ctx, orgID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrgHTTPResponse(rsp)
+}
+
+// UpdateOrgWithResponse Update an org
+//
+// Updates the Org's human-facing display name. Installation issuer
+// tokens require `admin: true`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
+func (c *ClientWithResponses) UpdateOrgWithResponse(ctx context.Context, orgID OrgID, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgHTTPResponse, error) {
+	rsp, err := c.UpdateOrg(ctx, orgID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrgHTTPResponse(rsp)
+}
+
 // ListProviderKeysWithResponse List reusable provider key metadata
 //
 // Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
@@ -18681,8 +21690,8 @@ func (c *ClientWithResponses) RotateProviderKeyWithResponse(ctx context.Context,
 // many turns, when a model call last used it, and the combined token and
 // cost totals.
 //
-// Calculated from stored records each time you ask, not kept in a running
-// counter, so deleting Sessions lowers these numbers.
+// Calculated from retained model-call facts each time you ask, so
+// deleting Sessions does not lower historical numbers.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -18780,13 +21789,11 @@ func (c *ClientWithResponses) CreateSessionWithResponse(ctx context.Context, bod
 // comes back empty. Otherwise a request arriving mid-sweep creates a new
 // Session behind you.
 //
-// Two consequences to plan for. Past usage numbers shrink:
-// `GET /v1/usage/daily` is calculated from the records you just erased,
-// which is why it is operational visibility rather than a billing
-// ledger — bill from usage you recorded yourself when each turn
-// finished, keyed by Invocation ID. And the deleted turns' idempotency
-// keys become reusable, since deduplication only holds while the
-// original turn still exists.
+// Two consequences to plan for. Content-free Invocation, model-call,
+// and tool-call facts remain for usage reporting, with the Invocation
+// marked erased; prompts, responses, and tool payloads do not. The
+// deleted turns' idempotency keys become reusable, since deduplication
+// only holds while the original turn still exists.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19042,33 +22049,53 @@ func (c *ClientWithResponses) StreamSessionTranscriptWithResponse(ctx context.Co
 	return ParseStreamSessionTranscriptHTTPResponse(rsp)
 }
 
-// GetDailyUsageWithResponse Read daily usage rollups
-//
-// Totals your model usage by day, app, provider, and model, with token
-// counts and estimated cost. It counts every model call nvoken made on
-// your behalf, including the ones it makes to summarize long
-// conversations.
-//
-// These totals are calculated from the stored records each time you ask,
-// not kept in a running counter. That means deleting Sessions lowers
-// past numbers. Treat this as operational visibility into what your
-// agents are doing, not as a billing ledger — if you bill from usage,
-// record it yourself when each turn finishes, keyed by Invocation ID.
-//
-// A credential bound to an app sees only that app. Only an app-less
-// issuer token with the `admin` claim can read across every registered
-// app. App-less API credentials are installation-management credentials
-// and cannot read usage or other runtime data.
+// GetUsageBreakdownWithResponse Rank usage by one dimension
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /v1/usage/daily (the `GetDailyUsage` operationId).
-func (c *ClientWithResponses) GetDailyUsageWithResponse(ctx context.Context, params *GetDailyUsageParams, reqEditors ...RequestEditorFn) (*GetDailyUsageHTTPResponse, error) {
-	rsp, err := c.GetDailyUsage(ctx, params, reqEditors...)
+// Corresponds with GET /v1/usage/breakdown (the `GetUsageBreakdown` operationId).
+func (c *ClientWithResponses) GetUsageBreakdownWithResponse(ctx context.Context, params *GetUsageBreakdownParams, reqEditors ...RequestEditorFn) (*GetUsageBreakdownHTTPResponse, error) {
+	rsp, err := c.GetUsageBreakdown(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetDailyUsageHTTPResponse(rsp)
+	return ParseGetUsageBreakdownHTTPResponse(rsp)
+}
+
+// ListUsageRecordsWithResponse Export itemized model-call facts
+//
+// Stable ascending `(started_at, id)` order; JSON and CSV contain the same logical columns and never content.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/usage/records (the `ListUsageRecords` operationId).
+func (c *ClientWithResponses) ListUsageRecordsWithResponse(ctx context.Context, params *ListUsageRecordsParams, reqEditors ...RequestEditorFn) (*ListUsageRecordsHTTPResponse, error) {
+	rsp, err := c.ListUsageRecords(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListUsageRecordsHTTPResponse(rsp)
+}
+
+// GetUsageTimeseriesWithResponse Read usage totals and sparse time buckets
+//
+// Returns activity, model, tool, and model-cost metrics from retained,
+// content-free facts. The half-open window totals use exact distinct
+// counts and are not sums of bucket distincts. Grouping is bounded to ten
+// selected series plus `other`. Session deletion does not rewrite history.
+// An App credential is forced to its App, an Org credential to Apps
+// currently owned by its Org, and only an installation-scoped admin
+// issuer token can span every App.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
+func (c *ClientWithResponses) GetUsageTimeseriesWithResponse(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*GetUsageTimeseriesHTTPResponse, error) {
+	rsp, err := c.GetUsageTimeseries(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUsageTimeseriesHTTPResponse(rsp)
 }
 
 // ParseListAgentsHTTPResponse parses an HTTP response from a ListAgentsWithResponse call
@@ -19538,6 +22565,67 @@ func ParseUpdateAppHTTPResponse(rsp *http.Response) (*UpdateAppHTTPResponse, err
 			headers.RetryAfter = &value
 		}
 		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListBudgetsHTTPResponse parses an HTTP response from a ListBudgetsWithResponse call
+func ParseListBudgetsHTTPResponse(rsp *http.Response) (*ListBudgetsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListBudgetsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BudgetList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -20991,6 +24079,74 @@ func ParseStreamInvocationHTTPResponse(rsp *http.Response) (*StreamInvocationHTT
 	return response, nil
 }
 
+// ParseGetInvocationTimelineHTTPResponse parses an HTTP response from a GetInvocationTimelineWithResponse call
+func ParseGetInvocationTimelineHTTPResponse(rsp *http.Response) (*GetInvocationTimelineHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInvocationTimelineHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest InvocationTimeline
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListToolCallsHTTPResponse parses an HTTP response from a ListToolCallsWithResponse call
 func ParseListToolCallsHTTPResponse(rsp *http.Response) (*ListToolCallsHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -21423,6 +24579,309 @@ func ParseGetModelHTTPResponse(rsp *http.Response) (*GetModelHTTPResponse, error
 		response.Headers304 = &headers
 	case rsp.StatusCode == 429:
 		var headers GetModelHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListOrgsHTTPResponse parses an HTTP response from a ListOrgsWithResponse call
+func ParseListOrgsHTTPResponse(rsp *http.Response) (*ListOrgsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOrgsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers ListOrgsHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseRegisterOrgHTTPResponse parses an HTTP response from a RegisterOrgWithResponse call
+func ParseRegisterOrgHTTPResponse(rsp *http.Response) (*RegisterOrgHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RegisterOrgHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers RegisterOrgHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgHTTPResponse parses an HTTP response from a GetOrgWithResponse call
+func ParseGetOrgHTTPResponse(rsp *http.Response) (*GetOrgHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetOrgHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseUpdateOrgHTTPResponse parses an HTTP response from a UpdateOrgWithResponse call
+func ParseUpdateOrgHTTPResponse(rsp *http.Response) (*UpdateOrgHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateOrgHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers UpdateOrgHTTPResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
@@ -22692,22 +26151,160 @@ func ParseStreamSessionTranscriptHTTPResponse(rsp *http.Response) (*StreamSessio
 	return response, nil
 }
 
-// ParseGetDailyUsageHTTPResponse parses an HTTP response from a GetDailyUsageWithResponse call
-func ParseGetDailyUsageHTTPResponse(rsp *http.Response) (*GetDailyUsageHTTPResponse, error) {
+// ParseGetUsageBreakdownHTTPResponse parses an HTTP response from a GetUsageBreakdownWithResponse call
+func ParseGetUsageBreakdownHTTPResponse(rsp *http.Response) (*GetUsageBreakdownHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetDailyUsageHTTPResponse{
+	response := &GetUsageBreakdownHTTPResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest DailyUsage
+		var dest UsageBreakdown
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListUsageRecordsHTTPResponse parses an HTTP response from a ListUsageRecordsWithResponse call
+func ParseListUsageRecordsHTTPResponse(rsp *http.Response) (*ListUsageRecordsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListUsageRecordsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UsageRecords
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case rsp.StatusCode == 200:
+		// Content-type (text/csv) unsupported
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListUsageRecordsHTTPResponse200Headers
+		if values := rsp.Header.Values("X-Nvoken-Next-Cursor"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Nvoken-Next-Cursor", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XNvokenNextCursor = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetUsageTimeseriesHTTPResponse parses an HTTP response from a GetUsageTimeseriesWithResponse call
+func ParseGetUsageTimeseriesHTTPResponse(rsp *http.Response) (*GetUsageTimeseriesHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUsageTimeseriesHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UsageTimeseries
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -13,10 +13,10 @@ use crate::{apis::ResponseContent, models};
 use reqwest;
 use serde::{de::Error as _, Deserialize, Serialize};
 
-/// struct for typed errors of method [`get_daily_usage`]
+/// struct for typed errors of method [`get_usage_breakdown`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum GetDailyUsageError {
+pub enum GetUsageBreakdownError {
     Status400(models::ErrorResponse),
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
@@ -25,30 +25,78 @@ pub enum GetDailyUsageError {
     UnknownValue(serde_json::Value),
 }
 
-/// Totals your model usage by day, app, provider, and model, with token counts and estimated cost. It counts every model call nvoken made on your behalf, including the ones it makes to summarize long conversations.  These totals are calculated from the stored records each time you ask, not kept in a running counter. That means deleting Sessions lowers past numbers. Treat this as operational visibility into what your agents are doing, not as a billing ledger — if you bill from usage, record it yourself when each turn finishes, keyed by Invocation ID.  A credential bound to an app sees only that app. Only an app-less issuer token with the `admin` claim can read across every registered app. App-less API credentials are installation-management credentials and cannot read usage or other runtime data.
-pub async fn get_daily_usage(
+/// struct for typed errors of method [`get_usage_timeseries`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GetUsageTimeseriesError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`list_usage_records`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ListUsageRecordsError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+pub async fn get_usage_breakdown(
     configuration: &configuration::Configuration,
-    start_date: Option<chrono::NaiveDate>,
-    end_date: Option<chrono::NaiveDate>,
+    start_at: chrono::DateTime<chrono::FixedOffset>,
+    end_at: chrono::DateTime<chrono::FixedOffset>,
+    group_by: &str,
+    app_id: Option<&str>,
     tenant_key: Option<&str>,
     user_key: Option<&str>,
-    group_by: Option<&str>,
-) -> Result<models::DailyUsage, Error<GetDailyUsageError>> {
+    agent_id: Option<&str>,
+    provider: Option<&str>,
+    model: Option<&str>,
+    provider_key_source: Option<models::ProviderKeySource>,
+    provider_key_id: Option<&str>,
+    credential_family_id: Option<&str>,
+    call_kind: Option<models::ModelCallKind>,
+    tool_name: Option<&str>,
+    tool_mode: Option<models::ToolCallMode>,
+    sort: Option<&str>,
+    cursor: Option<&str>,
+    limit: Option<u32>,
+) -> Result<models::UsageBreakdown, Error<GetUsageBreakdownError>> {
     // add a prefix to parameters to efficiently prevent name collisions
-    let p_query_start_date = start_date;
-    let p_query_end_date = end_date;
+    let p_query_start_at = start_at;
+    let p_query_end_at = end_at;
+    let p_query_group_by = group_by;
+    let p_query_app_id = app_id;
     let p_query_tenant_key = tenant_key;
     let p_query_user_key = user_key;
-    let p_query_group_by = group_by;
+    let p_query_agent_id = agent_id;
+    let p_query_provider = provider;
+    let p_query_model = model;
+    let p_query_provider_key_source = provider_key_source;
+    let p_query_provider_key_id = provider_key_id;
+    let p_query_credential_family_id = credential_family_id;
+    let p_query_call_kind = call_kind;
+    let p_query_tool_name = tool_name;
+    let p_query_tool_mode = tool_mode;
+    let p_query_sort = sort;
+    let p_query_cursor = cursor;
+    let p_query_limit = limit;
 
-    let uri_str = format!("{}/v1/usage/daily", configuration.base_path);
+    let uri_str = format!("{}/v1/usage/breakdown", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    if let Some(ref param_value) = p_query_start_date {
-        req_builder = req_builder.query(&[("start_date", &param_value.to_string())]);
-    }
-    if let Some(ref param_value) = p_query_end_date {
-        req_builder = req_builder.query(&[("end_date", &param_value.to_string())]);
+    req_builder = req_builder.query(&[("start_at", &p_query_start_at.to_string())]);
+    req_builder = req_builder.query(&[("end_at", &p_query_end_at.to_string())]);
+    if let Some(ref param_value) = p_query_app_id {
+        req_builder = req_builder.query(&[("app_id", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_tenant_key {
         req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
@@ -56,8 +104,42 @@ pub async fn get_daily_usage(
     if let Some(ref param_value) = p_query_user_key {
         req_builder = req_builder.query(&[("user_key", &param_value.to_string())]);
     }
-    if let Some(ref param_value) = p_query_group_by {
-        req_builder = req_builder.query(&[("group_by", &param_value.to_string())]);
+    if let Some(ref param_value) = p_query_agent_id {
+        req_builder = req_builder.query(&[("agent_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_provider {
+        req_builder = req_builder.query(&[("provider", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_model {
+        req_builder = req_builder.query(&[("model", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_provider_key_source {
+        req_builder = req_builder.query(&[("provider_key_source", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_provider_key_id {
+        req_builder = req_builder.query(&[("provider_key_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_credential_family_id {
+        req_builder = req_builder.query(&[("credential_family_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_call_kind {
+        req_builder = req_builder.query(&[("call_kind", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_tool_name {
+        req_builder = req_builder.query(&[("tool_name", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_tool_mode {
+        req_builder = req_builder.query(&[("tool_mode", &param_value.to_string())]);
+    }
+    req_builder = req_builder.query(&[("group_by", &p_query_group_by.to_string())]);
+    if let Some(ref param_value) = p_query_sort {
+        req_builder = req_builder.query(&[("sort", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_cursor {
+        req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
     }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
@@ -81,12 +163,272 @@ pub async fn get_daily_usage(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::DailyUsage`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::DailyUsage`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::UsageBreakdown`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::UsageBreakdown`")))),
         }
     } else {
         let content = resp.text().await?;
-        let entity: Option<GetDailyUsageError> = serde_json::from_str(&content).ok();
+        let entity: Option<GetUsageBreakdownError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Returns activity, model, tool, and model-cost metrics from retained, content-free facts. The half-open window totals use exact distinct counts and are not sums of bucket distincts. Grouping is bounded to ten selected series plus `other`. Session deletion does not rewrite history. An App credential is forced to its App, an Org credential to Apps currently owned by its Org, and only an installation-scoped admin issuer token can span every App.
+pub async fn get_usage_timeseries(
+    configuration: &configuration::Configuration,
+    start_at: chrono::DateTime<chrono::FixedOffset>,
+    end_at: chrono::DateTime<chrono::FixedOffset>,
+    interval: models::UsageInterval,
+    timezone: Option<&str>,
+    app_id: Option<&str>,
+    tenant_key: Option<&str>,
+    user_key: Option<&str>,
+    agent_id: Option<&str>,
+    provider: Option<&str>,
+    model: Option<&str>,
+    provider_key_source: Option<models::ProviderKeySource>,
+    provider_key_id: Option<&str>,
+    credential_family_id: Option<&str>,
+    call_kind: Option<models::ModelCallKind>,
+    tool_name: Option<&str>,
+    tool_mode: Option<models::ToolCallMode>,
+    group_by: Option<&str>,
+    top: Option<u32>,
+    keys: Option<&str>,
+) -> Result<models::UsageTimeseries, Error<GetUsageTimeseriesError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_start_at = start_at;
+    let p_query_end_at = end_at;
+    let p_query_interval = interval;
+    let p_query_timezone = timezone;
+    let p_query_app_id = app_id;
+    let p_query_tenant_key = tenant_key;
+    let p_query_user_key = user_key;
+    let p_query_agent_id = agent_id;
+    let p_query_provider = provider;
+    let p_query_model = model;
+    let p_query_provider_key_source = provider_key_source;
+    let p_query_provider_key_id = provider_key_id;
+    let p_query_credential_family_id = credential_family_id;
+    let p_query_call_kind = call_kind;
+    let p_query_tool_name = tool_name;
+    let p_query_tool_mode = tool_mode;
+    let p_query_group_by = group_by;
+    let p_query_top = top;
+    let p_query_keys = keys;
+
+    let uri_str = format!("{}/v1/usage/timeseries", configuration.base_path);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    req_builder = req_builder.query(&[("start_at", &p_query_start_at.to_string())]);
+    req_builder = req_builder.query(&[("end_at", &p_query_end_at.to_string())]);
+    req_builder = req_builder.query(&[("interval", &p_query_interval.to_string())]);
+    if let Some(ref param_value) = p_query_timezone {
+        req_builder = req_builder.query(&[("timezone", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_app_id {
+        req_builder = req_builder.query(&[("app_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_tenant_key {
+        req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_user_key {
+        req_builder = req_builder.query(&[("user_key", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_agent_id {
+        req_builder = req_builder.query(&[("agent_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_provider {
+        req_builder = req_builder.query(&[("provider", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_model {
+        req_builder = req_builder.query(&[("model", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_provider_key_source {
+        req_builder = req_builder.query(&[("provider_key_source", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_provider_key_id {
+        req_builder = req_builder.query(&[("provider_key_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_credential_family_id {
+        req_builder = req_builder.query(&[("credential_family_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_call_kind {
+        req_builder = req_builder.query(&[("call_kind", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_tool_name {
+        req_builder = req_builder.query(&[("tool_name", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_tool_mode {
+        req_builder = req_builder.query(&[("tool_mode", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_group_by {
+        req_builder = req_builder.query(&[("group_by", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_top {
+        req_builder = req_builder.query(&[("top", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_keys {
+        req_builder = req_builder.query(&[("keys", &param_value.to_string())]);
+    }
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::UsageTimeseries`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::UsageTimeseries`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<GetUsageTimeseriesError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Stable ascending `(started_at, id)` order; JSON and CSV contain the same logical columns and never content.
+pub async fn list_usage_records(
+    configuration: &configuration::Configuration,
+    start_at: chrono::DateTime<chrono::FixedOffset>,
+    end_at: chrono::DateTime<chrono::FixedOffset>,
+    app_id: Option<&str>,
+    tenant_key: Option<&str>,
+    user_key: Option<&str>,
+    agent_id: Option<&str>,
+    provider: Option<&str>,
+    model: Option<&str>,
+    provider_key_source: Option<models::ProviderKeySource>,
+    provider_key_id: Option<&str>,
+    credential_family_id: Option<&str>,
+    call_kind: Option<models::ModelCallKind>,
+    tool_name: Option<&str>,
+    tool_mode: Option<models::ToolCallMode>,
+    cursor: Option<&str>,
+    limit: Option<u32>,
+    format: Option<&str>,
+) -> Result<models::UsageRecords, Error<ListUsageRecordsError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_start_at = start_at;
+    let p_query_end_at = end_at;
+    let p_query_app_id = app_id;
+    let p_query_tenant_key = tenant_key;
+    let p_query_user_key = user_key;
+    let p_query_agent_id = agent_id;
+    let p_query_provider = provider;
+    let p_query_model = model;
+    let p_query_provider_key_source = provider_key_source;
+    let p_query_provider_key_id = provider_key_id;
+    let p_query_credential_family_id = credential_family_id;
+    let p_query_call_kind = call_kind;
+    let p_query_tool_name = tool_name;
+    let p_query_tool_mode = tool_mode;
+    let p_query_cursor = cursor;
+    let p_query_limit = limit;
+    let p_query_format = format;
+
+    let uri_str = format!("{}/v1/usage/records", configuration.base_path);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    req_builder = req_builder.query(&[("start_at", &p_query_start_at.to_string())]);
+    req_builder = req_builder.query(&[("end_at", &p_query_end_at.to_string())]);
+    if let Some(ref param_value) = p_query_app_id {
+        req_builder = req_builder.query(&[("app_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_tenant_key {
+        req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_user_key {
+        req_builder = req_builder.query(&[("user_key", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_agent_id {
+        req_builder = req_builder.query(&[("agent_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_provider {
+        req_builder = req_builder.query(&[("provider", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_model {
+        req_builder = req_builder.query(&[("model", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_provider_key_source {
+        req_builder = req_builder.query(&[("provider_key_source", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_provider_key_id {
+        req_builder = req_builder.query(&[("provider_key_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_credential_family_id {
+        req_builder = req_builder.query(&[("credential_family_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_call_kind {
+        req_builder = req_builder.query(&[("call_kind", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_tool_name {
+        req_builder = req_builder.query(&[("tool_name", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_tool_mode {
+        req_builder = req_builder.query(&[("tool_mode", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_cursor {
+        req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_format {
+        req_builder = req_builder.query(&[("format", &param_value.to_string())]);
+    }
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::UsageRecords`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::UsageRecords`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ListUsageRecordsError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
