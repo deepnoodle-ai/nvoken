@@ -124,7 +124,7 @@ Reasoning is typed and fail closed:
 
 ```ts
 const execution = {
-  model: { provider: "anthropic", id: "claude-opus-4-8" },
+  model: { provider: "anthropic", id: "claude-opus-5" },
   reasoning: { effort: "high" as const },
 };
 ```

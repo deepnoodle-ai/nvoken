@@ -215,7 +215,7 @@ are intentionally absent; `limits.max_output_tokens` is the output guardrail.
 Reasoning is typed and fail closed:
 
 ```rust
-let request = InvokeRequest::new("support", "hello", Model::new("anthropic", "claude-opus-4-8"))
+let request = InvokeRequest::new("support", "hello", Model::new("anthropic", "claude-opus-5"))
     .reasoning(Reasoning {
         effort: Some(ReasoningEffort::High),
         budget_tokens: None,
