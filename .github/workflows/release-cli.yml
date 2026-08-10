@@ -74,11 +74,22 @@ jobs:
             gh release upload "${TAG}" dist/* --clobber
             exit 0
           fi
-          args=()
+          previous_tag=""
+          while IFS= read -r candidate; do
+            if [ "${candidate}" != "${TAG}" ]; then
+              previous_tag="${candidate}"
+              break
+            fi
+          done < <(git tag --merged HEAD --list 'v*' --sort=-version:refname)
+
+          args=(--generate-notes)
           if [ "${PRERELEASE}" = "true" ]; then args+=(--prerelease); fi
+          if [ -n "${previous_tag}" ]; then
+            echo "generating notes after ${previous_tag}"
+            args+=(--notes-start-tag "${previous_tag}")
+          fi
           gh release create "${TAG}" \
             --title "nvoken CLI v${VERSION}" \
-            --generate-notes \
             "${args[@]}" \
             dist/*
       - name: Update Homebrew tap
