@@ -541,7 +541,7 @@ async def test_shared_fault_server_semantics() -> None:
         assert exact_model.pricing.status == "unpriced"
 
         fixture = json.loads(
-            (Path(__file__).parents[2] / "conformance/fixtures/shared-usage-budgets-v1.json").read_text()
+            (Path(__file__).parents[2] / "conformance/fixtures/shared-budgets-v1.json").read_text()
         )
         assert fixture["scopes"] == [
             "app", "tenant", "user", "agent", "provider_key", "credential"
