@@ -43,9 +43,13 @@ info:
     authentication presentation only and does not create a user identity model
     in nvoken.
 
-    - Runtime credentials may call every Runtime operation and GET /v1/identity.
-    - Viewer credentials may call Runtime reads and GET /v1/identity.
-    - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.
+    - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity.
+    - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity.
+    - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.
+    - Org-scoped Viewer and Operator credentials are management and reporting
+      identities only. They resolve no tenant and cannot perform Runtime
+      operations; Operators can register and manage Apps and their App
+      credentials, while Viewers have read-only access.
 
     Tenant, Session, operation, and expiry constraints only narrow these grants.
 
@@ -98,6 +102,8 @@ tags:
       the model.
   - name: Apps
     description: Host applications using nvoken as their agentic backend.
+  - name: Orgs
+    description: Thin customer ownership boundaries containing one or more Apps.
   - name: Usage
     description: Token and cost totals, calculated from the stored record of what actually ran.
   - name: Identity
@@ -105,16 +111,131 @@ tags:
       Durable machine credential lifecycle and caller introspection. These
       credentials authenticate every other operation in this contract.
 paths:
+  /v1/orgs:
+    get:
+      tags: [Orgs]
+      operationId: listOrgs
+      summary: List registered orgs
+      description: |
+        Returns the Orgs visible to the caller. Installation machine
+        credentials and admin issuer tokens see every Org; an Org-scoped
+        credential sees only its own Org. App-scoped credentials and
+        non-admin installation issuer tokens cannot list Orgs.
+      responses:
+        "200":
+          description: The Orgs visible to the authenticated credential.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgList"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+    post:
+      tags: [Orgs]
+      operationId: registerOrg
+      summary: Register an org
+      description: |
+        Registers a thin customer ownership boundary. This requires an
+        installation Operator credential or an admin issuer token. When
+        `external_ref` names an existing Org, the existing resource is
+        returned unchanged so register-on-first-login is race-safe and
+        idempotent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterOrgRequest"
+      responses:
+        "200":
+          description: The existing Org matched by `external_ref`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        "201":
+          description: The newly registered Org.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /v1/orgs/{org_id}:
+    get:
+      tags: [Orgs]
+      operationId: getOrg
+      summary: Get one org
+      description: |
+        Returns one registered Org. An Org-scoped caller receives `404` for
+        any other Org, so identifiers cannot be probed across the ownership
+        boundary. Installation issuer tokens require `admin: true`.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/OrgID"
+      responses:
+        "200":
+          description: The requested Org.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+    patch:
+      tags: [Orgs]
+      operationId: updateOrg
+      summary: Update an org
+      description: |
+        Updates the Org's human-facing display name. Installation issuer
+        tokens require `admin: true`.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/OrgID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrgRequest"
+      responses:
+        "200":
+          description: The updated Org.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
   /v1/apps:
     get:
       tags: [Apps]
       operationId: listApps
       summary: List registered apps
       description: |
-        Returns the apps this credential can see. A credential associated with
-        an app sees only that app; a credential with no app association sees
-        every registered app. An exact `external_ref` filter narrows either
-        view to apps owned by that reference.
+        Returns the Apps this credential can see. An App-scoped credential
+        sees only that App, an Org-scoped credential sees the Apps contained
+        by its Org, and an installation credential sees every registered App.
+        An exact `external_ref` filter narrows that visible set during the
+        staged console migration.
       parameters:
         - name: external_ref
           in: query
@@ -148,11 +269,13 @@ paths:
         scope of each delivery. Registration is unavailable when the service's
         encryption keyring is not configured.
 
-        Registration is installation management rather than work inside an app,
-        so it requires a credential that is *not* associated with an app; a
-        credential bound to one app cannot mint siblings for itself. Names
-        identify apps and are unique, so re-registering an existing name is
-        rejected rather than returning the existing app.
+        Registration requires an Org or installation Operator credential; an
+        App-scoped credential cannot mint siblings. Org callers always create
+        Apps in their own Org and may omit `org_id`. Installation machine
+        credentials may choose any registered Org or temporarily leave
+        ownership unset during the staged console migration. An installation
+        issuer token requires `admin: true` to assign an Org. Names identify
+        Apps and are unique, so re-registering an existing name is rejected.
       requestBody:
         required: true
         content:
@@ -179,9 +302,8 @@ paths:
       operationId: getApp
       summary: Get one app
       description: |
-        Returns one registered app. A credential associated with a different
-        app receives `404`, so an app identifier cannot be probed across the
-        isolation boundary.
+        Returns one registered App. App- and Org-scoped credentials receive
+        `404` for Apps outside their durable containment boundary.
       parameters:
         - name: app_id
           in: path
@@ -205,9 +327,11 @@ paths:
       operationId: updateApp
       summary: Update an app
       description: |
-        Updates an app's mutable presentation fields. The unique `name` and the
-        ownership-grounding `external_ref` cannot be changed. A credential
-        associated with a different app receives `404`.
+        Updates an App's display name. An installation administrator may also
+        transfer the App to another registered Org by changing `org_id`.
+        Org- and App-scoped callers receive `404` outside their containment
+        boundary, and cannot move an App. The unique `name` and transitional
+        `external_ref` cannot be changed.
       parameters:
         - name: app_id
           in: path
@@ -965,6 +1089,30 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
+  /v1/invocations/{invocation_id}/timeline:
+    parameters:
+      - $ref: "#/components/parameters/InvocationID"
+    get:
+      tags: [Invocations]
+      operationId: getInvocationTimeline
+      summary: Read the durable execution waterfall for one turn
+      description: |
+        Assembles lifecycle waits, model calls, tool calls, nudges, and
+        compactions from one database snapshot. It contains timings and usage,
+        never prompts, responses, tool arguments, results, or error text. After
+        Session erasure it degrades to the retained facts-only skeleton.
+      responses:
+        "200":
+          description: Ordered durable execution steps.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvocationTimeline" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /v1/invocations/{invocation_id}/tool-calls:
     parameters:
       - $ref: "#/components/parameters/InvocationID"
@@ -1468,6 +1616,44 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
   /v1/budgets:
+    get:
+      tags: [Budgets]
+      operationId: listBudgets
+      summary: List Budget windows
+      description: Returns cursor-paginated Budget guardrails inside the authenticated App and tenant constraint.
+      parameters:
+        - name: scope
+          in: query
+          schema: { $ref: "#/components/schemas/BudgetScope" }
+        - { $ref: "#/components/parameters/TenantKeyFilter" }
+        - { $ref: "#/components/parameters/UserKeyFilter" }
+        - { $ref: "#/components/parameters/UsageAgentIDFilter" }
+        - { $ref: "#/components/parameters/UsageProviderKeyIDFilter" }
+        - { $ref: "#/components/parameters/UsageCredentialFamilyIDFilter" }
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, upcoming, expired, removed] }
+        - name: window_start
+          in: query
+          schema: { type: string, format: date-time }
+        - name: window_end
+          in: query
+          schema: { type: string, format: date-time }
+        - { $ref: "#/components/parameters/Cursor" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Budget windows ordered newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BudgetList" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
     post:
       tags: [Budgets]
       operationId: createBudget
@@ -1727,8 +1913,8 @@ paths:
         many turns, when a model call last used it, and the combined token and
         cost totals.
 
-        Calculated from stored records each time you ask, not kept in a running
-        counter, so deleting Sessions lowers these numbers.
+        Calculated from retained model-call facts each time you ask, so
+        deleting Sessions does not lower historical numbers.
       responses:
         "200":
           description: Aggregated usage attributed to the provider key.
@@ -1741,69 +1927,145 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
-  /v1/usage/daily:
+  /v1/usage/timeseries:
     get:
       tags: [Usage]
-      operationId: getDailyUsage
-      summary: Read daily usage rollups
+      operationId: getUsageTimeseries
+      summary: Read usage totals and sparse time buckets
       description: |
-        Totals your model usage by day, app, provider, and model, with token
-        counts and estimated cost. It counts every model call nvoken made on
-        your behalf, including the ones it makes to summarize long
-        conversations.
-
-        These totals are calculated from the stored records each time you ask,
-        not kept in a running counter. That means deleting Sessions lowers
-        past numbers. Treat this as operational visibility into what your
-        agents are doing, not as a billing ledger — if you bill from usage,
-        record it yourself when each turn finishes, keyed by Invocation ID.
-
-        A credential bound to an app sees only that app. Only an app-less
-        issuer token with the `admin` claim can read across every registered
-        app. App-less API credentials are installation-management credentials
-        and cannot read usage or other runtime data.
+        Returns activity, model, tool, and model-cost metrics from retained,
+        content-free facts. The half-open window totals use exact distinct
+        counts and are not sums of bucket distincts. Grouping is bounded to ten
+        selected series plus `other`. Session deletion does not rewrite history.
+        An App credential is forced to its App, an Org credential to Apps
+        currently owned by its Org, and only an installation-scoped admin
+        issuer token can span every App.
       parameters:
-        - name: start_date
+        - { $ref: "#/components/parameters/UsageStartAt" }
+        - { $ref: "#/components/parameters/UsageEndAt" }
+        - name: interval
           in: query
-          required: false
-          schema:
-            type: string
-            format: date
-          description: Inclusive first UTC day. Defaults to 29 days before `end_date`.
-        - name: end_date
+          required: true
+          schema: { $ref: "#/components/schemas/UsageInterval" }
+        - name: timezone
           in: query
-          required: false
-          schema:
-            type: string
-            format: date
-          description: Inclusive last UTC day. Defaults to the current UTC day.
-        - name: tenant_key
-          in: query
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 255
-          description: Return only usage attributed to this host tenant.
-        - name: user_key
-          in: query
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 255
-          description: Return only usage attributed to this host end user.
+          schema: { type: string, default: UTC }
+          description: IANA timezone used for bucket boundaries.
+        - { $ref: "#/components/parameters/UsageAppIDFilter" }
+        - { $ref: "#/components/parameters/TenantKeyFilter" }
+        - { $ref: "#/components/parameters/UserKeyFilter" }
+        - { $ref: "#/components/parameters/UsageAgentIDFilter" }
+        - { $ref: "#/components/parameters/UsageProviderFilter" }
+        - { $ref: "#/components/parameters/UsageModelFilter" }
+        - { $ref: "#/components/parameters/UsageProviderKeySourceFilter" }
+        - { $ref: "#/components/parameters/UsageProviderKeyIDFilter" }
+        - { $ref: "#/components/parameters/UsageCredentialFamilyIDFilter" }
+        - { $ref: "#/components/parameters/UsageCallKindFilter" }
+        - { $ref: "#/components/parameters/UsageToolNameFilter" }
+        - { $ref: "#/components/parameters/UsageToolModeFilter" }
         - name: group_by
           in: query
-          schema:
-            type: string
-            enum: [tenant_key]
-          description: Split otherwise identical buckets by host tenant.
+          schema: { type: string, enum: [tenant_key, agent_id, model, tool_name] }
+        - name: top
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10 }
+        - name: keys
+          in: query
+          schema: { type: string }
+          description: Comma-separated explicit series keys, maximum ten; mutually exclusive with top.
       responses:
         "200":
-          description: Daily usage buckets ordered by day, app, provider, and model.
+          description: Normalized window, exact totals, and sparse buckets.
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/DailyUsage"
+              schema: { $ref: "#/components/schemas/UsageTimeseries" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/usage/breakdown:
+    get:
+      tags: [Usage]
+      operationId: getUsageBreakdown
+      summary: Rank usage by one dimension
+      parameters:
+        - { $ref: "#/components/parameters/UsageStartAt" }
+        - { $ref: "#/components/parameters/UsageEndAt" }
+        - { $ref: "#/components/parameters/UsageAppIDFilter" }
+        - { $ref: "#/components/parameters/TenantKeyFilter" }
+        - { $ref: "#/components/parameters/UserKeyFilter" }
+        - { $ref: "#/components/parameters/UsageAgentIDFilter" }
+        - { $ref: "#/components/parameters/UsageProviderFilter" }
+        - { $ref: "#/components/parameters/UsageModelFilter" }
+        - { $ref: "#/components/parameters/UsageProviderKeySourceFilter" }
+        - { $ref: "#/components/parameters/UsageProviderKeyIDFilter" }
+        - { $ref: "#/components/parameters/UsageCredentialFamilyIDFilter" }
+        - { $ref: "#/components/parameters/UsageCallKindFilter" }
+        - { $ref: "#/components/parameters/UsageToolNameFilter" }
+        - { $ref: "#/components/parameters/UsageToolModeFilter" }
+        - name: group_by
+          in: query
+          required: true
+          schema: { type: string, enum: [app_id, tenant_key, user_key, agent_id, provider, model, tool_name, provider_key_source, provider_key_id, credential_family_id, failure_class] }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [model_cost, invocations, model_calls, tool_calls], default: model_cost }
+        - { $ref: "#/components/parameters/Cursor" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Ranked rows and totals over the full filtered result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageBreakdown" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/usage/records:
+    get:
+      tags: [Usage]
+      operationId: listUsageRecords
+      summary: Export itemized model-call facts
+      description: Stable ascending `(started_at, id)` order; JSON and CSV contain the same logical columns and never content.
+      parameters:
+        - { $ref: "#/components/parameters/UsageStartAt" }
+        - { $ref: "#/components/parameters/UsageEndAt" }
+        - { $ref: "#/components/parameters/UsageAppIDFilter" }
+        - { $ref: "#/components/parameters/TenantKeyFilter" }
+        - { $ref: "#/components/parameters/UserKeyFilter" }
+        - { $ref: "#/components/parameters/UsageAgentIDFilter" }
+        - { $ref: "#/components/parameters/UsageProviderFilter" }
+        - { $ref: "#/components/parameters/UsageModelFilter" }
+        - { $ref: "#/components/parameters/UsageProviderKeySourceFilter" }
+        - { $ref: "#/components/parameters/UsageProviderKeyIDFilter" }
+        - { $ref: "#/components/parameters/UsageCredentialFamilyIDFilter" }
+        - { $ref: "#/components/parameters/UsageCallKindFilter" }
+        - { $ref: "#/components/parameters/UsageToolNameFilter" }
+        - { $ref: "#/components/parameters/UsageToolModeFilter" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, csv], default: json }
+      responses:
+        "200":
+          description: One page of retained call facts.
+          headers:
+            X-Nvoken-Next-Cursor:
+              description: Continuation cursor for CSV responses.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageRecords" }
+            text/csv:
+              schema: { type: string }
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -2175,13 +2437,11 @@ paths:
         comes back empty. Otherwise a request arriving mid-sweep creates a new
         Session behind you.
 
-        Two consequences to plan for. Past usage numbers shrink:
-        `GET /v1/usage/daily` is calculated from the records you just erased,
-        which is why it is operational visibility rather than a billing
-        ledger — bill from usage you recorded yourself when each turn
-        finished, keyed by Invocation ID. And the deleted turns' idempotency
-        keys become reusable, since deduplication only holds while the
-        original turn still exists.
+        Two consequences to plan for. Content-free Invocation, model-call,
+        and tool-call facts remain for usage reporting, with the Invocation
+        marked erased; prompts, responses, and tool payloads do not. The
+        deleted turns' idempotency keys become reusable, since deduplication
+        only holds while the original turn still exists.
       responses:
         "204":
           description: The Session and its subtree no longer exist.
@@ -2491,6 +2751,10 @@ paths:
       tags: [Identity]
       operationId: createCredential
       summary: Create a machine credential
+      description: |
+        Creates a credential within the caller's durable boundary. A non-admin
+        installation issuer token may create App credentials, but cannot mint
+        Org or installation credentials.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -2713,9 +2977,11 @@ components:
         `CONSOLE_ISSUER_PUBLIC_KEYS` is configured, a JWT with `alg: EdDSA`,
         a known `kid`, `iss: nvoken-console`, `aud: nvoken`, and required
         `iat`, `exp`, `scope`, `profile`, and `sub` claims. `scope` is `app`
-        (with `app_id`) or `installation`; `profile` is `operator` or
-        `viewer`; `exp - iat` may not exceed five minutes. An app token's
-        `sub` must equal the app's `external_ref` unless `admin: true`.
+        (with `app_id` and `org_id`), `org` (with `org_id`), or
+        `installation`; `profile` is `operator` or `viewer`; `exp - iat` may
+        not exceed five minutes. The subject identifies the human for
+        attribution only. App authorization compares the asserted `org_id`
+        with the App's durable owner; `admin: true` retains its bypass.
   headers:
     ETag:
       description: Strong validator for this exact JSON representation.
@@ -2841,7 +3107,121 @@ components:
         type: string
         minLength: 1
         maxLength: 255
+    UsageStartAt:
+      name: start_at
+      in: query
+      required: true
+      description: Inclusive RFC 3339 start of the half-open reporting window.
+      schema: { type: string, format: date-time }
+    UsageEndAt:
+      name: end_at
+      in: query
+      required: true
+      description: Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.
+      schema: { type: string, format: date-time }
+    UsageAppIDFilter:
+      name: app_id
+      in: query
+      description: Exact App within the caller's App, Org, or installation reporting scope.
+      schema: { $ref: "#/components/schemas/AppID" }
+    UsageAgentIDFilter:
+      name: agent_id
+      in: query
+      schema: { $ref: "#/components/schemas/AgentID" }
+    UsageProviderFilter:
+      name: provider
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 255 }
+    UsageModelFilter:
+      name: model
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 255 }
+    UsageProviderKeySourceFilter:
+      name: provider_key_source
+      in: query
+      schema: { $ref: "#/components/schemas/ProviderKeySource" }
+    UsageProviderKeyIDFilter:
+      name: provider_key_id
+      in: query
+      schema: { $ref: "#/components/schemas/ProviderKeyID" }
+    UsageCredentialFamilyIDFilter:
+      name: credential_family_id
+      in: query
+      schema: { $ref: "#/components/schemas/CredentialID" }
+    UsageCallKindFilter:
+      name: call_kind
+      in: query
+      schema: { $ref: "#/components/schemas/ModelCallKind" }
+    UsageToolNameFilter:
+      name: tool_name
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 255 }
+    UsageToolModeFilter:
+      name: tool_mode
+      in: query
+      schema: { $ref: "#/components/schemas/ToolCallMode" }
   schemas:
+    OrgID:
+      type: string
+      minLength: 1
+      description: Opaque identifier with the public `org_` prefix. Treat the body as opaque.
+    Org:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, external_ref, created_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/OrgID"
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Human-facing label for the customer Org.
+        external_ref:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 255
+          description: Optional unique identity-provider Org identifier.
+        created_at:
+          type: string
+          format: date-time
+      description: |
+        Thin customer ownership boundary. Membership, roles, invitations,
+        policy, and runtime state deliberately live elsewhere.
+    OrgList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Org"
+    RegisterOrgRequest:
+      type: object
+      additionalProperties: false
+      required: [display_name]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        external_ref:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: |
+            Optional unique identity-provider Org identifier. Reusing it
+            returns the existing Org unchanged.
+    UpdateOrgRequest:
+      type: object
+      additionalProperties: false
+      required: [display_name]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 255
     AgentID:
       type: string
       minLength: 1
@@ -2867,11 +3247,18 @@ components:
     App:
       type: object
       additionalProperties: false
-      required: [id, name, external_ref, display_name, created_at]
+      required: [id, org_id, name, external_ref, display_name, created_at]
       properties:
         id:
           $ref: "#/components/schemas/AppID"
           description: The generated nvoken app identifier.
+        org_id:
+          oneOf:
+            - $ref: "#/components/schemas/OrgID"
+            - type: "null"
+          description: |
+            Durable owning Org. Nullable only during the staged console
+            migration and tightened after every existing App is claimed.
         name:
           type: string
           description: The unique host-chosen name for this app.
@@ -2879,8 +3266,9 @@ components:
           type: [string, "null"]
           maxLength: 255
           description: |
-            Opaque owner reference used to ground console issuer tokens. One
-            reference may own many apps.
+            Transitional console-owner reference retained only to stamp
+            existing Apps into Orgs during rollout. It is not an authorization
+            boundary and is removed by the gated cleanup migration.
         display_name:
           type: [string, "null"]
           maxLength: 255
@@ -2948,6 +3336,12 @@ components:
           description: |
             The unique name identifying this app. Registering a name that
             already exists is rejected.
+        org_id:
+          $ref: "#/components/schemas/OrgID"
+          description: |
+            Owning Org. Org-scoped callers may omit this to use their own Org
+            and cannot name another. Installation callers may name any
+            registered Org or omit it during the staged migration.
         external_ref:
           type: string
           minLength: 1
@@ -2961,13 +3355,18 @@ components:
     UpdateAppRequest:
       type: object
       additionalProperties: false
-      required: [display_name]
+      minProperties: 1
       properties:
         display_name:
           type: string
           minLength: 1
           maxLength: 255
           description: New human-facing label for the app.
+        org_id:
+          $ref: "#/components/schemas/OrgID"
+          description: |
+            New owning Org. Supplying this field transfers ownership and is
+            restricted to installation administrators.
     AgentList:
       type: object
       additionalProperties: false
@@ -3802,6 +4201,16 @@ components:
         nvoken's own running tally for deciding when to stop work — deleting
         transcripts does not give quota back, and these numbers are an
         estimate for enforcement, not a bill.
+    BudgetList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Budget" }
+        next_cursor:
+          type: [string, "null"]
     BudgetBlock:
       type: object
       additionalProperties: false
@@ -3964,87 +4373,235 @@ components:
             - $ref: "#/components/schemas/ModelUsage"
             - type: "null"
           description: Summed checkpoint usage, null before the first model call.
-    DailyUsage:
+    UsageInterval:
+      type: string
+      enum: [day, week, month]
+    ModelCallKind:
+      type: string
+      enum: [generation, compaction, direct]
+    ModelCallFactStatus:
+      type: string
+      enum: [prepared, started, settled, not_started, uncertain]
+    ProviderKeySource:
+      type: string
+      enum: [caller_ephemeral, app_byok, tenant_byok, platform, config_byok]
+    Money:
       type: object
       additionalProperties: false
-      required: [start_date, end_date, items]
+      required: [amount, currency]
       properties:
-        start_date:
+        amount:
           type: string
-          format: date
-          description: Inclusive first UTC day of the served window.
-        end_date:
+          pattern: '^-?[0-9]+\.[0-9]{6}$'
+          description: Exact decimal amount with six fractional digits.
+        currency:
           type: string
-          format: date
-          description: Inclusive last UTC day of the served window.
+          const: USD
+    ActivityMetrics:
+      type: object
+      additionalProperties: false
+      required: [invocations, completed_invocations, incomplete_invocations, failed_invocations, cancelled_invocations, open_invocations, active_users, unattributed_invocations, active_tenants, active_agents]
+      properties:
+        invocations: { type: integer, minimum: 0 }
+        completed_invocations: { type: integer, minimum: 0 }
+        incomplete_invocations: { type: integer, minimum: 0 }
+        failed_invocations: { type: integer, minimum: 0 }
+        cancelled_invocations: { type: integer, minimum: 0 }
+        open_invocations: { type: integer, minimum: 0 }
+        active_users: { type: integer, minimum: 0, description: Exact distinct non-null user identities over this row's window. }
+        unattributed_invocations: { type: integer, minimum: 0 }
+        active_tenants: { type: integer, minimum: 0 }
+        active_agents: { type: integer, minimum: 0 }
+    ModelMetrics:
+      type: object
+      additionalProperties: false
+      required: [model_calls, reported_model_calls, failed_model_calls, runtime_steps, generation_calls, compaction_calls, direct_calls, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, reasoning_tokens]
+      properties:
+        model_calls: { type: integer, minimum: 0 }
+        reported_model_calls: { type: integer, minimum: 0 }
+        failed_model_calls: { type: integer, minimum: 0 }
+        runtime_steps: { type: integer, minimum: 0, description: Model results durably committed to an Invocation transcript. }
+        generation_calls: { type: integer, minimum: 0 }
+        compaction_calls: { type: integer, minimum: 0 }
+        direct_calls: { type: integer, minimum: 0 }
+        input_tokens: { type: integer, minimum: 0 }
+        output_tokens: { type: integer, minimum: 0 }
+        cache_creation_input_tokens: { type: integer, minimum: 0 }
+        cache_read_input_tokens: { type: integer, minimum: 0 }
+        reasoning_tokens: { type: integer, minimum: 0 }
+    ToolMetrics:
+      type: object
+      additionalProperties: false
+      required: [tool_calls, completed_tool_calls, failed_tool_calls, cancelled_tool_calls]
+      properties:
+        tool_calls: { type: integer, minimum: 0 }
+        completed_tool_calls: { type: integer, minimum: 0 }
+        failed_tool_calls: { type: integer, minimum: 0 }
+        cancelled_tool_calls: { type: integer, minimum: 0 }
+    CostMetrics:
+      type: object
+      additionalProperties: false
+      required: [model_cost, cost_coverage, priced_model_calls, unpriced_model_calls, uncertain_model_calls, unbounded_uncertain_model_calls, max_cost_at_risk]
+      properties:
+        model_cost: { $ref: "#/components/schemas/Money" }
+        cost_coverage: { type: string, enum: [complete, partial, none, not_applicable] }
+        priced_model_calls: { type: integer, minimum: 0 }
+        unpriced_model_calls: { type: integer, minimum: 0 }
+        uncertain_model_calls: { type: integer, minimum: 0 }
+        unbounded_uncertain_model_calls: { type: integer, minimum: 0 }
+        max_cost_at_risk: { $ref: "#/components/schemas/Money" }
+    UsageMetrics:
+      type: object
+      additionalProperties: false
+      required: [activity, model, tools, cost]
+      properties:
+        activity: { $ref: "#/components/schemas/ActivityMetrics" }
+        model: { $ref: "#/components/schemas/ModelMetrics" }
+        tools: { $ref: "#/components/schemas/ToolMetrics" }
+        cost: { $ref: "#/components/schemas/CostMetrics" }
+    UsageTimeseriesBucket:
+      type: object
+      additionalProperties: false
+      required: [start_at, end_at, metrics]
+      properties:
+        start_at: { type: string, format: date-time }
+        end_at: { type: string, format: date-time }
+        series_key: { type: string }
+        metrics: { $ref: "#/components/schemas/UsageMetrics" }
+    UsageTimeseries:
+      type: object
+      additionalProperties: false
+      required: [start_at, end_at, interval, timezone, totals, buckets]
+      properties:
+        start_at: { type: string, format: date-time }
+        end_at: { type: string, format: date-time }
+        interval: { $ref: "#/components/schemas/UsageInterval" }
+        timezone: { type: string }
+        group_by: { type: string, enum: [tenant_key, agent_id, model, tool_name] }
+        totals: { $ref: "#/components/schemas/UsageMetrics" }
+        buckets:
+          type: array
+          items: { $ref: "#/components/schemas/UsageTimeseriesBucket" }
+    UsageBreakdownItem:
+      type: object
+      additionalProperties: false
+      required: [key, metrics]
+      properties:
+        key: { type: string }
+        metrics: { $ref: "#/components/schemas/UsageMetrics" }
+    UsageBreakdown:
+      type: object
+      additionalProperties: false
+      required: [start_at, end_at, group_by, sort, totals, items, next_cursor]
+      properties:
+        start_at: { type: string, format: date-time }
+        end_at: { type: string, format: date-time }
+        group_by: { type: string }
+        sort: { type: string }
+        totals: { $ref: "#/components/schemas/UsageMetrics" }
         items:
           type: array
-          items:
-            $ref: "#/components/schemas/DailyUsageBucket"
-          description: Buckets ordered by day, app, provider, and model. Days with no usage produce no bucket.
-    DailyUsageBucket:
+          items: { $ref: "#/components/schemas/UsageBreakdownItem" }
+        next_cursor: { type: [string, "null"] }
+    ModelCallRecord:
       type: object
       additionalProperties: false
-      required:
-        [
-          day,
-          app_id,
-          provider,
-          model,
-          invocations,
-          model_calls,
-          input_tokens,
-          output_tokens,
-          cache_creation_input_tokens,
-          cache_read_input_tokens,
-          reasoning_tokens,
-          estimated_cost_usd,
-        ]
+      required: [id, invocation_id, session_id, app_id, tenant_key, user_key, agent_id, credential_family_id, provider_key_source, provider_key_id, provider_key_version_id, call_kind, call_ordinal, lease_attempt, provider_attempt_ordinal, requested_provider, requested_model, served_provider, served_model, status, outcome, failure_class, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, reasoning_tokens, model_cost, cost_coverage, max_cost_at_risk, pricing_version, created_at, started_at, first_output_at, settled_at]
       properties:
-        day:
-          type: string
-          format: date
-          description: UTC calendar day of the bucket.
-        app_id:
-          $ref: "#/components/schemas/AppID"
-          description: The app whose tenants produced the usage.
-        tenant_key:
-          oneOf:
-            - type: string
-            - type: "null"
-          description: Host tenant group when `group_by=tenant_key`; omitted otherwise.
-        provider:
-          type: string
-          description: Provider from checkpoint provenance; empty when provenance omitted it.
-        model:
-          type: string
-          description: Served model from provenance, falling back to the requested model.
-        invocations:
-          type: integer
-          minimum: 0
-          description: Distinct Invocations with at least one model call in the bucket. Compaction calls carry no Invocation.
-        model_calls:
-          type: integer
-          minimum: 0
-          description: Individual provider calls in the bucket.
-        input_tokens:
-          type: integer
-          minimum: 0
-        output_tokens:
-          type: integer
-          minimum: 0
-        cache_creation_input_tokens:
-          type: integer
-          minimum: 0
-        cache_read_input_tokens:
-          type: integer
-          minimum: 0
-        reasoning_tokens:
-          type: integer
-          minimum: 0
-        estimated_cost_usd:
-          type: number
-          description: Summed list-price estimate in USD; zero when every call in the bucket was unpriced.
+        id: { type: string, description: Opaque model-call fact ID with the mcall_ prefix. }
+        invocation_id: { type: [string, "null"] }
+        session_id: { type: [string, "null"] }
+        app_id: { $ref: "#/components/schemas/AppID" }
+        tenant_key: { type: [string, "null"] }
+        user_key: { type: [string, "null"], description: Null after user erasure. }
+        agent_id: { type: [string, "null"] }
+        credential_family_id: { type: [string, "null"] }
+        provider_key_source: { $ref: "#/components/schemas/ProviderKeySource" }
+        provider_key_id: { type: [string, "null"] }
+        provider_key_version_id: { type: [string, "null"] }
+        call_kind: { $ref: "#/components/schemas/ModelCallKind" }
+        call_ordinal: { type: integer, minimum: 1 }
+        lease_attempt: { type: integer, minimum: 1 }
+        provider_attempt_ordinal: { type: integer, minimum: 1 }
+        requested_provider: { type: string }
+        requested_model: { type: string }
+        served_provider: { type: [string, "null"] }
+        served_model: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/ModelCallFactStatus" }
+        outcome: { type: [string, "null"], enum: [succeeded, failed, cancelled, null] }
+        failure_class: { type: [string, "null"] }
+        input_tokens: { type: [integer, "null"], minimum: 0 }
+        output_tokens: { type: [integer, "null"], minimum: 0 }
+        cache_creation_input_tokens: { type: [integer, "null"], minimum: 0 }
+        cache_read_input_tokens: { type: [integer, "null"], minimum: 0 }
+        reasoning_tokens: { type: [integer, "null"], minimum: 0 }
+        model_cost:
+          oneOf: [{ $ref: "#/components/schemas/Money" }, { type: "null" }]
+        cost_coverage: { type: string, enum: [complete, none, not_applicable] }
+        max_cost_at_risk:
+          oneOf: [{ $ref: "#/components/schemas/Money" }, { type: "null" }]
+        pricing_version: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        first_output_at: { type: [string, "null"], format: date-time }
+        settled_at: { type: [string, "null"], format: date-time }
+    UsageRecords:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ModelCallRecord" }
+        next_cursor: { type: [string, "null"] }
+    InvocationTimelineStep:
+      type: object
+      additionalProperties: false
+      required: [kind, id, detail_id, status, started_at]
+      properties:
+        kind: { type: string, enum: [lifecycle, model_call, tool_call, nudge] }
+        id: { type: string }
+        detail_id: { type: string }
+        name: { type: string }
+        mode: { type: string }
+        call_kind: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        status: { type: string }
+        started_at: { type: string, format: date-time }
+        first_output_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        duration_ms: { type: integer, minimum: 0 }
+        time_to_first_output_ms: { type: integer, minimum: 0 }
+        input_tokens: { type: integer, minimum: 0 }
+        output_tokens: { type: integer, minimum: 0 }
+        cache_creation_input_tokens: { type: integer, minimum: 0 }
+        cache_read_input_tokens: { type: integer, minimum: 0 }
+        reasoning_tokens: { type: integer, minimum: 0 }
+        model_cost: { $ref: "#/components/schemas/Money" }
+    InvocationTimeline:
+      type: object
+      additionalProperties: false
+      required: [invocation_id, session_id, app_id, tenant_key, user_key, agent_id, accepted_at, ended_at, status, stop_reason, failure_code, attempt_count, active_execution_ms, waiting_execution_ms, erased_at, steps]
+      properties:
+        invocation_id: { $ref: "#/components/schemas/InvocationID" }
+        session_id: { $ref: "#/components/schemas/SessionID" }
+        app_id: { $ref: "#/components/schemas/AppID" }
+        tenant_key: { type: [string, "null"] }
+        user_key: { type: [string, "null"] }
+        agent_id: { $ref: "#/components/schemas/AgentID" }
+        accepted_at: { type: string, format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        status: { type: [string, "null"] }
+        stop_reason: { type: [string, "null"] }
+        failure_code: { type: [string, "null"] }
+        attempt_count: { type: integer, minimum: 0 }
+        active_execution_ms: { type: integer, minimum: 0 }
+        waiting_execution_ms: { type: integer, minimum: 0 }
+        erased_at: { type: [string, "null"], format: date-time }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/InvocationTimelineStep" }
     InvocationInput:
       description: |
         A plain string is shorthand for one text block; an array is ordered
@@ -6527,9 +7084,12 @@ components:
     CredentialProfile:
       type: string
       enum: [runtime, viewer, operator]
+      description: |
+        Fixed authorization profile. Runtime is meaningful for App-bound
+        execution and cannot be selected for an Org credential.
     Operation:
       type: string
-      enum: [create_invocation, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_budgets, write_budgets, register_app, list_apps, get_app, update_app]
+      enum: [create_invocation, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_budgets, write_budgets, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
     CredentialStatus:
       type: string
       enum: [active, revoked]
@@ -6550,6 +7110,10 @@ components:
         app_id:
           oneOf:
             - $ref: "#/components/schemas/AppID"
+            - type: "null"
+        org_id:
+          oneOf:
+            - $ref: "#/components/schemas/OrgID"
             - type: "null"
         creator_credential_id:
           oneOf:
@@ -6617,10 +7181,16 @@ components:
         app_id:
           $ref: "#/components/schemas/AppID"
           description: |
-            Target App for an app-less Operator provisioning an app credential.
-            Omit to issue another app-less credential. An app-bound Operator
-            may omit this field or repeat its own App ID, but cannot name a
-            different App.
+            Target App for an Org or installation Operator provisioning an App
+            credential. Org callers may name only Apps contained by their Org.
+            App callers may omit this field or repeat their own App ID.
+        org_id:
+          $ref: "#/components/schemas/OrgID"
+          description: |
+            Target Org for an installation Operator provisioning an Org
+            credential. Installation issuer tokens require `admin: true`.
+            Mutually exclusive with `app_id`. Org and App callers cannot mint
+            Org credentials.
         tenant_key:
           type: string
           minLength: 1
@@ -6655,10 +7225,18 @@ components:
       properties:
         authentication:
           type: object
-          required: [credential_id, effective_profile, operations, method, assurance]
+          required: [credential_id, app_id, org_id, effective_profile, operations, method, assurance]
           properties:
             credential_id:
               $ref: "#/components/schemas/CredentialID"
+            app_id:
+              oneOf:
+                - $ref: "#/components/schemas/AppID"
+                - type: "null"
+            org_id:
+              oneOf:
+                - $ref: "#/components/schemas/OrgID"
+                - type: "null"
             effective_profile:
               $ref: "#/components/schemas/CredentialProfile"
             tenant_key:

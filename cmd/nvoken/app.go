@@ -62,6 +62,7 @@ func newApp() *cli.App {
 	registerProviderKeyCommands(app)
 	registerUsageCommands(app)
 	registerBudgetCommands(app)
+	registerOrgCommands(app)
 	registerAuthCommands(app)
 	registerCredentialCommands(app)
 	return app

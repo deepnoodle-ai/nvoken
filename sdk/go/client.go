@@ -243,6 +243,21 @@ func (c *Client) GetInvocationResult(ctx context.Context, invocationID string) (
 	})
 }
 
+func (c *Client) GetInvocationTimeline(ctx context.Context, invocationID string) (*InvocationTimeline, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationTimeline], error) {
+		response, err := c.raw.GetInvocationTimelineWithResponse(ctx, invocationID)
+		if err != nil {
+			return callResult[generated.InvocationTimeline]{}, err
+		}
+		return callResult[generated.InvocationTimeline]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
 func (c *Client) CancelInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
 		response, err := c.raw.CancelInvocationWithResponse(ctx, invocationID)
@@ -795,13 +810,52 @@ func (c *Client) GetProviderKeyUsage(ctx context.Context, id string) (*ProviderK
 	})
 }
 
-func (c *Client) GetDailyUsage(ctx context.Context, params *GetDailyUsageParams) (*DailyUsage, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.DailyUsage], error) {
-		response, err := c.raw.GetDailyUsageWithResponse(ctx, params)
+func (c *Client) GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams) (*UsageTimeseries, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.UsageTimeseries], error) {
+		response, err := c.raw.GetUsageTimeseriesWithResponse(ctx, params)
 		if err != nil {
-			return callResult[generated.DailyUsage]{}, err
+			return callResult[generated.UsageTimeseries]{}, err
 		}
-		return callResult[generated.DailyUsage]{
+		return callResult[generated.UsageTimeseries]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetUsageBreakdown(ctx context.Context, params *GetUsageBreakdownParams) (*UsageBreakdown, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.UsageBreakdown], error) {
+		response, err := c.raw.GetUsageBreakdownWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.UsageBreakdown]{}, err
+		}
+		return callResult[generated.UsageBreakdown]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// ListUsageRecords returns the JSON representation. Use Raw when requesting
+// the CSV representation so the response body and continuation header remain
+// available without lossy conversion.
+func (c *Client) ListUsageRecords(ctx context.Context, params *ListUsageRecordsParams) (*UsageRecords, error) {
+	if params != nil && params.Format != nil && string(*params.Format) == "csv" {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "ListUsageRecords returns JSON; use Raw to request CSV",
+		}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.UsageRecords], error) {
+		response, err := c.raw.ListUsageRecordsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.UsageRecords]{}, err
+		}
+		return callResult[generated.UsageRecords]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -848,6 +902,21 @@ func (c *Client) GetBudget(ctx context.Context, budgetID string) (*Budget, error
 			return callResult[generated.Budget]{}, err
 		}
 		return callResult[generated.Budget]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) ListBudgets(ctx context.Context, params *ListBudgetsParams) (*BudgetList, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.BudgetList], error) {
+		response, err := c.raw.ListBudgetsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.BudgetList]{}, err
+		}
+		return callResult[generated.BudgetList]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -938,13 +1007,14 @@ func (c *Client) RevokeProviderKey(ctx context.Context, id string) (*ProviderKey
 }
 
 // RegisterApp registers one host application and returns its generated app_id.
-// It requires a credential that is not associated with an app.
+// It requires an Org-scoped or installation Operator credential.
 func (c *Client) RegisterApp(ctx context.Context, name string, options RegisterAppOptions) (*AppRegistration, error) {
 	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.AppRegistration], error) {
 		response, err := c.raw.RegisterAppWithResponse(ctx, generated.RegisterAppJSONRequestBody{
 			Name:        name,
 			ExternalRef: options.ExternalRef,
 			DisplayName: options.DisplayName,
+			OrgID:       options.OrgID,
 		})
 		if err != nil {
 			return callResult[generated.AppRegistration]{}, err
@@ -993,13 +1063,88 @@ func (c *Client) ListApps(ctx context.Context, options ListAppsOptions) (*AppLis
 
 // UpdateApp changes an app's mutable presentation fields; name and
 // external_ref cannot be changed.
-func (c *Client) UpdateApp(ctx context.Context, appID string, displayName string) (*App, error) {
-	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.App], error) {
-		response, err := c.raw.UpdateAppWithResponse(ctx, appID, generated.UpdateAppJSONRequestBody{DisplayName: displayName})
+func (c *Client) UpdateApp(ctx context.Context, appID string, options UpdateAppOptions) (*App, error) {
+	if options.DisplayName == nil && options.OrgID == nil {
+		return nil, &Error{Category: ErrorValidation, Message: "app update requires display name or Org ID"}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.App], error) {
+		response, err := c.raw.UpdateAppWithResponse(ctx, appID, generated.UpdateAppJSONRequestBody{
+			DisplayName: options.DisplayName,
+			OrgID:       options.OrgID,
+		})
 		if err != nil {
 			return callResult[generated.App]{}, err
 		}
 		return callResult[generated.App]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) ListOrgs(ctx context.Context) (*OrgList, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.OrgList], error) {
+		response, err := c.raw.ListOrgsWithResponse(ctx)
+		if err != nil {
+			return callResult[generated.OrgList]{}, err
+		}
+		return callResult[generated.OrgList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) RegisterOrg(ctx context.Context, displayName string, options RegisterOrgOptions) (*Org, error) {
+	return callReplaySafe(ctx, c.retry, options.ExternalRef != nil, func() (callResult[generated.Org], error) {
+		response, err := c.raw.RegisterOrgWithResponse(ctx, generated.RegisterOrgJSONRequestBody{
+			DisplayName: displayName,
+			ExternalRef: options.ExternalRef,
+		})
+		if err != nil {
+			return callResult[generated.Org]{}, err
+		}
+		value := response.JSON201
+		if value == nil {
+			value = response.JSON200
+		}
+		return callResult[generated.Org]{
+			Value:  value,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) GetOrg(ctx context.Context, orgID string) (*Org, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Org], error) {
+		response, err := c.raw.GetOrgWithResponse(ctx, orgID)
+		if err != nil {
+			return callResult[generated.Org]{}, err
+		}
+		return callResult[generated.Org]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) UpdateOrg(ctx context.Context, orgID, displayName string) (*Org, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Org], error) {
+		response, err := c.raw.UpdateOrgWithResponse(ctx, orgID, generated.UpdateOrgJSONRequestBody{
+			DisplayName: displayName,
+		})
+		if err != nil {
+			return callResult[generated.Org]{}, err
+		}
+		return callResult[generated.Org]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),

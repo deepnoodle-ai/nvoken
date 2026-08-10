@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - Runtime credentials may call every Runtime operation and GET /v1/identity. - Viewer credentials may call Runtime reads and GET /v1/identity. - Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -14,22 +14,107 @@
 
 import * as runtime from '../runtime.js';
 import {
-    type DailyUsage,
-    DailyUsageFromJSON,
-    DailyUsageToJSON,
-} from '../models/DailyUsage.js';
-import {
     type ErrorResponse,
     ErrorResponseFromJSON,
     ErrorResponseToJSON,
 } from '../models/ErrorResponse.js';
+import {
+    type ModelCallKind,
+    ModelCallKindFromJSON,
+    ModelCallKindToJSON,
+} from '../models/ModelCallKind.js';
+import {
+    type ProviderKeySource,
+    ProviderKeySourceFromJSON,
+    ProviderKeySourceToJSON,
+} from '../models/ProviderKeySource.js';
+import {
+    type ToolCallMode,
+    ToolCallModeFromJSON,
+    ToolCallModeToJSON,
+} from '../models/ToolCallMode.js';
+import {
+    type UsageBreakdown,
+    UsageBreakdownFromJSON,
+    UsageBreakdownToJSON,
+} from '../models/UsageBreakdown.js';
+import {
+    type UsageInterval,
+    UsageIntervalFromJSON,
+    UsageIntervalToJSON,
+} from '../models/UsageInterval.js';
+import {
+    type UsageRecords,
+    UsageRecordsFromJSON,
+    UsageRecordsToJSON,
+} from '../models/UsageRecords.js';
+import {
+    type UsageTimeseries,
+    UsageTimeseriesFromJSON,
+    UsageTimeseriesToJSON,
+} from '../models/UsageTimeseries.js';
 
-export interface GetDailyUsageRequest {
-    startDate?: Date;
-    endDate?: Date;
+export interface GetUsageBreakdownRequest {
+    startAt: Date;
+    endAt: Date;
+    groupBy: GetUsageBreakdownGroupByEnum;
+    appId?: string;
     tenantKey?: string;
     userKey?: string;
-    groupBy?: GetDailyUsageGroupByEnum;
+    agentId?: string;
+    provider?: string;
+    model?: string;
+    providerKeySource?: ProviderKeySource;
+    providerKeyId?: string;
+    credentialFamilyId?: string;
+    callKind?: ModelCallKind;
+    toolName?: string;
+    toolMode?: ToolCallMode;
+    sort?: GetUsageBreakdownSortEnum;
+    cursor?: string;
+    limit?: number;
+}
+
+export interface GetUsageTimeseriesRequest {
+    startAt: Date;
+    endAt: Date;
+    interval: UsageInterval;
+    timezone?: string;
+    appId?: string;
+    tenantKey?: string;
+    userKey?: string;
+    agentId?: string;
+    provider?: string;
+    model?: string;
+    providerKeySource?: ProviderKeySource;
+    providerKeyId?: string;
+    credentialFamilyId?: string;
+    callKind?: ModelCallKind;
+    toolName?: string;
+    toolMode?: ToolCallMode;
+    groupBy?: GetUsageTimeseriesGroupByEnum;
+    top?: number;
+    keys?: string;
+}
+
+export interface ListUsageRecordsRequest {
+    startAt: Date;
+    endAt: Date;
+    appId?: string;
+    tenantKey?: string;
+    userKey?: string;
+    agentId?: string;
+    provider?: string;
+    model?: string;
+    providerKeySource?: ProviderKeySource;
+    providerKeyId?: string;
+    credentialFamilyId?: string;
+    callKind?: ModelCallKind;
+    toolName?: string;
+    toolMode?: ToolCallMode;
+    cursor?: string;
+    limit?: number;
+    format?: ListUsageRecordsFormatEnum;
 }
 
 /**
@@ -38,17 +123,42 @@ export interface GetDailyUsageRequest {
 export class UsageApi extends runtime.BaseAPI {
 
     /**
-     * Creates request options for getDailyUsage without sending the request
+     * Creates request options for getUsageBreakdown without sending the request
      */
-    async getDailyUsageRequestOpts(requestParameters: GetDailyUsageRequest): Promise<runtime.RequestOpts> {
-        const queryParameters: any = {};
-
-        if (requestParameters['startDate'] != null) {
-            queryParameters['start_date'] = (requestParameters['startDate'] as any).toISOString().substring(0,10);
+    async getUsageBreakdownRequestOpts(requestParameters: GetUsageBreakdownRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['startAt'] == null) {
+            throw new runtime.RequiredError(
+                'startAt',
+                'Required parameter "startAt" was null or undefined when calling getUsageBreakdown().'
+            );
         }
 
-        if (requestParameters['endDate'] != null) {
-            queryParameters['end_date'] = (requestParameters['endDate'] as any).toISOString().substring(0,10);
+        if (requestParameters['endAt'] == null) {
+            throw new runtime.RequiredError(
+                'endAt',
+                'Required parameter "endAt" was null or undefined when calling getUsageBreakdown().'
+            );
+        }
+
+        if (requestParameters['groupBy'] == null) {
+            throw new runtime.RequiredError(
+                'groupBy',
+                'Required parameter "groupBy" was null or undefined when calling getUsageBreakdown().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['startAt'] != null) {
+            queryParameters['start_at'] = (requestParameters['startAt'] as any).toISOString();
+        }
+
+        if (requestParameters['endAt'] != null) {
+            queryParameters['end_at'] = (requestParameters['endAt'] as any).toISOString();
+        }
+
+        if (requestParameters['appId'] != null) {
+            queryParameters['app_id'] = requestParameters['appId'];
         }
 
         if (requestParameters['tenantKey'] != null) {
@@ -59,8 +169,56 @@ export class UsageApi extends runtime.BaseAPI {
             queryParameters['user_key'] = requestParameters['userKey'];
         }
 
+        if (requestParameters['agentId'] != null) {
+            queryParameters['agent_id'] = requestParameters['agentId'];
+        }
+
+        if (requestParameters['provider'] != null) {
+            queryParameters['provider'] = requestParameters['provider'];
+        }
+
+        if (requestParameters['model'] != null) {
+            queryParameters['model'] = requestParameters['model'];
+        }
+
+        if (requestParameters['providerKeySource'] != null) {
+            queryParameters['provider_key_source'] = requestParameters['providerKeySource'];
+        }
+
+        if (requestParameters['providerKeyId'] != null) {
+            queryParameters['provider_key_id'] = requestParameters['providerKeyId'];
+        }
+
+        if (requestParameters['credentialFamilyId'] != null) {
+            queryParameters['credential_family_id'] = requestParameters['credentialFamilyId'];
+        }
+
+        if (requestParameters['callKind'] != null) {
+            queryParameters['call_kind'] = requestParameters['callKind'];
+        }
+
+        if (requestParameters['toolName'] != null) {
+            queryParameters['tool_name'] = requestParameters['toolName'];
+        }
+
+        if (requestParameters['toolMode'] != null) {
+            queryParameters['tool_mode'] = requestParameters['toolMode'];
+        }
+
         if (requestParameters['groupBy'] != null) {
             queryParameters['group_by'] = requestParameters['groupBy'];
+        }
+
+        if (requestParameters['sort'] != null) {
+            queryParameters['sort'] = requestParameters['sort'];
+        }
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
         }
 
         const headerParameters: runtime.HTTPHeaders = {};
@@ -74,7 +232,7 @@ export class UsageApi extends runtime.BaseAPI {
             }
         }
 
-        let urlPath = `/v1/usage/daily`;
+        let urlPath = `/v1/usage/breakdown`;
 
         return {
             path: urlPath,
@@ -85,22 +243,293 @@ export class UsageApi extends runtime.BaseAPI {
     }
 
     /**
-     * Totals your model usage by day, app, provider, and model, with token counts and estimated cost. It counts every model call nvoken made on your behalf, including the ones it makes to summarize long conversations.  These totals are calculated from the stored records each time you ask, not kept in a running counter. That means deleting Sessions lowers past numbers. Treat this as operational visibility into what your agents are doing, not as a billing ledger — if you bill from usage, record it yourself when each turn finishes, keyed by Invocation ID.  A credential bound to an app sees only that app. Only an app-less issuer token with the `admin` claim can read across every registered app. App-less API credentials are installation-management credentials and cannot read usage or other runtime data.
-     * Read daily usage rollups
+     * Rank usage by one dimension
      */
-    async getDailyUsageRaw(requestParameters: GetDailyUsageRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DailyUsage>> {
-        const requestOptions = await this.getDailyUsageRequestOpts(requestParameters);
+    async getUsageBreakdownRaw(requestParameters: GetUsageBreakdownRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<UsageBreakdown>> {
+        const requestOptions = await this.getUsageBreakdownRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => DailyUsageFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => UsageBreakdownFromJSON(jsonValue));
     }
 
     /**
-     * Totals your model usage by day, app, provider, and model, with token counts and estimated cost. It counts every model call nvoken made on your behalf, including the ones it makes to summarize long conversations.  These totals are calculated from the stored records each time you ask, not kept in a running counter. That means deleting Sessions lowers past numbers. Treat this as operational visibility into what your agents are doing, not as a billing ledger — if you bill from usage, record it yourself when each turn finishes, keyed by Invocation ID.  A credential bound to an app sees only that app. Only an app-less issuer token with the `admin` claim can read across every registered app. App-less API credentials are installation-management credentials and cannot read usage or other runtime data.
-     * Read daily usage rollups
+     * Rank usage by one dimension
      */
-    async getDailyUsage(requestParameters: GetDailyUsageRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DailyUsage> {
-        const response = await this.getDailyUsageRaw(requestParameters, initOverrides);
+    async getUsageBreakdown(requestParameters: GetUsageBreakdownRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<UsageBreakdown> {
+        const response = await this.getUsageBreakdownRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getUsageTimeseries without sending the request
+     */
+    async getUsageTimeseriesRequestOpts(requestParameters: GetUsageTimeseriesRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['startAt'] == null) {
+            throw new runtime.RequiredError(
+                'startAt',
+                'Required parameter "startAt" was null or undefined when calling getUsageTimeseries().'
+            );
+        }
+
+        if (requestParameters['endAt'] == null) {
+            throw new runtime.RequiredError(
+                'endAt',
+                'Required parameter "endAt" was null or undefined when calling getUsageTimeseries().'
+            );
+        }
+
+        if (requestParameters['interval'] == null) {
+            throw new runtime.RequiredError(
+                'interval',
+                'Required parameter "interval" was null or undefined when calling getUsageTimeseries().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['startAt'] != null) {
+            queryParameters['start_at'] = (requestParameters['startAt'] as any).toISOString();
+        }
+
+        if (requestParameters['endAt'] != null) {
+            queryParameters['end_at'] = (requestParameters['endAt'] as any).toISOString();
+        }
+
+        if (requestParameters['interval'] != null) {
+            queryParameters['interval'] = requestParameters['interval'];
+        }
+
+        if (requestParameters['timezone'] != null) {
+            queryParameters['timezone'] = requestParameters['timezone'];
+        }
+
+        if (requestParameters['appId'] != null) {
+            queryParameters['app_id'] = requestParameters['appId'];
+        }
+
+        if (requestParameters['tenantKey'] != null) {
+            queryParameters['tenant_key'] = requestParameters['tenantKey'];
+        }
+
+        if (requestParameters['userKey'] != null) {
+            queryParameters['user_key'] = requestParameters['userKey'];
+        }
+
+        if (requestParameters['agentId'] != null) {
+            queryParameters['agent_id'] = requestParameters['agentId'];
+        }
+
+        if (requestParameters['provider'] != null) {
+            queryParameters['provider'] = requestParameters['provider'];
+        }
+
+        if (requestParameters['model'] != null) {
+            queryParameters['model'] = requestParameters['model'];
+        }
+
+        if (requestParameters['providerKeySource'] != null) {
+            queryParameters['provider_key_source'] = requestParameters['providerKeySource'];
+        }
+
+        if (requestParameters['providerKeyId'] != null) {
+            queryParameters['provider_key_id'] = requestParameters['providerKeyId'];
+        }
+
+        if (requestParameters['credentialFamilyId'] != null) {
+            queryParameters['credential_family_id'] = requestParameters['credentialFamilyId'];
+        }
+
+        if (requestParameters['callKind'] != null) {
+            queryParameters['call_kind'] = requestParameters['callKind'];
+        }
+
+        if (requestParameters['toolName'] != null) {
+            queryParameters['tool_name'] = requestParameters['toolName'];
+        }
+
+        if (requestParameters['toolMode'] != null) {
+            queryParameters['tool_mode'] = requestParameters['toolMode'];
+        }
+
+        if (requestParameters['groupBy'] != null) {
+            queryParameters['group_by'] = requestParameters['groupBy'];
+        }
+
+        if (requestParameters['top'] != null) {
+            queryParameters['top'] = requestParameters['top'];
+        }
+
+        if (requestParameters['keys'] != null) {
+            queryParameters['keys'] = requestParameters['keys'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/usage/timeseries`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns activity, model, tool, and model-cost metrics from retained, content-free facts. The half-open window totals use exact distinct counts and are not sums of bucket distincts. Grouping is bounded to ten selected series plus `other`. Session deletion does not rewrite history. An App credential is forced to its App, an Org credential to Apps currently owned by its Org, and only an installation-scoped admin issuer token can span every App.
+     * Read usage totals and sparse time buckets
+     */
+    async getUsageTimeseriesRaw(requestParameters: GetUsageTimeseriesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<UsageTimeseries>> {
+        const requestOptions = await this.getUsageTimeseriesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => UsageTimeseriesFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns activity, model, tool, and model-cost metrics from retained, content-free facts. The half-open window totals use exact distinct counts and are not sums of bucket distincts. Grouping is bounded to ten selected series plus `other`. Session deletion does not rewrite history. An App credential is forced to its App, an Org credential to Apps currently owned by its Org, and only an installation-scoped admin issuer token can span every App.
+     * Read usage totals and sparse time buckets
+     */
+    async getUsageTimeseries(requestParameters: GetUsageTimeseriesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<UsageTimeseries> {
+        const response = await this.getUsageTimeseriesRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listUsageRecords without sending the request
+     */
+    async listUsageRecordsRequestOpts(requestParameters: ListUsageRecordsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['startAt'] == null) {
+            throw new runtime.RequiredError(
+                'startAt',
+                'Required parameter "startAt" was null or undefined when calling listUsageRecords().'
+            );
+        }
+
+        if (requestParameters['endAt'] == null) {
+            throw new runtime.RequiredError(
+                'endAt',
+                'Required parameter "endAt" was null or undefined when calling listUsageRecords().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['startAt'] != null) {
+            queryParameters['start_at'] = (requestParameters['startAt'] as any).toISOString();
+        }
+
+        if (requestParameters['endAt'] != null) {
+            queryParameters['end_at'] = (requestParameters['endAt'] as any).toISOString();
+        }
+
+        if (requestParameters['appId'] != null) {
+            queryParameters['app_id'] = requestParameters['appId'];
+        }
+
+        if (requestParameters['tenantKey'] != null) {
+            queryParameters['tenant_key'] = requestParameters['tenantKey'];
+        }
+
+        if (requestParameters['userKey'] != null) {
+            queryParameters['user_key'] = requestParameters['userKey'];
+        }
+
+        if (requestParameters['agentId'] != null) {
+            queryParameters['agent_id'] = requestParameters['agentId'];
+        }
+
+        if (requestParameters['provider'] != null) {
+            queryParameters['provider'] = requestParameters['provider'];
+        }
+
+        if (requestParameters['model'] != null) {
+            queryParameters['model'] = requestParameters['model'];
+        }
+
+        if (requestParameters['providerKeySource'] != null) {
+            queryParameters['provider_key_source'] = requestParameters['providerKeySource'];
+        }
+
+        if (requestParameters['providerKeyId'] != null) {
+            queryParameters['provider_key_id'] = requestParameters['providerKeyId'];
+        }
+
+        if (requestParameters['credentialFamilyId'] != null) {
+            queryParameters['credential_family_id'] = requestParameters['credentialFamilyId'];
+        }
+
+        if (requestParameters['callKind'] != null) {
+            queryParameters['call_kind'] = requestParameters['callKind'];
+        }
+
+        if (requestParameters['toolName'] != null) {
+            queryParameters['tool_name'] = requestParameters['toolName'];
+        }
+
+        if (requestParameters['toolMode'] != null) {
+            queryParameters['tool_mode'] = requestParameters['toolMode'];
+        }
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['format'] != null) {
+            queryParameters['format'] = requestParameters['format'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/usage/records`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Stable ascending `(started_at, id)` order; JSON and CSV contain the same logical columns and never content.
+     * Export itemized model-call facts
+     */
+    async listUsageRecordsRaw(requestParameters: ListUsageRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<UsageRecords>> {
+        const requestOptions = await this.listUsageRecordsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => UsageRecordsFromJSON(jsonValue));
+    }
+
+    /**
+     * Stable ascending `(started_at, id)` order; JSON and CSV contain the same logical columns and never content.
+     * Export itemized model-call facts
+     */
+    async listUsageRecords(requestParameters: ListUsageRecordsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<UsageRecords> {
+        const response = await this.listUsageRecordsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -109,7 +538,45 @@ export class UsageApi extends runtime.BaseAPI {
 /**
  * @export
  */
-export const GetDailyUsageGroupByEnum = {
-    TenantKey: 'tenant_key'
+export const GetUsageBreakdownGroupByEnum = {
+    AppId: 'app_id',
+    TenantKey: 'tenant_key',
+    UserKey: 'user_key',
+    AgentId: 'agent_id',
+    Provider: 'provider',
+    Model: 'model',
+    ToolName: 'tool_name',
+    ProviderKeySource: 'provider_key_source',
+    ProviderKeyId: 'provider_key_id',
+    CredentialFamilyId: 'credential_family_id',
+    FailureClass: 'failure_class'
 } as const;
-export type GetDailyUsageGroupByEnum = typeof GetDailyUsageGroupByEnum[keyof typeof GetDailyUsageGroupByEnum];
+export type GetUsageBreakdownGroupByEnum = typeof GetUsageBreakdownGroupByEnum[keyof typeof GetUsageBreakdownGroupByEnum];
+/**
+ * @export
+ */
+export const GetUsageBreakdownSortEnum = {
+    ModelCost: 'model_cost',
+    Invocations: 'invocations',
+    ModelCalls: 'model_calls',
+    ToolCalls: 'tool_calls'
+} as const;
+export type GetUsageBreakdownSortEnum = typeof GetUsageBreakdownSortEnum[keyof typeof GetUsageBreakdownSortEnum];
+/**
+ * @export
+ */
+export const GetUsageTimeseriesGroupByEnum = {
+    TenantKey: 'tenant_key',
+    AgentId: 'agent_id',
+    Model: 'model',
+    ToolName: 'tool_name'
+} as const;
+export type GetUsageTimeseriesGroupByEnum = typeof GetUsageTimeseriesGroupByEnum[keyof typeof GetUsageTimeseriesGroupByEnum];
+/**
+ * @export
+ */
+export const ListUsageRecordsFormatEnum = {
+    Json: 'json',
+    Csv: 'csv'
+} as const;
+export type ListUsageRecordsFormatEnum = typeof ListUsageRecordsFormatEnum[keyof typeof ListUsageRecordsFormatEnum];

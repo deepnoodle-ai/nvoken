@@ -33,12 +33,36 @@ type ModelDescriptor = generated.ModelDescriptor
 type ModelPricing = generated.ModelPricing
 type ProviderKey = generated.ProviderKey
 type ProviderKeyUsage = generated.ProviderKeyUsage
-type DailyUsage = generated.DailyUsage
-type DailyUsageBucket = generated.DailyUsageBucket
 type Budget = generated.Budget
+type BudgetList = generated.BudgetList
 type BudgetScope = generated.BudgetScope
-type GetDailyUsageParams = generated.GetDailyUsageParams
-type GetDailyUsageParamsGroupBy = generated.GetDailyUsageParamsGroupBy
+type ListBudgetsParams = generated.ListBudgetsParams
+type ListBudgetsParamsStatus = generated.ListBudgetsParamsStatus
+type InvocationTimeline = generated.InvocationTimeline
+type InvocationTimelineStep = generated.InvocationTimelineStep
+type InvocationTimelineStepKind = generated.InvocationTimelineStepKind
+type Org = generated.Org
+type OrgList = generated.OrgList
+type UsageBreakdown = generated.UsageBreakdown
+type UsageBreakdownItem = generated.UsageBreakdownItem
+type ActivityMetrics = generated.ActivityMetrics
+type CostMetrics = generated.CostMetrics
+type ModelMetrics = generated.ModelMetrics
+type ToolMetrics = generated.ToolMetrics
+type Money = generated.Money
+type ModelCallRecord = generated.ModelCallRecord
+type UsageMetrics = generated.UsageMetrics
+type UsageRecords = generated.UsageRecords
+type UsageTimeseries = generated.UsageTimeseries
+type UsageTimeseriesBucket = generated.UsageTimeseriesBucket
+type UsageInterval = generated.UsageInterval
+type GetUsageBreakdownParams = generated.GetUsageBreakdownParams
+type GetUsageBreakdownParamsGroupBy = generated.GetUsageBreakdownParamsGroupBy
+type GetUsageBreakdownParamsSort = generated.GetUsageBreakdownParamsSort
+type ListUsageRecordsParams = generated.ListUsageRecordsParams
+type ListUsageRecordsParamsFormat = generated.ListUsageRecordsParamsFormat
+type GetUsageTimeseriesParams = generated.GetUsageTimeseriesParams
+type GetUsageTimeseriesParamsGroupBy = generated.GetUsageTimeseriesParamsGroupBy
 type ProviderKeyScope = generated.ProviderKeyScope
 type ProviderKeyStatus = generated.ProviderKeyStatus
 type InvocationChange = generated.InvocationChange
@@ -106,7 +130,9 @@ const (
 	NudgeDrained                                    = generated.NudgeStatusDrained
 	NudgeExpired                                    = generated.NudgeStatusExpired
 	NudgeCancelled                                  = generated.NudgeStatusCancelled
-	DailyUsageGroupByTenantKey                      = generated.TenantKey
+	UsageIntervalDay                                = generated.Day
+	UsageIntervalWeek                               = generated.Week
+	UsageIntervalMonth                              = generated.Month
 	CredentialProfileRuntime                        = generated.Runtime
 	CredentialProfileViewer                         = generated.Viewer
 	CredentialProfileOperator                       = generated.Operator
@@ -145,6 +171,10 @@ const (
 	OperationListApps                               = generated.ListApps
 	OperationGetApp                                 = generated.GetApp
 	OperationUpdateApp                              = generated.UpdateApp
+	OperationGetOrg                                 = generated.GetOrg
+	OperationListOrgs                               = generated.ListOrgs
+	OperationRegisterOrg                            = generated.RegisterOrg
+	OperationUpdateOrg                              = generated.UpdateOrg
 )
 
 type ModelList struct {
@@ -728,9 +758,19 @@ type ListAgentsOptions struct {
 type RegisterAppOptions struct {
 	ExternalRef *string
 	DisplayName *string
+	OrgID       *string
 }
 
 type ListAppsOptions struct {
+	ExternalRef *string
+}
+
+type UpdateAppOptions struct {
+	DisplayName *string
+	OrgID       *string
+}
+
+type RegisterOrgOptions struct {
 	ExternalRef *string
 }
 

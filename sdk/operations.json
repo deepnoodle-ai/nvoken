@@ -82,11 +82,6 @@
       "path": "/v1/identity"
     },
     {
-      "operation_id": "getDailyUsage",
-      "method": "GET",
-      "path": "/v1/usage/daily"
-    },
-    {
       "operation_id": "getInvocation",
       "method": "GET",
       "path": "/v1/invocations/{invocation_id}"
@@ -97,9 +92,19 @@
       "path": "/v1/invocations/{invocation_id}/result"
     },
     {
+      "operation_id": "getInvocationTimeline",
+      "method": "GET",
+      "path": "/v1/invocations/{invocation_id}/timeline"
+    },
+    {
       "operation_id": "getModel",
       "method": "GET",
       "path": "/v1/models/{provider}/{model_id}"
+    },
+    {
+      "operation_id": "getOrg",
+      "method": "GET",
+      "path": "/v1/orgs/{org_id}"
     },
     {
       "operation_id": "getProviderKey",
@@ -122,6 +127,16 @@
       "path": "/v1/sessions/{session_id}/transcript"
     },
     {
+      "operation_id": "getUsageBreakdown",
+      "method": "GET",
+      "path": "/v1/usage/breakdown"
+    },
+    {
+      "operation_id": "getUsageTimeseries",
+      "method": "GET",
+      "path": "/v1/usage/timeseries"
+    },
+    {
       "operation_id": "interruptInvocation",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/interrupt"
@@ -135,6 +150,11 @@
       "operation_id": "listApps",
       "method": "GET",
       "path": "/v1/apps"
+    },
+    {
+      "operation_id": "listBudgets",
+      "method": "GET",
+      "path": "/v1/budgets"
     },
     {
       "operation_id": "listCredentials",
@@ -162,6 +182,11 @@
       "path": "/v1/invocations/{invocation_id}/nudges"
     },
     {
+      "operation_id": "listOrgs",
+      "method": "GET",
+      "path": "/v1/orgs"
+    },
+    {
       "operation_id": "listProviderKeys",
       "method": "GET",
       "path": "/v1/provider-keys"
@@ -187,9 +212,19 @@
       "path": "/v1/invocations/{invocation_id}/tool-calls"
     },
     {
+      "operation_id": "listUsageRecords",
+      "method": "GET",
+      "path": "/v1/usage/records"
+    },
+    {
       "operation_id": "registerApp",
       "method": "POST",
       "path": "/v1/apps"
+    },
+    {
+      "operation_id": "registerOrg",
+      "method": "POST",
+      "path": "/v1/orgs"
     },
     {
       "operation_id": "resumeInvocation",
@@ -240,6 +275,11 @@
       "operation_id": "updateBudget",
       "method": "PATCH",
       "path": "/v1/budgets/{budget_id}"
+    },
+    {
+      "operation_id": "updateOrg",
+      "method": "PATCH",
+      "path": "/v1/orgs/{org_id}"
     },
     {
       "operation_id": "updateSession",
