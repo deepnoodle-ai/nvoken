@@ -29,12 +29,28 @@ def git(repo: Path, *arguments: str) -> str:
     return result.stdout.strip()
 
 
+def contract_commit(repo: Path) -> str:
+    """Return the last commit that changed the contract.
+
+    Provenance deliberately tracks the contract rather than the upstream HEAD.
+    Every unrelated cloud commit would otherwise invalidate a byte-identical
+    snapshot and force a public commit that only rewrites a hash.
+    """
+    commit = git(repo, "log", "-1", "--format=%H", "--", f"openapi/{CONTRACT}")
+    if not commit:
+        raise ValueError(
+            f"no commit in {repo} changed openapi/{CONTRACT}; commit the "
+            "contract before synchronizing"
+        )
+    return commit
+
+
 def validate_source(repo: Path, *, allow_dirty: bool) -> tuple[str, bool]:
     if not (repo / "openapi" / CONTRACT).is_file():
         raise ValueError(
             f"{repo} is not an nvoken-cloud checkout; missing: openapi/{CONTRACT}"
         )
-    commit = git(repo, "rev-parse", "HEAD")
+    commit = contract_commit(repo)
     status = git(
         repo,
         "status",
@@ -129,7 +145,7 @@ def main(argv: list[str]) -> int:
                 for failure in failures:
                     print(f"openapi sync: {failure}", file=sys.stderr)
                 return 1
-            print(f"OpenAPI snapshot matches nvoken-cloud {git(repo, 'rev-parse', '--short=12', 'HEAD')}")
+            print(f"OpenAPI snapshot matches nvoken-cloud {contract_commit(repo)[:12]}")
             return 0
         synchronize(repo, allow_dirty=args.allow_dirty)
         return 0

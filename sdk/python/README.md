@@ -223,7 +223,7 @@ from nvoken import InvokeRequest, Model, Reasoning
 request = InvokeRequest(
     agent_key="support",
     input="hello",
-    model=Model(provider="anthropic", id="claude-opus-4-8"),
+    model=Model(provider="anthropic", id="claude-opus-5"),
     reasoning=Reasoning(effort="high"),
 )
 ```

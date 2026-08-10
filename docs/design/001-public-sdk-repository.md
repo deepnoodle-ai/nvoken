@@ -78,7 +78,8 @@ and one private local-storage package. It does not import service internals.
 `nvoken-cloud/openapi/nvoken.yaml` is authoritative. This repository commits a
 byte-for-byte snapshot under `openapi/` so a public pull
 request can regenerate and test clients without access to a private repository.
-`openapi/SOURCE.json` records the upstream repository and commit.
+`openapi/SOURCE.json` records the upstream repository and the commit that last
+changed the contract.
 
 `make openapi-sync` copies the contract from `NVOKEN_CLOUD_REPO`
 (defaulting to `../nvoken-cloud`) and refreshes provenance. `make
