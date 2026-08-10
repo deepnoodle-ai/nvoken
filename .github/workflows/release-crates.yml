@@ -49,7 +49,9 @@ jobs:
           version="$(cargo metadata --manifest-path sdk/rust/Cargo.toml --format-version 1 --no-deps \
             | python3 -c 'import json, sys; print(json.load(sys.stdin)["packages"][0]["version"])')"
           for attempt in 1 2 3 4 5 6; do
-            if curl --silent --fail "https://crates.io/api/v1/crates/nvoken/${version}" >/dev/null; then
+            if curl --silent --fail \
+              --user-agent "nvoken-release/${version} (https://github.com/deepnoodle-ai/nvoken)" \
+              "https://crates.io/api/v1/crates/nvoken/${version}" >/dev/null; then
               echo "crates.io serves nvoken ${version}"
               exit 0
             fi
