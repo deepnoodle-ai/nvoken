@@ -8,6 +8,15 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.11.0 - 2026-08-10
+
+- **Replace the daily usage API.** Add timeseries, breakdown, and record views
+  with explicit token, cost, activity, model, and tool metrics.
+- Add organization management and app organization ownership across the SDKs
+  and CLI.
+- Add budget listing and invocation timeline APIs across all four generated
+  SDK transports.
+- Strengthen Go SDK request validation and retry safety for the expanded API.
 - Clean up Budget conformance naming, CLI tenant terminology, and registry
   release guidance after the 0.10.0 migration.
 - Track OpenAPI provenance by the commit that last changed the contract, so
