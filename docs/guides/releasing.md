@@ -10,8 +10,8 @@ the corresponding trusted publishers:
 
 - npm: organization `deepnoodle-ai`, repository `nvoken`, workflow
   `release-npm.yml`, environment `npm`, allowed action `npm publish`;
-- PyPI pending publisher: project `nvoken`, owner `deepnoodle-ai`, repository
-  `nvoken`, workflow `release-pypi.yml`, environment `pypi`;
+- PyPI: project `nvoken`, owner `deepnoodle-ai`, repository `nvoken`, workflow
+  `release-pypi.yml`, environment `pypi` as its trusted publisher;
 - crates.io: publish the first crate version with a scoped crates.io token,
   then configure repository `deepnoodle-ai/nvoken`, workflow
   `release-crates.yml`, environment `crates-io` as its trusted publisher.

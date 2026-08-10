@@ -64,9 +64,7 @@ jobs:
         working-directory: sdk/typescript
       - run: npm publish --dry-run --ignore-scripts
         working-directory: sdk/typescript
-      # Verbose logging records only the registry's OIDC exchange result, not
-      # either GitHub token, which makes trusted-publisher mismatches actionable.
-      - run: npm publish --loglevel=verbose
+      - run: npm publish
         working-directory: sdk/typescript
       - name: Verify the public registry artifact
         working-directory: sdk/typescript

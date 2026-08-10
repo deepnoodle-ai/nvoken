@@ -698,7 +698,7 @@ async fn shared_fault_server_semantics() {
         nvoken::models::model_pricing::Status::Unpriced
     );
     let budget_fixture: Value = serde_json::from_str(include_str!(
-        "../../conformance/fixtures/shared-usage-budgets-v1.json"
+        "../../conformance/fixtures/shared-budgets-v1.json"
     ))
     .unwrap();
     assert_eq!(

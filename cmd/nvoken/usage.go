@@ -18,9 +18,9 @@ func registerUsageCommands(app *cli.App) {
 		Flags(
 			cli.String("start-date").Help("Inclusive first UTC day (YYYY-MM-DD); defaults to 29 days before end-date"),
 			cli.String("end-date").Help("Inclusive last UTC day (YYYY-MM-DD); defaults to today"),
-			cli.String("tenant-key").Help("Return only usage for one host customer"),
+			cli.String("tenant-key").Help("Return only usage for one host tenant"),
 			cli.String("user-key").Help("Return only usage for one host end user"),
-			cli.String("group-by").Enum("tenant_key").Help("Split buckets by host customer"),
+			cli.String("group-by").Enum("tenant_key").Help("Split buckets by host tenant"),
 		).
 		Run(runUsageDaily)
 }
@@ -57,9 +57,9 @@ func runUsageDaily(command *cli.Context) error {
 	}
 	return writeOutput(command, usage, func(writer io.Writer) error {
 		for _, bucket := range usage.Items {
-			customer := ""
+			tenant := ""
 			if bucket.TenantKey != nil {
-				customer = fmt.Sprintf("\ttenant=%s", *bucket.TenantKey)
+				tenant = fmt.Sprintf("\ttenant=%s", *bucket.TenantKey)
 			}
 			if _, err := fmt.Fprintf(
 				writer,
@@ -68,7 +68,7 @@ func runUsageDaily(command *cli.Context) error {
 				bucket.AppID,
 				bucket.Provider,
 				bucket.Model,
-				customer,
+				tenant,
 				bucket.Invocations,
 				bucket.ModelCalls,
 				bucket.InputTokens,

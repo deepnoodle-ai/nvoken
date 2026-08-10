@@ -1103,7 +1103,7 @@ test("shared fault server semantics", async (context) => {
   assert.equal(exactModel.cataloged, false);
   assert.equal(exactModel.pricing.status, "unpriced");
   const budgetFixture = JSON.parse(await readFile(
-    new URL("../../../conformance/fixtures/shared-usage-budgets-v1.json", import.meta.url),
+    new URL("../../../conformance/fixtures/shared-budgets-v1.json", import.meta.url),
     "utf8",
   )) as { scopes: string[]; budget: { id: string } };
   assert.deepEqual(

@@ -8,6 +8,9 @@ without republishing every artifact.
 
 ## Unreleased
 
+- Clean up Budget conformance naming, CLI tenant terminology, and registry
+  release guidance after the 0.10.0 migration.
+
 ## 0.10.0 - 2026-08-09
 
 - Generate every SDK and the CLI from the single authoritative
@@ -24,5 +27,6 @@ without republishing every artifact.
 - Port the existing `0.9.0` client implementations from `nvoken-cloud`.
 - Add reproducible OpenAPI synchronization, generation, conformance, CI, and
   release workflows.
-- Publish the first aligned release from the public repository and move the
-  Homebrew formula to CLI-only archives.
+- Publish the first Python and Rust releases from the public repository and
+  move the Homebrew formula to CLI-only archives. npm, Go, and CLI alignment
+  followed in 0.10.0.
