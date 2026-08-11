@@ -28,6 +28,7 @@ from nvoken_generated.models.agent import Agent as AgentIdentity
 from nvoken_generated.models.agent_list import AgentList
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
+from nvoken_generated.models.agent_definition_resource_list import AgentDefinitionResourceList
 from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite
 from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest
 from nvoken_generated.models.allocate_credits_result import AllocateCreditsResult
@@ -965,6 +966,21 @@ class Client:
             lambda: self.agent_definitions.get_agent_definition(agent_definition_id)
         )
 
+    async def list_agent_definitions(
+        self,
+        *,
+        include_archived: bool | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> AgentDefinitionResourceList:
+        return await self._replay_safe(
+            lambda: self.agent_definitions.list_agent_definitions(
+                include_archived=include_archived,
+                cursor=cursor,
+                limit=limit,
+            )
+        )
+
     async def update_agent_definition(
         self,
         agent_definition_id: str,
@@ -978,6 +994,16 @@ class Client:
                 agent_definition_id,
                 body,
             )
+        )
+
+    async def archive_agent_definition(self, agent_definition_id: str) -> None:
+        await self._replay_safe(
+            lambda: self.agent_definitions.archive_agent_definition(agent_definition_id)
+        )
+
+    async def restore_agent_definition(self, agent_definition_id: str) -> None:
+        await self._replay_safe(
+            lambda: self.agent_definitions.restore_agent_definition(agent_definition_id)
         )
 
     def invocation(self, invocation_id: str) -> InvocationHandle:

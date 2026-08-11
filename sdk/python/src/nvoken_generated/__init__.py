@@ -43,6 +43,7 @@ __all__ = [
     "Agent",
     "AgentDefinition",
     "AgentDefinitionResource",
+    "AgentDefinitionResourceList",
     "AgentDefinitionWrite",
     "AgentList",
     "AllocateCreditsRequest",
@@ -299,6 +300,7 @@ from nvoken_generated.models.activity_metrics import ActivityMetrics as Activity
 from nvoken_generated.models.agent import Agent as Agent
 from nvoken_generated.models.agent_definition import AgentDefinition as AgentDefinition
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource as AgentDefinitionResource
+from nvoken_generated.models.agent_definition_resource_list import AgentDefinitionResourceList as AgentDefinitionResourceList
 from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite as AgentDefinitionWrite
 from nvoken_generated.models.agent_list import AgentList as AgentList
 from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest as AllocateCreditsRequest

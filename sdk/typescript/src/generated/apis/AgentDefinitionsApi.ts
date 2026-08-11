@@ -19,6 +19,11 @@ import {
     AgentDefinitionResourceToJSON,
 } from '../models/AgentDefinitionResource.js';
 import {
+    type AgentDefinitionResourceList,
+    AgentDefinitionResourceListFromJSON,
+    AgentDefinitionResourceListToJSON,
+} from '../models/AgentDefinitionResourceList.js';
+import {
     type AgentDefinitionWrite,
     AgentDefinitionWriteFromJSON,
     AgentDefinitionWriteToJSON,
@@ -29,12 +34,26 @@ import {
     ErrorResponseToJSON,
 } from '../models/ErrorResponse.js';
 
+export interface ArchiveAgentDefinitionRequest {
+    agentDefinitionId: string;
+}
+
 export interface CreateAgentDefinitionRequest {
     idempotencyKey: string;
     agentDefinitionWrite: AgentDefinitionWrite;
 }
 
 export interface GetAgentDefinitionRequest {
+    agentDefinitionId: string;
+}
+
+export interface ListAgentDefinitionsRequest {
+    includeArchived?: boolean;
+    cursor?: string;
+    limit?: number;
+}
+
+export interface RestoreAgentDefinitionRequest {
     agentDefinitionId: string;
 }
 
@@ -48,6 +67,60 @@ export interface UpdateAgentDefinitionRequest {
  *
  */
 export class AgentDefinitionsApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for archiveAgentDefinition without sending the request
+     */
+    async archiveAgentDefinitionRequestOpts(requestParameters: ArchiveAgentDefinitionRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['agentDefinitionId'] == null) {
+            throw new runtime.RequiredError(
+                'agentDefinitionId',
+                'Required parameter "agentDefinitionId" was null or undefined when calling archiveAgentDefinition().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agent-definitions/{agent_definition_id}`;
+        urlPath = urlPath.replace('{agent_definition_id}', encodeURIComponent(String(requestParameters['agentDefinitionId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Marks the resource retired. Invocation admission that resolves it — by `agent_definition_id` or by a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
+     * Archive an Agent Definition
+     */
+    async archiveAgentDefinitionRaw(requestParameters: ArchiveAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.archiveAgentDefinitionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Marks the resource retired. Invocation admission that resolves it — by `agent_definition_id` or by a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
+     * Archive an Agent Definition
+     */
+    async archiveAgentDefinition(requestParameters: ArchiveAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.archiveAgentDefinitionRaw(requestParameters, initOverrides);
+    }
 
     /**
      * Creates request options for createAgentDefinition without sending the request
@@ -168,6 +241,119 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     async getAgentDefinition(requestParameters: GetAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResource> {
         const response = await this.getAgentDefinitionRaw(requestParameters, initOverrides);
         return await response.value();
+    }
+
+    /**
+     * Creates request options for listAgentDefinitions without sending the request
+     */
+    async listAgentDefinitionsRequestOpts(requestParameters: ListAgentDefinitionsRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['includeArchived'] != null) {
+            queryParameters['include_archived'] = requestParameters['includeArchived'];
+        }
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agent-definitions`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns this App\'s stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+     * List the App\'s Agent Definition resources
+     */
+    async listAgentDefinitionsRaw(requestParameters: ListAgentDefinitionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionResourceList>> {
+        const requestOptions = await this.listAgentDefinitionsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AgentDefinitionResourceListFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns this App\'s stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+     * List the App\'s Agent Definition resources
+     */
+    async listAgentDefinitions(requestParameters: ListAgentDefinitionsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResourceList> {
+        const response = await this.listAgentDefinitionsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for restoreAgentDefinition without sending the request
+     */
+    async restoreAgentDefinitionRequestOpts(requestParameters: RestoreAgentDefinitionRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['agentDefinitionId'] == null) {
+            throw new runtime.RequiredError(
+                'agentDefinitionId',
+                'Required parameter "agentDefinitionId" was null or undefined when calling restoreAgentDefinition().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agent-definitions/{agent_definition_id}/restore`;
+        urlPath = urlPath.replace('{agent_definition_id}', encodeURIComponent(String(requestParameters['agentDefinitionId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Clears the resource\'s archive tombstone so Invocation admission resolves it again. Restoring a live resource is a successful no-op.
+     * Restore an archived Agent Definition
+     */
+    async restoreAgentDefinitionRaw(requestParameters: RestoreAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.restoreAgentDefinitionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Clears the resource\'s archive tombstone so Invocation admission resolves it again. Restoring a live resource is a successful no-op.
+     * Restore an archived Agent Definition
+     */
+    async restoreAgentDefinition(requestParameters: RestoreAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.restoreAgentDefinitionRaw(requestParameters, initOverrides);
     }
 
     /**

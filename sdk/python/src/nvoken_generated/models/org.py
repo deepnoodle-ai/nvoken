@@ -33,7 +33,8 @@ class Org(BaseModel):
     display_name: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Human-facing label for the customer Org.")
     external_ref: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(description="Optional unique identity-provider Org identifier.")
     created_at: datetime
-    __properties: ClassVar[List[str]] = ["id", "display_name", "external_ref", "created_at"]
+    archived_at: Optional[datetime] = Field(description="When the Org was archived, or null while it is live. An archived Org admits no new App and no new Org-bound credential; its reads and org-scoped reporting are unchanged. ")
+    __properties: ClassVar[List[str]] = ["id", "display_name", "external_ref", "created_at", "archived_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -79,6 +80,11 @@ class Org(BaseModel):
         if self.external_ref is None and "external_ref" in self.model_fields_set:
             _dict['external_ref'] = None
 
+        # set to None if archived_at (nullable) is None
+        # and model_fields_set contains the field
+        if self.archived_at is None and "archived_at" in self.model_fields_set:
+            _dict['archived_at'] = None
+
         return _dict
 
     @classmethod
@@ -94,6 +100,7 @@ class Org(BaseModel):
             "id": obj.get("id"),
             "display_name": obj.get("display_name"),
             "external_ref": obj.get("external_ref"),
-            "created_at": obj.get("created_at")
+            "created_at": obj.get("created_at"),
+            "archived_at": obj.get("archived_at")
         })
         return _obj

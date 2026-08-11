@@ -7,6 +7,21 @@
       "path": "/v1/credits/allocations"
     },
     {
+      "operation_id": "archiveAgentDefinition",
+      "method": "DELETE",
+      "path": "/v1/agent-definitions/{agent_definition_id}"
+    },
+    {
+      "operation_id": "archiveApp",
+      "method": "DELETE",
+      "path": "/v1/apps/{app_id}"
+    },
+    {
+      "operation_id": "archiveOrg",
+      "method": "DELETE",
+      "path": "/v1/orgs/{org_id}"
+    },
+    {
       "operation_id": "cancelInvocation",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/cancel"
@@ -147,6 +162,11 @@
       "path": "/v1/invocations/{invocation_id}/interrupt"
     },
     {
+      "operation_id": "listAgentDefinitions",
+      "method": "GET",
+      "path": "/v1/agent-definitions"
+    },
+    {
       "operation_id": "listAgents",
       "method": "GET",
       "path": "/v1/agents"
@@ -240,6 +260,21 @@
       "operation_id": "registerOrg",
       "method": "POST",
       "path": "/v1/orgs"
+    },
+    {
+      "operation_id": "restoreAgentDefinition",
+      "method": "POST",
+      "path": "/v1/agent-definitions/{agent_definition_id}/restore"
+    },
+    {
+      "operation_id": "restoreApp",
+      "method": "POST",
+      "path": "/v1/apps/{app_id}/restore"
+    },
+    {
+      "operation_id": "restoreOrg",
+      "method": "POST",
+      "path": "/v1/orgs/{org_id}/restore"
     },
     {
       "operation_id": "resumeInvocation",

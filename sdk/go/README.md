@@ -251,6 +251,8 @@ The resource has a stable ID and an increasing revision. Read it with
 `GetAgentDefinition`; replace its configuration with `UpdateAgentDefinition`
 and the revision you last read. An idempotency key makes create retries safe,
 while equal content under another key creates an independent resource.
+List resources with `ListAgentDefinitions`; archive one to stop new admissions
+without deleting its revision history, and restore it when it should run again.
 
 Supply exactly one of `AgentDefinition` and `AgentDefinitionID`; the facade
 rejects a request carrying both or neither before it reaches the network.

@@ -13,94 +13,79 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { AgentDefinitionResource } from './AgentDefinitionResource.js';
+import {
+    AgentDefinitionResourceFromJSON,
+    AgentDefinitionResourceFromJSONTyped,
+    AgentDefinitionResourceToJSON,
+    AgentDefinitionResourceToJSONTyped,
+} from './AgentDefinitionResource.js';
+
 /**
- * Thin customer ownership boundary. Membership, roles, invitations,
- * policy, and runtime state deliberately live elsewhere.
  *
  * @export
- * @interface Org
+ * @interface AgentDefinitionResourceList
  */
-export interface Org {
-    /**
-     * Opaque identifier with the public `org_` prefix. Treat the body as opaque.
-     * @type {string}
-     * @memberof Org
-     */
-    id: string;
-    /**
-     * Human-facing label for the customer Org.
-     * @type {string}
-     * @memberof Org
-     */
-    displayName: string;
-    /**
-     * Optional unique identity-provider Org identifier.
-     * @type {string}
-     * @memberof Org
-     */
-    externalRef: string | null;
+export interface AgentDefinitionResourceList {
     /**
      *
-     * @type {Date}
-     * @memberof Org
+     * @type {Array<AgentDefinitionResource>}
+     * @memberof AgentDefinitionResourceList
      */
-    createdAt: Date;
+    items: Array<AgentDefinitionResource>;
     /**
-     * When the Org was archived, or null while it is live. An archived
-     * Org admits no new App and no new Org-bound credential; its reads
-     * and org-scoped reporting are unchanged.
      *
-     * @type {Date}
-     * @memberof Org
+     * @type {boolean}
+     * @memberof AgentDefinitionResourceList
      */
-    archivedAt: Date | null;
+    hasMore: boolean;
+    /**
+     *
+     * @type {string}
+     * @memberof AgentDefinitionResourceList
+     */
+    nextCursor: string | null;
 }
 
 /**
- * Check if a given object implements the Org interface.
+ * Check if a given object implements the AgentDefinitionResourceList interface.
  */
-export function instanceOfOrg(value: object): value is Org {
-    if (!('id' in value) || value['id'] === undefined) return false;
-    if (!('displayName' in value) || value['displayName'] === undefined) return false;
-    if (!('externalRef' in value) || value['externalRef'] === undefined) return false;
-    if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
-    if (!('archivedAt' in value) || value['archivedAt'] === undefined) return false;
+export function instanceOfAgentDefinitionResourceList(value: object): value is AgentDefinitionResourceList {
+    if (!('items' in value) || value['items'] === undefined) return false;
+    if (!('hasMore' in value) || value['hasMore'] === undefined) return false;
+    if (!('nextCursor' in value) || value['nextCursor'] === undefined) return false;
     return true;
 }
 
-export function OrgFromJSON(json: any): Org {
-    return OrgFromJSONTyped(json, false);
+export function AgentDefinitionResourceListFromJSON(json: any): AgentDefinitionResourceList {
+    return AgentDefinitionResourceListFromJSONTyped(json, false);
 }
 
-export function OrgFromJSONTyped(json: any, ignoreDiscriminator: boolean): Org {
+export function AgentDefinitionResourceListFromJSONTyped(json: any, ignoreDiscriminator: boolean): AgentDefinitionResourceList {
     if (json == null) {
         return json;
     }
     return {
 
-        'id': json['id'],
-        'displayName': json['display_name'],
-        'externalRef': json['external_ref'],
-        'createdAt': (new Date(json['created_at'])),
-        'archivedAt': (json['archived_at'] == null ? null : new Date(json['archived_at'])),
+        'items': ((json['items'] as Array<any>).map(AgentDefinitionResourceFromJSON)),
+        'hasMore': json['has_more'],
+        'nextCursor': json['next_cursor'],
     };
 }
 
-export function OrgToJSON(json: any): Org {
-    return OrgToJSONTyped(json, false);
+export function AgentDefinitionResourceListToJSON(json: any): AgentDefinitionResourceList {
+    return AgentDefinitionResourceListToJSONTyped(json, false);
 }
 
-export function OrgToJSONTyped(value?: Org | null, ignoreDiscriminator: boolean = false): any {
+export function AgentDefinitionResourceListToJSONTyped(value?: AgentDefinitionResourceList | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'id': value['id'],
-        'display_name': value['displayName'],
-        'external_ref': value['externalRef'],
-        'created_at': value['createdAt'].toISOString(),
-        'archived_at': value['archivedAt'] == null ? value['archivedAt'] : value['archivedAt'].toISOString(),
+        'items': ((value['items'] as Array<any>).map(AgentDefinitionResourceToJSON)),
+        'has_more': value['hasMore'],
+        'next_cursor': value['nextCursor'],
     };
 }

@@ -101,6 +101,16 @@ export interface App {
      * @memberof App
      */
     createdAt: Date;
+    /**
+     * When the App was archived, or null while it is live. An archived
+     * App refuses admission and grant-minting with `409 app_archived`
+     * while every read, settlement, erasure, configuration, and
+     * revocation path stays open. Its credentials keep authenticating.
+     *
+     * @type {Date}
+     * @memberof App
+     */
+    archivedAt: Date | null;
 }
 
 /**
@@ -116,6 +126,7 @@ export function instanceOfApp(value: object): value is App {
     if (!('defaultRateLimits' in value) || value['defaultRateLimits'] === undefined) return false;
     if (!('browserAccess' in value) || value['browserAccess'] === undefined) return false;
     if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
+    if (!('archivedAt' in value) || value['archivedAt'] === undefined) return false;
     return true;
 }
 
@@ -138,6 +149,7 @@ export function AppFromJSONTyped(json: any, ignoreDiscriminator: boolean): App {
         'defaultRateLimits': AppDefaultRateLimitsFromJSON(json['default_rate_limits']),
         'browserAccess': BrowserAccessFromJSON(json['browser_access']),
         'createdAt': (new Date(json['created_at'])),
+        'archivedAt': (json['archived_at'] == null ? null : new Date(json['archived_at'])),
     };
 }
 
@@ -161,5 +173,6 @@ export function AppToJSONTyped(value?: App | null, ignoreDiscriminator: boolean 
         'default_rate_limits': AppDefaultRateLimitsToJSON(value['defaultRateLimits']),
         'browser_access': BrowserAccessToJSON(value['browserAccess']),
         'created_at': value['createdAt'].toISOString(),
+        'archived_at': value['archivedAt'] == null ? value['archivedAt'] : value['archivedAt'].toISOString(),
     };
 }

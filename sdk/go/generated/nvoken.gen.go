@@ -474,8 +474,10 @@ func (e DocumentReferenceBlockType) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
+	ErrorCodeAgentDefinitionArchived         ErrorCode = "agent_definition_archived"
 	ErrorCodeAgentDefinitionNotFound         ErrorCode = "agent_definition_not_found"
 	ErrorCodeAgentDefinitionRevisionConflict ErrorCode = "agent_definition_revision_conflict"
+	ErrorCodeAppArchived                     ErrorCode = "app_archived"
 	ErrorCodeBudgetExceeded                  ErrorCode = "budget_exceeded"
 	ErrorCodeCostEstimateUnavailable         ErrorCode = "cost_estimate_unavailable"
 	ErrorCodeForbidden                       ErrorCode = "forbidden"
@@ -489,6 +491,8 @@ const (
 	ErrorCodeMediaFetchFailed                ErrorCode = "media_fetch_failed"
 	ErrorCodeModelRetired                    ErrorCode = "model_retired"
 	ErrorCodeNotFound                        ErrorCode = "not_found"
+	ErrorCodeOrgArchived                     ErrorCode = "org_archived"
+	ErrorCodeOrgHasActiveApps                ErrorCode = "org_has_active_apps"
 	ErrorCodePreconditionRequired            ErrorCode = "precondition_required"
 	ErrorCodeProviderKeyConflict             ErrorCode = "provider_key_conflict"
 	ErrorCodeRateLimited                     ErrorCode = "rate_limited"
@@ -503,9 +507,13 @@ const (
 // Valid indicates whether the value is a known member of the ErrorCode enum.
 func (e ErrorCode) Valid() bool {
 	switch e {
+	case ErrorCodeAgentDefinitionArchived:
+		return true
 	case ErrorCodeAgentDefinitionNotFound:
 		return true
 	case ErrorCodeAgentDefinitionRevisionConflict:
+		return true
+	case ErrorCodeAppArchived:
 		return true
 	case ErrorCodeBudgetExceeded:
 		return true
@@ -532,6 +540,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeModelRetired:
 		return true
 	case ErrorCodeNotFound:
+		return true
+	case ErrorCodeOrgArchived:
+		return true
+	case ErrorCodeOrgHasActiveApps:
 		return true
 	case ErrorCodePreconditionRequired:
 		return true
@@ -1183,6 +1195,7 @@ const (
 	GetSession             Operation = "get_session"
 	GetSessionTranscript   Operation = "get_session_transcript"
 	InterruptInvocation    Operation = "interrupt_invocation"
+	ListAgentDefinitions   Operation = "list_agent_definitions"
 	ListAgents             Operation = "list_agents"
 	ListApps               Operation = "list_apps"
 	ListCredentials        Operation = "list_credentials"
@@ -1248,6 +1261,8 @@ func (e Operation) Valid() bool {
 	case GetSessionTranscript:
 		return true
 	case InterruptInvocation:
+		return true
+	case ListAgentDefinitions:
 		return true
 	case ListAgents:
 		return true
@@ -2002,6 +2017,69 @@ func (e WebhookEvent) Valid() bool {
 	}
 }
 
+// Defines values for ArchiveStatus.
+const (
+	ArchiveStatusActive   ArchiveStatus = "active"
+	ArchiveStatusAll      ArchiveStatus = "all"
+	ArchiveStatusArchived ArchiveStatus = "archived"
+)
+
+// Valid indicates whether the value is a known member of the ArchiveStatus enum.
+func (e ArchiveStatus) Valid() bool {
+	switch e {
+	case ArchiveStatusActive:
+		return true
+	case ArchiveStatusAll:
+		return true
+	case ArchiveStatusArchived:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAppsParamsStatus.
+const (
+	ListAppsParamsStatusActive   ListAppsParamsStatus = "active"
+	ListAppsParamsStatusAll      ListAppsParamsStatus = "all"
+	ListAppsParamsStatusArchived ListAppsParamsStatus = "archived"
+)
+
+// Valid indicates whether the value is a known member of the ListAppsParamsStatus enum.
+func (e ListAppsParamsStatus) Valid() bool {
+	switch e {
+	case ListAppsParamsStatusActive:
+		return true
+	case ListAppsParamsStatusAll:
+		return true
+	case ListAppsParamsStatusArchived:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListOrgsParamsStatus.
+const (
+	ListOrgsParamsStatusActive   ListOrgsParamsStatus = "active"
+	ListOrgsParamsStatusAll      ListOrgsParamsStatus = "all"
+	ListOrgsParamsStatusArchived ListOrgsParamsStatus = "archived"
+)
+
+// Valid indicates whether the value is a known member of the ListOrgsParamsStatus enum.
+func (e ListOrgsParamsStatus) Valid() bool {
+	switch e {
+	case ListOrgsParamsStatusActive:
+		return true
+	case ListOrgsParamsStatusAll:
+		return true
+	case ListOrgsParamsStatusArchived:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListProviderKeysParamsStatus.
 const (
 	ListProviderKeysParamsStatusActive  ListProviderKeysParamsStatus = "active"
@@ -2247,6 +2325,12 @@ type AgentDefinitionID = string
 
 // AgentDefinitionResource defines model for AgentDefinitionResource.
 type AgentDefinitionResource struct {
+	// ArchivedAt When the resource was archived, or null while it is live. Invocation
+	// admission that resolves an archived Agent Definition, by id or by
+	// pinned revision, is refused with `409 agent_definition_archived`.
+	// The resource and every revision stay readable.
+	ArchivedAt *time.Time `json:"archived_at"`
+
 	// ClientInterface One immutable definition-specific authorization object. Omission means
 	// the definition is not client-token-capable; an explicit empty object
 	// opts in with no client-authored context or tools. Each set is sorted
@@ -2301,6 +2385,13 @@ type AgentDefinitionResource struct {
 	ToolChoice *ToolChoice        `json:"tool_choice,omitempty"`
 	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
 	UpdatedAt  time.Time          `json:"updated_at"`
+}
+
+// AgentDefinitionResourceList defines model for AgentDefinitionResourceList.
+type AgentDefinitionResourceList struct {
+	HasMore    bool                      `json:"has_more"`
+	Items      []AgentDefinitionResource `json:"items"`
+	NextCursor *string                   `json:"next_cursor"`
 }
 
 // AgentDefinitionWrite Complete writable Agent Definition fields. The model string shorthand
@@ -2401,6 +2492,12 @@ type AllocateCreditsResult struct {
 
 // App defines model for App.
 type App struct {
+	// ArchivedAt When the App was archived, or null while it is live. An archived
+	// App refuses admission and grant-minting with `409 app_archived`
+	// while every read, settlement, erasure, configuration, and
+	// revocation path stays open. Its credentials keep authenticating.
+	ArchivedAt *time.Time `json:"archived_at"`
+
 	// BrowserAccess Complete dormant browser-direct configuration. Null means browser
 	// access is disabled. Client JWTs and CORS remain unavailable until
 	// PRD 065.
@@ -4712,7 +4809,11 @@ type Operation string
 // Org Thin customer ownership boundary. Membership, roles, invitations,
 // policy, and runtime state deliberately live elsewhere.
 type Org struct {
-	CreatedAt time.Time `json:"created_at"`
+	// ArchivedAt When the Org was archived, or null while it is live. An archived
+	// Org admits no new App and no new Org-bound credential; its reads
+	// and org-scoped reporting are unchanged.
+	ArchivedAt *time.Time `json:"archived_at"`
+	CreatedAt  time.Time  `json:"created_at"`
 
 	// DisplayName Human-facing label for the customer Org.
 	DisplayName string `json:"display_name"`
@@ -5975,6 +6076,9 @@ type WebhookTarget struct {
 // AgentKeyFilter defines model for AgentKeyFilter.
 type AgentKeyFilter = string
 
+// ArchiveStatus defines model for ArchiveStatus.
+type ArchiveStatus string
+
 // CredentialLimit defines model for CredentialLimit.
 type CredentialLimit = int
 
@@ -6038,6 +6142,9 @@ type UsageToolNameFilter = string
 // UserKeyFilter defines model for UserKeyFilter.
 type UserKeyFilter = string
 
+// AppArchived defines model for AppArchived.
+type AppArchived = ErrorResponse
+
 // Conflict defines model for Conflict.
 type Conflict = ErrorResponse
 
@@ -6056,6 +6163,9 @@ type MCPDiscoveryFailed = ErrorResponse
 // NotFound defines model for NotFound.
 type NotFound = ErrorResponse
 
+// OrgArchived defines model for OrgArchived.
+type OrgArchived = ErrorResponse
+
 // RateLimited defines model for RateLimited.
 type RateLimited = ErrorResponse
 
@@ -6064,6 +6174,18 @@ type Unauthenticated = ErrorResponse
 
 // Unavailable defines model for Unavailable.
 type Unavailable = ErrorResponse
+
+// ListAgentDefinitionsParams defines parameters for ListAgentDefinitions.
+type ListAgentDefinitionsParams struct {
+	// IncludeArchived Include archived resources alongside live ones.
+	IncludeArchived *bool `form:"include_archived,omitempty" json:"include_archived,omitempty"`
+
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Maximum items in this page. Defaults to 100.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
 
 // CreateAgentDefinitionParams defines parameters for CreateAgentDefinition.
 type CreateAgentDefinitionParams struct {
@@ -6093,7 +6215,14 @@ type ListAgentsParams struct {
 type ListAppsParams struct {
 	// ExternalRef Return only apps whose `external_ref` equals this value.
 	ExternalRef *string `form:"external_ref,omitempty" json:"external_ref,omitempty"`
+
+	// Status Which container rows to return. Archive hides a container from pickers,
+	// never from money: usage reporting always counts archived Apps.
+	Status *ListAppsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
 }
+
+// ListAppsParamsStatus defines parameters for ListApps.
+type ListAppsParamsStatus string
 
 // ListCreditAccountsParams defines parameters for ListCreditAccounts.
 type ListCreditAccountsParams struct {
@@ -6242,6 +6371,16 @@ type GetModelParams struct {
 	// IfNoneMatch ETag from a prior response for this exact representation.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
+
+// ListOrgsParams defines parameters for ListOrgs.
+type ListOrgsParams struct {
+	// Status Which container rows to return. Archive hides a container from pickers,
+	// never from money: usage reporting always counts archived Apps.
+	Status *ListOrgsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// ListOrgsParamsStatus defines parameters for ListOrgs.
+type ListOrgsParamsStatus string
 
 // ListProviderKeysParams defines parameters for ListProviderKeys.
 type ListProviderKeysParams struct {
@@ -8885,6 +9024,15 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
+	// ListAgentDefinitions List the App's Agent Definition resources
+	//
+	// Returns this App's stable resources at their current revision, newest
+	// first and cursor-paginated. Archived resources are excluded unless
+	// `include_archived` is true, and then carry a non-null `archived_at`.
+	//
+	// Corresponds with GET /v1/agent-definitions (the `ListAgentDefinitions` operationId).
+	ListAgentDefinitions(ctx context.Context, params *ListAgentDefinitionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateAgentDefinitionWithBody Create an Agent Definition resource
 	//
 	// Creates a stable App-owned resource at revision 1. Equal content in a
@@ -8909,6 +9057,21 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/agent-definitions (the `CreateAgentDefinition` operationId).
 	CreateAgentDefinition(ctx context.Context, params *CreateAgentDefinitionParams, body CreateAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ArchiveAgentDefinition Archive an Agent Definition
+	//
+	// Marks the resource retired. Invocation admission that resolves it —
+	// by `agent_definition_id` or by a pinned revision, on every admission
+	// path including browser-direct client tokens — is then refused with
+	// `409 agent_definition_archived`.
+	//
+	// Nothing is destroyed: the resource and every revision stay readable,
+	// and each existing Invocation keeps its pinned revision evidence.
+	// Archiving requires the same authority as replacing the definition, and
+	// repeating the call is a successful no-op.
+	//
+	// Corresponds with DELETE /v1/agent-definitions/{agent_definition_id} (the `ArchiveAgentDefinition` operationId).
+	ArchiveAgentDefinition(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetAgentDefinition Get the current Agent Definition revision
 	//
 	// Corresponds with GET /v1/agent-definitions/{agent_definition_id} (the `GetAgentDefinition` operationId).
@@ -8927,6 +9090,14 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/agent-definitions/{agent_definition_id} (the `UpdateAgentDefinition` operationId).
 	UpdateAgentDefinition(ctx context.Context, agentDefinitionID AgentDefinitionID, params *UpdateAgentDefinitionParams, body UpdateAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RestoreAgentDefinition Restore an archived Agent Definition
+	//
+	// Clears the resource's archive tombstone so Invocation admission
+	// resolves it again. Restoring a live resource is a successful no-op.
+	//
+	// Corresponds with POST /v1/agent-definitions/{agent_definition_id}/restore (the `RestoreAgentDefinition` operationId).
+	RestoreAgentDefinition(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAgents List Agent identity anchors
 	//
@@ -8960,7 +9131,8 @@ type ClientInterface interface {
 	// sees only that App, an Org-scoped credential sees the Apps contained
 	// by its Org, and an installation credential sees every registered App.
 	// An exact `external_ref` filter narrows that visible set during the
-	// staged console migration.
+	// staged console migration. Archived Apps are excluded unless `status`
+	// asks for them.
 	//
 	// Corresponds with GET /v1/apps (the `ListApps` operationId).
 	ListApps(ctx context.Context, params *ListAppsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -9010,6 +9182,30 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/apps (the `RegisterApp` operationId).
 	RegisterApp(ctx context.Context, body RegisterAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ArchiveApp Archive an app
+	//
+	// Marks the App out of service. Nothing is destroyed and no other
+	// resource's lifecycle changes: the App's credentials keep
+	// authenticating, its client keys stay registered, and its Agent
+	// Definitions are untouched.
+	//
+	// While archived, exactly these operations return `409 app_archived`:
+	// Session create and fork, Invocation create, Invocation resume, Agent
+	// Definition create and replace, client-key create, App-bound credential
+	// issuance, provider-key create, and credit allocation. Everything else
+	// behaves as on a live App — reads and lists, cancel, interrupt, nudges,
+	// tool-result submission, Session update and erasure, App `PATCH`, and
+	// credential, client-key, and provider-key rotation and revocation — so a
+	// draining host can let running turns settle and then clean up. Usage
+	// reporting keeps counting the App's spend.
+	//
+	// Archiving requires the same authority as updating the App: an Org or
+	// installation credential. A credential bound to the App cannot archive
+	// or restore it. Repeating the call is a successful no-op.
+	//
+	// Corresponds with DELETE /v1/apps/{app_id} (the `ArchiveApp` operationId).
+	ArchiveApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetApp Get one app
 	//
@@ -9100,6 +9296,15 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /v1/apps/{app_id}/client-keys/{key_id} (the `RevokeAppClientKey` operationId).
 	RevokeAppClientKey(ctx context.Context, appID AppID, keyID ClientKeyID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RestoreApp Restore an archived app
+	//
+	// Clears the App's archive tombstone and reopens admission. Nothing else
+	// is restored, and the App's Org may still be archived. Restoring a live
+	// App is a successful no-op.
+	//
+	// Corresponds with POST /v1/apps/{app_id}/restore (the `RestoreApp` operationId).
+	RestoreApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListCreditAccounts List tenant credit accounts
 	//
@@ -9793,8 +9998,10 @@ type ClientInterface interface {
 	// credential sees only its own Org. App-scoped credentials and
 	// non-admin installation issuer tokens cannot list Orgs.
 	//
+	// Archived Orgs are excluded unless `status` asks for them.
+	//
 	// Corresponds with GET /v1/orgs (the `ListOrgs` operationId).
-	ListOrgs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListOrgs(ctx context.Context, params *ListOrgsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RegisterOrgWithBody Register an org
 	//
@@ -9803,6 +10010,8 @@ type ClientInterface interface {
 	// `external_ref` names an existing Org, the existing resource is
 	// returned unchanged so register-on-first-login is race-safe and
 	// idempotent.
+	//
+	// Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -9817,10 +10026,26 @@ type ClientInterface interface {
 	// returned unchanged so register-on-first-login is race-safe and
 	// idempotent.
 	//
+	// Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
+	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
 	RegisterOrg(ctx context.Context, body RegisterOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ArchiveOrg Archive an org
+	//
+	// Marks the Org out of service. Every App it owns must be archived first;
+	// this is an explicit precondition rather than a cascade, so no
+	// irreversible side effect hides inside a reversible operation.
+	//
+	// Nothing is destroyed. An archived Org refuses App registration into it
+	// and Org-bound credential issuance with `409 org_archived`, while Org
+	// reads and org-scoped reporting stay open. Archiving requires the same
+	// authority as updating the Org, and repeating it is a successful no-op.
+	//
+	// Corresponds with DELETE /v1/orgs/{org_id} (the `ArchiveOrg` operationId).
+	ArchiveOrg(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOrg Get one org
 	//
@@ -9850,6 +10075,15 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
 	UpdateOrg(ctx context.Context, orgID OrgID, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RestoreOrg Restore an archived org
+	//
+	// Clears the Org's archive tombstone. There is no ordering precondition
+	// and nothing else is restored: Apps archived before the Org stay
+	// archived. Restoring a live Org is a successful no-op.
+	//
+	// Corresponds with POST /v1/orgs/{org_id}/restore (the `RestoreOrg` operationId).
+	RestoreOrg(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListProviderKeys List reusable provider key metadata
 	//
@@ -10212,6 +10446,25 @@ type ClientInterface interface {
 	GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
+// ListAgentDefinitions List the App's Agent Definition resources
+//
+// Returns this App's stable resources at their current revision, newest
+// first and cursor-paginated. Archived resources are excluded unless
+// `include_archived` is true, and then carry a non-null `archived_at`.
+//
+// Corresponds with GET /v1/agent-definitions (the `ListAgentDefinitions` operationId).
+func (c *Client) ListAgentDefinitions(ctx context.Context, params *ListAgentDefinitionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentDefinitionsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // CreateAgentDefinitionWithBody Create an Agent Definition resource
 //
 // Creates a stable App-owned resource at revision 1. Equal content in a
@@ -10246,6 +10499,31 @@ func (c *Client) CreateAgentDefinitionWithBody(ctx context.Context, params *Crea
 // Corresponds with POST /v1/agent-definitions (the `CreateAgentDefinition` operationId).
 func (c *Client) CreateAgentDefinition(ctx context.Context, params *CreateAgentDefinitionParams, body CreateAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateAgentDefinitionRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ArchiveAgentDefinition Archive an Agent Definition
+//
+// Marks the resource retired. Invocation admission that resolves it —
+// by `agent_definition_id` or by a pinned revision, on every admission
+// path including browser-direct client tokens — is then refused with
+// `409 agent_definition_archived`.
+//
+// Nothing is destroyed: the resource and every revision stay readable,
+// and each existing Invocation keeps its pinned revision evidence.
+// Archiving requires the same authority as replacing the definition, and
+// repeating the call is a successful no-op.
+//
+// Corresponds with DELETE /v1/agent-definitions/{agent_definition_id} (the `ArchiveAgentDefinition` operationId).
+func (c *Client) ArchiveAgentDefinition(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewArchiveAgentDefinitionRequest(c.Server, agentDefinitionID)
 	if err != nil {
 		return nil, err
 	}
@@ -10295,6 +10573,24 @@ func (c *Client) UpdateAgentDefinitionWithBody(ctx context.Context, agentDefinit
 // Corresponds with PUT /v1/agent-definitions/{agent_definition_id} (the `UpdateAgentDefinition` operationId).
 func (c *Client) UpdateAgentDefinition(ctx context.Context, agentDefinitionID AgentDefinitionID, params *UpdateAgentDefinitionParams, body UpdateAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateAgentDefinitionRequest(c.Server, agentDefinitionID, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RestoreAgentDefinition Restore an archived Agent Definition
+//
+// Clears the resource's archive tombstone so Invocation admission
+// resolves it again. Restoring a live resource is a successful no-op.
+//
+// Corresponds with POST /v1/agent-definitions/{agent_definition_id}/restore (the `RestoreAgentDefinition` operationId).
+func (c *Client) RestoreAgentDefinition(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestoreAgentDefinitionRequest(c.Server, agentDefinitionID)
 	if err != nil {
 		return nil, err
 	}
@@ -10357,7 +10653,8 @@ func (c *Client) GetAgent(ctx context.Context, agentID AgentID, reqEditors ...Re
 // sees only that App, an Org-scoped credential sees the Apps contained
 // by its Org, and an installation credential sees every registered App.
 // An exact `external_ref` filter narrows that visible set during the
-// staged console migration.
+// staged console migration. Archived Apps are excluded unless `status`
+// asks for them.
 //
 // Corresponds with GET /v1/apps (the `ListApps` operationId).
 func (c *Client) ListApps(ctx context.Context, params *ListAppsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10428,6 +10725,40 @@ func (c *Client) RegisterAppWithBody(ctx context.Context, contentType string, bo
 // Corresponds with POST /v1/apps (the `RegisterApp` operationId).
 func (c *Client) RegisterApp(ctx context.Context, body RegisterAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRegisterAppRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ArchiveApp Archive an app
+//
+// Marks the App out of service. Nothing is destroyed and no other
+// resource's lifecycle changes: the App's credentials keep
+// authenticating, its client keys stay registered, and its Agent
+// Definitions are untouched.
+//
+// While archived, exactly these operations return `409 app_archived`:
+// Session create and fork, Invocation create, Invocation resume, Agent
+// Definition create and replace, client-key create, App-bound credential
+// issuance, provider-key create, and credit allocation. Everything else
+// behaves as on a live App — reads and lists, cancel, interrupt, nudges,
+// tool-result submission, Session update and erasure, App `PATCH`, and
+// credential, client-key, and provider-key rotation and revocation — so a
+// draining host can let running turns settle and then clean up. Usage
+// reporting keeps counting the App's spend.
+//
+// Archiving requires the same authority as updating the App: an Org or
+// installation credential. A credential bound to the App cannot archive
+// or restore it. Repeating the call is a successful no-op.
+//
+// Corresponds with DELETE /v1/apps/{app_id} (the `ArchiveApp` operationId).
+func (c *Client) ArchiveApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewArchiveAppRequest(c.Server, appID)
 	if err != nil {
 		return nil, err
 	}
@@ -10588,6 +10919,25 @@ func (c *Client) CreateAppClientKey(ctx context.Context, appID AppID, body Creat
 // Corresponds with DELETE /v1/apps/{app_id}/client-keys/{key_id} (the `RevokeAppClientKey` operationId).
 func (c *Client) RevokeAppClientKey(ctx context.Context, appID AppID, keyID ClientKeyID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRevokeAppClientKeyRequest(c.Server, appID, keyID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RestoreApp Restore an archived app
+//
+// Clears the App's archive tombstone and reopens admission. Nothing else
+// is restored, and the App's Org may still be archived. Restoring a live
+// App is a successful no-op.
+//
+// Corresponds with POST /v1/apps/{app_id}/restore (the `RestoreApp` operationId).
+func (c *Client) RestoreApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestoreAppRequest(c.Server, appID)
 	if err != nil {
 		return nil, err
 	}
@@ -11630,9 +11980,11 @@ func (c *Client) GetModel(ctx context.Context, provider ModelProvider, modelID s
 // credential sees only its own Org. App-scoped credentials and
 // non-admin installation issuer tokens cannot list Orgs.
 //
+// Archived Orgs are excluded unless `status` asks for them.
+//
 // Corresponds with GET /v1/orgs (the `ListOrgs` operationId).
-func (c *Client) ListOrgs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListOrgsRequest(c.Server)
+func (c *Client) ListOrgs(ctx context.Context, params *ListOrgsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOrgsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -11650,6 +12002,8 @@ func (c *Client) ListOrgs(ctx context.Context, reqEditors ...RequestEditorFn) (*
 // `external_ref` names an existing Org, the existing resource is
 // returned unchanged so register-on-first-login is race-safe and
 // idempotent.
+//
+// Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
 //
 // Takes any type of body and a specified content type.
 //
@@ -11674,11 +12028,37 @@ func (c *Client) RegisterOrgWithBody(ctx context.Context, contentType string, bo
 // returned unchanged so register-on-first-login is race-safe and
 // idempotent.
 //
+// Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
+//
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
 func (c *Client) RegisterOrg(ctx context.Context, body RegisterOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRegisterOrgRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ArchiveOrg Archive an org
+//
+// Marks the Org out of service. Every App it owns must be archived first;
+// this is an explicit precondition rather than a cascade, so no
+// irreversible side effect hides inside a reversible operation.
+//
+// Nothing is destroyed. An archived Org refuses App registration into it
+// and Org-bound credential issuance with `409 org_archived`, while Org
+// reads and org-scoped reporting stay open. Archiving requires the same
+// authority as updating the Org, and repeating it is a successful no-op.
+//
+// Corresponds with DELETE /v1/orgs/{org_id} (the `ArchiveOrg` operationId).
+func (c *Client) ArchiveOrg(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewArchiveOrgRequest(c.Server, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -11738,6 +12118,25 @@ func (c *Client) UpdateOrgWithBody(ctx context.Context, orgID OrgID, contentType
 // Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
 func (c *Client) UpdateOrg(ctx context.Context, orgID OrgID, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateOrgRequest(c.Server, orgID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RestoreOrg Restore an archived org
+//
+// Clears the Org's archive tombstone. There is no ordering precondition
+// and nothing else is restored: Apps archived before the Org stay
+// archived. Restoring a live Org is a successful no-op.
+//
+// Corresponds with POST /v1/orgs/{org_id}/restore (the `RestoreOrg` operationId).
+func (c *Client) RestoreOrg(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestoreOrgRequest(c.Server, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -12348,6 +12747,84 @@ func (c *Client) GetUsageTimeseries(ctx context.Context, params *GetUsageTimeser
 	return c.Client.Do(req)
 }
 
+// NewListAgentDefinitionsRequest constructs an http.Request for the ListAgentDefinitions method
+func NewListAgentDefinitionsRequest(server string, params *ListAgentDefinitionsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agent-definitions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeArchived != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_archived", *params.IncludeArchived, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCreateAgentDefinitionRequest calls the generic CreateAgentDefinition builder with application/json body
 func NewCreateAgentDefinitionRequest(server string, params *CreateAgentDefinitionParams, body CreateAgentDefinitionJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -12396,6 +12873,40 @@ func NewCreateAgentDefinitionRequestWithBody(server string, params *CreateAgentD
 
 		req.Header.Set("Idempotency-Key", headerParam0)
 
+	}
+
+	return req, nil
+}
+
+// NewArchiveAgentDefinitionRequest constructs an http.Request for the ArchiveAgentDefinition method
+func NewArchiveAgentDefinitionRequest(server string, agentDefinitionID AgentDefinitionID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agent_definition_id", agentDefinitionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agent-definitions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -12490,6 +13001,40 @@ func NewUpdateAgentDefinitionRequestWithBody(server string, agentDefinitionID Ag
 
 		req.Header.Set("If-Match", headerParam0)
 
+	}
+
+	return req, nil
+}
+
+// NewRestoreAgentDefinitionRequest constructs an http.Request for the RestoreAgentDefinition method
+func NewRestoreAgentDefinitionRequest(server string, agentDefinitionID AgentDefinitionID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agent_definition_id", agentDefinitionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agent-definitions/%s/restore", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -12647,6 +13192,18 @@ func NewListAppsRequest(server string, params *ListAppsParams) (*http.Request, e
 
 		}
 
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -12697,6 +13254,40 @@ func NewRegisterAppRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewArchiveAppRequest constructs an http.Request for the ArchiveApp method
+func NewArchiveAppRequest(server string, appID AppID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "app_id", appID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/apps/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -12897,6 +13488,40 @@ func NewRevokeAppClientKeyRequest(server string, appID AppID, keyID ClientKeyID)
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRestoreAppRequest constructs an http.Request for the RestoreApp method
+func NewRestoreAppRequest(server string, appID AppID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "app_id", appID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/apps/%s/restore", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -14424,7 +15049,7 @@ func NewGetModelRequest(server string, provider ModelProvider, modelID string, p
 }
 
 // NewListOrgsRequest constructs an http.Request for the ListOrgs method
-func NewListOrgsRequest(server string) (*http.Request, error) {
+func NewListOrgsRequest(server string, params *ListOrgsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -14440,6 +15065,33 @@ func NewListOrgsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -14486,6 +15138,40 @@ func NewRegisterOrgRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewArchiveOrgRequest constructs an http.Request for the ArchiveOrg method
+func NewArchiveOrgRequest(server string, orgID OrgID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org_id", orgID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/orgs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -14567,6 +15253,40 @@ func NewUpdateOrgRequestWithBody(server string, orgID OrgID, contentType string,
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRestoreOrgRequest constructs an http.Request for the RestoreOrg method
+func NewRestoreOrgRequest(server string, orgID OrgID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org_id", orgID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/orgs/%s/restore", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -16355,6 +17075,17 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// ListAgentDefinitionsWithResponse List the App's Agent Definition resources
+	//
+	// Returns this App's stable resources at their current revision, newest
+	// first and cursor-paginated. Archived resources are excluded unless
+	// `include_archived` is true, and then carry a non-null `archived_at`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/agent-definitions (the `ListAgentDefinitions` operationId).
+	ListAgentDefinitionsWithResponse(ctx context.Context, params *ListAgentDefinitionsParams, reqEditors ...RequestEditorFn) (*ListAgentDefinitionsHTTPResponse, error)
+
 	// CreateAgentDefinitionWithBodyWithResponse Create an Agent Definition resource
 	//
 	// Creates a stable App-owned resource at revision 1. Equal content in a
@@ -16379,6 +17110,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/agent-definitions (the `CreateAgentDefinition` operationId).
 	CreateAgentDefinitionWithResponse(ctx context.Context, params *CreateAgentDefinitionParams, body CreateAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentDefinitionHTTPResponse, error)
 
+	// ArchiveAgentDefinitionWithResponse Archive an Agent Definition
+	//
+	// Marks the resource retired. Invocation admission that resolves it —
+	// by `agent_definition_id` or by a pinned revision, on every admission
+	// path including browser-direct client tokens — is then refused with
+	// `409 agent_definition_archived`.
+	//
+	// Nothing is destroyed: the resource and every revision stay readable,
+	// and each existing Invocation keeps its pinned revision evidence.
+	// Archiving requires the same authority as replacing the definition, and
+	// repeating the call is a successful no-op.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/agent-definitions/{agent_definition_id} (the `ArchiveAgentDefinition` operationId).
+	ArchiveAgentDefinitionWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*ArchiveAgentDefinitionHTTPResponse, error)
+
 	// GetAgentDefinitionWithResponse Get the current Agent Definition revision
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -16399,6 +17147,16 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/agent-definitions/{agent_definition_id} (the `UpdateAgentDefinition` operationId).
 	UpdateAgentDefinitionWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, params *UpdateAgentDefinitionParams, body UpdateAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionHTTPResponse, error)
+
+	// RestoreAgentDefinitionWithResponse Restore an archived Agent Definition
+	//
+	// Clears the resource's archive tombstone so Invocation admission
+	// resolves it again. Restoring a live resource is a successful no-op.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/agent-definitions/{agent_definition_id}/restore (the `RestoreAgentDefinition` operationId).
+	RestoreAgentDefinitionWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*RestoreAgentDefinitionHTTPResponse, error)
 
 	// ListAgentsWithResponse List Agent identity anchors
 	//
@@ -16436,7 +17194,8 @@ type ClientWithResponsesInterface interface {
 	// sees only that App, an Org-scoped credential sees the Apps contained
 	// by its Org, and an installation credential sees every registered App.
 	// An exact `external_ref` filter narrows that visible set during the
-	// staged console migration.
+	// staged console migration. Archived Apps are excluded unless `status`
+	// asks for them.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -16488,6 +17247,32 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/apps (the `RegisterApp` operationId).
 	RegisterAppWithResponse(ctx context.Context, body RegisterAppJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterAppHTTPResponse, error)
+
+	// ArchiveAppWithResponse Archive an app
+	//
+	// Marks the App out of service. Nothing is destroyed and no other
+	// resource's lifecycle changes: the App's credentials keep
+	// authenticating, its client keys stay registered, and its Agent
+	// Definitions are untouched.
+	//
+	// While archived, exactly these operations return `409 app_archived`:
+	// Session create and fork, Invocation create, Invocation resume, Agent
+	// Definition create and replace, client-key create, App-bound credential
+	// issuance, provider-key create, and credit allocation. Everything else
+	// behaves as on a live App — reads and lists, cancel, interrupt, nudges,
+	// tool-result submission, Session update and erasure, App `PATCH`, and
+	// credential, client-key, and provider-key rotation and revocation — so a
+	// draining host can let running turns settle and then clean up. Usage
+	// reporting keeps counting the App's spend.
+	//
+	// Archiving requires the same authority as updating the App: an Org or
+	// installation credential. A credential bound to the App cannot archive
+	// or restore it. Repeating the call is a successful no-op.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/apps/{app_id} (the `ArchiveApp` operationId).
+	ArchiveAppWithResponse(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*ArchiveAppHTTPResponse, error)
 
 	// GetAppWithResponse Get one app
 	//
@@ -16584,6 +17369,17 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /v1/apps/{app_id}/client-keys/{key_id} (the `RevokeAppClientKey` operationId).
 	RevokeAppClientKeyWithResponse(ctx context.Context, appID AppID, keyID ClientKeyID, reqEditors ...RequestEditorFn) (*RevokeAppClientKeyHTTPResponse, error)
+
+	// RestoreAppWithResponse Restore an archived app
+	//
+	// Clears the App's archive tombstone and reopens admission. Nothing else
+	// is restored, and the App's Org may still be archived. Restoring a live
+	// App is a successful no-op.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/apps/{app_id}/restore (the `RestoreApp` operationId).
+	RestoreAppWithResponse(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*RestoreAppHTTPResponse, error)
 
 	// ListCreditAccountsWithResponse List tenant credit accounts
 	//
@@ -17313,10 +18109,12 @@ type ClientWithResponsesInterface interface {
 	// credential sees only its own Org. App-scoped credentials and
 	// non-admin installation issuer tokens cannot list Orgs.
 	//
+	// Archived Orgs are excluded unless `status` asks for them.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/orgs (the `ListOrgs` operationId).
-	ListOrgsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOrgsHTTPResponse, error)
+	ListOrgsWithResponse(ctx context.Context, params *ListOrgsParams, reqEditors ...RequestEditorFn) (*ListOrgsHTTPResponse, error)
 
 	// RegisterOrgWithBodyWithResponse Register an org
 	//
@@ -17325,6 +18123,8 @@ type ClientWithResponsesInterface interface {
 	// `external_ref` names an existing Org, the existing resource is
 	// returned unchanged so register-on-first-login is race-safe and
 	// idempotent.
+	//
+	// Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -17339,10 +18139,28 @@ type ClientWithResponsesInterface interface {
 	// returned unchanged so register-on-first-login is race-safe and
 	// idempotent.
 	//
+	// Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
+	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
 	RegisterOrgWithResponse(ctx context.Context, body RegisterOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterOrgHTTPResponse, error)
+
+	// ArchiveOrgWithResponse Archive an org
+	//
+	// Marks the Org out of service. Every App it owns must be archived first;
+	// this is an explicit precondition rather than a cascade, so no
+	// irreversible side effect hides inside a reversible operation.
+	//
+	// Nothing is destroyed. An archived Org refuses App registration into it
+	// and Org-bound credential issuance with `409 org_archived`, while Org
+	// reads and org-scoped reporting stay open. Archiving requires the same
+	// authority as updating the Org, and repeating it is a successful no-op.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/orgs/{org_id} (the `ArchiveOrg` operationId).
+	ArchiveOrgWithResponse(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*ArchiveOrgHTTPResponse, error)
 
 	// GetOrgWithResponse Get one org
 	//
@@ -17374,6 +18192,17 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /v1/orgs/{org_id} (the `UpdateOrg` operationId).
 	UpdateOrgWithResponse(ctx context.Context, orgID OrgID, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgHTTPResponse, error)
+
+	// RestoreOrgWithResponse Restore an archived org
+	//
+	// Clears the Org's archive tombstone. There is no ordering precondition
+	// and nothing else is restored: Apps archived before the Org stay
+	// archived. Restoring a live Org is a successful no-op.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/orgs/{org_id}/restore (the `RestoreOrg` operationId).
+	RestoreOrgWithResponse(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*RestoreOrgHTTPResponse, error)
 
 	// ListProviderKeysWithResponse List reusable provider key metadata
 	//
@@ -17764,6 +18593,96 @@ type ClientWithResponsesInterface interface {
 	GetUsageTimeseriesWithResponse(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*GetUsageTimeseriesHTTPResponse, error)
 }
 
+// ListAgentDefinitionsHTTPResponse429Headers the declared response headers of an HTTP 429 response for ListAgentDefinitions
+type ListAgentDefinitionsHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type ListAgentDefinitionsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AgentDefinitionResourceList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *ListAgentDefinitionsHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAgentDefinitionsHTTPResponse) GetJSON200() *AgentDefinitionResourceList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListAgentDefinitionsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListAgentDefinitionsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListAgentDefinitionsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r ListAgentDefinitionsHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListAgentDefinitionsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListAgentDefinitionsHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAgentDefinitionsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentDefinitionsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentDefinitionsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAgentDefinitionsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // CreateAgentDefinitionHTTPResponse201Headers the declared response headers of an HTTP 201 response for CreateAgentDefinition
 type CreateAgentDefinitionHTTPResponse201Headers struct {
 	ETag *string
@@ -17785,6 +18704,8 @@ type CreateAgentDefinitionHTTPResponse struct {
 	JSON401 *Unauthenticated
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *Forbidden
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *AppArchived
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -17815,6 +18736,11 @@ func (r CreateAgentDefinitionHTTPResponse) GetJSON401() *Unauthenticated {
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
 func (r CreateAgentDefinitionHTTPResponse) GetJSON403() *Forbidden {
 	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateAgentDefinitionHTTPResponse) GetJSON409() *AppArchived {
+	return r.JSON409
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -17855,6 +18781,82 @@ func (r CreateAgentDefinitionHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateAgentDefinitionHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ArchiveAgentDefinitionHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ArchiveAgentDefinitionHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ArchiveAgentDefinitionHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ArchiveAgentDefinitionHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ArchiveAgentDefinitionHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ArchiveAgentDefinitionHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ArchiveAgentDefinitionHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ArchiveAgentDefinitionHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ArchiveAgentDefinitionHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ArchiveAgentDefinitionHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ArchiveAgentDefinitionHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17962,6 +18964,8 @@ type UpdateAgentDefinitionHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *AppArchived
 	// JSON412 the response for an HTTP 412 `application/json` response
 	JSON412 *ErrorResponse
 	// JSON428 the response for an HTTP 428 `application/json` response
@@ -17997,6 +19001,11 @@ func (r UpdateAgentDefinitionHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r UpdateAgentDefinitionHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r UpdateAgentDefinitionHTTPResponse) GetJSON409() *AppArchived {
+	return r.JSON409
 }
 
 // GetJSON412 returns the response for an HTTP 412 `application/json` response
@@ -18042,6 +19051,82 @@ func (r UpdateAgentDefinitionHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateAgentDefinitionHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RestoreAgentDefinitionHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RestoreAgentDefinitionHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RestoreAgentDefinitionHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RestoreAgentDefinitionHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RestoreAgentDefinitionHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r RestoreAgentDefinitionHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r RestoreAgentDefinitionHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r RestoreAgentDefinitionHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RestoreAgentDefinitionHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestoreAgentDefinitionHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestoreAgentDefinitionHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18327,6 +19412,8 @@ type RegisterAppHTTPResponse struct {
 	JSON401 *Unauthenticated
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *Forbidden
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *OrgArchived
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -18355,6 +19442,11 @@ func (r RegisterAppHTTPResponse) GetJSON401() *Unauthenticated {
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
 func (r RegisterAppHTTPResponse) GetJSON403() *Forbidden {
 	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r RegisterAppHTTPResponse) GetJSON409() *OrgArchived {
+	return r.JSON409
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -18395,6 +19487,89 @@ func (r RegisterAppHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RegisterAppHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ArchiveAppHTTPResponse429Headers the declared response headers of an HTTP 429 response for ArchiveApp
+type ArchiveAppHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type ArchiveAppHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *ArchiveAppHTTPResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ArchiveAppHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ArchiveAppHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ArchiveAppHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ArchiveAppHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r ArchiveAppHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ArchiveAppHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ArchiveAppHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ArchiveAppHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ArchiveAppHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ArchiveAppHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18502,6 +19677,8 @@ type UpdateAppHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *OrgArchived
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -18533,6 +19710,11 @@ func (r UpdateAppHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r UpdateAppHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r UpdateAppHTTPResponse) GetJSON409() *OrgArchived {
+	return r.JSON409
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -18675,6 +19857,8 @@ type CreateAppClientKeyHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *AppArchived
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -18706,6 +19890,11 @@ func (r CreateAppClientKeyHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r CreateAppClientKeyHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateAppClientKeyHTTPResponse) GetJSON409() *AppArchived {
+	return r.JSON409
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -18817,6 +20006,89 @@ func (r RevokeAppClientKeyHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RevokeAppClientKeyHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// RestoreAppHTTPResponse429Headers the declared response headers of an HTTP 429 response for RestoreApp
+type RestoreAppHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type RestoreAppHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *RestoreAppHTTPResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RestoreAppHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RestoreAppHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RestoreAppHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RestoreAppHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r RestoreAppHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r RestoreAppHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RestoreAppHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RestoreAppHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestoreAppHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestoreAppHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -19185,7 +20457,7 @@ type CreateCredentialHTTPResponse struct {
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *Forbidden
 	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Conflict
+	JSON409 *ErrorResponse
 	// Headers201 the parsed response headers for an HTTP 201 response
 	Headers201 *CreateCredentialHTTPResponse201Headers
 }
@@ -19211,7 +20483,7 @@ func (r CreateCredentialHTTPResponse) GetJSON403() *Forbidden {
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r CreateCredentialHTTPResponse) GetJSON409() *Conflict {
+func (r CreateCredentialHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
 }
 
@@ -20287,7 +21559,7 @@ type ResumeInvocationHTTPResponse struct {
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Conflict
+	JSON409 *ErrorResponse
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -20324,7 +21596,7 @@ func (r ResumeInvocationHTTPResponse) GetJSON404() *NotFound {
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r ResumeInvocationHTTPResponse) GetJSON409() *Conflict {
+func (r ResumeInvocationHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
 }
 
@@ -21189,6 +22461,96 @@ func (r RegisterOrgHTTPResponse) ContentType() string {
 	return ""
 }
 
+// ArchiveOrgHTTPResponse429Headers the declared response headers of an HTTP 429 response for ArchiveOrg
+type ArchiveOrgHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type ArchiveOrgHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorResponse
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *ArchiveOrgHTTPResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ArchiveOrgHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ArchiveOrgHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ArchiveOrgHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ArchiveOrgHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ArchiveOrgHTTPResponse) GetJSON409() *ErrorResponse {
+	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r ArchiveOrgHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ArchiveOrgHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ArchiveOrgHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ArchiveOrgHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ArchiveOrgHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ArchiveOrgHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetOrgHTTPResponse429Headers the declared response headers of an HTTP 429 response for GetOrg
 type GetOrgHTTPResponse429Headers struct {
 	RetryAfter *int
@@ -21356,6 +22718,89 @@ func (r UpdateOrgHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateOrgHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// RestoreOrgHTTPResponse429Headers the declared response headers of an HTTP 429 response for RestoreOrg
+type RestoreOrgHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type RestoreOrgHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *RestoreOrgHTTPResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RestoreOrgHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RestoreOrgHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RestoreOrgHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RestoreOrgHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r RestoreOrgHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r RestoreOrgHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RestoreOrgHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RestoreOrgHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestoreOrgHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestoreOrgHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -22432,6 +23877,8 @@ type ForkSessionHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *AppArchived
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -22465,6 +23912,11 @@ func (r ForkSessionHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r ForkSessionHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ForkSessionHTTPResponse) GetJSON409() *AppArchived {
+	return r.JSON409
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -23030,6 +24482,23 @@ func (r GetUsageTimeseriesHTTPResponse) ContentType() string {
 	return ""
 }
 
+// ListAgentDefinitionsWithResponse List the App's Agent Definition resources
+//
+// Returns this App's stable resources at their current revision, newest
+// first and cursor-paginated. Archived resources are excluded unless
+// `include_archived` is true, and then carry a non-null `archived_at`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/agent-definitions (the `ListAgentDefinitions` operationId).
+func (c *ClientWithResponses) ListAgentDefinitionsWithResponse(ctx context.Context, params *ListAgentDefinitionsParams, reqEditors ...RequestEditorFn) (*ListAgentDefinitionsHTTPResponse, error) {
+	rsp, err := c.ListAgentDefinitions(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentDefinitionsHTTPResponse(rsp)
+}
+
 // CreateAgentDefinitionWithBodyWithResponse Create an Agent Definition resource
 //
 // Creates a stable App-owned resource at revision 1. Equal content in a
@@ -23064,6 +24533,29 @@ func (c *ClientWithResponses) CreateAgentDefinitionWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseCreateAgentDefinitionHTTPResponse(rsp)
+}
+
+// ArchiveAgentDefinitionWithResponse Archive an Agent Definition
+//
+// Marks the resource retired. Invocation admission that resolves it —
+// by `agent_definition_id` or by a pinned revision, on every admission
+// path including browser-direct client tokens — is then refused with
+// `409 agent_definition_archived`.
+//
+// Nothing is destroyed: the resource and every revision stay readable,
+// and each existing Invocation keeps its pinned revision evidence.
+// Archiving requires the same authority as replacing the definition, and
+// repeating the call is a successful no-op.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/agent-definitions/{agent_definition_id} (the `ArchiveAgentDefinition` operationId).
+func (c *ClientWithResponses) ArchiveAgentDefinitionWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*ArchiveAgentDefinitionHTTPResponse, error) {
+	rsp, err := c.ArchiveAgentDefinition(ctx, agentDefinitionID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseArchiveAgentDefinitionHTTPResponse(rsp)
 }
 
 // GetAgentDefinitionWithResponse Get the current Agent Definition revision
@@ -23103,6 +24595,22 @@ func (c *ClientWithResponses) UpdateAgentDefinitionWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseUpdateAgentDefinitionHTTPResponse(rsp)
+}
+
+// RestoreAgentDefinitionWithResponse Restore an archived Agent Definition
+//
+// Clears the resource's archive tombstone so Invocation admission
+// resolves it again. Restoring a live resource is a successful no-op.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/agent-definitions/{agent_definition_id}/restore (the `RestoreAgentDefinition` operationId).
+func (c *ClientWithResponses) RestoreAgentDefinitionWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*RestoreAgentDefinitionHTTPResponse, error) {
+	rsp, err := c.RestoreAgentDefinition(ctx, agentDefinitionID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestoreAgentDefinitionHTTPResponse(rsp)
 }
 
 // ListAgentsWithResponse List Agent identity anchors
@@ -23153,7 +24661,8 @@ func (c *ClientWithResponses) GetAgentWithResponse(ctx context.Context, agentID 
 // sees only that App, an Org-scoped credential sees the Apps contained
 // by its Org, and an installation credential sees every registered App.
 // An exact `external_ref` filter narrows that visible set during the
-// staged console migration.
+// staged console migration. Archived Apps are excluded unless `status`
+// asks for them.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -23222,6 +24731,38 @@ func (c *ClientWithResponses) RegisterAppWithResponse(ctx context.Context, body 
 		return nil, err
 	}
 	return ParseRegisterAppHTTPResponse(rsp)
+}
+
+// ArchiveAppWithResponse Archive an app
+//
+// Marks the App out of service. Nothing is destroyed and no other
+// resource's lifecycle changes: the App's credentials keep
+// authenticating, its client keys stay registered, and its Agent
+// Definitions are untouched.
+//
+// While archived, exactly these operations return `409 app_archived`:
+// Session create and fork, Invocation create, Invocation resume, Agent
+// Definition create and replace, client-key create, App-bound credential
+// issuance, provider-key create, and credit allocation. Everything else
+// behaves as on a live App — reads and lists, cancel, interrupt, nudges,
+// tool-result submission, Session update and erasure, App `PATCH`, and
+// credential, client-key, and provider-key rotation and revocation — so a
+// draining host can let running turns settle and then clean up. Usage
+// reporting keeps counting the App's spend.
+//
+// Archiving requires the same authority as updating the App: an Org or
+// installation credential. A credential bound to the App cannot archive
+// or restore it. Repeating the call is a successful no-op.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/apps/{app_id} (the `ArchiveApp` operationId).
+func (c *ClientWithResponses) ArchiveAppWithResponse(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*ArchiveAppHTTPResponse, error) {
+	rsp, err := c.ArchiveApp(ctx, appID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseArchiveAppHTTPResponse(rsp)
 }
 
 // GetAppWithResponse Get one app
@@ -23360,6 +24901,23 @@ func (c *ClientWithResponses) RevokeAppClientKeyWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseRevokeAppClientKeyHTTPResponse(rsp)
+}
+
+// RestoreAppWithResponse Restore an archived app
+//
+// Clears the App's archive tombstone and reopens admission. Nothing else
+// is restored, and the App's Org may still be archived. Restoring a live
+// App is a successful no-op.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/apps/{app_id}/restore (the `RestoreApp` operationId).
+func (c *ClientWithResponses) RestoreAppWithResponse(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*RestoreAppHTTPResponse, error) {
+	rsp, err := c.RestoreApp(ctx, appID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestoreAppHTTPResponse(rsp)
 }
 
 // ListCreditAccountsWithResponse List tenant credit accounts
@@ -24294,11 +25852,13 @@ func (c *ClientWithResponses) GetModelWithResponse(ctx context.Context, provider
 // credential sees only its own Org. App-scoped credentials and
 // non-admin installation issuer tokens cannot list Orgs.
 //
+// Archived Orgs are excluded unless `status` asks for them.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /v1/orgs (the `ListOrgs` operationId).
-func (c *ClientWithResponses) ListOrgsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOrgsHTTPResponse, error) {
-	rsp, err := c.ListOrgs(ctx, reqEditors...)
+func (c *ClientWithResponses) ListOrgsWithResponse(ctx context.Context, params *ListOrgsParams, reqEditors ...RequestEditorFn) (*ListOrgsHTTPResponse, error) {
+	rsp, err := c.ListOrgs(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -24312,6 +25872,8 @@ func (c *ClientWithResponses) ListOrgsWithResponse(ctx context.Context, reqEdito
 // `external_ref` names an existing Org, the existing resource is
 // returned unchanged so register-on-first-login is race-safe and
 // idempotent.
+//
+// Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -24332,6 +25894,8 @@ func (c *ClientWithResponses) RegisterOrgWithBodyWithResponse(ctx context.Contex
 // returned unchanged so register-on-first-login is race-safe and
 // idempotent.
 //
+// Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
+//
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /v1/orgs (the `RegisterOrg` operationId).
@@ -24341,6 +25905,28 @@ func (c *ClientWithResponses) RegisterOrgWithResponse(ctx context.Context, body 
 		return nil, err
 	}
 	return ParseRegisterOrgHTTPResponse(rsp)
+}
+
+// ArchiveOrgWithResponse Archive an org
+//
+// Marks the Org out of service. Every App it owns must be archived first;
+// this is an explicit precondition rather than a cascade, so no
+// irreversible side effect hides inside a reversible operation.
+//
+// Nothing is destroyed. An archived Org refuses App registration into it
+// and Org-bound credential issuance with `409 org_archived`, while Org
+// reads and org-scoped reporting stay open. Archiving requires the same
+// authority as updating the Org, and repeating it is a successful no-op.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/orgs/{org_id} (the `ArchiveOrg` operationId).
+func (c *ClientWithResponses) ArchiveOrgWithResponse(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*ArchiveOrgHTTPResponse, error) {
+	rsp, err := c.ArchiveOrg(ctx, orgID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseArchiveOrgHTTPResponse(rsp)
 }
 
 // GetOrgWithResponse Get one org
@@ -24390,6 +25976,23 @@ func (c *ClientWithResponses) UpdateOrgWithResponse(ctx context.Context, orgID O
 		return nil, err
 	}
 	return ParseUpdateOrgHTTPResponse(rsp)
+}
+
+// RestoreOrgWithResponse Restore an archived org
+//
+// Clears the Org's archive tombstone. There is no ordering precondition
+// and nothing else is restored: Apps archived before the Org stay
+// archived. Restoring a live Org is a successful no-op.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/orgs/{org_id}/restore (the `RestoreOrg` operationId).
+func (c *ClientWithResponses) RestoreOrgWithResponse(ctx context.Context, orgID OrgID, reqEditors ...RequestEditorFn) (*RestoreOrgHTTPResponse, error) {
+	rsp, err := c.RestoreOrg(ctx, orgID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestoreOrgHTTPResponse(rsp)
 }
 
 // ListProviderKeysWithResponse List reusable provider key metadata
@@ -24924,26 +26527,26 @@ func (c *ClientWithResponses) GetUsageTimeseriesWithResponse(ctx context.Context
 	return ParseGetUsageTimeseriesHTTPResponse(rsp)
 }
 
-// ParseCreateAgentDefinitionHTTPResponse parses an HTTP response from a CreateAgentDefinitionWithResponse call
-func ParseCreateAgentDefinitionHTTPResponse(rsp *http.Response) (*CreateAgentDefinitionHTTPResponse, error) {
+// ParseListAgentDefinitionsHTTPResponse parses an HTTP response from a ListAgentDefinitionsWithResponse call
+func ParseListAgentDefinitionsHTTPResponse(rsp *http.Response) (*ListAgentDefinitionsHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &CreateAgentDefinitionHTTPResponse{
+	response := &ListAgentDefinitionsHTTPResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest AgentDefinitionResource
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentDefinitionResourceList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.JSON201 = &dest
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest InvalidRequest
@@ -24990,6 +26593,94 @@ func ParseCreateAgentDefinitionHTTPResponse(rsp *http.Response) (*CreateAgentDef
 	}
 
 	switch {
+	case rsp.StatusCode == 429:
+		var headers ListAgentDefinitionsHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseCreateAgentDefinitionHTTPResponse parses an HTTP response from a CreateAgentDefinitionWithResponse call
+func ParseCreateAgentDefinitionHTTPResponse(rsp *http.Response) (*CreateAgentDefinitionHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateAgentDefinitionHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AgentDefinitionResource
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest AppArchived
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
 	case rsp.StatusCode == 201:
 		var headers CreateAgentDefinitionHTTPResponse201Headers
 		if values := rsp.Header.Values("ETag"); len(values) > 0 {
@@ -25010,6 +26701,70 @@ func ParseCreateAgentDefinitionHTTPResponse(rsp *http.Response) (*CreateAgentDef
 			headers.RetryAfter = &value
 		}
 		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseArchiveAgentDefinitionHTTPResponse parses an HTTP response from a ArchiveAgentDefinitionWithResponse call
+func ParseArchiveAgentDefinitionHTTPResponse(rsp *http.Response) (*ArchiveAgentDefinitionHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ArchiveAgentDefinitionHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -25138,6 +26893,13 @@ func ParseUpdateAgentDefinitionHTTPResponse(rsp *http.Response) (*UpdateAgentDef
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest AppArchived
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -25179,6 +26941,70 @@ func ParseUpdateAgentDefinitionHTTPResponse(rsp *http.Response) (*UpdateAgentDef
 			headers.ETag = &value
 		}
 		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseRestoreAgentDefinitionHTTPResponse parses an HTTP response from a RestoreAgentDefinitionWithResponse call
+func ParseRestoreAgentDefinitionHTTPResponse(rsp *http.Response) (*RestoreAgentDefinitionHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestoreAgentDefinitionHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -25462,6 +27288,13 @@ func ParseRegisterAppHTTPResponse(rsp *http.Response) (*RegisterAppHTTPResponse,
 		}
 		response.JSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest OrgArchived
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -25488,6 +27321,83 @@ func ParseRegisterAppHTTPResponse(rsp *http.Response) (*RegisterAppHTTPResponse,
 	switch {
 	case rsp.StatusCode == 429:
 		var headers RegisterAppHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseArchiveAppHTTPResponse parses an HTTP response from a ArchiveAppWithResponse call
+func ParseArchiveAppHTTPResponse(rsp *http.Response) (*ArchiveAppHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ArchiveAppHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers ArchiveAppHTTPResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
@@ -25623,6 +27533,13 @@ func ParseUpdateAppHTTPResponse(rsp *http.Response) (*UpdateAppHTTPResponse, err
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest OrgArchived
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -25779,6 +27696,13 @@ func ParseCreateAppClientKeyHTTPResponse(rsp *http.Response) (*CreateAppClientKe
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest AppArchived
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -25868,6 +27792,83 @@ func ParseRevokeAppClientKeyHTTPResponse(rsp *http.Response) (*RevokeAppClientKe
 	switch {
 	case rsp.StatusCode == 429:
 		var headers RevokeAppClientKeyHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseRestoreAppHTTPResponse parses an HTTP response from a RestoreAppWithResponse call
+func ParseRestoreAppHTTPResponse(rsp *http.Response) (*RestoreAppHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestoreAppHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers RestoreAppHTTPResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
@@ -26194,7 +28195,7 @@ func ParseCreateCredentialHTTPResponse(rsp *http.Response) (*CreateCredentialHTT
 		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
+		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -27139,7 +29140,7 @@ func ParseResumeInvocationHTTPResponse(rsp *http.Response) (*ResumeInvocationHTT
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
+		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -27926,6 +29927,90 @@ func ParseRegisterOrgHTTPResponse(rsp *http.Response) (*RegisterOrgHTTPResponse,
 	return response, nil
 }
 
+// ParseArchiveOrgHTTPResponse parses an HTTP response from a ArchiveOrgWithResponse call
+func ParseArchiveOrgHTTPResponse(rsp *http.Response) (*ArchiveOrgHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ArchiveOrgHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers ArchiveOrgHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseGetOrgHTTPResponse parses an HTTP response from a GetOrgWithResponse call
 func ParseGetOrgHTTPResponse(rsp *http.Response) (*GetOrgHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -28068,6 +30153,83 @@ func ParseUpdateOrgHTTPResponse(rsp *http.Response) (*UpdateOrgHTTPResponse, err
 	switch {
 	case rsp.StatusCode == 429:
 		var headers UpdateOrgHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseRestoreOrgHTTPResponse parses an HTTP response from a RestoreOrgWithResponse call
+func ParseRestoreOrgHTTPResponse(rsp *http.Response) (*RestoreOrgHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestoreOrgHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers RestoreOrgHTTPResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
@@ -29040,6 +31202,13 @@ func ParseForkSessionHTTPResponse(rsp *http.Response) (*ForkSessionHTTPResponse,
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest AppArchived
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited

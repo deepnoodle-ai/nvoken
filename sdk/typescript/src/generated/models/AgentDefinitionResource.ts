@@ -184,6 +184,16 @@ export interface AgentDefinitionResource {
      * @memberof AgentDefinitionResource
      */
     updatedAt: Date;
+    /**
+     * When the resource was archived, or null while it is live. Invocation
+     * admission that resolves an archived Agent Definition, by id or by
+     * pinned revision, is refused with `409 agent_definition_archived`.
+     * The resource and every revision stay readable.
+     *
+     * @type {Date}
+     * @memberof AgentDefinitionResource
+     */
+    archivedAt: Date | null;
 }
 
 /**
@@ -195,6 +205,7 @@ export function instanceOfAgentDefinitionResource(value: object): value is Agent
     if (!('model' in value) || value['model'] === undefined) return false;
     if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
     if (!('updatedAt' in value) || value['updatedAt'] === undefined) return false;
+    if (!('archivedAt' in value) || value['archivedAt'] === undefined) return false;
     return true;
 }
 
@@ -223,6 +234,7 @@ export function AgentDefinitionResourceFromJSONTyped(json: any, ignoreDiscrimina
         'createdAt': (new Date(json['created_at'])),
         'clientInterface': json['client_interface'] == null ? undefined : BrowserClientInterfaceFromJSON(json['client_interface']),
         'updatedAt': (new Date(json['updated_at'])),
+        'archivedAt': (json['archived_at'] == null ? null : new Date(json['archived_at'])),
     };
 }
 
@@ -252,5 +264,6 @@ export function AgentDefinitionResourceToJSONTyped(value?: AgentDefinitionResour
         'created_at': value['createdAt'].toISOString(),
         'client_interface': BrowserClientInterfaceToJSON(value['clientInterface']),
         'updated_at': value['updatedAt'].toISOString(),
+        'archived_at': value['archivedAt'] == null ? value['archivedAt'] : value['archivedAt'].toISOString(),
     };
 }

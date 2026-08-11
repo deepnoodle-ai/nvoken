@@ -6,6 +6,8 @@ pub mod agent_definition;
 pub use self::agent_definition::AgentDefinition;
 pub mod agent_definition_resource;
 pub use self::agent_definition_resource::AgentDefinitionResource;
+pub mod agent_definition_resource_list;
+pub use self::agent_definition_resource_list::AgentDefinitionResourceList;
 pub mod agent_definition_write;
 pub use self::agent_definition_write::AgentDefinitionWrite;
 pub mod agent_list;

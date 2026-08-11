@@ -29,6 +29,7 @@ class Operation(str, Enum):
     CREATE_INVOCATION = 'create_invocation'
     CREATE_AGENT_DEFINITION = 'create_agent_definition'
     GET_AGENT_DEFINITION = 'get_agent_definition'
+    LIST_AGENT_DEFINITIONS = 'list_agent_definitions'
     UPDATE_AGENT_DEFINITION = 'update_agent_definition'
     CREATE_SESSION = 'create_session'
     GET_AGENT = 'get_agent'

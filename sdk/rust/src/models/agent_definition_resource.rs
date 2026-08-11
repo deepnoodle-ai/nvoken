@@ -45,6 +45,9 @@ pub struct AgentDefinitionResource {
     pub client_interface: Option<Box<models::BrowserClientInterface>>,
     #[serde(rename = "updated_at")]
     pub updated_at: chrono::DateTime<chrono::FixedOffset>,
+    /// When the resource was archived, or null while it is live. Invocation admission that resolves an archived Agent Definition, by id or by pinned revision, is refused with `409 agent_definition_archived`. The resource and every revision stay readable.
+    #[serde(rename = "archived_at", deserialize_with = "Option::deserialize")]
+    pub archived_at: Option<chrono::DateTime<chrono::FixedOffset>>,
 }
 
 impl AgentDefinitionResource {
@@ -54,6 +57,7 @@ impl AgentDefinitionResource {
         model: models::Model,
         created_at: chrono::DateTime<chrono::FixedOffset>,
         updated_at: chrono::DateTime<chrono::FixedOffset>,
+        archived_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     ) -> AgentDefinitionResource {
         AgentDefinitionResource {
             id,
@@ -71,6 +75,7 @@ impl AgentDefinitionResource {
             created_at,
             client_interface: None,
             updated_at,
+            archived_at,
         }
     }
 }

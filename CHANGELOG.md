@@ -14,7 +14,10 @@ without republishing every artifact.
   to the default or a named tenant, then read its account and append-only
   allocation history; Session spending ceilings are removed.
 - **Make reusable Agent Definitions stable revisioned resources.** Create, get,
-  and update them by ID; equal content no longer implies shared identity.
+  list, update, archive, and restore them by ID; equal content no longer
+  implies shared identity.
+- Archive and restore Apps and Orgs without destroying usage history, and
+  filter container lists by active, archived, or all.
 - Invocation requests and all high-level SDKs accept exactly one of an inline
   Agent Definition or `agent_definition_id`. Browser client-token requests
   remain pinned to a reusable ID and revision.

@@ -20,9 +20,11 @@ type AppList = generated.AppList
 type AppRegistration = generated.AppRegistration
 type AppSigningKeyPurpose = generated.AppSigningKeyPurpose
 type AppSigningKeySecret = generated.AppSigningKeySecret
+type ArchiveStatus = generated.ArchiveStatus
 type ClientKey = generated.ClientKey
 type ClientKeyList = generated.ClientKeyList
 type AgentIdentity = generated.Agent
+type AgentDefinitionResourceList = generated.AgentDefinitionResourceList
 type Session = generated.Session
 type SessionContext = generated.SessionContext
 type SessionMessage = generated.SessionMessage
@@ -136,6 +138,9 @@ const (
 	CredentialProfileOperator                    = generated.CredentialProfileOperator
 	CredentialStatusActive                       = generated.CredentialStatusActive
 	CredentialStatusRevoked                      = generated.CredentialStatusRevoked
+	ArchiveStatusActive                          = generated.ArchiveStatusActive
+	ArchiveStatusAll                             = generated.ArchiveStatusAll
+	ArchiveStatusArchived                        = generated.ArchiveStatusArchived
 	OperationCreateInvocation                    = generated.CreateInvocation
 	OperationCreateSession                       = generated.CreateSession
 	OperationGetAgent                            = generated.GetAgent
@@ -166,6 +171,7 @@ const (
 	OperationReadCredits                         = generated.ReadCredits
 	OperationAllocateCredits                     = generated.AllocateCredits
 	OperationCreateAgentDefinition               = generated.CreateAgentDefinition
+	OperationListAgentDefinitions                = generated.ListAgentDefinitions
 	OperationGetAgentDefinition                  = generated.GetAgentDefinition
 	OperationUpdateAgentDefinition               = generated.UpdateAgentDefinition
 	OperationRegisterApp                         = generated.RegisterApp
@@ -830,6 +836,17 @@ type RegisterAppOptions struct {
 
 type ListAppsOptions struct {
 	ExternalRef *string
+	Status      *ArchiveStatus
+}
+
+type ListOrgsOptions struct {
+	Status *ArchiveStatus
+}
+
+type ListAgentDefinitionsOptions struct {
+	IncludeArchived *bool
+	Cursor          *string
+	Limit           *int
 }
 
 type UpdateAppOptions struct {

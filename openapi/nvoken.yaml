@@ -131,6 +131,10 @@ paths:
         credentials and admin issuer tokens see every Org; an Org-scoped
         credential sees only its own Org. App-scoped credentials and
         non-admin installation issuer tokens cannot list Orgs.
+
+        Archived Orgs are excluded unless `status` asks for them.
+      parameters:
+        - $ref: "#/components/parameters/ArchiveStatus"
       responses:
         "200":
           description: The Orgs visible to the authenticated credential.
@@ -152,6 +156,8 @@ paths:
         `external_ref` names an existing Org, the existing resource is
         returned unchanged so register-on-first-login is race-safe and
         idempotent.
+
+        Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
       requestBody:
         required: true
         content:
@@ -235,6 +241,71 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
+    delete:
+      tags: [Orgs]
+      operationId: archiveOrg
+      summary: Archive an org
+      description: |
+        Marks the Org out of service. Every App it owns must be archived first;
+        this is an explicit precondition rather than a cascade, so no
+        irreversible side effect hides inside a reversible operation.
+
+        Nothing is destroyed. An archived Org refuses App registration into it
+        and Org-bound credential issuance with `409 org_archived`, while Org
+        reads and org-scoped reporting stay open. Archiving requires the same
+        authority as updating the Org, and repeating it is a successful no-op.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/OrgID"
+      responses:
+        "204":
+          description: The Org is archived.
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The Org still owns at least one live App.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: org_has_active_apps
+                message: Archive every App the Org owns before archiving the Org.
+                request_id: req_01K0NVB0QFQP0YNSVD3CB7E97V
+                details:
+                  org_id: org_019b0a12-8d51-7f34-aed2-0e07c1bdb321
+                  active_apps: 2
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /v1/orgs/{org_id}/restore:
+    post:
+      tags: [Orgs]
+      operationId: restoreOrg
+      summary: Restore an archived org
+      description: |
+        Clears the Org's archive tombstone. There is no ordering precondition
+        and nothing else is restored: Apps archived before the Org stay
+        archived. Restoring a live Org is a successful no-op.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/OrgID"
+      responses:
+        "204":
+          description: The Org is live.
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
   /v1/apps:
     get:
       tags: [Apps]
@@ -245,7 +316,8 @@ paths:
         sees only that App, an Org-scoped credential sees the Apps contained
         by its Org, and an installation credential sees every registered App.
         An exact `external_ref` filter narrows that visible set during the
-        staged console migration.
+        staged console migration. Archived Apps are excluded unless `status`
+        asks for them.
       parameters:
         - name: external_ref
           in: query
@@ -255,6 +327,7 @@ paths:
             minLength: 1
             maxLength: 255
           description: Return only apps whose `external_ref` equals this value.
+        - $ref: "#/components/parameters/ArchiveStatus"
       responses:
         "200":
           description: The apps visible to the authenticated credential.
@@ -303,6 +376,7 @@ paths:
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/OrgArchived" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
@@ -362,6 +436,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/App"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OrgArchived" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+    delete:
+      tags: [Apps]
+      operationId: archiveApp
+      summary: Archive an app
+      description: |
+        Marks the App out of service. Nothing is destroyed and no other
+        resource's lifecycle changes: the App's credentials keep
+        authenticating, its client keys stay registered, and its Agent
+        Definitions are untouched.
+
+        While archived, exactly these operations return `409 app_archived`:
+        Session create and fork, Invocation create, Invocation resume, Agent
+        Definition create and replace, client-key create, App-bound credential
+        issuance, provider-key create, and credit allocation. Everything else
+        behaves as on a live App — reads and lists, cancel, interrupt, nudges,
+        tool-result submission, Session update and erasure, App `PATCH`, and
+        credential, client-key, and provider-key rotation and revocation — so a
+        draining host can let running turns settle and then clean up. Usage
+        reporting keeps counting the App's spend.
+
+        Archiving requires the same authority as updating the App: an Org or
+        installation credential. A credential bound to the App cannot archive
+        or restore it. Repeating the call is a successful no-op.
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppID"
+      responses:
+        "204":
+          description: The App is archived.
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /v1/apps/{app_id}/restore:
+    post:
+      tags: [Apps]
+      operationId: restoreApp
+      summary: Restore an archived app
+      description: |
+        Clears the App's archive tombstone and reopens admission. Nothing else
+        is restored, and the App's Org may still be archived. Restoring a live
+        App is a successful no-op.
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppID"
+      responses:
+        "204":
+          description: The App is live.
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -434,6 +571,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AppArchived" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
   /v1/apps/{app_id}/client-keys/{key_id}:
@@ -567,6 +705,37 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
   /v1/agent-definitions:
+    get:
+      tags: [Agent Definitions]
+      operationId: listAgentDefinitions
+      summary: List the App's Agent Definition resources
+      description: |
+        Returns this App's stable resources at their current revision, newest
+        first and cursor-paginated. Archived resources are excluded unless
+        `include_archived` is true, and then carry a non-null `archived_at`.
+      parameters:
+        - name: include_archived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Include archived resources alongside live ones.
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One page of the App's Agent Definition resources.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDefinitionResourceList"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
     post:
       tags: [Agent Definitions]
       operationId: createAgentDefinition
@@ -618,12 +787,15 @@ paths:
                   id: claude-sonnet-5
                 created_at: 2026-08-11T12:00:00Z
                 updated_at: 2026-08-11T12:00:00Z
+                archived_at: null
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/AppArchived"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -686,6 +858,7 @@ paths:
         "401": {$ref: "#/components/responses/Unauthenticated"}
         "403": {$ref: "#/components/responses/Forbidden"}
         "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/AppArchived"}
         "412":
           description: The supplied revision is stale.
           content:
@@ -696,6 +869,52 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/ErrorResponse"}
+        "500": {$ref: "#/components/responses/Internal"}
+        "503": {$ref: "#/components/responses/Unavailable"}
+    delete:
+      tags: [Agent Definitions]
+      operationId: archiveAgentDefinition
+      summary: Archive an Agent Definition
+      description: |
+        Marks the resource retired. Invocation admission that resolves it —
+        by `agent_definition_id` or by a pinned revision, on every admission
+        path including browser-direct client tokens — is then refused with
+        `409 agent_definition_archived`.
+
+        Nothing is destroyed: the resource and every revision stay readable,
+        and each existing Invocation keeps its pinned revision evidence.
+        Archiving requires the same authority as replacing the definition, and
+        repeating the call is a successful no-op.
+      responses:
+        "204":
+          description: The Agent Definition is archived.
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+        "401": {$ref: "#/components/responses/Unauthenticated"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "500": {$ref: "#/components/responses/Internal"}
+        "503": {$ref: "#/components/responses/Unavailable"}
+  /v1/agent-definitions/{agent_definition_id}/restore:
+    parameters:
+      - name: agent_definition_id
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/AgentDefinitionID"
+    post:
+      tags: [Agent Definitions]
+      operationId: restoreAgentDefinition
+      summary: Restore an archived Agent Definition
+      description: |
+        Clears the resource's archive tombstone so Invocation admission
+        resolves it again. Restoring a live resource is a successful no-op.
+      responses:
+        "204":
+          description: The Agent Definition is live.
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+        "401": {$ref: "#/components/responses/Unauthenticated"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
         "500": {$ref: "#/components/responses/Internal"}
         "503": {$ref: "#/components/responses/Unavailable"}
   /v1/invocations:
@@ -1087,7 +1306,9 @@ paths:
                     details:
                       agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
         "409":
-          description: The idempotency key, supplied Session options, or active Session state conflicts.
+          description: |
+            The idempotency key, supplied Session options, or active Session
+            state conflicts, or the App or Agent Definition is archived.
           content:
             application/json:
               schema:
@@ -1101,6 +1322,22 @@ paths:
                     request_id: req_01K0NV89D93D0W2V5CGF8BC2R7
                     details:
                       conflicting_paths: [/input]
+                appArchived:
+                  summary: Admission is closed on an archived App
+                  value:
+                    code: app_archived
+                    message: The App is archived. Existing work can finish and be read, but no new work or grants are admitted.
+                    request_id: req_01K0NV89D93D0W2V5CGF8BC2R8
+                    details:
+                      app_id: app_019b0a12-8d51-7f34-aed2-0e07c1bdb320
+                agentDefinitionArchived:
+                  summary: The referenced Agent Definition is retired
+                  value:
+                    code: agent_definition_archived
+                    message: The Agent Definition is archived and no longer admits Invocations.
+                    request_id: req_01K0NV89D93D0W2V5CGF8BC2R9
+                    details:
+                      agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                 activeInvocation:
                   summary: Distinct request races existing nonterminal work
                   value:
@@ -1596,7 +1833,15 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409":
+          description: |
+            The Invocation is not paused on a raisable ceiling, or the App is
+            archived (`app_archived`): a paused Invocation on an archived App
+            can be cancelled, not continued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
@@ -1933,7 +2178,9 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409":
-          description: The idempotency key was already used with different allocation inputs.
+          description: |
+            The idempotency key was already used with different allocation
+            inputs, or the App is archived (`app_archived`).
           content:
             application/json:
               schema:
@@ -2018,7 +2265,10 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409":
-          description: The idempotency key changed nonsecret request metadata or an active provider key already exists.
+          description: |
+            The idempotency key changed nonsecret request metadata, an active
+            provider key already exists, or the App is archived
+            (`app_archived`).
           content:
             application/json:
               schema:
@@ -2430,7 +2680,9 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          description: Supplied options differ from the existing keyed Session.
+          description: |
+            Supplied options differ from the existing keyed Session, or the App
+            is archived (`app_archived`).
           content:
             application/json:
               schema:
@@ -2706,6 +2958,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AppArchived"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -2983,7 +3237,14 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/Conflict"
+          description: |
+            The idempotency key was reused with a different request, or the
+            App or Org the credential would be bound to is archived
+            (`app_archived`, `org_archived`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/identity/credentials/{credential_id}:
     parameters:
       - $ref: "#/components/parameters/CredentialID"
@@ -3209,6 +3470,17 @@ components:
       schema:
         type: string
   parameters:
+    ArchiveStatus:
+      name: status
+      in: query
+      required: false
+      description: |
+        Which container rows to return. Archive hides a container from pickers,
+        never from money: usage reporting always counts archived Apps.
+      schema:
+        type: string
+        enum: [active, archived, all]
+        default: active
     IfNoneMatch:
       name: If-None-Match
       in: header
@@ -3387,7 +3659,7 @@ components:
     Org:
       type: object
       additionalProperties: false
-      required: [id, display_name, external_ref, created_at]
+      required: [id, display_name, external_ref, created_at, archived_at]
       properties:
         id:
           $ref: "#/components/schemas/OrgID"
@@ -3404,6 +3676,13 @@ components:
         created_at:
           type: string
           format: date-time
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            When the Org was archived, or null while it is live. An archived
+            Org admits no new App and no new Org-bound credential; its reads
+            and org-scoped reporting are unchanged.
       description: |
         Thin customer ownership boundary. Membership, roles, invitations,
         policy, and runtime state deliberately live elsewhere.
@@ -3466,7 +3745,7 @@ components:
     App:
       type: object
       additionalProperties: false
-      required: [id, org_id, name, external_ref, display_name, callback_timeout_seconds, default_rate_limits, browser_access, created_at]
+      required: [id, org_id, name, external_ref, display_name, callback_timeout_seconds, default_rate_limits, browser_access, created_at, archived_at]
       properties:
         id:
           $ref: "#/components/schemas/AppID"
@@ -3519,6 +3798,14 @@ components:
         created_at:
           type: string
           format: date-time
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            When the App was archived, or null while it is live. An archived
+            App refuses admission and grant-minting with `409 app_archived`
+            while every read, settlement, erasure, configuration, and
+            revocation path stays open. Its credentials keep authenticating.
     AppList:
       type: object
       additionalProperties: false
@@ -5303,7 +5590,7 @@ components:
     AgentDefinitionResource:
       type: object
       additionalProperties: false
-      required: [id, revision, model, created_at, updated_at]
+      required: [id, revision, model, created_at, updated_at, archived_at]
       properties:
         id:
           $ref: "#/components/schemas/AgentDefinitionID"
@@ -5349,6 +5636,27 @@ components:
         updated_at:
           type: string
           format: date-time
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            When the resource was archived, or null while it is live. Invocation
+            admission that resolves an archived Agent Definition, by id or by
+            pinned revision, is refused with `409 agent_definition_archived`.
+            The resource and every revision stay readable.
+    AgentDefinitionResourceList:
+      type: object
+      additionalProperties: false
+      required: [items, has_more, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentDefinitionResource"
+        has_more:
+          type: boolean
+        next_cursor:
+          type: [string, "null"]
     Sampling:
       type: object
       additionalProperties: false
@@ -7939,6 +8247,10 @@ components:
         - session_invocation_active
         - invocation_not_waiting
         - invocation_not_paused
+        - app_archived
+        - org_archived
+        - agent_definition_archived
+        - org_has_active_apps
         - budget_exceeded
         - insufficient_credits
         - cost_estimate_unavailable
@@ -7970,7 +8282,7 @@ components:
         execution and cannot be selected for an Org credential.
     Operation:
       type: string
-      enum: [create_invocation, create_agent_definition, get_agent_definition, update_agent_definition, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, interrupt_invocation, manage_invocation_nudges, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_credits, allocate_credits, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
+      enum: [create_invocation, create_agent_definition, get_agent_definition, list_agent_definitions, update_agent_definition, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, interrupt_invocation, manage_invocation_nudges, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_credits, allocate_credits, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
     CredentialStatus:
       type: string
       enum: [active, revoked]
@@ -8217,6 +8529,33 @@ components:
             code: invocation_not_paused
             message: The Invocation is not paused on a turn-level budget.
             request_id: req_01K0NVB0QFQP0YNSVD3CB7E97S
+    AppArchived:
+      description: |
+        The App is archived, so admission and grant-minting are closed. Reads,
+        settlement of running work, erasure, configuration, and revocation are
+        unaffected; restore reopens the App.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: app_archived
+            message: The App is archived. Existing work can finish and be read, but no new work or grants are admitted.
+            request_id: req_01K0NVB0QFQP0YNSVD3CB7E97T
+            details:
+              app_id: app_019b0a12-8d51-7f34-aed2-0e07c1bdb320
+    OrgArchived:
+      description: The Org is archived and admits no new App or Org-bound credential.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: org_archived
+            message: The Org is archived and admits no new Apps or credentials.
+            request_id: req_01K0NVB0QFQP0YNSVD3CB7E97U
+            details:
+              org_id: org_019b0a12-8d51-7f34-aed2-0e07c1bdb321
     RateLimited:
       description: A durable App, tenant, or opaque-user admission limit refused fresh work, or deployment ingress rate limited the request. No Invocation is created.
       headers:

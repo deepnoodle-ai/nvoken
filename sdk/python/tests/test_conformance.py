@@ -1103,6 +1103,40 @@ async def test_collection_transcript_and_provider_key_operations() -> None:
             (None, "transcript-2"),
         ]
 
+        definition_calls: list[tuple[str, Any]] = []
+
+        async def list_agent_definitions(**kwargs: Any) -> Any:
+            definition_calls.append(("list", kwargs))
+            return SimpleNamespace(items=[SimpleNamespace(id="def_test")])
+
+        async def archive_agent_definition(agent_definition_id: str) -> None:
+            definition_calls.append(("archive", agent_definition_id))
+
+        async def restore_agent_definition(agent_definition_id: str) -> None:
+            definition_calls.append(("restore", agent_definition_id))
+
+        client.agent_definitions.list_agent_definitions = list_agent_definitions
+        client.agent_definitions.archive_agent_definition = archive_agent_definition
+        client.agent_definitions.restore_agent_definition = restore_agent_definition
+
+        definitions = await client.list_agent_definitions(
+            include_archived=True,
+            cursor="definitions-2",
+            limit=10,
+        )
+        assert definitions.items[0].id == "def_test"
+        await client.archive_agent_definition("def_test")
+        await client.restore_agent_definition("def_test")
+        assert definition_calls == [
+            ("list", {
+                "include_archived": True,
+                "cursor": "definitions-2",
+                "limit": 10,
+            }),
+            ("archive", "def_test"),
+            ("restore", "def_test"),
+        ]
+
         credential_calls: list[tuple[str, Any]] = []
 
         async def create_credential(body: Any) -> Any:

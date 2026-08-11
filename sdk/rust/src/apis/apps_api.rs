@@ -13,6 +13,19 @@ use crate::{apis::ResponseContent, models};
 use reqwest;
 use serde::{de::Error as _, Deserialize, Serialize};
 
+/// struct for typed errors of method [`archive_app`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ArchiveAppError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`create_app_client_key`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -21,6 +34,7 @@ pub enum CreateAppClientKeyError {
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
     Status404(models::ErrorResponse),
+    Status409(models::ErrorResponse),
     Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
     UnknownValue(serde_json::Value),
@@ -68,9 +82,23 @@ pub enum RegisterAppError {
     Status400(models::ErrorResponse),
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
+    Status409(models::ErrorResponse),
     Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
     Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`restore_app`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RestoreAppError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
     UnknownValue(serde_json::Value),
 }
 
@@ -94,9 +122,52 @@ pub enum UpdateAppError {
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
     Status404(models::ErrorResponse),
+    Status409(models::ErrorResponse),
     Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
     UnknownValue(serde_json::Value),
+}
+
+/// Marks the App out of service. Nothing is destroyed and no other resource's lifecycle changes: the App's credentials keep authenticating, its client keys stay registered, and its Agent Definitions are untouched.  While archived, exactly these operations return `409 app_archived`: Session create and fork, Invocation create, Invocation resume, Agent Definition create and replace, client-key create, App-bound credential issuance, provider-key create, and credit allocation. Everything else behaves as on a live App — reads and lists, cancel, interrupt, nudges, tool-result submission, Session update and erasure, App `PATCH`, and credential, client-key, and provider-key rotation and revocation — so a draining host can let running turns settle and then clean up. Usage reporting keeps counting the App's spend.  Archiving requires the same authority as updating the App: an Org or installation credential. A credential bound to the App cannot archive or restore it. Repeating the call is a successful no-op.
+pub async fn archive_app(
+    configuration: &configuration::Configuration,
+    app_id: &str,
+) -> Result<(), Error<ArchiveAppError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_app_id = app_id;
+
+    let uri_str = format!(
+        "{}/v1/apps/{app_id}",
+        configuration.base_path,
+        app_id = crate::apis::urlencode(p_path_app_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::DELETE, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ArchiveAppError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
 }
 
 /// Registers one standard-base64-encoded, exactly 32-byte Ed25519 public key. nvoken stores no seed or private key and never returns the public bytes. At most five keys may exist for one App so hosts can overlap a bounded rotation. Duplicate public bytes within one App are rejected; another App may independently register the same bytes.  Registration remains dormant in this version: a JWT signed by the key still receives the existing unauthenticated response and creates no runtime or credential rows.
@@ -257,19 +328,24 @@ pub async fn list_app_client_keys(
     }
 }
 
-/// Returns the Apps this credential can see. An App-scoped credential sees only that App, an Org-scoped credential sees the Apps contained by its Org, and an installation credential sees every registered App. An exact `external_ref` filter narrows that visible set during the staged console migration.
+/// Returns the Apps this credential can see. An App-scoped credential sees only that App, an Org-scoped credential sees the Apps contained by its Org, and an installation credential sees every registered App. An exact `external_ref` filter narrows that visible set during the staged console migration. Archived Apps are excluded unless `status` asks for them.
 pub async fn list_apps(
     configuration: &configuration::Configuration,
     external_ref: Option<&str>,
+    status: Option<&str>,
 ) -> Result<models::AppList, Error<ListAppsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_query_external_ref = external_ref;
+    let p_query_status = status;
 
     let uri_str = format!("{}/v1/apps", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
     if let Some(ref param_value) = p_query_external_ref {
         req_builder = req_builder.query(&[("external_ref", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_status {
+        req_builder = req_builder.query(&[("status", &param_value.to_string())]);
     }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
@@ -349,6 +425,48 @@ pub async fn register_app(
     } else {
         let content = resp.text().await?;
         let entity: Option<RegisterAppError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Clears the App's archive tombstone and reopens admission. Nothing else is restored, and the App's Org may still be archived. Restoring a live App is a successful no-op.
+pub async fn restore_app(
+    configuration: &configuration::Configuration,
+    app_id: &str,
+) -> Result<(), Error<RestoreAppError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_app_id = app_id;
+
+    let uri_str = format!(
+        "{}/v1/apps/{app_id}/restore",
+        configuration.base_path,
+        app_id = crate::apis::urlencode(p_path_app_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<RestoreAppError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,

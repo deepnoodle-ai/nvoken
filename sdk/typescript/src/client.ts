@@ -16,6 +16,7 @@ import {
 import type {
   Agent as AgentIdentity,
   AgentDefinitionResource,
+  AgentDefinitionResourceList,
   AgentDefinitionWrite,
   AgentList,
   AllocateCreditsResult,
@@ -969,6 +970,12 @@ export interface ListInvocationOptions {
   limit?: number;
 }
 
+export interface ListAgentDefinitionsOptions {
+  includeArchived?: boolean;
+  cursor?: string;
+  limit?: number;
+}
+
 export interface ListModelsOptions {
   provider?: ModelProvider;
   includeDeprecated?: boolean;
@@ -1622,6 +1629,16 @@ export class Client {
     );
   }
 
+  listAgentDefinitions(
+    options: ListAgentDefinitionsOptions = {},
+    signal?: AbortSignal,
+  ): Promise<AgentDefinitionResourceList> {
+    return this.replaySafe(
+      () => this.agentDefinitions.listAgentDefinitions(options, { signal }),
+      signal,
+    );
+  }
+
   updateAgentDefinition<TOutput extends object = JsonObject>(
     agentDefinitionId: string,
     expectedRevision: number,
@@ -1635,6 +1652,26 @@ export class Client {
         ifMatch: `"${expectedRevision}"`,
         agentDefinitionWrite: agentDefinitionToWire(definition),
       }, { signal }),
+      signal,
+    );
+  }
+
+  archiveAgentDefinition(
+    agentDefinitionId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.replaySafe(
+      () => this.agentDefinitions.archiveAgentDefinition({ agentDefinitionId }, { signal }),
+      signal,
+    );
+  }
+
+  restoreAgentDefinition(
+    agentDefinitionId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.replaySafe(
+      () => this.agentDefinitions.restoreAgentDefinition({ agentDefinitionId }, { signal }),
       signal,
     );
   }
