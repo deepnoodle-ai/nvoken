@@ -145,6 +145,7 @@ fn invocation_payload(id: &str, status: &str) -> Value {
         "user_key": null,
         "agent_definition_id": DEFINITION_ID,
         "agent_definition": null,
+        "context": null,
         "status": status,
         "stop_reason": if status == "completed" { json!("end_turn") } else { Value::Null },
         "blocking_budget": null,

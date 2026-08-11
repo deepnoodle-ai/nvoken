@@ -279,6 +279,22 @@ func (h conformanceMCPServerHeaders) valid() bool {
 		h.Headers["Authorization"] == "Bearer conformance-mcp-secret"
 }
 
+// conformanceContext is one recorded application state snapshot. It travels at
+// the top level of the request, so an SDK that nests it inside the Agent
+// Definition or drops the tier fails here rather than at the Runtime.
+type conformanceContext struct {
+	Name    string `json:"name"`
+	Tier    string `json:"tier"`
+	Content string `json:"content"`
+}
+
+func (c conformanceContext) valid() bool {
+	return c.Name != "" &&
+		!strings.HasPrefix(c.Name, "app-") &&
+		(c.Tier == "contextual" || c.Tier == "operator") &&
+		c.Content != ""
+}
+
 func serveModels(response http.ResponseWriter, request *http.Request) bool {
 	if request.Method != http.MethodGet {
 		return false
@@ -458,6 +474,7 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 		AgentDefinitionID string                  `json:"agent_definition_id"`
 		AgentDefinition   *conformanceDefinition  `json:"agent_definition"`
 		MCPServerHeaders  []conformanceMCPHeaders `json:"mcp_server_headers"`
+		Context           []conformanceContext    `json:"context"`
 	}
 	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 		writeError(response, http.StatusBadRequest, "invalid_request", "invalid conformance admission")
@@ -501,6 +518,12 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 	if len(definition.MCPServers) > 0 && len(body.MCPServerHeaders) == 0 {
 		writeError(response, http.StatusBadRequest, "invalid_request", "MCP secret headers were dropped")
 		return
+	}
+	for _, item := range body.Context {
+		if !item.valid() {
+			writeError(response, http.StatusBadRequest, "invalid_request", "recorded context did not round-trip")
+			return
+		}
 	}
 	if strings.Contains(body.IdempotencyKey, "lost-ack") &&
 		!strings.HasPrefix(body.IdempotencyKey, "cli-") &&
@@ -875,6 +898,7 @@ func invocationWithID(id string, status string) map[string]any {
 		"user_key":                     nil,
 		"agent_definition_id":          definitionID,
 		"agent_definition":             nil,
+		"context":                      nil,
 		"status":                       status,
 		"stop_reason":                  nullableStopReason(status),
 		"blocking_budget":              nil,

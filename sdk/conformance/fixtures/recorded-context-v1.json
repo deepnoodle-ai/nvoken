@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "note": "Recorded application context is per-Invocation Session history, not part of the content-addressed Agent Definition. It travels at the top level of a create request, the Invocation echoes the accepted pre-deduplication list, and the transcript stores each snapshot as a typed reminder block.",
+  "limits": {
+    "items": 8,
+    "name_characters": 64,
+    "content_bytes": 8192,
+    "total_content_bytes": 16384,
+    "session_names": 16
+  },
+  "name_pattern": "^[a-z][a-z0-9-]*$",
+  "tiers": ["contextual", "operator"],
+  "reserved_prefix": "app-",
+  "runtime_only_checks": [
+    "A Session may record at most 16 distinct context names over its lifetime.",
+    "A byte-identical resend of a name, tier, and content adds no transcript message, while the Invocation still echoes the pre-deduplication list it accepted.",
+    "Compaction projects the latest covered copy of each name after the summary without adding Session messages."
+  ],
+  "excluded_from_agent_definition": ["context"],
+  "accepted": {
+    "id": "recorded-context",
+    "note": "Names omit the reserved app- prefix on the request; the transcript and the model see it added.",
+    "request": {
+      "agent_key": "support",
+      "session_key": "ticket-483",
+      "idempotency_key": "recorded-context",
+      "input": "Can I refund the duplicate charge?",
+      "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005",
+      "context": [
+        {
+          "name": "customer",
+          "tier": "contextual",
+          "content": "plan: pro; account standing: current"
+        },
+        {
+          "name": "refund-policy",
+          "tier": "operator",
+          "content": "Maximum self-serve refund: 50 USD"
+        }
+      ]
+    },
+    "messages": [
+      {
+        "sequence": 1,
+        "role": "user",
+        "content": [
+          {
+            "type": "reminder",
+            "name": "app-customer",
+            "tier": "contextual",
+            "content": "plan: pro; account standing: current"
+          }
+        ]
+      },
+      {
+        "sequence": 2,
+        "role": "system",
+        "content": [
+          {
+            "type": "reminder",
+            "name": "app-refund-policy",
+            "tier": "operator",
+            "content": "Maximum self-serve refund: 50 USD"
+          }
+        ]
+      }
+    ]
+  },
+  "rejected": [
+    {
+      "id": "uppercase-name",
+      "context": [
+        {
+          "name": "Customer",
+          "tier": "contextual",
+          "content": "plan: pro"
+        }
+      ],
+      "issue": {
+        "code": "invalid_request",
+        "path": "context[0].name",
+        "reason": "name_pattern"
+      }
+    },
+    {
+      "id": "leading-digit-name",
+      "context": [
+        {
+          "name": "2fa-state",
+          "tier": "contextual",
+          "content": "enrolled"
+        }
+      ],
+      "issue": {
+        "code": "invalid_request",
+        "path": "context[0].name",
+        "reason": "name_pattern"
+      }
+    },
+    {
+      "id": "duplicate-name",
+      "context": [
+        {
+          "name": "customer",
+          "tier": "contextual",
+          "content": "plan: pro"
+        },
+        {
+          "name": "customer",
+          "tier": "operator",
+          "content": "plan: enterprise"
+        }
+      ],
+      "issue": {
+        "code": "invalid_request",
+        "path": "context[1].name",
+        "reason": "duplicate_name"
+      }
+    },
+    {
+      "id": "empty-content",
+      "context": [
+        {
+          "name": "customer",
+          "tier": "contextual",
+          "content": ""
+        }
+      ],
+      "issue": {
+        "code": "invalid_request",
+        "path": "context[0].content",
+        "reason": "empty_content"
+      }
+    },
+    {
+      "id": "unknown-tier",
+      "context": [
+        {
+          "name": "customer",
+          "tier": "advisory",
+          "content": "plan: pro"
+        }
+      ],
+      "issue": {
+        "code": "invalid_request",
+        "path": "context[0].tier",
+        "reason": "unknown_tier"
+      },
+      "unrepresentable_in": ["typescript", "rust"]
+    }
+  ],
+  "generated_rejections": [
+    {
+      "id": "too-many-items",
+      "reason": "item_count",
+      "note": "Build limits.items + 1 items named c0, c1, ... each with one byte of content."
+    },
+    {
+      "id": "oversize-name",
+      "reason": "name_pattern",
+      "note": "Build one item whose name repeats 'a' limits.name_characters + 1 times."
+    },
+    {
+      "id": "oversize-content",
+      "reason": "content_bytes",
+      "note": "Build one item whose content repeats 'a' limits.content_bytes + 1 times."
+    },
+    {
+      "id": "oversize-total",
+      "reason": "total_content_bytes",
+      "note": "Build three items each holding limits.content_bytes bytes of content, which stays under the per-item bound and exceeds the total."
+    }
+  ]
+}

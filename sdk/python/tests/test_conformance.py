@@ -25,7 +25,17 @@ from nvoken_generated.models.nudge_status import NudgeStatus
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
 from nvoken_generated.models.tool_declaration import ToolDeclaration as GeneratedToolDeclaration
 
-from nvoken.client import TERMINAL_STATUSES, _generated_webhook_target
+from nvoken_generated.models.reminder_block import ReminderBlock
+from nvoken_generated.models.session_content_block import SessionContentBlock
+
+from nvoken.client import (
+    TERMINAL_STATUSES,
+    _MAX_CONTEXT_CONTENT_BYTES,
+    _MAX_CONTEXT_ITEMS,
+    _MAX_CONTEXT_NAME_LENGTH,
+    _MAX_CONTEXT_TOTAL_BYTES,
+    _generated_webhook_target,
+)
 from nvoken.media_preflight import (
     DOCUMENT_MEDIA_TYPES,
     IMAGE_MEDIA_TYPES,
@@ -51,6 +61,7 @@ from nvoken import (
     AskUserOutput,
     Client,
     ContextCompaction,
+    ContextItem,
     InvocationHandle,
     InvokeRequest,
     MCPServer,
@@ -1326,3 +1337,78 @@ def test_shared_invocation_nudge_fixture_pins_the_steering_contract() -> None:
     )
     assert drained is not None
     assert getattr(drained, fixture["nudge_status"]["drained_carries"]) == 7
+
+
+# Recorded context must reach the wire at the top level rather than inside the
+# Agent Definition, and every locally checkable bound must be refused before a
+# request is spent.
+def test_shared_recorded_context_fixture_is_expressible() -> None:
+    fixture = json.loads(
+        (
+            Path(__file__).parents[2]
+            / "conformance/fixtures/recorded-context-v1.json"
+        ).read_text()
+    )
+    limits = fixture["limits"]
+    assert limits["items"] == _MAX_CONTEXT_ITEMS
+    assert limits["name_characters"] == _MAX_CONTEXT_NAME_LENGTH
+    assert limits["content_bytes"] == _MAX_CONTEXT_CONTENT_BYTES
+    assert limits["total_content_bytes"] == _MAX_CONTEXT_TOTAL_BYTES
+    assert fixture["tiers"] == ["contextual", "operator"]
+
+    client = Client(base_url="https://runtime.example.test", api_key="key")
+    accepted = fixture["accepted"]["request"]
+    body = client._invocation_body(InvokeRequest(
+        agent_key=accepted["agent_key"],
+        session_key=accepted["session_key"],
+        idempotency_key=accepted["idempotency_key"],
+        input=accepted["input"],
+        agent_definition_id=accepted["agent_definition_id"],
+        context=tuple(ContextItem(**item) for item in accepted["context"]),
+    )).to_dict()
+    assert body["context"] == accepted["context"]
+    assert "agent_definition" not in body
+
+    # The transcript stores each snapshot as a typed reminder block whose name
+    # carries the reserved prefix the request omits.
+    for message in fixture["accepted"]["messages"]:
+        block = SessionContentBlock.from_dict(message["content"][0])
+        reminder = block.actual_instance
+        assert isinstance(reminder, ReminderBlock), message["role"]
+        assert reminder.name.startswith("app-")
+        assert reminder.content
+
+    def refused(items: tuple[ContextItem, ...]) -> bool:
+        try:
+            client._invocation_body(InvokeRequest(
+                agent_key="support",
+                input="hello",
+                agent_definition_id=accepted["agent_definition_id"],
+                context=items,
+            ))
+        except NvokenError as error:
+            return error.category == "validation"
+        return False
+
+    for rejected in fixture["rejected"]:
+        if "python" in rejected.get("unrepresentable_in", []):
+            continue
+        assert refused(
+            tuple(ContextItem(**item) for item in rejected["context"])
+        ), rejected["id"]
+
+    def item(name: str, content: str) -> ContextItem:
+        return ContextItem(name=name, tier="contextual", content=content)
+
+    assert refused(tuple(
+        item(f"c{index}", "a") for index in range(limits["items"] + 1)
+    )), "too-many-items"
+    assert refused(
+        (item("a" * (limits["name_characters"] + 1), "x"),)
+    ), "oversize-name"
+    assert refused(
+        (item("customer", "a" * (limits["content_bytes"] + 1)),)
+    ), "oversize-content"
+    assert refused(tuple(
+        item(f"c{index}", "a" * limits["content_bytes"]) for index in range(3)
+    )), "oversize-total"

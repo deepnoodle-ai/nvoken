@@ -10,13 +10,13 @@ use nvoken::{
     fetch_tool, preflight_input_blocks, preflight_output_schema, verify_callback, AgentDefinition,
     AgentInvocationOptions, AgentOptions, AskUserInput, AskUserKind, AskUserOutput,
     BudgetExhaustionBehavior, CallbackError, CallbackResultStore, Client, CompactionListOptions,
-    ContextCompaction, ContextCompactionTrigger, ErrorCategory, IfActivePolicy, InvokeRequest,
-    Limits, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions, ListSessionsOptions,
-    McpServer, McpServerHeaders, MessageListOptions, Model, NvokenError, ProviderKeySelection,
-    ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer, RetryPolicy, Sampling,
-    SessionOptions, StreamEvent, StreamPreview, Tool, ToolCallListOptions, ToolChoice, ToolMode,
-    ToolResult, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent,
-    WebhookTarget, ASK_USER_TOOL_NAME,
+    ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier, ErrorCategory,
+    IfActivePolicy, InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions,
+    ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
+    NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
+    Reducer, RetryPolicy, Sampling, SessionOptions, StreamEvent, StreamPreview, Tool,
+    ToolCallListOptions, ToolChoice, ToolMode, ToolResult, WaitCondition, WaitOptions,
+    WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget, ASK_USER_TOOL_NAME,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -823,6 +823,7 @@ async fn shared_fault_server_semantics() {
             }),
             agent_definition_id: None,
             mcp_server_headers: vec![McpServerHeaders::new("support", mcp_secret)],
+            context: Vec::new(),
             provider_keys: vec![ProviderKeySelection {
                 provider: "openai".to_owned(),
                 source: ProviderKeySource::CallerEphemeral {
@@ -1538,4 +1539,120 @@ fn shared_invocation_nudge_fixture_pins_the_steering_contract() {
         encoded_drained[&fixture.nudge_status.drained_carries],
         json!(7)
     );
+}
+
+// Recorded context must reach the wire at the top level rather than inside the
+// Agent Definition, and every locally checkable bound must be refused before a
+// request is spent.
+#[test]
+fn shared_recorded_context_fixture_is_expressible() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../conformance/fixtures/recorded-context-v1.json"
+    ))
+    .unwrap();
+    let limits = &fixture["limits"];
+    let items_limit = limits["items"].as_u64().unwrap() as usize;
+    let name_limit = limits["name_characters"].as_u64().unwrap() as usize;
+    let content_limit = limits["content_bytes"].as_u64().unwrap() as usize;
+    assert_eq!(fixture["tiers"], json!(["contextual", "operator"]));
+
+    let client = Client::new("https://runtime.example.test", "key").unwrap();
+    let accepted = &fixture["accepted"]["request"];
+    let mut request = InvokeRequest::from_agent_definition(
+        accepted["agent_key"].as_str().unwrap(),
+        accepted["input"].as_str().unwrap(),
+        accepted["agent_definition_id"].as_str().unwrap(),
+    )
+    .session_key(accepted["session_key"].as_str().unwrap())
+    .idempotency_key(accepted["idempotency_key"].as_str().unwrap());
+    for item in accepted["context"].as_array().unwrap() {
+        request = request.context(fixture_context_item(item));
+    }
+    let body = client.invocation_body(request).unwrap();
+    assert_eq!(
+        serde_json::to_value(body.context.as_ref().unwrap()).unwrap(),
+        accepted["context"]
+    );
+    assert!(body.agent_definition.is_none());
+
+    // The transcript stores each snapshot as a typed reminder block whose name
+    // carries the reserved prefix the request omits.
+    for message in fixture["accepted"]["messages"].as_array().unwrap() {
+        let block: models::SessionContentBlock =
+            serde_json::from_value(message["content"][0].clone()).unwrap();
+        let models::SessionContentBlock::Reminder(reminder) = block else {
+            panic!("{} content is not a reminder", message["role"]);
+        };
+        assert!(reminder.name.starts_with("app-"));
+        assert!(!reminder.content.is_empty());
+    }
+
+    let refused = |context: Vec<ContextItem>| {
+        let mut request = InvokeRequest::from_agent_definition(
+            "support",
+            "hello",
+            accepted["agent_definition_id"].as_str().unwrap(),
+        );
+        request.context = context;
+        matches!(
+            client.invocation_body(request),
+            Err(error) if error.category == ErrorCategory::Validation
+        )
+    };
+    for rejected in fixture["rejected"].as_array().unwrap() {
+        let id = rejected["id"].as_str().unwrap();
+        if rejected["unrepresentable_in"]
+            .as_array()
+            .is_some_and(|langs| langs.iter().any(|lang| lang == "rust"))
+        {
+            continue;
+        }
+        let context = rejected["context"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(fixture_context_item)
+            .collect();
+        assert!(refused(context), "{id}");
+    }
+    let item =
+        |name: String, content: String| ContextItem::new(name, ContextTier::Contextual, content);
+    assert!(
+        refused(
+            (0..=items_limit)
+                .map(|index| item(format!("c{index}"), "a".to_owned()))
+                .collect()
+        ),
+        "too-many-items"
+    );
+    assert!(
+        refused(vec![item("a".repeat(name_limit + 1), "x".to_owned())]),
+        "oversize-name"
+    );
+    assert!(
+        refused(vec![item(
+            "customer".to_owned(),
+            "a".repeat(content_limit + 1)
+        )]),
+        "oversize-content"
+    );
+    assert!(
+        refused(
+            (0..3)
+                .map(|index| item(format!("c{index}"), "a".repeat(content_limit)))
+                .collect()
+        ),
+        "oversize-total"
+    );
+}
+
+fn fixture_context_item(item: &Value) -> ContextItem {
+    ContextItem::new(
+        item["name"].as_str().unwrap(),
+        match item["tier"].as_str().unwrap() {
+            "operator" => ContextTier::Operator,
+            _ => ContextTier::Contextual,
+        },
+        item["content"].as_str().unwrap(),
+    )
 }

@@ -117,6 +117,8 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("if-active").Default("reject").Enum("reject", "supersede", "interrupt").Help("Reject active work, atomically replace it, or stop it gracefully and keep what it produced"),
 			cli.String("webhook-url").Help("HTTPS endpoint for signed Invocation webhooks"),
 			cli.Strings("webhook-event").Help("Restrict webhooks to invocation.waiting, invocation.paused, or invocation.ended; repeatable, default all"),
+			cli.Strings("context").Help(`Record an application state snapshot as name=content, such as customer="plan: pro"; repeatable`),
+			cli.Strings("context-operator").Help("Record a snapshot as higher-authority application state; same name=content form, repeatable"),
 			cli.Strings("image").Help("Attach a local image file; repeatable"),
 			cli.Strings("document").Help("Attach a local PDF file; repeatable"),
 			cli.Strings("image-url").Help("Attach a public HTTPS image URL; repeatable"),
@@ -748,6 +750,9 @@ func runInvoke(command *cli.Context) error {
 	request.SessionID = optionalString(command.String("session-id"))
 	request.SessionKey = optionalString(command.String("session-key"))
 	if request.Webhook, err = notifyTargetFlags(command); err != nil {
+		return err
+	}
+	if request.Context, err = contextFlags(command); err != nil {
 		return err
 	}
 	handle, err := client.Invoke(command.Context(), request)
@@ -1689,6 +1694,17 @@ func writeMessageText(writer io.Writer, message nvoken.SessionMessage) error {
 			parts = append(parts, textBlock.Text)
 			continue
 		}
+		// A recorded context snapshot is text the host wrote, so it reads as
+		// its name and content rather than as the raw block every other
+		// non-text type falls back to.
+		if blockType == "reminder" {
+			reminder, err := block.AsReminderBlock()
+			if err != nil {
+				return fmt.Errorf("decode reminder content: %w", err)
+			}
+			parts = append(parts, fmt.Sprintf("[%s] %s", reminder.Name, reminder.Content))
+			continue
+		}
 		encoded, err := json.Marshal(block)
 		if err != nil {
 			return fmt.Errorf("encode message content: %w", err)
@@ -1762,6 +1778,33 @@ func optionalBool(value bool) *bool {
 // notifyTargetFlags refuses --webhook-event without --webhook-url rather than
 // ignoring it, so a mistyped invocation cannot look like it asked for
 // webhooks and silently get none.
+// contextFlags reads the recorded application context. Every --context is
+// emitted before every --context-operator, so the same flags always render the
+// same order-sensitive list and a replay under one idempotency key matches.
+func contextFlags(command *cli.Context) ([]nvoken.ContextItem, error) {
+	var items []nvoken.ContextItem
+	for _, tier := range []struct {
+		flag string
+		tier nvoken.ContextTier
+	}{
+		{"context", nvoken.ContextTierContextual},
+		{"context-operator", nvoken.ContextTierOperator},
+	} {
+		for _, entry := range command.Strings(tier.flag) {
+			name, content, found := strings.Cut(entry, "=")
+			if !found || name == "" || content == "" {
+				return nil, fmt.Errorf("--%s expects name=content, got %q", tier.flag, entry)
+			}
+			items = append(items, nvoken.ContextItem{
+				Name:    name,
+				Tier:    tier.tier,
+				Content: content,
+			})
+		}
+	}
+	return items, nil
+}
+
 func notifyTargetFlags(command *cli.Context) (*nvoken.WebhookTarget, error) {
 	url := command.String("webhook-url")
 	events := command.Strings("webhook-event")

@@ -429,6 +429,7 @@ func onboardingInvocation(
 		"user_key":                     nil,
 		"agent_definition_id":          onboardingID("def", 1),
 		"agent_definition":             nil,
+		"context":                      nil,
 		"status":                       status,
 		"stop_reason":                  nullableStopReason(status),
 		"attempt":                      1,
