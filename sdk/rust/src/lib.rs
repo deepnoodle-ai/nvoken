@@ -22,18 +22,18 @@ pub use ask_user::{
     AskUserOption, AskUserOutput, ASK_USER_DESCRIPTION, ASK_USER_TOOL_NAME,
 };
 pub use callback::{
-    deduplicate_callback_result, verify_callback, CallbackEnvelope, CallbackError,
-    CallbackResultStore, VerifiedCallback,
+    acknowledge_callback, callback_result, deduplicate_callback_result, verify_callback,
+    CallbackEnvelope, CallbackError, CallbackReply, CallbackResultStore, VerifiedCallback,
 };
 pub use client::{
-    fetch_tool, BudgetExhaustionBehavior, Client, CompactionListOptions, ContextCompaction,
-    ContextCompactionTrigger, ErrorCategory, HostToolHandler, IfActivePolicy, InvocationHandle,
-    InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
-    ListSessionsOptions, McpServer, MessageListOptions, Model, NvokenError, ProviderKeySelection,
-    ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, RetryPolicy, Sampling,
-    SessionOptions, SessionRetention, StreamOptions, Tool, ToolCallListOptions, ToolChoice,
-    ToolHandlerError, ToolMode, ToolResult, WaitCondition, WaitOptions, WebSearchLocation,
-    WebSearchTool, WebhookEvent, WebhookTarget,
+    fetch_tool, AgentDefinition, BudgetExhaustionBehavior, Client, CompactionListOptions,
+    ContextCompaction, ContextCompactionTrigger, ErrorCategory, HostToolHandler, IfActivePolicy,
+    InvocationHandle, InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions,
+    ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
+    NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
+    RetryPolicy, Sampling, SessionOptions, SessionRetention, StreamOptions, Tool,
+    ToolCallListOptions, ToolChoice, ToolHandlerError, ToolMode, ToolResult, WaitCondition,
+    WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
 };
 pub use media_preflight::{
     document_block, document_url_block, image_block, image_url_block, preflight_input_blocks,

@@ -7,16 +7,16 @@ use http::HeaderMap;
 use nvoken::models;
 use nvoken::{
     ask_user_input_schema, ask_user_tool, ask_user_tool_with, deduplicate_callback_result,
-    fetch_tool, preflight_input_blocks, preflight_output_schema, verify_callback,
+    fetch_tool, preflight_input_blocks, preflight_output_schema, verify_callback, AgentDefinition,
     AgentInvocationOptions, AgentOptions, AskUserInput, AskUserKind, AskUserOutput,
     BudgetExhaustionBehavior, CallbackError, CallbackResultStore, Client, CompactionListOptions,
     ContextCompaction, ContextCompactionTrigger, ErrorCategory, IfActivePolicy, InvokeRequest,
     Limits, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions, ListSessionsOptions,
-    McpServer, MessageListOptions, Model, NvokenError, ProviderKeySelection, ProviderKeySource,
-    ProviderTool, Reasoning, ReasoningEffort, Reducer, RetryPolicy, Sampling, SessionOptions,
-    StreamEvent, StreamPreview, Tool, ToolCallListOptions, ToolChoice, ToolMode, ToolResult,
-    WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
-    ASK_USER_TOOL_NAME,
+    McpServer, McpServerHeaders, MessageListOptions, Model, NvokenError, ProviderKeySelection,
+    ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer, RetryPolicy, Sampling,
+    SessionOptions, StreamEvent, StreamPreview, Tool, ToolCallListOptions, ToolChoice, ToolMode,
+    ToolResult, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent,
+    WebhookTarget, ASK_USER_TOOL_NAME,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -154,12 +154,12 @@ fn shared_agent_request_fixture_is_expressible() {
     let expected = &fixture["agent_request"]["web_search_metadata_unbound"];
     let client = Client::new("https://runtime.example.test", "key").unwrap();
     let mut options = AgentOptions::new("support", Model::new("anthropic", "claude-sonnet-4-6"));
-    options.sampling = Some(Sampling { temperature: 0.2 });
-    options.reasoning = Some(Reasoning {
+    options.agent_definition.sampling = Some(Sampling { temperature: 0.2 });
+    options.agent_definition.reasoning = Some(Reasoning {
         effort: Some(ReasoningEffort::Low),
         budget_tokens: None,
     });
-    options.provider_tools = vec![ProviderTool::WebSearch(
+    options.agent_definition.provider_tools = vec![ProviderTool::WebSearch(
         WebSearchTool::default().max_uses(5),
     )];
     let agent = client.agent(options).unwrap();
@@ -406,24 +406,81 @@ fn shared_media_input_fixture_matches_preflight() {
 }
 
 #[test]
-fn shared_definition_reuse_fixture_is_expressible() {
+fn shared_agent_definition_reuse_fixture_is_expressible() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../conformance/fixtures/definition-reuse-v1.json"
+        "../../conformance/fixtures/agent-definition-reuse-v1.json"
     ))
     .unwrap();
     let client = Client::new("https://runtime.example.test", "key").unwrap();
     let body = client
-        .invocation_body(InvokeRequest::from_definition(
+        .invocation_body(InvokeRequest::from_agent_definition(
             "support",
             "hello",
-            fixture["definition_id"].as_str().unwrap(),
+            fixture["agent_definition_id"].as_str().unwrap(),
         ))
         .unwrap();
     assert_eq!(
-        body.definition_id.as_deref(),
-        fixture["definition_id"].as_str()
+        body.agent_definition_id.as_deref(),
+        fixture["agent_definition_id"].as_str()
     );
-    assert!(body.model.is_none());
+    assert!(body.agent_definition.is_none());
+}
+
+// Registration and invocation must render the same object, or an SDK could
+// register one definition and then invoke a different, silently new one.
+#[test]
+fn registration_sends_the_same_agent_definition_an_invocation_nests() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../conformance/fixtures/agent-definition-reuse-v1.json"
+    ))
+    .unwrap();
+    let client = Client::new("https://runtime.example.test", "key").unwrap();
+    let definition = AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
+        .instructions("You are a concise billing support agent.");
+    let registration = client.agent_definition_body(definition.clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(&registration).unwrap(),
+        fixture["registration"]["request"]
+    );
+    let body = client
+        .invocation_body(
+            InvokeRequest::without_model("support", "hello").agent_definition(definition),
+        )
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(body.agent_definition.unwrap()).unwrap(),
+        serde_json::to_value(&registration).unwrap()
+    );
+}
+
+// A secret inside a content-addressed definition would change its identity, so
+// MCP headers must ride alongside it and never within it.
+#[test]
+fn mcp_secrets_stay_outside_the_agent_definition() {
+    let client = Client::new("https://runtime.example.test", "key").unwrap();
+    let server = McpServer::new("support", "https://mcp.example.test/rpc").allowed_tool("lookup");
+    let headers = HashMap::from([("Authorization".to_owned(), "Bearer secret".to_owned())]);
+    let request = InvokeRequest::new(
+        "support",
+        "hello",
+        Model::new("anthropic", "claude-sonnet-5"),
+    )
+    .mcp_server(server.clone())
+    .mcp_server_headers(McpServerHeaders::new("support", headers.clone()));
+    let body = client.invocation_body(request).unwrap();
+    let definition = serde_json::to_value(body.agent_definition.unwrap()).unwrap();
+    assert!(definition["mcp_servers"][0].get("headers").is_none());
+    assert_eq!(body.mcp_server_headers.unwrap()[0].headers, headers);
+
+    // A header naming no declared server is a typo the SDK can catch locally.
+    let mismatched = InvokeRequest::new(
+        "support",
+        "hello",
+        Model::new("anthropic", "claude-sonnet-5"),
+    )
+    .mcp_server(server)
+    .mcp_server_headers(McpServerHeaders::new("typo", headers));
+    assert!(client.invocation_body(mismatched).is_err());
 }
 
 // fixture_blocks decodes fixture wire blocks into generated input blocks.
@@ -541,9 +598,10 @@ fn request_builders_cover_core_admission_types() {
             source: ProviderKeySource::AppByok,
         });
 
-    assert_eq!(request.model.id, "gpt-test");
-    assert_eq!(request.instructions.as_deref(), Some("help"));
-    assert_eq!(request.tools.len(), 1);
+    let definition = request.agent_definition.as_ref().unwrap();
+    assert_eq!(definition.model.id, "gpt-test");
+    assert_eq!(definition.instructions.as_deref(), Some("help"));
+    assert_eq!(definition.tools.len(), 1);
     assert_eq!(request.session_key.as_deref(), Some("ticket-42"));
     assert_eq!(request.session_id, None);
     assert_eq!(request.provider_keys.len(), 1);
@@ -679,10 +737,15 @@ async fn shared_fault_server_semantics() {
             .len(),
         5
     );
-    let server = McpServer::new("support", "https://mcp.example.test/rpc")
-        .allowed_tool("lookup")
-        .header("Authorization", "Bearer conformance-mcp-secret");
-    let mcp_tools = client.list_mcp_tools(&server).await.unwrap();
+    let server = McpServer::new("support", "https://mcp.example.test/rpc").allowed_tool("lookup");
+    let mcp_secret = HashMap::from([(
+        "Authorization".to_owned(),
+        "Bearer conformance-mcp-secret".to_owned(),
+    )]);
+    let mcp_tools = client
+        .list_mcp_tools(&server, Some(mcp_secret.clone()))
+        .await
+        .unwrap();
     assert_eq!(mcp_tools.tools[0].projected_name, "support__lookup");
     let exact_model = client
         .get_model(&Model {
@@ -740,23 +803,26 @@ async fn shared_fault_server_semantics() {
             metadata: None,
             input: "hello".to_owned(),
             input_blocks: Vec::new(),
-            definition_id: None,
-            instructions: Some("help".to_owned()),
-            model: Model {
-                provider: "openai".to_owned(),
-                id: "gpt-test".to_owned(),
-            },
-            sampling: Some(Sampling { temperature: 0.0 }),
-            reasoning: Some(Reasoning {
-                effort: Some(ReasoningEffort::High),
-                budget_tokens: None,
+            agent_definition: Some(AgentDefinition {
+                model: Model {
+                    provider: "openai".to_owned(),
+                    id: "gpt-test".to_owned(),
+                },
+                instructions: Some("help".to_owned()),
+                sampling: Some(Sampling { temperature: 0.0 }),
+                reasoning: Some(Reasoning {
+                    effort: Some(ReasoningEffort::High),
+                    budget_tokens: None,
+                }),
+                tool_choice: Some(ToolChoice::Required),
+                limits: None,
+                tools: Vec::new(),
+                mcp_servers: vec![server],
+                provider_tools: Vec::new(),
+                output_schema: None,
             }),
-            tool_choice: Some(ToolChoice::Required),
-            limits: None,
-            tools: Vec::new(),
-            mcp_servers: vec![server],
-            provider_tools: Vec::new(),
-            output_schema: None,
+            agent_definition_id: None,
+            mcp_server_headers: vec![McpServerHeaders::new("support", mcp_secret)],
             provider_keys: vec![ProviderKeySelection {
                 provider: "openai".to_owned(),
                 source: ProviderKeySource::CallerEphemeral {
