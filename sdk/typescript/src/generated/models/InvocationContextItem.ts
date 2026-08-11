@@ -12,43 +12,86 @@
  * Do not edit the class manually.
  */
 
-
+import { mapValues } from '../runtime.js';
 /**
  *
  * @export
+ * @interface InvocationContextItem
  */
-export const SessionMessageRole = {
-    System: 'system',
-    User: 'user',
-    Assistant: 'assistant',
-    Tool: 'tool'
+export interface InvocationContextItem {
+    /**
+     * Stable caller-owned name without the reserved `app-` prefix.
+     * @type {string}
+     * @memberof InvocationContextItem
+     */
+    name: string;
+    /**
+     * `contextual` is ordinary conversation context. `operator` is
+     * higher-authority application state; Dive maps the typed tier to
+     * each provider's native role.
+     *
+     * @type {InvocationContextItemTierEnum}
+     * @memberof InvocationContextItem
+     */
+    tier: InvocationContextItemTierEnum;
+    /**
+     * Non-empty UTF-8 snapshot text, at most 8 KiB.
+     * @type {string}
+     * @memberof InvocationContextItem
+     */
+    content: string;
+}
+
+
+/**
+ * @export
+ */
+export const InvocationContextItemTierEnum = {
+    Contextual: 'contextual',
+    Operator: 'operator'
 } as const;
-export type SessionMessageRole = typeof SessionMessageRole[keyof typeof SessionMessageRole];
+export type InvocationContextItemTierEnum = typeof InvocationContextItemTierEnum[keyof typeof InvocationContextItemTierEnum];
 
 
-export function instanceOfSessionMessageRole(value: any): boolean {
-    for (const key in SessionMessageRole) {
-        if (Object.prototype.hasOwnProperty.call(SessionMessageRole, key)) {
-            if (SessionMessageRole[key as keyof typeof SessionMessageRole] === value) {
-                return true;
-            }
-        }
+/**
+ * Check if a given object implements the InvocationContextItem interface.
+ */
+export function instanceOfInvocationContextItem(value: object): value is InvocationContextItem {
+    if (!('name' in value) || value['name'] === undefined) return false;
+    if (!('tier' in value) || value['tier'] === undefined) return false;
+    if (!('content' in value) || value['content'] === undefined) return false;
+    return true;
+}
+
+export function InvocationContextItemFromJSON(json: any): InvocationContextItem {
+    return InvocationContextItemFromJSONTyped(json, false);
+}
+
+export function InvocationContextItemFromJSONTyped(json: any, ignoreDiscriminator: boolean): InvocationContextItem {
+    if (json == null) {
+        return json;
     }
-    return false;
+    return {
+
+        'name': json['name'],
+        'tier': json['tier'],
+        'content': json['content'],
+    };
 }
 
-export function SessionMessageRoleFromJSON(json: any): SessionMessageRole {
-    return SessionMessageRoleFromJSONTyped(json, false);
+export function InvocationContextItemToJSON(json: any): InvocationContextItem {
+    return InvocationContextItemToJSONTyped(json, false);
 }
 
-export function SessionMessageRoleFromJSONTyped(json: any, ignoreDiscriminator: boolean): SessionMessageRole {
-    return json as SessionMessageRole;
-}
+export function InvocationContextItemToJSONTyped(value?: InvocationContextItem | null, ignoreDiscriminator: boolean = false): any {
+    if (value == null) {
+        return value;
+    }
 
-export function SessionMessageRoleToJSON(value?: SessionMessageRole | null): any {
-    return value as any;
-}
+    return {
 
-export function SessionMessageRoleToJSONTyped(value: any, ignoreDiscriminator: boolean): SessionMessageRole {
-    return value as SessionMessageRole;
+        'name': value['name'],
+        'tier': value['tier'],
+        'content': value['content'],
+    };
 }

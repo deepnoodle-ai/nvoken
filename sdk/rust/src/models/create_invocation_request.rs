@@ -46,6 +46,9 @@ pub struct CreateInvocationRequest {
         skip_serializing_if = "Option::is_none"
     )]
     pub on_budget_exhausted: Option<OnBudgetExhausted>,
+    /// Ordered application-owned state snapshots to record before this turn's input. Send a name again to supersede its prior value. An unchanged latest value is deduplicated from the transcript, while this exact pre-deduplication payload remains part of the Invocation and of idempotency comparison.  A Session may observe at most 16 distinct names over its lifetime. Names are stored and shown to the model with the reserved `app-` prefix, which callers must omit here. Context is not part of the Agent Definition and never changes its content-addressed ID.
+    #[serde(rename = "context", skip_serializing_if = "Option::is_none")]
+    pub context: Option<Vec<models::InvocationContextItem>>,
     #[serde(rename = "input")]
     pub input: Box<models::InvocationInput>,
     #[serde(rename = "webhook", skip_serializing_if = "Option::is_none")]
@@ -83,6 +86,7 @@ impl CreateInvocationRequest {
             idempotency_key,
             if_active: None,
             on_budget_exhausted: None,
+            context: None,
             input: Box::new(input),
             webhook: None,
             agent_definition_id: None,

@@ -234,19 +234,19 @@ func (e CreateInvocationRequestOnBudgetExhausted) Valid() bool {
 
 // Defines values for CredentialProfile.
 const (
-	Operator CredentialProfile = "operator"
-	Runtime  CredentialProfile = "runtime"
-	Viewer   CredentialProfile = "viewer"
+	CredentialProfileOperator CredentialProfile = "operator"
+	CredentialProfileRuntime  CredentialProfile = "runtime"
+	CredentialProfileViewer   CredentialProfile = "viewer"
 )
 
 // Valid indicates whether the value is a known member of the CredentialProfile enum.
 func (e CredentialProfile) Valid() bool {
 	switch e {
-	case Operator:
+	case CredentialProfileOperator:
 		return true
-	case Runtime:
+	case CredentialProfileRuntime:
 		return true
-	case Viewer:
+	case CredentialProfileViewer:
 		return true
 	default:
 		return false
@@ -559,6 +559,24 @@ const (
 func (e InvocationAcceptedEventType) Valid() bool {
 	switch e {
 	case EventInvocationAccepted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvocationContextItemTier.
+const (
+	InvocationContextItemTierContextual InvocationContextItemTier = "contextual"
+	InvocationContextItemTierOperator   InvocationContextItemTier = "operator"
+)
+
+// Valid indicates whether the value is a known member of the InvocationContextItemTier enum.
+func (e InvocationContextItemTier) Valid() bool {
+	switch e {
+	case InvocationContextItemTierContextual:
+		return true
+	case InvocationContextItemTierOperator:
 		return true
 	default:
 		return false
@@ -1345,6 +1363,39 @@ func (e RedactedBlockType) Valid() bool {
 	}
 }
 
+// Defines values for ReminderBlockTier.
+const (
+	ReminderBlockTierContextual ReminderBlockTier = "contextual"
+	ReminderBlockTierOperator   ReminderBlockTier = "operator"
+)
+
+// Valid indicates whether the value is a known member of the ReminderBlockTier enum.
+func (e ReminderBlockTier) Valid() bool {
+	switch e {
+	case ReminderBlockTierContextual:
+		return true
+	case ReminderBlockTierOperator:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReminderBlockType.
+const (
+	TypeReminder ReminderBlockType = "reminder"
+)
+
+// Valid indicates whether the value is a known member of the ReminderBlockType enum.
+func (e ReminderBlockType) Valid() bool {
+	switch e {
+	case TypeReminder:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SeedMessageRole.
 const (
 	SeedMessageRoleAssistant SeedMessageRole = "assistant"
@@ -1438,6 +1489,7 @@ func (e SessionMessageOrigin) Valid() bool {
 // Defines values for SessionMessageRole.
 const (
 	SessionMessageRoleAssistant SessionMessageRole = "assistant"
+	SessionMessageRoleSystem    SessionMessageRole = "system"
 	SessionMessageRoleTool      SessionMessageRole = "tool"
 	SessionMessageRoleUser      SessionMessageRole = "user"
 )
@@ -1446,6 +1498,8 @@ const (
 func (e SessionMessageRole) Valid() bool {
 	switch e {
 	case SessionMessageRoleAssistant:
+		return true
+	case SessionMessageRoleSystem:
 		return true
 	case SessionMessageRoleTool:
 		return true
@@ -2404,6 +2458,18 @@ type CreateInvocationRequest struct {
 	// only and is shared across that App's tenant partitions.
 	AgentKey string `json:"agent_key"`
 
+	// Context Ordered application-owned state snapshots to record before this
+	// turn's input. Send a name again to supersede its prior value. An
+	// unchanged latest value is deduplicated from the transcript, while
+	// this exact pre-deduplication payload remains part of the Invocation
+	// and of idempotency comparison.
+	//
+	// A Session may observe at most 16 distinct names over its lifetime.
+	// Names are stored and shown to the model with the reserved `app-`
+	// prefix, which callers must omit here. Context is not part of the
+	// Agent Definition and never changes its content-addressed ID.
+	Context *[]InvocationContextItem `json:"context,omitempty"`
+
 	// IdempotencyKey Your key for making retries safe. Send the same unchanged request
 	// again after a 5xx, a timeout, a dropped connection, or any case
 	// where you never saw the response, and you get the original turn
@@ -2983,7 +3049,14 @@ type Invocation struct {
 
 	// BlockingBudget Exact first-class Budget for a shared-budget stop, otherwise null.
 	BlockingBudget *BudgetBlock `json:"blocking_budget"`
-	CreatedAt      time.Time    `json:"created_at"`
+
+	// Context The ordered context payload accepted with this turn, before
+	// transcript deduplication. Null when omitted and in Invocation list
+	// items. Present on admission, point reads, results, and stream
+	// Invocation projections. Context is immutable and order-sensitive
+	// for idempotency.
+	Context   *[]InvocationContextItem `json:"context"`
+	CreatedAt time.Time                `json:"created_at"`
 
 	// DeadlineAt The deadline currently enforced by the runtime. Null while the
 	// Invocation is waiting without an explicit waiting timeout; the
@@ -3168,6 +3241,25 @@ type InvocationChange struct {
 	ThroughMessageSequence     *int64                      `json:"through_message_sequence"`
 	Usage                      *ModelUsage                 `json:"usage"`
 }
+
+// InvocationContextItem defines model for InvocationContextItem.
+type InvocationContextItem struct {
+	// Content Non-empty UTF-8 snapshot text, at most 8 KiB.
+	Content string `json:"content"`
+
+	// Name Stable caller-owned name without the reserved `app-` prefix.
+	Name string `json:"name"`
+
+	// Tier `contextual` is ordinary conversation context. `operator` is
+	// higher-authority application state; Dive maps the typed tier to
+	// each provider's native role.
+	Tier InvocationContextItemTier `json:"tier"`
+}
+
+// InvocationContextItemTier `contextual` is ordinary conversation context. `operator` is
+// higher-authority application state; Dive maps the typed tier to
+// each provider's native role.
+type InvocationContextItemTier string
 
 // InvocationFailure A failed turn still reports `usage` and `provenance` if the model
 // answered at least once before it stopped, so you can see what you were
@@ -4282,6 +4374,24 @@ type RegisterOrgRequest struct {
 	// returns the existing Org unchanged.
 	ExternalRef *string `json:"external_ref,omitempty"`
 }
+
+// ReminderBlock One application-owned state snapshot recorded at Invocation admission.
+// Contextual reminders use the user role; operator reminders use the
+// system role. The typed tier remains authoritative for provider mapping.
+type ReminderBlock struct {
+	Content string `json:"content"`
+
+	// Name Caller name in nvoken's reserved application namespace.
+	Name string            `json:"name"`
+	Tier ReminderBlockTier `json:"tier"`
+	Type ReminderBlockType `json:"type"`
+}
+
+// ReminderBlockTier defines model for ReminderBlock.Tier.
+type ReminderBlockTier string
+
+// ReminderBlockType defines model for ReminderBlock.Type.
+type ReminderBlockType string
 
 // ResolvedLimits defines model for ResolvedLimits.
 type ResolvedLimits struct {
@@ -6754,6 +6864,40 @@ func (t *SessionContentBlock) MergeToolResultBlock(v ToolResultBlock) error {
 	return err
 }
 
+// AsReminderBlock returns the union data inside the SessionContentBlock as a ReminderBlock
+func (t SessionContentBlock) AsReminderBlock() (ReminderBlock, error) {
+	var body ReminderBlock
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromReminderBlock overwrites any union data inside the SessionContentBlock as the provided ReminderBlock
+func (t *SessionContentBlock) FromReminderBlock(v ReminderBlock) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"reminder"}`))
+	t.union = b
+	return err
+}
+
+// MergeReminderBlock performs a merge with any union data inside the SessionContentBlock, using the provided ReminderBlock
+func (t *SessionContentBlock) MergeReminderBlock(v ReminderBlock) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"reminder"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsRedactedBlock returns the union data inside the SessionContentBlock as a RedactedBlock
 func (t SessionContentBlock) AsRedactedBlock() (RedactedBlock, error) {
 	var body RedactedBlock
@@ -6808,6 +6952,8 @@ func (t SessionContentBlock) ValueByDiscriminator() (interface{}, error) {
 		return t.AsImageReferenceBlock()
 	case "redacted":
 		return t.AsRedactedBlock()
+	case "reminder":
+		return t.AsReminderBlock()
 	case "server_tool_use":
 		return t.AsServerToolUseBlock()
 	case "text":

@@ -20,6 +20,7 @@ from typing import Any, List, Optional
 from nvoken_generated.models.document_reference_block import DocumentReferenceBlock
 from nvoken_generated.models.image_reference_block import ImageReferenceBlock
 from nvoken_generated.models.redacted_block import RedactedBlock
+from nvoken_generated.models.reminder_block import ReminderBlock
 from nvoken_generated.models.server_tool_use_block import ServerToolUseBlock
 from nvoken_generated.models.text_block import TextBlock
 from nvoken_generated.models.tool_result_block import ToolResultBlock
@@ -28,7 +29,7 @@ from pydantic import StrictStr, Field
 from typing import Union, List, Set, Optional, Dict
 from typing_extensions import Literal, Self
 
-SESSIONCONTENTBLOCK_ONE_OF_SCHEMAS = ["DocumentReferenceBlock", "ImageReferenceBlock", "RedactedBlock", "ServerToolUseBlock", "TextBlock", "ToolResultBlock", "ToolUseBlock"]
+SESSIONCONTENTBLOCK_ONE_OF_SCHEMAS = ["DocumentReferenceBlock", "ImageReferenceBlock", "RedactedBlock", "ReminderBlock", "ServerToolUseBlock", "TextBlock", "ToolResultBlock", "ToolUseBlock"]
 
 class SessionContentBlock(BaseModel):
     """
@@ -46,10 +47,12 @@ class SessionContentBlock(BaseModel):
     oneof_schema_5_validator: Optional[ServerToolUseBlock] = None
     # data type: ToolResultBlock
     oneof_schema_6_validator: Optional[ToolResultBlock] = None
+    # data type: ReminderBlock
+    oneof_schema_7_validator: Optional[ReminderBlock] = None
     # data type: RedactedBlock
-    oneof_schema_7_validator: Optional[RedactedBlock] = None
-    actual_instance: Optional[Union[DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock]] = None
-    one_of_schemas: Set[str] = { "DocumentReferenceBlock", "ImageReferenceBlock", "RedactedBlock", "ServerToolUseBlock", "TextBlock", "ToolResultBlock", "ToolUseBlock" }
+    oneof_schema_8_validator: Optional[RedactedBlock] = None
+    actual_instance: Optional[Union[DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ReminderBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock]] = None
+    one_of_schemas: Set[str] = { "DocumentReferenceBlock", "ImageReferenceBlock", "RedactedBlock", "ReminderBlock", "ServerToolUseBlock", "TextBlock", "ToolResultBlock", "ToolUseBlock" }
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -105,6 +108,11 @@ class SessionContentBlock(BaseModel):
             error_messages.append(f"Error! Input type `{type(v)}` is not `ToolResultBlock`")
         else:
             match += 1
+        # validate data type: ReminderBlock
+        if not isinstance(v, ReminderBlock):
+            error_messages.append(f"Error! Input type `{type(v)}` is not `ReminderBlock`")
+        else:
+            match += 1
         # validate data type: RedactedBlock
         if not isinstance(v, RedactedBlock):
             error_messages.append(f"Error! Input type `{type(v)}` is not `RedactedBlock`")
@@ -112,10 +120,10 @@ class SessionContentBlock(BaseModel):
             match += 1
         if match > 1:
             # more than 1 match
-            raise ValueError("Multiple matches found when setting `actual_instance` in SessionContentBlock with oneOf schemas: DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock. Details: " + ", ".join(error_messages))
+            raise ValueError("Multiple matches found when setting `actual_instance` in SessionContentBlock with oneOf schemas: DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ReminderBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock. Details: " + ", ".join(error_messages))
         elif match == 0:
             # no match
-            raise ValueError("No match found when setting `actual_instance` in SessionContentBlock with oneOf schemas: DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock. Details: " + ", ".join(error_messages))
+            raise ValueError("No match found when setting `actual_instance` in SessionContentBlock with oneOf schemas: DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ReminderBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock. Details: " + ", ".join(error_messages))
         else:
             return v
 
@@ -166,6 +174,12 @@ class SessionContentBlock(BaseModel):
             match += 1
         except (ValidationError, ValueError) as e:
             error_messages.append(str(e))
+        # deserialize data into ReminderBlock
+        try:
+            instance.actual_instance = ReminderBlock.from_json(json_str)
+            match += 1
+        except (ValidationError, ValueError) as e:
+            error_messages.append(str(e))
         # deserialize data into RedactedBlock
         try:
             instance.actual_instance = RedactedBlock.from_json(json_str)
@@ -175,10 +189,10 @@ class SessionContentBlock(BaseModel):
 
         if match > 1:
             # more than 1 match
-            raise ValueError("Multiple matches found when deserializing the JSON string into SessionContentBlock with oneOf schemas: DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock. Details: " + ", ".join(error_messages))
+            raise ValueError("Multiple matches found when deserializing the JSON string into SessionContentBlock with oneOf schemas: DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ReminderBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock. Details: " + ", ".join(error_messages))
         elif match == 0:
             # no match
-            raise ValueError("No match found when deserializing the JSON string into SessionContentBlock with oneOf schemas: DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock. Details: " + ", ".join(error_messages))
+            raise ValueError("No match found when deserializing the JSON string into SessionContentBlock with oneOf schemas: DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ReminderBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock. Details: " + ", ".join(error_messages))
         else:
             return instance
 
@@ -192,7 +206,7 @@ class SessionContentBlock(BaseModel):
         else:
             return json.dumps(self.actual_instance)
 
-    def to_dict(self) -> Optional[Union[Dict[str, Any], DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock]]:
+    def to_dict(self) -> Optional[Union[Dict[str, Any], DocumentReferenceBlock, ImageReferenceBlock, RedactedBlock, ReminderBlock, ServerToolUseBlock, TextBlock, ToolResultBlock, ToolUseBlock]]:
         """Returns the dict representation of the actual instance"""
         if self.actual_instance is None:
             return None

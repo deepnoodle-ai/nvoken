@@ -27,6 +27,8 @@ pub enum SessionContentBlock {
     ServerToolUse(Box<models::ServerToolUseBlock>),
     #[serde(rename = "tool_result")]
     ToolResult(Box<models::ToolResultBlock>),
+    #[serde(rename = "reminder")]
+    Reminder(Box<models::ReminderBlock>),
     #[serde(rename = "redacted")]
     Redacted(Box<models::RedactedBlock>),
 }
@@ -47,5 +49,19 @@ pub enum MediaType {
 impl Default for MediaType {
     fn default() -> MediaType {
         Self::ApplicationSlashPdf
+    }
+}
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum Tier {
+    #[serde(rename = "contextual")]
+    Contextual,
+    #[serde(rename = "operator")]
+    Operator,
+}
+
+impl Default for Tier {
+    fn default() -> Tier {
+        Self::Contextual
     }
 }

@@ -12,43 +12,103 @@
  * Do not edit the class manually.
  */
 
-
+import { mapValues } from '../runtime.js';
 /**
+ * One application-owned state snapshot recorded at Invocation admission.
+ * Contextual reminders use the user role; operator reminders use the
+ * system role. The typed tier remains authoritative for provider mapping.
  *
  * @export
+ * @interface ReminderBlock
  */
-export const SessionMessageRole = {
-    System: 'system',
-    User: 'user',
-    Assistant: 'assistant',
-    Tool: 'tool'
+export interface ReminderBlock {
+    /**
+     *
+     * @type {ReminderBlockTypeEnum}
+     * @memberof ReminderBlock
+     */
+    type: ReminderBlockTypeEnum;
+    /**
+     * Caller name in nvoken's reserved application namespace.
+     * @type {string}
+     * @memberof ReminderBlock
+     */
+    name: string;
+    /**
+     *
+     * @type {ReminderBlockTierEnum}
+     * @memberof ReminderBlock
+     */
+    tier: ReminderBlockTierEnum;
+    /**
+     *
+     * @type {string}
+     * @memberof ReminderBlock
+     */
+    content: string;
+}
+
+
+/**
+ * @export
+ */
+export const ReminderBlockTypeEnum = {
+    TypeReminder: 'reminder'
 } as const;
-export type SessionMessageRole = typeof SessionMessageRole[keyof typeof SessionMessageRole];
+export type ReminderBlockTypeEnum = typeof ReminderBlockTypeEnum[keyof typeof ReminderBlockTypeEnum];
+
+/**
+ * @export
+ */
+export const ReminderBlockTierEnum = {
+    Contextual: 'contextual',
+    Operator: 'operator'
+} as const;
+export type ReminderBlockTierEnum = typeof ReminderBlockTierEnum[keyof typeof ReminderBlockTierEnum];
 
 
-export function instanceOfSessionMessageRole(value: any): boolean {
-    for (const key in SessionMessageRole) {
-        if (Object.prototype.hasOwnProperty.call(SessionMessageRole, key)) {
-            if (SessionMessageRole[key as keyof typeof SessionMessageRole] === value) {
-                return true;
-            }
-        }
+/**
+ * Check if a given object implements the ReminderBlock interface.
+ */
+export function instanceOfReminderBlock(value: object): value is ReminderBlock {
+    if (!('type' in value) || value['type'] === undefined) return false;
+    if (!('name' in value) || value['name'] === undefined) return false;
+    if (!('tier' in value) || value['tier'] === undefined) return false;
+    if (!('content' in value) || value['content'] === undefined) return false;
+    return true;
+}
+
+export function ReminderBlockFromJSON(json: any): ReminderBlock {
+    return ReminderBlockFromJSONTyped(json, false);
+}
+
+export function ReminderBlockFromJSONTyped(json: any, ignoreDiscriminator: boolean): ReminderBlock {
+    if (json == null) {
+        return json;
     }
-    return false;
+    return {
+
+        'type': json['type'],
+        'name': json['name'],
+        'tier': json['tier'],
+        'content': json['content'],
+    };
 }
 
-export function SessionMessageRoleFromJSON(json: any): SessionMessageRole {
-    return SessionMessageRoleFromJSONTyped(json, false);
+export function ReminderBlockToJSON(json: any): ReminderBlock {
+    return ReminderBlockToJSONTyped(json, false);
 }
 
-export function SessionMessageRoleFromJSONTyped(json: any, ignoreDiscriminator: boolean): SessionMessageRole {
-    return json as SessionMessageRole;
-}
+export function ReminderBlockToJSONTyped(value?: ReminderBlock | null, ignoreDiscriminator: boolean = false): any {
+    if (value == null) {
+        return value;
+    }
 
-export function SessionMessageRoleToJSON(value?: SessionMessageRole | null): any {
-    return value as any;
-}
+    return {
 
-export function SessionMessageRoleToJSONTyped(value: any, ignoreDiscriminator: boolean): SessionMessageRole {
-    return value as SessionMessageRole;
+        'type': value['type'],
+        'name': value['name'],
+        'tier': value['tier'],
+        'content': value['content'],
+    };
 }

@@ -20,6 +20,13 @@ import {
     WebhookTargetToJSON,
     WebhookTargetToJSONTyped,
 } from './WebhookTarget.js';
+import type { InvocationContextItem } from './InvocationContextItem.js';
+import {
+    InvocationContextItemFromJSON,
+    InvocationContextItemFromJSONTyped,
+    InvocationContextItemToJSON,
+    InvocationContextItemToJSONTyped,
+} from './InvocationContextItem.js';
 import type { RegisterAgentDefinitionRequest } from './RegisterAgentDefinitionRequest.js';
 import {
     RegisterAgentDefinitionRequestFromJSON,
@@ -189,6 +196,22 @@ export interface CreateInvocationRequest {
      */
     onBudgetExhausted?: CreateInvocationRequestOnBudgetExhaustedEnum;
     /**
+     * Ordered application-owned state snapshots to record before this
+     * turn's input. Send a name again to supersede its prior value. An
+     * unchanged latest value is deduplicated from the transcript, while
+     * this exact pre-deduplication payload remains part of the Invocation
+     * and of idempotency comparison.
+     *
+     * A Session may observe at most 16 distinct names over its lifetime.
+     * Names are stored and shown to the model with the reserved `app-`
+     * prefix, which callers must omit here. Context is not part of the
+     * Agent Definition and never changes its content-addressed ID.
+     *
+     * @type {Array<InvocationContextItem>}
+     * @memberof CreateInvocationRequest
+     */
+    context?: Array<InvocationContextItem>;
+    /**
      *
      * @type {InvocationInput}
      * @memberof CreateInvocationRequest
@@ -299,6 +322,7 @@ export function CreateInvocationRequestFromJSONTyped(json: any, ignoreDiscrimina
         'idempotencyKey': json['idempotency_key'],
         'ifActive': json['if_active'] == null ? undefined : json['if_active'],
         'onBudgetExhausted': json['on_budget_exhausted'] == null ? undefined : json['on_budget_exhausted'],
+        'context': json['context'] == null ? undefined : ((json['context'] as Array<any>).map(InvocationContextItemFromJSON)),
         'input': InvocationInputFromJSON(json['input']),
         'webhook': json['webhook'] == null ? undefined : WebhookTargetFromJSON(json['webhook']),
         'agentDefinitionId': json['agent_definition_id'] == null ? undefined : json['agent_definition_id'],
@@ -329,6 +353,7 @@ export function CreateInvocationRequestToJSONTyped(value?: CreateInvocationReque
         'idempotency_key': value['idempotencyKey'],
         'if_active': value['ifActive'],
         'on_budget_exhausted': value['onBudgetExhausted'],
+        'context': value['context'] == null ? undefined : ((value['context'] as Array<any>).map(InvocationContextItemToJSON)),
         'input': InvocationInputToJSON(value['input']),
         'webhook': WebhookTargetToJSON(value['webhook']),
         'agent_definition_id': value['agentDefinitionId'],

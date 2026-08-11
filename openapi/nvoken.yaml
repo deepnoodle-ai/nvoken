@@ -827,6 +827,7 @@ paths:
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                     agent_definition: null
+                    context: null
                     status: queued
                     stop_reason: null
                     blocking_budget: null
@@ -857,6 +858,7 @@ paths:
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                     agent_definition: null
+                    context: null
                     status: running
                     stop_reason: null
                     blocking_budget: null
@@ -887,6 +889,7 @@ paths:
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                     agent_definition: null
+                    context: null
                     status: completed
                     stop_reason: end_turn
                     blocking_budget: null
@@ -1036,6 +1039,7 @@ paths:
                       model:
                         provider: anthropic
                         id: claude-sonnet-5
+                    context: null
                     status: queued
                     stop_reason: null
                     blocking_budget: null
@@ -1109,6 +1113,7 @@ paths:
                         model:
                           provider: anthropic
                           id: claude-sonnet-5
+                      context: null
                       status: completed
                       stop_reason: end_turn
                       blocking_budget: null
@@ -3924,6 +3929,23 @@ components:
             Covers the iteration, output-token, per-turn cost, and Session
             cost limits. Deadlines are not covered — a turn that runs out of
             time always ends and can never be resumed.
+        context:
+          type: array
+          maxItems: 8
+          x-nvoken-max-total-utf8-bytes: 16384
+          items:
+            $ref: "#/components/schemas/InvocationContextItem"
+          description: |
+            Ordered application-owned state snapshots to record before this
+            turn's input. Send a name again to supersede its prior value. An
+            unchanged latest value is deduplicated from the transcript, while
+            this exact pre-deduplication payload remains part of the Invocation
+            and of idempotency comparison.
+
+            A Session may observe at most 16 distinct names over its lifetime.
+            Names are stored and shown to the model with the reserved `app-`
+            prefix, which callers must omit here. Context is not part of the
+            Agent Definition and never changes its content-addressed ID.
         input:
           $ref: "#/components/schemas/InvocationInput"
         webhook:
@@ -3968,6 +3990,29 @@ components:
             Whichever source is chosen is fixed when the turn starts. A turn never
             silently falls through to a different payer partway through, so the
             bill cannot move once work has begun.
+    InvocationContextItem:
+      type: object
+      additionalProperties: false
+      required: [name, tier, content]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-z][a-z0-9-]*$"
+          description: Stable caller-owned name without the reserved `app-` prefix.
+        tier:
+          type: string
+          enum: [contextual, operator]
+          description: |
+            `contextual` is ordinary conversation context. `operator` is
+            higher-authority application state; Dive maps the typed tier to
+            each provider's native role.
+        content:
+          type: string
+          minLength: 1
+          x-nvoken-max-utf8-bytes: 8192
+          description: Non-empty UTF-8 snapshot text, at most 8 KiB.
     SeedMessage:
       type: object
       additionalProperties: false
@@ -5661,7 +5706,7 @@ components:
     Invocation:
       type: object
       additionalProperties: false
-      required: [id, agent_id, session_id, user_key, agent_definition_id, agent_definition, status, stop_reason, blocking_budget,
+      required: [id, agent_id, session_id, user_key, agent_definition_id, agent_definition, context, status, stop_reason, blocking_budget,
                  attempt, error, usage,
                  provenance, structured_output, structured_output_provenance,
                  metadata, limits, active_execution_ms, deadline_at,
@@ -5695,6 +5740,19 @@ components:
 
             Present on `GET /v1/invocations/{id}` and on the result. Null in list
             items, where `agent_definition_id` identifies it instead.
+        context:
+          oneOf:
+            - type: array
+              maxItems: 8
+              items:
+                $ref: "#/components/schemas/InvocationContextItem"
+            - type: "null"
+          description: |
+            The ordered context payload accepted with this turn, before
+            transcript deduplication. Null when omitted and in Invocation list
+            items. Present on admission, point reads, results, and stream
+            Invocation projections. Context is immutable and order-sensitive
+            for idempotency.
         deduplicated:
           type: boolean
           description: |
@@ -6444,7 +6502,7 @@ components:
             - type: "null"
     SessionMessageRole:
       type: string
-      enum: [user, assistant, tool]
+      enum: [system, user, assistant, tool]
     SessionContentBlock:
       oneOf:
         - $ref: "#/components/schemas/TextBlock"
@@ -6453,6 +6511,7 @@ components:
         - $ref: "#/components/schemas/ToolUseBlock"
         - $ref: "#/components/schemas/ServerToolUseBlock"
         - $ref: "#/components/schemas/ToolResultBlock"
+        - $ref: "#/components/schemas/ReminderBlock"
         - $ref: "#/components/schemas/RedactedBlock"
       discriminator:
         propertyName: type
@@ -6463,6 +6522,7 @@ components:
           tool_use: "#/components/schemas/ToolUseBlock"
           server_tool_use: "#/components/schemas/ServerToolUseBlock"
           tool_result: "#/components/schemas/ToolResultBlock"
+          reminder: "#/components/schemas/ReminderBlock"
           redacted: "#/components/schemas/RedactedBlock"
       description: |
         One block of a stored message, in nvoken's own shape rather than any
@@ -6491,6 +6551,32 @@ components:
           items:
             $ref: "#/components/schemas/Citation"
           description: Source locations attached to generated text.
+    ReminderBlock:
+      type: object
+      additionalProperties: false
+      required: [type, name, tier, content]
+      properties:
+        type:
+          type: string
+          enum: [reminder]
+          x-enum-varnames: [TypeReminder]
+        name:
+          type: string
+          minLength: 5
+          maxLength: 68
+          pattern: "^app-[a-z][a-z0-9-]*$"
+          description: Caller name in nvoken's reserved application namespace.
+        tier:
+          type: string
+          enum: [contextual, operator]
+        content:
+          type: string
+          minLength: 1
+          x-nvoken-max-utf8-bytes: 8192
+      description: |
+        One application-owned state snapshot recorded at Invocation admission.
+        Contextual reminders use the user role; operator reminders use the
+        system role. The typed tier remains authoritative for provider mapping.
     Citation:
       oneOf:
         - $ref: "#/components/schemas/CharLocationCitation"
