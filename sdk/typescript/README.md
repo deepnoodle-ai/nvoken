@@ -2,7 +2,8 @@
 
 An Invocation is one durable agent turn. The host supplies `agentKey`,
 optional `tenantKey`, `sessionKey`, and `idempotencyKey`; instructions, model,
-and tools travel inline with the turn.
+and tools travel with the turn as an `agentDefinition`, either inline or
+referenced by a registered `agentDefinitionId`.
 
 The package has three deliberate levels:
 
@@ -39,8 +40,10 @@ import { Client, fetchTool } from "@deepnoodle/nvoken";
 
 const agent = new Client().agent({
   agentKey: "research",
-  instructions: "Use nvoken_fetch for public URLs, then summarize the source.",
-  tools: [fetchTool()],
+  agentDefinition: {
+    instructions: "Use nvoken_fetch for public URLs, then summarize the source.",
+    tools: [fetchTool()],
+  },
 });
 ```
 
@@ -60,7 +63,7 @@ import { Client } from "@deepnoodle/nvoken";
 
 const agent = new Client().agent({
   agentKey: "support",
-  instructions: "Be concise and helpful.",
+  agentDefinition: { instructions: "Be concise and helpful." },
 });
 
 console.log(await agent.text("Why was I charged twice?"));
@@ -108,7 +111,7 @@ containing `/`, reserved characters, or Unicode.
 Set an explicit portable temperature on the request or Agent:
 
 ```ts
-const execution = {
+const agentDefinition = {
   model: { provider: "anthropic", id: "claude-haiku-4-5" },
   sampling: { temperature: 0 },
 };
@@ -123,7 +126,7 @@ portable range is `[0,1]`. `top_p` and stop sequences are intentionally absent;
 Reasoning is typed and fail closed:
 
 ```ts
-const execution = {
+const agentDefinition = {
   model: { provider: "anthropic", id: "claude-opus-5" },
   reasoning: { effort: "high" as const },
 };
@@ -276,6 +279,39 @@ one-time `secret`, `deliveryExpiresAt`, and `replayed` fields; store the secret
 before its delivery deadline. `client.raw().identity` is the generated
 low-level transport, and `credentialPages()` iterates the cursor envelope.
 
+## Reuse an Agent Definition
+
+Every turn runs against an Agent Definition: instructions, model, sampling,
+reasoning, tool choice, limits, tools, MCP servers, provider tools, and output
+schema. Sending it inline is the ordinary path. Register it instead when many
+turns share one configuration and you would rather send a short ID:
+
+```ts
+const registration = await client.registerAgentDefinition({
+  instructions: "Be concise and helpful.",
+  model: { provider: "anthropic", id: "claude-sonnet-5" },
+});
+
+const handle = await client.invoke({
+  agentKey: "support",
+  sessionKey: "ticket-483",
+  input: "Why was I charged twice?",
+  agentDefinitionId: registration.agentDefinitionId,
+});
+```
+
+A definition is content-addressed and immutable, so registering the same one
+twice returns the same `agentDefinitionId`, and so does registering one an
+earlier inline turn already stored. Registering starts no turn and creates no
+Agent, Session, or message. There is no list, update, or delete: to change a
+definition, register the new one and reference that.
+
+Send exactly one of `agentDefinition` and `agentDefinitionId`. The types make
+the pair mutually exclusive, and the facade rejects a request carrying both or
+neither before it reaches the network. `Agent` always sends its definition
+inline, because it serves the host tool handlers declared in it; reuse by ID
+belongs on the `client.invoke()` path.
+
 ## Remote MCP tools
 
 Probe the projected catalog, then attach the same declaration to an Agent:
@@ -287,22 +323,28 @@ const server = mcpServer({
   name: "support",
   url: "https://mcp.example.com/rpc",
   allowedTools: ["lookup_order"],
-  headers: { Authorization: `Bearer ${mcpToken}` },
   timeouts: { discoverySeconds: 10, callSeconds: 30 },
 });
 
-console.log((await client.listMcpTools(server)).tools);
+const headers = { Authorization: `Bearer ${mcpToken}` };
+console.log((await client.listMcpTools(server, headers)).tools);
 
 const support = client.agent({
   agentKey: "support",
-  instructions: "Use support tools when needed.",
-  mcpServers: [server],
+  agentDefinition: {
+    instructions: "Use support tools when needed.",
+    mcpServers: [server],
+  },
+  mcpServerHeaders: [{ name: "support", headers }],
 });
 ```
 
-The helper copies headers and allowlists into generated wire types. Headers are
-one-Invocation secret material and are absent from durable specs, responses,
-streams, transcripts, errors, and logs.
+The declaration carries no secrets. An Agent Definition is content-addressed and
+reused across turns, so authentication headers travel per Invocation in
+`mcpServerHeaders`, keyed to the server name. They are one-Invocation secret
+material and are absent from durable Agent Definitions, responses, streams,
+transcripts, errors, and logs. The SDK checks the name and header values, and
+that every named server exists, before the request leaves the process.
 
 ## Multiple turns
 
@@ -390,8 +432,10 @@ const lookupOrder = defineHostTool({
 
 const support = new Client().agent({
   agentKey: "support",
-  instructions: "Use lookup_order for order questions.",
-  tools: [lookupOrder],
+  agentDefinition: {
+    instructions: "Use lookup_order for order questions.",
+    tools: [lookupOrder],
+  },
 });
 
 console.log(await support.text("Where is order 42?"));
@@ -406,6 +450,36 @@ and external workers.
 Stable ToolCall IDs let a handler make its own side effects idempotent. They do
 not make arbitrary side effects exactly-once.
 
+## Callback tools
+
+A callback tool runs on an HTTPS endpoint nvoken posts to, rather than on a
+worker that polls for parked calls. Verify the signed delivery, then answer:
+
+```ts
+import { acknowledgeCallback, callbackResult, verifyCallback } from "@deepnoodle/nvoken";
+
+const delivery = await verifyCallback(signingKey, request.headers, rawBody);
+const reply = callbackResult(await runMigration(delivery.envelope.input));
+
+return new Response(reply.body, { status: reply.status });
+```
+
+`callbackResult(content, isError?)` settles the ToolCall inline and the turn
+resumes as soon as nvoken records the reply. `acknowledgeCallback()` returns
+`202` with no body instead: it accepts the delivery without settling the call,
+for work that will outlive the App's callback reply deadline. Settle it later
+with `client.submitToolResults()`, reusing the delivery's ToolCall ID.
+
+Acknowledging trades away the fail-loud guarantee. nvoken marks an
+unacknowledged delivery failed once its retries are exhausted, so the turn
+always moves on. An acknowledged call instead waits under your responsibility,
+bounded only by the Invocation's `limits.waitingTimeoutSeconds`. Acknowledge
+only when something durable will settle the call.
+
+An acknowledged call appears in a waiting Invocation's pending calls the same
+way a host call does. `Agent` skips the callback tools its own definition
+declares rather than dispatching them locally.
+
 ## Structured output and schema libraries
 
 Raw JSON Schema keeps an application type:
@@ -418,16 +492,18 @@ interface Classification {
 
 const classifier = new Client().agent({
   agentKey: "classifier",
-  instructions: "Classify the request.",
-  outputSchema: defineJsonSchema<Classification>({
-    type: "object",
-    properties: {
-      category: { type: "string", enum: ["billing", "other"] },
-      needsHuman: { type: "boolean" },
-    },
-    required: ["category", "needsHuman"],
-    additionalProperties: false,
-  }),
+  agentDefinition: {
+    instructions: "Classify the request.",
+    outputSchema: defineJsonSchema<Classification>({
+      type: "object",
+      properties: {
+        category: { type: "string", enum: ["billing", "other"] },
+        needsHuman: { type: "boolean" },
+      },
+      required: ["category", "needsHuman"],
+      additionalProperties: false,
+    }),
+  },
 });
 
 const result = await classifier.run("I was charged twice.");
@@ -448,8 +524,10 @@ const outputSchema = z.object({
 
 const classifier = new Client().agent({
   agentKey: "classifier",
-  instructions: "Classify the request.",
-  outputSchema,
+  agentDefinition: {
+    instructions: "Classify the request.",
+    outputSchema,
+  },
 });
 ```
 

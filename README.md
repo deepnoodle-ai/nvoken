@@ -42,8 +42,10 @@ import { Client } from "@deepnoodle/nvoken";
 
 const agent = new Client().agent({
   agentKey: "support",
-  instructions: "Be concise and helpful.",
-  model: { provider: "openai", id: "<model-id>" },
+  agentDefinition: {
+    instructions: "Be concise and helpful.",
+    model: { provider: "openai", id: "<model-id>" },
+  },
 });
 
 console.log(await agent.text("Summarize the latest customer request."));

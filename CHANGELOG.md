@@ -8,6 +8,31 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.12.0 - 2026-08-11
+
+- **Rename Definition to Agent Definition.** `definition_id` on an Invocation is
+  now `agent_definition_id`, and the CLI flag `--definition-id` is now
+  `--agent-definition-id`.
+- **Nest the execution configuration under `agent_definition`.** Instructions,
+  model, tools, and the rest move off the top level of an invocation create
+  request into a first-class Agent Definition type. Supply exactly one of the
+  inline definition and `agent_definition_id`.
+- **Add `POST /v1/agent-definitions`.** Register an Agent Definition without
+  starting a turn, then reuse the returned ID. It is idempotent by content, so a
+  repeat and a definition an earlier inline turn stored return the same response.
+- **Move remote MCP secrets out of the Agent Definition.** Headers now travel
+  per Invocation in `mcp_server_headers`, keyed to the server name, so a
+  content-addressed definition never hashes a secret.
+- Add callback ack-then-settle: reply `202` with an empty body to accept a
+  delivery without settling its ToolCall, then settle it later through
+  `/tool-results`.
+- Record `result_origin` on every ToolCall and add `acknowledged` to the
+  callback delivery outcomes.
+- Add an optional App callback reply timeout to registration and update.
+- Generate the transports from a preprocessed copy of the contract, because no
+  generator handles the constraint-only `oneOf` stating Agent Definition
+  exclusivity.
+
 ## 0.11.0 - 2026-08-10
 
 - **Replace the daily usage API.** Add timeseries, breakdown, and record views

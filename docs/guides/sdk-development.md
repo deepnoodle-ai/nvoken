@@ -32,6 +32,18 @@ cross-repository iteration, but dirty provenance should not be merged.
 Do not hand-edit generated transports. The exact generated paths are listed in
 `CONTRIBUTING.md` and enforced by `make sdk-generate-check`.
 
+`sdk/scripts/generate.sh` generates from a copy of the snapshot with one
+constraint removed. The contract states Agent Definition exclusivity as a
+constraint-only `oneOf` on `CreateInvocationRequest`: two branches carrying
+`required` and `not` and no properties. No generator handles that shape.
+openapi-generator's Java generators drop the model outright, so TypeScript,
+Python, and Rust silently lose `CreateInvocationRequest`, and the Rust generator
+additionally aborts. oapi-codegen keeps the model but turns it into an opaque
+`json.RawMessage` union. Each facade enforces the exclusivity itself before
+building a request. The script fails loudly if the constraint moves, so an
+upstream edit to that block surfaces as a generation failure rather than a
+silent behavior change.
+
 Handwritten facade code belongs in the language package outside its generated
 directory. Preserve these cross-language reliability rules:
 

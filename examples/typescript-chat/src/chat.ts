@@ -7,8 +7,10 @@ const client = new Client();
 const sessionKey = process.env.NVOKEN_SESSION_KEY ?? `local-chat-${randomUUID()}`;
 const chat = client.agent({
   agentKey: "typescript-local-chat",
-  instructions: "Be concise, helpful, and remember relevant details across this chat.",
-  limits: { maxOutputTokens: 300 },
+  agentDefinition: {
+    instructions: "Be concise, helpful, and remember relevant details across this chat.",
+    limits: { maxOutputTokens: 300 },
+  },
 }).session({ sessionKey });
 
 const input = createInterface({
