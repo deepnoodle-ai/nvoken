@@ -252,16 +252,14 @@ func TestSharedAgentRequestFixture(t *testing.T) {
 	temperature := Sampling{Temperature: 0.2}
 	effort := ReasoningEffortLow
 	agent, err := client.Agent(AgentOptions{
-		AgentKey: "support",
-		AgentDefinition: AgentDefinition{
-			Model:     Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
-			Sampling:  &temperature,
-			Reasoning: &Reasoning{Effort: &effort},
-			ProviderTools: []ProviderTool{{
-				Type:      ProviderToolWebSearch,
-				WebSearch: &WebSearchTool{MaxUses: 5},
-			}},
-		},
+		AgentKey:  "support",
+		Model:     Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
+		Sampling:  &temperature,
+		Reasoning: &Reasoning{Effort: &effort},
+		ProviderTools: []ProviderTool{{
+			Type:      ProviderToolWebSearch,
+			WebSearch: &WebSearchTool{MaxUses: 5},
+		}},
 	})
 	if err != nil {
 		t.Fatalf("agent: %v", err)

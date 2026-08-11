@@ -18,6 +18,7 @@ from .client import (
     InvocationHandle,
     InvokeRequest,
     Limits,
+    MCPServer,
     MCPServerHeaders,
     Model,
     WebhookTarget,
@@ -77,17 +78,32 @@ class NoOutputTextError(NvokenError):
 
 @dataclass(frozen=True)
 class AgentOptions(Generic[StructuredT]):
-    agent_key: str
-    agent_definition: AgentDefinition | None = None
-    """The configuration every turn from this Agent runs with.
+    """One identity and the Agent Definition every turn from this Agent runs with.
 
-    An Agent always sends it inline rather than by ID, because it serves the
-    host tool handlers declared in it. Reuse a registered
-    ``agent_definition_id`` through :meth:`Client.invoke` instead. Its ``model``
-    may be omitted when the Client carries a default.
+    The definition's fields read flat here rather than nested, because an Agent
+    always sends it inline: it serves the host tool handlers declared in it, so
+    there is no inline-or-by-ID choice for a nested field to express. Reuse a
+    registered ``agent_definition_id`` through :meth:`Client.invoke` instead.
+    ``model`` may be omitted when the Client carries a default.
     """
+
+    agent_key: str
+    model: Model | None = None
+    instructions: str | None = None
+    sampling: Sampling | None = None
+    reasoning: Reasoning | None = None
+    tool_choice: ToolChoice | None = None
+    limits: Limits | None = None
+    tools: tuple[Tool | BuiltinTool, ...] = ()
+    mcp_servers: tuple[MCPServer, ...] = ()
+    provider_tools: tuple[ProviderTool, ...] = ()
+    output_schema: dict[str, Any] | None = None
     mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
-    """Per-turn secret headers for the MCP servers the definition declares."""
+    """Per-turn secret headers for the MCP servers this Agent declares.
+
+    They stay outside the Agent Definition so its content-addressed identity
+    does not depend on a secret.
+    """
     tenant_key: str | None = None
     provider_keys: tuple[ProviderKeySelection, ...] = ()
     webhook: WebhookTarget | None = None
@@ -150,16 +166,23 @@ class Agent(Generic[StructuredT]):
     def __init__(self, client: Client, options: AgentOptions[StructuredT]) -> None:
         if not options.agent_key:
             raise NvokenError("validation", "agent_key is required")
-        definition = options.agent_definition
-        if definition is None or definition.model is None:
-            if client.default_model is None:
-                raise NvokenError("validation", "model is required")
-            definition = (
-                AgentDefinition(model=client.default_model)
-                if definition is None
-                else replace(definition, model=client.default_model)
-            )
-            options = replace(options, agent_definition=definition)
+        model = options.model or client.default_model
+        if model is None:
+            raise NvokenError("validation", "model is required")
+        # The flat options gather into the value the wire shape nests, so the
+        # Agent and Client.invoke paths render one definition type.
+        definition = AgentDefinition(
+            model=model,
+            instructions=options.instructions,
+            sampling=options.sampling,
+            reasoning=options.reasoning,
+            tool_choice=options.tool_choice,
+            limits=options.limits,
+            tools=options.tools,
+            mcp_servers=options.mcp_servers,
+            provider_tools=options.provider_tools,
+            output_schema=options.output_schema,
+        )
         self.client = client
         self.options = options
         self.definition = definition

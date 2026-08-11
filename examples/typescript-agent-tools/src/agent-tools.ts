@@ -37,13 +37,11 @@ try {
   const runId = randomUUID();
   const support = new Client().agent({
     agentKey: `agent-tools-${runId}`,
-    agentDefinition: {
-      instructions: [
-        "Use lookup_order for order questions.",
-        "Remember durable Session context between turns.",
-      ].join(" "),
-      tools: [lookupOrder],
-    },
+    instructions: [
+      "Use lookup_order for order questions.",
+      "Remember durable Session context between turns.",
+    ].join(" "),
+    tools: [lookupOrder],
   });
   const chat = support.session({
     sessionKey: `order-chat-${runId}`,

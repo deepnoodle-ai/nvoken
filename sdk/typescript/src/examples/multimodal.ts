@@ -27,12 +27,10 @@ const client = new Client({
 
 const agent = client.agent({
   agentKey: "invoice-review",
-  agentDefinition: {
-    instructions: "Answer only from the attached file.",
-    model: {
-      provider: process.env.NVOKEN_PROVIDER ?? "anthropic",
-      id: process.env.NVOKEN_MODEL ?? "claude-sonnet-5",
-    },
+  instructions: "Answer only from the attached file.",
+  model: {
+    provider: process.env.NVOKEN_PROVIDER ?? "anthropic",
+    id: process.env.NVOKEN_MODEL ?? "claude-sonnet-5",
   },
 });
 

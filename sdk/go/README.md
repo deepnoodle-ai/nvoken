@@ -59,13 +59,11 @@ Use an Agent for the common path:
 
 ```go
 agent, err := client.Agent(nvoken.AgentOptions{
-	AgentKey: "support",
-	AgentDefinition: nvoken.AgentDefinition{
-		Instructions: "Help with billing questions.",
-		Model: nvoken.Model{
-			Provider: "anthropic",
-			ID:       "claude-sonnet-5",
-		},
+	AgentKey:     "support",
+	Instructions: "Help with billing questions.",
+	Model: nvoken.Model{
+		Provider: "anthropic",
+		ID:       "claude-sonnet-5",
 	},
 })
 answer, err := agent.Text(ctx, "Why was I charged twice?", nvoken.AgentInvocationOptions{})
@@ -254,7 +252,8 @@ definition, register the new one and reference that.
 Supply exactly one of `AgentDefinition` and `AgentDefinitionID`; the facade
 rejects a request carrying both or neither before it reaches the network. An
 `Agent` always sends its definition inline, because it serves the host tool
-handlers declared in it.
+handlers declared in it, which is why `AgentOptions` spells the definition's
+fields flat rather than nesting them: there is no choice there to express.
 
 ## Remote MCP tools
 

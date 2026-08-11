@@ -266,7 +266,8 @@ Exactly one of the inline definition and the ID may be set. Calling a
 write-through builder on a request that names an ID grows an inline definition,
 so the exclusivity check reports the conflict rather than silently dropping the
 field. An `Agent` always sends its definition inline, because it serves the host
-tool handlers declared in it.
+tool handlers declared in it, which is why `AgentOptions` writes the definition's
+fields through its own builders: there is no choice there to express.
 
 ## Remote MCP tools
 

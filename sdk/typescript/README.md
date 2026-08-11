@@ -40,10 +40,8 @@ import { Client, fetchTool } from "@deepnoodle/nvoken";
 
 const agent = new Client().agent({
   agentKey: "research",
-  agentDefinition: {
-    instructions: "Use nvoken_fetch for public URLs, then summarize the source.",
-    tools: [fetchTool()],
-  },
+  instructions: "Use nvoken_fetch for public URLs, then summarize the source.",
+  tools: [fetchTool()],
 });
 ```
 
@@ -63,7 +61,7 @@ import { Client } from "@deepnoodle/nvoken";
 
 const agent = new Client().agent({
   agentKey: "support",
-  agentDefinition: { instructions: "Be concise and helpful." },
+  instructions: "Be concise and helpful.",
 });
 
 console.log(await agent.text("Why was I charged twice?"));
@@ -331,10 +329,8 @@ console.log((await client.listMcpTools(server, headers)).tools);
 
 const support = client.agent({
   agentKey: "support",
-  agentDefinition: {
-    instructions: "Use support tools when needed.",
-    mcpServers: [server],
-  },
+  instructions: "Use support tools when needed.",
+  mcpServers: [server],
   mcpServerHeaders: [{ name: "support", headers }],
 });
 ```
@@ -432,10 +428,8 @@ const lookupOrder = defineHostTool({
 
 const support = new Client().agent({
   agentKey: "support",
-  agentDefinition: {
-    instructions: "Use lookup_order for order questions.",
-    tools: [lookupOrder],
-  },
+  instructions: "Use lookup_order for order questions.",
+  tools: [lookupOrder],
 });
 
 console.log(await support.text("Where is order 42?"));
@@ -492,18 +486,16 @@ interface Classification {
 
 const classifier = new Client().agent({
   agentKey: "classifier",
-  agentDefinition: {
-    instructions: "Classify the request.",
-    outputSchema: defineJsonSchema<Classification>({
-      type: "object",
-      properties: {
-        category: { type: "string", enum: ["billing", "other"] },
-        needsHuman: { type: "boolean" },
-      },
-      required: ["category", "needsHuman"],
-      additionalProperties: false,
-    }),
-  },
+  instructions: "Classify the request.",
+  outputSchema: defineJsonSchema<Classification>({
+    type: "object",
+    properties: {
+      category: { type: "string", enum: ["billing", "other"] },
+      needsHuman: { type: "boolean" },
+    },
+    required: ["category", "needsHuman"],
+    additionalProperties: false,
+  }),
 });
 
 const result = await classifier.run("I was charged twice.");
@@ -524,10 +516,8 @@ const outputSchema = z.object({
 
 const classifier = new Client().agent({
   agentKey: "classifier",
-  agentDefinition: {
-    instructions: "Classify the request.",
-    outputSchema,
-  },
+  instructions: "Classify the request.",
+  outputSchema,
 });
 ```
 

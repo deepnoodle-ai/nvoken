@@ -9,21 +9,48 @@ import (
 	"time"
 )
 
+// AgentOptions fixes one identity and the Agent Definition every turn from this
+// Agent runs with. The definition's fields read flat here rather than nested,
+// because an Agent always sends it inline: it serves the host tool handlers
+// declared in it, so there is no inline-or-by-ID choice for a nested field to
+// express. Reuse a registered AgentDefinitionID through Client.Invoke instead.
 type AgentOptions struct {
-	AgentKey  string
-	TenantKey *string
-	// AgentDefinition is the execution configuration every turn from this Agent
-	// runs with. An Agent always sends it inline rather than by ID, because it
-	// serves the host tool handlers declared in it. Reuse a registered
-	// AgentDefinitionID through Client.Invoke instead.
-	AgentDefinition AgentDefinition
-	// MCPServerHeaders carries per-turn secret headers for the MCP servers the
-	// definition declares. They stay outside the definition so its
+	AgentKey      string
+	TenantKey     *string
+	Instructions  string
+	Model         Model
+	Sampling      *Sampling
+	Reasoning     *Reasoning
+	ToolChoice    *ToolChoice
+	Limits        *Limits
+	Tools         []Tool
+	MCPServers    []MCPServer
+	ProviderTools []ProviderTool
+	OutputSchema  map[string]any
+	// MCPServerHeaders carries per-turn secret headers for the MCP servers this
+	// Agent declares. They stay outside the Agent Definition so its
 	// content-addressed identity does not depend on a secret.
 	MCPServerHeaders  []MCPServerHeaders
 	ProviderKeys      []ProviderKeySelection
 	Webhook           *WebhookTarget
 	OnBudgetExhausted BudgetExhaustionBehavior
+}
+
+// agentDefinition gathers the flat execution fields into the value the wire
+// shape nests, so the Agent and Client.Invoke paths render one definition type.
+func (o AgentOptions) agentDefinition() AgentDefinition {
+	return AgentDefinition{
+		Instructions:  o.Instructions,
+		Model:         o.Model,
+		Sampling:      o.Sampling,
+		Reasoning:     o.Reasoning,
+		ToolChoice:    o.ToolChoice,
+		Limits:        o.Limits,
+		Tools:         o.Tools,
+		MCPServers:    o.MCPServers,
+		ProviderTools: o.ProviderTools,
+		OutputSchema:  o.OutputSchema,
+	}
 }
 
 type AgentInvocationOptions struct {
@@ -124,18 +151,18 @@ func NewAgent(client *Client, options AgentOptions) (*Agent, error) {
 			Message:  "Agent key is required",
 		}
 	}
-	if options.AgentDefinition.Model == (Model{}) {
+	if options.Model == (Model{}) {
 		if client.DefaultModel == nil {
 			return nil, &Error{
 				Category: ErrorValidation,
 				Message:  "Agent model is required",
 			}
 		}
-		options.AgentDefinition.Model = *client.DefaultModel
+		options.Model = *client.DefaultModel
 	}
 	hostTools := make(map[string]Tool)
 	callbackTools := make(map[string]struct{})
-	for _, tool := range options.AgentDefinition.Tools {
+	for _, tool := range options.Tools {
 		switch tool.Mode {
 		case ToolModeHost:
 			hostTools[tool.Name] = tool
@@ -171,7 +198,7 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 	if onBudgetExhausted == "" {
 		onBudgetExhausted = a.options.OnBudgetExhausted
 	}
-	definition := a.options.AgentDefinition
+	definition := a.options.agentDefinition()
 	return InvokeRequest{
 		AgentKey:          a.options.AgentKey,
 		TenantKey:         tenantKey,
@@ -282,7 +309,7 @@ func (a *Agent) textFromResult(result *AgentResult) (string, error) {
 	resultKind := "no assistant output"
 	if len(result.StructuredOutput) > 0 && string(result.StructuredOutput) != "null" {
 		resultKind = "structured output"
-	} else if len(a.options.AgentDefinition.Tools) > 0 {
+	} else if len(a.options.Tools) > 0 {
 		resultKind = "tool-only output"
 	}
 	return "", &NoOutputTextError{

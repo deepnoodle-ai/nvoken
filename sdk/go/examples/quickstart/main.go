@@ -15,13 +15,11 @@ func main() {
 		log.Fatal(err)
 	}
 	agent, err := client.Agent(nvoken.AgentOptions{
-		AgentKey: "support",
-		AgentDefinition: nvoken.AgentDefinition{
-			Instructions: "Help the customer with billing questions.",
-			Model: nvoken.Model{
-				Provider: "anthropic",
-				ID:       "claude-sonnet-5",
-			},
+		AgentKey:     "support",
+		Instructions: "Help the customer with billing questions.",
+		Model: nvoken.Model{
+			Provider: "anthropic",
+			ID:       "claude-sonnet-5",
 		},
 	})
 	if err != nil {

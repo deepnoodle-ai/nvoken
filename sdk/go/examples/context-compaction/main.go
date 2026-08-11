@@ -22,11 +22,9 @@ func main() {
 	}
 	agent, err := client.Agent(nvoken.AgentOptions{
 		AgentKey: "context-compaction-example",
-		AgentDefinition: nvoken.AgentDefinition{
-			Model: nvoken.Model{
-				Provider: "anthropic",
-				ID:       "claude-sonnet-5",
-			},
+		Model: nvoken.Model{
+			Provider: "anthropic",
+			ID:       "claude-sonnet-5",
 		},
 	})
 	if err != nil {

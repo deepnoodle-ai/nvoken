@@ -814,27 +814,30 @@ export interface ClientOptions {
   retry?: RetryPolicy;
 }
 
-export type AgentOptions<TOutput extends object = JsonObject> = {
-  agentKey: string;
-  /**
-   * The execution configuration every turn from this Agent runs with. An Agent
-   * always sends it inline rather than by ID, because it serves the host tool
-   * handlers declared in it. Reuse a registered `agentDefinitionId` through
-   * {@link Client.invoke} instead. `model` may be omitted when the Client
-   * carries a default, and the whole definition may be omitted by an Agent that
-   * wants nothing but that default.
-   */
-  agentDefinition?: Omit<AgentDefinition<TOutput>, "model"> & { model?: Model };
-  /**
-   * Per-turn secret headers for the MCP servers the definition declares. They
-   * stay outside the definition so its content-addressed identity does not
-   * depend on a secret.
-   */
-  mcpServerHeaders?: readonly MCPServerHeaders[];
-  providerKeys?: ProviderKeySelection[];
-  webhook?: WebhookTarget;
-  onBudgetExhausted?: BudgetExhaustionBehavior;
-};
+/**
+ * The Agent Definition fields read flat here rather than nested under
+ * `agentDefinition`. An Agent always sends its definition inline, because it
+ * serves the host tool handlers declared in it, so there is no inline-or-by-ID
+ * choice for a wrapper to express. Reuse a registered `agentDefinitionId`
+ * through {@link Client.invoke} instead. Spreading a whole definition
+ * (`{ agentKey, ...definition }`) therefore also works. `model` may be omitted
+ * when the Client carries a default.
+ */
+export type AgentOptions<TOutput extends object = JsonObject> =
+  & Omit<AgentDefinition<TOutput>, "model">
+  & {
+    agentKey: string;
+    model?: Model;
+    /**
+     * Per-turn secret headers for the MCP servers this Agent declares. They
+     * stay outside the Agent Definition so its content-addressed identity does
+     * not depend on a secret.
+     */
+    mcpServerHeaders?: readonly MCPServerHeaders[];
+    providerKeys?: ProviderKeySelection[];
+    webhook?: WebhookTarget;
+    onBudgetExhausted?: BudgetExhaustionBehavior;
+  };
 
 export interface InvocationOptions {
   tenantKey?: string;
@@ -2056,7 +2059,15 @@ export class Agent<TOutput extends object = JsonObject> {
     if (!options.agentKey) {
       throw new NvokenError("validation", "agentKey is required");
     }
-    const { model, ...execution } = options.agentDefinition ?? {};
+    const {
+      agentKey: _agentKey,
+      model,
+      mcpServerHeaders: _mcpServerHeaders,
+      providerKeys: _providerKeys,
+      webhook: _webhook,
+      onBudgetExhausted: _onBudgetExhausted,
+      ...execution
+    } = options;
     if (execution.instructions !== undefined && !execution.instructions.trim()) {
       throw new NvokenError("validation", "instructions cannot be blank");
     }

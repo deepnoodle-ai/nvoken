@@ -214,12 +214,10 @@ def test_shared_agent_request_fixture() -> None:
     client = Client(base_url="https://runtime.example.test", api_key="key")
     agent = client.agent(AgentOptions(
         agent_key="support",
-        agent_definition=AgentDefinition(
-            model=Model(provider="anthropic", id="claude-sonnet-4-6"),
-            sampling=Sampling(temperature=0.2),
-            reasoning=Reasoning(effort="low"),
-            provider_tools=(web_search_tool(WebSearchTool(max_uses=5)),),
-        ),
+        model=Model(provider="anthropic", id="claude-sonnet-4-6"),
+        sampling=Sampling(temperature=0.2),
+        reasoning=Reasoning(effort="low"),
+        provider_tools=(web_search_tool(WebSearchTool(max_uses=5)),),
     ))
     # Durable options apply on a new anonymous Session too, which is where a
     # short retention window matters most.

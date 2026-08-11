@@ -979,12 +979,10 @@ test("agent-issued requests carry every field the shared fixture pins", async ()
   });
   await client.agent({
     agentKey: "support",
-    agentDefinition: {
-      model: { provider: "anthropic", id: "claude-sonnet-4-6" },
-      sampling: { temperature: 0.2 },
-      reasoning: { effort: "low" },
-      providerTools: [webSearchTool({ maxUses: 5 })],
-    },
+    model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+    sampling: { temperature: 0.2 },
+    reasoning: { effort: "low" },
+    providerTools: [webSearchTool({ maxUses: 5 })],
   }).invoke("hello", {
     idempotencyKey: "conformance",
     onBudgetExhausted: "pause",
@@ -1002,9 +1000,7 @@ test("agent-issued requests carry every field the shared fixture pins", async ()
   // reconciliation instead of rejecting the pairing in the SDK.
   await client.agent({
     agentKey: "support",
-    agentDefinition: {
-      model: { provider: "anthropic", id: "claude-sonnet-4-6" },
-    },
+    model: { provider: "anthropic", id: "claude-sonnet-4-6" },
   }).invoke("hello", {
     sessionId,
     sessionOptions: { retention: { ttlSeconds: 86400 } },
@@ -1659,11 +1655,9 @@ test("agent run converts standard schemas, retries one admission, and dispatches
   });
   const result = await client.agent({
     agentKey: "support",
-    agentDefinition: {
-      instructions: "Help the customer.",
-      tools: [lookup],
-      outputSchema,
-    },
+    instructions: "Help the customer.",
+    tools: [lookup],
+    outputSchema,
   }).run("Where is my order?", { ifActive: "supersede" });
 
   assert.equal(result.text, "ready");
@@ -1784,18 +1778,14 @@ test("missing handlers cancel by default and support explicit handoff", async ()
   });
 
   await assert.rejects(
-    makeClient().agent({ agentKey: "support",
- agentDefinition: {   tools: [missingTool],
- }, }).run("hello"),
+    makeClient().agent({ agentKey: "support", tools: [missingTool] }).run("hello"),
     (error: unknown) => error instanceof MissingToolHandlerError
       && error.invocationCancelled,
   );
   assert.equal(cancellations, 1);
 
   await assert.rejects(
-    makeClient().agent({ agentKey: "support",
- agentDefinition: {   tools: [missingTool],
- }, }).run("hello", {
+    makeClient().agent({ agentKey: "support", tools: [missingTool] }).run("hello", {
       leaveWaitingOnMissingHandler: true,
     }),
     (error: unknown) => error instanceof MissingToolHandlerError

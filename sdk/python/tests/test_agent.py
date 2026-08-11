@@ -8,7 +8,6 @@ from typing import Any, AsyncIterator
 import pytest
 
 from nvoken import (
-    AgentDefinition,
     Agent,
     AgentOptions,
     InvocationOptions,
@@ -128,11 +127,9 @@ def agent_options(*tools: Tool) -> AgentOptions[Answer]:
     return AgentOptions(
         agent_key="support",
         structured_output_decoder=lambda value: Answer(**value),
-        agent_definition=AgentDefinition(
-            model=Model(provider="openai", id="gpt-test"),
-            tools=tools,
-            output_schema={"type": "object"},
-        ),
+        model=Model(provider="openai", id="gpt-test"),
+        tools=tools,
+        output_schema={"type": "object"},
     )
 
 

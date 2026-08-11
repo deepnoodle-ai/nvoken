@@ -38,14 +38,12 @@ Instructions, models, tools, and provider keys remain per Invocation.
 Opt into the fixed guarded public-web reader with `fetch_tool()`:
 
 ```python
-from nvoken import AgentDefinition, AgentOptions, Model, fetch_tool
+from nvoken import AgentOptions, Model, fetch_tool
 
 options = AgentOptions(
     agent_key="research",
-    agent_definition=AgentDefinition(
-        model=Model(provider="anthropic", id="claude-sonnet-5"),
-        tools=(fetch_tool(),),
-    ),
+    model=Model(provider="anthropic", id="claude-sonnet-5"),
+    tools=(fetch_tool(),),
 )
 ```
 
@@ -59,10 +57,8 @@ Use an Agent for the common path:
 ```python
 agent = client.agent(AgentOptions(
     agent_key="support",
-    agent_definition=AgentDefinition(
-        instructions="Help with billing questions.",
-        model=Model(provider="anthropic", id="claude-sonnet-5"),
-    ),
+    instructions="Help with billing questions.",
+    model=Model(provider="anthropic", id="claude-sonnet-5"),
 ))
 
 print(await agent.text("Why was I charged twice?"))
@@ -278,7 +274,8 @@ definition, register the new one and reference that.
 Supply exactly one of `agent_definition` and `agent_definition_id`; the facade
 rejects a request carrying both or neither before it reaches the network. An
 `Agent` always sends its definition inline, because it serves the host tool
-handlers declared in it.
+handlers declared in it, which is why `AgentOptions` spells the definition's
+fields flat rather than nesting them: there is no choice there to express.
 
 ## Remote MCP tools
 
