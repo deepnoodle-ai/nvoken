@@ -1,7 +1,7 @@
 import asyncio
 import os
 
-from nvoken import AgentOptions, Client, Model
+from nvoken import AgentDefinition, AgentOptions, Client, Model
 
 
 async def main() -> None:
@@ -11,8 +11,10 @@ async def main() -> None:
     ) as client:
         agent = client.agent(AgentOptions(
             agent_key="support",
-            instructions="Help the customer with billing questions.",
-            model=Model(provider="anthropic", id="claude-sonnet-5"),
+            agent_definition=AgentDefinition(
+                instructions="Help the customer with billing questions.",
+                model=Model(provider="anthropic", id="claude-sonnet-5"),
+            ),
         ))
         print(f"agent> {await agent.text('Why was I charged twice?')}")
 

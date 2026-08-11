@@ -3,8 +3,11 @@ from nvoken_generated import __version__ as __version__
 from nvoken_generated.models.agent import Agent as AgentIdentity
 
 from .callback import (
+    CallbackReply,
     CallbackResultStore,
     VerifiedCallback,
+    acknowledge_callback,
+    callback_result,
     deduplicate_callback_result,
     verify_callback,
 )
@@ -30,6 +33,7 @@ from .ask_user import (
     ask_user_tool,
 )
 from .client import (
+    AgentDefinition,
     BuiltinTool,
     BudgetExhaustionBehavior,
     Limits,
@@ -39,6 +43,7 @@ from .client import (
     InvocationHandle,
     InvokeRequest,
     MCPServer,
+    MCPServerHeaders,
     MCPTimeouts,
     Model,
     NvokenError,
@@ -72,6 +77,7 @@ from .client import (
 )
 from .stream import Reducer, ReducedSnapshot, StreamEvent, StreamPreview, stream_session
 __all__ = [
+    "AgentDefinition",
     "__version__",
     "ASK_USER_DESCRIPTION",
     "ASK_USER_TOOL_NAME",
@@ -91,6 +97,7 @@ __all__ = [
     "BoundSession",
     "BuiltinTool",
     "BudgetExhaustionBehavior",
+    "CallbackReply",
     "CallbackResultStore",
     "Client",
     "ContextCompaction",
@@ -99,6 +106,7 @@ __all__ = [
     "InvocationOptions",
     "InvokeRequest",
     "MCPServer",
+    "MCPServerHeaders",
     "MCPTimeouts",
     "MissingToolHandlerError",
     "Model",
@@ -143,6 +151,8 @@ __all__ = [
     "ToolResult",
     "TranscriptDrain",
     "VerifiedCallback",
+    "acknowledge_callback",
+    "callback_result",
     "deduplicate_callback_result",
     "fetch_tool",
     "verify_callback",

@@ -10,6 +10,7 @@ from nvoken_generated.models.invocation_result import InvocationResult
 from nvoken_generated.models.pending_host_tool_call import PendingHostToolCall
 
 from .client import (
+    AgentDefinition,
     BuiltinTool,
     BudgetExhaustionBehavior,
     Client,
@@ -17,7 +18,7 @@ from .client import (
     InvocationHandle,
     InvokeRequest,
     Limits,
-    MCPServer,
+    MCPServerHeaders,
     Model,
     WebhookTarget,
     NvokenError,
@@ -77,16 +78,16 @@ class NoOutputTextError(NvokenError):
 @dataclass(frozen=True)
 class AgentOptions(Generic[StructuredT]):
     agent_key: str
-    model: Model | None = None
-    instructions: str | None = None
-    sampling: Sampling | None = None
-    reasoning: Reasoning | None = None
-    tool_choice: ToolChoice | None = None
-    limits: Limits | None = None
-    tools: tuple[Tool | BuiltinTool, ...] = ()
-    mcp_servers: tuple[MCPServer, ...] = ()
-    provider_tools: tuple[ProviderTool, ...] = ()
-    output_schema: dict[str, Any] | None = None
+    agent_definition: AgentDefinition | None = None
+    """The configuration every turn from this Agent runs with.
+
+    An Agent always sends it inline rather than by ID, because it serves the
+    host tool handlers declared in it. Reuse a registered
+    ``agent_definition_id`` through :meth:`Client.invoke` instead. Its ``model``
+    may be omitted when the Client carries a default.
+    """
+    mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
+    """Per-turn secret headers for the MCP servers the definition declares."""
     tenant_key: str | None = None
     provider_keys: tuple[ProviderKeySelection, ...] = ()
     webhook: WebhookTarget | None = None
@@ -149,16 +150,32 @@ class Agent(Generic[StructuredT]):
     def __init__(self, client: Client, options: AgentOptions[StructuredT]) -> None:
         if not options.agent_key:
             raise NvokenError("validation", "agent_key is required")
-        if options.model is None:
+        definition = options.agent_definition
+        if definition is None or definition.model is None:
             if client.default_model is None:
                 raise NvokenError("validation", "model is required")
-            options = replace(options, model=client.default_model)
+            definition = (
+                AgentDefinition(model=client.default_model)
+                if definition is None
+                else replace(definition, model=client.default_model)
+            )
+            options = replace(options, agent_definition=definition)
         self.client = client
         self.options = options
+        self.definition = definition
         self._host_tools = {
             tool.name: tool
-            for tool in options.tools
-            if tool.mode == "host"
+            for tool in definition.tools
+            if not isinstance(tool, BuiltinTool) and tool.mode == "host"
+        }
+        # Tools nvoken delivers over HTTPS. They can appear in a waiting
+        # Invocation's pending calls once an endpoint has acknowledged a
+        # delivery without settling it, and are answered by whatever accepted
+        # that acknowledgement rather than from local handlers.
+        self._callback_tools = {
+            tool.name
+            for tool in definition.tools
+            if not isinstance(tool, BuiltinTool) and tool.mode == "callback"
         }
 
     async def invoke(
@@ -207,7 +224,7 @@ class Agent(Generic[StructuredT]):
             "structured output"
             if result.raw_structured_output is not None
             else "tool-only output"
-            if self.options.tools
+            if self.definition.tools
             else "no assistant output"
         )
         raise NoOutputTextError(result.handle.invocation_id, result_kind)
@@ -278,6 +295,8 @@ class Agent(Generic[StructuredT]):
         handle = self.client.invocation(invocation_id)
         results: list[ToolResult] = []
         for pending in invocation.pending_tool_calls or []:
+            if pending.name in self._callback_tools:
+                continue
             tool = self._host_tools.get(pending.name)
             if tool is None or tool.handler is None:
                 if call_options.leave_waiting_on_missing_handler:
@@ -342,20 +361,11 @@ class Agent(Generic[StructuredT]):
         )
 
     def _request(self, input: str, options: InvocationOptions) -> InvokeRequest:
-        assert self.options.model is not None
         return InvokeRequest(
             agent_key=self.options.agent_key,
             input=input,
-            model=self.options.model,
-            instructions=self.options.instructions,
-            sampling=self.options.sampling,
-            reasoning=self.options.reasoning,
-            tool_choice=self.options.tool_choice,
-            limits=self.options.limits,
-            tools=self.options.tools,
-            mcp_servers=self.options.mcp_servers,
-            provider_tools=self.options.provider_tools,
-            output_schema=self.options.output_schema,
+            agent_definition=self.definition,
+            mcp_server_headers=self.options.mcp_server_headers,
             idempotency_key=options.idempotency_key,
             if_active=options.if_active,
             on_budget_exhausted=(
@@ -413,6 +423,8 @@ class Agent(Generic[StructuredT]):
         results: list[ToolResult] = []
         for pending in invocation.pending_tool_calls or []:
             if pending.id in submitted:
+                continue
+            if pending.name in self._callback_tools:
                 continue
             tool = self._host_tools.get(pending.name)
             if tool is None or tool.handler is None:

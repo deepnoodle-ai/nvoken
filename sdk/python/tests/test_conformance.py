@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,6 +45,7 @@ from nvoken.media_preflight import (
 )
 
 from nvoken import (
+    AgentDefinition,
     ASK_USER_TOOL_NAME,
     AskUserInput,
     AskUserOutput,
@@ -53,6 +54,7 @@ from nvoken import (
     InvocationHandle,
     InvokeRequest,
     MCPServer,
+    MCPServerHeaders,
     Model,
     WebhookTarget,
     NvokenError,
@@ -142,12 +144,19 @@ def test_shared_session_lifecycle_fixture() -> None:
         session_key="conformance",
         session_options=SessionOptions(retention=SessionRetention(ttl_seconds=86400)),
         metadata=fixture["invocation_metadata"],
-        model=model,
-        provider_tools=(web_search_tool(),),
+        agent_definition=AgentDefinition(
+            model=model,
+            provider_tools=(web_search_tool(),),
+        ),
     ))
     assert retention["session_options"] == fixture["session_options"]["retention_only"]
     assert retention["metadata"] == fixture["invocation_metadata"]
-    assert retention["provider_tools"] == fixture["provider_tools"]["defaults"]
+    # Execution fields belong to the Agent Definition now. Reading them back
+    # through that key is what proves the nesting actually happened.
+    assert (
+        retention["agent_definition"]["provider_tools"]
+        == fixture["provider_tools"]["defaults"]
+    )
 
     every = body(InvokeRequest(
         agent_key="support",
@@ -158,20 +167,25 @@ def test_shared_session_lifecycle_fixture() -> None:
             retention=SessionRetention(ttl_seconds=3600),
             metadata={"surface": "web"},
         ),
-        model=model,
-        provider_tools=(web_search_tool(WebSearchTool(
-            max_uses=5,
-            allowed_domains=("example.com", "docs.example.com"),
-            user_location=WebSearchLocation(
-                city="Austin",
-                region="Texas",
-                country="US",
-                timezone="America/Chicago",
-            ),
-        )),),
+        agent_definition=AgentDefinition(
+            model=model,
+            provider_tools=(web_search_tool(WebSearchTool(
+                max_uses=5,
+                allowed_domains=("example.com", "docs.example.com"),
+                user_location=WebSearchLocation(
+                    city="Austin",
+                    region="Texas",
+                    country="US",
+                    timezone="America/Chicago",
+                ),
+            )),),
+        ),
     ))
     assert every["session_options"] == fixture["session_options"]["every_member"]
-    assert every["provider_tools"] == fixture["provider_tools"]["configured"]
+    assert (
+        every["agent_definition"]["provider_tools"]
+        == fixture["provider_tools"]["configured"]
+    )
 
     # Session options with no members would serialize to `{}`, which the Runtime
     # rejects for minProperties — catching it locally names the field.
@@ -181,7 +195,9 @@ def test_shared_session_lifecycle_fixture() -> None:
             input="hello",
             session_key="conformance",
             session_options=SessionOptions(),
-            model=model,
+            agent_definition=AgentDefinition(
+                model=model,
+            ),
         ))
 
 
@@ -198,10 +214,12 @@ def test_shared_agent_request_fixture() -> None:
     client = Client(base_url="https://runtime.example.test", api_key="key")
     agent = client.agent(AgentOptions(
         agent_key="support",
-        model=Model(provider="anthropic", id="claude-sonnet-4-6"),
-        sampling=Sampling(temperature=0.2),
-        reasoning=Reasoning(effort="low"),
-        provider_tools=(web_search_tool(WebSearchTool(max_uses=5)),),
+        agent_definition=AgentDefinition(
+            model=Model(provider="anthropic", id="claude-sonnet-4-6"),
+            sampling=Sampling(temperature=0.2),
+            reasoning=Reasoning(effort="low"),
+            provider_tools=(web_search_tool(WebSearchTool(max_uses=5)),),
+        ),
     ))
     # Durable options apply on a new anonymous Session too, which is where a
     # short retention window matters most.
@@ -372,22 +390,84 @@ def test_shared_media_input_fixture_matches_preflight() -> None:
         assert asdict(issue) == rejected["issue"], rejected["id"]
 
 
-def test_shared_definition_reuse_fixture_is_expressible() -> None:
+def test_shared_agent_definition_reuse_fixture_is_expressible() -> None:
     fixture = json.loads(
         (
             Path(__file__).parents[2]
-            / "conformance/fixtures/definition-reuse-v1.json"
+            / "conformance/fixtures/agent-definition-reuse-v1.json"
         ).read_text()
     )
     client = Client(base_url="https://runtime.example.test", api_key="key")
     body = client._invocation_body(InvokeRequest(
         agent_key="support",
         input="hello",
-        idempotency_key="definition-reference",
-        definition_id=fixture["definition_id"],
+        idempotency_key="agent-definition-reference",
+        agent_definition_id=fixture["agent_definition_id"],
     )).to_dict()
-    assert body["definition_id"] == fixture["definition_id"]
-    assert "model" not in body
+    assert body["agent_definition_id"] == fixture["agent_definition_id"]
+    assert "agent_definition" not in body
+
+
+# Registration and invocation must render the same object, or an SDK could
+# register one definition and then invoke a different, silently new one.
+def test_registration_sends_the_same_agent_definition_an_invocation_nests() -> None:
+    fixture = json.loads(
+        (
+            Path(__file__).parents[2]
+            / "conformance/fixtures/agent-definition-reuse-v1.json"
+        ).read_text()
+    )
+    client = Client(base_url="https://runtime.example.test", api_key="key")
+    definition = AgentDefinition(
+        instructions="You are a concise billing support agent.",
+        model=Model(provider="anthropic", id="claude-sonnet-5"),
+    )
+    registration = client._agent_definition_body(definition).to_dict()
+    assert registration == fixture["registration"]["request"]
+    body = client._invocation_body(InvokeRequest(
+        agent_key="support",
+        input="hello",
+        idempotency_key="agent-definition-inline",
+        agent_definition=definition,
+    )).to_dict()
+    assert body["agent_definition"] == registration
+
+
+# A secret inside a content-addressed definition would change its identity, so
+# MCP headers must ride alongside it and never within it.
+def test_mcp_secrets_stay_outside_the_agent_definition() -> None:
+    client = Client(base_url="https://runtime.example.test", api_key="key")
+    server = MCPServer(
+        name="support",
+        url="https://mcp.example.test/rpc",
+        allowed_tools=("lookup",),
+    )
+    request = InvokeRequest(
+        agent_key="support",
+        input="hello",
+        idempotency_key="mcp-secret-placement",
+        agent_definition=AgentDefinition(
+            model=Model(provider="anthropic", id="claude-sonnet-5"),
+            mcp_servers=(server,),
+        ),
+        mcp_server_headers=(
+            MCPServerHeaders(name="support", headers={"Authorization": "Bearer secret"}),
+        ),
+    )
+    body = client._invocation_body(request).to_dict()
+    assert "headers" not in body["agent_definition"]["mcp_servers"][0]
+    assert body["mcp_server_headers"] == [
+        {"name": "support", "headers": {"Authorization": "Bearer secret"}}
+    ]
+
+    # A header naming no declared server is a typo the SDK can catch locally.
+    with pytest.raises(NvokenError):
+        client._invocation_body(replace(
+            request,
+            mcp_server_headers=(
+                MCPServerHeaders(name="typo", headers={"Authorization": "Bearer secret"}),
+            ),
+        ))
 
 
 def test_shared_context_compaction_fixture_is_expressible() -> None:
@@ -488,8 +568,10 @@ async def test_invoke_preflights_output_schema_before_transport() -> None:
                 await client.invoke(InvokeRequest(
                     agent_key="support",
                     input="help",
-                    model=Model(provider="anthropic", id="test-model"),
-                    output_schema=expand_output_schema_fixture(test_case),
+                    agent_definition=AgentDefinition(
+                        model=Model(provider="anthropic", id="test-model"),
+                        output_schema=expand_output_schema_fixture(test_case),
+                    ),
                 ))
             assert failure.value.code == "schema_preflight_failed", test_case["id"]
         assert attempts == 0
@@ -531,9 +613,11 @@ async def test_shared_fault_server_semantics() -> None:
             name="support",
             url="https://mcp.example.test/rpc",
             allowed_tools=("lookup",),
-            headers={"Authorization": "Bearer conformance-mcp-secret"},
         )
-        mcp_tools = await client.list_mcp_tools(server)
+        mcp_tools = await client.list_mcp_tools(
+            server,
+            {"Authorization": "Bearer conformance-mcp-secret"},
+        )
         assert mcp_tools.tools[0].projected_name == "support__lookup"
         exact_model = await client.get_model(Model(provider="openai", id=EXACT_MODEL_ID))
         assert exact_model.id == EXACT_MODEL_ID
@@ -565,16 +649,24 @@ async def test_shared_fault_server_semantics() -> None:
             idempotency_key="python-lost-ack",
             if_active="supersede",
             input="hello",
-            instructions="help",
-            model=Model(provider="openai", id="gpt-test"),
-            sampling=Sampling(temperature=0),
-            reasoning=Reasoning(effort="high"),
-            mcp_servers=(server,),
             provider_keys=(
                 ProviderKeySelection(
                     provider="openai",
                     source="caller_ephemeral",
                     api_key="conformance-secret",
+                ),
+            ),
+            agent_definition=AgentDefinition(
+                instructions="help",
+                model=Model(provider="openai", id="gpt-test"),
+                sampling=Sampling(temperature=0),
+                reasoning=Reasoning(effort="high"),
+                mcp_servers=(server,),
+            ),
+            mcp_server_headers=(
+                MCPServerHeaders(
+                    name="support",
+                    headers={"Authorization": "Bearer conformance-mcp-secret"},
                 ),
             ),
         ))
@@ -898,7 +990,9 @@ async def test_invoke_maps_ephemeral_and_stored_provider_keys() -> None:
         base = {
             "agent_key": "support",
             "input": "hello",
-            "model": Model(provider="openai", id="gpt-test"),
+            "agent_definition": AgentDefinition(
+                model=Model(provider="openai", id="gpt-test"),
+            ),
         }
         await client.invoke(InvokeRequest(
             **base,
