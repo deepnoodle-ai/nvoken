@@ -2726,7 +2726,7 @@ class InvocationsApi:
     ) -> InvocationLogList:
         """Page through hosted structured logs for one turn
 
-        Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no hosted telemetry store.
+        Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no configured observation store.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -2807,7 +2807,7 @@ class InvocationsApi:
     ) -> ApiResponse[InvocationLogList]:
         """Page through hosted structured logs for one turn
 
-        Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no hosted telemetry store.
+        Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no configured observation store.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -2888,7 +2888,7 @@ class InvocationsApi:
     ) -> RESTResponseType:
         """Page through hosted structured logs for one turn
 
-        Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no hosted telemetry store.
+        Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no configured observation store.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -3039,7 +3039,7 @@ class InvocationsApi:
     ) -> TraceList:
         """Page through hosted agent traces for one turn
 
-        Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no hosted telemetry store.
+        Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -3120,7 +3120,7 @@ class InvocationsApi:
     ) -> ApiResponse[TraceList]:
         """Page through hosted agent traces for one turn
 
-        Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no hosted telemetry store.
+        Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -3201,7 +3201,7 @@ class InvocationsApi:
     ) -> RESTResponseType:
         """Page through hosted agent traces for one turn
 
-        Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no hosted telemetry store.
+        Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
 
         :param invocation_id: (required)
         :type invocation_id: str

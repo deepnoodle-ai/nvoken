@@ -790,7 +790,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no hosted telemetry store.
+     * Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no configured observation store.
      * Page through hosted structured logs for one turn
      */
     async listInvocationLogsRaw(requestParameters: ListInvocationLogsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<InvocationLogList>> {
@@ -801,7 +801,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no hosted telemetry store.
+     * Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no configured observation store.
      * Page through hosted structured logs for one turn
      */
     async listInvocationLogs(requestParameters: ListInvocationLogsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<InvocationLogList> {
@@ -853,7 +853,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no hosted telemetry store.
+     * Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
      * Page through hosted agent traces for one turn
      */
     async listInvocationTracesRaw(requestParameters: ListInvocationTracesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<TraceList>> {
@@ -864,7 +864,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no hosted telemetry store.
+     * Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
      * Page through hosted agent traces for one turn
      */
     async listInvocationTraces(requestParameters: ListInvocationTracesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<TraceList> {

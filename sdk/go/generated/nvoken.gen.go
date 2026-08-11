@@ -10270,8 +10270,8 @@ type ClientInterface interface {
 	//
 	// Returns the content-free structured lifecycle logs associated by the
 	// Invocation ID. Arbitrary attributes and raw error values are omitted.
-	// `status` is `disabled` when this installation has no hosted telemetry
-	// store.
+	// `status` is `disabled` when this installation has no configured
+	// observation store.
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id}/logs (the `ListInvocationLogs` operationId).
 	ListInvocationLogs(ctx context.Context, invocationID InvocationID, params *ListInvocationLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -10549,7 +10549,7 @@ type ClientInterface interface {
 	// Returns the content-free root summaries exported from Dive through
 	// OpenTelemetry. Traces are diagnostic and best-effort; the durable
 	// Invocation timeline remains the execution authority. `status` is
-	// `disabled` when this installation has no hosted telemetry store.
+	// `disabled` when this installation has no configured observation store.
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id}/traces (the `ListInvocationTraces` operationId).
 	ListInvocationTraces(ctx context.Context, invocationID InvocationID, params *ListInvocationTracesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -12225,8 +12225,8 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID Invocatio
 //
 // Returns the content-free structured lifecycle logs associated by the
 // Invocation ID. Arbitrary attributes and raw error values are omitted.
-// `status` is `disabled` when this installation has no hosted telemetry
-// store.
+// `status` is `disabled` when this installation has no configured
+// observation store.
 //
 // Corresponds with GET /v1/invocations/{invocation_id}/logs (the `ListInvocationLogs` operationId).
 func (c *Client) ListInvocationLogs(ctx context.Context, invocationID InvocationID, params *ListInvocationLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -12634,7 +12634,7 @@ func (c *Client) SubmitHostToolResults(ctx context.Context, invocationID Invocat
 // Returns the content-free root summaries exported from Dive through
 // OpenTelemetry. Traces are diagnostic and best-effort; the durable
 // Invocation timeline remains the execution authority. `status` is
-// `disabled` when this installation has no hosted telemetry store.
+// `disabled` when this installation has no configured observation store.
 //
 // Corresponds with GET /v1/invocations/{invocation_id}/traces (the `ListInvocationTraces` operationId).
 func (c *Client) ListInvocationTraces(ctx context.Context, invocationID InvocationID, params *ListInvocationTracesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -19161,8 +19161,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns the content-free structured lifecycle logs associated by the
 	// Invocation ID. Arbitrary attributes and raw error values are omitted.
-	// `status` is `disabled` when this installation has no hosted telemetry
-	// store.
+	// `status` is `disabled` when this installation has no configured
+	// observation store.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19454,7 +19454,7 @@ type ClientWithResponsesInterface interface {
 	// Returns the content-free root summaries exported from Dive through
 	// OpenTelemetry. Traces are diagnostic and best-effort; the durable
 	// Invocation timeline remains the execution authority. `status` is
-	// `disabled` when this installation has no hosted telemetry store.
+	// `disabled` when this installation has no configured observation store.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -27500,8 +27500,8 @@ func (c *ClientWithResponses) InterruptInvocationWithResponse(ctx context.Contex
 //
 // Returns the content-free structured lifecycle logs associated by the
 // Invocation ID. Arbitrary attributes and raw error values are omitted.
-// `status` is `disabled` when this installation has no hosted telemetry
-// store.
+// `status` is `disabled` when this installation has no configured
+// observation store.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27871,7 +27871,7 @@ func (c *ClientWithResponses) SubmitHostToolResultsWithResponse(ctx context.Cont
 // Returns the content-free root summaries exported from Dive through
 // OpenTelemetry. Traces are diagnostic and best-effort; the durable
 // Invocation timeline remains the execution authority. `status` is
-// `disabled` when this installation has no hosted telemetry store.
+// `disabled` when this installation has no configured observation store.
 //
 // Returns a wrapper object for the known response body format(s).
 //
