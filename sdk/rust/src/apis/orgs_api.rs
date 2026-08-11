@@ -13,6 +13,20 @@ use crate::{apis::ResponseContent, models};
 use reqwest;
 use serde::{de::Error as _, Deserialize, Serialize};
 
+/// struct for typed errors of method [`archive_org`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ArchiveOrgError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status409(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`get_org`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -48,6 +62,19 @@ pub enum RegisterOrgError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`restore_org`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RestoreOrgError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`update_org`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -59,6 +86,48 @@ pub enum UpdateOrgError {
     Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
     UnknownValue(serde_json::Value),
+}
+
+/// Marks the Org out of service. Every App it owns must be archived first; this is an explicit precondition rather than a cascade, so no irreversible side effect hides inside a reversible operation.  Nothing is destroyed. An archived Org refuses App registration into it and Org-bound credential issuance with `409 org_archived`, while Org reads and org-scoped reporting stay open. Archiving requires the same authority as updating the Org, and repeating it is a successful no-op.
+pub async fn archive_org(
+    configuration: &configuration::Configuration,
+    org_id: &str,
+) -> Result<(), Error<ArchiveOrgError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_org_id = org_id;
+
+    let uri_str = format!(
+        "{}/v1/orgs/{org_id}",
+        configuration.base_path,
+        org_id = crate::apis::urlencode(p_path_org_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::DELETE, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ArchiveOrgError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
 }
 
 /// Returns one registered Org. An Org-scoped caller receives `404` for any other Org, so identifiers cannot be probed across the ownership boundary. Installation issuer tokens require `admin: true`.
@@ -112,13 +181,20 @@ pub async fn get_org(
     }
 }
 
-/// Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.
+/// Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.  Archived Orgs are excluded unless `status` asks for them.
 pub async fn list_orgs(
     configuration: &configuration::Configuration,
+    status: Option<&str>,
 ) -> Result<models::OrgList, Error<ListOrgsError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_status = status;
+
     let uri_str = format!("{}/v1/orgs", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_status {
+        req_builder = req_builder.query(&[("status", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -155,7 +231,7 @@ pub async fn list_orgs(
     }
 }
 
-/// Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.
+/// Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.  Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
 pub async fn register_org(
     configuration: &configuration::Configuration,
     register_org_request: models::RegisterOrgRequest,
@@ -197,6 +273,48 @@ pub async fn register_org(
     } else {
         let content = resp.text().await?;
         let entity: Option<RegisterOrgError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Clears the Org's archive tombstone. There is no ordering precondition and nothing else is restored: Apps archived before the Org stay archived. Restoring a live Org is a successful no-op.
+pub async fn restore_org(
+    configuration: &configuration::Configuration,
+    org_id: &str,
+) -> Result<(), Error<RestoreOrgError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_org_id = org_id;
+
+    let uri_str = format!(
+        "{}/v1/orgs/{org_id}/restore",
+        configuration.base_path,
+        org_id = crate::apis::urlencode(p_path_org_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<RestoreOrgError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,

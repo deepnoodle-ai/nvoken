@@ -17,31 +17,21 @@ import pprint
 import re  # noqa: F401
 import json
 
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
-from typing import Any, ClassVar, Dict, Optional
-from typing_extensions import Annotated
-from nvoken_generated.models.app_default_rate_limits import AppDefaultRateLimits
-from nvoken_generated.models.browser_access import BrowserAccess
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
+from typing import Any, ClassVar, Dict, List, Optional
+from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class App(BaseModel):
+class AgentDefinitionResourceList(BaseModel):
     """
-    App
+    AgentDefinitionResourceList
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="The generated nvoken app identifier.")
-    org_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Durable owning Org. Nullable only during the staged console migration and tightened after every existing App is claimed. ")
-    name: StrictStr = Field(description="The unique host-chosen name for this app.")
-    external_ref: Optional[Annotated[str, Field(strict=True, max_length=255)]] = Field(description="Transitional console-owner reference retained only to stamp existing Apps into Orgs during rollout. It is not an authorization boundary and is removed by the gated cleanup migration. ")
-    display_name: Optional[Annotated[str, Field(strict=True, max_length=255)]] = Field(description="Human-facing label; `name` stays the unique handle.")
-    callback_timeout_seconds: Annotated[int, Field(le=60, strict=True, ge=1)] = Field(description="Resolved deadline for each callback HTTP request. Defaults to 10. Webhook delivery is unaffected. ")
-    default_rate_limits: Optional[AppDefaultRateLimits] = Field(description="Dormant App-wide admission ceilings shared by machine and future client-token callers. Null means unlimited machine admission. These values are recorded but not enforced until PRD 065. ")
-    browser_access: Optional[BrowserAccess] = Field(description="Complete dormant browser-direct configuration. Null means browser access is disabled. Client JWTs and CORS remain unavailable until PRD 065. ")
-    created_at: datetime
-    archived_at: Optional[datetime] = Field(description="When the App was archived, or null while it is live. An archived App refuses admission and grant-minting with `409 app_archived` while every read, settlement, erasure, configuration, and revocation path stays open. Its credentials keep authenticating. ")
-    __properties: ClassVar[List[str]] = ["id", "org_id", "name", "external_ref", "display_name", "callback_timeout_seconds", "default_rate_limits", "browser_access", "created_at", "archived_at"]
+    items: List[AgentDefinitionResource]
+    has_more: StrictBool
+    next_cursor: Optional[StrictStr]
+    __properties: ClassVar[List[str]] = ["items", "has_more", "next_cursor"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -61,7 +51,7 @@ class App(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of App from a JSON string"""
+        """Create an instance of AgentDefinitionResourceList from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -82,47 +72,23 @@ class App(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of default_rate_limits
-        if self.default_rate_limits:
-            _dict['default_rate_limits'] = self.default_rate_limits.to_dict()
-        # override the default output from pydantic by calling `to_dict()` of browser_access
-        if self.browser_access:
-            _dict['browser_access'] = self.browser_access.to_dict()
-        # set to None if org_id (nullable) is None
+        # override the default output from pydantic by calling `to_dict()` of each item in items (list)
+        _items = []
+        if self.items:
+            for _item_items in self.items:
+                if _item_items:
+                    _items.append(_item_items.to_dict())
+            _dict['items'] = _items
+        # set to None if next_cursor (nullable) is None
         # and model_fields_set contains the field
-        if self.org_id is None and "org_id" in self.model_fields_set:
-            _dict['org_id'] = None
-
-        # set to None if external_ref (nullable) is None
-        # and model_fields_set contains the field
-        if self.external_ref is None and "external_ref" in self.model_fields_set:
-            _dict['external_ref'] = None
-
-        # set to None if display_name (nullable) is None
-        # and model_fields_set contains the field
-        if self.display_name is None and "display_name" in self.model_fields_set:
-            _dict['display_name'] = None
-
-        # set to None if default_rate_limits (nullable) is None
-        # and model_fields_set contains the field
-        if self.default_rate_limits is None and "default_rate_limits" in self.model_fields_set:
-            _dict['default_rate_limits'] = None
-
-        # set to None if browser_access (nullable) is None
-        # and model_fields_set contains the field
-        if self.browser_access is None and "browser_access" in self.model_fields_set:
-            _dict['browser_access'] = None
-
-        # set to None if archived_at (nullable) is None
-        # and model_fields_set contains the field
-        if self.archived_at is None and "archived_at" in self.model_fields_set:
-            _dict['archived_at'] = None
+        if self.next_cursor is None and "next_cursor" in self.model_fields_set:
+            _dict['next_cursor'] = None
 
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of App from a dict"""
+        """Create an instance of AgentDefinitionResourceList from a dict"""
         if obj is None:
             return None
 
@@ -130,15 +96,8 @@ class App(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "id": obj.get("id"),
-            "org_id": obj.get("org_id"),
-            "name": obj.get("name"),
-            "external_ref": obj.get("external_ref"),
-            "display_name": obj.get("display_name"),
-            "callback_timeout_seconds": obj.get("callback_timeout_seconds"),
-            "default_rate_limits": AppDefaultRateLimits.from_dict(obj["default_rate_limits"]) if obj.get("default_rate_limits") is not None else None,
-            "browser_access": BrowserAccess.from_dict(obj["browser_access"]) if obj.get("browser_access") is not None else None,
-            "created_at": obj.get("created_at"),
-            "archived_at": obj.get("archived_at")
+            "items": [AgentDefinitionResource.from_dict(_item) for _item in obj["items"]] if obj.get("items") is not None else None,
+            "has_more": obj.get("has_more"),
+            "next_cursor": obj.get("next_cursor")
         })
         return _obj

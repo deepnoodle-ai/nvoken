@@ -1006,6 +1006,13 @@ pub struct ListAgentsOptions {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct ListAgentDefinitionsOptions {
+    pub include_archived: Option<bool>,
+    pub cursor: Option<String>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct ListInvocationsOptions {
     pub tenant_key: Option<String>,
     pub default_tenant: Option<bool>,
@@ -1767,6 +1774,20 @@ impl Client {
             .map_err(|error| self.normalize_generated_error(error))
     }
 
+    pub async fn list_agent_definitions(
+        &self,
+        options: ListAgentDefinitionsOptions,
+    ) -> Result<models::AgentDefinitionResourceList, NvokenError> {
+        apis::agent_definitions_api::list_agent_definitions(
+            &self.configuration,
+            options.include_archived,
+            options.cursor.as_deref(),
+            options.limit,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
     pub async fn update_agent_definition(
         &self,
         agent_definition_id: &str,
@@ -1792,6 +1813,30 @@ impl Client {
         apis::models_api::get_model(&self.configuration, &provider, &model.id, None)
             .await
             .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn archive_agent_definition(
+        &self,
+        agent_definition_id: &str,
+    ) -> Result<(), NvokenError> {
+        apis::agent_definitions_api::archive_agent_definition(
+            &self.configuration,
+            agent_definition_id,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn restore_agent_definition(
+        &self,
+        agent_definition_id: &str,
+    ) -> Result<(), NvokenError> {
+        apis::agent_definitions_api::restore_agent_definition(
+            &self.configuration,
+            agent_definition_id,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn get_invocation(

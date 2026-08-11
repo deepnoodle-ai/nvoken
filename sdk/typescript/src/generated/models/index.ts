@@ -4,6 +4,7 @@ export * from './ActivityMetrics.js';
 export * from './Agent.js';
 export * from './AgentDefinition.js';
 export * from './AgentDefinitionResource.js';
+export * from './AgentDefinitionResourceList.js';
 export * from './AgentDefinitionWrite.js';
 export * from './AgentList.js';
 export * from './AllocateCreditsRequest.js';

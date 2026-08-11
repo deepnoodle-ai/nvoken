@@ -45,8 +45,11 @@ var operationCommands = map[string]string{
 	"createCredential":        "credentials create",
 	"createInvocation":        "invoke",
 	"createAgentDefinition":   "agent-definition create",
+	"listAgentDefinitions":    "agent-definition list",
 	"getAgentDefinition":      "agent-definition get",
 	"updateAgentDefinition":   "agent-definition update",
+	"archiveAgentDefinition":  "agent-definition archive",
+	"restoreAgentDefinition":  "agent-definition restore",
 	"createAppClientKey":      "client-key create",
 	"listAppClientKeys":       "client-key list",
 	"revokeAppClientKey":      "client-key revoke",
@@ -63,11 +66,15 @@ var operationCommands = map[string]string{
 	"listApps":                "app list",
 	"registerApp":             "app register",
 	"updateApp":               "app update",
+	"archiveApp":              "app archive",
+	"restoreApp":              "app restore",
 	"getInvocation":           "invocation get",
 	"getInvocationResult":     "invocation result",
 	"getInvocationTimeline":   "invocation timeline",
 	"getModel":                "model get",
 	"getOrg":                  "org get",
+	"archiveOrg":              "org archive",
+	"restoreOrg":              "org restore",
 	"getProviderKey":          "provider-key get",
 	"getUsageBreakdown":       "usage breakdown",
 	"getUsageTimeseries":      "usage timeseries",
@@ -131,7 +138,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runInvoke)
 
 	agentDefinitions := app.Group("agent-definition").
-		Description("Create, read, and revise App-owned Agent Definitions")
+		Description("Manage App-owned Agent Definitions")
 	agentDefinitions.Command("create").
 		Description("Create one Agent Definition resource without starting a turn").
 		Flags(
@@ -143,6 +150,13 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runCreateAgentDefinition)
 	agentDefinitions.Command("get").Args("agent-definition-id").Run(runGetAgentDefinition)
+	agentDefinitions.Command("list").
+		Flags(
+			cli.Bool("include-archived").Help("Include archived Agent Definitions"),
+			cli.String("cursor").Help("Continue a previous page"),
+			cli.Int("limit").Help("Maximum items in this page"),
+		).
+		Run(runListAgentDefinitions)
 	agentDefinitions.Command("update").
 		Description("Replace one Agent Definition at an expected revision").
 		Args("agent-definition-id").
@@ -154,6 +168,8 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.Int("revision").Required().Help("Current revision from GET"),
 		).
 		Run(runUpdateAgentDefinition)
+	agentDefinitions.Command("archive").Args("agent-definition-id").Run(runArchiveAgentDefinition)
+	agentDefinitions.Command("restore").Args("agent-definition-id").Run(runRestoreAgentDefinition)
 
 	apps := app.Group("app").Description("Register and read host applications")
 	apps.Command("register").
@@ -171,6 +187,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("List visible apps; an app-bound credential sees only its own").
 		Flags(
 			cli.String("external-ref").Help("Return only apps with exactly this external_ref"),
+			cli.String("status").Enum("active", "archived", "all").Help("Filter by archive status; defaults to active"),
 		).
 		Run(runAppList)
 	apps.Command("update").
@@ -182,6 +199,8 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.Int("callback-timeout").Help("Replacement callback HTTP reply deadline in seconds, 1 to 60"),
 		).
 		Run(runAppUpdate)
+	apps.Command("archive").Args("app-id").Run(runAppArchive)
+	apps.Command("restore").Args("app-id").Run(runAppRestore)
 
 	agents := app.Group("agent").Description("Read installation-wide Agent identity anchors")
 	agents.Command("get").
@@ -652,6 +671,30 @@ func runGetAgentDefinition(command *cli.Context) error {
 	})
 }
 
+func runListAgentDefinitions(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	resources, err := client.ListAgentDefinitions(command.Context(), nvoken.ListAgentDefinitionsOptions{
+		IncludeArchived: optionalBool(command.Bool("include-archived")),
+		Cursor:          optionalString(command.String("cursor")),
+		Limit:           optionalInt(command.Int("limit")),
+	})
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, resources, func(writer io.Writer) error {
+		for index := range resources.Items {
+			resource := &resources.Items[index]
+			if _, err := fmt.Fprintf(writer, "%s\trevision=%d\t%s/%s\n", resource.ID, resource.Revision, resource.Model.Provider, resource.Model.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func runUpdateAgentDefinition(command *cli.Context) error {
 	definition, err := agentDefinitionFlags(command)
 	if err != nil {
@@ -672,6 +715,22 @@ func runUpdateAgentDefinition(command *cli.Context) error {
 		_, err := fmt.Fprintf(writer, "%s\trevision=%d\n", resource.ID, resource.Revision)
 		return err
 	})
+}
+
+func runArchiveAgentDefinition(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	return client.ArchiveAgentDefinition(command.Context(), command.Arg(0))
+}
+
+func runRestoreAgentDefinition(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	return client.RestoreAgentDefinition(command.Context(), command.Arg(0))
 }
 
 // agentDefinitionFlags reads a whole definition from a file, or builds the
@@ -1208,6 +1267,7 @@ func runAppList(command *cli.Context) error {
 	}
 	list, err := client.ListApps(command.Context(), nvoken.ListAppsOptions{
 		ExternalRef: optionalString(command.String("external-ref")),
+		Status:      optionalArchiveStatus(command.String("status")),
 	})
 	if err != nil {
 		return err
@@ -1220,6 +1280,30 @@ func runAppList(command *cli.Context) error {
 		}
 		return nil
 	})
+}
+
+func runAppArchive(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	return client.ArchiveApp(command.Context(), command.Arg(0))
+}
+
+func runAppRestore(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	return client.RestoreApp(command.Context(), command.Arg(0))
+}
+
+func optionalArchiveStatus(value string) *nvoken.ArchiveStatus {
+	if value == "" {
+		return nil
+	}
+	status := nvoken.ArchiveStatus(value)
+	return &status
 }
 
 func runAgentGet(command *cli.Context) error {

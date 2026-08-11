@@ -11,40 +11,26 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// Org : Thin customer ownership boundary. Membership, roles, invitations, policy, and runtime state deliberately live elsewhere.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Org {
-    /// Opaque identifier with the public `org_` prefix. Treat the body as opaque.
-    #[serde(rename = "id")]
-    pub id: String,
-    /// Human-facing label for the customer Org.
-    #[serde(rename = "display_name")]
-    pub display_name: String,
-    /// Optional unique identity-provider Org identifier.
-    #[serde(rename = "external_ref", deserialize_with = "Option::deserialize")]
-    pub external_ref: Option<String>,
-    #[serde(rename = "created_at")]
-    pub created_at: chrono::DateTime<chrono::FixedOffset>,
-    /// When the Org was archived, or null while it is live. An archived Org admits no new App and no new Org-bound credential; its reads and org-scoped reporting are unchanged.
-    #[serde(rename = "archived_at", deserialize_with = "Option::deserialize")]
-    pub archived_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+pub struct AgentDefinitionResourceList {
+    #[serde(rename = "items")]
+    pub items: Vec<models::AgentDefinitionResource>,
+    #[serde(rename = "has_more")]
+    pub has_more: bool,
+    #[serde(rename = "next_cursor", deserialize_with = "Option::deserialize")]
+    pub next_cursor: Option<String>,
 }
 
-impl Org {
-    /// Thin customer ownership boundary. Membership, roles, invitations, policy, and runtime state deliberately live elsewhere.
+impl AgentDefinitionResourceList {
     pub fn new(
-        id: String,
-        display_name: String,
-        external_ref: Option<String>,
-        created_at: chrono::DateTime<chrono::FixedOffset>,
-        archived_at: Option<chrono::DateTime<chrono::FixedOffset>>,
-    ) -> Org {
-        Org {
-            id,
-            display_name,
-            external_ref,
-            created_at,
-            archived_at,
+        items: Vec<models::AgentDefinitionResource>,
+        has_more: bool,
+        next_cursor: Option<String>,
+    ) -> AgentDefinitionResourceList {
+        AgentDefinitionResourceList {
+            items,
+            has_more,
+            next_cursor,
         }
     }
 }

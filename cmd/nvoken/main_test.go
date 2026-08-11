@@ -650,6 +650,67 @@ func TestEveryOperationHasACommand(t *testing.T) {
 	}
 }
 
+func TestArchiveLifecycleCommands(t *testing.T) {
+	t.Setenv("NVOKEN_API_KEY", "operator-key")
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requests++
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/agent-definitions":
+			if request.URL.Query().Get("include_archived") != "true" || request.URL.Query().Get("limit") != "10" {
+				t.Errorf("Agent Definition query = %q", request.URL.RawQuery)
+			}
+			_, _ = response.Write([]byte(`{"items":[{"id":"def_test","revision":2,"model":{"provider":"openai","id":"gpt-test"}}],"has_more":false,"next_cursor":null}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/v1/agent-definitions/def_test":
+			response.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/agent-definitions/def_test/restore":
+			response.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/apps":
+			if request.URL.Query().Get("status") != "archived" {
+				t.Errorf("App query = %q", request.URL.RawQuery)
+			}
+			_, _ = response.Write([]byte(`{"items":[{"id":"app_test","name":"support"}]}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/v1/apps/app_test":
+			response.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/apps/app_test/restore":
+			response.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/orgs":
+			if request.URL.Query().Get("status") != "all" {
+				t.Errorf("Org query = %q", request.URL.RawQuery)
+			}
+			_, _ = response.Write([]byte(`{"items":[{"id":"org_test","display_name":"Example"}]}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/v1/orgs/org_test":
+			response.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/orgs/org_test/restore":
+			response.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+
+	commands := [][]string{
+		{"agent-definition", "list", "--include-archived", "--limit", "10"},
+		{"agent-definition", "archive", "def_test"},
+		{"agent-definition", "restore", "def_test"},
+		{"app", "list", "--status", "archived"},
+		{"app", "archive", "app_test"},
+		{"app", "restore", "app_test"},
+		{"org", "list", "--status", "all"},
+		{"org", "archive", "org_test"},
+		{"org", "restore", "org_test"},
+	}
+	for _, arguments := range commands {
+		if _, err := executeCLI(t, server.URL, false, arguments...); err != nil {
+			t.Fatalf("%v: %v", arguments, err)
+		}
+	}
+	if requests != len(commands) {
+		t.Fatalf("requests = %d, want %d", requests, len(commands))
+	}
+}
+
 func TestMCPHeadersFromEnvironmentStaySecretSafe(t *testing.T) {
 	t.Setenv("NVOKEN_TEST_MCP_HEADERS", `{"Authorization":"Bearer environment-secret"}`)
 	headers, err := mcpHeaders(nil, "NVOKEN_TEST_MCP_HEADERS")

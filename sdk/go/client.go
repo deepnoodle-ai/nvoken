@@ -359,6 +359,29 @@ func (c *Client) GetAgentDefinition(ctx context.Context, id string) (*AgentDefin
 	})
 }
 
+func (c *Client) ListAgentDefinitions(
+	ctx context.Context,
+	options ListAgentDefinitionsOptions,
+) (*AgentDefinitionResourceList, error) {
+	params := &generated.ListAgentDefinitionsParams{
+		IncludeArchived: options.IncludeArchived,
+		Cursor:          options.Cursor,
+		Limit:           options.Limit,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResourceList], error) {
+		response, err := c.raw.ListAgentDefinitionsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.AgentDefinitionResourceList]{}, err
+		}
+		return callResult[generated.AgentDefinitionResourceList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
 func (c *Client) UpdateAgentDefinition(
 	ctx context.Context,
 	id string,
@@ -396,6 +419,44 @@ func (c *Client) UpdateAgentDefinition(
 			Body:   response.Body,
 		}, nil
 	})
+}
+
+func (c *Client) ArchiveAgentDefinition(ctx context.Context, id string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.ArchiveAgentDefinitionWithResponse(ctx, id)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
+func (c *Client) RestoreAgentDefinition(ctx context.Context, id string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.RestoreAgentDefinitionWithResponse(ctx, id)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
 }
 
 func (c *Client) GetInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
@@ -1189,8 +1250,14 @@ func (c *Client) GetApp(ctx context.Context, appID string) (*App, error) {
 }
 
 func (c *Client) ListApps(ctx context.Context, options ListAppsOptions) (*AppList, error) {
+	var status *generated.ListAppsParamsStatus
+	if options.Status != nil {
+		value := generated.ListAppsParamsStatus(*options.Status)
+		status = &value
+	}
 	params := &generated.ListAppsParams{
 		ExternalRef: options.ExternalRef,
+		Status:      status,
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AppList], error) {
 		response, err := c.raw.ListAppsWithResponse(ctx, params)
@@ -1204,6 +1271,44 @@ func (c *Client) ListApps(ctx context.Context, options ListAppsOptions) (*AppLis
 			Body:   response.Body,
 		}, nil
 	})
+}
+
+func (c *Client) ArchiveApp(ctx context.Context, appID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.ArchiveAppWithResponse(ctx, appID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
+func (c *Client) RestoreApp(ctx context.Context, appID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.RestoreAppWithResponse(ctx, appID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
 }
 
 func (c *Client) ListAppClientKeys(ctx context.Context, appID string) (*ClientKeyList, error) {
@@ -1289,9 +1394,14 @@ func (c *Client) UpdateApp(ctx context.Context, appID string, options UpdateAppO
 	})
 }
 
-func (c *Client) ListOrgs(ctx context.Context) (*OrgList, error) {
+func (c *Client) ListOrgs(ctx context.Context, options ListOrgsOptions) (*OrgList, error) {
+	var status *generated.ListOrgsParamsStatus
+	if options.Status != nil {
+		value := generated.ListOrgsParamsStatus(*options.Status)
+		status = &value
+	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.OrgList], error) {
-		response, err := c.raw.ListOrgsWithResponse(ctx)
+		response, err := c.raw.ListOrgsWithResponse(ctx, &generated.ListOrgsParams{Status: status})
 		if err != nil {
 			return callResult[generated.OrgList]{}, err
 		}
@@ -1302,6 +1412,44 @@ func (c *Client) ListOrgs(ctx context.Context) (*OrgList, error) {
 			Body:   response.Body,
 		}, nil
 	})
+}
+
+func (c *Client) ArchiveOrg(ctx context.Context, orgID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.ArchiveOrgWithResponse(ctx, orgID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
+func (c *Client) RestoreOrg(ctx context.Context, orgID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.RestoreOrgWithResponse(ctx, orgID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
 }
 
 func (c *Client) RegisterOrg(ctx context.Context, displayName string, options RegisterOrgOptions) (*Org, error) {

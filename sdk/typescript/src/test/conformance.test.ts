@@ -300,6 +300,49 @@ test("Agent Definition creation returns a stable resource used by Invocation ID"
 	assert.equal(bodies[1]?.agent_definition, undefined);
 });
 
+test("Agent Definition lifecycle facade lists, archives, and restores", async () => {
+  const calls: Array<{ method: string; path: string; query: string }> = [];
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? "GET";
+      calls.push({ method, path: url.pathname, query: url.searchParams.toString() });
+      if (method === "GET") {
+        return new Response(JSON.stringify({
+          items: [{ id: "def_test", revision: 2 }],
+          has_more: false,
+          next_cursor: null,
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(null, { status: 204 });
+    },
+  });
+
+  const listed = await client.listAgentDefinitions({
+    includeArchived: true,
+    cursor: "page-2",
+    limit: 10,
+  });
+  assert.equal(listed.items[0]?.id, "def_test");
+  await client.archiveAgentDefinition("def_test");
+  await client.restoreAgentDefinition("def_test");
+  assert.deepEqual(calls, [
+    {
+      method: "GET",
+      path: "/v1/agent-definitions",
+      query: "include_archived=true&cursor=page-2&limit=10",
+    },
+    { method: "DELETE", path: "/v1/agent-definitions/def_test", query: "" },
+    { method: "POST", path: "/v1/agent-definitions/def_test/restore", query: "" },
+  ]);
+});
+
 // A reusable definition is durable configuration, so MCP headers must ride
 // alongside it and never within it.
 test("mcp secrets stay outside the Agent Definition", async () => {

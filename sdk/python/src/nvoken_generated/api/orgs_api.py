@@ -15,7 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field
+from pydantic import Field, StrictStr, field_validator
+from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.org import Org
 from nvoken_generated.models.org_list import OrgList
@@ -38,6 +39,288 @@ class OrgsApi:
         if api_client is None:
             api_client = ApiClient.get_default()
         self.api_client = api_client
+
+
+    @validate_call
+    async def archive_org(
+        self,
+        org_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> None:
+        """Archive an org
+
+        Marks the Org out of service. Every App it owns must be archived first; this is an explicit precondition rather than a cascade, so no irreversible side effect hides inside a reversible operation.  Nothing is destroyed. An archived Org refuses App registration into it and Org-bound credential issuance with `409 org_archived`, while Org reads and org-scoped reporting stay open. Archiving requires the same authority as updating the Org, and repeating it is a successful no-op.
+
+        :param org_id: (required)
+        :type org_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._archive_org_serialize(
+            org_id=org_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '409': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def archive_org_with_http_info(
+        self,
+        org_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[None]:
+        """Archive an org
+
+        Marks the Org out of service. Every App it owns must be archived first; this is an explicit precondition rather than a cascade, so no irreversible side effect hides inside a reversible operation.  Nothing is destroyed. An archived Org refuses App registration into it and Org-bound credential issuance with `409 org_archived`, while Org reads and org-scoped reporting stay open. Archiving requires the same authority as updating the Org, and repeating it is a successful no-op.
+
+        :param org_id: (required)
+        :type org_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._archive_org_serialize(
+            org_id=org_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '409': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def archive_org_without_preload_content(
+        self,
+        org_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Archive an org
+
+        Marks the Org out of service. Every App it owns must be archived first; this is an explicit precondition rather than a cascade, so no irreversible side effect hides inside a reversible operation.  Nothing is destroyed. An archived Org refuses App registration into it and Org-bound credential issuance with `409 org_archived`, while Org reads and org-scoped reporting stay open. Archiving requires the same authority as updating the Org, and repeating it is a successful no-op.
+
+        :param org_id: (required)
+        :type org_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._archive_org_serialize(
+            org_id=org_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '409': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _archive_org_serialize(
+        self,
+        org_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if org_id is not None:
+            _path_params['org_id'] = org_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='DELETE',
+            resource_path='/v1/orgs/{org_id}',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
 
 
     @validate_call
@@ -319,6 +602,7 @@ class OrgsApi:
     @validate_call
     async def list_orgs(
         self,
+        status: Annotated[Optional[StrictStr], Field(description="Which container rows to return. Archive hides a container from pickers, never from money: usage reporting always counts archived Apps. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -334,8 +618,10 @@ class OrgsApi:
     ) -> OrgList:
         """List registered orgs
 
-        Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.
+        Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.  Archived Orgs are excluded unless `status` asks for them.
 
+        :param status: Which container rows to return. Archive hides a container from pickers, never from money: usage reporting always counts archived Apps.
+        :type status: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -359,6 +645,7 @@ class OrgsApi:
         """ # noqa: E501
 
         _param = self._list_orgs_serialize(
+            status=status,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -386,6 +673,7 @@ class OrgsApi:
     @validate_call
     async def list_orgs_with_http_info(
         self,
+        status: Annotated[Optional[StrictStr], Field(description="Which container rows to return. Archive hides a container from pickers, never from money: usage reporting always counts archived Apps. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -401,8 +689,10 @@ class OrgsApi:
     ) -> ApiResponse[OrgList]:
         """List registered orgs
 
-        Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.
+        Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.  Archived Orgs are excluded unless `status` asks for them.
 
+        :param status: Which container rows to return. Archive hides a container from pickers, never from money: usage reporting always counts archived Apps.
+        :type status: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -426,6 +716,7 @@ class OrgsApi:
         """ # noqa: E501
 
         _param = self._list_orgs_serialize(
+            status=status,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -453,6 +744,7 @@ class OrgsApi:
     @validate_call
     async def list_orgs_without_preload_content(
         self,
+        status: Annotated[Optional[StrictStr], Field(description="Which container rows to return. Archive hides a container from pickers, never from money: usage reporting always counts archived Apps. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -468,8 +760,10 @@ class OrgsApi:
     ) -> RESTResponseType:
         """List registered orgs
 
-        Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.
+        Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.  Archived Orgs are excluded unless `status` asks for them.
 
+        :param status: Which container rows to return. Archive hides a container from pickers, never from money: usage reporting always counts archived Apps.
+        :type status: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -493,6 +787,7 @@ class OrgsApi:
         """ # noqa: E501
 
         _param = self._list_orgs_serialize(
+            status=status,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -515,6 +810,7 @@ class OrgsApi:
 
     def _list_orgs_serialize(
         self,
+        status,
         _request_auth,
         _content_type,
         _headers,
@@ -537,6 +833,10 @@ class OrgsApi:
 
         # process the path parameters
         # process the query parameters
+        if status is not None:
+
+            _query_params.append(('status', status))
+
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -593,7 +893,7 @@ class OrgsApi:
     ) -> Org:
         """Register an org
 
-        Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.
+        Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.  Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
 
         :param register_org_request: (required)
         :type register_org_request: RegisterOrgRequest
@@ -666,7 +966,7 @@ class OrgsApi:
     ) -> ApiResponse[Org]:
         """Register an org
 
-        Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.
+        Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.  Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
 
         :param register_org_request: (required)
         :type register_org_request: RegisterOrgRequest
@@ -739,7 +1039,7 @@ class OrgsApi:
     ) -> RESTResponseType:
         """Register an org
 
-        Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.
+        Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.  Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
 
         :param register_org_request: (required)
         :type register_org_request: RegisterOrgRequest
@@ -851,6 +1151,285 @@ class OrgsApi:
         return self.api_client.param_serialize(
             method='POST',
             resource_path='/v1/orgs',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    async def restore_org(
+        self,
+        org_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> None:
+        """Restore an archived org
+
+        Clears the Org's archive tombstone. There is no ordering precondition and nothing else is restored: Apps archived before the Org stay archived. Restoring a live Org is a successful no-op.
+
+        :param org_id: (required)
+        :type org_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._restore_org_serialize(
+            org_id=org_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def restore_org_with_http_info(
+        self,
+        org_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[None]:
+        """Restore an archived org
+
+        Clears the Org's archive tombstone. There is no ordering precondition and nothing else is restored: Apps archived before the Org stay archived. Restoring a live Org is a successful no-op.
+
+        :param org_id: (required)
+        :type org_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._restore_org_serialize(
+            org_id=org_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def restore_org_without_preload_content(
+        self,
+        org_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Restore an archived org
+
+        Clears the Org's archive tombstone. There is no ordering precondition and nothing else is restored: Apps archived before the Org stay archived. Restoring a live Org is a successful no-op.
+
+        :param org_id: (required)
+        :type org_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._restore_org_serialize(
+            org_id=org_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _restore_org_serialize(
+        self,
+        org_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if org_id is not None:
+            _path_params['org_id'] = org_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='POST',
+            resource_path='/v1/orgs/{org_id}/restore',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,

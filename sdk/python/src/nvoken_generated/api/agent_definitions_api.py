@@ -15,9 +15,11 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
+from pydantic import Field, StrictBool, StrictStr
+from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
+from nvoken_generated.models.agent_definition_resource_list import AgentDefinitionResourceList
 from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite
 
 from nvoken_generated.api_client import ApiClient, RequestSerialized
@@ -36,6 +38,285 @@ class AgentDefinitionsApi:
         if api_client is None:
             api_client = ApiClient.get_default()
         self.api_client = api_client
+
+
+    @validate_call
+    async def archive_agent_definition(
+        self,
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> None:
+        """Archive an Agent Definition
+
+        Marks the resource retired. Invocation admission that resolves it — by `agent_definition_id` or by a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
+
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._archive_agent_definition_serialize(
+            agent_definition_id=agent_definition_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def archive_agent_definition_with_http_info(
+        self,
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[None]:
+        """Archive an Agent Definition
+
+        Marks the resource retired. Invocation admission that resolves it — by `agent_definition_id` or by a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
+
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._archive_agent_definition_serialize(
+            agent_definition_id=agent_definition_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def archive_agent_definition_without_preload_content(
+        self,
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Archive an Agent Definition
+
+        Marks the resource retired. Invocation admission that resolves it — by `agent_definition_id` or by a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
+
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._archive_agent_definition_serialize(
+            agent_definition_id=agent_definition_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _archive_agent_definition_serialize(
+        self,
+        agent_definition_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if agent_definition_id is not None:
+            _path_params['agent_definition_id'] = agent_definition_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='DELETE',
+            resource_path='/v1/agent-definitions/{agent_definition_id}',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
 
 
     @validate_call
@@ -100,6 +381,7 @@ class AgentDefinitionsApi:
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
+            '409': "ErrorResponse",
             '429': "ErrorResponse",
             '500': "ErrorResponse",
             '503': "ErrorResponse",
@@ -177,6 +459,7 @@ class AgentDefinitionsApi:
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
+            '409': "ErrorResponse",
             '429': "ErrorResponse",
             '500': "ErrorResponse",
             '503': "ErrorResponse",
@@ -254,6 +537,7 @@ class AgentDefinitionsApi:
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
+            '409': "ErrorResponse",
             '429': "ErrorResponse",
             '500': "ErrorResponse",
             '503': "ErrorResponse",
@@ -619,6 +903,600 @@ class AgentDefinitionsApi:
 
 
     @validate_call
+    async def list_agent_definitions(
+        self,
+        include_archived: Annotated[Optional[StrictBool], Field(description="Include archived resources alongside live ones.")] = None,
+        cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
+        limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AgentDefinitionResourceList:
+        """List the App's Agent Definition resources
+
+        Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+
+        :param include_archived: Include archived resources alongside live ones.
+        :type include_archived: bool
+        :param cursor: Opaque cursor returned by the same operation and filter set.
+        :type cursor: str
+        :param limit: Maximum items in this page. Defaults to 100.
+        :type limit: int
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_agent_definitions_serialize(
+            include_archived=include_archived,
+            cursor=cursor,
+            limit=limit,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResourceList",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def list_agent_definitions_with_http_info(
+        self,
+        include_archived: Annotated[Optional[StrictBool], Field(description="Include archived resources alongside live ones.")] = None,
+        cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
+        limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AgentDefinitionResourceList]:
+        """List the App's Agent Definition resources
+
+        Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+
+        :param include_archived: Include archived resources alongside live ones.
+        :type include_archived: bool
+        :param cursor: Opaque cursor returned by the same operation and filter set.
+        :type cursor: str
+        :param limit: Maximum items in this page. Defaults to 100.
+        :type limit: int
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_agent_definitions_serialize(
+            include_archived=include_archived,
+            cursor=cursor,
+            limit=limit,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResourceList",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def list_agent_definitions_without_preload_content(
+        self,
+        include_archived: Annotated[Optional[StrictBool], Field(description="Include archived resources alongside live ones.")] = None,
+        cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
+        limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """List the App's Agent Definition resources
+
+        Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+
+        :param include_archived: Include archived resources alongside live ones.
+        :type include_archived: bool
+        :param cursor: Opaque cursor returned by the same operation and filter set.
+        :type cursor: str
+        :param limit: Maximum items in this page. Defaults to 100.
+        :type limit: int
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_agent_definitions_serialize(
+            include_archived=include_archived,
+            cursor=cursor,
+            limit=limit,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResourceList",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _list_agent_definitions_serialize(
+        self,
+        include_archived,
+        cursor,
+        limit,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        # process the query parameters
+        if include_archived is not None:
+
+            _query_params.append(('include_archived', include_archived))
+
+        if cursor is not None:
+
+            _query_params.append(('cursor', cursor))
+
+        if limit is not None:
+
+            _query_params.append(('limit', limit))
+
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='GET',
+            resource_path='/v1/agent-definitions',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    async def restore_agent_definition(
+        self,
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> None:
+        """Restore an archived Agent Definition
+
+        Clears the resource's archive tombstone so Invocation admission resolves it again. Restoring a live resource is a successful no-op.
+
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._restore_agent_definition_serialize(
+            agent_definition_id=agent_definition_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def restore_agent_definition_with_http_info(
+        self,
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[None]:
+        """Restore an archived Agent Definition
+
+        Clears the resource's archive tombstone so Invocation admission resolves it again. Restoring a live resource is a successful no-op.
+
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._restore_agent_definition_serialize(
+            agent_definition_id=agent_definition_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def restore_agent_definition_without_preload_content(
+        self,
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Restore an archived Agent Definition
+
+        Clears the resource's archive tombstone so Invocation admission resolves it again. Restoring a live resource is a successful no-op.
+
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._restore_agent_definition_serialize(
+            agent_definition_id=agent_definition_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _restore_agent_definition_serialize(
+        self,
+        agent_definition_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if agent_definition_id is not None:
+            _path_params['agent_definition_id'] = agent_definition_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='POST',
+            resource_path='/v1/agent-definitions/{agent_definition_id}/restore',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
     async def update_agent_definition(
         self,
         if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT.")],
@@ -684,6 +1562,7 @@ class AgentDefinitionsApi:
             '401': "ErrorResponse",
             '403': "ErrorResponse",
             '404': "ErrorResponse",
+            '409': "ErrorResponse",
             '412': "ErrorResponse",
             '428': "ErrorResponse",
             '500': "ErrorResponse",
@@ -766,6 +1645,7 @@ class AgentDefinitionsApi:
             '401': "ErrorResponse",
             '403': "ErrorResponse",
             '404': "ErrorResponse",
+            '409': "ErrorResponse",
             '412': "ErrorResponse",
             '428': "ErrorResponse",
             '500': "ErrorResponse",
@@ -848,6 +1728,7 @@ class AgentDefinitionsApi:
             '401': "ErrorResponse",
             '403': "ErrorResponse",
             '404': "ErrorResponse",
+            '409': "ErrorResponse",
             '412': "ErrorResponse",
             '428': "ErrorResponse",
             '500': "ErrorResponse",

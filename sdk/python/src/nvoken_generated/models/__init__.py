@@ -17,6 +17,7 @@ from nvoken_generated.models.activity_metrics import ActivityMetrics
 from nvoken_generated.models.agent import Agent
 from nvoken_generated.models.agent_definition import AgentDefinition
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
+from nvoken_generated.models.agent_definition_resource_list import AgentDefinitionResourceList
 from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite
 from nvoken_generated.models.agent_list import AgentList
 from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest

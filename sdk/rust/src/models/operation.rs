@@ -20,6 +20,8 @@ pub enum Operation {
     CreateAgentDefinition,
     #[serde(rename = "get_agent_definition")]
     GetAgentDefinition,
+    #[serde(rename = "list_agent_definitions")]
+    ListAgentDefinitions,
     #[serde(rename = "update_agent_definition")]
     UpdateAgentDefinition,
     #[serde(rename = "create_session")]
@@ -106,6 +108,7 @@ impl std::fmt::Display for Operation {
             Self::CreateInvocation => write!(f, "create_invocation"),
             Self::CreateAgentDefinition => write!(f, "create_agent_definition"),
             Self::GetAgentDefinition => write!(f, "get_agent_definition"),
+            Self::ListAgentDefinitions => write!(f, "list_agent_definitions"),
             Self::UpdateAgentDefinition => write!(f, "update_agent_definition"),
             Self::CreateSession => write!(f, "create_session"),
             Self::GetAgent => write!(f, "get_agent"),

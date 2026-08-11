@@ -44,6 +44,14 @@ pub enum ErrorCode {
     InvocationNotWaiting,
     #[serde(rename = "invocation_not_paused")]
     InvocationNotPaused,
+    #[serde(rename = "app_archived")]
+    AppArchived,
+    #[serde(rename = "org_archived")]
+    OrgArchived,
+    #[serde(rename = "agent_definition_archived")]
+    AgentDefinitionArchived,
+    #[serde(rename = "org_has_active_apps")]
+    OrgHasActiveApps,
     #[serde(rename = "budget_exceeded")]
     BudgetExceeded,
     #[serde(rename = "insufficient_credits")]
@@ -84,6 +92,10 @@ impl std::fmt::Display for ErrorCode {
             Self::SessionInvocationActive => write!(f, "session_invocation_active"),
             Self::InvocationNotWaiting => write!(f, "invocation_not_waiting"),
             Self::InvocationNotPaused => write!(f, "invocation_not_paused"),
+            Self::AppArchived => write!(f, "app_archived"),
+            Self::OrgArchived => write!(f, "org_archived"),
+            Self::AgentDefinitionArchived => write!(f, "agent_definition_archived"),
+            Self::OrgHasActiveApps => write!(f, "org_has_active_apps"),
             Self::BudgetExceeded => write!(f, "budget_exceeded"),
             Self::InsufficientCredits => write!(f, "insufficient_credits"),
             Self::CostEstimateUnavailable => write!(f, "cost_estimate_unavailable"),

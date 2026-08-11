@@ -53,7 +53,8 @@ class AgentDefinitionResource(BaseModel):
     created_at: datetime
     client_interface: Optional[BrowserClientInterface] = None
     updated_at: datetime
-    __properties: ClassVar[List[str]] = ["id", "revision", "instructions", "model", "sampling", "reasoning", "tool_choice", "limits", "output_schema", "tools", "mcp_servers", "provider_tools", "created_at", "client_interface", "updated_at"]
+    archived_at: Optional[datetime] = Field(description="When the resource was archived, or null while it is live. Invocation admission that resolves an archived Agent Definition, by id or by pinned revision, is refused with `409 agent_definition_archived`. The resource and every revision stay readable. ")
+    __properties: ClassVar[List[str]] = ["id", "revision", "instructions", "model", "sampling", "reasoning", "tool_choice", "limits", "output_schema", "tools", "mcp_servers", "provider_tools", "created_at", "client_interface", "updated_at", "archived_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -133,6 +134,11 @@ class AgentDefinitionResource(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of client_interface
         if self.client_interface:
             _dict['client_interface'] = self.client_interface.to_dict()
+        # set to None if archived_at (nullable) is None
+        # and model_fields_set contains the field
+        if self.archived_at is None and "archived_at" in self.model_fields_set:
+            _dict['archived_at'] = None
+
         return _dict
 
     @classmethod
@@ -159,6 +165,7 @@ class AgentDefinitionResource(BaseModel):
             "provider_tools": [ProviderTool.from_dict(_item) for _item in obj["provider_tools"]] if obj.get("provider_tools") is not None else None,
             "created_at": obj.get("created_at"),
             "client_interface": BrowserClientInterface.from_dict(obj["client_interface"]) if obj.get("client_interface") is not None else None,
-            "updated_at": obj.get("updated_at")
+            "updated_at": obj.get("updated_at"),
+            "archived_at": obj.get("archived_at")
         })
         return _obj

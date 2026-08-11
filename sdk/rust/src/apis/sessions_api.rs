@@ -49,6 +49,7 @@ pub enum ForkSessionError {
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
     Status404(models::ErrorResponse),
+    Status409(models::ErrorResponse),
     Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
     Status503(models::ErrorResponse),

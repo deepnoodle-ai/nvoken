@@ -21,6 +21,7 @@ export const Operation = {
     CreateInvocation: 'create_invocation',
     CreateAgentDefinition: 'create_agent_definition',
     GetAgentDefinition: 'get_agent_definition',
+    ListAgentDefinitions: 'list_agent_definitions',
     UpdateAgentDefinition: 'update_agent_definition',
     CreateSession: 'create_session',
     GetAgent: 'get_agent',

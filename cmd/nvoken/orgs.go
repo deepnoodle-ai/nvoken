@@ -15,8 +15,12 @@ func registerOrgCommands(app *cli.App) {
 		Flags(cli.String("external-ref").Help("Unique identity-provider Org identifier; makes registration idempotent")).
 		Run(runOrgRegister)
 	orgs.Command("get").Args("org-id").Run(runOrgGet)
-	orgs.Command("list").Run(runOrgList)
+	orgs.Command("list").
+		Flags(cli.String("status").Enum("active", "archived", "all").Help("Filter by archive status; defaults to active")).
+		Run(runOrgList)
 	orgs.Command("update").Args("org-id", "display-name").Run(runOrgUpdate)
+	orgs.Command("archive").Args("org-id").Run(runOrgArchive)
+	orgs.Command("restore").Args("org-id").Run(runOrgRestore)
 }
 
 func runOrgRegister(command *cli.Context) error {
@@ -50,7 +54,9 @@ func runOrgList(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	orgs, err := client.ListOrgs(command.Context())
+	orgs, err := client.ListOrgs(command.Context(), nvoken.ListOrgsOptions{
+		Status: optionalArchiveStatus(command.String("status")),
+	})
 	if err != nil {
 		return err
 	}
@@ -62,6 +68,22 @@ func runOrgList(command *cli.Context) error {
 		}
 		return nil
 	})
+}
+
+func runOrgArchive(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	return client.ArchiveOrg(command.Context(), command.Arg(0))
+}
+
+func runOrgRestore(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	return client.RestoreOrg(command.Context(), command.Arg(0))
 }
 
 func runOrgUpdate(command *cli.Context) error {

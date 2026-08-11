@@ -39,12 +39,24 @@ import {
     UpdateOrgRequestToJSON,
 } from '../models/UpdateOrgRequest.js';
 
+export interface ArchiveOrgRequest {
+    orgId: string;
+}
+
 export interface GetOrgRequest {
     orgId: string;
 }
 
+export interface ListOrgsRequest {
+    status?: ListOrgsStatusEnum;
+}
+
 export interface RegisterOrgOperationRequest {
     registerOrgRequest: RegisterOrgRequest;
+}
+
+export interface RestoreOrgRequest {
+    orgId: string;
 }
 
 export interface UpdateOrgOperationRequest {
@@ -56,6 +68,60 @@ export interface UpdateOrgOperationRequest {
  *
  */
 export class OrgsApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for archiveOrg without sending the request
+     */
+    async archiveOrgRequestOpts(requestParameters: ArchiveOrgRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['orgId'] == null) {
+            throw new runtime.RequiredError(
+                'orgId',
+                'Required parameter "orgId" was null or undefined when calling archiveOrg().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/orgs/{org_id}`;
+        urlPath = urlPath.replace('{org_id}', encodeURIComponent(String(requestParameters['orgId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Marks the Org out of service. Every App it owns must be archived first; this is an explicit precondition rather than a cascade, so no irreversible side effect hides inside a reversible operation.  Nothing is destroyed. An archived Org refuses App registration into it and Org-bound credential issuance with `409 org_archived`, while Org reads and org-scoped reporting stay open. Archiving requires the same authority as updating the Org, and repeating it is a successful no-op.
+     * Archive an org
+     */
+    async archiveOrgRaw(requestParameters: ArchiveOrgRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.archiveOrgRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Marks the Org out of service. Every App it owns must be archived first; this is an explicit precondition rather than a cascade, so no irreversible side effect hides inside a reversible operation.  Nothing is destroyed. An archived Org refuses App registration into it and Org-bound credential issuance with `409 org_archived`, while Org reads and org-scoped reporting stay open. Archiving requires the same authority as updating the Org, and repeating it is a successful no-op.
+     * Archive an org
+     */
+    async archiveOrg(requestParameters: ArchiveOrgRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.archiveOrgRaw(requestParameters, initOverrides);
+    }
 
     /**
      * Creates request options for getOrg without sending the request
@@ -115,8 +181,12 @@ export class OrgsApi extends runtime.BaseAPI {
     /**
      * Creates request options for listOrgs without sending the request
      */
-    async listOrgsRequestOpts(): Promise<runtime.RequestOpts> {
+    async listOrgsRequestOpts(requestParameters: ListOrgsRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
+
+        if (requestParameters['status'] != null) {
+            queryParameters['status'] = requestParameters['status'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -140,22 +210,22 @@ export class OrgsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.
+     * Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.  Archived Orgs are excluded unless `status` asks for them.
      * List registered orgs
      */
-    async listOrgsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<OrgList>> {
-        const requestOptions = await this.listOrgsRequestOpts();
+    async listOrgsRaw(requestParameters: ListOrgsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<OrgList>> {
+        const requestOptions = await this.listOrgsRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
         return new runtime.JSONApiResponse(response, (jsonValue) => OrgListFromJSON(jsonValue));
     }
 
     /**
-     * Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.
+     * Returns the Orgs visible to the caller. Installation machine credentials and admin issuer tokens see every Org; an Org-scoped credential sees only its own Org. App-scoped credentials and non-admin installation issuer tokens cannot list Orgs.  Archived Orgs are excluded unless `status` asks for them.
      * List registered orgs
      */
-    async listOrgs(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<OrgList> {
-        const response = await this.listOrgsRaw(initOverrides);
+    async listOrgs(requestParameters: ListOrgsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<OrgList> {
+        const response = await this.listOrgsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -197,7 +267,7 @@ export class OrgsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.
+     * Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.  Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
      * Register an org
      */
     async registerOrgRaw(requestParameters: RegisterOrgOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Org>> {
@@ -208,12 +278,66 @@ export class OrgsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.
+     * Registers a thin customer ownership boundary. This requires an installation Operator credential or an admin issuer token. When `external_ref` names an existing Org, the existing resource is returned unchanged so register-on-first-login is race-safe and idempotent.  Orgs are never hard-deleted; `DELETE /v1/orgs/{org_id}` archives.
      * Register an org
      */
     async registerOrg(requestParameters: RegisterOrgOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Org> {
         const response = await this.registerOrgRaw(requestParameters, initOverrides);
         return await response.value();
+    }
+
+    /**
+     * Creates request options for restoreOrg without sending the request
+     */
+    async restoreOrgRequestOpts(requestParameters: RestoreOrgRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['orgId'] == null) {
+            throw new runtime.RequiredError(
+                'orgId',
+                'Required parameter "orgId" was null or undefined when calling restoreOrg().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/orgs/{org_id}/restore`;
+        urlPath = urlPath.replace('{org_id}', encodeURIComponent(String(requestParameters['orgId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Clears the Org\'s archive tombstone. There is no ordering precondition and nothing else is restored: Apps archived before the Org stay archived. Restoring a live Org is a successful no-op.
+     * Restore an archived org
+     */
+    async restoreOrgRaw(requestParameters: RestoreOrgRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.restoreOrgRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Clears the Org\'s archive tombstone. There is no ordering precondition and nothing else is restored: Apps archived before the Org stay archived. Restoring a live Org is a successful no-op.
+     * Restore an archived org
+     */
+    async restoreOrg(requestParameters: RestoreOrgRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.restoreOrgRaw(requestParameters, initOverrides);
     }
 
     /**
@@ -282,3 +406,13 @@ export class OrgsApi extends runtime.BaseAPI {
     }
 
 }
+
+/**
+ * @export
+ */
+export const ListOrgsStatusEnum = {
+    Active: 'active',
+    Archived: 'archived',
+    All: 'all'
+} as const;
+export type ListOrgsStatusEnum = typeof ListOrgsStatusEnum[keyof typeof ListOrgsStatusEnum];

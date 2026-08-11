@@ -59,6 +59,10 @@ import {
     UpdateAppRequestToJSON,
 } from '../models/UpdateAppRequest.js';
 
+export interface ArchiveAppRequest {
+    appId: string;
+}
+
 export interface CreateAppClientKeyRequest {
     appId: string;
     createClientKeyRequest: CreateClientKeyRequest;
@@ -74,10 +78,15 @@ export interface ListAppClientKeysRequest {
 
 export interface ListAppsRequest {
     externalRef?: string;
+    status?: ListAppsStatusEnum;
 }
 
 export interface RegisterAppOperationRequest {
     registerAppRequest: RegisterAppRequest;
+}
+
+export interface RestoreAppRequest {
+    appId: string;
 }
 
 export interface RevokeAppClientKeyRequest {
@@ -94,6 +103,60 @@ export interface UpdateAppOperationRequest {
  *
  */
 export class AppsApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for archiveApp without sending the request
+     */
+    async archiveAppRequestOpts(requestParameters: ArchiveAppRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['appId'] == null) {
+            throw new runtime.RequiredError(
+                'appId',
+                'Required parameter "appId" was null or undefined when calling archiveApp().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/apps/{app_id}`;
+        urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Marks the App out of service. Nothing is destroyed and no other resource\'s lifecycle changes: the App\'s credentials keep authenticating, its client keys stay registered, and its Agent Definitions are untouched.  While archived, exactly these operations return `409 app_archived`: Session create and fork, Invocation create, Invocation resume, Agent Definition create and replace, client-key create, App-bound credential issuance, provider-key create, and credit allocation. Everything else behaves as on a live App — reads and lists, cancel, interrupt, nudges, tool-result submission, Session update and erasure, App `PATCH`, and credential, client-key, and provider-key rotation and revocation — so a draining host can let running turns settle and then clean up. Usage reporting keeps counting the App\'s spend.  Archiving requires the same authority as updating the App: an Org or installation credential. A credential bound to the App cannot archive or restore it. Repeating the call is a successful no-op.
+     * Archive an app
+     */
+    async archiveAppRaw(requestParameters: ArchiveAppRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.archiveAppRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Marks the App out of service. Nothing is destroyed and no other resource\'s lifecycle changes: the App\'s credentials keep authenticating, its client keys stay registered, and its Agent Definitions are untouched.  While archived, exactly these operations return `409 app_archived`: Session create and fork, Invocation create, Invocation resume, Agent Definition create and replace, client-key create, App-bound credential issuance, provider-key create, and credit allocation. Everything else behaves as on a live App — reads and lists, cancel, interrupt, nudges, tool-result submission, Session update and erasure, App `PATCH`, and credential, client-key, and provider-key rotation and revocation — so a draining host can let running turns settle and then clean up. Usage reporting keeps counting the App\'s spend.  Archiving requires the same authority as updating the App: an Org or installation credential. A credential bound to the App cannot archive or restore it. Repeating the call is a successful no-op.
+     * Archive an app
+     */
+    async archiveApp(requestParameters: ArchiveAppRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.archiveAppRaw(requestParameters, initOverrides);
+    }
 
     /**
      * Creates request options for createAppClientKey without sending the request
@@ -280,6 +343,10 @@ export class AppsApi extends runtime.BaseAPI {
             queryParameters['external_ref'] = requestParameters['externalRef'];
         }
 
+        if (requestParameters['status'] != null) {
+            queryParameters['status'] = requestParameters['status'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
 
         if (this.configuration && this.configuration.accessToken) {
@@ -302,7 +369,7 @@ export class AppsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the Apps this credential can see. An App-scoped credential sees only that App, an Org-scoped credential sees the Apps contained by its Org, and an installation credential sees every registered App. An exact `external_ref` filter narrows that visible set during the staged console migration.
+     * Returns the Apps this credential can see. An App-scoped credential sees only that App, an Org-scoped credential sees the Apps contained by its Org, and an installation credential sees every registered App. An exact `external_ref` filter narrows that visible set during the staged console migration. Archived Apps are excluded unless `status` asks for them.
      * List registered apps
      */
     async listAppsRaw(requestParameters: ListAppsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AppList>> {
@@ -313,7 +380,7 @@ export class AppsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the Apps this credential can see. An App-scoped credential sees only that App, an Org-scoped credential sees the Apps contained by its Org, and an installation credential sees every registered App. An exact `external_ref` filter narrows that visible set during the staged console migration.
+     * Returns the Apps this credential can see. An App-scoped credential sees only that App, an Org-scoped credential sees the Apps contained by its Org, and an installation credential sees every registered App. An exact `external_ref` filter narrows that visible set during the staged console migration. Archived Apps are excluded unless `status` asks for them.
      * List registered apps
      */
     async listApps(requestParameters: ListAppsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AppList> {
@@ -376,6 +443,60 @@ export class AppsApi extends runtime.BaseAPI {
     async registerApp(requestParameters: RegisterAppOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AppRegistration> {
         const response = await this.registerAppRaw(requestParameters, initOverrides);
         return await response.value();
+    }
+
+    /**
+     * Creates request options for restoreApp without sending the request
+     */
+    async restoreAppRequestOpts(requestParameters: RestoreAppRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['appId'] == null) {
+            throw new runtime.RequiredError(
+                'appId',
+                'Required parameter "appId" was null or undefined when calling restoreApp().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/apps/{app_id}/restore`;
+        urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Clears the App\'s archive tombstone and reopens admission. Nothing else is restored, and the App\'s Org may still be archived. Restoring a live App is a successful no-op.
+     * Restore an archived app
+     */
+    async restoreAppRaw(requestParameters: RestoreAppRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.restoreAppRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Clears the App\'s archive tombstone and reopens admission. Nothing else is restored, and the App\'s Org may still be archived. Restoring a live App is a successful no-op.
+     * Restore an archived app
+     */
+    async restoreApp(requestParameters: RestoreAppRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.restoreAppRaw(requestParameters, initOverrides);
     }
 
     /**
@@ -506,3 +627,13 @@ export class AppsApi extends runtime.BaseAPI {
     }
 
 }
+
+/**
+ * @export
+ */
+export const ListAppsStatusEnum = {
+    Active: 'active',
+    Archived: 'archived',
+    All: 'all'
+} as const;
+export type ListAppsStatusEnum = typeof ListAppsStatusEnum[keyof typeof ListAppsStatusEnum];

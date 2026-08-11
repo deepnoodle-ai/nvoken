@@ -13,6 +13,19 @@ use crate::{apis::ResponseContent, models};
 use reqwest;
 use serde::{de::Error as _, Deserialize, Serialize};
 
+/// struct for typed errors of method [`archive_agent_definition`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ArchiveAgentDefinitionError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`create_agent_definition`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -20,6 +33,7 @@ pub enum CreateAgentDefinitionError {
     Status400(models::ErrorResponse),
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
+    Status409(models::ErrorResponse),
     Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
     Status503(models::ErrorResponse),
@@ -38,6 +52,32 @@ pub enum GetAgentDefinitionError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`list_agent_definitions`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ListAgentDefinitionsError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`restore_agent_definition`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RestoreAgentDefinitionError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`update_agent_definition`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -46,11 +86,54 @@ pub enum UpdateAgentDefinitionError {
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
     Status404(models::ErrorResponse),
+    Status409(models::ErrorResponse),
     Status412(models::ErrorResponse),
     Status428(models::ErrorResponse),
     Status500(models::ErrorResponse),
     Status503(models::ErrorResponse),
     UnknownValue(serde_json::Value),
+}
+
+/// Marks the resource retired. Invocation admission that resolves it — by `agent_definition_id` or by a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
+pub async fn archive_agent_definition(
+    configuration: &configuration::Configuration,
+    agent_definition_id: &str,
+) -> Result<(), Error<ArchiveAgentDefinitionError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_agent_definition_id = agent_definition_id;
+
+    let uri_str = format!(
+        "{}/v1/agent-definitions/{agent_definition_id}",
+        configuration.base_path,
+        agent_definition_id = crate::apis::urlencode(p_path_agent_definition_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::DELETE, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ArchiveAgentDefinitionError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
 }
 
 /// Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
@@ -148,6 +231,108 @@ pub async fn get_agent_definition(
     } else {
         let content = resp.text().await?;
         let entity: Option<GetAgentDefinitionError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+pub async fn list_agent_definitions(
+    configuration: &configuration::Configuration,
+    include_archived: Option<bool>,
+    cursor: Option<&str>,
+    limit: Option<u32>,
+) -> Result<models::AgentDefinitionResourceList, Error<ListAgentDefinitionsError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_include_archived = include_archived;
+    let p_query_cursor = cursor;
+    let p_query_limit = limit;
+
+    let uri_str = format!("{}/v1/agent-definitions", configuration.base_path);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref param_value) = p_query_include_archived {
+        req_builder = req_builder.query(&[("include_archived", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_cursor {
+        req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::AgentDefinitionResourceList`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::AgentDefinitionResourceList`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ListAgentDefinitionsError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Clears the resource's archive tombstone so Invocation admission resolves it again. Restoring a live resource is a successful no-op.
+pub async fn restore_agent_definition(
+    configuration: &configuration::Configuration,
+    agent_definition_id: &str,
+) -> Result<(), Error<RestoreAgentDefinitionError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_agent_definition_id = agent_definition_id;
+
+    let uri_str = format!(
+        "{}/v1/agent-definitions/{agent_definition_id}/restore",
+        configuration.base_path,
+        agent_definition_id = crate::apis::urlencode(p_path_agent_definition_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<RestoreAgentDefinitionError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,

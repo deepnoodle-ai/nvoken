@@ -42,6 +42,9 @@ pub struct App {
     pub browser_access: Option<Box<models::BrowserAccess>>,
     #[serde(rename = "created_at")]
     pub created_at: chrono::DateTime<chrono::FixedOffset>,
+    /// When the App was archived, or null while it is live. An archived App refuses admission and grant-minting with `409 app_archived` while every read, settlement, erasure, configuration, and revocation path stays open. Its credentials keep authenticating.
+    #[serde(rename = "archived_at", deserialize_with = "Option::deserialize")]
+    pub archived_at: Option<chrono::DateTime<chrono::FixedOffset>>,
 }
 
 impl App {
@@ -55,6 +58,7 @@ impl App {
         default_rate_limits: Option<models::AppDefaultRateLimits>,
         browser_access: Option<models::BrowserAccess>,
         created_at: chrono::DateTime<chrono::FixedOffset>,
+        archived_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     ) -> App {
         App {
             id,
@@ -74,6 +78,7 @@ impl App {
                 None
             },
             created_at,
+            archived_at,
         }
     }
 }
