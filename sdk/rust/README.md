@@ -269,6 +269,52 @@ field. An `Agent` always sends its definition inline, because it serves the host
 tool handlers declared in it, which is why `AgentOptions` writes the definition's
 fields through its own builders: there is no choice there to express.
 
+## Record changing application state
+
+Keep `instructions` static. Product state that changes between turns — a board
+snapshot, customer facts, the current policy — belongs in `context`:
+
+```rust
+let answer = agent
+    .text(
+        "Can I refund the duplicate charge?",
+        AgentInvocationOptions {
+            session_key: Some("ticket-483".to_owned()),
+            context: vec![
+                ContextItem::new("customer", ContextTier::Contextual, "plan: pro"),
+                ContextItem::new(
+                    "refund-policy",
+                    ContextTier::Operator,
+                    "Self-serve refunds cap at 50 USD",
+                ),
+            ],
+            ..Default::default()
+        },
+    )
+    .await?;
+```
+
+A name is a stable identity. Send it once and nvoken records it as a leading
+message the model reads as `app-customer`; omit that reserved prefix here.
+Send the same name again only when its value changes — a byte-identical resend
+is accepted but adds no message, so a stateless host may resend its whole
+snapshot every turn and get the same transcript as a host that tracks changes.
+
+Use `ContextTier::Contextual` for conversation-adjacent facts and
+`ContextTier::Operator` for policy or other application-authoritative state.
+Context is Session history, not an Agent Definition field: it never changes
+`agent_definition_id`, and later turns keep sending it to the model even when
+you omit it. That is what keeps the prompt prefix stable enough for provider
+caching, which rewriting the same state into `instructions` would break on every
+turn.
+
+The list is order-sensitive and part of idempotency, so a replay that reorders
+or edits an item conflicts rather than updating it. A request accepts at most
+eight items, 8 KiB per item, and 16 KiB in total; the SDK checks all three
+before the request leaves the process. A Session may accumulate at most 16
+distinct names, which only the service can check. Retire a name by superseding
+it with a short current value such as `"ticket: closed"`.
+
 ## Remote MCP tools
 
 The durable-handle facade also covers server declarations and stateless

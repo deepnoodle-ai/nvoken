@@ -255,6 +255,43 @@ rejects a request carrying both or neither before it reaches the network. An
 handlers declared in it, which is why `AgentOptions` spells the definition's
 fields flat rather than nesting them: there is no choice there to express.
 
+## Record changing application state
+
+Keep `Instructions` static. Product state that changes between turns — a board
+snapshot, customer facts, the current policy — belongs in `Context`:
+
+```go
+sessionKey := "ticket-483"
+answer, err := agent.Text(ctx, "Can I refund the duplicate charge?", nvoken.AgentInvocationOptions{
+	SessionKey: &sessionKey,
+	Context: []nvoken.ContextItem{
+		{Name: "customer", Tier: nvoken.ContextTierContextual, Content: "plan: pro"},
+		{Name: "refund-policy", Tier: nvoken.ContextTierOperator, Content: "Self-serve refunds cap at 50 USD"},
+	},
+})
+```
+
+A name is a stable identity. Send it once and nvoken records it as a leading
+message the model reads as `app-customer`; omit that reserved prefix here.
+Send the same name again only when its value changes — a byte-identical resend
+is accepted but adds no message, so a stateless host may resend its whole
+snapshot every turn and get the same transcript as a host that tracks changes.
+
+Use `ContextTierContextual` for conversation-adjacent facts and
+`ContextTierOperator` for policy or other application-authoritative state.
+Context is Session history, not an Agent Definition field: it never changes
+`AgentDefinitionID`, and later turns keep sending it to the model even when you
+omit it. That is what keeps the prompt prefix stable enough for provider
+caching, which rewriting the same state into `Instructions` would break on every
+turn.
+
+The list is order-sensitive and part of idempotency, so a replay that reorders
+or edits an item conflicts rather than updating it. A request accepts at most
+eight items, 8 KiB per item, and 16 KiB in total; the SDK checks all three
+before the request leaves the process. A Session may accumulate at most 16
+distinct names, which only the service can check. Retire a name by superseding
+it with a short current value such as `"ticket: closed"`.
+
 ## Remote MCP tools
 
 Probe the exact projected catalog, then reuse the same declaration on an
