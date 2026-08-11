@@ -3,6 +3,7 @@
 // in resolveEnvironment, the only place that touches the filesystem.
 
 import {
+  AgentDefinitionsApi,
   AgentsApi,
   BudgetsApi,
   IdentityApi,
@@ -14,11 +15,13 @@ import {
 } from "./generated/apis/index.js";
 import type {
   Agent as AgentIdentity,
+  AgentDefinitionRegistration,
   AgentList,
   Budget,
   BudgetScope,
   CreateInvocationRequest,
   CreateSessionRequest,
+  RegisterAgentDefinitionRequest,
   ForkSessionRequest,
   Invocation,
   InvocationChange,
@@ -620,8 +623,14 @@ export interface SessionOptions {
   metadata?: Metadata;
 }
 
-/** Execution controls admitted with an Invocation. */
-export interface InvocationExecutionOptions<TOutput extends object = JsonObject> {
+/**
+ * The immutable execution configuration a turn runs with. nvoken
+ * content-addresses it, so two turns whose definitions serialize identically
+ * share one Agent Definition and one `agentDefinitionId`. Identity, session
+ * selection, input, idempotency, webhooks, metadata, and provider key selection
+ * are durable elsewhere and deliberately absent here.
+ */
+export interface AgentDefinition<TOutput extends object = JsonObject> {
   instructions?: string;
   model: Model;
   sampling?: Sampling;
@@ -687,12 +696,16 @@ export type ToolChoice =
   | { mode: "auto" | "none" | "required"; name?: never }
   | { mode: "named"; name: string };
 
+/**
+ * Declares a remote MCP server. It carries no secrets: an Agent Definition is
+ * content-addressed and shared across turns, so authentication headers travel
+ * per Invocation in {@link InvokeRequestBase.mcpServerHeaders} instead.
+ */
 export interface MCPServerOptions {
   name: string;
   url: string;
   transport?: "streamable_http";
   allowedTools?: Iterable<string>;
-  headers?: Record<string, string>;
   timeouts?: MCPTimeouts;
 }
 
@@ -704,9 +717,18 @@ export function mcpServer(options: MCPServerOptions): MCPServer {
     allowedTools: options.allowedTools === undefined
       ? undefined
       : new Set(options.allowedTools),
-    headers: options.headers === undefined ? undefined : { ...options.headers },
     timeouts: options.timeouts === undefined ? undefined : { ...options.timeouts },
   };
+}
+
+/**
+ * Secret headers for one MCP server named by the selected Agent Definition.
+ * They are encrypted for a single turn, and are never stored in, hashed into,
+ * or returned with the Agent Definition.
+ */
+export interface MCPServerHeaders {
+  name: string;
+  headers: Record<string, string>;
 }
 
 export type InvokeInput = string | readonly InputBlock[];
@@ -734,6 +756,12 @@ interface InvokeRequestBase {
   webhook?: WebhookTarget;
   providerKeys?: ProviderKeySelection[];
   /**
+   * Per-turn secret headers, keyed to MCP server names in the selected Agent
+   * Definition. They live here rather than on {@link MCPServer} because an
+   * Agent Definition is content-addressed and reused across turns.
+   */
+  mcpServerHeaders?: readonly MCPServerHeaders[];
+  /**
    * Opaque host correlation data recorded on this Invocation. It is part of
    * the admitted input, so it is immutable and material to idempotency: a
    * replay carrying different metadata conflicts rather than updating it.
@@ -743,26 +771,18 @@ interface InvokeRequestBase {
   metadata?: Metadata;
 }
 
-type InlineDefinitionRequest<TOutput extends object> = InvocationExecutionOptions<TOutput> & {
-  definitionId?: never;
+type InlineAgentDefinitionRequest<TOutput extends object> = {
+  agentDefinition: AgentDefinition<TOutput>;
+  agentDefinitionId?: never;
 };
 
-type ReferencedDefinitionRequest = {
-  definitionId: string;
-  instructions?: never;
-  model?: never;
-  sampling?: never;
-  reasoning?: never;
-  toolChoice?: never;
-  limits?: never;
-  tools?: never;
-  mcpServers?: never;
-  providerTools?: never;
-  outputSchema?: never;
+type ReferencedAgentDefinitionRequest = {
+  agentDefinitionId: string;
+  agentDefinition?: never;
 };
 
 export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBase & (
-  InlineDefinitionRequest<TOutput> | ReferencedDefinitionRequest
+  InlineAgentDefinitionRequest<TOutput> | ReferencedAgentDefinitionRequest
 ) & (
   | { sessionId: string; sessionKey?: never; sessionOptions?: SessionOptions }
   | { sessionKey: string; sessionId?: never; sessionOptions?: SessionOptions }
@@ -794,15 +814,30 @@ export interface ClientOptions {
   retry?: RetryPolicy;
 }
 
-/** Agent defaults for the flat Invocation execution controls. */
+/**
+ * The Agent Definition fields read flat here rather than nested under
+ * `agentDefinition`. An Agent always sends its definition inline, because it
+ * serves the host tool handlers declared in it, so there is no inline-or-by-ID
+ * choice for a wrapper to express. Reuse a registered `agentDefinitionId`
+ * through {@link Client.invoke} instead. Spreading a whole definition
+ * (`{ agentKey, ...definition }`) therefore also works. `model` may be omitted
+ * when the Client carries a default.
+ */
 export type AgentOptions<TOutput extends object = JsonObject> =
-  Omit<InvocationExecutionOptions<TOutput>, "model"> & {
-  agentKey: string;
-  model?: Model;
-  providerKeys?: ProviderKeySelection[];
-  webhook?: WebhookTarget;
-  onBudgetExhausted?: BudgetExhaustionBehavior;
-};
+  & Omit<AgentDefinition<TOutput>, "model">
+  & {
+    agentKey: string;
+    model?: Model;
+    /**
+     * Per-turn secret headers for the MCP servers this Agent declares. They
+     * stay outside the Agent Definition so its content-addressed identity does
+     * not depend on a secret.
+     */
+    mcpServerHeaders?: readonly MCPServerHeaders[];
+    providerKeys?: ProviderKeySelection[];
+    webhook?: WebhookTarget;
+    onBudgetExhausted?: BudgetExhaustionBehavior;
+  };
 
 export interface InvocationOptions {
   tenantKey?: string;
@@ -1009,6 +1044,7 @@ export class Client {
   readonly agents: AgentsApi;
   readonly budgets: BudgetsApi;
   readonly invocations: InvocationsApi;
+  readonly agentDefinitions: AgentDefinitionsApi;
   readonly mcp: MCPApi;
   readonly models: ModelsApi;
   readonly providerKeys: ProviderKeysApi;
@@ -1045,6 +1081,7 @@ export class Client {
     this.agents = new AgentsApi(this.configuration);
     this.budgets = new BudgetsApi(this.configuration);
     this.invocations = new InvocationsApi(this.configuration);
+    this.agentDefinitions = new AgentDefinitionsApi(this.configuration);
     this.mcp = new MCPApi(this.configuration);
     this.models = new ModelsApi(this.configuration);
     this.providerKeys = new ProviderKeysApi(this.configuration);
@@ -1074,6 +1111,7 @@ export class Client {
     agents: AgentsApi;
     budgets: BudgetsApi;
     invocations: InvocationsApi;
+    agentDefinitions: AgentDefinitionsApi;
     mcp: MCPApi;
     models: ModelsApi;
     providerKeys: ProviderKeysApi;
@@ -1084,6 +1122,7 @@ export class Client {
       agents: this.agents,
       budgets: this.budgets,
       invocations: this.invocations,
+      agentDefinitions: this.agentDefinitions,
       mcp: this.mcp,
       models: this.models,
       providerKeys: this.providerKeys,
@@ -1122,13 +1161,25 @@ export class Client {
     );
   }
 
+  /**
+   * Discovers the tools a remote MCP server projects. Headers are a separate
+   * argument because {@link MCPServer} is part of a content-addressed Agent
+   * Definition and therefore carries no secrets; these are used for this one
+   * discovery request and never stored.
+   */
   listMcpTools(
     server: MCPServer,
+    headers?: Record<string, string>,
     signal?: AbortSignal,
   ): Promise<MCPListToolsResponse> {
     return this.replaySafe(
       () => this.mcp.listMCPTools(
-        { mCPListToolsRequest: { server } },
+        {
+          mCPListToolsRequest: {
+            server,
+            headers: headers === undefined ? undefined : { ...headers },
+          },
+        },
         { signal },
       ),
       signal,
@@ -1453,19 +1504,20 @@ export class Client {
         "onBudgetExhausted must be stop or pause",
       );
     }
-    if (request.definitionId !== undefined) {
-      if (!request.definitionId) {
-        throw new NvokenError("validation", "definitionId cannot be empty");
+    if ((request.agentDefinition === undefined) === (request.agentDefinitionId === undefined)) {
+      throw new NvokenError(
+        "validation",
+        "supply exactly one of agentDefinition and agentDefinitionId",
+      );
+    }
+    if (request.agentDefinitionId !== undefined) {
+      if (!request.agentDefinitionId) {
+        throw new NvokenError("validation", "agentDefinitionId cannot be empty");
       }
     } else {
-      validateModel(request.model);
+      validateAgentDefinition(request.agentDefinition);
     }
-    if (
-      request.instructions !== undefined
-      && !request.instructions.trim()
-    ) {
-      throw new NvokenError("validation", "instructions cannot be blank");
-    }
+    validateMCPServerHeaders(request.mcpServerHeaders, request.agentDefinition);
     const idempotencyKey = request.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
     const generatedRequest = invocationRequestToWire(request, idempotencyKey);
     const ack = await this.replaySafe(
@@ -1484,7 +1536,37 @@ export class Client {
       ack.status,
       ack.deduplicated,
       ack.deadlineAt,
-      request.model?.provider,
+      request.agentDefinition?.model?.provider,
+    );
+  }
+
+  /**
+   * Stores one Agent Definition without starting a turn, and returns the
+   * content-addressed ID later Invocations reuse through
+   * {@link InvokeRequest.agentDefinitionId}.
+   *
+   * Registration is idempotent by content rather than by key. A first
+   * registration, a repeat, and a definition an earlier turn already stored all
+   * return the same response, so callers need not track whether they have
+   * registered before.
+   *
+   * Only the definition's own content is checked here. Installation state, the
+   * App callback signing key, budgets, provider keys, and model lifecycle are
+   * checked again when a turn is admitted. A callback tool can therefore be
+   * registered before its App signing key exists, while an Invocation using it
+   * is still refused until delivery is configured.
+   */
+  async registerAgentDefinition<TOutput extends object = JsonObject>(
+    definition: AgentDefinition<TOutput>,
+    signal?: AbortSignal,
+  ): Promise<AgentDefinitionRegistration> {
+    validateAgentDefinition(definition);
+    return await this.replaySafe(
+      () => this.agentDefinitions.registerAgentDefinition(
+        { registerAgentDefinitionRequest: agentDefinitionToWire(definition) },
+        { signal },
+      ),
+      signal,
     );
   }
 
@@ -1960,8 +2042,15 @@ export interface AnswerPendingToolCallsOptions {
 
 export class Agent<TOutput extends object = JsonObject> {
   readonly model: Model;
-  private readonly execution: Omit<InvocationExecutionOptions<TOutput>, "model">;
+  private readonly definition: AgentDefinition<TOutput>;
   private readonly hostTools: Map<string, HostTool<object>>;
+  /**
+   * Tools nvoken delivers over HTTPS. They can appear in a waiting Invocation's
+   * pending calls once an endpoint has acknowledged a delivery without settling
+   * it, and are answered by whatever accepted that acknowledgement rather than
+   * from local handlers.
+   */
+  private readonly callbackTools: Set<string>;
 
   constructor(
     readonly client: Client,
@@ -1973,20 +2062,27 @@ export class Agent<TOutput extends object = JsonObject> {
     const {
       agentKey: _agentKey,
       model,
+      mcpServerHeaders: _mcpServerHeaders,
       providerKeys: _providerKeys,
-      webhook: _notify,
+      webhook: _webhook,
+      onBudgetExhausted: _onBudgetExhausted,
       ...execution
     } = options;
-    this.execution = execution;
-    if (this.execution.instructions !== undefined && !this.execution.instructions.trim()) {
+    if (execution.instructions !== undefined && !execution.instructions.trim()) {
       throw new NvokenError("validation", "instructions cannot be blank");
     }
     this.model = model ?? client.defaultModel ?? missingModel();
     validateModel(this.model);
+    this.definition = { ...execution, model: this.model } as AgentDefinition<TOutput>;
     this.hostTools = new Map(
-      (this.execution.tools ?? [])
+      (this.definition.tools ?? [])
         .filter((tool): tool is HostTool<object> => tool.mode === "host")
         .map((tool) => [tool.name, tool]),
+    );
+    this.callbackTools = new Set(
+      (this.definition.tools ?? [])
+        .filter((tool) => tool.mode === "callback")
+        .map((tool) => tool.name),
     );
   }
 
@@ -2006,15 +2102,15 @@ export class Agent<TOutput extends object = JsonObject> {
     options: InvocationOptions,
     idempotencyKey = options.idempotencyKey,
   ): InvokeRequest<TOutput> {
-    const request: InvokeRequestBase & InlineDefinitionRequest<TOutput> = {
+    const request: InvokeRequestBase & InlineAgentDefinitionRequest<TOutput> = {
       agentKey: this.options.agentKey,
       tenantKey: options.tenantKey,
       idempotencyKey,
       ifActive: options.ifActive,
       onBudgetExhausted: options.onBudgetExhausted ?? this.options.onBudgetExhausted,
       input,
-      ...this.execution,
-      model: this.model,
+      agentDefinition: this.definition,
+      mcpServerHeaders: this.options.mcpServerHeaders,
       providerKeys: this.options.providerKeys,
       // A per-call target overrides the agent default so one Agent can webhook
       // different endpoints without a second Agent.
@@ -2611,42 +2707,31 @@ function sessionOptionsToWire(
   };
 }
 
-function invocationRequestToWire<TOutput extends object>(
-  request: InvokeRequest<TOutput>,
-  idempotencyKey: string,
-): CreateInvocationRequest {
-  const outputSchema = request.outputSchema
-    ? schemaToJSON(request.outputSchema, "output")
+/**
+ * Renders one Agent Definition. Invocation creation and registration both send
+ * exactly this object, so a field either reaches the wire for both or neither.
+ */
+function agentDefinitionToWire<TOutput extends object>(
+  definition: AgentDefinition<TOutput>,
+): RegisterAgentDefinitionRequest {
+  const outputSchema = definition.outputSchema
+    ? schemaToJSON(definition.outputSchema, "output")
     : undefined;
   if (outputSchema) preflightOutputSchema(outputSchema);
-  preflightInput(request.input);
   return {
-    agentKey: request.agentKey,
-    tenantKey: request.tenantKey,
-    sessionId: request.sessionId,
-    sessionKey: request.sessionKey,
-    sessionOptions: sessionOptionsToWire(request.sessionOptions),
-    metadata: request.metadata === undefined ? undefined : { ...request.metadata },
-    idempotencyKey,
-    ifActive: request.ifActive,
-    onBudgetExhausted: request.onBudgetExhausted,
-    input: typeof request.input === "string"
-      ? request.input
-      : request.input.map((block) => inputBlockToWire(block)),
-    definitionId: request.definitionId,
-    instructions: request.instructions,
-    model: request.model,
-    sampling: request.sampling === undefined
+    instructions: definition.instructions,
+    model: definition.model,
+    sampling: definition.sampling === undefined
         ? undefined
-        : { ...request.sampling },
-    reasoning: request.reasoning === undefined
+        : { ...definition.sampling },
+    reasoning: definition.reasoning === undefined
         ? undefined
-        : { ...request.reasoning },
-    toolChoice: request.toolChoice === undefined
+        : { ...definition.reasoning },
+    toolChoice: definition.toolChoice === undefined
         ? undefined
-        : { ...request.toolChoice },
-    limits: request.limits,
-    tools: request.tools?.map((tool) => tool.mode === "builtin"
+        : { ...definition.toolChoice },
+    limits: definition.limits,
+    tools: definition.tools?.map((tool) => tool.mode === "builtin"
         ? {
           name: tool.name,
           mode: tool.mode,
@@ -2665,15 +2750,14 @@ function invocationRequestToWire<TOutput extends object>(
             mode: tool.mode,
             inputSchema: schemaToJSON(tool.inputSchema, "input"),
           }),
-    mcpServers: request.mcpServers?.map((server) => ({
+    mcpServers: definition.mcpServers?.map((server) => ({
         ...server,
         allowedTools: server.allowedTools === undefined
           ? undefined
           : new Set(server.allowedTools),
-        headers: server.headers === undefined ? undefined : { ...server.headers },
         timeouts: server.timeouts === undefined ? undefined : { ...server.timeouts },
       })),
-    providerTools: request.providerTools?.map((tool) => ({
+    providerTools: definition.providerTools?.map((tool) => ({
         type: tool.type,
         webSearch: {
           maxUses: tool.webSearch.maxUses,
@@ -2689,6 +2773,35 @@ function invocationRequestToWire<TOutput extends object>(
         },
       })),
     outputSchema,
+  };
+}
+
+function invocationRequestToWire<TOutput extends object>(
+  request: InvokeRequest<TOutput>,
+  idempotencyKey: string,
+): CreateInvocationRequest {
+  preflightInput(request.input);
+  return {
+    agentKey: request.agentKey,
+    tenantKey: request.tenantKey,
+    sessionId: request.sessionId,
+    sessionKey: request.sessionKey,
+    sessionOptions: sessionOptionsToWire(request.sessionOptions),
+    metadata: request.metadata === undefined ? undefined : { ...request.metadata },
+    idempotencyKey,
+    ifActive: request.ifActive,
+    onBudgetExhausted: request.onBudgetExhausted,
+    input: typeof request.input === "string"
+      ? request.input
+      : request.input.map((block) => inputBlockToWire(block)),
+    agentDefinitionId: request.agentDefinitionId,
+    agentDefinition: request.agentDefinition === undefined
+      ? undefined
+      : agentDefinitionToWire(request.agentDefinition),
+    mcpServerHeaders: request.mcpServerHeaders?.map((entry) => ({
+      name: entry.name,
+      headers: { ...entry.headers },
+    })),
     providerKeys: request.providerKeys,
     webhook: request.webhook === undefined ? undefined : {
       url: request.webhook.url,
@@ -2699,6 +2812,58 @@ function invocationRequestToWire<TOutput extends object>(
         : new Set(request.webhook.events),
     },
   };
+}
+
+/**
+ * Checks one Agent Definition on its own content. Installation state, the App
+ * signing key, budgets, provider keys, and model lifecycle are checked again
+ * when a turn is admitted.
+ */
+function validateAgentDefinition<TOutput extends object>(
+  definition: AgentDefinition<TOutput>,
+): void {
+  validateModel(definition.model);
+  if (definition.instructions !== undefined && !definition.instructions.trim()) {
+    throw new NvokenError("validation", "instructions cannot be blank");
+  }
+}
+
+/**
+ * Checks the per-turn MCP secret headers. With an inline definition every entry
+ * must name a server it declares; a referenced definition is opaque here, so
+ * those names are left to the service.
+ */
+function validateMCPServerHeaders<TOutput extends object>(
+  entries: readonly MCPServerHeaders[] | undefined,
+  definition: AgentDefinition<TOutput> | undefined,
+): void {
+  if (entries === undefined) return;
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (!entry.name) {
+      throw new NvokenError("validation", "mcpServerHeaders require a server name");
+    }
+    if (Object.keys(entry.headers ?? {}).length === 0) {
+      throw new NvokenError(
+        "validation",
+        `mcpServerHeaders for ${entry.name} require at least one header`,
+      );
+    }
+    if (seen.has(entry.name)) {
+      throw new NvokenError(
+        "validation",
+        `mcpServerHeaders name ${entry.name} is repeated`,
+      );
+    }
+    seen.add(entry.name);
+    if (definition === undefined) continue;
+    if (!definition.mcpServers?.some((server) => server.name === entry.name)) {
+      throw new NvokenError(
+        "validation",
+        `mcpServerHeaders name ${entry.name} matches no declared mcp server`,
+      );
+    }
+  }
 }
 
 /**

@@ -115,11 +115,11 @@ func run(ctx context.Context) error {
 		Name:         "scripted",
 		URL:          mcpURL,
 		AllowedTools: []string{"lookup"},
-		Headers: map[string]string{
-			"Authorization": "Bearer " + token,
-		},
 	}
-	catalog, err := client.ListMCPTools(ctx, server)
+	// The server declaration is part of a content-addressed Agent Definition, so
+	// the bearer token travels beside it rather than inside it.
+	headers := map[string]string{"Authorization": "Bearer " + token}
+	catalog, err := client.ListMCPTools(ctx, server, headers)
 	if err != nil {
 		return fmt.Errorf("discover scripted MCP tools: %w", err)
 	}
@@ -135,13 +135,18 @@ func run(ctx context.Context) error {
 			AgentKey:       "mcp-recovery-example",
 			IdempotencyKey: "mcp-recovery-" + strconv.FormatInt(time.Now().UnixNano(), 10),
 			Input:          "Look up fixture 42 and report its value.",
-			Instructions:   "Always call scripted__lookup with id 42 before answering.",
-			Model: nvoken.Model{
-				Provider: requiredEnvironment("NVOKEN_PROVIDER"),
-				ID:       requiredEnvironment("NVOKEN_MODEL"),
+			AgentDefinition: &nvoken.AgentDefinition{
+				Instructions: "Always call scripted__lookup with id 42 before answering.",
+				Model: nvoken.Model{
+					Provider: requiredEnvironment("NVOKEN_PROVIDER"),
+					ID:       requiredEnvironment("NVOKEN_MODEL"),
+				},
+				Limits:     &nvoken.Limits{MaxIterations: &maxIterations},
+				MCPServers: []nvoken.MCPServer{server},
 			},
-			Limits:     &nvoken.Limits{MaxIterations: &maxIterations},
-			MCPServers: []nvoken.MCPServer{server},
+			MCPServerHeaders: []nvoken.MCPServerHeaders{
+				{Name: server.Name, Headers: headers},
+			},
 		})
 		if err != nil {
 			return fmt.Errorf("admit MCP Invocation: %w", err)

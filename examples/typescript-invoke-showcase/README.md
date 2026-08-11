@@ -5,6 +5,8 @@ quickstart. It makes real provider requests and verifies:
 
 - two turns sharing one durable Session;
 - exact idempotent admission replay and changed-request conflict;
+- Agent Definition registration, its content-addressed identity, and reuse of a
+  registered `agentDefinitionId` on a later turn;
 - host ToolCall parking, Session visibility, result submission, and replay;
 - schema-bound host-tool input and structured output;
 - actionable waiting plus admission acknowledgement metadata;
@@ -36,7 +38,7 @@ npm run check --prefix examples/typescript-invoke-showcase
 
 The example uses a unique tenant, Agent key, Session key, and idempotency
 key namespace on every run. It prints identifiers and assertion results but
-never prints credentials. Expect up to nine small model requests. They may be
+never prints credentials. Expect up to ten small model requests. They may be
 billed by the configured provider.
 
 The local `file:` dependency intentionally targets `sdk/typescript`, so `dist/`

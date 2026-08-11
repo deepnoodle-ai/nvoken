@@ -131,6 +131,51 @@ pub fn verify_callback(
     })
 }
 
+/// The HTTP answer to one callback delivery.
+///
+/// Rendering it is left to the host's web framework: write `status`, and `body`
+/// when it is not `None`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallbackReply {
+    pub status: u16,
+    pub body: Option<String>,
+}
+
+/// Settles the ToolCall inline.
+///
+/// Content may be any JSON value, encoded to at most 256 KiB and 32 levels of
+/// nesting. The turn resumes as soon as nvoken records the reply.
+pub fn callback_result(
+    content: serde_json::Value,
+    is_error: bool,
+) -> Result<CallbackReply, serde_json::Error> {
+    let mut payload = serde_json::Map::new();
+    payload.insert("content".to_owned(), content);
+    if is_error {
+        payload.insert("is_error".to_owned(), serde_json::Value::Bool(true));
+    }
+    Ok(CallbackReply {
+        status: 200,
+        body: Some(serde_json::to_string(&serde_json::Value::Object(payload))?),
+    })
+}
+
+/// Accepts delivery without settling the ToolCall, for work that will outlive
+/// the App's callback reply deadline. Settle it later with
+/// `Client::submit_tool_results`, reusing the delivery's ToolCall id.
+///
+/// This trades away the fail-loud guarantee. nvoken marks an unacknowledged
+/// delivery failed once its retries are exhausted, so the turn always moves on.
+/// An acknowledged call instead waits under the host's responsibility, bounded
+/// only by the Invocation's `limits.waiting_timeout_seconds`. Acknowledge only
+/// when something durable will settle the call.
+pub fn acknowledge_callback() -> CallbackReply {
+    CallbackReply {
+        status: 202,
+        body: None,
+    }
+}
+
 #[async_trait]
 pub trait CallbackResultStore<T> {
     async fn put_if_absent(&self, tool_call_id: &str, result: T) -> Result<(T, bool), String>;

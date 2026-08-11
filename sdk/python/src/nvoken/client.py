@@ -15,6 +15,7 @@ import httpx
 from nvoken_generated import __version__ as SDK_VERSION
 from nvoken_generated.api.agents_api import AgentsApi
 from nvoken_generated.api.budgets_api import BudgetsApi
+from nvoken_generated.api.agent_definitions_api import AgentDefinitionsApi
 from nvoken_generated.api.invocations_api import InvocationsApi
 from nvoken_generated.api.mcp_api import MCPApi
 from nvoken_generated.api.models_api import ModelsApi
@@ -52,7 +53,12 @@ from nvoken_generated.models.web_search_location import (
     WebSearchLocation as GeneratedWebSearchLocation,
 )
 from nvoken_generated.models.host_tool_declaration import HostToolDeclaration
+from nvoken_generated.models.agent_definition_registration import AgentDefinitionRegistration
 from nvoken_generated.models.create_invocation_request import CreateInvocationRequest
+from nvoken_generated.models.mcp_server_headers import MCPServerHeaders as GeneratedMCPServerHeaders
+from nvoken_generated.models.register_agent_definition_request import (
+    RegisterAgentDefinitionRequest,
+)
 from nvoken_generated.models.invocation import Invocation
 from nvoken_generated.models.invocation_change import InvocationChange
 from nvoken_generated.models.limits import Limits as GeneratedLimits
@@ -375,12 +381,30 @@ class MCPTimeouts:
 
 @dataclass(frozen=True)
 class MCPServer:
+    """Declares a remote MCP server.
+
+    It carries no secrets: an Agent Definition is content-addressed and shared
+    across turns, so authentication headers travel per Invocation in
+    :class:`MCPServerHeaders` instead.
+    """
+
     name: str
     url: str
     transport: Literal["streamable_http"] = "streamable_http"
     allowed_tools: tuple[str, ...] = ()
-    headers: dict[str, str] = field(default_factory=dict, repr=False)
     timeouts: MCPTimeouts | None = None
+
+
+@dataclass(frozen=True)
+class MCPServerHeaders:
+    """Secret headers for one MCP server named by the selected Agent Definition.
+
+    They are encrypted for a single turn, and are never stored in, hashed into,
+    or returned with the Agent Definition.
+    """
+
+    name: str
+    headers: dict[str, str] = field(default_factory=dict, repr=False)
 
 
 WebhookEvent = Literal["invocation.waiting", "invocation.paused", "invocation.ended"]
@@ -409,12 +433,16 @@ class ProviderKeySelection:
 
 
 @dataclass(frozen=True)
-class InvokeRequest:
-    agent_key: str
-    input: str | tuple[InputBlock, ...]
-    """Text shorthand, or ordered blocks mixing text, images, and documents."""
-    model: Model | None = None
-    definition_id: str | None = None
+class AgentDefinition:
+    """The immutable execution configuration a turn runs with.
+
+    nvoken content-addresses it, so two turns whose definitions serialize
+    identically share one Agent Definition and one ``agent_definition_id``.
+    Identity, session selection, input, idempotency, webhooks, metadata, and
+    provider key selection are durable elsewhere and deliberately absent here.
+    """
+
+    model: Model
     instructions: str | None = None
     sampling: Sampling | None = None
     reasoning: Reasoning | None = None
@@ -424,6 +452,22 @@ class InvokeRequest:
     mcp_servers: tuple[MCPServer, ...] = ()
     provider_tools: tuple[ProviderTool, ...] = ()
     output_schema: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class InvokeRequest:
+    agent_key: str
+    input: str | tuple[InputBlock, ...]
+    """Text shorthand, or ordered blocks mixing text, images, and documents."""
+    agent_definition: AgentDefinition | None = None
+    """The definition this turn runs with, sent inline.
+
+    Supply exactly one of ``agent_definition`` and ``agent_definition_id``.
+    """
+    agent_definition_id: str | None = None
+    """Reuse a definition already registered for this App."""
+    mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
+    """Per-turn secret headers, keyed to MCP server names in the definition."""
     idempotency_key: str | None = None
     if_active: IfActivePolicy | None = None
     on_budget_exhausted: BudgetExhaustionBehavior | None = None
@@ -498,6 +542,7 @@ class Client:
         self.agents = AgentsApi(self.api_client)
         self.budgets = BudgetsApi(self.api_client)
         self.invocations = InvocationsApi(self.api_client)
+        self.agent_definitions = AgentDefinitionsApi(self.api_client)
         self.mcp = MCPApi(self.api_client)
         self.models = ModelsApi(self.api_client)
         self.provider_keys = ProviderKeysApi(self.api_client)
@@ -575,9 +620,22 @@ class Client:
             include_deprecated=include_deprecated,
         ))
 
-    async def list_mcp_tools(self, server: MCPServer) -> MCPListToolsResponse:
+    async def list_mcp_tools(
+        self,
+        server: MCPServer,
+        headers: dict[str, str] | None = None,
+    ) -> MCPListToolsResponse:
+        """Discover the tools a remote MCP server projects.
+
+        Headers are a separate argument because :class:`MCPServer` is part of a
+        content-addressed Agent Definition and therefore carries no secrets;
+        these are used for this one discovery request and never stored.
+        """
         return await self._replay_safe(lambda: self.mcp.list_mcp_tools(
-            MCPListToolsRequest(server=_generated_mcp_server(server))
+            MCPListToolsRequest(
+                server=_generated_mcp_server(server),
+                headers=dict(headers) if headers else None,
+            )
         ))
 
     async def get_model(self, model: Model) -> ModelDescriptor:
@@ -603,44 +661,23 @@ class Client:
             deadline_at=invocation.deadline_at,
         )
 
-    def _invocation_body(self, request: InvokeRequest) -> CreateInvocationRequest:
-        if not request.agent_key or not request.input:
-            raise NvokenError("validation", "agent_key and input are required")
-        preflight_input(request.input)
-        has_inline_definition = any((
-            request.model is not None,
-            request.instructions is not None,
-            request.sampling is not None,
-            request.reasoning is not None,
-            request.tool_choice is not None,
-            request.limits is not None,
-            bool(request.tools),
-            bool(request.mcp_servers),
-            bool(request.provider_tools),
-            request.output_schema is not None,
-        ))
-        if bool(request.definition_id) == has_inline_definition:
-            raise NvokenError(
-                "validation",
-                "request requires exactly one of definition_id or an inline definition",
-            )
-        if request.definition_id is None and request.model is None:
-            raise NvokenError("validation", "inline definition requires model")
-        if request.if_active not in (None, "reject", "supersede", "interrupt"):
-            raise NvokenError(
-                "validation",
-                "if_active must be reject, supersede, or interrupt",
-            )
-        if request.on_budget_exhausted not in (None, "stop", "pause"):
-            raise NvokenError(
-                "validation",
-                "on_budget_exhausted must be stop or pause",
-            )
-        if request.output_schema is not None:
-            preflight_output_schema(request.output_schema)
-        idempotency_key = request.idempotency_key or f"nvoken-{uuid.uuid4()}"
+    def _agent_definition_body(
+        self,
+        definition: AgentDefinition,
+    ) -> RegisterAgentDefinitionRequest:
+        """Render one Agent Definition.
+
+        Invocation creation and registration both send exactly this object, so a
+        field either reaches the wire for both or neither. Only the definition's
+        own content is checked; installation state, App signing keys, budgets,
+        provider keys, and model lifecycle are checked again at turn admission.
+        """
+        if definition.model is None:
+            raise NvokenError("validation", "agent definition requires model")
+        if definition.output_schema is not None:
+            preflight_output_schema(definition.output_schema)
         tools: list[GeneratedToolDeclaration] = []
-        for tool in request.tools:
+        for tool in definition.tools:
             if isinstance(tool, BuiltinTool):
                 tools.append(GeneratedToolDeclaration(BuiltinToolDeclaration(
                     mode="builtin",
@@ -677,7 +714,104 @@ class Client:
                     input_schema=tool.input_schema,
                     callback=GeneratedCallbackTarget(url=tool.callback_url),
                 )))
-        limits = request.limits
+        return RegisterAgentDefinitionRequest(
+            instructions=definition.instructions,
+            model=GeneratedModelInput(GeneratedModel(
+                provider=definition.model.provider,
+                id=definition.model.id,
+            )),
+            sampling=GeneratedSampling(temperature=definition.sampling.temperature)
+            if definition.sampling is not None
+            else None,
+            reasoning=GeneratedReasoning(
+                    effort=ReasoningEffort(definition.reasoning.effort)
+                    if definition.reasoning.effort is not None
+                    else None,
+                    budget_tokens=definition.reasoning.budget_tokens,
+                )
+                if definition.reasoning is not None
+                else None,
+            tool_choice=GeneratedToolChoice(
+                    mode=ModelToolChoiceMode(definition.tool_choice.mode),
+                    name=definition.tool_choice.name,
+                )
+                if definition.tool_choice is not None
+                else None,
+            limits=GeneratedLimits(**vars(definition.limits))
+            if definition.limits
+            else None,
+            tools=tools or None,
+            mcp_servers=[
+                    _generated_mcp_server(server)
+                    for server in definition.mcp_servers
+                ] or None,
+            provider_tools=[
+                    _generated_provider_tool(tool)
+                    for tool in definition.provider_tools
+                ] or None,
+            output_schema=definition.output_schema,
+        )
+
+    def _mcp_server_headers(
+        self,
+        request: InvokeRequest,
+    ) -> list[GeneratedMCPServerHeaders] | None:
+        """Check the per-turn MCP secret headers.
+
+        With an inline definition every entry must name a server it declares; a
+        referenced definition is opaque here, so those names are left to the
+        service.
+        """
+        seen: set[str] = set()
+        entries: list[GeneratedMCPServerHeaders] = []
+        for entry in request.mcp_server_headers:
+            if not entry.name:
+                raise NvokenError("validation", "mcp server headers require a server name")
+            if not entry.headers:
+                raise NvokenError(
+                    "validation",
+                    f"mcp server headers for {entry.name} require at least one header",
+                )
+            if entry.name in seen:
+                raise NvokenError(
+                    "validation",
+                    f"mcp server headers name {entry.name} is repeated",
+                )
+            seen.add(entry.name)
+            if request.agent_definition is not None and not any(
+                server.name == entry.name
+                for server in request.agent_definition.mcp_servers
+            ):
+                raise NvokenError(
+                    "validation",
+                    f"mcp server headers name {entry.name} matches no declared mcp server",
+                )
+            entries.append(GeneratedMCPServerHeaders(
+                name=entry.name,
+                headers=dict(entry.headers),
+            ))
+        return entries or None
+
+    def _invocation_body(self, request: InvokeRequest) -> CreateInvocationRequest:
+        if not request.agent_key or not request.input:
+            raise NvokenError("validation", "agent_key and input are required")
+        preflight_input(request.input)
+        if (request.agent_definition is None) == (request.agent_definition_id is None):
+            raise NvokenError(
+                "validation",
+                "supply exactly one of agent_definition and agent_definition_id",
+            )
+        if request.if_active not in (None, "reject", "supersede", "interrupt"):
+            raise NvokenError(
+                "validation",
+                "if_active must be reject, supersede, or interrupt",
+            )
+        if request.on_budget_exhausted not in (None, "stop", "pause"):
+            raise NvokenError(
+                "validation",
+                "on_budget_exhausted must be stop or pause",
+            )
+        idempotency_key = request.idempotency_key or f"nvoken-{uuid.uuid4()}"
         return CreateInvocationRequest(
             agent_key=request.agent_key,
             tenant_key=request.tenant_key,
@@ -693,46 +827,35 @@ class Client:
                 if isinstance(request.input, str)
                 else [input_block_wire(block) for block in request.input]
             ),
-            definition_id=request.definition_id,
-            instructions=request.instructions,
-            model=GeneratedModelInput(GeneratedModel(
-                provider=request.model.provider,
-                id=request.model.id,
-            )) if request.model is not None else None,
-            sampling=GeneratedSampling(temperature=request.sampling.temperature)
-            if request.sampling is not None
+            agent_definition_id=request.agent_definition_id,
+            agent_definition=self._agent_definition_body(request.agent_definition)
+            if request.agent_definition is not None
             else None,
-            reasoning=GeneratedReasoning(
-                    effort=ReasoningEffort(request.reasoning.effort)
-                    if request.reasoning.effort is not None
-                    else None,
-                    budget_tokens=request.reasoning.budget_tokens,
-                )
-                if request.reasoning is not None
-                else None,
-            tool_choice=GeneratedToolChoice(
-                    mode=ModelToolChoiceMode(request.tool_choice.mode),
-                    name=request.tool_choice.name,
-                )
-                if request.tool_choice is not None
-                else None,
-            limits=GeneratedLimits(**vars(limits)) if limits else None,
-            tools=tools or None,
-            mcp_servers=[
-                    _generated_mcp_server(server)
-                    for server in request.mcp_servers
-                ] or None,
-            provider_tools=[
-                    _generated_provider_tool(tool)
-                    for tool in request.provider_tools
-                ] or None,
-            output_schema=request.output_schema,
+            mcp_server_headers=self._mcp_server_headers(request),
             provider_keys=[
                 _provider_key_selection(selection)
                 for selection in request.provider_keys
             ] or None,
             webhook=_generated_webhook_target(request.webhook),
         )
+
+    async def register_agent_definition(
+        self,
+        definition: AgentDefinition,
+    ) -> AgentDefinitionRegistration:
+        """Store one Agent Definition without starting a turn.
+
+        Returns the content-addressed ID later Invocations reuse through
+        :attr:`InvokeRequest.agent_definition_id`. Registration is idempotent by
+        content rather than by key: a first registration, a repeat, and a
+        definition an earlier turn already stored all return the same response,
+        so callers need not track whether they have registered before.
+        """
+        body = self._agent_definition_body(definition)
+        return await self._replay_safe(
+            lambda: self.agent_definitions.register_agent_definition(body)
+        )
+
     def invocation(self, invocation_id: str) -> InvocationHandle:
         return InvocationHandle(self, invocation_id)
 
@@ -1361,7 +1484,6 @@ def _generated_mcp_server(server: MCPServer) -> GeneratedMCPServer:
         url=server.url,
         transport=server.transport,
         allowed_tools=list(server.allowed_tools) or None,
-        headers=dict(server.headers) or None,
         timeouts=GeneratedMCPTimeouts(
             discovery_seconds=timeouts.discovery_seconds,
             call_seconds=timeouts.call_seconds,

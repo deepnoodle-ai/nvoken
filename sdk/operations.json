@@ -217,6 +217,11 @@
       "path": "/v1/usage/records"
     },
     {
+      "operation_id": "registerAgentDefinition",
+      "method": "POST",
+      "path": "/v1/agent-definitions"
+    },
+    {
       "operation_id": "registerApp",
       "method": "POST",
       "path": "/v1/apps"

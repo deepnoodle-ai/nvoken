@@ -2,7 +2,8 @@
 
 An Invocation is one durable agent turn. The host supplies `agent_key`,
 optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
-model, and tools travel inline with the turn.
+model, and tools travel with the turn as an `AgentDefinition`, either inline or
+referenced by a registered `agent_definition_id`.
 
 The handwritten level covers both transport plus durable handle, and a
 high-level Agent facade on top of it:
@@ -231,11 +232,42 @@ complete continuation representation is durable.
 ## Structured-output schema preflight
 
 `Client::invoke` calls `preflight_output_schema(&schema)` before transport when
-`InvokeRequest::output_schema` is present. Rejection is an `NvokenError` with
+the request's `AgentDefinition::output_schema` is present. Rejection is an `NvokenError` with
 code `schema_preflight_failed`; its safe `details` contain the portable issue
 `code`, RFC 6901 `path`, and optional `keyword`. A successful local check means
 eligible for admission. Generated APIs reached through `client.raw()` still
 rely on the authoritative Runtime check.
+
+## Reuse an Agent Definition
+
+The convenience builders on `InvokeRequest` write through into an inline
+`AgentDefinition`, which is the ordinary path. Register one instead when many
+turns share a configuration and you would rather send a short ID:
+
+```rust
+let definition = AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
+    .instructions("Help with billing questions.");
+let registration = client.register_agent_definition(definition).await?;
+
+let request = InvokeRequest::from_agent_definition(
+    "support",
+    "Why was I charged twice?",
+    registration.agent_definition_id,
+);
+```
+
+A definition is content-addressed and immutable, so registering the same one
+twice returns the same `agent_definition_id`, and so does registering one an
+earlier inline turn already stored. Registering starts no turn and creates no
+Agent, Session, or message. There is no list, update, or delete: to change a
+definition, register the new one and reference that.
+
+Exactly one of the inline definition and the ID may be set. Calling a
+write-through builder on a request that names an ID grows an inline definition,
+so the exclusivity check reports the conflict rather than silently dropping the
+field. An `Agent` always sends its definition inline, because it serves the host
+tool handlers declared in it, which is why `AgentOptions` writes the definition's
+fields through its own builders: there is no choice there to express.
 
 ## Remote MCP tools
 
@@ -244,13 +276,38 @@ discovery:
 
 ```rust
 let server = McpServer::new("support", "https://mcp.example.com/rpc")
-    .allowed_tool("lookup_order")
-    .header("Authorization", format!("Bearer {mcp_token}"));
+    .allowed_tool("lookup_order");
+let headers = HashMap::from([
+    ("Authorization".to_owned(), format!("Bearer {mcp_token}")),
+]);
 
-let catalog = client.list_mcp_tools(&server).await?;
+let catalog = client.list_mcp_tools(&server, Some(headers.clone())).await?;
 let request = InvokeRequest::new("support", "hello", Model::new("anthropic", "claude-sonnet-5"))
-    .mcp_server(server);
+    .mcp_server(server)
+    .mcp_server_headers(McpServerHeaders::new("support", headers));
 ```
 
-Headers are one-Invocation secret material and never appear in durable specs or
-public recovery surfaces.
+The declaration carries no secrets. An Agent Definition is content-addressed and
+reused across turns, so authentication headers travel per Invocation in
+`mcp_server_headers`, keyed to the server name. They are one-Invocation secret
+material and never appear in durable Agent Definitions or public recovery
+surfaces.
+
+## Callback tools
+
+A `Tool::callback(...)` runs on an HTTPS endpoint nvoken posts to. Verify the
+signed delivery with `verify_callback`, then answer with one of two replies.
+`callback_result(content, is_error)` settles the ToolCall inline and the turn
+resumes as soon as nvoken records the reply. `acknowledge_callback()` returns
+`202` with no body instead: it accepts the delivery without settling the call,
+for work that will outlive the App's callback reply deadline. Settle it later
+with `Client::submit_tool_results`, reusing the delivery's ToolCall id.
+
+Acknowledging trades away the fail-loud guarantee. nvoken marks an
+unacknowledged delivery failed once its retries are exhausted, so the turn
+always moves on. An acknowledged call instead waits under your responsibility,
+bounded only by the Invocation's `limits.waiting_timeout_seconds`. Acknowledge
+only when something durable will settle the call. Such a call appears in a
+waiting Invocation's pending calls the same way a host call does; an `Agent`
+skips the callback tools its own definition declares rather than dispatching
+them locally.

@@ -69,6 +69,46 @@ def verify_callback(
     )
 
 
+@dataclass(frozen=True)
+class CallbackReply:
+    """The HTTP answer to one callback delivery.
+
+    Rendering it is left to the host's web framework: write ``status``, and
+    ``body`` when it is not None.
+    """
+
+    status: int
+    body: str | None = None
+
+
+def callback_result(content: Any, is_error: bool = False) -> CallbackReply:
+    """Settle the ToolCall inline.
+
+    Content may be any JSON value, encoded to at most 256 KiB and 32 levels of
+    nesting. The turn resumes as soon as nvoken records the reply.
+    """
+    payload: dict[str, Any] = {"content": content}
+    if is_error:
+        payload["is_error"] = True
+    return CallbackReply(status=200, body=json.dumps(payload))
+
+
+def acknowledge_callback() -> CallbackReply:
+    """Accept delivery without settling the ToolCall.
+
+    For work that will outlive the App's callback reply deadline. Settle it
+    later with :meth:`Client.submit_tool_results`, reusing the delivery's
+    ToolCall id.
+
+    This trades away the fail-loud guarantee. nvoken marks an unacknowledged
+    delivery failed once its retries are exhausted, so the turn always moves on.
+    An acknowledged call instead waits under the host's responsibility, bounded
+    only by the Invocation's ``limits.waiting_timeout_seconds``. Acknowledge only
+    when something durable will settle the call.
+    """
+    return CallbackReply(status=202)
+
+
 T = TypeVar("T")
 
 

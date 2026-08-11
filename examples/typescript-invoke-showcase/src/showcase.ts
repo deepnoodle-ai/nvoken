@@ -84,7 +84,7 @@ async function main(): Promise<void> {
     sessionKey: sharedSessionKey,
     idempotencyKey: `${runId}:turn-1`,
     input: "Remember that my confirmation code is ORCHID-724. Reply only with remembered.",
-    ...chatExecution(),
+    ...chatDefinition(),
   };
   const first = await completed(firstRequest);
   assert.match(first.text, /remembered/i);
@@ -118,7 +118,7 @@ async function main(): Promise<void> {
     sessionId: first.handle.sessionId!,
     idempotencyKey: `${runId}:turn-2`,
     input: "What is my confirmation code? Reply only with the code.",
-    ...chatExecution(),
+    ...chatDefinition(),
   });
   assert.match(second.text, /ORCHID-724/i);
   assert.equal(second.handle.sessionId, first.handle.sessionId);
@@ -133,6 +133,26 @@ async function main(): Promise<void> {
     new Set([second.handle.invocationId]),
   );
   console.log("PASS incremental transcript cursor contains only the second turn");
+
+  // An Agent Definition is content-addressed, so registering the same one the
+  // inline turns already sent returns the ID they were assigned, and repeating
+  // the registration returns it again.
+  const registration = await client.registerAgentDefinition(chatDefinition().agentDefinition);
+  const repeated = await client.registerAgentDefinition(chatDefinition().agentDefinition);
+  assert.equal(repeated.agentDefinitionId, registration.agentDefinitionId);
+  assert.equal(first.invocation.agentDefinitionId, registration.agentDefinitionId);
+
+  const referenced = await completed({
+    agentKey: primaryAgentKey,
+    tenantKey: tenantA,
+    sessionKey: `${runId}-registered-session`,
+    idempotencyKey: `${runId}:registered`,
+    input: "Reply only with registered.",
+    agentDefinitionId: registration.agentDefinitionId,
+  });
+  assert.match(referenced.text, /registered/i);
+  assert.equal(referenced.invocation.agentDefinitionId, registration.agentDefinitionId);
+  console.log(`PASS Agent Definition registration is idempotent by content and reusable by ID: ${registration.agentDefinitionId}`);
 
   const session = await client.getSession(first.handle.sessionId!);
   assert.equal(session.tenantKey, tenantA);
@@ -180,7 +200,7 @@ async function main(): Promise<void> {
     sessionKey: sharedSessionKey,
     idempotencyKey: firstRequest.idempotencyKey,
     input: "Reply only with beta.",
-    ...chatExecution(),
+    ...chatDefinition(),
   });
   const tenantBSession = await client.getSession(tenantBResult.handle.sessionId!);
   assert.equal(tenantBSession.agentId, session.agentId);
@@ -193,7 +213,7 @@ async function main(): Promise<void> {
     sessionKey: sharedSessionKey,
     idempotencyKey: firstRequest.idempotencyKey,
     input: "Reply only with alternate.",
-    ...chatExecution(),
+    ...chatDefinition(),
   });
   const alternateSession = await client.getSession(alternateResult.handle.sessionId!);
   assert.notEqual(alternateSession.agentId, session.agentId);
@@ -211,7 +231,7 @@ async function main(): Promise<void> {
       sessionId: session.id,
       idempotencyKey: `${runId}:agent-mismatch`,
       input: "This should not be admitted.",
-      ...chatExecution(),
+      ...chatDefinition(),
     }),
     "not_found",
   );
@@ -222,7 +242,7 @@ async function main(): Promise<void> {
       sessionId: session.id,
       idempotencyKey: `${runId}:tenant-mismatch`,
       input: "This should not be admitted.",
-      ...chatExecution(),
+      ...chatDefinition(),
     }),
     "not_found",
   );
@@ -234,13 +254,15 @@ async function main(): Promise<void> {
     sessionKey: `${runId}-tool-session`,
     idempotencyKey: `${runId}:tool`,
     input: "Check order order-42 and tell me its current state. You must use lookup_order first.",
-    instructions: "Always call lookup_order exactly once before answering an order-status question. Never invent tool results.",
-    model: { provider, id: model },
-    limits: {
-      maxOutputTokens: 200,
-      maxIterations: 3,
+    agentDefinition: {
+      instructions: "Always call lookup_order exactly once before answering an order-status question. Never invent tool results.",
+      model: { provider, id: model },
+      limits: {
+        maxOutputTokens: 200,
+        maxIterations: 3,
+      },
+      tools: [lookupOrder],
     },
-    tools: [lookupOrder],
   });
 
   const waiting = await toolHandle.wait({ until: "actionable" });
@@ -261,7 +283,7 @@ async function main(): Promise<void> {
       sessionId: toolHandle.sessionId!,
       idempotencyKey: `${runId}:busy-session`,
       input: "This turn should not be admitted while the tool call is waiting.",
-      ...chatExecution(),
+      ...chatDefinition(),
     }),
     "session_invocation_active",
   );
@@ -304,7 +326,7 @@ async function main(): Promise<void> {
     sessionId: toolHandle.sessionId!,
     idempotencyKey: `${runId}:tool-followup`,
     input: "Based on our previous order lookup, when is the estimated delivery? Reply only with the answer.",
-    ...chatExecution(),
+    ...chatDefinition(),
   });
   assert.match(toolFollowup.text, /tomorrow/i);
   console.log("PASS a later Invocation receives the successful host-tool transcript as Session context");
@@ -315,13 +337,15 @@ async function main(): Promise<void> {
     sessionKey: `${runId}-structured-session`,
     idempotencyKey: `${runId}:structured`,
     input: "Classify this request: I was billed twice and need a human to review it today.",
-    instructions: "Submit the requested structured classification, then give one short confirmation sentence.",
-    model: { provider, id: model },
-    limits: {
-      maxOutputTokens: 200,
-      maxIterations: 3,
+    agentDefinition: {
+      instructions: "Submit the requested structured classification, then give one short confirmation sentence.",
+      model: { provider, id: model },
+      limits: {
+        maxOutputTokens: 200,
+        maxIterations: 3,
+      },
+      outputSchema: supportClassification,
     },
-    outputSchema: supportClassification,
   });
 
   const streamEvents = new Set<string>();
@@ -386,13 +410,15 @@ async function main(): Promise<void> {
   }, null, 2));
 }
 
-function chatExecution() {
+function chatDefinition() {
   return {
-    instructions: "You are a concise support assistant. Remember relevant facts from earlier turns in this Session.",
-    model: { provider, id: model },
-    limits: {
-      maxOutputTokens: 100,
-      maxIterations: 1,
+    agentDefinition: {
+      instructions: "You are a concise support assistant. Remember relevant facts from earlier turns in this Session.",
+      model: { provider, id: model },
+      limits: {
+        maxOutputTokens: 100,
+        maxIterations: 1,
+      },
     },
   };
 }

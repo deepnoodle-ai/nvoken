@@ -344,11 +344,15 @@ pub struct McpTimeouts {
 }
 
 #[derive(Debug, Clone)]
+/// Declares a remote MCP server.
+///
+/// It carries no secrets: an Agent Definition is content-addressed and shared
+/// across turns, so authentication headers travel per Invocation in
+/// `McpServerHeaders` instead.
 pub struct McpServer {
     pub name: String,
     pub url: String,
     pub allowed_tools: Vec<String>,
-    pub headers: HashMap<String, String>,
     pub timeouts: Option<McpTimeouts>,
 }
 
@@ -358,18 +362,12 @@ impl McpServer {
             name: name.into(),
             url: url.into(),
             allowed_tools: Vec::new(),
-            headers: HashMap::new(),
             timeouts: None,
         }
     }
 
     pub fn allowed_tool(mut self, name: impl Into<String>) -> Self {
         self.allowed_tools.push(name.into());
-        self
-    }
-
-    pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
-        self.headers.insert(name.into(), value.into());
         self
     }
 
@@ -382,7 +380,6 @@ impl McpServer {
         let mut result = models::McpServer::new(self.name.clone(), self.url.clone());
         result.transport = Some(models::mcp_server::Transport::TransportStreamableHTTP);
         result.allowed_tools = (!self.allowed_tools.is_empty()).then(|| self.allowed_tools.clone());
-        result.headers = (!self.headers.is_empty()).then(|| self.headers.clone());
         result.timeouts = self.timeouts.as_ref().map(|timeouts| {
             Box::new(models::McpTimeouts {
                 discovery_seconds: timeouts.discovery_seconds,
@@ -597,6 +594,99 @@ pub enum ToolChoice {
     Named(String),
 }
 
+/// The immutable execution configuration a turn runs with.
+///
+/// nvoken content-addresses it, so two turns whose definitions serialize
+/// identically share one Agent Definition and one `agent_definition_id`.
+/// Identity, session selection, input, idempotency, webhooks, metadata, and
+/// provider key selection are durable elsewhere and deliberately absent here.
+#[derive(Debug, Clone, Default)]
+pub struct AgentDefinition {
+    pub model: Model,
+    pub instructions: Option<String>,
+    pub sampling: Option<Sampling>,
+    pub reasoning: Option<Reasoning>,
+    pub tool_choice: Option<ToolChoice>,
+    pub limits: Option<Limits>,
+    pub tools: Vec<Tool>,
+    pub mcp_servers: Vec<McpServer>,
+    pub provider_tools: Vec<ProviderTool>,
+    pub output_schema: Option<HashMap<String, Value>>,
+}
+
+impl AgentDefinition {
+    pub fn new(model: Model) -> Self {
+        Self {
+            model,
+            ..Self::default()
+        }
+    }
+
+    pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
+        self.instructions = Some(instructions.into());
+        self
+    }
+
+    pub fn sampling(mut self, sampling: Sampling) -> Self {
+        self.sampling = Some(sampling);
+        self
+    }
+
+    pub fn reasoning(mut self, reasoning: Reasoning) -> Self {
+        self.reasoning = Some(reasoning);
+        self
+    }
+
+    pub fn tool_choice(mut self, tool_choice: ToolChoice) -> Self {
+        self.tool_choice = Some(tool_choice);
+        self
+    }
+
+    pub fn limits(mut self, limits: Limits) -> Self {
+        self.limits = Some(limits);
+        self
+    }
+
+    pub fn tool(mut self, tool: Tool) -> Self {
+        self.tools.push(tool);
+        self
+    }
+
+    pub fn mcp_server(mut self, server: McpServer) -> Self {
+        self.mcp_servers.push(server);
+        self
+    }
+
+    pub fn provider_tool(mut self, tool: ProviderTool) -> Self {
+        self.provider_tools.push(tool);
+        self
+    }
+
+    pub fn output_schema(mut self, schema: HashMap<String, Value>) -> Self {
+        self.output_schema = Some(schema);
+        self
+    }
+}
+
+/// Secret headers for one MCP server named by the selected Agent Definition.
+///
+/// They are encrypted for a single turn, and are never stored in, hashed into,
+/// or returned with the Agent Definition.
+#[derive(Debug, Clone, Default)]
+pub struct McpServerHeaders {
+    pub name: String,
+    pub headers: HashMap<String, String>,
+}
+
+impl McpServerHeaders {
+    pub fn new(name: impl Into<String>, headers: HashMap<String, String>) -> Self {
+        Self {
+            name: name.into(),
+            headers,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct InvokeRequest {
     pub agent_key: String,
@@ -611,17 +701,15 @@ pub struct InvokeRequest {
     /// Ordered blocks mixing text, images, and documents. Supply exactly one of
     /// `input` and `input_blocks`.
     pub input_blocks: Vec<models::InputBlock>,
-    pub definition_id: Option<String>,
-    pub model: Model,
-    pub instructions: Option<String>,
-    pub sampling: Option<Sampling>,
-    pub reasoning: Option<Reasoning>,
-    pub tool_choice: Option<ToolChoice>,
-    pub limits: Option<Limits>,
-    pub tools: Vec<Tool>,
-    pub mcp_servers: Vec<McpServer>,
-    pub provider_tools: Vec<ProviderTool>,
-    pub output_schema: Option<HashMap<String, Value>>,
+    /// The configuration this turn runs with, sent inline. Supply exactly one
+    /// of `agent_definition` and `agent_definition_id`.
+    pub agent_definition: Option<AgentDefinition>,
+    /// Reuse an Agent Definition already registered for this App.
+    pub agent_definition_id: Option<String>,
+    /// Per-turn secret headers, keyed to MCP server names in the selected
+    /// Agent Definition. They live here rather than on `McpServer` because an
+    /// Agent Definition is content-addressed and reused across turns.
+    pub mcp_server_headers: Vec<McpServerHeaders>,
     pub provider_keys: Vec<ProviderKeySelection>,
     /// Endpoint nvoken posts a signed webhook to when this Invocation
     /// parks awaiting host tool results or ends. An empty event list selects
@@ -649,17 +737,9 @@ impl InvokeRequest {
             on_budget_exhausted: None,
             input: input.into(),
             input_blocks: Vec::new(),
-            definition_id: None,
-            model,
-            instructions: None,
-            sampling: None,
-            reasoning: None,
-            tool_choice: None,
-            limits: None,
-            tools: Vec::new(),
-            mcp_servers: Vec::new(),
-            provider_tools: Vec::new(),
-            output_schema: None,
+            agent_definition: Some(AgentDefinition::new(model)),
+            agent_definition_id: None,
+            mcp_server_headers: Vec::new(),
             provider_keys: Vec::new(),
             webhook: None,
             metadata: None,
@@ -673,15 +753,38 @@ impl InvokeRequest {
         Self::new(agent_key, input, Model::default())
     }
 
-    /// Builds a request that reuses an immutable definition admitted by this app.
-    pub fn from_definition(
+    /// Builds a request that reuses an Agent Definition already registered for
+    /// this App, whether by an earlier turn or by `register_agent_definition`.
+    pub fn from_agent_definition(
         agent_key: impl Into<String>,
         input: impl Into<String>,
-        definition_id: impl Into<String>,
+        agent_definition_id: impl Into<String>,
     ) -> Self {
         let mut request = Self::without_model(agent_key, input);
-        request.definition_id = Some(definition_id.into());
+        request.agent_definition = None;
+        request.agent_definition_id = Some(agent_definition_id.into());
         request
+    }
+
+    /// Replaces the whole inline Agent Definition, for a definition built
+    /// separately and shared with `register_agent_definition`.
+    pub fn agent_definition(mut self, definition: AgentDefinition) -> Self {
+        self.agent_definition = Some(definition);
+        self.agent_definition_id = None;
+        self
+    }
+
+    pub fn mcp_server_headers(mut self, headers: McpServerHeaders) -> Self {
+        self.mcp_server_headers.push(headers);
+        self
+    }
+
+    /// The inline definition these convenience builders write through. A
+    /// request that already names an ID grows one here, so the exclusivity
+    /// check reports the conflict rather than silently dropping the field.
+    fn definition_mut(&mut self) -> &mut AgentDefinition {
+        self.agent_definition
+            .get_or_insert_with(AgentDefinition::default)
     }
 
     pub fn tenant_key(mut self, tenant_key: impl Into<String>) -> Self {
@@ -727,47 +830,47 @@ impl InvokeRequest {
     }
 
     pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
-        self.instructions = Some(instructions.into());
+        self.definition_mut().instructions = Some(instructions.into());
         self
     }
 
     pub fn limits(mut self, limits: Limits) -> Self {
-        self.limits = Some(limits);
+        self.definition_mut().limits = Some(limits);
         self
     }
 
     pub fn sampling(mut self, sampling: Sampling) -> Self {
-        self.sampling = Some(sampling);
+        self.definition_mut().sampling = Some(sampling);
         self
     }
 
     pub fn reasoning(mut self, reasoning: Reasoning) -> Self {
-        self.reasoning = Some(reasoning);
+        self.definition_mut().reasoning = Some(reasoning);
         self
     }
 
     pub fn tool_choice(mut self, tool_choice: ToolChoice) -> Self {
-        self.tool_choice = Some(tool_choice);
+        self.definition_mut().tool_choice = Some(tool_choice);
         self
     }
 
     pub fn tool(mut self, tool: Tool) -> Self {
-        self.tools.push(tool);
+        self.definition_mut().tools.push(tool);
         self
     }
 
     pub fn mcp_server(mut self, server: McpServer) -> Self {
-        self.mcp_servers.push(server);
+        self.definition_mut().mcp_servers.push(server);
         self
     }
 
     pub fn provider_tool(mut self, tool: ProviderTool) -> Self {
-        self.provider_tools.push(tool);
+        self.definition_mut().provider_tools.push(tool);
         self
     }
 
     pub fn output_schema(mut self, schema: HashMap<String, Value>) -> Self {
-        self.output_schema = Some(schema);
+        self.definition_mut().output_schema = Some(schema);
         self
     }
 
@@ -1082,60 +1185,34 @@ impl Client {
     /// Validates and converts a request into the exact body `invoke` sends,
     /// including the generated idempotency key. Useful for inspecting what an
     /// admission will carry without making one.
-    pub fn invocation_body(
+    /// Renders one Agent Definition.
+    ///
+    /// Invocation creation and registration both send exactly this object, so a
+    /// field either reaches the wire for both or neither. Only the definition's
+    /// own content is checked here; installation state, App signing keys,
+    /// budgets, provider keys, and model lifecycle are checked again when a turn
+    /// is admitted.
+    pub fn agent_definition_body(
         &self,
-        mut request: InvokeRequest,
-    ) -> Result<models::CreateInvocationRequest, NvokenError> {
-        if request.agent_key.is_empty() {
-            return Err(NvokenError::validation("agent key and input are required"));
-        }
-        let has_inline_definition = !request.model.is_unset()
-            || request.instructions.is_some()
-            || request.sampling.is_some()
-            || request.reasoning.is_some()
-            || request.tool_choice.is_some()
-            || request.limits.is_some()
-            || !request.tools.is_empty()
-            || !request.mcp_servers.is_empty()
-            || !request.provider_tools.is_empty()
-            || request.output_schema.is_some();
-        if request.definition_id.is_some() && has_inline_definition {
-            return Err(NvokenError::validation(
-                "definition_id is mutually exclusive with every inline definition field",
-            ));
-        }
-        if request.definition_id.is_none() && request.model.is_unset() {
-            request.model = self
+        mut definition: AgentDefinition,
+    ) -> Result<models::RegisterAgentDefinitionRequest, NvokenError> {
+        if definition.model.is_unset() {
+            definition.model = self
                 .default_model
                 .clone()
                 .ok_or_else(|| NvokenError::validation("model is required"))?;
         }
-        if request.input.is_empty() == request.input_blocks.is_empty() {
-            return Err(NvokenError::validation(
-                "supply exactly one of input and input blocks",
-            ));
-        }
-        if !request.input_blocks.is_empty() {
-            preflight_input_blocks(&request.input_blocks)?;
-        }
-        if let Some(schema) = &request.output_schema {
+        if let Some(schema) = &definition.output_schema {
             preflight_output_schema(schema)?;
         }
-        let model = if request.definition_id.is_none() {
-            let provider = model_provider(&request.model.provider)?;
-            Some(models::ModelInput::Model(Box::new(models::Model::new(
-                provider,
-                request.model.id,
-            ))))
-        } else {
-            None
-        };
-        let instructions = request.instructions;
-        let sampling = request
+        let provider = model_provider(&definition.model.provider)?;
+        let model =
+            models::ModelInput::Model(Box::new(models::Model::new(provider, definition.model.id)));
+        let sampling = definition
             .sampling
             .map(|value| models::Sampling::new(value.temperature))
             .map(Box::new);
-        let reasoning = request.reasoning.map(|value| {
+        let reasoning = definition.reasoning.map(|value| {
             let effort = value.effort.map(|effort| match effort {
                 ReasoningEffort::Low => models::ReasoningEffort::EffortLow,
                 ReasoningEffort::Medium => models::ReasoningEffort::EffortMedium,
@@ -1148,7 +1225,7 @@ impl Client {
                 budget_tokens: value.budget_tokens,
             })
         });
-        let tool_choice = request.tool_choice.map(|value| {
+        let tool_choice = definition.tool_choice.map(|value| {
             let (mode, name) = match value {
                 ToolChoice::Auto => (models::ModelToolChoiceMode::ChoiceAuto, None),
                 ToolChoice::None => (models::ModelToolChoiceMode::ChoiceNone, None),
@@ -1157,15 +1234,14 @@ impl Client {
             };
             Box::new(models::ToolChoice { mode, name })
         });
-        let limits = request
+        let limits = definition
             .limits
             .map(|value| serde_json::from_value(json!(value)))
             .transpose()
             .map_err(|error| NvokenError::validation(error.to_string()))?
             .map(Box::new);
-        let output_schema = request.output_schema;
-        let mut tools = Vec::with_capacity(request.tools.len());
-        for tool in request.tools {
+        let mut tools = Vec::with_capacity(definition.tools.len());
+        for tool in definition.tools {
             let mode = match tool.mode {
                 ToolMode::Builtin => {
                     if tool.name != "nvoken_fetch"
@@ -1202,21 +1278,105 @@ impl Client {
             };
             tools.push(mode);
         }
-        let tools = (!tools.is_empty()).then_some(tools);
-        let mcp_servers = (!request.mcp_servers.is_empty()).then(|| {
-            request
+        let mut body = models::RegisterAgentDefinitionRequest::new(model);
+        body.instructions = definition.instructions;
+        body.sampling = sampling;
+        body.reasoning = reasoning;
+        body.tool_choice = tool_choice;
+        body.limits = limits;
+        body.output_schema = definition.output_schema;
+        body.tools = (!tools.is_empty()).then_some(tools);
+        body.mcp_servers = (!definition.mcp_servers.is_empty()).then(|| {
+            definition
                 .mcp_servers
                 .iter()
                 .map(McpServer::generated)
                 .collect()
         });
-        let provider_tools = (!request.provider_tools.is_empty()).then(|| {
-            request
+        body.provider_tools = (!definition.provider_tools.is_empty()).then(|| {
+            definition
                 .provider_tools
                 .iter()
                 .map(ProviderTool::generated)
                 .collect()
         });
+        Ok(body)
+    }
+
+    /// Checks the per-turn MCP secret headers.
+    ///
+    /// With an inline definition every entry must name a server it declares; a
+    /// referenced definition is opaque here, so those names are left to the
+    /// service.
+    fn mcp_server_headers_body(
+        request: &InvokeRequest,
+    ) -> Result<Option<Vec<models::McpServerHeaders>>, NvokenError> {
+        let mut seen = std::collections::HashSet::new();
+        let mut entries = Vec::with_capacity(request.mcp_server_headers.len());
+        for entry in &request.mcp_server_headers {
+            if entry.name.is_empty() {
+                return Err(NvokenError::validation(
+                    "mcp server headers require a server name",
+                ));
+            }
+            if entry.headers.is_empty() {
+                return Err(NvokenError::validation(format!(
+                    "mcp server headers for {} require at least one header",
+                    entry.name
+                )));
+            }
+            if !seen.insert(entry.name.clone()) {
+                return Err(NvokenError::validation(format!(
+                    "mcp server headers name {} is repeated",
+                    entry.name
+                )));
+            }
+            if let Some(definition) = &request.agent_definition {
+                if !definition
+                    .mcp_servers
+                    .iter()
+                    .any(|server| server.name == entry.name)
+                {
+                    return Err(NvokenError::validation(format!(
+                        "mcp server headers name {} matches no declared mcp server",
+                        entry.name
+                    )));
+                }
+            }
+            entries.push(models::McpServerHeaders::new(
+                entry.name.clone(),
+                entry.headers.clone(),
+            ));
+        }
+        Ok((!entries.is_empty()).then_some(entries))
+    }
+
+    pub fn invocation_body(
+        &self,
+        request: InvokeRequest,
+    ) -> Result<models::CreateInvocationRequest, NvokenError> {
+        if request.agent_key.is_empty() {
+            return Err(NvokenError::validation("agent key and input are required"));
+        }
+        if request.agent_definition.is_some() == request.agent_definition_id.is_some() {
+            return Err(NvokenError::validation(
+                "supply exactly one of agent definition and agent definition id",
+            ));
+        }
+        if request.input.is_empty() == request.input_blocks.is_empty() {
+            return Err(NvokenError::validation(
+                "supply exactly one of input and input blocks",
+            ));
+        }
+        if !request.input_blocks.is_empty() {
+            preflight_input_blocks(&request.input_blocks)?;
+        }
+        let mcp_server_headers = Self::mcp_server_headers_body(&request)?;
+        let agent_definition = request
+            .agent_definition
+            .map(|definition| self.agent_definition_body(definition))
+            .transpose()?
+            .map(Box::new);
         let input = if request.input_blocks.is_empty() {
             models::InvocationInput::String(request.input)
         } else {
@@ -1229,17 +1389,9 @@ impl Client {
                 .unwrap_or_else(generated_idempotency_key),
             input,
         );
-        body.definition_id = request.definition_id;
-        body.model = model.map(Box::new);
-        body.instructions = instructions;
-        body.sampling = sampling;
-        body.reasoning = reasoning;
-        body.tool_choice = tool_choice;
-        body.limits = limits;
-        body.output_schema = output_schema;
-        body.tools = tools;
-        body.mcp_servers = mcp_servers;
-        body.provider_tools = provider_tools;
+        body.agent_definition_id = request.agent_definition_id;
+        body.agent_definition = agent_definition;
+        body.mcp_server_headers = mcp_server_headers;
         body.tenant_key = request.tenant_key;
         body.session_id = request.session_id;
         body.session_key = request.session_key;
@@ -1384,16 +1536,43 @@ impl Client {
         .map_err(|error| self.normalize_generated_error(error))
     }
 
+    /// Discovers the tools a remote MCP server projects.
+    ///
+    /// Headers are a separate argument because `McpServer` is part of a
+    /// content-addressed Agent Definition and therefore carries no secrets;
+    /// these are used for this one discovery request and never stored.
     pub async fn list_mcp_tools(
         &self,
         server: &McpServer,
+        headers: Option<HashMap<String, String>>,
     ) -> Result<models::McpListToolsResponse, NvokenError> {
-        apis::mcp_api::list_mcp_tools(
-            &self.configuration,
-            models::McpListToolsRequest::new(server.generated()),
-        )
-        .await
-        .map_err(|error| self.normalize_generated_error(error))
+        let mut request = models::McpListToolsRequest::new(server.generated());
+        request.headers = headers.filter(|values| !values.is_empty());
+        apis::mcp_api::list_mcp_tools(&self.configuration, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    /// Stores one Agent Definition without starting a turn, and returns the
+    /// content-addressed ID later Invocations reuse through
+    /// `InvokeRequest::agent_definition_id`.
+    ///
+    /// Registration is idempotent by content rather than by key. A first
+    /// registration, a repeat, and a definition an earlier turn already stored
+    /// all return the same response, so callers need not track whether they
+    /// have registered before.
+    ///
+    /// Only the definition's own content is checked. Installation state, the
+    /// App callback signing key, budgets, provider keys, and model lifecycle
+    /// are checked again when a turn is admitted.
+    pub async fn register_agent_definition(
+        &self,
+        definition: AgentDefinition,
+    ) -> Result<models::AgentDefinitionRegistration, NvokenError> {
+        let body = self.agent_definition_body(definition)?;
+        apis::agent_definitions_api::register_agent_definition(&self.configuration, body)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn get_model(&self, model: &Model) -> Result<models::ModelDescriptor, NvokenError> {

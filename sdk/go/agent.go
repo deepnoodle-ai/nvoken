@@ -9,22 +9,48 @@ import (
 	"time"
 )
 
+// AgentOptions fixes one identity and the Agent Definition every turn from this
+// Agent runs with. The definition's fields read flat here rather than nested,
+// because an Agent always sends it inline: it serves the host tool handlers
+// declared in it, so there is no inline-or-by-ID choice for a nested field to
+// express. Reuse a registered AgentDefinitionID through Client.Invoke instead.
 type AgentOptions struct {
-	AgentKey          string
-	TenantKey         *string
-	Instructions      string
-	Model             Model
-	Sampling          *Sampling
-	Reasoning         *Reasoning
-	ToolChoice        *ToolChoice
-	Limits            *Limits
-	Tools             []Tool
-	MCPServers        []MCPServer
-	ProviderTools     []ProviderTool
-	OutputSchema      map[string]any
+	AgentKey      string
+	TenantKey     *string
+	Instructions  string
+	Model         Model
+	Sampling      *Sampling
+	Reasoning     *Reasoning
+	ToolChoice    *ToolChoice
+	Limits        *Limits
+	Tools         []Tool
+	MCPServers    []MCPServer
+	ProviderTools []ProviderTool
+	OutputSchema  map[string]any
+	// MCPServerHeaders carries per-turn secret headers for the MCP servers this
+	// Agent declares. They stay outside the Agent Definition so its
+	// content-addressed identity does not depend on a secret.
+	MCPServerHeaders  []MCPServerHeaders
 	ProviderKeys      []ProviderKeySelection
 	Webhook           *WebhookTarget
 	OnBudgetExhausted BudgetExhaustionBehavior
+}
+
+// agentDefinition gathers the flat execution fields into the value the wire
+// shape nests, so the Agent and Client.Invoke paths render one definition type.
+func (o AgentOptions) agentDefinition() AgentDefinition {
+	return AgentDefinition{
+		Instructions:  o.Instructions,
+		Model:         o.Model,
+		Sampling:      o.Sampling,
+		Reasoning:     o.Reasoning,
+		ToolChoice:    o.ToolChoice,
+		Limits:        o.Limits,
+		Tools:         o.Tools,
+		MCPServers:    o.MCPServers,
+		ProviderTools: o.ProviderTools,
+		OutputSchema:  o.OutputSchema,
+	}
 }
 
 type AgentInvocationOptions struct {
@@ -97,9 +123,15 @@ func (e *NoOutputTextError) Error() string {
 }
 
 type Agent struct {
-	client    *Client
-	options   AgentOptions
-	hostTools map[string]Tool
+	client  *Client
+	options AgentOptions
+	// hostTools serves the calls this Agent answers locally. callbackTools
+	// names the ones nvoken delivers over HTTPS instead: those can appear in a
+	// waiting Invocation's pending calls once the endpoint has acknowledged a
+	// delivery without settling it, and they are answered by whatever accepted
+	// that acknowledgement, not from here.
+	hostTools     map[string]Tool
+	callbackTools map[string]struct{}
 }
 
 func (c *Client) Agent(options AgentOptions) (*Agent, error) {
@@ -129,15 +161,20 @@ func NewAgent(client *Client, options AgentOptions) (*Agent, error) {
 		options.Model = *client.DefaultModel
 	}
 	hostTools := make(map[string]Tool)
+	callbackTools := make(map[string]struct{})
 	for _, tool := range options.Tools {
-		if tool.Mode == ToolModeHost {
+		switch tool.Mode {
+		case ToolModeHost:
 			hostTools[tool.Name] = tool
+		case ToolModeCallback:
+			callbackTools[tool.Name] = struct{}{}
 		}
 	}
 	return &Agent{
-		client:    client,
-		options:   options,
-		hostTools: hostTools,
+		client:        client,
+		options:       options,
+		hostTools:     hostTools,
+		callbackTools: callbackTools,
 	}, nil
 }
 
@@ -161,6 +198,7 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 	if onBudgetExhausted == "" {
 		onBudgetExhausted = a.options.OnBudgetExhausted
 	}
+	definition := a.options.agentDefinition()
 	return InvokeRequest{
 		AgentKey:          a.options.AgentKey,
 		TenantKey:         tenantKey,
@@ -171,16 +209,8 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		IfActive:          options.IfActive,
 		OnBudgetExhausted: onBudgetExhausted,
 		Input:             input,
-		Instructions:      a.options.Instructions,
-		Model:             a.options.Model,
-		Sampling:          a.options.Sampling,
-		Reasoning:         a.options.Reasoning,
-		ToolChoice:        a.options.ToolChoice,
-		Limits:            a.options.Limits,
-		Tools:             a.options.Tools,
-		MCPServers:        a.options.MCPServers,
-		ProviderTools:     a.options.ProviderTools,
-		OutputSchema:      a.options.OutputSchema,
+		AgentDefinition:   &definition,
+		MCPServerHeaders:  a.options.MCPServerHeaders,
 		ProviderKeys:      a.options.ProviderKeys,
 		// A per-call target overrides the agent default so one Agent can
 		// webhook different endpoints without a second Agent.
@@ -380,6 +410,9 @@ func (a *Agent) dispatchWaiting(
 	results := make([]ToolResult, 0, len(*invocation.PendingToolCalls))
 	for _, pending := range *invocation.PendingToolCalls {
 		if _, alreadySubmitted := submitted[pending.ID]; alreadySubmitted {
+			continue
+		}
+		if _, isCallback := a.callbackTools[pending.Name]; isCallback {
 			continue
 		}
 		tool, ok := a.hostTools[pending.Name]
@@ -653,6 +686,9 @@ func (a *Agent) AnswerPendingToolCalls(
 	handle := a.client.Invocation(invocationID)
 	results := make([]ToolResult, 0, len(*invocation.PendingToolCalls))
 	for _, pending := range *invocation.PendingToolCalls {
+		if _, isCallback := a.callbackTools[pending.Name]; isCallback {
+			continue
+		}
 		tool, ok := a.hostTools[pending.Name]
 		if !ok || tool.Handler == nil {
 			if options.LeaveWaitingOnMissingHandler {

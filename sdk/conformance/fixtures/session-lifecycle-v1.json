@@ -3,29 +3,48 @@
   "description": "Wire shapes for the Session options, host metadata, and provider server-side tools each SDK builds by hand. Four independently written request builders converge here so a field one binding spells differently is a failing test rather than a silently dropped option.",
   "session_options": {
     "retention_only": {
-      "retention": { "ttl_seconds": 86400 }
+      "retention": {
+        "ttl_seconds": 86400
+      }
     },
     "metadata_only": {
-      "metadata": { "board": "brand-2026", "trace_id": "018f-4a" }
+      "metadata": {
+        "board": "brand-2026",
+        "trace_id": "018f-4a"
+      }
     },
     "every_member": {
-      "compaction": { "trigger_tokens": 32768 },
-      "retention": { "ttl_seconds": 3600 },
-      "metadata": { "surface": "web" }
+      "compaction": {
+        "trigger_tokens": 32768
+      },
+      "retention": {
+        "ttl_seconds": 3600
+      },
+      "metadata": {
+        "surface": "web"
+      }
     }
   },
   "retention_bounds": {
     "min_ttl_seconds": 3600,
     "max_ttl_seconds": 2592000
   },
-  "invocation_metadata": { "board": "brand-2026", "surface": "web" },
+  "invocation_metadata": {
+    "board": "brand-2026",
+    "surface": "web"
+  },
   "metadata_bounds": {
     "max_entries": 16,
     "max_key_bytes": 64,
     "max_value_bytes": 512
   },
   "metadata_patch": {
-    "request": { "metadata": { "title": "Refund policy", "trace_id": null } },
+    "request": {
+      "metadata": {
+        "title": "Refund policy",
+        "trace_id": null
+      }
+    },
     "note": "A present key replaces, an explicit null deletes, an absent key survives. `\"metadata\": null` is refused rather than guessed at."
   },
   "agent_request": {
@@ -35,25 +54,54 @@
       "idempotency_key": "conformance",
       "on_budget_exhausted": "pause",
       "input": "hello",
-      "metadata": { "board": "brand-2026", "surface": "web" },
+      "metadata": {
+        "board": "brand-2026",
+        "surface": "web"
+      },
       "session_options": {
-        "retention": { "ttl_seconds": 86400 },
+        "retention": {
+          "ttl_seconds": 86400
+        },
         "max_estimated_cost_usd": 0.25
       },
-      "model": { "provider": "anthropic", "id": "claude-sonnet-4-6" },
-      "sampling": { "temperature": 0.2 },
-      "reasoning": { "effort": "low" },
-      "provider_tools": [{ "type": "web_search", "web_search": { "max_uses": 5 } }]
+      "agent_definition": {
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-sonnet-4-6"
+        },
+        "sampling": {
+          "temperature": 0.2
+        },
+        "reasoning": {
+          "effort": "low"
+        },
+        "provider_tools": [
+          {
+            "type": "web_search",
+            "web_search": {
+              "max_uses": 5
+            }
+          }
+        ]
+      }
     }
   },
   "provider_tools": {
-    "defaults": [{ "type": "web_search", "web_search": {} }],
+    "defaults": [
+      {
+        "type": "web_search",
+        "web_search": {}
+      }
+    ],
     "configured": [
       {
         "type": "web_search",
         "web_search": {
           "max_uses": 5,
-          "allowed_domains": ["example.com", "docs.example.com"],
+          "allowed_domains": [
+            "example.com",
+            "docs.example.com"
+          ],
           "user_location": {
             "city": "Austin",
             "region": "Texas",

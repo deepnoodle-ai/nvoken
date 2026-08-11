@@ -334,7 +334,10 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	}
 }
 
-func TestFlatAdmissionAndDeltaRendering(t *testing.T) {
+// The CLI's invoke flags are flat, but the admitted body nests every execution
+// field under agent_definition. Pinning both halves keeps a flag from silently
+// landing at the top level, where the Runtime would reject it.
+func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 	t.Setenv("NVOKEN_API_KEY", "test-key")
 	var admission map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -352,8 +355,8 @@ func TestFlatAdmissionAndDeltaRendering(t *testing.T) {
 				"id":"invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
 				"agent_id":"agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
 				"session_id":"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-				"definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
-				"definition":null,
+				"agent_definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+				"agent_definition":null,
 				"status":"queued",
 				"stop_reason":null,
 				"attempt":0,
@@ -405,15 +408,21 @@ func TestFlatAdmissionAndDeltaRendering(t *testing.T) {
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("flat admission output=%q err=%v", output, err)
 	}
-	if admission["definition"] != nil {
-		t.Fatalf("admission unexpectedly contains definition wrapper: %#v", admission)
+	for _, leaked := range []string{"instructions", "model", "limits", "tools"} {
+		if admission[leaked] != nil {
+			t.Fatalf("execution field %q leaked to the top level: %#v", leaked, admission)
+		}
 	}
-	if admission["instructions"] != "Preserve this exact public shape." {
-		t.Fatalf("admitted instructions=%#v", admission["instructions"])
+	definition, ok := admission["agent_definition"].(map[string]any)
+	if !ok {
+		t.Fatalf("admission carried no agent_definition: %#v", admission)
 	}
-	model, ok := admission["model"].(map[string]any)
+	if definition["instructions"] != "Preserve this exact public shape." {
+		t.Fatalf("admitted instructions=%#v", definition["instructions"])
+	}
+	model, ok := definition["model"].(map[string]any)
 	if !ok || model["provider"] != "openai" || model["id"] != "gpt-test" {
-		t.Fatalf("admitted model=%#v", admission["model"])
+		t.Fatalf("admitted model=%#v", definition["model"])
 	}
 
 	output, err = executeCLI(
@@ -426,7 +435,7 @@ func TestFlatAdmissionAndDeltaRendering(t *testing.T) {
 		"support",
 		"--idempotency-key",
 		"definition-url-test",
-		"--definition-id",
+		"--agent-definition-id",
 		"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
 		"--image-url",
 		"https://media.example.test/chart.png",
@@ -436,8 +445,8 @@ func TestFlatAdmissionAndDeltaRendering(t *testing.T) {
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("definition URL admission output=%q err=%v", output, err)
 	}
-	if admission["definition_id"] != "def_019b0a12-8d51-7f34-aed2-0e07c1bdb330" ||
-		admission["model"] != nil {
+	if admission["agent_definition_id"] != "def_019b0a12-8d51-7f34-aed2-0e07c1bdb330" ||
+		admission["agent_definition"] != nil {
 		t.Fatalf("definition URL admission=%#v", admission)
 	}
 	content, ok := admission["input"].([]any)
@@ -512,7 +521,11 @@ func TestModelCheckProbeCarriesAUsableOutputBudget(t *testing.T) {
 		t.Fatalf("model check: %v", err)
 	}
 
-	limits, ok := admission["limits"].(map[string]any)
+	probeDefinition, ok := admission["agent_definition"].(map[string]any)
+	if !ok {
+		t.Fatalf("probe request carried no agent_definition: %#v", admission)
+	}
+	limits, ok := probeDefinition["limits"].(map[string]any)
 	if !ok {
 		t.Fatalf("probe request carried no limits: %#v", admission)
 	}
@@ -579,7 +592,7 @@ func TestInvokeRejectsInvalidIfActiveBeforeNetwork(t *testing.T) {
 		"hello",
 		"--agent",
 		"support",
-		"--definition-id",
+		"--agent-definition-id",
 		"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
 		"--provider",
 		"openai",

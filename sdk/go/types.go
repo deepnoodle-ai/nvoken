@@ -488,13 +488,23 @@ type MCPTimeouts struct {
 	CallSeconds      *int `json:"call_seconds,omitempty"`
 }
 
+// MCPServer declares a remote MCP server. It carries no secrets: an Agent
+// Definition is content-addressed and shared across turns, so authentication
+// headers travel per Invocation in MCPServerHeaders instead.
 type MCPServer struct {
-	Name         string            `json:"name"`
-	URL          string            `json:"url"`
-	Transport    string            `json:"transport,omitempty"`
-	AllowedTools []string          `json:"allowed_tools,omitempty"`
-	Headers      map[string]string `json:"headers,omitempty"`
-	Timeouts     *MCPTimeouts      `json:"timeouts,omitempty"`
+	Name         string       `json:"name"`
+	URL          string       `json:"url"`
+	Transport    string       `json:"transport,omitempty"`
+	AllowedTools []string     `json:"allowed_tools,omitempty"`
+	Timeouts     *MCPTimeouts `json:"timeouts,omitempty"`
+}
+
+// MCPServerHeaders carries the secret headers for one MCP server named by the
+// selected Agent Definition. They are encrypted for a single turn, and are
+// never stored in, hashed into, or returned with the Agent Definition.
+type MCPServerHeaders struct {
+	Name    string            `json:"name"`
+	Headers map[string]string `json:"headers"`
 }
 
 // ProviderTool selects one provider server-side tool. Web search is Anthropic
@@ -537,6 +547,34 @@ func WebSearchProviderTool() ProviderTool {
 	return ProviderTool{Type: ProviderToolWebSearch, WebSearch: &WebSearchTool{}}
 }
 
+// AgentDefinition is the immutable execution configuration a turn runs with.
+// nvoken content-addresses it, so two turns whose definitions serialize
+// identically share one Agent Definition and one AgentDefinitionID. Identity,
+// session selection, input, idempotency, webhooks, metadata, and provider key
+// selection are durable elsewhere and deliberately absent here.
+// The JSON tags match the contract, so a definition stored as JSON decodes
+// straight into this type. Encoding for the wire still goes through encoded(),
+// which validates the definition and omits what was never set.
+type AgentDefinition struct {
+	Instructions  string         `json:"instructions,omitempty"`
+	Model         Model          `json:"model"`
+	Sampling      *Sampling      `json:"sampling,omitempty"`
+	Reasoning     *Reasoning     `json:"reasoning,omitempty"`
+	ToolChoice    *ToolChoice    `json:"tool_choice,omitempty"`
+	Limits        *Limits        `json:"limits,omitempty"`
+	Tools         []Tool         `json:"tools,omitempty"`
+	MCPServers    []MCPServer    `json:"mcp_servers,omitempty"`
+	ProviderTools []ProviderTool `json:"provider_tools,omitempty"`
+	OutputSchema  map[string]any `json:"output_schema,omitempty"`
+}
+
+// AgentDefinitionRegistration is the resolved Agent Definition and the
+// content-addressed ID that refers to it.
+type AgentDefinitionRegistration struct {
+	AgentDefinitionID string
+	AgentDefinition   generated.AgentDefinition
+}
+
 type InvokeRequest struct {
 	AgentKey  string
 	TenantKey *string
@@ -553,19 +591,18 @@ type InvokeRequest struct {
 	Input             string
 	// InputBlocks carries ordered multi-block input mixing text, images, and
 	// documents. Supply exactly one of Input and InputBlocks.
-	InputBlocks   []InputBlock
-	DefinitionID  string
-	Instructions  string
-	Model         Model
-	Sampling      *Sampling
-	Reasoning     *Reasoning
-	ToolChoice    *ToolChoice
-	Limits        *Limits
-	Tools         []Tool
-	MCPServers    []MCPServer
-	ProviderTools []ProviderTool
-	OutputSchema  map[string]any
-	ProviderKeys  []ProviderKeySelection
+	InputBlocks []InputBlock
+	// AgentDefinition is the execution configuration this turn runs with,
+	// sent inline. Supply exactly one of AgentDefinition and AgentDefinitionID.
+	AgentDefinition *AgentDefinition
+	// AgentDefinitionID reuses an Agent Definition already registered for this
+	// App, whether by an earlier turn or by Client.RegisterAgentDefinition.
+	AgentDefinitionID string
+	// MCPServerHeaders carries per-turn secret headers, keyed to MCP server
+	// names in the selected Agent Definition. They live here rather than on
+	// MCPServer because an Agent Definition is content-addressed and reused.
+	MCPServerHeaders []MCPServerHeaders
+	ProviderKeys     []ProviderKeySelection
 	// Metadata is opaque host correlation data recorded on this Invocation. It
 	// is part of the admitted input, so it is immutable and material to
 	// idempotency: a replay carrying different metadata conflicts rather than
@@ -759,6 +796,11 @@ type RegisterAppOptions struct {
 	ExternalRef *string
 	DisplayName *string
 	OrgID       *string
+	// CallbackTimeoutSeconds bounds each callback HTTP request, 1 to 60,
+	// defaulting to 10. A callback that cannot answer within it should return
+	// 202 and settle later through SubmitToolResults. Webhook delivery is
+	// unaffected.
+	CallbackTimeoutSeconds *int64
 }
 
 type ListAppsOptions struct {
@@ -768,6 +810,8 @@ type ListAppsOptions struct {
 type UpdateAppOptions struct {
 	DisplayName *string
 	OrgID       *string
+	// CallbackTimeoutSeconds replaces the App's callback HTTP reply deadline.
+	CallbackTimeoutSeconds *int64
 }
 
 type RegisterOrgOptions struct {
@@ -824,19 +868,17 @@ func (o WaitOptions) normalized() WaitOptions {
 	return o
 }
 
-func (r InvokeRequest) encoded() ([]byte, error) {
-	if r.AgentKey == "" {
-		return nil, fmt.Errorf("agent key is required")
+// encoded validates one Agent Definition on its own content and renders the
+// body that invocation creation and registration both send. It deliberately
+// checks only what the definition itself can settle: installation state, App
+// signing keys, budgets, provider keys, and model lifecycle are re-checked when
+// a turn is admitted, so a definition can be registered before its App is fully
+// configured to run it.
+func (d AgentDefinition) encoded() (map[string]any, error) {
+	if d.Model.Provider == "" || d.Model.ID == "" {
+		return nil, fmt.Errorf("agent definition model is required")
 	}
-	if (r.Input == "") == (len(r.InputBlocks) == 0) {
-		return nil, fmt.Errorf("supply exactly one of input and input blocks")
-	}
-	if len(r.InputBlocks) != 0 {
-		if err := PreflightInputBlocks(r.InputBlocks); err != nil {
-			return nil, err
-		}
-	}
-	for _, tool := range r.Tools {
+	for _, tool := range d.Tools {
 		switch tool.Mode {
 		case ToolModeBuiltin:
 			if tool.Name != "nvoken_fetch" ||
@@ -876,19 +918,100 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 			)
 		}
 	}
-	if r.OutputSchema != nil {
-		if err := PreflightOutputSchema(r.OutputSchema); err != nil {
+	if d.OutputSchema != nil {
+		if err := PreflightOutputSchema(d.OutputSchema); err != nil {
 			return nil, err
 		}
 	}
-	hasInlineDefinition := r.Instructions != "" || r.Model.Provider != "" || r.Model.ID != "" ||
-		r.Sampling != nil || r.Reasoning != nil || r.ToolChoice != nil || r.Limits != nil ||
-		len(r.Tools) != 0 || len(r.MCPServers) != 0 || len(r.ProviderTools) != 0 || r.OutputSchema != nil
-	if r.DefinitionID != "" && hasInlineDefinition {
-		return nil, fmt.Errorf("definition id is mutually exclusive with inline definition fields")
+	body := map[string]any{"model": d.Model}
+	if d.Instructions != "" {
+		body["instructions"] = d.Instructions
 	}
-	if r.DefinitionID == "" && !hasInlineDefinition {
-		return nil, fmt.Errorf("model or definition id is required")
+	if d.Limits != nil {
+		body["limits"] = d.Limits
+	}
+	if d.Sampling != nil {
+		body["sampling"] = d.Sampling
+	}
+	if d.Reasoning != nil {
+		body["reasoning"] = d.Reasoning
+	}
+	if d.ToolChoice != nil {
+		body["tool_choice"] = d.ToolChoice
+	}
+	if len(d.Tools) > 0 {
+		body["tools"] = d.Tools
+	}
+	if len(d.MCPServers) > 0 {
+		body["mcp_servers"] = d.MCPServers
+	}
+	if len(d.ProviderTools) > 0 {
+		body["provider_tools"] = d.ProviderTools
+	}
+	if d.OutputSchema != nil {
+		body["output_schema"] = d.OutputSchema
+	}
+	return body, nil
+}
+
+// encodedMCPServerHeaders checks the per-turn secret headers. When the
+// definition is inline every entry must name a server it declares; a referenced
+// definition is opaque here, so those names are left to the service.
+func (r InvokeRequest) encodedMCPServerHeaders() ([]MCPServerHeaders, error) {
+	seen := make(map[string]struct{}, len(r.MCPServerHeaders))
+	for _, entry := range r.MCPServerHeaders {
+		if entry.Name == "" {
+			return nil, fmt.Errorf("mcp server headers require a server name")
+		}
+		if len(entry.Headers) == 0 {
+			return nil, fmt.Errorf(
+				"mcp server headers for %q require at least one header",
+				entry.Name,
+			)
+		}
+		if _, duplicate := seen[entry.Name]; duplicate {
+			return nil, fmt.Errorf(
+				"mcp server headers name %q is repeated",
+				entry.Name,
+			)
+		}
+		seen[entry.Name] = struct{}{}
+		if r.AgentDefinition == nil {
+			continue
+		}
+		declared := false
+		for _, server := range r.AgentDefinition.MCPServers {
+			if server.Name == entry.Name {
+				declared = true
+				break
+			}
+		}
+		if !declared {
+			return nil, fmt.Errorf(
+				"mcp server headers name %q matches no declared mcp server",
+				entry.Name,
+			)
+		}
+	}
+	return r.MCPServerHeaders, nil
+}
+
+func (r InvokeRequest) encoded() ([]byte, error) {
+	if r.AgentKey == "" {
+		return nil, fmt.Errorf("agent key is required")
+	}
+	if (r.Input == "") == (len(r.InputBlocks) == 0) {
+		return nil, fmt.Errorf("supply exactly one of input and input blocks")
+	}
+	if len(r.InputBlocks) != 0 {
+		if err := PreflightInputBlocks(r.InputBlocks); err != nil {
+			return nil, err
+		}
+	}
+	if (r.AgentDefinition == nil) == (r.AgentDefinitionID == "") {
+		return nil, fmt.Errorf(
+			"supply exactly one of agent definition and agent definition id",
+		)
 	}
 	var input any = r.Input
 	if len(r.InputBlocks) != 0 {
@@ -899,37 +1022,21 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 		"idempotency_key": r.IdempotencyKey,
 		"input":           input,
 	}
-	if r.DefinitionID != "" {
-		wire["definition_id"] = r.DefinitionID
+	if r.AgentDefinitionID != "" {
+		wire["agent_definition_id"] = r.AgentDefinitionID
 	} else {
-		wire["model"] = r.Model
+		definition, err := r.AgentDefinition.encoded()
+		if err != nil {
+			return nil, err
+		}
+		wire["agent_definition"] = definition
 	}
-	if r.Instructions != "" {
-		wire["instructions"] = r.Instructions
+	headers, err := r.encodedMCPServerHeaders()
+	if err != nil {
+		return nil, err
 	}
-	if r.Limits != nil {
-		wire["limits"] = r.Limits
-	}
-	if r.Sampling != nil {
-		wire["sampling"] = r.Sampling
-	}
-	if r.Reasoning != nil {
-		wire["reasoning"] = r.Reasoning
-	}
-	if r.ToolChoice != nil {
-		wire["tool_choice"] = r.ToolChoice
-	}
-	if len(r.Tools) > 0 {
-		wire["tools"] = r.Tools
-	}
-	if len(r.MCPServers) > 0 {
-		wire["mcp_servers"] = r.MCPServers
-	}
-	if len(r.ProviderTools) > 0 {
-		wire["provider_tools"] = r.ProviderTools
-	}
-	if r.OutputSchema != nil {
-		wire["output_schema"] = r.OutputSchema
+	if len(headers) > 0 {
+		wire["mcp_server_headers"] = headers
 	}
 	if r.TenantKey != nil {
 		wire["tenant_key"] = *r.TenantKey

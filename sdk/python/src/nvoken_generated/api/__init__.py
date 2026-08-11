@@ -1,6 +1,7 @@
 # flake8: noqa
 
 # import apis into api package
+from nvoken_generated.api.agent_definitions_api import AgentDefinitionsApi
 from nvoken_generated.api.agents_api import AgentsApi
 from nvoken_generated.api.apps_api import AppsApi
 from nvoken_generated.api.budgets_api import BudgetsApi

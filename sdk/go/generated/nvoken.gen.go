@@ -99,16 +99,19 @@ func (e BuiltinToolDeclarationName) Valid() bool {
 
 // Defines values for CallbackDeliveryOutcome.
 const (
-	CallbackDeliveryOutcomeAbandoned CallbackDeliveryOutcome = "abandoned"
-	CallbackDeliveryOutcomeFailed    CallbackDeliveryOutcome = "failed"
-	CallbackDeliveryOutcomePending   CallbackDeliveryOutcome = "pending"
-	CallbackDeliveryOutcomeSucceeded CallbackDeliveryOutcome = "succeeded"
+	CallbackDeliveryOutcomeAbandoned    CallbackDeliveryOutcome = "abandoned"
+	CallbackDeliveryOutcomeAcknowledged CallbackDeliveryOutcome = "acknowledged"
+	CallbackDeliveryOutcomeFailed       CallbackDeliveryOutcome = "failed"
+	CallbackDeliveryOutcomePending      CallbackDeliveryOutcome = "pending"
+	CallbackDeliveryOutcomeSucceeded    CallbackDeliveryOutcome = "succeeded"
 )
 
 // Valid indicates whether the value is a known member of the CallbackDeliveryOutcome enum.
 func (e CallbackDeliveryOutcome) Valid() bool {
 	switch e {
 	case CallbackDeliveryOutcomeAbandoned:
+		return true
+	case CallbackDeliveryOutcomeAcknowledged:
 		return true
 	case CallbackDeliveryOutcomeFailed:
 		return true
@@ -363,9 +366,9 @@ func (e DocumentReferenceBlockType) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
+	ErrorCodeAgentDefinitionNotFound ErrorCode = "agent_definition_not_found"
 	ErrorCodeBudgetConflict          ErrorCode = "budget_conflict"
 	ErrorCodeBudgetExceeded          ErrorCode = "budget_exceeded"
-	ErrorCodeDefinitionNotFound      ErrorCode = "definition_not_found"
 	ErrorCodeForbidden               ErrorCode = "forbidden"
 	ErrorCodeIdempotencyConflict     ErrorCode = "idempotency_conflict"
 	ErrorCodeInternal                ErrorCode = "internal"
@@ -389,11 +392,11 @@ const (
 // Valid indicates whether the value is a known member of the ErrorCode enum.
 func (e ErrorCode) Valid() bool {
 	switch e {
+	case ErrorCodeAgentDefinitionNotFound:
+		return true
 	case ErrorCodeBudgetConflict:
 		return true
 	case ErrorCodeBudgetExceeded:
-		return true
-	case ErrorCodeDefinitionNotFound:
 		return true
 	case ErrorCodeForbidden:
 		return true
@@ -1600,6 +1603,33 @@ func (e ToolCallMode) Valid() bool {
 	}
 }
 
+// Defines values for ToolCallResultOrigin.
+const (
+	ToolCallResultOriginBuiltin  ToolCallResultOrigin = "builtin"
+	ToolCallResultOriginCallback ToolCallResultOrigin = "callback"
+	ToolCallResultOriginHost     ToolCallResultOrigin = "host"
+	ToolCallResultOriginMcp      ToolCallResultOrigin = "mcp"
+	ToolCallResultOriginSystem   ToolCallResultOrigin = "system"
+)
+
+// Valid indicates whether the value is a known member of the ToolCallResultOrigin enum.
+func (e ToolCallResultOrigin) Valid() bool {
+	switch e {
+	case ToolCallResultOriginBuiltin:
+		return true
+	case ToolCallResultOriginCallback:
+		return true
+	case ToolCallResultOriginHost:
+		return true
+	case ToolCallResultOriginMcp:
+		return true
+	case ToolCallResultOriginSystem:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ToolCallStatus.
 const (
 	ToolCallStatusCancelled ToolCallStatus = "cancelled"
@@ -1978,6 +2008,84 @@ type Agent struct {
 	ID AgentID `json:"id"`
 }
 
+// AgentDefinition Immutable Agent Definition returned by registration and detailed
+// Invocation reads. The host owns the configuration and nvoken only records
+// the Agent Definition each turn ran with. Invocation creation nests these
+// execution fields under `agent_definition`; nvoken stores one immutable
+// Agent Definition and re-reads it unchanged on every model
+// iteration and recovery. Two registrations and Invocations with
+// byte-identical execution fields share one Agent Definition.
+// Identity, session selection, input, idempotency, `if_active`, `webhook`,
+// metadata, and provider key selection are durable elsewhere and
+// never appear here. Invocation admission for callback declarations
+// requires App callback-signing configuration. Remote MCP authentication
+// headers are encrypted outside this Agent Definition and never returned.
+// Tools or structured output require at least two model iterations;
+// omission resolves to three or the lower installation maximum.
+type AgentDefinition struct {
+	// Instructions Optional model instructions. Omission adds no hidden default.
+	Instructions *string `json:"instructions,omitempty"`
+
+	// Limits Optional requested limits. Total time bounds the entire turn, active
+	// time bounds model and tool execution, and waiting time bounds the
+	// cumulative time parked for host or callback tool results. Installation
+	// defaults supply all three time limits and the iteration limit.
+	// Output-token and estimated-cost limits are unlimited when omitted.
+	// Installation maxima may be lower than the schema's numeric range.
+	Limits     *Limits      `json:"limits,omitempty"`
+	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
+	Model      Model        `json:"model"`
+
+	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
+	// is limited to 32 KiB and 16 schema positions. Supported keywords are
+	// type, title, description, properties, required, additionalProperties,
+	// items, enum, pattern, minLength, maxLength, minItems, maxItems,
+	// uniqueItems, minimum, and maximum. Every schema position has one string
+	// type; pattern values are limited to 1,024 UTF-8 bytes; references and
+	// other keywords are rejected. Numeric bounds are read as values, not
+	// spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
+	// exposes a reserved durable submit tool and publishes only a
+	// server-validated terminal object. This does not enable host-defined
+	// tools.
+	OutputSchema  *OutputSchema   `json:"output_schema,omitempty"`
+	ProviderTools *[]ProviderTool `json:"provider_tools,omitempty"`
+	Reasoning     *Reasoning      `json:"reasoning,omitempty"`
+	Sampling      *Sampling       `json:"sampling,omitempty"`
+
+	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
+	// none disables tools for the Invocation; required and named apply only
+	// to the first durable model iteration, then return to auto. name is
+	// required only for named mode. The final bounded iteration always
+	// disables tools.
+	ToolChoice *ToolChoice        `json:"tool_choice,omitempty"`
+	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
+}
+
+// AgentDefinitionID Content-addressed Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+type AgentDefinitionID = string
+
+// AgentDefinitionRegistration defines model for AgentDefinitionRegistration.
+type AgentDefinitionRegistration struct {
+	// AgentDefinition Immutable Agent Definition returned by registration and detailed
+	// Invocation reads. The host owns the configuration and nvoken only records
+	// the Agent Definition each turn ran with. Invocation creation nests these
+	// execution fields under `agent_definition`; nvoken stores one immutable
+	// Agent Definition and re-reads it unchanged on every model
+	// iteration and recovery. Two registrations and Invocations with
+	// byte-identical execution fields share one Agent Definition.
+	// Identity, session selection, input, idempotency, `if_active`, `webhook`,
+	// metadata, and provider key selection are durable elsewhere and
+	// never appear here. Invocation admission for callback declarations
+	// requires App callback-signing configuration. Remote MCP authentication
+	// headers are encrypted outside this Agent Definition and never returned.
+	// Tools or structured output require at least two model iterations;
+	// omission resolves to three or the lower installation maximum.
+	AgentDefinition AgentDefinition `json:"agent_definition"`
+
+	// AgentDefinitionID Content-addressed Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
+}
+
 // AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 type AgentID = string
 
@@ -1990,7 +2098,10 @@ type AgentList struct {
 
 // App defines model for App.
 type App struct {
-	CreatedAt time.Time `json:"created_at"`
+	// CallbackTimeoutSeconds Resolved deadline for each callback HTTP request. Defaults to 10.
+	// Webhook delivery is unaffected.
+	CallbackTimeoutSeconds int64     `json:"callback_timeout_seconds"`
+	CreatedAt              time.Time `json:"created_at"`
 
 	// DisplayName Human-facing label; `name` stays the unique handle.
 	DisplayName *string `json:"display_name"`
@@ -2110,7 +2221,9 @@ type BuiltinToolDeclarationMode string
 type BuiltinToolDeclarationName string
 
 // CallbackDeliveryOutcome `pending` means nvoken has not reached a final transport outcome.
-// The other values are terminal transport outcomes.
+// `acknowledged` means the endpoint returned 202 with an empty body and
+// the ToolCall still awaits settlement. The other values are terminal
+// transport outcomes.
 type CallbackDeliveryOutcome string
 
 // CallbackTarget defines model for CallbackTarget.
@@ -2268,24 +2381,28 @@ type CreateCredentialRequest struct {
 	TenantKey *string    `json:"tenant_key,omitempty"`
 }
 
-// CreateInvocationRequest The request carries one definition form. It either carries
-// definition_id or an inline definition with model. The two forms are
-// mutually exclusive.
+// CreateInvocationRequest The request carries exactly one Agent Definition form: either
+// `agent_definition_id` or an inline `agent_definition` object.
 type CreateInvocationRequest struct {
+	// AgentDefinition One Agent Definition accepted by registration or nested under
+	// `agent_definition` during Invocation creation. The model string shorthand
+	// is accepted on write; the resolved Agent Definition returns object form.
+	AgentDefinition *RegisterAgentDefinitionRequest `json:"agent_definition,omitempty"`
+
+	// AgentDefinitionID Reuse an Agent Definition already registered for this App,
+	// instead of sending it again. The ID is derived from the Agent
+	// Definition's content, so it never points at anything else.
+	//
+	// IDs from another app, or IDs that do not exist, return
+	// `agent_definition_not_found`. Cannot be combined with `agent_definition`.
+	// Sending the ID and sending the identical definition inline
+	// count as the same request when retrying with an idempotency key.
+	AgentDefinitionID *AgentDefinitionID `json:"agent_definition_id,omitempty"`
+
 	// AgentKey Stable caller-controlled Agent key, unique within the
 	// authenticated App. The resulting Agent anchor stores identity
 	// only and is shared across that App's tenant partitions.
 	AgentKey string `json:"agent_key"`
-
-	// DefinitionID Reuse an agent definition you already sent inline on an earlier turn,
-	// instead of sending it again. The ID is derived from the definition's
-	// own content, so it never points at anything but that exact definition.
-	//
-	// IDs from another app, or IDs that do not exist, return
-	// `definition_not_found`. Cannot be combined with the inline definition
-	// fields. Sending the ID and sending the identical definition inline
-	// count as the same request when retrying with an idempotency key.
-	DefinitionID *DefinitionID `json:"definition_id,omitempty"`
 
 	// IdempotencyKey Your key for making retries safe. Send the same unchanged request
 	// again after a 5xx, a timeout, a dropped connection, or any case
@@ -2320,17 +2437,10 @@ type CreateInvocationRequest struct {
 	// total at most 16777216 bytes.
 	Input InvocationInput `json:"input"`
 
-	// Instructions Optional model instructions. Omission adds no hidden default.
-	Instructions *string `json:"instructions,omitempty"`
-
-	// Limits Optional requested limits. Total time bounds the entire turn, active
-	// time bounds model and tool execution, and waiting time bounds the
-	// cumulative time parked for host or callback tool results. Installation
-	// defaults supply all three time limits and the iteration limit.
-	// Output-token and estimated-cost limits are unlimited when omitted.
-	// Installation maxima may be lower than the schema's numeric range.
-	Limits     *Limits      `json:"limits,omitempty"`
-	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
+	// McpServerHeaders Per-Invocation secret headers keyed to MCP server names in the
+	// selected Agent Definition. Encrypted for this turn and never stored
+	// in, hashed into, or returned with the Agent Definition.
+	McpServerHeaders *[]MCPServerHeaders `json:"mcp_server_headers,omitempty"`
 
 	// Metadata Your own data to attach to this turn — a ticket number, a trace
 	// ID, whatever helps you tie it back to your system. nvoken stores
@@ -2346,12 +2456,6 @@ type CreateInvocationRequest struct {
 	// `session_options.metadata` and `PATCH /v1/sessions/{session_id}`.
 	Metadata *Metadata `json:"metadata,omitempty"`
 
-	// Model Which model to use. The object form — separate `provider` and `id` — is
-	// the real shape. You may also send a single `provider/id` string for
-	// convenience; nvoken splits it at the first slash and always returns the
-	// object form.
-	Model *ModelInput `json:"model,omitempty"`
-
 	// OnBudgetExhausted What to do when the turn runs out of one of its spending limits.
 	// `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
 	// you can raise the limit and continue it.
@@ -2360,19 +2464,6 @@ type CreateInvocationRequest struct {
 	// cost limits. Deadlines are not covered — a turn that runs out of
 	// time always ends and can never be resumed.
 	OnBudgetExhausted *CreateInvocationRequestOnBudgetExhausted `json:"on_budget_exhausted,omitempty"`
-
-	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
-	// is limited to 32 KiB and 16 schema positions. Supported keywords are
-	// type, title, description, properties, required, additionalProperties,
-	// items, enum, pattern, minLength, maxLength, minItems, maxItems,
-	// uniqueItems, minimum, and maximum. Every schema position has one string
-	// type; pattern values are limited to 1,024 UTF-8 bytes; references and
-	// other keywords are rejected. Numeric bounds are read as values, not
-	// spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
-	// exposes a reserved durable submit tool and publishes only a
-	// server-validated terminal object. This does not enable host-defined
-	// tools.
-	OutputSchema *OutputSchema `json:"output_schema,omitempty"`
 
 	// ProviderKeys Which key pays for the model on this turn. Names a source; never
 	// contains a secret.
@@ -2385,10 +2476,7 @@ type CreateInvocationRequest struct {
 	// Whichever source is chosen is fixed when the turn starts. A turn never
 	// silently falls through to a different payer partway through, so the
 	// bill cannot move once work has begun.
-	ProviderKeys  *[]ProviderKeySelection `json:"provider_keys,omitempty"`
-	ProviderTools *[]ProviderTool         `json:"provider_tools,omitempty"`
-	Reasoning     *Reasoning              `json:"reasoning,omitempty"`
-	Sampling      *Sampling               `json:"sampling,omitempty"`
+	ProviderKeys *[]ProviderKeySelection `json:"provider_keys,omitempty"`
 
 	// SessionID Existing Session to continue. Mutually exclusive with session_key.
 	SessionID *SessionID `json:"session_id,omitempty"`
@@ -2417,14 +2505,6 @@ type CreateInvocationRequest struct {
 	// stored partition.
 	TenantKey *string `json:"tenant_key,omitempty"`
 
-	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
-	// none disables tools for the Invocation; required and named apply only
-	// to the first durable model iteration, then return to auto. name is
-	// required only for named mode. The final bounded iteration always
-	// disables tools.
-	ToolChoice *ToolChoice        `json:"tool_choice,omitempty"`
-	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
-
 	// UserKey Optional host-owned end-user label recorded on this Invocation and
 	// its input message. The Session retains the label from the request
 	// that opened it, while later turns may identify different end users.
@@ -2434,8 +2514,8 @@ type CreateInvocationRequest struct {
 	// Webhook Optional endpoint nvoken posts a signed webhook to when this
 	// Invocation parks awaiting host tool results or reaches a terminal
 	// status. It is delivery configuration rather than model input, so it is
-	// excluded from the reusable Definition. Two otherwise identical turns
-	// that differ only in endpoint therefore share one Definition.
+	// excluded from the reusable Agent Definition. Two otherwise identical
+	// turns that differ only in endpoint therefore share one Agent Definition.
 	//
 	// Delivery is at least once and ordered within one Invocation, and the
 	// webhook ID is repeated in `Idempotency-Key` on every attempt. nvoken
@@ -2629,61 +2709,6 @@ type CurrentIdentityAuthenticationAssurance string
 
 // CurrentIdentityAuthenticationMethod defines model for CurrentIdentity.Authentication.Method.
 type CurrentIdentityAuthenticationMethod string
-
-// Definition Immutable Definition returned on detailed Invocation reads. The
-// host owns the agent definition; nvoken only records the definition
-// each turn ran with. The create request exposes these execution fields
-// at its top level; nvoken selects them, stores one immutable Definition,
-// and re-reads it unchanged on every model iteration and recovery. Two
-// Invocations with byte-identical execution fields share one Definition.
-// Identity, session selection, input, idempotency, `if_active`, `webhook`,
-// metadata, and provider key selection are durable elsewhere and
-// never appear here. Callback declarations require installation callback
-// signing configuration. Remote MCP authentication headers are encrypted
-// outside this Definition and never returned. Tools or structured output
-// require at least two model iterations; omission resolves to three or
-// the lower installation maximum.
-type Definition struct {
-	// Instructions Optional model instructions. Omission adds no hidden default.
-	Instructions *string `json:"instructions,omitempty"`
-
-	// Limits Optional requested limits. Total time bounds the entire turn, active
-	// time bounds model and tool execution, and waiting time bounds the
-	// cumulative time parked for host or callback tool results. Installation
-	// defaults supply all three time limits and the iteration limit.
-	// Output-token and estimated-cost limits are unlimited when omitted.
-	// Installation maxima may be lower than the schema's numeric range.
-	Limits     *Limits      `json:"limits,omitempty"`
-	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
-	Model      Model        `json:"model"`
-
-	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
-	// is limited to 32 KiB and 16 schema positions. Supported keywords are
-	// type, title, description, properties, required, additionalProperties,
-	// items, enum, pattern, minLength, maxLength, minItems, maxItems,
-	// uniqueItems, minimum, and maximum. Every schema position has one string
-	// type; pattern values are limited to 1,024 UTF-8 bytes; references and
-	// other keywords are rejected. Numeric bounds are read as values, not
-	// spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
-	// exposes a reserved durable submit tool and publishes only a
-	// server-validated terminal object. This does not enable host-defined
-	// tools.
-	OutputSchema  *OutputSchema   `json:"output_schema,omitempty"`
-	ProviderTools *[]ProviderTool `json:"provider_tools,omitempty"`
-	Reasoning     *Reasoning      `json:"reasoning,omitempty"`
-	Sampling      *Sampling       `json:"sampling,omitempty"`
-
-	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
-	// none disables tools for the Invocation; required and named apply only
-	// to the first durable model iteration, then return to auto. name is
-	// required only for named mode. The final bounded iteration always
-	// disables tools.
-	ToolChoice *ToolChoice        `json:"tool_choice,omitempty"`
-	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
-}
-
-// DefinitionID Opaque identifier with the public `def_` prefix. Treat the body as opaque.
-type DefinitionID = string
 
 // DeliveryID Identifies one delivery nvoken sent you, callback or webhook alike —
 // both are the same durable record and carry the same `dlvr_` prefix.
@@ -2934,6 +2959,17 @@ type InputBlock struct {
 type Invocation struct {
 	ActiveExecutionMs int `json:"active_execution_ms"`
 
+	// AgentDefinition The agent definition this turn actually ran with, stored when the turn
+	// started and returned exactly as it was. Request headers for remote MCP
+	// servers are never stored and never appear here.
+	//
+	// Present on `GET /v1/invocations/{id}` and on the result. Null in list
+	// items, where `agent_definition_id` identifies it instead.
+	AgentDefinition *AgentDefinition `json:"agent_definition"`
+
+	// AgentDefinitionID Content-addressed Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
+
 	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	AgentID AgentID `json:"agent_id"`
 
@@ -2958,18 +2994,7 @@ type Invocation struct {
 	// Deduplicated Only present on the `POST /v1/invocations` response. False when this
 	// call created a new turn, true when your idempotency key matched one
 	// that already existed and you got that one back.
-	Deduplicated *bool `json:"deduplicated,omitempty"`
-
-	// Definition The agent definition this turn actually ran with, stored when the turn
-	// started and returned exactly as it was. Request headers for remote MCP
-	// servers are never stored and never appear here.
-	//
-	// Present on `GET /v1/invocations/{id}` and on the result. Null in list
-	// items, where `definition_id` identifies it instead.
-	Definition *Definition `json:"definition"`
-
-	// DefinitionID Opaque identifier with the public `def_` prefix. Treat the body as opaque.
-	DefinitionID DefinitionID       `json:"definition_id"`
+	Deduplicated *bool              `json:"deduplicated,omitempty"`
 	EndedAt      *time.Time         `json:"ended_at"`
 	Error        *InvocationFailure `json:"error"`
 
@@ -2981,7 +3006,7 @@ type Invocation struct {
 	// you sent it.
 	Metadata *Metadata `json:"metadata"`
 
-	// PendingToolCalls Present for a waiting Invocation with unresolved host calls.
+	// PendingToolCalls Present for a waiting Invocation with unresolved host or callback calls.
 	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
 	Provenance       *ModelProvenance       `json:"provenance"`
 
@@ -3412,7 +3437,9 @@ type Limits struct {
 
 // MCPListToolsRequest defines model for MCPListToolsRequest.
 type MCPListToolsRequest struct {
-	Server MCPServer `json:"server"`
+	// Headers Optional secret headers used only for this discovery request.
+	Headers *map[string]string `json:"headers,omitempty"`
+	Server  MCPServer          `json:"server"`
 }
 
 // MCPListToolsResponse defines model for MCPListToolsResponse.
@@ -3445,11 +3472,6 @@ type MCPServer struct {
 	// AllowedTools Optional ordered allowlist. Every named tool must be discovered and projectable.
 	AllowedTools *[]string `json:"allowed_tools,omitempty"`
 
-	// Headers Secret request headers, limited to 8 KiB encoded. Routing,
-	// framing, proxy, cookie, hop-by-hop, and MCP session headers are
-	// rejected. Headers are encrypted per Invocation and never returned.
-	Headers *map[string]string `json:"headers,omitempty"`
-
 	// Name A name for this MCP server, unique within the turn. Its tools are
 	// exposed to the model as `<name>__<tool>`, so this is the prefix your
 	// model will see. Names starting with `nvoken`, in any casing, are
@@ -3464,6 +3486,17 @@ type MCPServer struct {
 
 // MCPServerTransport defines model for MCPServer.Transport.
 type MCPServerTransport string
+
+// MCPServerHeaders defines model for MCPServerHeaders.
+type MCPServerHeaders struct {
+	// Headers Secret request headers, limited to 8 KiB encoded. Routing,
+	// framing, proxy, cookie, hop-by-hop, and MCP session headers are
+	// rejected. Headers are encrypted per Invocation and never returned.
+	Headers *map[string]string `json:"headers,omitempty"`
+
+	// Name Exact name of one MCP server in the selected Agent Definition.
+	Name string `json:"name"`
+}
 
 // MCPTimeouts defines model for MCPTimeouts.
 type MCPTimeouts struct {
@@ -3818,15 +3851,27 @@ type ModelToolChoiceMode string
 
 // ModelUsage defines model for ModelUsage.
 type ModelUsage struct {
-	CacheCreationInputTokens *int       `json:"cache_creation_input_tokens,omitempty"`
-	CacheReadInputTokens     *int       `json:"cache_read_input_tokens,omitempty"`
-	EstimatedCost            *ModelCost `json:"estimated_cost,omitempty"`
-	InputTokens              int        `json:"input_tokens"`
+	// CacheCreationInputTokens Input tokens written to the provider's prompt cache. Absent on
+	// providers that report cache hits but not cache writes.
+	CacheCreationInputTokens *int `json:"cache_creation_input_tokens,omitempty"`
+
+	// CacheReadInputTokens Input tokens served from the provider's prompt cache.
+	CacheReadInputTokens *int       `json:"cache_read_input_tokens,omitempty"`
+	EstimatedCost        *ModelCost `json:"estimated_cost,omitempty"`
+
+	// InputTokens Uncached input tokens. The three input buckets are disjoint across
+	// every provider, so total prompt size is input_tokens +
+	// cache_creation_input_tokens + cache_read_input_tokens. Cached tokens
+	// are never also counted here.
+	InputTokens int `json:"input_tokens"`
 
 	// ModelCalls How many model requests these totals cover. Older records may not have
 	// it.
-	ModelCalls      *int `json:"model_calls,omitempty"`
-	OutputTokens    int  `json:"output_tokens"`
+	ModelCalls   *int `json:"model_calls,omitempty"`
+	OutputTokens int  `json:"output_tokens"`
+
+	// ReasoningTokens Output tokens spent on reasoning. A subset of output_tokens, not an
+	// additive bucket.
 	ReasoningTokens *int `json:"reasoning_tokens,omitempty"`
 }
 
@@ -4159,8 +4204,60 @@ type RedactedBlock struct {
 // RedactedBlockType defines model for RedactedBlock.Type.
 type RedactedBlockType string
 
+// RegisterAgentDefinitionRequest One Agent Definition accepted by registration or nested under
+// `agent_definition` during Invocation creation. The model string shorthand
+// is accepted on write; the resolved Agent Definition returns object form.
+type RegisterAgentDefinitionRequest struct {
+	// Instructions Optional model instructions. Omission adds no hidden default.
+	Instructions *string `json:"instructions,omitempty"`
+
+	// Limits Optional requested limits. Total time bounds the entire turn, active
+	// time bounds model and tool execution, and waiting time bounds the
+	// cumulative time parked for host or callback tool results. Installation
+	// defaults supply all three time limits and the iteration limit.
+	// Output-token and estimated-cost limits are unlimited when omitted.
+	// Installation maxima may be lower than the schema's numeric range.
+	Limits *Limits `json:"limits,omitempty"`
+
+	// McpServers MCP server declarations for later Invocations. Secrets are never part of an Agent Definition.
+	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
+
+	// Model Which model to use. The object form — separate `provider` and `id` — is
+	// the real shape. You may also send a single `provider/id` string for
+	// convenience; nvoken splits it at the first slash and always returns the
+	// object form.
+	Model ModelInput `json:"model"`
+
+	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
+	// is limited to 32 KiB and 16 schema positions. Supported keywords are
+	// type, title, description, properties, required, additionalProperties,
+	// items, enum, pattern, minLength, maxLength, minItems, maxItems,
+	// uniqueItems, minimum, and maximum. Every schema position has one string
+	// type; pattern values are limited to 1,024 UTF-8 bytes; references and
+	// other keywords are rejected. Numeric bounds are read as values, not
+	// spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
+	// exposes a reserved durable submit tool and publishes only a
+	// server-validated terminal object. This does not enable host-defined
+	// tools.
+	OutputSchema  *OutputSchema   `json:"output_schema,omitempty"`
+	ProviderTools *[]ProviderTool `json:"provider_tools,omitempty"`
+	Reasoning     *Reasoning      `json:"reasoning,omitempty"`
+	Sampling      *Sampling       `json:"sampling,omitempty"`
+
+	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
+	// none disables tools for the Invocation; required and named apply only
+	// to the first durable model iteration, then return to auto. name is
+	// required only for named mode. The final bounded iteration always
+	// disables tools.
+	ToolChoice *ToolChoice        `json:"tool_choice,omitempty"`
+	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
+}
+
 // RegisterAppRequest defines model for RegisterAppRequest.
 type RegisterAppRequest struct {
+	// CallbackTimeoutSeconds Callback HTTP reply deadline for this App.
+	CallbackTimeoutSeconds *int64 `json:"callback_timeout_seconds,omitempty"`
+
 	// DisplayName Optional human-facing label.
 	DisplayName *string `json:"display_name,omitempty"`
 
@@ -4342,7 +4439,7 @@ type Session struct {
 	// `PATCH /v1/sessions/{session_id}`.
 	Metadata *Metadata `json:"metadata"`
 
-	// PendingToolCalls Pending host calls for the active waiting Invocation.
+	// PendingToolCalls Pending host and callback calls for the active waiting Invocation.
 	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
 
 	// Retention The idle retention window this Session was created with, or null
@@ -4660,7 +4757,9 @@ type SubmitHostToolResultsRequest struct {
 // SubmitHostToolResultsResponse defines model for SubmitHostToolResultsResponse.
 type SubmitHostToolResultsResponse struct {
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID     InvocationID               `json:"invocation_id"`
+	InvocationID InvocationID `json:"invocation_id"`
+
+	// PendingToolCalls Remaining open host- and callback-mode ToolCalls.
 	PendingToolCalls []PendingHostToolCall      `json:"pending_tool_calls"`
 	Results          []HostToolResultAcceptance `json:"results"`
 
@@ -4756,11 +4855,14 @@ type ToolCall struct {
 	// transcript `tool_use` block or from the pending host tool calls, and
 	// pass it back verbatim as `tool_call_id` when submitting results. The
 	// same value is the `Idempotency-Key` on a callback delivery.
-	ID        ToolCallID     `json:"id"`
-	Iteration int            `json:"iteration"`
-	Mode      ToolCallMode   `json:"mode"`
-	Name      string         `json:"name"`
-	Status    ToolCallStatus `json:"status"`
+	ID        ToolCallID   `json:"id"`
+	Iteration int          `json:"iteration"`
+	Mode      ToolCallMode `json:"mode"`
+	Name      string       `json:"name"`
+
+	// ResultOrigin Null until a ToolCall has a committed result.
+	ResultOrigin *ToolCallResultOrigin `json:"result_origin"`
+	Status       ToolCallStatus        `json:"status"`
 }
 
 // ToolCallDelivery defines model for ToolCallDelivery.
@@ -4772,7 +4874,9 @@ type ToolCallDelivery struct {
 	LastHTTPStatus *int `json:"last_http_status"`
 
 	// Outcome `pending` means nvoken has not reached a final transport outcome.
-	// The other values are terminal transport outcomes.
+	// `acknowledged` means the endpoint returned 202 with an empty body and
+	// the ToolCall still awaits settlement. The other values are terminal
+	// transport outcomes.
 	Outcome CallbackDeliveryOutcome `json:"outcome"`
 }
 
@@ -4791,6 +4895,10 @@ type ToolCallList struct {
 
 // ToolCallMode defines model for ToolCallMode.
 type ToolCallMode string
+
+// ToolCallResultOrigin The component that committed the result. `callback` is an inline
+// callback response; `host` includes settlement through `tool-results`.
+type ToolCallResultOrigin string
 
 // ToolCallStatus defines model for ToolCallStatus.
 type ToolCallStatus string
@@ -4942,6 +5050,9 @@ type URLCitationType string
 
 // UpdateAppRequest defines model for UpdateAppRequest.
 type UpdateAppRequest struct {
+	// CallbackTimeoutSeconds New callback HTTP reply deadline for this App.
+	CallbackTimeoutSeconds *int64 `json:"callback_timeout_seconds,omitempty"`
+
 	// DisplayName New human-facing label for the app.
 	DisplayName *string `json:"display_name,omitempty"`
 
@@ -5088,8 +5199,8 @@ type WebhookEvent string
 // WebhookTarget Optional endpoint nvoken posts a signed webhook to when this
 // Invocation parks awaiting host tool results or reaches a terminal
 // status. It is delivery configuration rather than model input, so it is
-// excluded from the reusable Definition. Two otherwise identical turns
-// that differ only in endpoint therefore share one Definition.
+// excluded from the reusable Agent Definition. Two otherwise identical
+// turns that differ only in endpoint therefore share one Agent Definition.
 //
 // Delivery is at least once and ordered within one Invocation, and the
 // webhook ID is repeated in `Idempotency-Key` on every attempt. nvoken
@@ -5589,6 +5700,9 @@ type ReceiveToolCallbackParams struct {
 
 // ReceiveToolCallbackParamsXNvokenSignatureVersion defines parameters for ReceiveToolCallback.
 type ReceiveToolCallbackParamsXNvokenSignatureVersion string
+
+// RegisterAgentDefinitionJSONRequestBody defines body for RegisterAgentDefinition for application/json ContentType.
+type RegisterAgentDefinitionJSONRequestBody = RegisterAgentDefinitionRequest
 
 // RegisterAppJSONRequestBody defines body for RegisterApp for application/json ContentType.
 type RegisterAppJSONRequestBody = RegisterAppRequest
@@ -7068,6 +7182,76 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
+	// RegisterAgentDefinitionWithBody Register one immutable Agent Definition without starting a turn
+	//
+	// Validates and stores the same content-addressed Agent Definition that an
+	// inline `POST /v1/invocations` request would store, but creates no Agent,
+	// Session, message, or Invocation. The response is the same for a first
+	// registration, a repeat, or an Agent Definition an earlier turn already stored.
+	//
+	// Registration canonicalizes accepted model-provider aliases and resolves
+	// MCP defaults before hashing. Registering with an alias and invoking with
+	// its canonical provider name therefore produces the same `agent_definition_id`.
+	// The ID is not a mutable version or an agent name, and there is no list,
+	// read, update, or delete endpoint for Agent Definitions.
+	//
+	// Registration checks only the Agent Definition's own content: schema and size
+	// bounds, model controls, provider-tool support, and tool declarations.
+	// Turn admission checks installation, App signing-key, builtin-gate,
+	// budget, provider-key, Session, and current model-lifecycle state again.
+	// In particular, a callback tool can be registered before its App callback
+	// signing key exists, but an Invocation using it is refused until delivery
+	// is configured.
+	//
+	// Remote MCP headers are per-Invocation secrets and are not part of this
+	// request shape. Supply them through `mcp_server_headers` when creating an
+	// Invocation, whether its Agent Definition is inline or referenced by ID.
+	//
+	// The caller needs `create_invocation` on an App-bound credential. App-less
+	// installation credentials and tenant- or Session-constrained credentials
+	// are refused because registration creates an App-wide claim. The body may
+	// be at most 1 MiB.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/agent-definitions (the `RegisterAgentDefinition` operationId).
+	RegisterAgentDefinitionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RegisterAgentDefinition Register one immutable Agent Definition without starting a turn
+	//
+	// Validates and stores the same content-addressed Agent Definition that an
+	// inline `POST /v1/invocations` request would store, but creates no Agent,
+	// Session, message, or Invocation. The response is the same for a first
+	// registration, a repeat, or an Agent Definition an earlier turn already stored.
+	//
+	// Registration canonicalizes accepted model-provider aliases and resolves
+	// MCP defaults before hashing. Registering with an alias and invoking with
+	// its canonical provider name therefore produces the same `agent_definition_id`.
+	// The ID is not a mutable version or an agent name, and there is no list,
+	// read, update, or delete endpoint for Agent Definitions.
+	//
+	// Registration checks only the Agent Definition's own content: schema and size
+	// bounds, model controls, provider-tool support, and tool declarations.
+	// Turn admission checks installation, App signing-key, builtin-gate,
+	// budget, provider-key, Session, and current model-lifecycle state again.
+	// In particular, a callback tool can be registered before its App callback
+	// signing key exists, but an Invocation using it is refused until delivery
+	// is configured.
+	//
+	// Remote MCP headers are per-Invocation secrets and are not part of this
+	// request shape. Supply them through `mcp_server_headers` when creating an
+	// Invocation, whether its Agent Definition is inline or referenced by ID.
+	//
+	// The caller needs `create_invocation` on an App-bound credential. App-less
+	// installation credentials and tenant- or Session-constrained credentials
+	// are refused because registration creates an App-wide claim. The body may
+	// be at most 1 MiB.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/agent-definitions (the `RegisterAgentDefinition` operationId).
+	RegisterAgentDefinition(ctx context.Context, body RegisterAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAgents List Agent identity anchors
 	//
 	// Returns newest-first identity anchors scoped to the caller's app. An
@@ -7325,7 +7509,7 @@ type ClientInterface interface {
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken finds or creates the Agent and Session, resolves
-	// the agent definition you sent inline or referenced by `definition_id`,
+	// the agent definition you sent inline or referenced by `agent_definition_id`,
 	// appends your input as one message, and queues the turn. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
@@ -7349,8 +7533,8 @@ type ClientInterface interface {
 	// finished. Keys are scoped to the tenant and `agent_key`.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// resolved definition, and the input all match. A `definition_id` and
-	// the identical inline definition count as the same. Limits are compared
+	// resolved Agent Definition, and the input all match. An `agent_definition_id`
+	// and the identical inline Agent Definition count as the same. Limits are compared
 	// as you sent them, so sending a value that happens to equal the default
 	// is not the same as omitting it. Key order inside JSON objects does not
 	// matter; array order does. Change anything that matters and you get
@@ -7422,7 +7606,7 @@ type ClientInterface interface {
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken finds or creates the Agent and Session, resolves
-	// the agent definition you sent inline or referenced by `definition_id`,
+	// the agent definition you sent inline or referenced by `agent_definition_id`,
 	// appends your input as one message, and queues the turn. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
@@ -7446,8 +7630,8 @@ type ClientInterface interface {
 	// finished. Keys are scoped to the tenant and `agent_key`.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// resolved definition, and the input all match. A `definition_id` and
-	// the identical inline definition count as the same. Limits are compared
+	// resolved Agent Definition, and the input all match. An `agent_definition_id`
+	// and the identical inline Agent Definition count as the same. Limits are compared
 	// as you sent them, so sending a value that happens to equal the default
 	// is not the same as omitting it. Key order inside JSON objects does not
 	// matter; array order does. Change anything that matters and you get
@@ -7790,7 +7974,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/tool-calls (the `ListToolCalls` operationId).
 	ListToolCalls(ctx context.Context, invocationID InvocationID, params *ListToolCallsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SubmitHostToolResultsWithBody Submit durable results for pending host ToolCalls
+	// SubmitHostToolResultsWithBody Submit durable results for pending host and callback ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
 	// first committed result for each ToolCall wins. An equal replay is
@@ -7799,7 +7983,7 @@ type ClientInterface interface {
 	// queues the same Invocation and its successor dispatch before
 	// returning `202`.
 	//
-	// This command accepts only host-mode calls owned by the path
+	// This command accepts only host- or callback-mode calls owned by the path
 	// Invocation and authenticated tenant scope. It is not a generic
 	// Session append endpoint. The body is limited to 1 MiB; each result
 	// content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -7815,7 +7999,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 	SubmitHostToolResultsWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SubmitHostToolResults Submit durable results for pending host ToolCalls
+	// SubmitHostToolResults Submit durable results for pending host and callback ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
 	// first committed result for each ToolCall wins. An equal replay is
@@ -7824,7 +8008,7 @@ type ClientInterface interface {
 	// queues the same Invocation and its successor dispatch before
 	// returning `202`.
 	//
-	// This command accepts only host-mode calls owned by the path
+	// This command accepts only host- or callback-mode calls owned by the path
 	// Invocation and authenticated tenant scope. It is not a generic
 	// Session append endpoint. The body is limited to 1 MiB; each result
 	// content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -8311,6 +8495,96 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 	GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// RegisterAgentDefinitionWithBody Register one immutable Agent Definition without starting a turn
+//
+// Validates and stores the same content-addressed Agent Definition that an
+// inline `POST /v1/invocations` request would store, but creates no Agent,
+// Session, message, or Invocation. The response is the same for a first
+// registration, a repeat, or an Agent Definition an earlier turn already stored.
+//
+// Registration canonicalizes accepted model-provider aliases and resolves
+// MCP defaults before hashing. Registering with an alias and invoking with
+// its canonical provider name therefore produces the same `agent_definition_id`.
+// The ID is not a mutable version or an agent name, and there is no list,
+// read, update, or delete endpoint for Agent Definitions.
+//
+// Registration checks only the Agent Definition's own content: schema and size
+// bounds, model controls, provider-tool support, and tool declarations.
+// Turn admission checks installation, App signing-key, builtin-gate,
+// budget, provider-key, Session, and current model-lifecycle state again.
+// In particular, a callback tool can be registered before its App callback
+// signing key exists, but an Invocation using it is refused until delivery
+// is configured.
+//
+// Remote MCP headers are per-Invocation secrets and are not part of this
+// request shape. Supply them through `mcp_server_headers` when creating an
+// Invocation, whether its Agent Definition is inline or referenced by ID.
+//
+// The caller needs `create_invocation` on an App-bound credential. App-less
+// installation credentials and tenant- or Session-constrained credentials
+// are refused because registration creates an App-wide claim. The body may
+// be at most 1 MiB.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/agent-definitions (the `RegisterAgentDefinition` operationId).
+func (c *Client) RegisterAgentDefinitionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterAgentDefinitionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RegisterAgentDefinition Register one immutable Agent Definition without starting a turn
+//
+// Validates and stores the same content-addressed Agent Definition that an
+// inline `POST /v1/invocations` request would store, but creates no Agent,
+// Session, message, or Invocation. The response is the same for a first
+// registration, a repeat, or an Agent Definition an earlier turn already stored.
+//
+// Registration canonicalizes accepted model-provider aliases and resolves
+// MCP defaults before hashing. Registering with an alias and invoking with
+// its canonical provider name therefore produces the same `agent_definition_id`.
+// The ID is not a mutable version or an agent name, and there is no list,
+// read, update, or delete endpoint for Agent Definitions.
+//
+// Registration checks only the Agent Definition's own content: schema and size
+// bounds, model controls, provider-tool support, and tool declarations.
+// Turn admission checks installation, App signing-key, builtin-gate,
+// budget, provider-key, Session, and current model-lifecycle state again.
+// In particular, a callback tool can be registered before its App callback
+// signing key exists, but an Invocation using it is refused until delivery
+// is configured.
+//
+// Remote MCP headers are per-Invocation secrets and are not part of this
+// request shape. Supply them through `mcp_server_headers` when creating an
+// Invocation, whether its Agent Definition is inline or referenced by ID.
+//
+// The caller needs `create_invocation` on an App-bound credential. App-less
+// installation credentials and tenant- or Session-constrained credentials
+// are refused because registration creates an App-wide claim. The body may
+// be at most 1 MiB.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/agent-definitions (the `RegisterAgentDefinition` operationId).
+func (c *Client) RegisterAgentDefinition(ctx context.Context, body RegisterAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterAgentDefinitionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // ListAgents List Agent identity anchors
@@ -8810,7 +9084,7 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken finds or creates the Agent and Session, resolves
-// the agent definition you sent inline or referenced by `definition_id`,
+// the agent definition you sent inline or referenced by `agent_definition_id`,
 // appends your input as one message, and queues the turn. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
@@ -8834,8 +9108,8 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 // finished. Keys are scoped to the tenant and `agent_key`.
 //
 // A repeat counts as the same request only if the Session selector, the
-// resolved definition, and the input all match. A `definition_id` and
-// the identical inline definition count as the same. Limits are compared
+// resolved Agent Definition, and the input all match. An `agent_definition_id`
+// and the identical inline Agent Definition count as the same. Limits are compared
 // as you sent them, so sending a value that happens to equal the default
 // is not the same as omitting it. Key order inside JSON objects does not
 // matter; array order does. Change anything that matters and you get
@@ -8917,7 +9191,7 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken finds or creates the Agent and Session, resolves
-// the agent definition you sent inline or referenced by `definition_id`,
+// the agent definition you sent inline or referenced by `agent_definition_id`,
 // appends your input as one message, and queues the turn. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
@@ -8941,8 +9215,8 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 // finished. Keys are scoped to the tenant and `agent_key`.
 //
 // A repeat counts as the same request only if the Session selector, the
-// resolved definition, and the input all match. A `definition_id` and
-// the identical inline definition count as the same. Limits are compared
+// resolved Agent Definition, and the input all match. An `agent_definition_id`
+// and the identical inline Agent Definition count as the same. Limits are compared
 // as you sent them, so sending a value that happens to equal the default
 // is not the same as omitting it. Key order inside JSON objects does not
 // matter; array order does. Change anything that matters and you get
@@ -9425,7 +9699,7 @@ func (c *Client) ListToolCalls(ctx context.Context, invocationID InvocationID, p
 	return c.Client.Do(req)
 }
 
-// SubmitHostToolResultsWithBody Submit durable results for pending host ToolCalls
+// SubmitHostToolResultsWithBody Submit durable results for pending host and callback ToolCalls
 //
 // Atomically accepts one bounded batch for a waiting Invocation. The
 // first committed result for each ToolCall wins. An equal replay is
@@ -9434,7 +9708,7 @@ func (c *Client) ListToolCalls(ctx context.Context, invocationID InvocationID, p
 // queues the same Invocation and its successor dispatch before
 // returning `202`.
 //
-// This command accepts only host-mode calls owned by the path
+// This command accepts only host- or callback-mode calls owned by the path
 // Invocation and authenticated tenant scope. It is not a generic
 // Session append endpoint. The body is limited to 1 MiB; each result
 // content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -9460,7 +9734,7 @@ func (c *Client) SubmitHostToolResultsWithBody(ctx context.Context, invocationID
 	return c.Client.Do(req)
 }
 
-// SubmitHostToolResults Submit durable results for pending host ToolCalls
+// SubmitHostToolResults Submit durable results for pending host and callback ToolCalls
 //
 // Atomically accepts one bounded batch for a waiting Invocation. The
 // first committed result for each ToolCall wins. An equal replay is
@@ -9469,7 +9743,7 @@ func (c *Client) SubmitHostToolResultsWithBody(ctx context.Context, invocationID
 // queues the same Invocation and its successor dispatch before
 // returning `202`.
 //
-// This command accepts only host-mode calls owned by the path
+// This command accepts only host- or callback-mode calls owned by the path
 // Invocation and authenticated tenant scope. It is not a generic
 // Session append endpoint. The body is limited to 1 MiB; each result
 // content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -10305,6 +10579,46 @@ func (c *Client) GetUsageTimeseries(ctx context.Context, params *GetUsageTimeser
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewRegisterAgentDefinitionRequest calls the generic RegisterAgentDefinition builder with application/json body
+func NewRegisterAgentDefinitionRequest(server string, body RegisterAgentDefinitionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRegisterAgentDefinitionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRegisterAgentDefinitionRequestWithBody constructs an http.Request for the RegisterAgentDefinition method, with any body, and a specified content type
+func NewRegisterAgentDefinitionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agent-definitions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewListAgentsRequest constructs an http.Request for the ListAgents method
@@ -14118,6 +14432,76 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// RegisterAgentDefinitionWithBodyWithResponse Register one immutable Agent Definition without starting a turn
+	//
+	// Validates and stores the same content-addressed Agent Definition that an
+	// inline `POST /v1/invocations` request would store, but creates no Agent,
+	// Session, message, or Invocation. The response is the same for a first
+	// registration, a repeat, or an Agent Definition an earlier turn already stored.
+	//
+	// Registration canonicalizes accepted model-provider aliases and resolves
+	// MCP defaults before hashing. Registering with an alias and invoking with
+	// its canonical provider name therefore produces the same `agent_definition_id`.
+	// The ID is not a mutable version or an agent name, and there is no list,
+	// read, update, or delete endpoint for Agent Definitions.
+	//
+	// Registration checks only the Agent Definition's own content: schema and size
+	// bounds, model controls, provider-tool support, and tool declarations.
+	// Turn admission checks installation, App signing-key, builtin-gate,
+	// budget, provider-key, Session, and current model-lifecycle state again.
+	// In particular, a callback tool can be registered before its App callback
+	// signing key exists, but an Invocation using it is refused until delivery
+	// is configured.
+	//
+	// Remote MCP headers are per-Invocation secrets and are not part of this
+	// request shape. Supply them through `mcp_server_headers` when creating an
+	// Invocation, whether its Agent Definition is inline or referenced by ID.
+	//
+	// The caller needs `create_invocation` on an App-bound credential. App-less
+	// installation credentials and tenant- or Session-constrained credentials
+	// are refused because registration creates an App-wide claim. The body may
+	// be at most 1 MiB.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/agent-definitions (the `RegisterAgentDefinition` operationId).
+	RegisterAgentDefinitionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterAgentDefinitionHTTPResponse, error)
+
+	// RegisterAgentDefinitionWithResponse Register one immutable Agent Definition without starting a turn
+	//
+	// Validates and stores the same content-addressed Agent Definition that an
+	// inline `POST /v1/invocations` request would store, but creates no Agent,
+	// Session, message, or Invocation. The response is the same for a first
+	// registration, a repeat, or an Agent Definition an earlier turn already stored.
+	//
+	// Registration canonicalizes accepted model-provider aliases and resolves
+	// MCP defaults before hashing. Registering with an alias and invoking with
+	// its canonical provider name therefore produces the same `agent_definition_id`.
+	// The ID is not a mutable version or an agent name, and there is no list,
+	// read, update, or delete endpoint for Agent Definitions.
+	//
+	// Registration checks only the Agent Definition's own content: schema and size
+	// bounds, model controls, provider-tool support, and tool declarations.
+	// Turn admission checks installation, App signing-key, builtin-gate,
+	// budget, provider-key, Session, and current model-lifecycle state again.
+	// In particular, a callback tool can be registered before its App callback
+	// signing key exists, but an Invocation using it is refused until delivery
+	// is configured.
+	//
+	// Remote MCP headers are per-Invocation secrets and are not part of this
+	// request shape. Supply them through `mcp_server_headers` when creating an
+	// Invocation, whether its Agent Definition is inline or referenced by ID.
+	//
+	// The caller needs `create_invocation` on an App-bound credential. App-less
+	// installation credentials and tenant- or Session-constrained credentials
+	// are refused because registration creates an App-wide claim. The body may
+	// be at most 1 MiB.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/agent-definitions (the `RegisterAgentDefinition` operationId).
+	RegisterAgentDefinitionWithResponse(ctx context.Context, body RegisterAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterAgentDefinitionHTTPResponse, error)
+
 	// ListAgentsWithResponse List Agent identity anchors
 	//
 	// Returns newest-first identity anchors scoped to the caller's app. An
@@ -14399,7 +14783,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken finds or creates the Agent and Session, resolves
-	// the agent definition you sent inline or referenced by `definition_id`,
+	// the agent definition you sent inline or referenced by `agent_definition_id`,
 	// appends your input as one message, and queues the turn. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
@@ -14423,8 +14807,8 @@ type ClientWithResponsesInterface interface {
 	// finished. Keys are scoped to the tenant and `agent_key`.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// resolved definition, and the input all match. A `definition_id` and
-	// the identical inline definition count as the same. Limits are compared
+	// resolved Agent Definition, and the input all match. An `agent_definition_id`
+	// and the identical inline Agent Definition count as the same. Limits are compared
 	// as you sent them, so sending a value that happens to equal the default
 	// is not the same as omitting it. Key order inside JSON objects does not
 	// matter; array order does. Change anything that matters and you get
@@ -14496,7 +14880,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken finds or creates the Agent and Session, resolves
-	// the agent definition you sent inline or referenced by `definition_id`,
+	// the agent definition you sent inline or referenced by `agent_definition_id`,
 	// appends your input as one message, and queues the turn. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
@@ -14520,8 +14904,8 @@ type ClientWithResponsesInterface interface {
 	// finished. Keys are scoped to the tenant and `agent_key`.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// resolved definition, and the input all match. A `definition_id` and
-	// the identical inline definition count as the same. Limits are compared
+	// resolved Agent Definition, and the input all match. An `agent_definition_id`
+	// and the identical inline Agent Definition count as the same. Limits are compared
 	// as you sent them, so sending a value that happens to equal the default
 	// is not the same as omitting it. Key order inside JSON objects does not
 	// matter; array order does. Change anything that matters and you get
@@ -14882,7 +15266,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/tool-calls (the `ListToolCalls` operationId).
 	ListToolCallsWithResponse(ctx context.Context, invocationID InvocationID, params *ListToolCallsParams, reqEditors ...RequestEditorFn) (*ListToolCallsHTTPResponse, error)
 
-	// SubmitHostToolResultsWithBodyWithResponse Submit durable results for pending host ToolCalls
+	// SubmitHostToolResultsWithBodyWithResponse Submit durable results for pending host and callback ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
 	// first committed result for each ToolCall wins. An equal replay is
@@ -14891,7 +15275,7 @@ type ClientWithResponsesInterface interface {
 	// queues the same Invocation and its successor dispatch before
 	// returning `202`.
 	//
-	// This command accepts only host-mode calls owned by the path
+	// This command accepts only host- or callback-mode calls owned by the path
 	// Invocation and authenticated tenant scope. It is not a generic
 	// Session append endpoint. The body is limited to 1 MiB; each result
 	// content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -14907,7 +15291,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 	SubmitHostToolResultsWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitHostToolResultsHTTPResponse, error)
 
-	// SubmitHostToolResultsWithResponse Submit durable results for pending host ToolCalls
+	// SubmitHostToolResultsWithResponse Submit durable results for pending host and callback ToolCalls
 	//
 	// Atomically accepts one bounded batch for a waiting Invocation. The
 	// first committed result for each ToolCall wins. An equal replay is
@@ -14916,7 +15300,7 @@ type ClientWithResponsesInterface interface {
 	// queues the same Invocation and its successor dispatch before
 	// returning `202`.
 	//
-	// This command accepts only host-mode calls owned by the path
+	// This command accepts only host- or callback-mode calls owned by the path
 	// Invocation and authenticated tenant scope. It is not a generic
 	// Session append endpoint. The body is limited to 1 MiB; each result
 	// content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -15439,6 +15823,96 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 	GetUsageTimeseriesWithResponse(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*GetUsageTimeseriesHTTPResponse, error)
+}
+
+// RegisterAgentDefinitionHTTPResponse429Headers the declared response headers of an HTTP 429 response for RegisterAgentDefinition
+type RegisterAgentDefinitionHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type RegisterAgentDefinitionHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AgentDefinitionRegistration
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *RegisterAgentDefinitionHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RegisterAgentDefinitionHTTPResponse) GetJSON200() *AgentDefinitionRegistration {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RegisterAgentDefinitionHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RegisterAgentDefinitionHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RegisterAgentDefinitionHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r RegisterAgentDefinitionHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r RegisterAgentDefinitionHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r RegisterAgentDefinitionHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r RegisterAgentDefinitionHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RegisterAgentDefinitionHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RegisterAgentDefinitionHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RegisterAgentDefinitionHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 // ListAgentsHTTPResponse429Headers the declared response headers of an HTTP 429 response for ListAgents
@@ -20326,6 +20800,88 @@ func (r GetUsageTimeseriesHTTPResponse) ContentType() string {
 	return ""
 }
 
+// RegisterAgentDefinitionWithBodyWithResponse Register one immutable Agent Definition without starting a turn
+//
+// Validates and stores the same content-addressed Agent Definition that an
+// inline `POST /v1/invocations` request would store, but creates no Agent,
+// Session, message, or Invocation. The response is the same for a first
+// registration, a repeat, or an Agent Definition an earlier turn already stored.
+//
+// Registration canonicalizes accepted model-provider aliases and resolves
+// MCP defaults before hashing. Registering with an alias and invoking with
+// its canonical provider name therefore produces the same `agent_definition_id`.
+// The ID is not a mutable version or an agent name, and there is no list,
+// read, update, or delete endpoint for Agent Definitions.
+//
+// Registration checks only the Agent Definition's own content: schema and size
+// bounds, model controls, provider-tool support, and tool declarations.
+// Turn admission checks installation, App signing-key, builtin-gate,
+// budget, provider-key, Session, and current model-lifecycle state again.
+// In particular, a callback tool can be registered before its App callback
+// signing key exists, but an Invocation using it is refused until delivery
+// is configured.
+//
+// Remote MCP headers are per-Invocation secrets and are not part of this
+// request shape. Supply them through `mcp_server_headers` when creating an
+// Invocation, whether its Agent Definition is inline or referenced by ID.
+//
+// The caller needs `create_invocation` on an App-bound credential. App-less
+// installation credentials and tenant- or Session-constrained credentials
+// are refused because registration creates an App-wide claim. The body may
+// be at most 1 MiB.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/agent-definitions (the `RegisterAgentDefinition` operationId).
+func (c *ClientWithResponses) RegisterAgentDefinitionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterAgentDefinitionHTTPResponse, error) {
+	rsp, err := c.RegisterAgentDefinitionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRegisterAgentDefinitionHTTPResponse(rsp)
+}
+
+// RegisterAgentDefinitionWithResponse Register one immutable Agent Definition without starting a turn
+//
+// Validates and stores the same content-addressed Agent Definition that an
+// inline `POST /v1/invocations` request would store, but creates no Agent,
+// Session, message, or Invocation. The response is the same for a first
+// registration, a repeat, or an Agent Definition an earlier turn already stored.
+//
+// Registration canonicalizes accepted model-provider aliases and resolves
+// MCP defaults before hashing. Registering with an alias and invoking with
+// its canonical provider name therefore produces the same `agent_definition_id`.
+// The ID is not a mutable version or an agent name, and there is no list,
+// read, update, or delete endpoint for Agent Definitions.
+//
+// Registration checks only the Agent Definition's own content: schema and size
+// bounds, model controls, provider-tool support, and tool declarations.
+// Turn admission checks installation, App signing-key, builtin-gate,
+// budget, provider-key, Session, and current model-lifecycle state again.
+// In particular, a callback tool can be registered before its App callback
+// signing key exists, but an Invocation using it is refused until delivery
+// is configured.
+//
+// Remote MCP headers are per-Invocation secrets and are not part of this
+// request shape. Supply them through `mcp_server_headers` when creating an
+// Invocation, whether its Agent Definition is inline or referenced by ID.
+//
+// The caller needs `create_invocation` on an App-bound credential. App-less
+// installation credentials and tenant- or Session-constrained credentials
+// are refused because registration creates an App-wide claim. The body may
+// be at most 1 MiB.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/agent-definitions (the `RegisterAgentDefinition` operationId).
+func (c *ClientWithResponses) RegisterAgentDefinitionWithResponse(ctx context.Context, body RegisterAgentDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterAgentDefinitionHTTPResponse, error) {
+	rsp, err := c.RegisterAgentDefinition(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRegisterAgentDefinitionHTTPResponse(rsp)
+}
+
 // ListAgentsWithResponse List Agent identity anchors
 //
 // Returns newest-first identity anchors scoped to the caller's app. An
@@ -20751,7 +21307,7 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken finds or creates the Agent and Session, resolves
-// the agent definition you sent inline or referenced by `definition_id`,
+// the agent definition you sent inline or referenced by `agent_definition_id`,
 // appends your input as one message, and queues the turn. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
@@ -20775,8 +21331,8 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 // finished. Keys are scoped to the tenant and `agent_key`.
 //
 // A repeat counts as the same request only if the Session selector, the
-// resolved definition, and the input all match. A `definition_id` and
-// the identical inline definition count as the same. Limits are compared
+// resolved Agent Definition, and the input all match. An `agent_definition_id`
+// and the identical inline Agent Definition count as the same. Limits are compared
 // as you sent them, so sending a value that happens to equal the default
 // is not the same as omitting it. Key order inside JSON objects does not
 // matter; array order does. Change anything that matters and you get
@@ -20854,7 +21410,7 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken finds or creates the Agent and Session, resolves
-// the agent definition you sent inline or referenced by `definition_id`,
+// the agent definition you sent inline or referenced by `agent_definition_id`,
 // appends your input as one message, and queues the turn. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
@@ -20878,8 +21434,8 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 // finished. Keys are scoped to the tenant and `agent_key`.
 //
 // A repeat counts as the same request only if the Session selector, the
-// resolved definition, and the input all match. A `definition_id` and
-// the identical inline definition count as the same. Limits are compared
+// resolved Agent Definition, and the input all match. An `agent_definition_id`
+// and the identical inline Agent Definition count as the same. Limits are compared
 // as you sent them, so sending a value that happens to equal the default
 // is not the same as omitting it. Key order inside JSON objects does not
 // matter; array order does. Change anything that matters and you get
@@ -21324,7 +21880,7 @@ func (c *ClientWithResponses) ListToolCallsWithResponse(ctx context.Context, inv
 	return ParseListToolCallsHTTPResponse(rsp)
 }
 
-// SubmitHostToolResultsWithBodyWithResponse Submit durable results for pending host ToolCalls
+// SubmitHostToolResultsWithBodyWithResponse Submit durable results for pending host and callback ToolCalls
 //
 // Atomically accepts one bounded batch for a waiting Invocation. The
 // first committed result for each ToolCall wins. An equal replay is
@@ -21333,7 +21889,7 @@ func (c *ClientWithResponses) ListToolCallsWithResponse(ctx context.Context, inv
 // queues the same Invocation and its successor dispatch before
 // returning `202`.
 //
-// This command accepts only host-mode calls owned by the path
+// This command accepts only host- or callback-mode calls owned by the path
 // Invocation and authenticated tenant scope. It is not a generic
 // Session append endpoint. The body is limited to 1 MiB; each result
 // content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -21355,7 +21911,7 @@ func (c *ClientWithResponses) SubmitHostToolResultsWithBodyWithResponse(ctx cont
 	return ParseSubmitHostToolResultsHTTPResponse(rsp)
 }
 
-// SubmitHostToolResultsWithResponse Submit durable results for pending host ToolCalls
+// SubmitHostToolResultsWithResponse Submit durable results for pending host and callback ToolCalls
 //
 // Atomically accepts one bounded batch for a waiting Invocation. The
 // first committed result for each ToolCall wins. An equal replay is
@@ -21364,7 +21920,7 @@ func (c *ClientWithResponses) SubmitHostToolResultsWithBodyWithResponse(ctx cont
 // queues the same Invocation and its successor dispatch before
 // returning `202`.
 //
-// This command accepts only host-mode calls owned by the path
+// This command accepts only host- or callback-mode calls owned by the path
 // Invocation and authenticated tenant scope. It is not a generic
 // Session append endpoint. The body is limited to 1 MiB; each result
 // content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -22096,6 +22652,87 @@ func (c *ClientWithResponses) GetUsageTimeseriesWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseGetUsageTimeseriesHTTPResponse(rsp)
+}
+
+// ParseRegisterAgentDefinitionHTTPResponse parses an HTTP response from a RegisterAgentDefinitionWithResponse call
+func ParseRegisterAgentDefinitionHTTPResponse(rsp *http.Response) (*RegisterAgentDefinitionHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RegisterAgentDefinitionHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentDefinitionRegistration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers RegisterAgentDefinitionHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
 }
 
 // ParseListAgentsHTTPResponse parses an HTTP response from a ListAgentsWithResponse call

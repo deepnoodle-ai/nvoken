@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -13,34 +13,6 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { MCPServer } from './MCPServer.js';
-import {
-    MCPServerFromJSON,
-    MCPServerFromJSONTyped,
-    MCPServerToJSON,
-    MCPServerToJSONTyped,
-} from './MCPServer.js';
-import type { ModelInput } from './ModelInput.js';
-import {
-    ModelInputFromJSON,
-    ModelInputFromJSONTyped,
-    ModelInputToJSON,
-    ModelInputToJSONTyped,
-} from './ModelInput.js';
-import type { Limits } from './Limits.js';
-import {
-    LimitsFromJSON,
-    LimitsFromJSONTyped,
-    LimitsToJSON,
-    LimitsToJSONTyped,
-} from './Limits.js';
-import type { ToolChoice } from './ToolChoice.js';
-import {
-    ToolChoiceFromJSON,
-    ToolChoiceFromJSONTyped,
-    ToolChoiceToJSON,
-    ToolChoiceToJSONTyped,
-} from './ToolChoice.js';
 import type { WebhookTarget } from './WebhookTarget.js';
 import {
     WebhookTargetFromJSON,
@@ -48,13 +20,13 @@ import {
     WebhookTargetToJSON,
     WebhookTargetToJSONTyped,
 } from './WebhookTarget.js';
-import type { Reasoning } from './Reasoning.js';
+import type { RegisterAgentDefinitionRequest } from './RegisterAgentDefinitionRequest.js';
 import {
-    ReasoningFromJSON,
-    ReasoningFromJSONTyped,
-    ReasoningToJSON,
-    ReasoningToJSONTyped,
-} from './Reasoning.js';
+    RegisterAgentDefinitionRequestFromJSON,
+    RegisterAgentDefinitionRequestFromJSONTyped,
+    RegisterAgentDefinitionRequestToJSON,
+    RegisterAgentDefinitionRequestToJSONTyped,
+} from './RegisterAgentDefinitionRequest.js';
 import type { InvocationInput } from './InvocationInput.js';
 import {
     InvocationInputFromJSON,
@@ -76,27 +48,13 @@ import {
     SessionOptionsToJSON,
     SessionOptionsToJSONTyped,
 } from './SessionOptions.js';
-import type { ProviderTool } from './ProviderTool.js';
+import type { MCPServerHeaders } from './MCPServerHeaders.js';
 import {
-    ProviderToolFromJSON,
-    ProviderToolFromJSONTyped,
-    ProviderToolToJSON,
-    ProviderToolToJSONTyped,
-} from './ProviderTool.js';
-import type { ToolDeclaration } from './ToolDeclaration.js';
-import {
-    ToolDeclarationFromJSON,
-    ToolDeclarationFromJSONTyped,
-    ToolDeclarationToJSON,
-    ToolDeclarationToJSONTyped,
-} from './ToolDeclaration.js';
-import type { Sampling } from './Sampling.js';
-import {
-    SamplingFromJSON,
-    SamplingFromJSONTyped,
-    SamplingToJSON,
-    SamplingToJSONTyped,
-} from './Sampling.js';
+    MCPServerHeadersFromJSON,
+    MCPServerHeadersFromJSONTyped,
+    MCPServerHeadersToJSON,
+    MCPServerHeadersToJSONTyped,
+} from './MCPServerHeaders.js';
 
 /**
  *
@@ -243,90 +201,34 @@ export interface CreateInvocationRequest {
      */
     webhook?: WebhookTarget;
     /**
-     * Reuse an agent definition you already sent inline on an earlier turn,
-     * instead of sending it again. The ID is derived from the definition's
-     * own content, so it never points at anything but that exact definition.
+     * Reuse an Agent Definition already registered for this App,
+     * instead of sending it again. The ID is derived from the Agent
+     * Definition's content, so it never points at anything else.
      *
      * IDs from another app, or IDs that do not exist, return
-     * `definition_not_found`. Cannot be combined with the inline definition
-     * fields. Sending the ID and sending the identical definition inline
+     * `agent_definition_not_found`. Cannot be combined with `agent_definition`.
+     * Sending the ID and sending the identical definition inline
      * count as the same request when retrying with an idempotency key.
      *
      * @type {string}
      * @memberof CreateInvocationRequest
      */
-    definitionId?: string;
-    /**
-     * Optional model instructions. Omission adds no hidden default.
-     * @type {string}
-     * @memberof CreateInvocationRequest
-     */
-    instructions?: string;
+    agentDefinitionId?: string;
     /**
      *
-     * @type {ModelInput}
+     * @type {RegisterAgentDefinitionRequest}
      * @memberof CreateInvocationRequest
      */
-    model?: ModelInput;
+    agentDefinition?: RegisterAgentDefinitionRequest;
     /**
+     * Per-Invocation secret headers keyed to MCP server names in the
+     * selected Agent Definition. Encrypted for this turn and never stored
+     * in, hashed into, or returned with the Agent Definition.
      *
-     * @type {Sampling}
+     * @type {Array<MCPServerHeaders>}
      * @memberof CreateInvocationRequest
      */
-    sampling?: Sampling;
-    /**
-     *
-     * @type {Reasoning}
-     * @memberof CreateInvocationRequest
-     */
-    reasoning?: Reasoning;
-    /**
-     *
-     * @type {ToolChoice}
-     * @memberof CreateInvocationRequest
-     */
-    toolChoice?: ToolChoice;
-    /**
-     *
-     * @type {Limits}
-     * @memberof CreateInvocationRequest
-     */
-    limits?: Limits;
-    /**
-     * Self-contained JSON Schema for an object result. Compact canonical JSON
-     * is limited to 32 KiB and 16 schema positions. Supported keywords are
-     * type, title, description, properties, required, additionalProperties,
-     * items, enum, pattern, minLength, maxLength, minItems, maxItems,
-     * uniqueItems, minimum, and maximum. Every schema position has one string
-     * type; pattern values are limited to 1,024 UTF-8 bytes; references and
-     * other keywords are rejected. Numeric bounds are read as values, not
-     * spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
-     * exposes a reserved durable submit tool and publishes only a
-     * server-validated terminal object. This does not enable host-defined
-     * tools.
-     *
-     * @type {{ [key: string]: any; }}
-     * @memberof CreateInvocationRequest
-     */
-    outputSchema?: { [key: string]: any; };
-    /**
-     *
-     * @type {Array<ToolDeclaration>}
-     * @memberof CreateInvocationRequest
-     */
-    tools?: Array<ToolDeclaration>;
-    /**
-     *
-     * @type {Array<MCPServer>}
-     * @memberof CreateInvocationRequest
-     */
-    mcpServers?: Array<MCPServer>;
-    /**
-     *
-     * @type {Array<ProviderTool>}
-     * @memberof CreateInvocationRequest
-     */
-    providerTools?: Array<ProviderTool>;
+    mcpServerHeaders?: Array<MCPServerHeaders>;
     /**
      * Which key pays for the model on this turn. Names a source; never
      * contains a secret.
@@ -399,17 +301,9 @@ export function CreateInvocationRequestFromJSONTyped(json: any, ignoreDiscrimina
         'onBudgetExhausted': json['on_budget_exhausted'] == null ? undefined : json['on_budget_exhausted'],
         'input': InvocationInputFromJSON(json['input']),
         'webhook': json['webhook'] == null ? undefined : WebhookTargetFromJSON(json['webhook']),
-        'definitionId': json['definition_id'] == null ? undefined : json['definition_id'],
-        'instructions': json['instructions'] == null ? undefined : json['instructions'],
-        'model': json['model'] == null ? undefined : ModelInputFromJSON(json['model']),
-        'sampling': json['sampling'] == null ? undefined : SamplingFromJSON(json['sampling']),
-        'reasoning': json['reasoning'] == null ? undefined : ReasoningFromJSON(json['reasoning']),
-        'toolChoice': json['tool_choice'] == null ? undefined : ToolChoiceFromJSON(json['tool_choice']),
-        'limits': json['limits'] == null ? undefined : LimitsFromJSON(json['limits']),
-        'outputSchema': json['output_schema'] == null ? undefined : json['output_schema'],
-        'tools': json['tools'] == null ? undefined : ((json['tools'] as Array<any>).map(ToolDeclarationFromJSON)),
-        'mcpServers': json['mcp_servers'] == null ? undefined : ((json['mcp_servers'] as Array<any>).map(MCPServerFromJSON)),
-        'providerTools': json['provider_tools'] == null ? undefined : ((json['provider_tools'] as Array<any>).map(ProviderToolFromJSON)),
+        'agentDefinitionId': json['agent_definition_id'] == null ? undefined : json['agent_definition_id'],
+        'agentDefinition': json['agent_definition'] == null ? undefined : RegisterAgentDefinitionRequestFromJSON(json['agent_definition']),
+        'mcpServerHeaders': json['mcp_server_headers'] == null ? undefined : ((json['mcp_server_headers'] as Array<any>).map(MCPServerHeadersFromJSON)),
         'providerKeys': json['provider_keys'] == null ? undefined : ((json['provider_keys'] as Array<any>).map(ProviderKeySelectionFromJSON)),
     };
 }
@@ -437,17 +331,9 @@ export function CreateInvocationRequestToJSONTyped(value?: CreateInvocationReque
         'on_budget_exhausted': value['onBudgetExhausted'],
         'input': InvocationInputToJSON(value['input']),
         'webhook': WebhookTargetToJSON(value['webhook']),
-        'definition_id': value['definitionId'],
-        'instructions': value['instructions'],
-        'model': ModelInputToJSON(value['model']),
-        'sampling': SamplingToJSON(value['sampling']),
-        'reasoning': ReasoningToJSON(value['reasoning']),
-        'tool_choice': ToolChoiceToJSON(value['toolChoice']),
-        'limits': LimitsToJSON(value['limits']),
-        'output_schema': value['outputSchema'],
-        'tools': value['tools'] == null ? undefined : ((value['tools'] as Array<any>).map(ToolDeclarationToJSON)),
-        'mcp_servers': value['mcpServers'] == null ? undefined : ((value['mcpServers'] as Array<any>).map(MCPServerToJSON)),
-        'provider_tools': value['providerTools'] == null ? undefined : ((value['providerTools'] as Array<any>).map(ProviderToolToJSON)),
+        'agent_definition_id': value['agentDefinitionId'],
+        'agent_definition': RegisterAgentDefinitionRequestToJSON(value['agentDefinition']),
+        'mcp_server_headers': value['mcpServerHeaders'] == null ? undefined : ((value['mcpServerHeaders'] as Array<any>).map(MCPServerHeadersToJSON)),
         'provider_keys': value['providerKeys'] == null ? undefined : ((value['providerKeys'] as Array<any>).map(ProviderKeySelectionToJSON)),
     };
 }

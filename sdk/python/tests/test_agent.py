@@ -126,10 +126,10 @@ class Answer:
 def agent_options(*tools: Tool) -> AgentOptions[Answer]:
     return AgentOptions(
         agent_key="support",
+        structured_output_decoder=lambda value: Answer(**value),
         model=Model(provider="openai", id="gpt-test"),
         tools=tools,
         output_schema={"type": "object"},
-        structured_output_decoder=lambda value: Answer(**value),
     )
 
 

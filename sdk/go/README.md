@@ -2,7 +2,8 @@
 
 An Invocation is one durable agent turn. The host supplies `agent_key`,
 optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
-model, and tools travel inline with the turn.
+model, and tools travel with the turn as an `AgentDefinition`, either inline or
+referenced by a registered `AgentDefinitionID`.
 
 The package has three deliberate levels:
 
@@ -40,11 +41,13 @@ Opt into the fixed guarded public-web reader with `nvoken.FetchTool()`:
 request := nvoken.InvokeRequest{
 	AgentKey: "public-summary",
 	Input:    "Summarize the supplied URL.",
-	Model: nvoken.Model{
-		Provider: "anthropic",
-		ID:       "claude-sonnet-5",
+	AgentDefinition: &nvoken.AgentDefinition{
+		Model: nvoken.Model{
+			Provider: "anthropic",
+			ID:       "claude-sonnet-5",
+		},
+		Tools: []nvoken.Tool{nvoken.FetchTool()},
 	},
-	Tools: []nvoken.Tool{nvoken.FetchTool()},
 }
 ```
 
@@ -56,7 +59,7 @@ Use an Agent for the common path:
 
 ```go
 agent, err := client.Agent(nvoken.AgentOptions{
-	AgentKey:    "support",
+	AgentKey:     "support",
 	Instructions: "Help with billing questions.",
 	Model: nvoken.Model{
 		Provider: "anthropic",
@@ -73,6 +76,24 @@ returning `MissingToolHandlerError` by default. Set
 call. `NoOutputTextError.ResultKind` distinguishes structured, tool-only, and
 empty completions. `DecodeStructuredOutput[T]` decodes an `AgentResult` while
 `AgentResult.StructuredOutput` keeps the raw JSON.
+
+A `ToolModeCallback` tool runs on an HTTPS endpoint nvoken posts to. Verify the
+signed delivery with `nvoken.VerifyCallback`, then answer with one of two
+replies. `nvoken.CallbackResult(content, isError)` settles the ToolCall inline
+and the turn resumes as soon as nvoken records the reply.
+`nvoken.AcknowledgeCallback()` returns `202` with no body instead: it accepts
+the delivery without settling the call, for work that will outlive the App's
+callback reply deadline. Settle it later with `client.SubmitToolResults`,
+reusing the delivery's ToolCall ID.
+
+Acknowledging trades away the fail-loud guarantee. nvoken marks an
+unacknowledged delivery failed once its retries are exhausted, so the turn
+always moves on. An acknowledged call instead waits under your responsibility,
+bounded only by the Invocation's `Limits.WaitingTimeoutSeconds`. Acknowledge
+only when something durable will settle the call. Such a call appears in a
+waiting Invocation's pending calls the same way a host call does; an `Agent`
+skips the callback tools its own definition declares rather than dispatching
+them locally.
 
 A bound Session serializes admission only within the local client:
 
@@ -167,7 +188,7 @@ when the facade is intentionally too narrow.
 
 `Client.Invoke` and Agent operations call
 `nvoken.PreflightOutputSchema(schema)` before transport when
-`InvokeRequest.OutputSchema` is present. Rejection is an `*nvoken.Error` with
+`InvokeRequest.AgentDefinition.OutputSchema` is present. Rejection is an `*nvoken.Error` with
 code `schema_preflight_failed`; `Details` contain the portable issue `code`,
 RFC 6901 `path`, and optional `keyword`. A successful local check means
 eligible for admission. `Client.Raw()` remains the exact-wire escape hatch and
@@ -201,6 +222,39 @@ part of the admitted input, so it is immutable and material to idempotency: a
 replay carrying different metadata conflicts rather than updating it. That is
 why it is per-call rather than an `AgentOptions` default.
 
+## Reuse an Agent Definition
+
+Sending the definition inline is the ordinary path. Register it instead when
+many turns share one configuration and you would rather send a short ID:
+
+```go
+registration, err := client.RegisterAgentDefinition(ctx, nvoken.AgentDefinition{
+	Instructions: "Help with billing questions.",
+	Model: nvoken.Model{
+		Provider: "anthropic",
+		ID:       "claude-sonnet-5",
+	},
+})
+
+handle, err := client.Invoke(ctx, nvoken.InvokeRequest{
+	AgentKey:          "support",
+	Input:             "Why was I charged twice?",
+	AgentDefinitionID: registration.AgentDefinitionID,
+})
+```
+
+A definition is content-addressed and immutable, so registering the same one
+twice returns the same `AgentDefinitionID`, and so does registering one an
+earlier inline turn already stored. Registering starts no turn and creates no
+Agent, Session, or message. There is no list, update, or delete: to change a
+definition, register the new one and reference that.
+
+Supply exactly one of `AgentDefinition` and `AgentDefinitionID`; the facade
+rejects a request carrying both or neither before it reaches the network. An
+`Agent` always sends its definition inline, because it serves the host tool
+handlers declared in it, which is why `AgentOptions` spells the definition's
+fields flat rather than nesting them: there is no choice there to express.
+
 ## Remote MCP tools
 
 Probe the exact projected catalog, then reuse the same declaration on an
@@ -211,18 +265,22 @@ server := nvoken.MCPServer{
 	Name:         "support",
 	URL:          "https://mcp.example.com/rpc",
 	AllowedTools: []string{"lookup_order"},
-	Headers: map[string]string{
-		"Authorization": "Bearer " + mcpToken,
-	},
 }
-catalog, err := client.ListMCPTools(ctx, server)
+headers := map[string]string{"Authorization": "Bearer " + mcpToken}
+catalog, err := client.ListMCPTools(ctx, server, headers)
 
-request.MCPServers = []nvoken.MCPServer{server}
+request.AgentDefinition.MCPServers = []nvoken.MCPServer{server}
+request.MCPServerHeaders = []nvoken.MCPServerHeaders{{
+	Name:    "support",
+	Headers: headers,
+}}
 handle, err := client.Invoke(ctx, request)
 ```
 
-Headers are one-Invocation secret material and never appear in durable specs or
-public reads. The
+The declaration carries no secrets. An Agent Definition is content-addressed and
+reused across turns, so authentication headers travel per Invocation in
+`MCPServerHeaders`, keyed to the server name. They are one-Invocation secret
+material and never appear in durable Agent Definitions or public reads. The
 [recovery example](examples/mcp-recovery/README.md) exercises discovery,
 executor replacement, composed result recovery, and fixed-cut transcript
 recovery.
@@ -244,7 +302,7 @@ account access.
 Set an explicit portable temperature on the request:
 
 ```go
-request.Sampling = &nvoken.Sampling{Temperature: 0}
+request.AgentDefinition.Sampling = &nvoken.Sampling{Temperature: 0}
 ```
 
 Omit `Sampling` to preserve the provider default. Before setting it, check
@@ -257,7 +315,7 @@ Reasoning is also typed and fail closed:
 
 ```go
 effort := nvoken.ReasoningEffortHigh
-request.Reasoning = &nvoken.Reasoning{Effort: &effort}
+request.AgentDefinition.Reasoning = &nvoken.Reasoning{Effort: &effort}
 ```
 
 Check `selected.Controls.Reasoning` before admission. A manual

@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "note": "An Agent Definition is content-addressed and App-scoped. Registration and invocation store the same object, so an SDK must render the same body for both and must never let a per-turn secret reach it.",
+  "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005",
+  "reference_fields": {
+    "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005"
+  },
+  "rules": {
+    "content_addressed": true,
+    "immutable": true,
+    "app_scoped": true,
+    "inline_reference_replay_equal": true,
+    "retained_while_referenced": true,
+    "read_echoes_resolved_definition": true,
+    "registration_repeat_is_equal": true,
+    "registration_shares_invocation_identity": true
+  },
+  "refusals": [
+    {
+      "id": "foreign-agent-definition-id",
+      "status": 404,
+      "code": "agent_definition_not_found"
+    },
+    {
+      "id": "unknown-agent-definition-id",
+      "status": 404,
+      "code": "agent_definition_not_found"
+    },
+    {
+      "id": "agent-definition-plus-reference",
+      "status": 400,
+      "code": "invalid_request"
+    }
+  ],
+  "agent_definition_fields": [
+    "instructions",
+    "model",
+    "sampling",
+    "reasoning",
+    "tool_choice",
+    "limits",
+    "output_schema",
+    "tools",
+    "mcp_servers",
+    "provider_tools"
+  ],
+  "excluded_from_agent_definition": [
+    "agent_key",
+    "tenant_key",
+    "user_key",
+    "session_id",
+    "session_key",
+    "session_options",
+    "idempotency_key",
+    "if_active",
+    "input",
+    "metadata",
+    "webhook",
+    "provider_keys",
+    "mcp_server_headers"
+  ],
+  "registration": {
+    "note": "POST /v1/agent-definitions accepts exactly the object an invocation nests under agent_definition, and answers with that ID plus the resolved definition.",
+    "request": {
+      "instructions": "You are a concise billing support agent.",
+      "model": {
+        "provider": "anthropic",
+        "id": "claude-sonnet-5"
+      }
+    },
+    "response": {
+      "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005",
+      "agent_definition": {
+        "instructions": "You are a concise billing support agent.",
+        "model": {
+          "provider": "anthropic",
+          "id": "claude-sonnet-5"
+        }
+      }
+    }
+  },
+  "invocation_reference": {
+    "note": "The same definition reached by ID. Sending this and sending the identical definition inline count as one request when replayed under an idempotency key.",
+    "agent_key": "support",
+    "idempotency_key": "agent-definition-reference",
+    "input": "hello",
+    "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005"
+  }
+}

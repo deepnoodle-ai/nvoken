@@ -54,6 +54,42 @@ export async function verifyCallback(
   return { envelope, rawBody: rawBody.slice(), deliveryId, toolCallId, keyId, keyVersion, timestamp };
 }
 
+/**
+ * The HTTP answer to one callback delivery. Rendering it is left to the host's
+ * web framework: write `status`, and `body` when it is not undefined.
+ */
+export interface CallbackReply {
+  status: number;
+  body?: string;
+}
+
+/**
+ * Settles the ToolCall inline. Content may be any JSON value, encoded to at
+ * most 256 KiB and 32 levels of nesting. The turn resumes as soon as nvoken
+ * records the reply.
+ */
+export function callbackResult(content: unknown, isError = false): CallbackReply {
+  return {
+    status: 200,
+    body: JSON.stringify(isError ? { content, is_error: true } : { content }),
+  };
+}
+
+/**
+ * Accepts delivery without settling the ToolCall, for work that will outlive
+ * the App's callback reply deadline. Settle it later with
+ * `client.submitToolResults`, reusing the delivery's ToolCall ID.
+ *
+ * This trades away the fail-loud guarantee. nvoken marks an unacknowledged
+ * delivery failed once its retries are exhausted, so the turn always moves on.
+ * An acknowledged call instead waits under the host's responsibility, bounded
+ * only by the Invocation's `limits.waitingTimeoutSeconds`. Acknowledge only
+ * when something durable will settle the call.
+ */
+export function acknowledgeCallback(): CallbackReply {
+  return { status: 202 };
+}
+
 export interface CallbackResultStore<T> {
   putIfAbsent(toolCallId: string, result: T): Promise<{ value: T; inserted: boolean }>;
 }

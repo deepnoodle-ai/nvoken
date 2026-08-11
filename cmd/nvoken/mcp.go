@@ -37,7 +37,6 @@ func runMCPListTools(command *cli.Context) error {
 		Name:         command.String("name"),
 		URL:          command.String("url"),
 		AllowedTools: append([]string(nil), command.Strings("allowed-tool")...),
-		Headers:      headers,
 	}
 	discoveryTimeout := command.Int("discovery-timeout")
 	callTimeout := command.Int("call-timeout")
@@ -57,7 +56,7 @@ func runMCPListTools(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	catalog, err := client.ListMCPTools(command.Context(), server)
+	catalog, err := client.ListMCPTools(command.Context(), server, headers)
 	if err != nil {
 		return err
 	}

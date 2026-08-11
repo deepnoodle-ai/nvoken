@@ -1,5 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AgentDefinitionsApi.js';
 export * from './AgentsApi.js';
 export * from './AppsApi.js';
 export * from './BudgetsApi.js';

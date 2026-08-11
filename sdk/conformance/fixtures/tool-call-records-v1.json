@@ -9,7 +9,8 @@
         "iteration": 1,
         "created_at": "2026-08-08T17:02:11Z",
         "ended_at": "2026-08-08T17:02:12Z",
-        "attempts": 1
+        "attempts": 1,
+        "result_origin": "builtin"
       },
       {
         "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
@@ -19,7 +20,8 @@
         "iteration": 1,
         "created_at": "2026-08-08T17:02:13Z",
         "ended_at": null,
-        "attempts": 0
+        "attempts": 0,
+        "result_origin": null
       },
       {
         "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
@@ -34,7 +36,8 @@
           "outcome": "succeeded",
           "attempts": 2,
           "last_http_status": 200
-        }
+        },
+        "result_origin": "callback"
       },
       {
         "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
@@ -44,7 +47,24 @@
         "iteration": 2,
         "created_at": "2026-08-08T17:02:20Z",
         "ended_at": "2026-08-08T17:02:22Z",
-        "attempts": 1
+        "attempts": 1,
+        "result_origin": "mcp"
+      },
+      {
+        "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb32a",
+        "mode": "callback",
+        "name": "run_migration",
+        "status": "completed",
+        "iteration": 3,
+        "created_at": "2026-08-08T17:02:23Z",
+        "ended_at": "2026-08-08T17:09:41Z",
+        "attempts": 0,
+        "result_origin": "host",
+        "delivery": {
+          "outcome": "acknowledged",
+          "attempts": 1,
+          "last_http_status": 202
+        }
       }
     ],
     "has_more": false,
@@ -82,6 +102,32 @@
     },
     "max_content_bytes": 262144,
     "max_content_depth": 32,
-    "max_attempts": 5
+    "max_attempts": 5,
+    "acknowledgement": {
+      "note": "A 202 with an empty body accepts delivery without settling the ToolCall. The call then waits under the host's responsibility, bounded only by the Invocation's waiting_timeout_seconds, and is settled later through tool-results reusing this tool_call_id.",
+      "status": 202,
+      "body": "",
+      "delivery_outcome": "acknowledged",
+      "settled_by": "POST /v1/invocations/{invocation_id}/tool-results",
+      "settled_result_origin": "host"
+    },
+    "delivery_outcomes": [
+      "pending",
+      "acknowledged",
+      "succeeded",
+      "failed",
+      "abandoned"
+    ],
+    "fail_loud_applies_to": "unacknowledged delivery exhaustion"
+  },
+  "result_origin": {
+    "note": "The component that committed the result. Null until a ToolCall has one. `callback` is an inline callback reply; `host` covers every settlement through POST /v1/invocations/{id}/tool-results, including an acknowledged callback settled later.",
+    "values": [
+      "builtin",
+      "callback",
+      "host",
+      "mcp",
+      "system"
+    ]
   }
 }

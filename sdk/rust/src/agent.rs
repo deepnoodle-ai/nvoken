@@ -14,30 +14,27 @@ use futures_util::{pin_mut, StreamExt};
 use serde_json::{json, Value};
 
 use crate::client::{
-    BudgetExhaustionBehavior, Client, ErrorCategory, IfActivePolicy, InvocationHandle,
-    InvokeRequest, Limits, McpServer, Model, NvokenError, ProviderKeySelection, ProviderTool,
-    Reasoning, Sampling, SessionOptions, Tool, ToolChoice, ToolMode, ToolResult, WaitCondition,
-    WaitOptions, WebhookTarget,
+    AgentDefinition, BudgetExhaustionBehavior, Client, ErrorCategory, IfActivePolicy,
+    InvocationHandle, InvokeRequest, Limits, McpServer, McpServerHeaders, Model, NvokenError,
+    ProviderKeySelection, ProviderTool, Reasoning, Sampling, SessionOptions, Tool, ToolChoice,
+    ToolMode, ToolResult, WaitCondition, WaitOptions, WebhookTarget,
 };
 use crate::models;
 use crate::stream::StreamEvent;
 
-/// Fixed identity and flat execution controls every call through an `Agent`
+/// Fixed identity and the Agent Definition every call through an `Agent`
 /// admits with. Built with `Client::agent`.
 #[derive(Clone)]
 pub struct AgentOptions {
     pub agent_key: String,
     pub tenant_key: Option<String>,
-    pub model: Model,
-    pub instructions: Option<String>,
-    pub sampling: Option<Sampling>,
-    pub reasoning: Option<Reasoning>,
-    pub tool_choice: Option<ToolChoice>,
-    pub limits: Option<Limits>,
-    pub tools: Vec<Tool>,
-    pub mcp_servers: Vec<McpServer>,
-    pub provider_tools: Vec<ProviderTool>,
-    pub output_schema: Option<HashMap<String, Value>>,
+    /// The configuration every turn from this Agent runs with. An Agent always
+    /// sends it inline rather than by ID, because it serves the host tool
+    /// handlers declared in it. Reuse a registered `agent_definition_id`
+    /// through `Client::invoke` instead.
+    pub agent_definition: AgentDefinition,
+    /// Per-turn secret headers for the MCP servers the definition declares.
+    pub mcp_server_headers: Vec<McpServerHeaders>,
     pub provider_keys: Vec<ProviderKeySelection>,
     /// Endpoint every Invocation this Agent admits notifies by default. A
     /// per-call target on `AgentInvocationOptions` overrides it.
@@ -50,16 +47,8 @@ impl AgentOptions {
         Self {
             agent_key: agent_key.into(),
             tenant_key: None,
-            model,
-            instructions: None,
-            sampling: None,
-            reasoning: None,
-            tool_choice: None,
-            limits: None,
-            tools: Vec::new(),
-            mcp_servers: Vec::new(),
-            provider_tools: Vec::new(),
-            output_schema: None,
+            agent_definition: AgentDefinition::new(model),
+            mcp_server_headers: Vec::new(),
             provider_keys: Vec::new(),
             webhook: None,
             on_budget_exhausted: None,
@@ -67,47 +56,47 @@ impl AgentOptions {
     }
 
     pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
-        self.instructions = Some(instructions.into());
+        self.agent_definition.instructions = Some(instructions.into());
         self
     }
 
     pub fn limits(mut self, limits: Limits) -> Self {
-        self.limits = Some(limits);
+        self.agent_definition.limits = Some(limits);
         self
     }
 
     pub fn sampling(mut self, sampling: Sampling) -> Self {
-        self.sampling = Some(sampling);
+        self.agent_definition.sampling = Some(sampling);
         self
     }
 
     pub fn reasoning(mut self, reasoning: Reasoning) -> Self {
-        self.reasoning = Some(reasoning);
+        self.agent_definition.reasoning = Some(reasoning);
         self
     }
 
     pub fn tool_choice(mut self, tool_choice: ToolChoice) -> Self {
-        self.tool_choice = Some(tool_choice);
+        self.agent_definition.tool_choice = Some(tool_choice);
         self
     }
 
     pub fn tool(mut self, tool: Tool) -> Self {
-        self.tools.push(tool);
+        self.agent_definition.tools.push(tool);
         self
     }
 
     pub fn mcp_server(mut self, server: McpServer) -> Self {
-        self.mcp_servers.push(server);
+        self.agent_definition.mcp_servers.push(server);
         self
     }
 
     pub fn provider_tool(mut self, tool: ProviderTool) -> Self {
-        self.provider_tools.push(tool);
+        self.agent_definition.provider_tools.push(tool);
         self
     }
 
     pub fn output_schema(mut self, schema: HashMap<String, Value>) -> Self {
-        self.output_schema = Some(schema);
+        self.agent_definition.output_schema = Some(schema);
         self
     }
 
@@ -128,6 +117,18 @@ impl AgentOptions {
 
     pub fn on_budget_exhausted(mut self, behavior: BudgetExhaustionBehavior) -> Self {
         self.on_budget_exhausted = Some(behavior);
+        self
+    }
+
+    /// Replaces the whole Agent Definition, for one built separately and shared
+    /// with `Client::register_agent_definition`.
+    pub fn agent_definition(mut self, definition: AgentDefinition) -> Self {
+        self.agent_definition = definition;
+        self
+    }
+
+    pub fn mcp_server_headers(mut self, headers: McpServerHeaders) -> Self {
+        self.mcp_server_headers.push(headers);
         self
     }
 }
@@ -230,6 +231,7 @@ impl Stream for AgentEventStream {
 struct AgentInner {
     options: AgentOptions,
     host_tools: HashMap<String, Tool>,
+    callback_tools: std::collections::HashSet<String>,
 }
 
 /// A high-level binding for one Agent identity: `text`/`run`/`invoke`/
@@ -250,22 +252,35 @@ impl Client {
         if options.agent_key.is_empty() {
             return Err(NvokenError::validation("agent_key is required"));
         }
-        if options.model.is_unset() {
-            options.model = self
+        if options.agent_definition.model.is_unset() {
+            options.agent_definition.model = self
                 .default_model()
                 .ok_or_else(|| NvokenError::validation("model is required"))?;
         }
         let host_tools = options
+            .agent_definition
             .tools
             .iter()
             .filter(|tool| matches!(tool.mode, ToolMode::Host))
             .map(|tool| (tool.name.clone(), tool.clone()))
+            .collect();
+        // Tools nvoken delivers over HTTPS. They can appear in a waiting
+        // Invocation's pending calls once an endpoint has acknowledged a
+        // delivery without settling it, and are answered by whatever accepted
+        // that acknowledgement rather than from local handlers.
+        let callback_tools = options
+            .agent_definition
+            .tools
+            .iter()
+            .filter(|tool| matches!(tool.mode, ToolMode::Callback { .. }))
+            .map(|tool| tool.name.clone())
             .collect();
         Ok(Agent {
             client: self.clone(),
             inner: Arc::new(AgentInner {
                 options,
                 host_tools,
+                callback_tools,
             }),
         })
     }
@@ -294,17 +309,9 @@ impl Agent {
                 .or(agent_options.on_budget_exhausted),
             input,
             input_blocks: Vec::new(),
-            definition_id: None,
-            model: agent_options.model.clone(),
-            instructions: agent_options.instructions.clone(),
-            sampling: agent_options.sampling.clone(),
-            reasoning: agent_options.reasoning.clone(),
-            tool_choice: agent_options.tool_choice.clone(),
-            limits: agent_options.limits.clone(),
-            tools: agent_options.tools.clone(),
-            mcp_servers: agent_options.mcp_servers.clone(),
-            provider_tools: agent_options.provider_tools.clone(),
-            output_schema: agent_options.output_schema.clone(),
+            agent_definition: Some(agent_options.agent_definition.clone()),
+            agent_definition_id: None,
+            mcp_server_headers: agent_options.mcp_server_headers.clone(),
             provider_keys: agent_options.provider_keys.clone(),
             // A per-call target overrides the Agent default so one Agent can
             // webhook different endpoints without a second Agent.
@@ -367,7 +374,7 @@ impl Agent {
         }
         let result_kind = if result.structured_output.is_some() {
             "structured output"
-        } else if !self.inner.options.tools.is_empty() {
+        } else if !self.inner.options.agent_definition.tools.is_empty() {
             "tool-only output"
         } else {
             "no assistant output"
@@ -514,6 +521,9 @@ impl Agent {
         let handle = self.client.invocation(invocation_id);
         let mut results = Vec::new();
         for pending in pending_calls {
+            if self.inner.callback_tools.contains(&pending.name) {
+                continue;
+            }
             let handler = self
                 .inner
                 .host_tools
@@ -568,6 +578,9 @@ impl Agent {
         let mut results = Vec::new();
         for pending in pending_calls {
             if submitted.contains(&pending.id) {
+                continue;
+            }
+            if self.inner.callback_tools.contains(&pending.name) {
                 continue;
             }
             let handler = self

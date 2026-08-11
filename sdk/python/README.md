@@ -2,7 +2,8 @@
 
 An Invocation is one durable agent turn. The host supplies `agent_key`,
 optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
-model, and tools travel inline with the turn.
+model, and tools travel with the turn as an `agent_definition`, either inline or
+referenced by a registered `agent_definition_id`.
 
 The package has three deliberate levels:
 
@@ -123,12 +124,6 @@ Equivalent status sets share cursor identity regardless of input order.
 Session get/list models expose typed nullable `usage`, computed from durable
 Invocation usage as a convenience estimate rather than a billing ledger.
 
-Set `Outcome(description=..., rubric=...)` on the request or Agent to request a
-single finish-time self-review. The selected model does not see the criteria
-during its initial work; nvoken supplies them once as a Dive system reminder
-when the turn would otherwise finish, then continues the same turn within its
-ordinary limits. No independent grade or result field is produced.
-
 Install restart-stable compaction on a new or existing Session:
 
 ```python
@@ -141,7 +136,9 @@ request = InvokeRequest(
         compaction=ContextCompaction(trigger_tokens="auto"),
     ),
     input="hello",
-    model=Model(provider="anthropic", id="claude-sonnet-5"),
+    agent_definition=AgentDefinition(
+        model=Model(provider="anthropic", id="claude-sonnet-5"),
+    ),
 )
 ```
 
@@ -166,7 +163,9 @@ Pass a stored or one-turn provider key directly through
 request = InvokeRequest(
     agent_key="support",
     input="hello",
-    model=Model(provider="openai", id="gpt-test"),
+    agent_definition=AgentDefinition(
+        model=Model(provider="openai", id="gpt-test"),
+    ),
     provider_keys=(
         ProviderKeySelection(
             provider="openai",
@@ -199,13 +198,15 @@ Exact inspection also accepts uncataloged IDs.
 Set an explicit portable temperature on the request or Agent:
 
 ```python
-from nvoken import InvokeRequest, Model, Sampling
+from nvoken import AgentDefinition, InvokeRequest, Model, Sampling
 
 request = InvokeRequest(
     agent_key="support",
     input="hello",
-    model=Model(provider="anthropic", id="claude-haiku-4-5"),
-    sampling=Sampling(temperature=0),
+    agent_definition=AgentDefinition(
+        model=Model(provider="anthropic", id="claude-haiku-4-5"),
+        sampling=Sampling(temperature=0),
+    ),
 )
 ```
 
@@ -218,13 +219,15 @@ portable range is `[0,1]`. `top_p` and stop sequences are intentionally absent;
 Reasoning is typed and fail closed:
 
 ```python
-from nvoken import InvokeRequest, Model, Reasoning
+from nvoken import AgentDefinition, InvokeRequest, Model, Reasoning
 
 request = InvokeRequest(
     agent_key="support",
     input="hello",
-    model=Model(provider="anthropic", id="claude-opus-5"),
-    reasoning=Reasoning(effort="high"),
+    agent_definition=AgentDefinition(
+        model=Model(provider="anthropic", id="claude-opus-5"),
+        reasoning=Reasoning(effort="high"),
+    ),
 )
 ```
 
@@ -238,11 +241,41 @@ is durable.
 
 `Client.invoke` and Agent operations call
 `preflight_output_schema(schema)` before transport when
-`InvokeRequest.output_schema` is present. Rejection is an `NvokenError` with
+`InvokeRequest.agent_definition.output_schema` is present. Rejection is an `NvokenError` with
 code `schema_preflight_failed`; its safe `details` contain the portable issue
 `code`, RFC 6901 `path`, and optional `keyword`. A successful local check means
 eligible for admission. Generated APIs reached through `client.raw()` still
 rely on the authoritative Runtime check.
+
+## Reuse an Agent Definition
+
+Sending the definition inline is the ordinary path. Register it instead when
+many turns share one configuration and you would rather send a short ID:
+
+```python
+registration = await client.register_agent_definition(AgentDefinition(
+    instructions="Help with billing questions.",
+    model=Model(provider="anthropic", id="claude-sonnet-5"),
+))
+
+handle = await client.invoke(InvokeRequest(
+    agent_key="support",
+    input="Why was I charged twice?",
+    agent_definition_id=registration.agent_definition_id,
+))
+```
+
+A definition is content-addressed and immutable, so registering the same one
+twice returns the same `agent_definition_id`, and so does registering one an
+earlier inline turn already stored. Registering starts no turn and creates no
+Agent, Session, or message. There is no list, update, or delete: to change a
+definition, register the new one and reference that.
+
+Supply exactly one of `agent_definition` and `agent_definition_id`; the facade
+rejects a request carrying both or neither before it reaches the network. An
+`Agent` always sends its definition inline, because it serves the host tool
+handlers declared in it, which is why `AgentOptions` spells the definition's
+fields flat rather than nesting them: there is no choice there to express.
 
 ## Remote MCP tools
 
@@ -253,18 +286,43 @@ server = MCPServer(
     name="support",
     url="https://mcp.example.com/rpc",
     allowed_tools=("lookup_order",),
-    headers={"Authorization": f"Bearer {mcp_token}"},
     timeouts=MCPTimeouts(discovery_seconds=10, call_seconds=30),
 )
+headers = {"Authorization": f"Bearer {mcp_token}"}
 
-catalog = await client.list_mcp_tools(server)
+catalog = await client.list_mcp_tools(server, headers)
 request = InvokeRequest(
     agent_key="support",
     input="hello",
-    model=Model(provider="anthropic", id="claude-sonnet-5"),
-    mcp_servers=(server,),
+    agent_definition=AgentDefinition(
+        model=Model(provider="anthropic", id="claude-sonnet-5"),
+        mcp_servers=(server,),
+    ),
+    mcp_server_headers=(MCPServerHeaders(name="support", headers=headers),),
 )
 ```
 
-Headers are hidden from dataclass representation and are one-Invocation secret
-material. They never appear in durable specs or public recovery surfaces.
+The declaration carries no secrets. An Agent Definition is content-addressed and
+reused across turns, so authentication headers travel per Invocation in
+`mcp_server_headers`, keyed to the server name. They are hidden from dataclass
+representation, are one-Invocation secret material, and never appear in durable
+Agent Definitions or public recovery surfaces.
+
+## Callback tools
+
+A callback tool runs on an HTTPS endpoint nvoken posts to. Verify the signed
+delivery with `verify_callback`, then answer with one of two replies.
+`callback_result(content, is_error=False)` settles the ToolCall inline and the
+turn resumes as soon as nvoken records the reply. `acknowledge_callback()`
+returns `202` with no body instead: it accepts the delivery without settling the
+call, for work that will outlive the App's callback reply deadline. Settle it
+later with `client.submit_tool_results`, reusing the delivery's ToolCall ID.
+
+Acknowledging trades away the fail-loud guarantee. nvoken marks an
+unacknowledged delivery failed once its retries are exhausted, so the turn
+always moves on. An acknowledged call instead waits under your responsibility,
+bounded only by the Invocation's `limits.waiting_timeout_seconds`. Acknowledge
+only when something durable will settle the call. Such a call appears in a
+waiting Invocation's pending calls the same way a host call does; an `Agent`
+skips the callback tools its own definition declares rather than dispatching
+them locally.

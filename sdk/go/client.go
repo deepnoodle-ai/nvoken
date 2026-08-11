@@ -223,6 +223,62 @@ func (c *Client) Invocation(invocationID string) *InvocationHandle {
 	return &InvocationHandle{client: c, InvocationID: invocationID}
 }
 
+// RegisterAgentDefinition stores one Agent Definition without starting a turn,
+// and returns the content-addressed ID that later Invocations reuse through
+// InvokeRequest.AgentDefinitionID.
+//
+// Registration is idempotent by content rather than by key. A first
+// registration, a repeat, and a definition an earlier turn already stored all
+// return the same response, so callers do not need to track whether they have
+// registered before.
+//
+// Only the definition's own content is checked here. Installation state, the
+// App callback signing key, budgets, provider keys, and model lifecycle are
+// checked again when a turn is admitted. A callback tool can therefore be
+// registered before its App signing key exists, while an Invocation using it is
+// still refused until delivery is configured.
+func (c *Client) RegisterAgentDefinition(
+	ctx context.Context,
+	definition AgentDefinition,
+) (*AgentDefinitionRegistration, error) {
+	encoded, err := definition.encoded()
+	if err != nil {
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	body, err := json.Marshal(encoded)
+	if err != nil {
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	registration, err := callReplaySafe(
+		ctx,
+		c.retry,
+		true,
+		func() (callResult[generated.AgentDefinitionRegistration], error) {
+			response, callErr := c.raw.RegisterAgentDefinitionWithBodyWithResponse(
+				ctx,
+				"application/json",
+				bytes.NewReader(body),
+			)
+			if callErr != nil {
+				return callResult[generated.AgentDefinitionRegistration]{}, callErr
+			}
+			return callResult[generated.AgentDefinitionRegistration]{
+				Value:  response.JSON200,
+				Status: response.StatusCode(),
+				Header: responseHeader(response.HTTPResponse),
+				Body:   response.Body,
+			}, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &AgentDefinitionRegistration{
+		AgentDefinitionID: registration.AgentDefinitionID,
+		AgentDefinition:   registration.AgentDefinition,
+	}, nil
+}
+
 func (c *Client) GetInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
 		response, err := c.raw.GetInvocationWithResponse(ctx, invocationID)
@@ -468,12 +524,24 @@ func (c *Client) ListModels(
 	}, nil
 }
 
+// ListMCPTools discovers the tools a remote MCP server projects. Headers are a
+// separate argument because MCPServer is part of a content-addressed Agent
+// Definition and therefore carries no secrets; these are used for this one
+// discovery request and never stored.
 func (c *Client) ListMCPTools(
 	ctx context.Context,
 	server MCPServer,
+	headers map[string]string,
 ) (*MCPListToolsResponse, error) {
 	body := generated.MCPListToolsRequest{
 		Server: generatedMCPServer(server),
+	}
+	if len(headers) > 0 {
+		discovery := make(map[string]string, len(headers))
+		for name, value := range headers {
+			discovery[name] = value
+		}
+		body.Headers = &discovery
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.MCPListToolsResponse], error) {
 		response, err := c.raw.ListMCPToolsWithResponse(ctx, body)
@@ -528,13 +596,6 @@ func generatedMCPServer(server MCPServer) generated.MCPServer {
 	if server.AllowedTools != nil {
 		allowedTools := append([]string(nil), server.AllowedTools...)
 		result.AllowedTools = &allowedTools
-	}
-	if server.Headers != nil {
-		headers := make(map[string]string, len(server.Headers))
-		for name, value := range server.Headers {
-			headers[name] = value
-		}
-		result.Headers = &headers
 	}
 	if server.Timeouts != nil {
 		result.Timeouts = &generated.MCPTimeouts{
@@ -1011,10 +1072,11 @@ func (c *Client) RevokeProviderKey(ctx context.Context, id string) (*ProviderKey
 func (c *Client) RegisterApp(ctx context.Context, name string, options RegisterAppOptions) (*AppRegistration, error) {
 	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.AppRegistration], error) {
 		response, err := c.raw.RegisterAppWithResponse(ctx, generated.RegisterAppJSONRequestBody{
-			Name:        name,
-			ExternalRef: options.ExternalRef,
-			DisplayName: options.DisplayName,
-			OrgID:       options.OrgID,
+			Name:                   name,
+			ExternalRef:            options.ExternalRef,
+			DisplayName:            options.DisplayName,
+			OrgID:                  options.OrgID,
+			CallbackTimeoutSeconds: options.CallbackTimeoutSeconds,
 		})
 		if err != nil {
 			return callResult[generated.AppRegistration]{}, err
@@ -1064,13 +1126,18 @@ func (c *Client) ListApps(ctx context.Context, options ListAppsOptions) (*AppLis
 // UpdateApp changes an app's mutable presentation fields; name and
 // external_ref cannot be changed.
 func (c *Client) UpdateApp(ctx context.Context, appID string, options UpdateAppOptions) (*App, error) {
-	if options.DisplayName == nil && options.OrgID == nil {
-		return nil, &Error{Category: ErrorValidation, Message: "app update requires display name or Org ID"}
+	if options.DisplayName == nil && options.OrgID == nil &&
+		options.CallbackTimeoutSeconds == nil {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "app update requires display name, Org ID, or callback timeout",
+		}
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.App], error) {
 		response, err := c.raw.UpdateAppWithResponse(ctx, appID, generated.UpdateAppJSONRequestBody{
-			DisplayName: options.DisplayName,
-			OrgID:       options.OrgID,
+			DisplayName:            options.DisplayName,
+			OrgID:                  options.OrgID,
+			CallbackTimeoutSeconds: options.CallbackTimeoutSeconds,
 		})
 		if err != nil {
 			return callResult[generated.App]{}, err

@@ -230,11 +230,11 @@ test("shared media-input fixture matches local preflight", async () => {
   }
 });
 
-test("shared definition-reuse fixture is expressible", async () => {
+test("shared agent-definition-reuse fixture is expressible", async () => {
   const fixture = JSON.parse(await readFile(
-    new URL("../../../conformance/fixtures/definition-reuse-v1.json", import.meta.url),
+    new URL("../../../conformance/fixtures/agent-definition-reuse-v1.json", import.meta.url),
     "utf8",
-  )) as { definition_id: string };
+  )) as { agent_definition_id: string };
   let body: Record<string, unknown> | undefined;
   const client = new Client({
     baseUrl: "https://runtime.example.test",
@@ -247,12 +247,108 @@ test("shared definition-reuse fixture is expressible", async () => {
   });
   await client.invoke({
     agentKey: "support",
-    idempotencyKey: "definition-reference",
+    idempotencyKey: "agent-definition-reference",
     input: "hello",
-    definitionId: fixture.definition_id,
+    agentDefinitionId: fixture.agent_definition_id,
   });
-  assert.equal(body?.definition_id, fixture.definition_id);
-  assert.equal(body?.model, undefined);
+  assert.equal(body?.agent_definition_id, fixture.agent_definition_id);
+  assert.equal(body?.agent_definition, undefined);
+});
+
+// Registration and invocation must render the same object, or an SDK could
+// register one definition and then invoke a different, silently new one.
+test("registration sends the same Agent Definition an Invocation nests", async () => {
+  const fixture = JSON.parse(await readFile(
+    new URL("../../../conformance/fixtures/agent-definition-reuse-v1.json", import.meta.url),
+    "utf8",
+  )) as {
+    agent_definition_id: string;
+    registration: { request: Record<string, unknown>; response: Record<string, unknown> };
+  };
+  const bodies: Record<string, unknown>[] = [];
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      if (String(input).endsWith("/v1/agent-definitions")) {
+        return new Response(JSON.stringify(fixture.registration.response), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return admissionResponse();
+    },
+  });
+  const definition = {
+    instructions: "You are a concise billing support agent.",
+    model: { provider: "anthropic", id: "claude-sonnet-5" },
+  };
+  const registration = await client.registerAgentDefinition(definition);
+  assert.equal(registration.agentDefinitionId, fixture.agent_definition_id);
+  assert.deepEqual(bodies[0], fixture.registration.request);
+
+  await client.invoke({
+    agentKey: "support",
+    idempotencyKey: "agent-definition-inline",
+    input: "hello",
+    agentDefinition: definition,
+  });
+  assert.deepEqual(bodies[1]?.agent_definition, bodies[0]);
+});
+
+// A secret inside a content-addressed definition would change its identity, so
+// MCP headers must ride alongside it and never within it.
+test("mcp secrets stay outside the Agent Definition", async () => {
+  let body: Record<string, any> | undefined;
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, any>;
+      return admissionResponse();
+    },
+  });
+  const server = mcpServer({
+    name: "support",
+    url: "https://mcp.example.test/rpc",
+    allowedTools: ["lookup"],
+  });
+  await client.invoke({
+    agentKey: "support",
+    idempotencyKey: "mcp-secret-placement",
+    input: "hello",
+    agentDefinition: {
+      model: { provider: "anthropic", id: "claude-sonnet-5" },
+      mcpServers: [server],
+    },
+    mcpServerHeaders: [{
+      name: "support",
+      headers: { Authorization: "Bearer secret" },
+    }],
+  });
+  assert.equal(body?.agent_definition.mcp_servers[0].headers, undefined);
+  assert.deepEqual(body?.mcp_server_headers, [{
+    name: "support",
+    headers: { Authorization: "Bearer secret" },
+  }]);
+
+  // A header naming no declared server is a typo the SDK can catch locally.
+  await assert.rejects(
+    client.invoke({
+      agentKey: "support",
+      idempotencyKey: "mcp-secret-mismatch",
+      input: "hello",
+      agentDefinition: {
+        model: { provider: "anthropic", id: "claude-sonnet-5" },
+        mcpServers: [server],
+      },
+      mcpServerHeaders: [{ name: "typo", headers: { Authorization: "Bearer secret" } }],
+    }),
+    (error: unknown) => error instanceof NvokenError && error.category === "validation",
+  );
 });
 
 // fixtureBlock converts one wire block into the camelCase facade shape.
@@ -665,8 +761,8 @@ function wireInvocation(
     id: invocationId,
     agent_id: agentId,
     session_id: sessionId,
-    definition_id: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
-    definition: null,
+    agent_definition_id: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
+    agent_definition: null,
     status,
     stop_reason: status === "completed" ? "end_turn" : null,
     attempt: 1,
@@ -803,13 +899,17 @@ test("session options, metadata and provider tools match the shared fixture", as
     sessionOptions: { retention: { ttlSeconds: 86400 } },
     metadata: fixture.invocation_metadata,
     input: "hello",
-    model: { provider: "anthropic", id: "claude-sonnet-4-6" },
-    providerTools: [webSearchTool()],
+    agentDefinition: {
+      model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+      providerTools: [webSearchTool()],
+    },
   });
   const wire = body as Record<string, any>;
   assert.deepEqual(wire.session_options, fixture.session_options.retention_only);
   assert.deepEqual(wire.metadata, fixture.invocation_metadata);
-  assert.deepEqual(wire.provider_tools, fixture.provider_tools.defaults);
+  // Execution fields belong to the Agent Definition now. Reading them back
+  // through that key is what proves the nesting actually happened.
+  assert.deepEqual(wire.agent_definition.provider_tools, fixture.provider_tools.defaults);
 
   await client.invoke({
     agentKey: "support",
@@ -820,21 +920,26 @@ test("session options, metadata and provider tools match the shared fixture", as
       metadata: { surface: "web" },
     },
     input: "hello",
-    model: { provider: "anthropic", id: "claude-sonnet-4-6" },
-    providerTools: [webSearchTool({
-      maxUses: 5,
-      allowedDomains: ["example.com", "docs.example.com"],
-      userLocation: {
-        city: "Austin",
-        region: "Texas",
-        country: "US",
-        timezone: "America/Chicago",
-      },
-    })],
+    agentDefinition: {
+      model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+      providerTools: [webSearchTool({
+        maxUses: 5,
+        allowedDomains: ["example.com", "docs.example.com"],
+        userLocation: {
+          city: "Austin",
+          region: "Texas",
+          country: "US",
+          timezone: "America/Chicago",
+        },
+      })],
+    },
   });
   const configured = body as Record<string, any>;
   assert.deepEqual(configured.session_options, fixture.session_options.every_member);
-  assert.deepEqual(configured.provider_tools, fixture.provider_tools.configured);
+  assert.deepEqual(
+    configured.agent_definition.provider_tools,
+    fixture.provider_tools.configured,
+  );
 
   // Session options with no members would serialize to `{}`, which the Runtime
   // rejects for minProperties — catching it locally names the field.
@@ -844,7 +949,9 @@ test("session options, metadata and provider tools match the shared fixture", as
       sessionKey: "conformance",
       sessionOptions: {},
       input: "hello",
-      model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+      agentDefinition: {
+        model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+      },
     }),
     (error: unknown) => error instanceof NvokenError && error.category === "validation",
   );
@@ -922,8 +1029,10 @@ test("invoke preflights converted output schemas once before transport", async (
       client.invoke({
         agentKey: "support",
         input: "help",
-        model: { provider: "anthropic", id: "test-model" },
-        outputSchema: expandOutputSchemaFixture(testCase),
+        agentDefinition: {
+          model: { provider: "anthropic", id: "test-model" },
+          outputSchema: expandOutputSchemaFixture(testCase),
+        },
       }),
       (error: unknown) => {
         assert.ok(error instanceof NvokenError, testCase.id);
@@ -953,8 +1062,10 @@ test("invoke preflights converted output schemas once before transport", async (
     client.invoke({
       agentKey: "support",
       input: "help",
-      model: { provider: "anthropic", id: "test-model" },
-      outputSchema: schema,
+      agentDefinition: {
+        model: { provider: "anthropic", id: "test-model" },
+        outputSchema: schema,
+      },
     }),
     (error: unknown) => {
       assert.ok(error instanceof NvokenError);
@@ -1032,8 +1143,8 @@ test("InvocationError is actionable without a formatter", () => {
     structuredOutput: null,
     structuredOutputProvenance: null,
     metadata: null,
-    definitionId: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-    definition: null,
+    agentDefinitionId: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+    agentDefinition: null,
     limits: {
       totalTimeoutSeconds: 300,
       activeTimeoutSeconds: 120,
@@ -1094,9 +1205,10 @@ test("shared fault server semantics", async (context) => {
     name: "support",
     url: "https://mcp.example.test/rpc",
     allowedTools: ["lookup"],
-    headers: { Authorization: "Bearer conformance-mcp-secret" },
   });
-  const mcpTools = await client.listMcpTools(server);
+  const mcpTools = await client.listMcpTools(server, {
+    Authorization: "Bearer conformance-mcp-secret",
+  });
   assert.equal(mcpTools.tools[0]?.projectedName, "support__lookup");
   const exactModel = await client.getModel({ provider: "openai", id: exactModelId });
   assert.equal(exactModel.id, exactModelId);
@@ -1128,21 +1240,27 @@ test("shared fault server semantics", async (context) => {
     idempotencyKey: "typescript-lost-ack",
     ifActive: "supersede",
     input: "hello",
-    instructions: "help",
-    model: { provider: "openai", id: "gpt-test" },
-    sampling: { temperature: 0 },
-    reasoning: { effort: "high" },
-    mcpServers: [server],
-    outputSchema: defineJsonSchema<Answer>({
-      type: "object",
-      properties: { answer: { type: "string" } },
-      required: ["answer"],
-      additionalProperties: false,
-    }),
     providerKeys: [{
       provider: "openai",
       source: "caller_ephemeral",
       key: { apiKey: "conformance-secret" },
+    }],
+    agentDefinition: {
+      instructions: "help",
+      model: { provider: "openai", id: "gpt-test" },
+      sampling: { temperature: 0 },
+      reasoning: { effort: "high" },
+      mcpServers: [server],
+      outputSchema: defineJsonSchema<Answer>({
+        type: "object",
+        properties: { answer: { type: "string" } },
+        required: ["answer"],
+        additionalProperties: false,
+      }),
+    },
+    mcpServerHeaders: [{
+      name: "support",
+      headers: { Authorization: "Bearer conformance-mcp-secret" },
     }],
   });
   assert.equal(handle.invocationId, invocationId);
@@ -1552,15 +1670,20 @@ test("agent run converts standard schemas, retries one admission, and dispatches
   );
   assert.match(String(admissionBodies[0]?.idempotency_key), /^nvoken-/);
   assert.equal(admissionBodies[0]?.if_active, "supersede");
+  // Every execution field the Agent forwards travels inside the Agent
+  // Definition, so reading them back through that key proves the nesting.
   const admittedRequest = admissionBodies[0] as {
-    model: { id: string };
-    tools: Array<{ mode: string; input_schema: Record<string, unknown> }>;
-    output_schema: Record<string, unknown>;
+    agent_definition: {
+      model: { id: string };
+      tools: Array<{ mode: string; input_schema: Record<string, unknown> }>;
+      output_schema: Record<string, unknown>;
+    };
   };
-  assert.equal(admittedRequest.model.id, "gpt-test");
-  assert.equal(admittedRequest.tools[0]?.mode, "host");
-  assert.equal(admittedRequest.tools[0]?.input_schema.$schema, undefined);
-  assert.equal(admittedRequest.output_schema.$schema, undefined);
+  const admittedDefinition = admittedRequest.agent_definition;
+  assert.equal(admittedDefinition.model.id, "gpt-test");
+  assert.equal(admittedDefinition.tools[0]?.mode, "host");
+  assert.equal(admittedDefinition.tools[0]?.input_schema.$schema, undefined);
+  assert.equal(admittedDefinition.output_schema.$schema, undefined);
 });
 
 test("agent run falls back from a broken stream to authoritative reads", async () => {
@@ -1785,8 +1908,10 @@ test("session conflicts normalize to SessionBusyError with active work", async (
     client.invoke({
       agentKey: "support",
       input: "hello",
-      instructions: "help",
-      model: { provider: "openai", id: "gpt-test" },
+      agentDefinition: {
+        instructions: "help",
+        model: { provider: "openai", id: "gpt-test" },
+      },
     }),
     (error: unknown) => error instanceof SessionBusyError
       && error.activeInvocationId === invocationId

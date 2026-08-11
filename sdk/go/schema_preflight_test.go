@@ -61,11 +61,13 @@ func TestInvokePreflightsOutputSchemaBeforeTransport(t *testing.T) {
 		_, err = client.Invoke(context.Background(), InvokeRequest{
 			AgentKey: "support",
 			Input:    "help",
-			Model: Model{
-				Provider: "anthropic",
-				ID:       "test-model",
+			AgentDefinition: &AgentDefinition{
+				Model: Model{
+					Provider: "anthropic",
+					ID:       "test-model",
+				},
+				OutputSchema: expandOutputSchemaFixture(t, test),
 			},
-			OutputSchema: expandOutputSchemaFixture(t, test),
 		})
 		var sdkError *Error
 		if !errors.As(err, &sdkError) ||
@@ -80,16 +82,20 @@ func TestInvokePreflightsOutputSchemaBeforeTransport(t *testing.T) {
 
 func TestInvokeRequestOutputSchemaEncodesDirectly(t *testing.T) {
 	body, err := InvokeRequest{
-		AgentKey:     "support",
-		Input:        "help",
-		Model:        Model{Provider: "anthropic", ID: "test-model"},
-		OutputSchema: map[string]any{"type": "object"},
+		AgentKey: "support",
+		Input:    "help",
+		AgentDefinition: &AgentDefinition{
+			Model:        Model{Provider: "anthropic", ID: "test-model"},
+			OutputSchema: map[string]any{"type": "object"},
+		},
 	}.encoded()
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
 	var wire struct {
-		OutputSchema     map[string]any  `json:"output_schema"`
+		AgentDefinition struct {
+			OutputSchema map[string]any `json:"output_schema"`
+		} `json:"agent_definition"`
 		StructuredOutput json.RawMessage `json:"structured_output"`
 	}
 	if err := json.Unmarshal(body, &wire); err != nil {
@@ -98,8 +104,11 @@ func TestInvokeRequestOutputSchemaEncodesDirectly(t *testing.T) {
 	if wire.StructuredOutput != nil {
 		t.Fatalf("structured_output = %s, want absent", wire.StructuredOutput)
 	}
-	if wire.OutputSchema["type"] != "object" {
-		t.Fatalf("output_schema = %#v, want the supplied OutputSchema", wire.OutputSchema)
+	if wire.AgentDefinition.OutputSchema["type"] != "object" {
+		t.Fatalf(
+			"agent_definition.output_schema = %#v, want the supplied OutputSchema",
+			wire.AgentDefinition.OutputSchema,
+		)
 	}
 }
 
