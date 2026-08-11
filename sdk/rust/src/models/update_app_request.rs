@@ -41,6 +41,9 @@ pub struct UpdateAppRequest {
         skip_serializing_if = "Option::is_none"
     )]
     pub browser_access: Option<Option<Box<models::BrowserAccess>>>,
+    /// Change credit enforcement for turns admitted from now on. Invocations already running keep the policy they were admitted under. Omission preserves the stored value.
+    #[serde(rename = "credit_policy", skip_serializing_if = "Option::is_none")]
+    pub credit_policy: Option<models::CreditPolicy>,
 }
 
 impl UpdateAppRequest {
@@ -51,6 +54,7 @@ impl UpdateAppRequest {
             callback_timeout_seconds: None,
             default_rate_limits: None,
             browser_access: None,
+            credit_policy: None,
         }
     }
 }

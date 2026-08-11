@@ -14,6 +14,12 @@
 
 # import models into model package
 from nvoken_generated.models.activity_metrics import ActivityMetrics
+from nvoken_generated.models.admission_attempt import AdmissionAttempt
+from nvoken_generated.models.admission_attempt_list import AdmissionAttemptList
+from nvoken_generated.models.admission_outcome import AdmissionOutcome
+from nvoken_generated.models.admission_reason_count import AdmissionReasonCount
+from nvoken_generated.models.admission_summary import AdmissionSummary
+from nvoken_generated.models.admission_tenant_count import AdmissionTenantCount
 from nvoken_generated.models.agent import Agent
 from nvoken_generated.models.agent_definition import AgentDefinition
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
@@ -78,6 +84,7 @@ from nvoken_generated.models.credit_account_list import CreditAccountList
 from nvoken_generated.models.credit_allocation import CreditAllocation
 from nvoken_generated.models.credit_allocation_list import CreditAllocationList
 from nvoken_generated.models.credit_block import CreditBlock
+from nvoken_generated.models.credit_policy import CreditPolicy
 from nvoken_generated.models.current_identity import CurrentIdentity
 from nvoken_generated.models.current_identity_authentication import CurrentIdentityAuthentication
 from nvoken_generated.models.current_identity_response import CurrentIdentityResponse
@@ -103,6 +110,8 @@ from nvoken_generated.models.invocation_failure import InvocationFailure
 from nvoken_generated.models.invocation_input import InvocationInput
 from nvoken_generated.models.invocation_list import InvocationList
 from nvoken_generated.models.invocation_list_response import InvocationListResponse
+from nvoken_generated.models.invocation_log import InvocationLog
+from nvoken_generated.models.invocation_log_list import InvocationLogList
 from nvoken_generated.models.invocation_response import InvocationResponse
 from nvoken_generated.models.invocation_result import InvocationResult
 from nvoken_generated.models.invocation_result_event import InvocationResultEvent
@@ -152,6 +161,7 @@ from nvoken_generated.models.nudge import Nudge
 from nvoken_generated.models.nudge_acknowledgement import NudgeAcknowledgement
 from nvoken_generated.models.nudge_list import NudgeList
 from nvoken_generated.models.nudge_status import NudgeStatus
+from nvoken_generated.models.observation_status import ObservationStatus
 from nvoken_generated.models.operation import Operation
 from nvoken_generated.models.org import Org
 from nvoken_generated.models.org_list import OrgList
@@ -203,6 +213,9 @@ from nvoken_generated.models.structured_output_provenance import StructuredOutpu
 from nvoken_generated.models.submit_host_tool_results_request import SubmitHostToolResultsRequest
 from nvoken_generated.models.submit_host_tool_results_request_results_inner import SubmitHostToolResultsRequestResultsInner
 from nvoken_generated.models.submit_host_tool_results_response import SubmitHostToolResultsResponse
+from nvoken_generated.models.tenant import Tenant
+from nvoken_generated.models.tenant_credits import TenantCredits
+from nvoken_generated.models.tenant_list import TenantList
 from nvoken_generated.models.text_block import TextBlock
 from nvoken_generated.models.text_input_block import TextInputBlock
 from nvoken_generated.models.thinking_delta_event import ThinkingDeltaEvent
@@ -220,6 +233,10 @@ from nvoken_generated.models.tool_declaration import ToolDeclaration
 from nvoken_generated.models.tool_metrics import ToolMetrics
 from nvoken_generated.models.tool_result_block import ToolResultBlock
 from nvoken_generated.models.tool_use_block import ToolUseBlock
+from nvoken_generated.models.trace import Trace
+from nvoken_generated.models.trace_list import TraceList
+from nvoken_generated.models.trace_span import TraceSpan
+from nvoken_generated.models.trace_summary import TraceSummary
 from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot
 from nvoken_generated.models.transcript_snapshot_response import TranscriptSnapshotResponse
 from nvoken_generated.models.transcript_stream_event import TranscriptStreamEvent

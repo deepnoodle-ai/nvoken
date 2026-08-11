@@ -20,6 +20,13 @@ import {
     AppDefaultRateLimitsToJSON,
     AppDefaultRateLimitsToJSONTyped,
 } from './AppDefaultRateLimits.js';
+import type { CreditPolicy } from './CreditPolicy.js';
+import {
+    CreditPolicyFromJSON,
+    CreditPolicyFromJSONTyped,
+    CreditPolicyToJSON,
+    CreditPolicyToJSONTyped,
+} from './CreditPolicy.js';
 import type { BrowserAccess } from './BrowserAccess.js';
 import {
     BrowserAccessFromJSON,
@@ -85,7 +92,15 @@ export interface RegisterAppRequest {
      * @memberof RegisterAppRequest
      */
     browserAccess?: BrowserAccess | null;
+    /**
+     * Defaults to `off`. See the schema for what each value enforces.
+     * @type {CreditPolicy}
+     * @memberof RegisterAppRequest
+     */
+    creditPolicy?: CreditPolicy;
 }
+
+
 
 /**
  * Check if a given object implements the RegisterAppRequest interface.
@@ -112,6 +127,7 @@ export function RegisterAppRequestFromJSONTyped(json: any, ignoreDiscriminator: 
         'callbackTimeoutSeconds': json['callback_timeout_seconds'] == null ? undefined : json['callback_timeout_seconds'],
         'defaultRateLimits': json['default_rate_limits'] == null ? undefined : AppDefaultRateLimitsFromJSON(json['default_rate_limits']),
         'browserAccess': json['browser_access'] == null ? undefined : BrowserAccessFromJSON(json['browser_access']),
+        'creditPolicy': json['credit_policy'] == null ? undefined : CreditPolicyFromJSON(json['credit_policy']),
     };
 }
 
@@ -133,5 +149,6 @@ export function RegisterAppRequestToJSONTyped(value?: RegisterAppRequest | null,
         'callback_timeout_seconds': value['callbackTimeoutSeconds'],
         'default_rate_limits': AppDefaultRateLimitsToJSON(value['defaultRateLimits']),
         'browser_access': BrowserAccessToJSON(value['browserAccess']),
+        'credit_policy': CreditPolicyToJSON(value['creditPolicy']),
     };
 }

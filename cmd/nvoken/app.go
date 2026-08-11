@@ -66,6 +66,8 @@ func newApp() *cli.App {
 	registerOrgCommands(app)
 	registerAuthCommands(app)
 	registerCredentialCommands(app)
+	registerAdmissionCommands(app)
+	registerTenantCommands(app)
 	return app
 }
 

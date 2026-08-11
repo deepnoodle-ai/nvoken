@@ -40,6 +40,8 @@ pub struct App {
     /// Complete dormant browser-direct configuration. Null means browser access is disabled. Client JWTs and CORS remain unavailable until PRD 065.
     #[serde(rename = "browser_access", deserialize_with = "Option::deserialize")]
     pub browser_access: Option<Box<models::BrowserAccess>>,
+    #[serde(rename = "credit_policy")]
+    pub credit_policy: models::CreditPolicy,
     #[serde(rename = "created_at")]
     pub created_at: chrono::DateTime<chrono::FixedOffset>,
     /// When the App was archived, or null while it is live. An archived App refuses admission and grant-minting with `409 app_archived` while every read, settlement, erasure, configuration, and revocation path stays open. Its credentials keep authenticating.
@@ -57,6 +59,7 @@ impl App {
         callback_timeout_seconds: u64,
         default_rate_limits: Option<models::AppDefaultRateLimits>,
         browser_access: Option<models::BrowserAccess>,
+        credit_policy: models::CreditPolicy,
         created_at: chrono::DateTime<chrono::FixedOffset>,
         archived_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     ) -> App {
@@ -77,6 +80,7 @@ impl App {
             } else {
                 None
             },
+            credit_policy,
             created_at,
             archived_at,
         }

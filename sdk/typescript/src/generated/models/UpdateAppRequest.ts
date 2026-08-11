@@ -20,6 +20,13 @@ import {
     AppDefaultRateLimitsToJSON,
     AppDefaultRateLimitsToJSONTyped,
 } from './AppDefaultRateLimits.js';
+import type { CreditPolicy } from './CreditPolicy.js';
+import {
+    CreditPolicyFromJSON,
+    CreditPolicyFromJSONTyped,
+    CreditPolicyToJSON,
+    CreditPolicyToJSONTyped,
+} from './CreditPolicy.js';
 import type { BrowserAccess } from './BrowserAccess.js';
 import {
     BrowserAccessFromJSON,
@@ -72,7 +79,18 @@ export interface UpdateAppRequest {
      * @memberof UpdateAppRequest
      */
     browserAccess?: BrowserAccess | null;
+    /**
+     * Change credit enforcement for turns admitted from now on.
+     * Invocations already running keep the policy they were admitted
+     * under. Omission preserves the stored value.
+     *
+     * @type {CreditPolicy}
+     * @memberof UpdateAppRequest
+     */
+    creditPolicy?: CreditPolicy;
 }
+
+
 
 /**
  * Check if a given object implements the UpdateAppRequest interface.
@@ -96,6 +114,7 @@ export function UpdateAppRequestFromJSONTyped(json: any, ignoreDiscriminator: bo
         'callbackTimeoutSeconds': json['callback_timeout_seconds'] == null ? undefined : json['callback_timeout_seconds'],
         'defaultRateLimits': json['default_rate_limits'] == null ? undefined : AppDefaultRateLimitsFromJSON(json['default_rate_limits']),
         'browserAccess': json['browser_access'] == null ? undefined : BrowserAccessFromJSON(json['browser_access']),
+        'creditPolicy': json['credit_policy'] == null ? undefined : CreditPolicyFromJSON(json['credit_policy']),
     };
 }
 
@@ -115,5 +134,6 @@ export function UpdateAppRequestToJSONTyped(value?: UpdateAppRequest | null, ign
         'callback_timeout_seconds': value['callbackTimeoutSeconds'],
         'default_rate_limits': AppDefaultRateLimitsToJSON(value['defaultRateLimits']),
         'browser_access': BrowserAccessToJSON(value['browserAccess']),
+        'credit_policy': CreditPolicyToJSON(value['creditPolicy']),
     };
 }

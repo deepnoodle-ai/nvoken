@@ -19,6 +19,48 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AdmissionAttemptAuthenticationMethod.
+const (
+	AdmissionAttemptAuthenticationMethodAPIKey      AdmissionAttemptAuthenticationMethod = "api_key"
+	AdmissionAttemptAuthenticationMethodClientToken AdmissionAttemptAuthenticationMethod = "client_token"
+	AdmissionAttemptAuthenticationMethodIssuerToken AdmissionAttemptAuthenticationMethod = "issuer_token"
+	AdmissionAttemptAuthenticationMethodLessThanNil AdmissionAttemptAuthenticationMethod = "<nil>"
+)
+
+// Valid indicates whether the value is a known member of the AdmissionAttemptAuthenticationMethod enum.
+func (e AdmissionAttemptAuthenticationMethod) Valid() bool {
+	switch e {
+	case AdmissionAttemptAuthenticationMethodAPIKey:
+		return true
+	case AdmissionAttemptAuthenticationMethodClientToken:
+		return true
+	case AdmissionAttemptAuthenticationMethodIssuerToken:
+		return true
+	case AdmissionAttemptAuthenticationMethodLessThanNil:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdmissionOutcome.
+const (
+	Admitted AdmissionOutcome = "admitted"
+	Refused  AdmissionOutcome = "refused"
+)
+
+// Valid indicates whether the value is a known member of the AdmissionOutcome enum.
+func (e AdmissionOutcome) Valid() bool {
+	switch e {
+	case Admitted:
+		return true
+	case Refused:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AppSigningKeyPurpose.
 const (
 	AppSigningKeyPurposeCallback AppSigningKeyPurpose = "callback"
@@ -379,6 +421,24 @@ func (e CredentialStatus) Valid() bool {
 	}
 }
 
+// Defines values for CreditPolicy.
+const (
+	Off      CreditPolicy = "off"
+	Required CreditPolicy = "required"
+)
+
+// Valid indicates whether the value is a known member of the CreditPolicy enum.
+func (e CreditPolicy) Valid() bool {
+	switch e {
+	case Off:
+		return true
+	case Required:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CurrentIdentityAuthenticationAssurance.
 const (
 	CurrentIdentityAuthenticationAssuranceBearer CurrentIdentityAuthenticationAssurance = "bearer"
@@ -498,6 +558,7 @@ const (
 	ErrorCodeRateLimited                     ErrorCode = "rate_limited"
 	ErrorCodeSessionInvocationActive         ErrorCode = "session_invocation_active"
 	ErrorCodeSessionOptionsConflict          ErrorCode = "session_options_conflict"
+	ErrorCodeTenantInUse                     ErrorCode = "tenant_in_use"
 	ErrorCodeToolResultConflict              ErrorCode = "tool_result_conflict"
 	ErrorCodeToolResultExpired               ErrorCode = "tool_result_expired"
 	ErrorCodeUnauthenticated                 ErrorCode = "unauthenticated"
@@ -554,6 +615,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeSessionInvocationActive:
 		return true
 	case ErrorCodeSessionOptionsConflict:
+		return true
+	case ErrorCodeTenantInUse:
 		return true
 	case ErrorCodeToolResultConflict:
 		return true
@@ -1174,6 +1237,24 @@ func (e NudgeStatus) Valid() bool {
 	}
 }
 
+// Defines values for ObservationStatus.
+const (
+	Available ObservationStatus = "available"
+	Disabled  ObservationStatus = "disabled"
+)
+
+// Valid indicates whether the value is a known member of the ObservationStatus enum.
+func (e ObservationStatus) Valid() bool {
+	switch e {
+	case Available:
+		return true
+	case Disabled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Operation.
 const (
 	AllocateCredits        Operation = "allocate_credits"
@@ -1184,6 +1265,7 @@ const (
 	CreateProviderKey      Operation = "create_provider_key"
 	CreateSession          Operation = "create_session"
 	DeleteSession          Operation = "delete_session"
+	DeleteTenant           Operation = "delete_tenant"
 	GetAgent               Operation = "get_agent"
 	GetAgentDefinition     Operation = "get_agent_definition"
 	GetApp                 Operation = "get_app"
@@ -1239,6 +1321,8 @@ func (e Operation) Valid() bool {
 	case CreateSession:
 		return true
 	case DeleteSession:
+		return true
+	case DeleteTenant:
 		return true
 	case GetAgent:
 		return true
@@ -1903,6 +1987,117 @@ func (e ToolUseBlockType) Valid() bool {
 	}
 }
 
+// Defines values for TraceStatus.
+const (
+	TraceStatusError TraceStatus = "error"
+	TraceStatusOk    TraceStatus = "ok"
+	TraceStatusUnset TraceStatus = "unset"
+)
+
+// Valid indicates whether the value is a known member of the TraceStatus enum.
+func (e TraceStatus) Valid() bool {
+	switch e {
+	case TraceStatusError:
+		return true
+	case TraceStatusOk:
+		return true
+	case TraceStatusUnset:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TraceSpanKind.
+const (
+	TraceSpanKindClient   TraceSpanKind = "client"
+	TraceSpanKindConsumer TraceSpanKind = "consumer"
+	TraceSpanKindInternal TraceSpanKind = "internal"
+	TraceSpanKindProducer TraceSpanKind = "producer"
+	TraceSpanKindServer   TraceSpanKind = "server"
+)
+
+// Valid indicates whether the value is a known member of the TraceSpanKind enum.
+func (e TraceSpanKind) Valid() bool {
+	switch e {
+	case TraceSpanKindClient:
+		return true
+	case TraceSpanKindConsumer:
+		return true
+	case TraceSpanKindInternal:
+		return true
+	case TraceSpanKindProducer:
+		return true
+	case TraceSpanKindServer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TraceSpanOperation.
+const (
+	Chat        TraceSpanOperation = "chat"
+	ExecuteTool TraceSpanOperation = "execute_tool"
+	InvokeAgent TraceSpanOperation = "invoke_agent"
+)
+
+// Valid indicates whether the value is a known member of the TraceSpanOperation enum.
+func (e TraceSpanOperation) Valid() bool {
+	switch e {
+	case Chat:
+		return true
+	case ExecuteTool:
+		return true
+	case InvokeAgent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TraceSpanStatus.
+const (
+	TraceSpanStatusError TraceSpanStatus = "error"
+	TraceSpanStatusOk    TraceSpanStatus = "ok"
+	TraceSpanStatusUnset TraceSpanStatus = "unset"
+)
+
+// Valid indicates whether the value is a known member of the TraceSpanStatus enum.
+func (e TraceSpanStatus) Valid() bool {
+	switch e {
+	case TraceSpanStatusError:
+		return true
+	case TraceSpanStatusOk:
+		return true
+	case TraceSpanStatusUnset:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TraceSummaryStatus.
+const (
+	TraceSummaryStatusError TraceSummaryStatus = "error"
+	TraceSummaryStatusOk    TraceSummaryStatus = "ok"
+	TraceSummaryStatusUnset TraceSummaryStatus = "unset"
+)
+
+// Valid indicates whether the value is a known member of the TraceSummaryStatus enum.
+func (e TraceSummaryStatus) Valid() bool {
+	switch e {
+	case TraceSummaryStatusError:
+		return true
+	case TraceSummaryStatusOk:
+		return true
+	case TraceSummaryStatusUnset:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TranscriptUpdateType.
 const (
 	EventTranscriptUpdate TranscriptUpdateType = "transcript.update"
@@ -2246,6 +2441,95 @@ type ActivityMetrics struct {
 	UnattributedInvocations int `json:"unattributed_invocations"`
 }
 
+// AdmissionAttempt defines model for AdmissionAttempt.
+type AdmissionAttempt struct {
+	AgentKey             *string                               `json:"agent_key"`
+	AttemptedAt          time.Time                             `json:"attempted_at"`
+	AuthenticationMethod *AdmissionAttemptAuthenticationMethod `json:"authentication_method"`
+	CredentialFamilyID   *string                               `json:"credential_family_id"`
+
+	// Deduplicated Whether the request replayed an existing Invocation.
+	Deduplicated bool `json:"deduplicated"`
+
+	// Details The refusal's own detail object, the same one the caller received.
+	// For `insufficient_credits` it carries the tenant key with exact
+	// available and required amounts.
+	Details *map[string]interface{} `json:"details,omitempty"`
+
+	// ErrorCode The refusal code, or null when the turn was admitted.
+	ErrorCode *ErrorCode `json:"error_code"`
+
+	// HTTPStatus The status the caller received.
+	HTTPStatus int `json:"http_status"`
+
+	// ID Opaque identifier with the public `adm_` prefix.
+	ID string `json:"id"`
+
+	// InvocationID The admitted Invocation, or null for a refusal. It carries no
+	// foreign key: the record outlives Session erasure, so a deleted
+	// transcript never erases the evidence that the request happened.
+	InvocationID *InvocationID `json:"invocation_id"`
+	Model        *string       `json:"model"`
+
+	// Outcome `admitted` created an Invocation; `refused` did not. A refusal is the
+	// only record that the request happened at all.
+	Outcome   AdmissionOutcome `json:"outcome"`
+	Provider  *string          `json:"provider"`
+	RequestID *string          `json:"request_id"`
+
+	// TenantKey The tenant key as sent, or null for the App's default tenant. It is
+	// raw text, not a resolved reference: a refused attempt commonly
+	// names a tenant that was never interned.
+	TenantKey *string `json:"tenant_key"`
+	UserKey   *string `json:"user_key"`
+}
+
+// AdmissionAttemptAuthenticationMethod defines model for AdmissionAttempt.AuthenticationMethod.
+type AdmissionAttemptAuthenticationMethod string
+
+// AdmissionAttemptList defines model for AdmissionAttemptList.
+type AdmissionAttemptList struct {
+	Items      []AdmissionAttempt `json:"items"`
+	NextCursor *string            `json:"next_cursor"`
+}
+
+// AdmissionOutcome `admitted` created an Invocation; `refused` did not. A refusal is the
+// only record that the request happened at all.
+type AdmissionOutcome string
+
+// AdmissionReasonCount defines model for AdmissionReasonCount.
+type AdmissionReasonCount struct {
+	Count     int64  `json:"count"`
+	ErrorCode string `json:"error_code"`
+}
+
+// AdmissionSummary defines model for AdmissionSummary.
+type AdmissionSummary struct {
+	Admitted int64 `json:"admitted"`
+
+	// EndAt Exclusive upper bound, or null when the window runs to now.
+	EndAt *time.Time `json:"end_at"`
+
+	// Reasons Every refusal in the window, grouped by code. Never truncated.
+	Reasons []AdmissionReasonCount `json:"reasons"`
+	Refused int64                  `json:"refused"`
+
+	// StartAt Inclusive lower bound the counts cover.
+	StartAt time.Time `json:"start_at"`
+
+	// Tenants The ten keys refused most, worst first. Raw keys, not tenants: a
+	// key here may have no tenant behind it, which is the case worth
+	// acting on.
+	Tenants []AdmissionTenantCount `json:"tenants"`
+}
+
+// AdmissionTenantCount defines model for AdmissionTenantCount.
+type AdmissionTenantCount struct {
+	LastRefusedAt time.Time `json:"last_refused_at"`
+	Refusals      int64     `json:"refusals"`
+	TenantKey     string    `json:"tenant_key"`
+}
+
 // Agent App-scoped identity anchor only. Agent behavior is not registered;
 // instructions, model, tools, and provider keys travel per Invocation.
 type Agent struct {
@@ -2507,6 +2791,22 @@ type App struct {
 	// Webhook delivery is unaffected.
 	CallbackTimeoutSeconds int64     `json:"callback_timeout_seconds"`
 	CreatedAt              time.Time `json:"created_at"`
+
+	// CreditPolicy Whether nvoken refuses a turn whose tenant has no available credits.
+	//
+	// `off`, the default, admits turns without consulting the tenant's
+	// credit account. It is the right setting when the provider account
+	// paying for the call is yours -- an App provider key, or the
+	// deployment's own -- because nvoken is not the party at risk and your
+	// own billing system already meters the end user.
+	//
+	// `required` refuses admission, and each later provider call, unless the
+	// tenant has enough available credits. Choose it when you want nvoken to
+	// hold the line per tenant.
+	//
+	// Neither value governs platform-funded work. When a call is paid for by
+	// nvoken's own provider key, credits are always required.
+	CreditPolicy CreditPolicy `json:"credit_policy"`
 
 	// DefaultRateLimits Dormant App-wide admission ceilings shared by machine and future
 	// client-token callers. Null means unlimited machine admission.
@@ -3478,6 +3778,22 @@ type CreditBlock struct {
 	TenantKey *string `json:"tenant_key"`
 }
 
+// CreditPolicy Whether nvoken refuses a turn whose tenant has no available credits.
+//
+// `off`, the default, admits turns without consulting the tenant's
+// credit account. It is the right setting when the provider account
+// paying for the call is yours -- an App provider key, or the
+// deployment's own -- because nvoken is not the party at risk and your
+// own billing system already meters the end user.
+//
+// `required` refuses admission, and each later provider call, unless the
+// tenant has enough available credits. Choose it when you want nvoken to
+// hold the line per tenant.
+//
+// Neither value governs platform-funded work. When a call is paid for by
+// nvoken's own provider key, credits are always required.
+type CreditPolicy string
+
 // CurrentIdentity defines model for CurrentIdentity.
 type CurrentIdentity struct {
 	Authentication struct {
@@ -4074,6 +4390,38 @@ type InvocationList struct {
 // InvocationListResponse defines model for InvocationListResponse.
 type InvocationListResponse struct {
 	union json.RawMessage
+}
+
+// InvocationLog defines model for InvocationLog.
+type InvocationLog struct {
+	Component      *string   `json:"component,omitempty"`
+	ErrorClass     *string   `json:"error_class,omitempty"`
+	Event          *string   `json:"event,omitempty"`
+	ID             string    `json:"id"`
+	Message        string    `json:"message"`
+	Model          *string   `json:"model,omitempty"`
+	Outcome        *string   `json:"outcome,omitempty"`
+	Provider       *string   `json:"provider,omitempty"`
+	RequestID      *string   `json:"request_id,omitempty"`
+	ServiceName    *string   `json:"service_name,omitempty"`
+	Severity       string    `json:"severity"`
+	SeverityNumber int       `json:"severity_number"`
+	SpanID         *string   `json:"span_id,omitempty"`
+	Status         *string   `json:"status,omitempty"`
+	Timestamp      time.Time `json:"timestamp"`
+	ToolName       *string   `json:"tool_name,omitempty"`
+
+	// TraceID Lowercase W3C trace ID. Possession does not grant access.
+	TraceID *TraceID `json:"trace_id,omitempty"`
+}
+
+// InvocationLogList defines model for InvocationLogList.
+type InvocationLogList struct {
+	Items      []InvocationLog `json:"items"`
+	NextCursor *string         `json:"next_cursor"`
+
+	// Status Whether this installation has a hosted observation store.
+	Status ObservationStatus `json:"status"`
 }
 
 // InvocationResponse Trusted machine projection or the smaller projection selected by client-token authentication.
@@ -4803,6 +5151,9 @@ type NudgeList struct {
 // before the turn got to it.
 type NudgeStatus string
 
+// ObservationStatus Whether this installation has a hosted observation store.
+type ObservationStatus string
+
 // Operation defines model for Operation.
 type Operation string
 
@@ -5064,6 +5415,9 @@ type RegisterAppRequest struct {
 
 	// CallbackTimeoutSeconds Callback HTTP reply deadline for this App.
 	CallbackTimeoutSeconds *int64 `json:"callback_timeout_seconds,omitempty"`
+
+	// CreditPolicy Defaults to `off`. See the schema for what each value enforces.
+	CreditPolicy *CreditPolicy `json:"credit_policy,omitempty"`
 
 	// DefaultRateLimits Optional shared App admission ceilings. Browser access requires a
 	// non-null value. Recorded but not enforced until PRD 065.
@@ -5635,6 +5989,45 @@ type SubmitHostToolResultsResponse struct {
 	Status InvocationStatus `json:"status"`
 }
 
+// Tenant defines model for Tenant.
+type Tenant struct {
+	// CreatedAt When the key was first interned, by any path.
+	CreatedAt time.Time     `json:"created_at"`
+	Credits   TenantCredits `json:"credits"`
+
+	// ID Opaque identifier with the public `tnt_` prefix. Treat the body as opaque.
+	ID TenantID `json:"id"`
+
+	// LastInvocationAt When this tenant last had a turn admitted, or null if it never
+	// has. Read from retained Invocation facts, so Session deletion does
+	// not change it.
+	LastInvocationAt *time.Time `json:"last_invocation_at"`
+
+	// TenantKey The interned key, or null for the App's default tenant.
+	TenantKey *string `json:"tenant_key"`
+}
+
+// TenantCredits defines model for TenantCredits.
+type TenantCredits struct {
+	Allocated Money `json:"allocated"`
+	Available Money `json:"available"`
+
+	// Funded Whether a credit account exists at all. False means nothing was
+	// ever allocated, which reads as zero everywhere else here.
+	Funded bool  `json:"funded"`
+	Held   Money `json:"held"`
+	Used   Money `json:"used"`
+}
+
+// TenantID Opaque identifier with the public `tnt_` prefix. Treat the body as opaque.
+type TenantID = string
+
+// TenantList defines model for TenantList.
+type TenantList struct {
+	Items      []Tenant `json:"items"`
+	NextCursor *string  `json:"next_cursor"`
+}
+
 // TextBlock defines model for TextBlock.
 type TextBlock struct {
 	// Citations Source locations attached to generated text.
@@ -5839,6 +6232,99 @@ type ToolUseBlock struct {
 // ToolUseBlockType defines model for ToolUseBlock.Type.
 type ToolUseBlockType string
 
+// Trace defines model for Trace.
+type Trace struct {
+	DurationMs *int       `json:"duration_ms,omitempty"`
+	EndedAt    *time.Time `json:"ended_at,omitempty"`
+	ErrorCount int        `json:"error_count"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID    `json:"invocation_id"`
+	Logs         []InvocationLog `json:"logs"`
+	LogsHasMore  bool            `json:"logs_has_more"`
+	Name         string          `json:"name"`
+	RootSpanID   string          `json:"root_span_id"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID   `json:"session_id"`
+	SpanCount int         `json:"span_count"`
+	Spans     []TraceSpan `json:"spans"`
+	StartedAt time.Time   `json:"started_at"`
+	Status    TraceStatus `json:"status"`
+
+	// TraceID Lowercase W3C trace ID. Possession does not grant access.
+	TraceID TraceID `json:"trace_id"`
+}
+
+// TraceStatus defines model for Trace.Status.
+type TraceStatus string
+
+// TraceID Lowercase W3C trace ID. Possession does not grant access.
+type TraceID = string
+
+// TraceList defines model for TraceList.
+type TraceList struct {
+	Items      []TraceSummary `json:"items"`
+	NextCursor *string        `json:"next_cursor"`
+
+	// Status Whether this installation has a hosted observation store.
+	Status ObservationStatus `json:"status"`
+}
+
+// TraceSpan defines model for TraceSpan.
+type TraceSpan struct {
+	CacheCreationInputTokens *int                `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     *int                `json:"cache_read_input_tokens,omitempty"`
+	DurationMs               *int                `json:"duration_ms,omitempty"`
+	EndedAt                  *time.Time          `json:"ended_at,omitempty"`
+	ErrorType                *string             `json:"error_type,omitempty"`
+	InputTokens              *int                `json:"input_tokens,omitempty"`
+	Kind                     TraceSpanKind       `json:"kind"`
+	ModelCost                *Money              `json:"model_cost,omitempty"`
+	Name                     string              `json:"name"`
+	Operation                *TraceSpanOperation `json:"operation,omitempty"`
+	OutputTokens             *int                `json:"output_tokens,omitempty"`
+	ParentSpanID             *string             `json:"parent_span_id,omitempty"`
+	Provider                 *string             `json:"provider,omitempty"`
+	ReasoningTokens          *int                `json:"reasoning_tokens,omitempty"`
+	RequestModel             *string             `json:"request_model,omitempty"`
+	ResponseModel            *string             `json:"response_model,omitempty"`
+	SpanID                   string              `json:"span_id"`
+	StartedAt                time.Time           `json:"started_at"`
+	Status                   TraceSpanStatus     `json:"status"`
+	ToolName                 *string             `json:"tool_name,omitempty"`
+
+	// TraceID Lowercase W3C trace ID. Possession does not grant access.
+	TraceID TraceID `json:"trace_id"`
+}
+
+// TraceSpanKind defines model for TraceSpan.Kind.
+type TraceSpanKind string
+
+// TraceSpanOperation defines model for TraceSpan.Operation.
+type TraceSpanOperation string
+
+// TraceSpanStatus defines model for TraceSpan.Status.
+type TraceSpanStatus string
+
+// TraceSummary defines model for TraceSummary.
+type TraceSummary struct {
+	DurationMs *int               `json:"duration_ms,omitempty"`
+	EndedAt    *time.Time         `json:"ended_at,omitempty"`
+	ErrorCount int                `json:"error_count"`
+	Name       string             `json:"name"`
+	RootSpanID string             `json:"root_span_id"`
+	SpanCount  int                `json:"span_count"`
+	StartedAt  time.Time          `json:"started_at"`
+	Status     TraceSummaryStatus `json:"status"`
+
+	// TraceID Lowercase W3C trace ID. Possession does not grant access.
+	TraceID TraceID `json:"trace_id"`
+}
+
+// TraceSummaryStatus defines model for TraceSummary.Status.
+type TraceSummaryStatus string
+
 // TranscriptSnapshot defines model for TranscriptSnapshot.
 type TranscriptSnapshot struct {
 	HasMore           bool               `json:"has_more"`
@@ -5904,6 +6390,11 @@ type UpdateAppRequest struct {
 
 	// CallbackTimeoutSeconds New callback HTTP reply deadline for this App.
 	CallbackTimeoutSeconds *int64 `json:"callback_timeout_seconds,omitempty"`
+
+	// CreditPolicy Change credit enforcement for turns admitted from now on.
+	// Invocations already running keep the policy they were admitted
+	// under. Omission preserves the stored value.
+	CreditPolicy *CreditPolicy `json:"credit_policy,omitempty"`
 
 	// DefaultRateLimits Replace the whole member, or send null to restore unlimited
 	// machine admission. Clearing is rejected while browser access
@@ -6175,6 +6666,43 @@ type Unauthenticated = ErrorResponse
 // Unavailable defines model for Unavailable.
 type Unavailable = ErrorResponse
 
+// ListAdmissionsParams defines parameters for ListAdmissions.
+type ListAdmissionsParams struct {
+	// Outcome Limit to admitted or refused attempts.
+	Outcome *AdmissionOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
+
+	// ErrorCode Limit to one refusal code, for example `insufficient_credits`.
+	ErrorCode *string `form:"error_code,omitempty" json:"error_code,omitempty"`
+
+	// TenantKey Exact non-default tenant partition reference.
+	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
+
+	// UserKey Exact host-owned end-user reference. Filters to rows whose Session
+	// carries this label.
+	UserKey *UserKeyFilter `form:"user_key,omitempty" json:"user_key,omitempty"`
+
+	// StartAt Inclusive RFC 3339 lower bound on `attempted_at`.
+	StartAt *time.Time `form:"start_at,omitempty" json:"start_at,omitempty"`
+
+	// EndAt Exclusive RFC 3339 upper bound on `attempted_at`.
+	EndAt *time.Time `form:"end_at,omitempty" json:"end_at,omitempty"`
+
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// SummarizeAdmissionsParams defines parameters for SummarizeAdmissions.
+type SummarizeAdmissionsParams struct {
+	// StartAt Inclusive RFC 3339 lower bound. Defaults to 24 hours ago; the
+	// window is always bounded, since an unbounded count would change
+	// meaning silently as records age out.
+	StartAt *time.Time `form:"start_at,omitempty" json:"start_at,omitempty"`
+
+	// EndAt Exclusive RFC 3339 upper bound. Defaults to now.
+	EndAt *time.Time `form:"end_at,omitempty" json:"end_at,omitempty"`
+}
+
 // ListAgentDefinitionsParams defines parameters for ListAgentDefinitions.
 type ListAgentDefinitionsParams struct {
 	// IncludeArchived Include archived resources alongside live ones.
@@ -6321,6 +6849,15 @@ type CreateInvocationParams struct {
 	XXaiAPIKey       *string `json:"X-Xai-Api-Key,omitempty"`
 }
 
+// ListInvocationLogsParams defines parameters for ListInvocationLogs.
+type ListInvocationLogsParams struct {
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Maximum items in this page. Defaults to 100.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListNudgesParams defines parameters for ListNudges.
 type ListNudgesParams struct {
 	// Status Restrict to one status.
@@ -6347,6 +6884,15 @@ type StreamInvocationParams struct {
 
 // ListToolCallsParams defines parameters for ListToolCalls.
 type ListToolCallsParams struct {
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Maximum items in this page. Defaults to 100.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListInvocationTracesParams defines parameters for ListInvocationTraces.
+type ListInvocationTracesParams struct {
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
@@ -6464,6 +7010,16 @@ type StreamSessionTranscriptParams struct {
 
 	// LastEventID Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
+// ListTenantsParams defines parameters for ListTenants.
+type ListTenantsParams struct {
+	// TenantKey Exact non-default tenant partition reference.
+	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
+
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetUsageBreakdownParams defines parameters for GetUsageBreakdown.
@@ -9024,6 +9580,47 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
+	// ListAdmissions List attempts to start a turn, admitted and refused
+	//
+	// Every request to create an Invocation leaves one record here, whether
+	// or not an Invocation was created. Newest first.
+	//
+	// This is the surface for a turn that never became an Invocation. A
+	// refusal aborts the admission transaction, which also discards the
+	// tenant it interned along the way, so before this log a refused request
+	// left nothing behind anywhere: no Invocation, no tenant, no spend. The
+	// record is written after that transaction resolves, so the rollback no
+	// longer takes the evidence with it.
+	//
+	// `tenant_key` is the key the caller sent, not a resolved reference. For
+	// a refusal it is usually a key nvoken has never interned -- which is
+	// exactly the point when a host derives tenant keys and one of them is
+	// subtly wrong.
+	//
+	// Records are diagnostics, not accounting evidence: they age out after
+	// 30 days, while the retained usage facts they sit beside never do.
+	//
+	// Corresponds with GET /v1/admissions (the `ListAdmissions` operationId).
+	ListAdmissions(ctx context.Context, params *ListAdmissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SummarizeAdmissions Count a window of admission attempts by outcome, reason, and key
+	//
+	// The counts behind the log. `GET /v1/admissions` answers "what happened
+	// to this request"; this answers the question that comes first and that a
+	// page of records cannot: "is anything being refused at all".
+	//
+	// A host whose turns are failing has no reason to open a request log it
+	// does not know it needs, so this is the number worth putting somewhere
+	// an operator already looks.
+	//
+	// `reasons` covers every refusal in the window -- the error codes are a
+	// small fixed vocabulary. `tenants` is truncated to the ten keys refused
+	// most, and lists raw keys rather than tenants, because the key with no
+	// tenant behind it is the one worth seeing.
+	//
+	// Corresponds with GET /v1/admissions/summary (the `SummarizeAdmissions` operationId).
+	SummarizeAdmissions(ctx context.Context, params *SummarizeAdmissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAgentDefinitions List the App's Agent Definition resources
 	//
 	// Returns this App's stable resources at their current revision, newest
@@ -9669,6 +10266,16 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/interrupt (the `InterruptInvocation` operationId).
 	InterruptInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListInvocationLogs Page through hosted structured logs for one turn
+	//
+	// Returns the content-free structured lifecycle logs associated by the
+	// Invocation ID. Arbitrary attributes and raw error values are omitted.
+	// `status` is `disabled` when this installation has no hosted telemetry
+	// store.
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/logs (the `ListInvocationLogs` operationId).
+	ListInvocationLogs(ctx context.Context, invocationID InvocationID, params *ListInvocationLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListNudges List Nudges for an Invocation
 	//
 	// Lists the direction you have sent to this turn with `/nudges`, in the
@@ -9936,6 +10543,16 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 	SubmitHostToolResults(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListInvocationTraces Page through hosted agent traces for one turn
+	//
+	// Returns the content-free root summaries exported from Dive through
+	// OpenTelemetry. Traces are diagnostic and best-effort; the durable
+	// Invocation timeline remains the execution authority. `status` is
+	// `disabled` when this installation has no hosted telemetry store.
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/traces (the `ListInvocationTraces` operationId).
+	ListInvocationTraces(ctx context.Context, invocationID InvocationID, params *ListInvocationTracesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListMCPToolsWithBody Discover and project one remote MCP server's tools
 	//
@@ -10420,6 +11037,58 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
 	StreamSessionTranscript(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListTenants List the App's interned tenants
+	//
+	// One row per tenant key nvoken has interned for this App, with its
+	// credit position and the last time it ran a turn.
+	//
+	// A tenant row is an interning of a key, not tenant state: nvoken stores
+	// no configuration, profile, or entitlement for it. What this list
+	// reports is therefore what is attached to the key, not what is
+	// configured on it.
+	//
+	// A key that has only ever been refused does not appear here, because it
+	// was never interned. Those keys are in `GET /v1/admissions`, and the
+	// difference between the two lists is the set of tenants a host is
+	// addressing but has never successfully run.
+	//
+	// Corresponds with GET /v1/tenants (the `ListTenants` operationId).
+	ListTenants(ctx context.Context, params *ListTenantsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteTenant Delete a tenant that never ran anything
+	//
+	// Removes a tenant along with the credit account and allocations that
+	// belong to it alone. It exists to undo a mistake -- a key funded with a
+	// typo in it, a tenant created by a misconfigured client -- and is
+	// deliberately narrow.
+	//
+	// A tenant with any Session, Invocation, retained model-call fact,
+	// provider key, or dispatch is refused with `409 tenant_in_use` and the
+	// counts that made it load-bearing. This is not a policy choice: every
+	// runtime table references `tenants` with ON DELETE RESTRICT, and the
+	// retained usage facts must outlive the transcripts they describe, so
+	// deleting a tenant that has run work would mean destroying accounting
+	// evidence. To remove transcripts, delete the Sessions; the facts and
+	// their spend stay.
+	//
+	// The default tenant is never deletable. Deleting a funded tenant
+	// destroys its allocation history, and allocations cannot be recreated
+	// with their original identity, so the released amount is written to the
+	// operator log at deletion.
+	//
+	// Corresponds with DELETE /v1/tenants/{tenant_id} (the `DeleteTenant` operationId).
+	DeleteTenant(ctx context.Context, tenantID TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTrace Read one hosted agent trace and its associated logs
+	//
+	// Returns a content-free projection of the complete OpenTelemetry span
+	// tree plus the first 200 trace-correlated log records. nvoken grounds
+	// the trace's Invocation attribution in Postgres before returning it;
+	// knowing a W3C trace ID grants no authority.
+	//
+	// Corresponds with GET /v1/traces/{trace_id} (the `GetTrace` operationId).
+	GetTrace(ctx context.Context, traceID TraceID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetUsageBreakdown Rank usage by one dimension
 	//
 	// Corresponds with GET /v1/usage/breakdown (the `GetUsageBreakdown` operationId).
@@ -10444,6 +11113,67 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 	GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// ListAdmissions List attempts to start a turn, admitted and refused
+//
+// Every request to create an Invocation leaves one record here, whether
+// or not an Invocation was created. Newest first.
+//
+// This is the surface for a turn that never became an Invocation. A
+// refusal aborts the admission transaction, which also discards the
+// tenant it interned along the way, so before this log a refused request
+// left nothing behind anywhere: no Invocation, no tenant, no spend. The
+// record is written after that transaction resolves, so the rollback no
+// longer takes the evidence with it.
+//
+// `tenant_key` is the key the caller sent, not a resolved reference. For
+// a refusal it is usually a key nvoken has never interned -- which is
+// exactly the point when a host derives tenant keys and one of them is
+// subtly wrong.
+//
+// Records are diagnostics, not accounting evidence: they age out after
+// 30 days, while the retained usage facts they sit beside never do.
+//
+// Corresponds with GET /v1/admissions (the `ListAdmissions` operationId).
+func (c *Client) ListAdmissions(ctx context.Context, params *ListAdmissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAdmissionsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SummarizeAdmissions Count a window of admission attempts by outcome, reason, and key
+//
+// The counts behind the log. `GET /v1/admissions` answers "what happened
+// to this request"; this answers the question that comes first and that a
+// page of records cannot: "is anything being refused at all".
+//
+// A host whose turns are failing has no reason to open a request log it
+// does not know it needs, so this is the number worth putting somewhere
+// an operator already looks.
+//
+// `reasons` covers every refusal in the window -- the error codes are a
+// small fixed vocabulary. `tenants` is truncated to the ten keys refused
+// most, and lists raw keys rather than tenants, because the key with no
+// tenant behind it is the one worth seeing.
+//
+// Corresponds with GET /v1/admissions/summary (the `SummarizeAdmissions` operationId).
+func (c *Client) SummarizeAdmissions(ctx context.Context, params *SummarizeAdmissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSummarizeAdmissionsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // ListAgentDefinitions List the App's Agent Definition resources
@@ -11491,6 +12221,26 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID Invocatio
 	return c.Client.Do(req)
 }
 
+// ListInvocationLogs Page through hosted structured logs for one turn
+//
+// Returns the content-free structured lifecycle logs associated by the
+// Invocation ID. Arbitrary attributes and raw error values are omitted.
+// `status` is `disabled` when this installation has no hosted telemetry
+// store.
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/logs (the `ListInvocationLogs` operationId).
+func (c *Client) ListInvocationLogs(ctx context.Context, invocationID InvocationID, params *ListInvocationLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInvocationLogsRequest(c.Server, invocationID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListNudges List Nudges for an Invocation
 //
 // Lists the direction you have sent to this turn with `/nudges`, in the
@@ -11869,6 +12619,26 @@ func (c *Client) SubmitHostToolResultsWithBody(ctx context.Context, invocationID
 // Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 func (c *Client) SubmitHostToolResults(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSubmitHostToolResultsRequest(c.Server, invocationID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListInvocationTraces Page through hosted agent traces for one turn
+//
+// Returns the content-free root summaries exported from Dive through
+// OpenTelemetry. Traces are diagnostic and best-effort; the durable
+// Invocation timeline remains the execution authority. `status` is
+// `disabled` when this installation has no hosted telemetry store.
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/traces (the `ListInvocationTraces` operationId).
+func (c *Client) ListInvocationTraces(ctx context.Context, invocationID InvocationID, params *ListInvocationTracesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInvocationTracesRequest(c.Server, invocationID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -12692,6 +13462,88 @@ func (c *Client) StreamSessionTranscript(ctx context.Context, sessionID SessionI
 	return c.Client.Do(req)
 }
 
+// ListTenants List the App's interned tenants
+//
+// One row per tenant key nvoken has interned for this App, with its
+// credit position and the last time it ran a turn.
+//
+// A tenant row is an interning of a key, not tenant state: nvoken stores
+// no configuration, profile, or entitlement for it. What this list
+// reports is therefore what is attached to the key, not what is
+// configured on it.
+//
+// A key that has only ever been refused does not appear here, because it
+// was never interned. Those keys are in `GET /v1/admissions`, and the
+// difference between the two lists is the set of tenants a host is
+// addressing but has never successfully run.
+//
+// Corresponds with GET /v1/tenants (the `ListTenants` operationId).
+func (c *Client) ListTenants(ctx context.Context, params *ListTenantsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTenantsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteTenant Delete a tenant that never ran anything
+//
+// Removes a tenant along with the credit account and allocations that
+// belong to it alone. It exists to undo a mistake -- a key funded with a
+// typo in it, a tenant created by a misconfigured client -- and is
+// deliberately narrow.
+//
+// A tenant with any Session, Invocation, retained model-call fact,
+// provider key, or dispatch is refused with `409 tenant_in_use` and the
+// counts that made it load-bearing. This is not a policy choice: every
+// runtime table references `tenants` with ON DELETE RESTRICT, and the
+// retained usage facts must outlive the transcripts they describe, so
+// deleting a tenant that has run work would mean destroying accounting
+// evidence. To remove transcripts, delete the Sessions; the facts and
+// their spend stay.
+//
+// The default tenant is never deletable. Deleting a funded tenant
+// destroys its allocation history, and allocations cannot be recreated
+// with their original identity, so the released amount is written to the
+// operator log at deletion.
+//
+// Corresponds with DELETE /v1/tenants/{tenant_id} (the `DeleteTenant` operationId).
+func (c *Client) DeleteTenant(ctx context.Context, tenantID TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteTenantRequest(c.Server, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetTrace Read one hosted agent trace and its associated logs
+//
+// Returns a content-free projection of the complete OpenTelemetry span
+// tree plus the first 200 trace-correlated log records. nvoken grounds
+// the trace's Invocation attribution in Postgres before returning it;
+// knowing a W3C trace ID grants no authority.
+//
+// Corresponds with GET /v1/traces/{trace_id} (the `GetTrace` operationId).
+func (c *Client) GetTrace(ctx context.Context, traceID TraceID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTraceRequest(c.Server, traceID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetUsageBreakdown Rank usage by one dimension
 //
 // Corresponds with GET /v1/usage/breakdown (the `GetUsageBreakdown` operationId).
@@ -12745,6 +13597,210 @@ func (c *Client) GetUsageTimeseries(ctx context.Context, params *GetUsageTimeser
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListAdmissionsRequest constructs an http.Request for the ListAdmissions method
+func NewListAdmissionsRequest(server string, params *ListAdmissionsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admissions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Outcome != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "outcome", *params.Outcome, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ErrorCode != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "error_code", *params.ErrorCode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TenantKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.UserKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "user_key", *params.UserKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.StartAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "start_at", *params.StartAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.EndAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "end_at", *params.EndAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSummarizeAdmissionsRequest constructs an http.Request for the SummarizeAdmissions method
+func NewSummarizeAdmissionsRequest(server string, params *SummarizeAdmissionsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admissions/summary")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.StartAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "start_at", *params.StartAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.EndAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "end_at", *params.EndAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListAgentDefinitionsRequest constructs an http.Request for the ListAgentDefinitions method
@@ -14375,6 +15431,79 @@ func NewInterruptInvocationRequest(server string, invocationID InvocationID) (*h
 	return req, nil
 }
 
+// NewListInvocationLogsRequest constructs an http.Request for the ListInvocationLogs method
+func NewListInvocationLogsRequest(server string, invocationID InvocationID, params *ListInvocationLogsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/invocations/%s/logs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListNudgesRequest constructs an http.Request for the ListNudges method
 func NewListNudgesRequest(server string, invocationID InvocationID, params *ListNudgesParams) (*http.Request, error) {
 	var err error
@@ -14867,6 +15996,79 @@ func NewSubmitHostToolResultsRequestWithBody(server string, invocationID Invocat
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListInvocationTracesRequest constructs an http.Request for the ListInvocationTraces method
+func NewListInvocationTracesRequest(server string, invocationID InvocationID, params *ListInvocationTracesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/invocations/%s/traces", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -16253,6 +17455,152 @@ func NewStreamSessionTranscriptRequest(server string, sessionID SessionID, param
 	return req, nil
 }
 
+// NewListTenantsRequest constructs an http.Request for the ListTenants method
+func NewListTenantsRequest(server string, params *ListTenantsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.TenantKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteTenantRequest constructs an http.Request for the DeleteTenant method
+func NewDeleteTenantRequest(server string, tenantID TenantID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "tenant_id", tenantID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetTraceRequest constructs an http.Request for the GetTrace method
+func NewGetTraceRequest(server string, traceID TraceID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "trace_id", traceID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/traces/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetUsageBreakdownRequest constructs an http.Request for the GetUsageBreakdown method
 func NewGetUsageBreakdownRequest(server string, params *GetUsageBreakdownParams) (*http.Request, error) {
 	var err error
@@ -17075,6 +18423,51 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// ListAdmissionsWithResponse List attempts to start a turn, admitted and refused
+	//
+	// Every request to create an Invocation leaves one record here, whether
+	// or not an Invocation was created. Newest first.
+	//
+	// This is the surface for a turn that never became an Invocation. A
+	// refusal aborts the admission transaction, which also discards the
+	// tenant it interned along the way, so before this log a refused request
+	// left nothing behind anywhere: no Invocation, no tenant, no spend. The
+	// record is written after that transaction resolves, so the rollback no
+	// longer takes the evidence with it.
+	//
+	// `tenant_key` is the key the caller sent, not a resolved reference. For
+	// a refusal it is usually a key nvoken has never interned -- which is
+	// exactly the point when a host derives tenant keys and one of them is
+	// subtly wrong.
+	//
+	// Records are diagnostics, not accounting evidence: they age out after
+	// 30 days, while the retained usage facts they sit beside never do.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admissions (the `ListAdmissions` operationId).
+	ListAdmissionsWithResponse(ctx context.Context, params *ListAdmissionsParams, reqEditors ...RequestEditorFn) (*ListAdmissionsHTTPResponse, error)
+
+	// SummarizeAdmissionsWithResponse Count a window of admission attempts by outcome, reason, and key
+	//
+	// The counts behind the log. `GET /v1/admissions` answers "what happened
+	// to this request"; this answers the question that comes first and that a
+	// page of records cannot: "is anything being refused at all".
+	//
+	// A host whose turns are failing has no reason to open a request log it
+	// does not know it needs, so this is the number worth putting somewhere
+	// an operator already looks.
+	//
+	// `reasons` covers every refusal in the window -- the error codes are a
+	// small fixed vocabulary. `tenants` is truncated to the ten keys refused
+	// most, and lists raw keys rather than tenants, because the key with no
+	// tenant behind it is the one worth seeing.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admissions/summary (the `SummarizeAdmissions` operationId).
+	SummarizeAdmissionsWithResponse(ctx context.Context, params *SummarizeAdmissionsParams, reqEditors ...RequestEditorFn) (*SummarizeAdmissionsHTTPResponse, error)
+
 	// ListAgentDefinitionsWithResponse List the App's Agent Definition resources
 	//
 	// Returns this App's stable resources at their current revision, newest
@@ -17764,6 +19157,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/interrupt (the `InterruptInvocation` operationId).
 	InterruptInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*InterruptInvocationHTTPResponse, error)
 
+	// ListInvocationLogsWithResponse Page through hosted structured logs for one turn
+	//
+	// Returns the content-free structured lifecycle logs associated by the
+	// Invocation ID. Arbitrary attributes and raw error values are omitted.
+	// `status` is `disabled` when this installation has no hosted telemetry
+	// store.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/logs (the `ListInvocationLogs` operationId).
+	ListInvocationLogsWithResponse(ctx context.Context, invocationID InvocationID, params *ListInvocationLogsParams, reqEditors ...RequestEditorFn) (*ListInvocationLogsHTTPResponse, error)
+
 	// ListNudgesWithResponse List Nudges for an Invocation
 	//
 	// Lists the direction you have sent to this turn with `/nudges`, in the
@@ -18043,6 +19448,18 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 	SubmitHostToolResultsWithResponse(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitHostToolResultsHTTPResponse, error)
+
+	// ListInvocationTracesWithResponse Page through hosted agent traces for one turn
+	//
+	// Returns the content-free root summaries exported from Dive through
+	// OpenTelemetry. Traces are diagnostic and best-effort; the durable
+	// Invocation timeline remains the execution authority. `status` is
+	// `disabled` when this installation has no hosted telemetry store.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/traces (the `ListInvocationTraces` operationId).
+	ListInvocationTracesWithResponse(ctx context.Context, invocationID InvocationID, params *ListInvocationTracesParams, reqEditors ...RequestEditorFn) (*ListInvocationTracesHTTPResponse, error)
 
 	// ListMCPToolsWithBodyWithResponse Discover and project one remote MCP server's tools
 	//
@@ -18561,6 +19978,64 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
 	StreamSessionTranscriptWithResponse(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*StreamSessionTranscriptHTTPResponse, error)
 
+	// ListTenantsWithResponse List the App's interned tenants
+	//
+	// One row per tenant key nvoken has interned for this App, with its
+	// credit position and the last time it ran a turn.
+	//
+	// A tenant row is an interning of a key, not tenant state: nvoken stores
+	// no configuration, profile, or entitlement for it. What this list
+	// reports is therefore what is attached to the key, not what is
+	// configured on it.
+	//
+	// A key that has only ever been refused does not appear here, because it
+	// was never interned. Those keys are in `GET /v1/admissions`, and the
+	// difference between the two lists is the set of tenants a host is
+	// addressing but has never successfully run.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants (the `ListTenants` operationId).
+	ListTenantsWithResponse(ctx context.Context, params *ListTenantsParams, reqEditors ...RequestEditorFn) (*ListTenantsHTTPResponse, error)
+
+	// DeleteTenantWithResponse Delete a tenant that never ran anything
+	//
+	// Removes a tenant along with the credit account and allocations that
+	// belong to it alone. It exists to undo a mistake -- a key funded with a
+	// typo in it, a tenant created by a misconfigured client -- and is
+	// deliberately narrow.
+	//
+	// A tenant with any Session, Invocation, retained model-call fact,
+	// provider key, or dispatch is refused with `409 tenant_in_use` and the
+	// counts that made it load-bearing. This is not a policy choice: every
+	// runtime table references `tenants` with ON DELETE RESTRICT, and the
+	// retained usage facts must outlive the transcripts they describe, so
+	// deleting a tenant that has run work would mean destroying accounting
+	// evidence. To remove transcripts, delete the Sessions; the facts and
+	// their spend stay.
+	//
+	// The default tenant is never deletable. Deleting a funded tenant
+	// destroys its allocation history, and allocations cannot be recreated
+	// with their original identity, so the released amount is written to the
+	// operator log at deletion.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/tenants/{tenant_id} (the `DeleteTenant` operationId).
+	DeleteTenantWithResponse(ctx context.Context, tenantID TenantID, reqEditors ...RequestEditorFn) (*DeleteTenantHTTPResponse, error)
+
+	// GetTraceWithResponse Read one hosted agent trace and its associated logs
+	//
+	// Returns a content-free projection of the complete OpenTelemetry span
+	// tree plus the first 200 trace-correlated log records. nvoken grounds
+	// the trace's Invocation attribution in Postgres before returning it;
+	// knowing a W3C trace ID grants no authority.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/traces/{trace_id} (the `GetTrace` operationId).
+	GetTraceWithResponse(ctx context.Context, traceID TraceID, reqEditors ...RequestEditorFn) (*GetTraceHTTPResponse, error)
+
 	// GetUsageBreakdownWithResponse Rank usage by one dimension
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -18591,6 +20066,158 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 	GetUsageTimeseriesWithResponse(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*GetUsageTimeseriesHTTPResponse, error)
+}
+
+type ListAdmissionsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdmissionAttemptList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAdmissionsHTTPResponse) GetJSON200() *AdmissionAttemptList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListAdmissionsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListAdmissionsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListAdmissionsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListAdmissionsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListAdmissionsHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAdmissionsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAdmissionsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAdmissionsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAdmissionsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SummarizeAdmissionsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdmissionSummary
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SummarizeAdmissionsHTTPResponse) GetJSON200() *AdmissionSummary {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r SummarizeAdmissionsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r SummarizeAdmissionsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r SummarizeAdmissionsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r SummarizeAdmissionsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r SummarizeAdmissionsHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r SummarizeAdmissionsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SummarizeAdmissionsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SummarizeAdmissionsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SummarizeAdmissionsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 // ListAgentDefinitionsHTTPResponse429Headers the declared response headers of an HTTP 429 response for ListAgentDefinitions
@@ -21180,6 +22807,89 @@ func (r InterruptInvocationHTTPResponse) ContentType() string {
 	return ""
 }
 
+type ListInvocationLogsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *InvocationLogList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListInvocationLogsHTTPResponse) GetJSON200() *InvocationLogList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListInvocationLogsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListInvocationLogsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListInvocationLogsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListInvocationLogsHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListInvocationLogsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListInvocationLogsHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListInvocationLogsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInvocationLogsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInvocationLogsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListInvocationLogsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListNudgesHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -21998,6 +23708,89 @@ func (r SubmitHostToolResultsHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SubmitHostToolResultsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListInvocationTracesHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TraceList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListInvocationTracesHTTPResponse) GetJSON200() *TraceList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListInvocationTracesHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListInvocationTracesHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListInvocationTracesHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListInvocationTracesHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListInvocationTracesHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListInvocationTracesHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListInvocationTracesHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInvocationTracesHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInvocationTracesHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListInvocationTracesHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -24247,6 +26040,241 @@ func (r StreamSessionTranscriptHTTPResponse) ContentType() string {
 	return ""
 }
 
+type ListTenantsHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TenantList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListTenantsHTTPResponse) GetJSON200() *TenantList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListTenantsHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListTenantsHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListTenantsHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListTenantsHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListTenantsHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListTenantsHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTenantsHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTenantsHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListTenantsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteTenantHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorResponse
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteTenantHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteTenantHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteTenantHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r DeleteTenantHTTPResponse) GetJSON409() *ErrorResponse {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r DeleteTenantHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r DeleteTenantHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteTenantHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteTenantHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteTenantHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteTenantHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetTraceHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Trace
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetTraceHTTPResponse) GetJSON200() *Trace {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetTraceHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetTraceHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetTraceHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetTraceHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetTraceHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetTraceHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetTraceHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTraceHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTraceHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTraceHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetUsageBreakdownHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -24480,6 +26508,63 @@ func (r GetUsageTimeseriesHTTPResponse) ContentType() string {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
 	return ""
+}
+
+// ListAdmissionsWithResponse List attempts to start a turn, admitted and refused
+//
+// Every request to create an Invocation leaves one record here, whether
+// or not an Invocation was created. Newest first.
+//
+// This is the surface for a turn that never became an Invocation. A
+// refusal aborts the admission transaction, which also discards the
+// tenant it interned along the way, so before this log a refused request
+// left nothing behind anywhere: no Invocation, no tenant, no spend. The
+// record is written after that transaction resolves, so the rollback no
+// longer takes the evidence with it.
+//
+// `tenant_key` is the key the caller sent, not a resolved reference. For
+// a refusal it is usually a key nvoken has never interned -- which is
+// exactly the point when a host derives tenant keys and one of them is
+// subtly wrong.
+//
+// Records are diagnostics, not accounting evidence: they age out after
+// 30 days, while the retained usage facts they sit beside never do.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admissions (the `ListAdmissions` operationId).
+func (c *ClientWithResponses) ListAdmissionsWithResponse(ctx context.Context, params *ListAdmissionsParams, reqEditors ...RequestEditorFn) (*ListAdmissionsHTTPResponse, error) {
+	rsp, err := c.ListAdmissions(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAdmissionsHTTPResponse(rsp)
+}
+
+// SummarizeAdmissionsWithResponse Count a window of admission attempts by outcome, reason, and key
+//
+// The counts behind the log. `GET /v1/admissions` answers "what happened
+// to this request"; this answers the question that comes first and that a
+// page of records cannot: "is anything being refused at all".
+//
+// A host whose turns are failing has no reason to open a request log it
+// does not know it needs, so this is the number worth putting somewhere
+// an operator already looks.
+//
+// `reasons` covers every refusal in the window -- the error codes are a
+// small fixed vocabulary. `tenants` is truncated to the ten keys refused
+// most, and lists raw keys rather than tenants, because the key with no
+// tenant behind it is the one worth seeing.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admissions/summary (the `SummarizeAdmissions` operationId).
+func (c *ClientWithResponses) SummarizeAdmissionsWithResponse(ctx context.Context, params *SummarizeAdmissionsParams, reqEditors ...RequestEditorFn) (*SummarizeAdmissionsHTTPResponse, error) {
+	rsp, err := c.SummarizeAdmissions(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSummarizeAdmissionsHTTPResponse(rsp)
 }
 
 // ListAgentDefinitionsWithResponse List the App's Agent Definition resources
@@ -25411,6 +27496,24 @@ func (c *ClientWithResponses) InterruptInvocationWithResponse(ctx context.Contex
 	return ParseInterruptInvocationHTTPResponse(rsp)
 }
 
+// ListInvocationLogsWithResponse Page through hosted structured logs for one turn
+//
+// Returns the content-free structured lifecycle logs associated by the
+// Invocation ID. Arbitrary attributes and raw error values are omitted.
+// `status` is `disabled` when this installation has no hosted telemetry
+// store.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/logs (the `ListInvocationLogs` operationId).
+func (c *ClientWithResponses) ListInvocationLogsWithResponse(ctx context.Context, invocationID InvocationID, params *ListInvocationLogsParams, reqEditors ...RequestEditorFn) (*ListInvocationLogsHTTPResponse, error) {
+	rsp, err := c.ListInvocationLogs(ctx, invocationID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInvocationLogsHTTPResponse(rsp)
+}
+
 // ListNudgesWithResponse List Nudges for an Invocation
 //
 // Lists the direction you have sent to this turn with `/nudges`, in the
@@ -25761,6 +27864,24 @@ func (c *ClientWithResponses) SubmitHostToolResultsWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseSubmitHostToolResultsHTTPResponse(rsp)
+}
+
+// ListInvocationTracesWithResponse Page through hosted agent traces for one turn
+//
+// Returns the content-free root summaries exported from Dive through
+// OpenTelemetry. Traces are diagnostic and best-effort; the durable
+// Invocation timeline remains the execution authority. `status` is
+// `disabled` when this installation has no hosted telemetry store.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/traces (the `ListInvocationTraces` operationId).
+func (c *ClientWithResponses) ListInvocationTracesWithResponse(ctx context.Context, invocationID InvocationID, params *ListInvocationTracesParams, reqEditors ...RequestEditorFn) (*ListInvocationTracesHTTPResponse, error) {
+	rsp, err := c.ListInvocationTraces(ctx, invocationID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInvocationTracesHTTPResponse(rsp)
 }
 
 // ListMCPToolsWithBodyWithResponse Discover and project one remote MCP server's tools
@@ -26478,6 +28599,82 @@ func (c *ClientWithResponses) StreamSessionTranscriptWithResponse(ctx context.Co
 	return ParseStreamSessionTranscriptHTTPResponse(rsp)
 }
 
+// ListTenantsWithResponse List the App's interned tenants
+//
+// One row per tenant key nvoken has interned for this App, with its
+// credit position and the last time it ran a turn.
+//
+// A tenant row is an interning of a key, not tenant state: nvoken stores
+// no configuration, profile, or entitlement for it. What this list
+// reports is therefore what is attached to the key, not what is
+// configured on it.
+//
+// A key that has only ever been refused does not appear here, because it
+// was never interned. Those keys are in `GET /v1/admissions`, and the
+// difference between the two lists is the set of tenants a host is
+// addressing but has never successfully run.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants (the `ListTenants` operationId).
+func (c *ClientWithResponses) ListTenantsWithResponse(ctx context.Context, params *ListTenantsParams, reqEditors ...RequestEditorFn) (*ListTenantsHTTPResponse, error) {
+	rsp, err := c.ListTenants(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTenantsHTTPResponse(rsp)
+}
+
+// DeleteTenantWithResponse Delete a tenant that never ran anything
+//
+// Removes a tenant along with the credit account and allocations that
+// belong to it alone. It exists to undo a mistake -- a key funded with a
+// typo in it, a tenant created by a misconfigured client -- and is
+// deliberately narrow.
+//
+// A tenant with any Session, Invocation, retained model-call fact,
+// provider key, or dispatch is refused with `409 tenant_in_use` and the
+// counts that made it load-bearing. This is not a policy choice: every
+// runtime table references `tenants` with ON DELETE RESTRICT, and the
+// retained usage facts must outlive the transcripts they describe, so
+// deleting a tenant that has run work would mean destroying accounting
+// evidence. To remove transcripts, delete the Sessions; the facts and
+// their spend stay.
+//
+// The default tenant is never deletable. Deleting a funded tenant
+// destroys its allocation history, and allocations cannot be recreated
+// with their original identity, so the released amount is written to the
+// operator log at deletion.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/tenants/{tenant_id} (the `DeleteTenant` operationId).
+func (c *ClientWithResponses) DeleteTenantWithResponse(ctx context.Context, tenantID TenantID, reqEditors ...RequestEditorFn) (*DeleteTenantHTTPResponse, error) {
+	rsp, err := c.DeleteTenant(ctx, tenantID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteTenantHTTPResponse(rsp)
+}
+
+// GetTraceWithResponse Read one hosted agent trace and its associated logs
+//
+// Returns a content-free projection of the complete OpenTelemetry span
+// tree plus the first 200 trace-correlated log records. nvoken grounds
+// the trace's Invocation attribution in Postgres before returning it;
+// knowing a W3C trace ID grants no authority.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/traces/{trace_id} (the `GetTrace` operationId).
+func (c *ClientWithResponses) GetTraceWithResponse(ctx context.Context, traceID TraceID, reqEditors ...RequestEditorFn) (*GetTraceHTTPResponse, error) {
+	rsp, err := c.GetTrace(ctx, traceID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTraceHTTPResponse(rsp)
+}
+
 // GetUsageBreakdownWithResponse Rank usage by one dimension
 //
 // Returns a wrapper object for the known response body format(s).
@@ -26525,6 +28722,128 @@ func (c *ClientWithResponses) GetUsageTimeseriesWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseGetUsageTimeseriesHTTPResponse(rsp)
+}
+
+// ParseListAdmissionsHTTPResponse parses an HTTP response from a ListAdmissionsWithResponse call
+func ParseListAdmissionsHTTPResponse(rsp *http.Response) (*ListAdmissionsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAdmissionsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdmissionAttemptList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSummarizeAdmissionsHTTPResponse parses an HTTP response from a SummarizeAdmissionsWithResponse call
+func ParseSummarizeAdmissionsHTTPResponse(rsp *http.Response) (*SummarizeAdmissionsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SummarizeAdmissionsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdmissionSummary
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListAgentDefinitionsHTTPResponse parses an HTTP response from a ListAgentDefinitionsWithResponse call
@@ -28784,6 +31103,74 @@ func ParseInterruptInvocationHTTPResponse(rsp *http.Response) (*InterruptInvocat
 	return response, nil
 }
 
+// ParseListInvocationLogsHTTPResponse parses an HTTP response from a ListInvocationLogsWithResponse call
+func ParseListInvocationLogsHTTPResponse(rsp *http.Response) (*ListInvocationLogsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInvocationLogsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest InvocationLogList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListNudgesHTTPResponse parses an HTTP response from a ListNudgesWithResponse call
 func ParseListNudgesHTTPResponse(rsp *http.Response) (*ListNudgesHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -29477,6 +31864,74 @@ func ParseSubmitHostToolResultsHTTPResponse(rsp *http.Response) (*SubmitHostTool
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListInvocationTracesHTTPResponse parses an HTTP response from a ListInvocationTracesWithResponse call
+func ParseListInvocationTracesHTTPResponse(rsp *http.Response) (*ListInvocationTracesHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInvocationTracesHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TraceList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
@@ -31501,6 +33956,199 @@ func ParseStreamSessionTranscriptHTTPResponse(rsp *http.Response) (*StreamSessio
 			headers.RetryAfter = &value
 		}
 		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListTenantsHTTPResponse parses an HTTP response from a ListTenantsWithResponse call
+func ParseListTenantsHTTPResponse(rsp *http.Response) (*ListTenantsHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTenantsHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TenantList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteTenantHTTPResponse parses an HTTP response from a DeleteTenantWithResponse call
+func ParseDeleteTenantHTTPResponse(rsp *http.Response) (*DeleteTenantHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteTenantHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetTraceHTTPResponse parses an HTTP response from a GetTraceWithResponse call
+func ParseGetTraceHTTPResponse(rsp *http.Response) (*GetTraceHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTraceHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Trace
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil

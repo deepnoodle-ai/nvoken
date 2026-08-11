@@ -23,6 +23,7 @@ from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.app_default_rate_limits import AppDefaultRateLimits
 from nvoken_generated.models.browser_access import BrowserAccess
+from nvoken_generated.models.credit_policy import CreditPolicy
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -39,9 +40,10 @@ class App(BaseModel):
     callback_timeout_seconds: Annotated[int, Field(le=60, strict=True, ge=1)] = Field(description="Resolved deadline for each callback HTTP request. Defaults to 10. Webhook delivery is unaffected. ")
     default_rate_limits: Optional[AppDefaultRateLimits] = Field(description="Dormant App-wide admission ceilings shared by machine and future client-token callers. Null means unlimited machine admission. These values are recorded but not enforced until PRD 065. ")
     browser_access: Optional[BrowserAccess] = Field(description="Complete dormant browser-direct configuration. Null means browser access is disabled. Client JWTs and CORS remain unavailable until PRD 065. ")
+    credit_policy: CreditPolicy
     created_at: datetime
     archived_at: Optional[datetime] = Field(description="When the App was archived, or null while it is live. An archived App refuses admission and grant-minting with `409 app_archived` while every read, settlement, erasure, configuration, and revocation path stays open. Its credentials keep authenticating. ")
-    __properties: ClassVar[List[str]] = ["id", "org_id", "name", "external_ref", "display_name", "callback_timeout_seconds", "default_rate_limits", "browser_access", "created_at", "archived_at"]
+    __properties: ClassVar[List[str]] = ["id", "org_id", "name", "external_ref", "display_name", "callback_timeout_seconds", "default_rate_limits", "browser_access", "credit_policy", "created_at", "archived_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -138,6 +140,7 @@ class App(BaseModel):
             "callback_timeout_seconds": obj.get("callback_timeout_seconds"),
             "default_rate_limits": AppDefaultRateLimits.from_dict(obj["default_rate_limits"]) if obj.get("default_rate_limits") is not None else None,
             "browser_access": BrowserAccess.from_dict(obj["browser_access"]) if obj.get("browser_access") is not None else None,
+            "credit_policy": obj.get("credit_policy") if obj.get("credit_policy") is not None else CreditPolicy.FALSE,
             "created_at": obj.get("created_at"),
             "archived_at": obj.get("archived_at")
         })

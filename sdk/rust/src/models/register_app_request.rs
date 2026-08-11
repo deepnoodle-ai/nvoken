@@ -47,6 +47,9 @@ pub struct RegisterAppRequest {
         skip_serializing_if = "Option::is_none"
     )]
     pub browser_access: Option<Option<Box<models::BrowserAccess>>>,
+    /// Defaults to `off`. See the schema for what each value enforces.
+    #[serde(rename = "credit_policy", skip_serializing_if = "Option::is_none")]
+    pub credit_policy: Option<models::CreditPolicy>,
 }
 
 impl RegisterAppRequest {
@@ -59,6 +62,7 @@ impl RegisterAppRequest {
             callback_timeout_seconds: None,
             default_rate_limits: None,
             browser_access: None,
+            credit_policy: None,
         }
     }
 }

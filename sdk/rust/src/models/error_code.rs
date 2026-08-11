@@ -52,6 +52,8 @@ pub enum ErrorCode {
     AgentDefinitionArchived,
     #[serde(rename = "org_has_active_apps")]
     OrgHasActiveApps,
+    #[serde(rename = "tenant_in_use")]
+    TenantInUse,
     #[serde(rename = "budget_exceeded")]
     BudgetExceeded,
     #[serde(rename = "insufficient_credits")]
@@ -96,6 +98,7 @@ impl std::fmt::Display for ErrorCode {
             Self::OrgArchived => write!(f, "org_archived"),
             Self::AgentDefinitionArchived => write!(f, "agent_definition_archived"),
             Self::OrgHasActiveApps => write!(f, "org_has_active_apps"),
+            Self::TenantInUse => write!(f, "tenant_in_use"),
             Self::BudgetExceeded => write!(f, "budget_exceeded"),
             Self::InsufficientCredits => write!(f, "insufficient_credits"),
             Self::CostEstimateUnavailable => write!(f, "cost_estimate_unavailable"),
