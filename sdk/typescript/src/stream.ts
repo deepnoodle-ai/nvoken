@@ -2,6 +2,7 @@ import type { Client, InvocationHandle, JsonObject, TypedInvocationResult } from
 import { NvokenError, normalizeError, SessionBusyError } from "./client.js";
 import type {
   CreateInvocationRequest,
+	Invocation,
   InvocationAcceptedEvent,
   InvocationResultEvent,
   InvocationStreamEvent as GeneratedInvocationStreamEvent,
@@ -374,10 +375,10 @@ async function admitInvocation(
   for (;;) {
     attempts += 1;
     try {
-      const invocation = await client.invocations.createInvocation(
+	  const invocation = await client.invocations.createInvocation(
         { createInvocationRequest: request },
         { signal },
-      );
+	  ) as Invocation;
       return {
         type: "invocation.accepted",
         agentId: invocation.agentId,

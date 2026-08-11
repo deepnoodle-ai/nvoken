@@ -30,11 +30,8 @@ func TestAgentFiveVerbsDispatchAndStructuredOutput(t *testing.T) {
 	}
 	var handlerCalls atomic.Int64
 	agent, err := client.Agent(AgentOptions{
-		AgentKey: "support",
-		Model: Model{
-			Provider: "openai",
-			ID:       "gpt-test",
-		},
+		AgentKey:          "support",
+		AgentDefinitionID: "def_test",
 		Tools: []Tool{{
 			Mode:        ToolModeHost,
 			Name:        "weather",
@@ -49,7 +46,6 @@ func TestAgentFiveVerbsDispatchAndStructuredOutput(t *testing.T) {
 				return map[string]any{"temperature": 21}, nil
 			},
 		}},
-		OutputSchema: map[string]any{"type": "object"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -150,12 +146,9 @@ func TestAgentMissingHandlerPolicyAndNoOutputKinds(t *testing.T) {
 		InputSchema: map[string]any{"type": "object"},
 	}
 	agent, err := client.Agent(AgentOptions{
-		AgentKey: "support",
-		Model: Model{
-			Provider: "openai",
-			ID:       "gpt-test",
-		},
-		Tools: []Tool{missingTool},
+		AgentKey:          "support",
+		AgentDefinitionID: "def_test",
+		Tools:             []Tool{missingTool},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -216,11 +209,8 @@ func TestBoundSessionSerializesAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	agent, err := client.Agent(AgentOptions{
-		AgentKey: "support",
-		Model: Model{
-			Provider: "openai",
-			ID:       "gpt-test",
-		},
+		AgentKey:          "support",
+		AgentDefinitionID: "def_test",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -285,11 +275,8 @@ func TestWaitOptionsOverallTimeoutAndCondition(t *testing.T) {
 		t.Fatal(err)
 	}
 	handle, err := client.Agent(AgentOptions{
-		AgentKey: "support",
-		Model: Model{
-			Provider: "openai",
-			ID:       "gpt-test",
-		},
+		AgentKey:          "support",
+		AgentDefinitionID: "def_test",
 	})
 	if err != nil {
 		t.Fatal(err)

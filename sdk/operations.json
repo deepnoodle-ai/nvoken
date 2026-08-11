@@ -2,6 +2,11 @@
   "generated_by": "openapi/nvoken.yaml; do not edit",
   "operations": [
     {
+      "operation_id": "allocateCredits",
+      "method": "POST",
+      "path": "/v1/credits/allocations"
+    },
+    {
       "operation_id": "cancelInvocation",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/cancel"
@@ -12,9 +17,14 @@
       "path": "/v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel"
     },
     {
-      "operation_id": "createBudget",
+      "operation_id": "createAgentDefinition",
       "method": "POST",
-      "path": "/v1/budgets"
+      "path": "/v1/agent-definitions"
+    },
+    {
+      "operation_id": "createAppClientKey",
+      "method": "POST",
+      "path": "/v1/apps/{app_id}/client-keys"
     },
     {
       "operation_id": "createCredential",
@@ -42,11 +52,6 @@
       "path": "/v1/sessions"
     },
     {
-      "operation_id": "deleteBudget",
-      "method": "DELETE",
-      "path": "/v1/budgets/{budget_id}"
-    },
-    {
       "operation_id": "deleteSession",
       "method": "DELETE",
       "path": "/v1/sessions/{session_id}"
@@ -62,14 +67,14 @@
       "path": "/v1/agents/{agent_id}"
     },
     {
+      "operation_id": "getAgentDefinition",
+      "method": "GET",
+      "path": "/v1/agent-definitions/{agent_definition_id}"
+    },
+    {
       "operation_id": "getApp",
       "method": "GET",
       "path": "/v1/apps/{app_id}"
-    },
-    {
-      "operation_id": "getBudget",
-      "method": "GET",
-      "path": "/v1/budgets/{budget_id}"
     },
     {
       "operation_id": "getCredential",
@@ -147,19 +152,29 @@
       "path": "/v1/agents"
     },
     {
+      "operation_id": "listAppClientKeys",
+      "method": "GET",
+      "path": "/v1/apps/{app_id}/client-keys"
+    },
+    {
       "operation_id": "listApps",
       "method": "GET",
       "path": "/v1/apps"
     },
     {
-      "operation_id": "listBudgets",
-      "method": "GET",
-      "path": "/v1/budgets"
-    },
-    {
       "operation_id": "listCredentials",
       "method": "GET",
       "path": "/v1/identity/credentials"
+    },
+    {
+      "operation_id": "listCreditAccounts",
+      "method": "GET",
+      "path": "/v1/credits"
+    },
+    {
+      "operation_id": "listCreditAllocations",
+      "method": "GET",
+      "path": "/v1/credits/allocations"
     },
     {
       "operation_id": "listInvocations",
@@ -217,11 +232,6 @@
       "path": "/v1/usage/records"
     },
     {
-      "operation_id": "registerAgentDefinition",
-      "method": "POST",
-      "path": "/v1/agent-definitions"
-    },
-    {
       "operation_id": "registerApp",
       "method": "POST",
       "path": "/v1/apps"
@@ -235,6 +245,11 @@
       "operation_id": "resumeInvocation",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/resume"
+    },
+    {
+      "operation_id": "revokeAppClientKey",
+      "method": "DELETE",
+      "path": "/v1/apps/{app_id}/client-keys/{key_id}"
     },
     {
       "operation_id": "revokeCredential",
@@ -272,14 +287,14 @@
       "path": "/v1/invocations/{invocation_id}/tool-results"
     },
     {
+      "operation_id": "updateAgentDefinition",
+      "method": "PUT",
+      "path": "/v1/agent-definitions/{agent_definition_id}"
+    },
+    {
       "operation_id": "updateApp",
       "method": "PATCH",
       "path": "/v1/apps/{app_id}"
-    },
-    {
-      "operation_id": "updateBudget",
-      "method": "PATCH",
-      "path": "/v1/budgets/{budget_id}"
     },
     {
       "operation_id": "updateOrg",

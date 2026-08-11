@@ -4,7 +4,7 @@ import { Client, formatNvokenError } from "@deepnoodle/nvoken";
 
 const agent = new Client().agent({
   agentKey: "quickstart",
-  instructions: "Be concise and helpful.",
+	agentDefinitionId: process.env.NVOKEN_AGENT_DEFINITION_ID ?? "",
 });
 
 try {

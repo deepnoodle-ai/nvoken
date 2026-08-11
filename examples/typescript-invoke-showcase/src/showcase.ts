@@ -135,30 +135,29 @@ async function main(): Promise<void> {
   );
   console.log("PASS incremental transcript cursor contains only the second turn");
 
-  // An Agent Definition is content-addressed, so registering the same one the
-  // inline turns already sent returns the ID they were assigned, and repeating
-  // the registration returns it again.
-  const registration = await client.registerAgentDefinition(chatDefinition().agentDefinition);
-  const repeated = await client.registerAgentDefinition(chatDefinition().agentDefinition);
-  assert.equal(repeated.agentDefinitionId, registration.agentDefinitionId);
-  assert.equal(first.invocation.agentDefinitionId, registration.agentDefinitionId);
+  // Reusable Agent Definitions are stable, revisioned App resources. Inline
+  // definitions remain the ordinary path; create a resource only when turns
+  // benefit from referencing the same configuration by ID.
+  const resource = await client.createAgentDefinition(
+    chatDefinition().agentDefinition,
+    `${runId}:definition`,
+  );
 
   const referenced = await completed({
     agentKey: primaryAgentKey,
     tenantKey: tenantA,
-    sessionKey: `${runId}-registered-session`,
-    idempotencyKey: `${runId}:registered`,
-    input: "Reply only with registered.",
-    agentDefinitionId: registration.agentDefinitionId,
+    sessionKey: `${runId}-referenced-session`,
+    idempotencyKey: `${runId}:referenced`,
+    input: "Reply only with referenced.",
+    agentDefinitionId: resource.id,
   });
-  assert.match(referenced.text, /registered/i);
-  assert.equal(referenced.invocation.agentDefinitionId, registration.agentDefinitionId);
-  console.log(`PASS Agent Definition registration is idempotent by content and reusable by ID: ${registration.agentDefinitionId}`);
+  assert.match(referenced.text, /referenced/i);
+  assert.equal(referenced.invocation.agentDefinitionId, resource.id);
+  console.log(`PASS revisioned Agent Definition resource is reusable by ID: ${resource.id}`);
 
   // Recorded context is Session history rather than an Agent Definition field,
-  // so a turn carrying it reuses the same content-addressed ID. Resending an
-  // unchanged name adds no transcript message, while the Invocation still
-  // echoes the whole pre-deduplication list it accepted.
+  // so resending an unchanged name adds no transcript message while the
+  // Invocation still echoes the whole pre-deduplication list it accepted.
   const contextSessionKey = `${runId}-context-session`;
   const contextItems = [
     { name: "customer", tier: "contextual", content: "plan: pro; confirmation code: ORCHID-724" },
@@ -174,7 +173,6 @@ async function main(): Promise<void> {
     ...chatDefinition(),
   });
   assert.match(recorded.text, /recorded/i);
-  assert.equal(recorded.invocation.agentDefinitionId, registration.agentDefinitionId);
   assert.deepEqual(recorded.invocation.context, [...contextItems]);
 
   const contextMessages = await client.drainTranscript(recorded.handle.sessionId!, { pageSize: 50 });

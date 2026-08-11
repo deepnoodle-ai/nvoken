@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -29,6 +29,21 @@ import {
     AppRegistrationToJSON,
 } from '../models/AppRegistration.js';
 import {
+    type ClientKey,
+    ClientKeyFromJSON,
+    ClientKeyToJSON,
+} from '../models/ClientKey.js';
+import {
+    type ClientKeyList,
+    ClientKeyListFromJSON,
+    ClientKeyListToJSON,
+} from '../models/ClientKeyList.js';
+import {
+    type CreateClientKeyRequest,
+    CreateClientKeyRequestFromJSON,
+    CreateClientKeyRequestToJSON,
+} from '../models/CreateClientKeyRequest.js';
+import {
     type ErrorResponse,
     ErrorResponseFromJSON,
     ErrorResponseToJSON,
@@ -44,7 +59,16 @@ import {
     UpdateAppRequestToJSON,
 } from '../models/UpdateAppRequest.js';
 
+export interface CreateAppClientKeyRequest {
+    appId: string;
+    createClientKeyRequest: CreateClientKeyRequest;
+}
+
 export interface GetAppRequest {
+    appId: string;
+}
+
+export interface ListAppClientKeysRequest {
     appId: string;
 }
 
@@ -56,6 +80,11 @@ export interface RegisterAppOperationRequest {
     registerAppRequest: RegisterAppRequest;
 }
 
+export interface RevokeAppClientKeyRequest {
+    appId: string;
+    keyId: string;
+}
+
 export interface UpdateAppOperationRequest {
     appId: string;
     updateAppRequest: UpdateAppRequest;
@@ -65,6 +94,71 @@ export interface UpdateAppOperationRequest {
  *
  */
 export class AppsApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for createAppClientKey without sending the request
+     */
+    async createAppClientKeyRequestOpts(requestParameters: CreateAppClientKeyRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['appId'] == null) {
+            throw new runtime.RequiredError(
+                'appId',
+                'Required parameter "appId" was null or undefined when calling createAppClientKey().'
+            );
+        }
+
+        if (requestParameters['createClientKeyRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createClientKeyRequest',
+                'Required parameter "createClientKeyRequest" was null or undefined when calling createAppClientKey().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/apps/{app_id}/client-keys`;
+        urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateClientKeyRequestToJSON(requestParameters['createClientKeyRequest']),
+        };
+    }
+
+    /**
+     * Registers one standard-base64-encoded, exactly 32-byte Ed25519 public key. nvoken stores no seed or private key and never returns the public bytes. At most five keys may exist for one App so hosts can overlap a bounded rotation. Duplicate public bytes within one App are rejected; another App may independently register the same bytes.  Registration remains dormant in this version: a JWT signed by the key still receives the existing unauthenticated response and creates no runtime or credential rows.
+     * Register an Ed25519 client-token verification key
+     */
+    async createAppClientKeyRaw(requestParameters: CreateAppClientKeyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ClientKey>> {
+        const requestOptions = await this.createAppClientKeyRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ClientKeyFromJSON(jsonValue));
+    }
+
+    /**
+     * Registers one standard-base64-encoded, exactly 32-byte Ed25519 public key. nvoken stores no seed or private key and never returns the public bytes. At most five keys may exist for one App so hosts can overlap a bounded rotation. Duplicate public bytes within one App are rejected; another App may independently register the same bytes.  Registration remains dormant in this version: a JWT signed by the key still receives the existing unauthenticated response and creates no runtime or credential rows.
+     * Register an Ed25519 client-token verification key
+     */
+    async createAppClientKey(requestParameters: CreateAppClientKeyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ClientKey> {
+        const response = await this.createAppClientKeyRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for getApp without sending the request
@@ -118,6 +212,61 @@ export class AppsApi extends runtime.BaseAPI {
      */
     async getApp(requestParameters: GetAppRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<App> {
         const response = await this.getAppRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listAppClientKeys without sending the request
+     */
+    async listAppClientKeysRequestOpts(requestParameters: ListAppClientKeysRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['appId'] == null) {
+            throw new runtime.RequiredError(
+                'appId',
+                'Required parameter "appId" was null or undefined when calling listAppClientKeys().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/apps/{app_id}/client-keys`;
+        urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Lists the App\'s dormant Ed25519 verification-key records in creation order. Responses contain only the generated key ID, display name, SHA-256 fingerprint, and creation time; public-key bytes are never returned. This route requires the same non-client Operator authority as updating the visible App. Cross-App targets return `404`.
+     * List an App\'s client-token verification keys
+     */
+    async listAppClientKeysRaw(requestParameters: ListAppClientKeysRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ClientKeyList>> {
+        const requestOptions = await this.listAppClientKeysRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ClientKeyListFromJSON(jsonValue));
+    }
+
+    /**
+     * Lists the App\'s dormant Ed25519 verification-key records in creation order. Responses contain only the generated key ID, display name, SHA-256 fingerprint, and creation time; public-key bytes are never returned. This route requires the same non-client Operator authority as updating the visible App. Cross-App targets return `404`.
+     * List an App\'s client-token verification keys
+     */
+    async listAppClientKeys(requestParameters: ListAppClientKeysRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ClientKeyList> {
+        const response = await this.listAppClientKeysRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -230,6 +379,68 @@ export class AppsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for revokeAppClientKey without sending the request
+     */
+    async revokeAppClientKeyRequestOpts(requestParameters: RevokeAppClientKeyRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['appId'] == null) {
+            throw new runtime.RequiredError(
+                'appId',
+                'Required parameter "appId" was null or undefined when calling revokeAppClientKey().'
+            );
+        }
+
+        if (requestParameters['keyId'] == null) {
+            throw new runtime.RequiredError(
+                'keyId',
+                'Required parameter "keyId" was null or undefined when calling revokeAppClientKey().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/apps/{app_id}/client-keys/{key_id}`;
+        urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
+        urlPath = urlPath.replace('{key_id}', encodeURIComponent(String(requestParameters['keyId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Deletes only the named App-owned verification record. A repeated, unknown, or cross-App key ID returns the same `404`. Agent Definitions and App configuration are never changed by revocation.
+     * Revoke an App client-token verification key
+     */
+    async revokeAppClientKeyRaw(requestParameters: RevokeAppClientKeyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.revokeAppClientKeyRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Deletes only the named App-owned verification record. A repeated, unknown, or cross-App key ID returns the same `404`. Agent Definitions and App configuration are never changed by revocation.
+     * Revoke an App client-token verification key
+     */
+    async revokeAppClientKey(requestParameters: RevokeAppClientKeyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.revokeAppClientKeyRaw(requestParameters, initOverrides);
+    }
+
+    /**
      * Creates request options for updateApp without sending the request
      */
     async updateAppRequestOpts(requestParameters: UpdateAppOperationRequest): Promise<runtime.RequestOpts> {
@@ -275,7 +486,7 @@ export class AppsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Updates an App\'s display name. An installation administrator may also transfer the App to another registered Org by changing `org_id`. Org- and App-scoped callers receive `404` outside their containment boundary, and cannot move an App. The unique `name` and transitional `external_ref` cannot be changed.
+     * Updates an App\'s display name, callback timeout, or dormant browser configuration. An installation administrator may also transfer the App to another registered Org by changing `org_id`. Org- and App-scoped callers receive `404` outside their containment boundary, and cannot move an App. The unique `name` and transitional `external_ref` cannot be changed.
      * Update an app
      */
     async updateAppRaw(requestParameters: UpdateAppOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<App>> {
@@ -286,7 +497,7 @@ export class AppsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Updates an App\'s display name. An installation administrator may also transfer the App to another registered Org by changing `org_id`. Org- and App-scoped callers receive `404` outside their containment boundary, and cannot move an App. The unique `name` and transitional `external_ref` cannot be changed.
+     * Updates an App\'s display name, callback timeout, or dormant browser configuration. An installation administrator may also transfer the App to another registered Org by changing `org_id`. Org- and App-scoped callers receive `404` outside their containment boundary, and cannot move an App. The unique `name` and transitional `external_ref` cannot be changed.
      * Update an app
      */
     async updateApp(requestParameters: UpdateAppOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<App> {

@@ -191,16 +191,13 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 	// dropped between the typed request and the request body.
 	sessionKey := "conformance"
 	body, err := InvokeRequest{
-		AgentKey:       "support",
-		IdempotencyKey: "conformance",
-		Input:          "hello",
-		AgentDefinition: &AgentDefinition{
-			Model:         Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
-			ProviderTools: []ProviderTool{WebSearchProviderTool()},
-		},
-		SessionKey:     &sessionKey,
-		SessionOptions: &SessionOptions{Retention: &SessionRetention{TTLSeconds: 86400}},
-		Metadata:       fixture.InvocationMetadata,
+		AgentKey:          "support",
+		AgentDefinitionID: "def_conformance",
+		IdempotencyKey:    "conformance",
+		Input:             "hello",
+		SessionKey:        &sessionKey,
+		SessionOptions:    &SessionOptions{Retention: &SessionRetention{TTLSeconds: 86400}},
+		Metadata:          fixture.InvocationMetadata,
 	}.encoded()
 	if err != nil {
 		t.Fatalf("build request: %v", err)
@@ -211,25 +208,19 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 	}
 	assertEncodesTo(t, wire["metadata"], mustEncode(t, fixture.InvocationMetadata))
 	assertEncodesTo(t, wire["session_options"], fixture.SessionOptions.RetentionOnly)
-	// Execution fields belong to the Agent Definition now. Reading them back
-	// through that key is what proves the nesting actually happened.
-	definition, ok := wire["agent_definition"].(map[string]any)
-	if !ok {
-		t.Fatalf("agent_definition = %#v, want an object", wire["agent_definition"])
+	if wire["agent_definition_id"] != "def_conformance" {
+		t.Fatalf("agent_definition_id = %#v", wire["agent_definition_id"])
 	}
-	assertEncodesTo(t, definition["provider_tools"], fixture.ProviderTools.Defaults)
 
 	// Session options with no members would serialize to `{}`, which the
 	// Runtime rejects for minProperties — catching it locally names the field.
 	if _, err := (InvokeRequest{
-		AgentKey:       "support",
-		IdempotencyKey: "conformance",
-		Input:          "hello",
-		AgentDefinition: &AgentDefinition{
-			Model: Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
-		},
-		SessionKey:     &sessionKey,
-		SessionOptions: &SessionOptions{},
+		AgentKey:          "support",
+		AgentDefinitionID: "def_conformance",
+		IdempotencyKey:    "conformance",
+		Input:             "hello",
+		SessionKey:        &sessionKey,
+		SessionOptions:    &SessionOptions{},
 	}).encoded(); err == nil {
 		t.Fatal("empty session options were admitted")
 	}
@@ -250,31 +241,21 @@ func TestSharedAgentRequestFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}
-	temperature := Sampling{Temperature: 0.2}
-	effort := ReasoningEffortLow
 	agent, err := client.Agent(AgentOptions{
-		AgentKey:  "support",
-		Model:     Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
-		Sampling:  &temperature,
-		Reasoning: &Reasoning{Effort: &effort},
-		ProviderTools: []ProviderTool{{
-			Type:      ProviderToolWebSearch,
-			WebSearch: &WebSearchTool{MaxUses: 5},
-		}},
+		AgentKey:          "support",
+		AgentDefinitionID: "def_conformance",
 	})
 	if err != nil {
 		t.Fatalf("agent: %v", err)
 	}
 	// Durable options apply on a new anonymous Session too, which is where a
 	// short retention window matters most.
-	sessionMaxEstimatedCost := float32(0.25)
 	body, err := agent.request("hello", AgentInvocationOptions{
 		IdempotencyKey:    "conformance",
 		OnBudgetExhausted: BudgetExhaustionPause,
 		Metadata:          map[string]string{"board": "brand-2026", "surface": "web"},
 		SessionOptions: &SessionOptions{
-			Retention:           &SessionRetention{TTLSeconds: 86400},
-			MaxEstimatedCostUSD: &sessionMaxEstimatedCost,
+			Retention: &SessionRetention{TTLSeconds: 86400},
 		},
 	}).encoded()
 	if err != nil {
@@ -681,51 +662,29 @@ func TestConformance(t *testing.T) {
 	if err != nil || exactModel.ID != conformanceExactModelID || exactModel.Cataloged {
 		t.Fatalf("exact model lookup: %#v err=%v", exactModel, err)
 	}
-	windowStart := time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)
-	windowEnd := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
-	budget, err := client.CreateBudget(context.Background(), CreateBudgetInput{
-		Scope:               BudgetScopeApp,
-		WindowStart:         windowStart,
-		WindowEnd:           windowEnd,
-		MaxEstimatedCostUSD: 25,
-		IdempotencyKey:      "go-budget-conformance",
+	defaultTenant := true
+	credits, err := client.AllocateCredits(context.Background(), AllocateCreditsInput{
+		Amount:         Money{Amount: "25.000000", Currency: "USD"},
+		DefaultTenant:  &defaultTenant,
+		IdempotencyKey: "go-credit-conformance",
 	})
-	if err != nil || budget.PausedInvocations != 2 || budget.AvailableEstimatedCostUsd != 20.25 {
-		t.Fatalf("create Budget: %#v err=%v", budget, err)
+	if err != nil || credits.Account.PausedInvocations != 2 || credits.Account.Available.Amount != "20.250000" {
+		t.Fatalf("allocate Credits: %#v err=%v", credits, err)
 	}
-	budget, err = client.GetBudget(context.Background(), budget.ID)
-	if err != nil || budget.Scope != BudgetScopeApp {
-		t.Fatalf("get Budget: %#v err=%v", budget, err)
+	accounts, err := client.ListCreditAccounts(context.Background(), &ListCreditAccountsParams{DefaultTenant: &defaultTenant})
+	if err != nil || len(accounts.Items) != 1 || accounts.Items[0].Available.Amount != "20.250000" {
+		t.Fatalf("list Credit accounts: %#v err=%v", accounts, err)
 	}
-	budget, err = client.UpdateBudget(context.Background(), budget.ID, 30)
-	if err != nil || budget.MaxEstimatedCostUsd != 30 {
-		t.Fatalf("update Budget: %#v err=%v", budget, err)
-	}
-	if err := client.DeleteBudget(context.Background(), budget.ID); err != nil {
-		t.Fatalf("delete Budget: %v", err)
+	allocations, err := client.ListCreditAllocations(context.Background(), &ListCreditAllocationsParams{DefaultTenant: &defaultTenant})
+	if err != nil || len(allocations.Items) != 1 || allocations.Items[0].Amount.Amount != "25.000000" {
+		t.Fatalf("list Credit allocations: %#v err=%v", allocations, err)
 	}
 	request := InvokeRequest{
-		AgentKey:       "support",
-		IdempotencyKey: "conformance-lost-ack",
-		IfActive:       IfActiveSupersede,
-		Input:          "hello",
-		AgentDefinition: &AgentDefinition{
-			Instructions: "help",
-			Model: Model{
-				Provider: "openai",
-				ID:       "gpt-test",
-			},
-			Sampling: &Sampling{Temperature: 0},
-			Reasoning: &Reasoning{Effort: func() *ReasoningEffort {
-				value := ReasoningEffortHigh
-				return &value
-			}()},
-			MCPServers: []MCPServer{{
-				Name:         "support",
-				URL:          "https://mcp.example.test/rpc",
-				AllowedTools: []string{"lookup"},
-			}},
-		},
+		AgentKey:          "support",
+		AgentDefinitionID: "def_conformance",
+		IdempotencyKey:    "conformance-lost-ack",
+		IfActive:          IfActiveSupersede,
+		Input:             "hello",
 		MCPServerHeaders: []MCPServerHeaders{{
 			Name:    "support",
 			Headers: map[string]string{"Authorization": "Bearer conformance-mcp-secret"},
@@ -1140,12 +1099,10 @@ func TestSharedInvocationWebhookFixture(t *testing.T) {
 		events = append(events, WebhookEvent(event))
 	}
 	request := InvokeRequest{
-		AgentKey:       "support-bot",
-		IdempotencyKey: "req-1",
-		Input:          "hello",
-		AgentDefinition: &AgentDefinition{
-			Model: Model{Provider: "anthropic", ID: "claude-sonnet-4-5"},
-		},
+		AgentKey:          "support-bot",
+		AgentDefinitionID: "def_conformance",
+		IdempotencyKey:    "req-1",
+		Input:             "hello",
 		Webhook: &WebhookTarget{
 			URL:    fixture.ExampleRequest.Webhook.URL,
 			Events: events,

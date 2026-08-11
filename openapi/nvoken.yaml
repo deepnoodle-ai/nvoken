@@ -43,6 +43,12 @@ info:
     authentication presentation only and does not create a user identity model
     in nvoken.
 
+    Apps may register dormant browser-access configuration and Ed25519 client
+    public keys. This version does not accept App-issued client JWTs, apply the
+    registered admission limits, or emit CORS headers; PRD 065 activates that
+    complete boundary. The host remains the identity provider and alone holds
+    token-minting keys.
+
     - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity.
     - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity.
     - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.
@@ -94,7 +100,7 @@ tags:
   - name: MCP
     description: Stateless remote MCP server discovery.
   - name: Agent Definitions
-    description: Immutable, content-addressed agent configurations registered without starting a turn.
+    description: Stable App-owned agent configurations with immutable revision history.
   - name: Sessions
     description: Durable conversation identity and state. A Session is what OpenAI and Mistral call a Conversation.
   - name: Provider keys
@@ -108,6 +114,8 @@ tags:
     description: Thin customer ownership boundaries containing one or more Apps.
   - name: Usage
     description: Token and cost totals, calculated from the stored record of what actually ran.
+  - name: Credits
+    description: Persistent tenant spending capacity and its append-only allocation history.
   - name: Identity
     description: |
       Durable machine credential lifecycle and caller introspection. These
@@ -329,8 +337,9 @@ paths:
       operationId: updateApp
       summary: Update an app
       description: |
-        Updates an App's display name. An installation administrator may also
-        transfer the App to another registered Org by changing `org_id`.
+        Updates an App's display name, callback timeout, or dormant browser
+        configuration. An installation administrator may also transfer the
+        App to another registered Org by changing `org_id`.
         Org- and App-scoped callers receive `404` outside their containment
         boundary, and cannot move an App. The unique `name` and transitional
         `external_ref` cannot be changed.
@@ -354,6 +363,102 @@ paths:
               schema:
                 $ref: "#/components/schemas/App"
         "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /v1/apps/{app_id}/client-keys:
+    get:
+      tags: [Apps]
+      operationId: listAppClientKeys
+      summary: List an App's client-token verification keys
+      description: |
+        Lists the App's dormant Ed25519 verification-key records in creation
+        order. Responses contain only the generated key ID, display name,
+        SHA-256 fingerprint, and creation time; public-key bytes are never
+        returned. This route requires the same non-client Operator authority
+        as updating the visible App. Cross-App targets return `404`.
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppID"
+      responses:
+        "200":
+          description: The registered client keys.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientKeyList"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+    post:
+      tags: [Apps]
+      operationId: createAppClientKey
+      summary: Register an Ed25519 client-token verification key
+      description: |
+        Registers one standard-base64-encoded, exactly 32-byte Ed25519 public
+        key. nvoken stores no seed or private key and never returns the public
+        bytes. At most five keys may exist for one App so hosts can overlap a
+        bounded rotation. Duplicate public bytes within one App are rejected;
+        another App may independently register the same bytes.
+
+        Registration remains dormant in this version: a JWT signed by the key
+        still receives the existing unauthenticated response and creates no
+        runtime or credential rows.
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClientKeyRequest"
+      responses:
+        "201":
+          description: The registered client-key record without key material.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientKey"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /v1/apps/{app_id}/client-keys/{key_id}:
+    delete:
+      tags: [Apps]
+      operationId: revokeAppClientKey
+      summary: Revoke an App client-token verification key
+      description: |
+        Deletes only the named App-owned verification record. A repeated,
+        unknown, or cross-App key ID returns the same `404`. Agent Definitions
+        and App configuration are never changed by revocation.
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppID"
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/ClientKeyID"
+      responses:
+        "204":
+          description: The verification record was deleted.
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -464,42 +569,27 @@ paths:
   /v1/agent-definitions:
     post:
       tags: [Agent Definitions]
-      operationId: registerAgentDefinition
-      summary: Register one immutable Agent Definition without starting a turn
+      operationId: createAgentDefinition
+      summary: Create an Agent Definition resource
       description: |
-        Validates and stores the same content-addressed Agent Definition that an
-        inline `POST /v1/invocations` request would store, but creates no Agent,
-        Session, message, or Invocation. The response is the same for a first
-        registration, a repeat, or an Agent Definition an earlier turn already stored.
-
-        Registration canonicalizes accepted model-provider aliases and resolves
-        MCP defaults before hashing. Registering with an alias and invoking with
-        its canonical provider name therefore produces the same `agent_definition_id`.
-        The ID is not a mutable version or an agent name, and there is no list,
-        read, update, or delete endpoint for Agent Definitions.
-
-        Registration checks only the Agent Definition's own content: schema and size
-        bounds, model controls, provider-tool support, and tool declarations.
-        Turn admission checks installation, App signing-key, builtin-gate,
-        budget, provider-key, Session, and current model-lifecycle state again.
-        In particular, a callback tool can be registered before its App callback
-        signing key exists, but an Invocation using it is refused until delivery
-        is configured.
-
-        Remote MCP headers are per-Invocation secrets and are not part of this
-        request shape. Supply them through `mcp_server_headers` when creating an
-        Invocation, whether its Agent Definition is inline or referenced by ID.
-
-        The caller needs `create_invocation` on an App-bound credential. App-less
-        installation credentials and tenant- or Session-constrained credentials
-        are refused because registration creates an App-wide claim. The body may
-        be at most 1 MiB.
+        Creates a stable App-owned resource at revision 1. Equal content in a
+        separate create gets a separate ID. Retry the same canonical request
+        with the same `Idempotency-Key` to receive the original revision-1
+        resource; changing the request under that key conflicts.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RegisterAgentDefinitionRequest"
+              $ref: "#/components/schemas/AgentDefinitionWrite"
             examples:
               supportDefinition:
                 value:
@@ -508,19 +598,26 @@ paths:
                     provider: anthropic
                     id: claude-sonnet-5
       responses:
-        "200":
-          description: The resolved immutable Agent Definition and its content-addressed ID.
+        "201":
+          description: The new or idempotently replayed revision-1 resource.
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: Strong ETag containing the current decimal revision in quotes.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AgentDefinitionRegistration"
+                $ref: "#/components/schemas/AgentDefinitionResource"
               example:
-                agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
-                agent_definition:
-                  instructions: You are a concise billing support agent.
-                  model:
-                    provider: anthropic
-                    id: claude-sonnet-5
+                id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                revision: 1
+                instructions: You are a concise billing support agent.
+                model:
+                  provider: anthropic
+                  id: claude-sonnet-5
+                created_at: 2026-08-11T12:00:00Z
+                updated_at: 2026-08-11T12:00:00Z
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -533,6 +630,74 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
+  /v1/agent-definitions/{agent_definition_id}:
+    parameters:
+      - name: agent_definition_id
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/AgentDefinitionID"
+    get:
+      tags: [Agent Definitions]
+      operationId: getAgentDefinition
+      summary: Get the current Agent Definition revision
+      responses:
+        "200":
+          description: The current flat resource representation.
+          headers:
+            ETag:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDefinitionResource"
+        "401": {$ref: "#/components/responses/Unauthenticated"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "500": {$ref: "#/components/responses/Internal"}
+        "503": {$ref: "#/components/responses/Unavailable"}
+    put:
+      tags: [Agent Definitions]
+      operationId: updateAgentDefinition
+      summary: Replace an Agent Definition and create its next revision
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          schema: {type: string}
+          description: One strong decimal revision ETag returned by GET or PUT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentDefinitionWrite"
+      responses:
+        "200":
+          description: The committed next revision.
+          headers:
+            ETag:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDefinitionResource"
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+        "401": {$ref: "#/components/responses/Unauthenticated"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "412":
+          description: The supplied revision is stale.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+        "428":
+          description: If-Match was omitted.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+        "500": {$ref: "#/components/responses/Internal"}
+        "503": {$ref: "#/components/responses/Unavailable"}
   /v1/invocations:
     get:
       tags: [Invocations]
@@ -582,7 +747,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvocationList"
+                $ref: "#/components/schemas/InvocationListResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -602,8 +767,9 @@ paths:
       description: |
         Starts one agent turn and returns immediately. In a single database
         transaction nvoken finds or creates the Agent and Session, resolves
-        the agent definition you sent inline or referenced by `agent_definition_id`,
-        appends your input as one message, and queues the turn. You get a
+        either the inline `agent_definition` or the current revision of the
+        referenced `agent_definition_id`, appends your input as one message,
+        and queues the turn. You get a
         response only after that transaction commits, so a `202` means the
         work is safely recorded and will run even if nvoken restarts. The
         model does not run on this request — it runs in the background, and
@@ -626,8 +792,8 @@ paths:
         finished. Keys are scoped to the tenant and `agent_key`.
 
         A repeat counts as the same request only if the Session selector, the
-        resolved Agent Definition, and the input all match. An `agent_definition_id`
-        and the identical inline Agent Definition count as the same. Limits are compared
+        stable Agent Definition ID, and the input all match. The original
+        admitted revision is returned even if that resource has advanced. Limits are compared
         as you sent them, so sending a value that happens to equal the default
         is not the same as omitting it. Key order inside JSON objects does not
         matter; array order does. Change anything that matters and you get
@@ -739,6 +905,7 @@ paths:
                   idempotency_key: ticket-483:first-reply
                   input: Why was I charged twice?
                   agent_definition:
+                    instructions: You are a concise billing support agent.
                     model:
                       provider: anthropic
                       id: claude-sonnet-5
@@ -752,11 +919,7 @@ paths:
                   input:
                     - type: text
                       text: Can you show me the two charge dates?
-                  agent_definition:
-                    instructions: You are a concise billing support agent.
-                    model:
-                      provider: anthropic
-                      id: claude-sonnet-5
+                  agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
               existingSession:
                 summary: Continue an existing Session by durable ID
                 value:
@@ -766,13 +929,9 @@ paths:
                   input:
                     - type: text
                       text: Please summarize what happened.
-                  agent_definition:
-                    instructions: You are a concise billing support agent.
-                    model:
-                      provider: openai
-                      id: gpt-5.4
+                  agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
               reusedDefinition:
-                summary: Reuse an immutable Agent Definition already registered for this App
+                summary: Use an Agent Definition resource already created for this App
                 value:
                   agent_key: support-triage
                   session_key: ticket-483
@@ -788,19 +947,7 @@ paths:
                   input:
                     - type: text
                       text: Classify the billing problem.
-                  agent_definition:
-                    instructions: Classify the request, then submit the result.
-                    model:
-                      provider: anthropic
-                      id: claude-sonnet-5
-                    output_schema:
-                      type: object
-                      properties:
-                        category:
-                          type: string
-                          enum: [duplicate_charge, refund, other]
-                      required: [category]
-                      additionalProperties: false
+                  agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb324
       responses:
         "202":
           description: |
@@ -816,7 +963,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Invocation"
+                $ref: "#/components/schemas/InvocationResponse"
               examples:
                 queued:
                   summary: New queued Invocation
@@ -826,11 +973,12 @@ paths:
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                    agent_definition_revision: 1
                     agent_definition: null
                     context: null
                     status: queued
                     stop_reason: null
-                    blocking_budget: null
+                    credit_block: null
                     attempt: 0
                     error: null
                     usage: null
@@ -857,11 +1005,12 @@ paths:
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                    agent_definition_revision: 1
                     agent_definition: null
                     context: null
                     status: running
                     stop_reason: null
-                    blocking_budget: null
+                    credit_block: null
                     attempt: 1
                     error: null
                     usage: null
@@ -888,11 +1037,12 @@ paths:
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                    agent_definition_revision: 1
                     agent_definition: null
                     context: null
                     status: completed
                     stop_reason: end_turn
-                    blocking_budget: null
+                    credit_block: null
                     attempt: 1
                     error: null
                     usage:
@@ -915,7 +1065,7 @@ paths:
                     ended_at: "2026-07-20T14:16:07Z"
             text/event-stream:
               schema:
-                $ref: "#/components/schemas/InvocationStreamEvent"
+                $ref: "#/components/schemas/InvocationStreamResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1026,7 +1176,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Invocation"
+                $ref: "#/components/schemas/InvocationResponse"
               examples:
                 queuedAfterEngineLoss:
                   value:
@@ -1035,6 +1185,7 @@ paths:
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     agent_definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
+                    agent_definition_revision: 1
                     agent_definition:
                       model:
                         provider: anthropic
@@ -1042,7 +1193,7 @@ paths:
                     context: null
                     status: queued
                     stop_reason: null
-                    blocking_budget: null
+                    credit_block: null
                     attempt: 0
                     error: null
                     usage: null
@@ -1099,7 +1250,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvocationResult"
+                $ref: "#/components/schemas/InvocationResultResponse"
               examples:
                 completedTextTurn:
                   value:
@@ -1109,6 +1260,7 @@ paths:
                       session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                       user_key: null
                       agent_definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
+                      agent_definition_revision: 1
                       agent_definition:
                         model:
                           provider: anthropic
@@ -1116,7 +1268,7 @@ paths:
                       context: null
                       status: completed
                       stop_reason: end_turn
-                      blocking_budget: null
+                      credit_block: null
                       attempt: 1
                       error: null
                       usage: null
@@ -1283,11 +1435,14 @@ paths:
 
         Disconnecting never cancels the turn. It keeps running, and you can
         reconnect or read it later.
+
+        Client-token streams omit `thinking.delta` previews even when
+        `deltas=true`.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - name: deltas
           in: query
-          description: Include id-less output and thinking preview frames. Defaults to true.
+          description: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
           schema:
             type: boolean
             default: true
@@ -1303,7 +1458,7 @@ paths:
           content:
             text/event-stream:
               schema:
-                $ref: "#/components/schemas/InvocationStreamEvent"
+                $ref: "#/components/schemas/InvocationStreamResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1343,7 +1498,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Invocation"
+                $ref: "#/components/schemas/InvocationResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1394,7 +1549,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Invocation"
+                $ref: "#/components/schemas/InvocationResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1436,7 +1591,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Invocation"
+                $ref: "#/components/schemas/InvocationResponse"
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1699,135 +1854,90 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
-  /v1/budgets:
+  /v1/credits:
     get:
-      tags: [Budgets]
-      operationId: listBudgets
-      summary: List Budget windows
-      description: Returns cursor-paginated Budget guardrails inside the authenticated App and tenant constraint.
+      tags: [Credits]
+      operationId: listCreditAccounts
+      summary: List tenant credit accounts
+      description: Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
       parameters:
-        - name: scope
-          in: query
-          schema: { $ref: "#/components/schemas/BudgetScope" }
         - { $ref: "#/components/parameters/TenantKeyFilter" }
-        - { $ref: "#/components/parameters/UserKeyFilter" }
-        - { $ref: "#/components/parameters/UsageAgentIDFilter" }
-        - { $ref: "#/components/parameters/UsageProviderKeyIDFilter" }
-        - { $ref: "#/components/parameters/UsageCredentialFamilyIDFilter" }
-        - name: status
+        - name: default_tenant
           in: query
-          schema: { type: string, enum: [active, upcoming, expired, removed] }
-        - name: window_start
-          in: query
-          schema: { type: string, format: date-time }
-        - name: window_end
-          in: query
-          schema: { type: string, format: date-time }
+          schema: { type: boolean }
+          description: Select the App's default tenant account. Mutually exclusive with tenant_key.
         - { $ref: "#/components/parameters/Cursor" }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
       responses:
         "200":
-          description: Budget windows ordered newest first.
+          description: Credit accounts ordered newest first.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/BudgetList" }
+              schema: { $ref: "#/components/schemas/CreditAccountList" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/credits/allocations:
+    get:
+      tags: [Credits]
+      operationId: listCreditAllocations
+      summary: List credit allocations
+      description: Returns append-only credit allocations inside the authenticated App and tenant constraint.
+      parameters:
+        - { $ref: "#/components/parameters/TenantKeyFilter" }
+        - name: default_tenant
+          in: query
+          schema: { type: boolean }
+          description: Select the App's default tenant allocations. Mutually exclusive with tenant_key.
+        - { $ref: "#/components/parameters/Cursor" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Credit allocations ordered newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditAllocationList" }
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
     post:
-      tags: [Budgets]
-      operationId: createBudget
-      summary: Create one fixed Budget window
+      tags: [Credits]
+      operationId: allocateCredits
+      summary: Add credits to one tenant account
       description: |
-        Creates an estimated-list-price guardrail inside the authenticated App.
-        Windows for the same scope identity cannot overlap. The idempotency key
-        makes an identical retry return the first Budget.
+        Atomically appends a positive allocation and adds it to the selected
+        tenant's non-expiring credit account. An identical idempotent retry
+        returns the original allocation and current account.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateBudgetRequest"
+              $ref: "#/components/schemas/AllocateCreditsRequest"
       responses:
         "201":
-          description: Created Budget.
+          description: Credits allocated.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Budget"
+                $ref: "#/components/schemas/AllocateCreditsResult"
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409":
-          description: The window overlaps another Budget for the same identity, or the idempotency key changed.
+          description: The idempotency key was already used with different allocation inputs.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "500": { $ref: "#/components/responses/Internal" }
-        "503": { $ref: "#/components/responses/Unavailable" }
-  /v1/budgets/{budget_id}:
-    parameters:
-      - $ref: "#/components/parameters/BudgetID"
-    get:
-      tags: [Budgets]
-      operationId: getBudget
-      summary: Read one Budget
-      responses:
-        "200":
-          description: Current cap, accounting state, and paused work count.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Budget"
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/Internal" }
-        "503": { $ref: "#/components/responses/Unavailable" }
-    patch:
-      tags: [Budgets]
-      operationId: updateBudget
-      summary: Raise or lower a Budget cap
-      description: |
-        Sets a new spending cap. It cannot be lower than what the current
-        window has already used and committed. Raising it releases turns that
-        were paused for hitting the old cap; they resume in batches rather than
-        all at once.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateBudgetRequest"
-      responses:
-        "200":
-          description: Updated Budget.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Budget"
-        "400": { $ref: "#/components/responses/InvalidRequest" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/Internal" }
-        "503": { $ref: "#/components/responses/Unavailable" }
-    delete:
-      tags: [Budgets]
-      operationId: deleteBudget
-      summary: Remove a Budget guardrail
-      description: Removes enforcement without deleting its accounting history.
-      responses:
-        "204":
-          description: Budget removed.
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
   /v1/provider-keys:
@@ -2044,12 +2154,13 @@ paths:
         - { $ref: "#/components/parameters/UsageProviderKeySourceFilter" }
         - { $ref: "#/components/parameters/UsageProviderKeyIDFilter" }
         - { $ref: "#/components/parameters/UsageCredentialFamilyIDFilter" }
+        - { $ref: "#/components/parameters/UsageAuthenticationMethodFilter" }
         - { $ref: "#/components/parameters/UsageCallKindFilter" }
         - { $ref: "#/components/parameters/UsageToolNameFilter" }
         - { $ref: "#/components/parameters/UsageToolModeFilter" }
         - name: group_by
           in: query
-          schema: { type: string, enum: [tenant_key, agent_id, model, tool_name] }
+          schema: { type: string, enum: [tenant_key, agent_id, model, tool_name, authentication_method] }
         - name: top
           in: query
           schema: { type: integer, minimum: 1, maximum: 10 }
@@ -2085,13 +2196,14 @@ paths:
         - { $ref: "#/components/parameters/UsageProviderKeySourceFilter" }
         - { $ref: "#/components/parameters/UsageProviderKeyIDFilter" }
         - { $ref: "#/components/parameters/UsageCredentialFamilyIDFilter" }
+        - { $ref: "#/components/parameters/UsageAuthenticationMethodFilter" }
         - { $ref: "#/components/parameters/UsageCallKindFilter" }
         - { $ref: "#/components/parameters/UsageToolNameFilter" }
         - { $ref: "#/components/parameters/UsageToolModeFilter" }
         - name: group_by
           in: query
           required: true
-          schema: { type: string, enum: [app_id, tenant_key, user_key, agent_id, provider, model, tool_name, provider_key_source, provider_key_id, credential_family_id, failure_class] }
+          schema: { type: string, enum: [app_id, tenant_key, user_key, agent_id, provider, model, tool_name, provider_key_source, provider_key_id, credential_family_id, authentication_method, failure_class] }
         - name: sort
           in: query
           schema: { type: string, enum: [model_cost, invocations, model_calls, tool_calls], default: model_cost }
@@ -2128,6 +2240,7 @@ paths:
         - { $ref: "#/components/parameters/UsageProviderKeySourceFilter" }
         - { $ref: "#/components/parameters/UsageProviderKeyIDFilter" }
         - { $ref: "#/components/parameters/UsageCredentialFamilyIDFilter" }
+        - { $ref: "#/components/parameters/UsageAuthenticationMethodFilter" }
         - { $ref: "#/components/parameters/UsageCallKindFilter" }
         - { $ref: "#/components/parameters/UsageToolNameFilter" }
         - { $ref: "#/components/parameters/UsageToolModeFilter" }
@@ -2309,7 +2422,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Session"
+                $ref: "#/components/schemas/SessionResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -2361,7 +2474,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SessionList"
+                $ref: "#/components/schemas/SessionListResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -2394,7 +2507,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Session"
+                $ref: "#/components/schemas/SessionResponse"
               examples:
                 keyedTenantSession:
                   value:
@@ -2406,10 +2519,9 @@ paths:
                     forked_from: null
                     active_invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     active_invocation_status: running
-                    blocking_budget: null
+                    credit_block: null
                     compaction: null
                     retention: null
-                    max_estimated_cost_usd: null
                     expires_at: null
                     metadata: null
                     context:
@@ -2442,7 +2554,9 @@ paths:
       description: |
         Replaces or removes the Session lifetime estimated-cost cap, and merges
         host metadata when present. Raising or removing an exhausted cap
-        requeues the paused turn when every first-class Budget allows it.
+        requeues a turn paused on its per-Invocation estimated-cost limit. A
+        credit-paused turn resumes automatically after its account receives
+        enough credits.
 
         For metadata, a present key replaces its value, an explicit
         `null` deletes that key, and a key the patch does not mention survives.
@@ -2478,7 +2592,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Session"
+                $ref: "#/components/schemas/SessionResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -2583,7 +2697,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Session"
+                $ref: "#/components/schemas/SessionResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -2619,7 +2733,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SessionMessageList"
+                $ref: "#/components/schemas/SessionMessageListResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -2705,7 +2819,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TranscriptSnapshot"
+                $ref: "#/components/schemas/TranscriptSnapshotResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -2755,11 +2869,14 @@ paths:
         client that can set the `Authorization` header — the browser's
         built-in `EventSource` cannot. The server suggests a 1000 ms
         reconnect delay.
+
+        Client-token streams omit `thinking.delta` previews even when
+        `deltas=true`.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - name: deltas
           in: query
-          description: Include id-less output and thinking preview frames. Defaults to true.
+          description: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
           schema:
             type: boolean
             default: true
@@ -2773,11 +2890,12 @@ paths:
         "200":
           description: |
             SSE frames named `transcript.update`, `output_text.delta`,
-            `thinking.delta`, `stream.resync`, and `stream.end`.
+            `thinking.delta`, `stream.resync`, and `stream.end`. Client-token
+            streams never emit `thinking.delta`.
           content:
             text/event-stream:
               schema:
-                $ref: "#/components/schemas/TranscriptStreamEvent"
+                $ref: "#/components/schemas/TranscriptStreamResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -2803,7 +2921,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CurrentIdentity"
+                $ref: "#/components/schemas/CurrentIdentityResponse"
         "401":
           $ref: "#/components/responses/Unauthenticated"
   /v1/identity/credentials:
@@ -3077,6 +3195,14 @@ components:
         not exceed five minutes. The subject identifies the human for
         attribution only. App authorization compares the asserted `org_id`
         with the App's durable owner; `admin: true` retains its bypass.
+
+        Browser-direct calls use a separate App-signed Ed25519 JWT trust class:
+        `iss` is the App ID, `kid` names one active registered client key,
+        `aud` is `nvoken`, and `sub`, `tenant_key`, `agent_key`,
+        `agent_definition_id`, `agent_definition_revision`, `iat`, and `exp` are required. `session_id` and
+        `ops` are optional. Lifetime is at most 15 minutes. Client tokens are
+        accepted only in this header, never in a query parameter, and expose
+        only the documented Client-prefixed response schemas and public routes.
   headers:
     ETag:
       description: Strong validator for this exact JSON representation.
@@ -3120,12 +3246,6 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/ProviderKeyID"
-    BudgetID:
-      name: budget_id
-      in: path
-      required: true
-      schema:
-        $ref: "#/components/schemas/BudgetID"
     CredentialID:
       name: credential_id
       in: path
@@ -3243,6 +3363,10 @@ components:
       name: credential_family_id
       in: query
       schema: { $ref: "#/components/schemas/CredentialID" }
+    UsageAuthenticationMethodFilter:
+      name: authentication_method
+      in: query
+      schema: { $ref: "#/components/schemas/AuthenticationMethod" }
     UsageCallKindFilter:
       name: call_kind
       in: query
@@ -3342,7 +3466,7 @@ components:
     App:
       type: object
       additionalProperties: false
-      required: [id, org_id, name, external_ref, display_name, callback_timeout_seconds, created_at]
+      required: [id, org_id, name, external_ref, display_name, callback_timeout_seconds, default_rate_limits, browser_access, created_at]
       properties:
         id:
           $ref: "#/components/schemas/AppID"
@@ -3376,6 +3500,22 @@ components:
           description: |
             Resolved deadline for each callback HTTP request. Defaults to 10.
             Webhook delivery is unaffected.
+        default_rate_limits:
+          oneOf:
+            - $ref: "#/components/schemas/AppDefaultRateLimits"
+            - type: "null"
+          description: |
+            Dormant App-wide admission ceilings shared by machine and future
+            client-token callers. Null means unlimited machine admission.
+            These values are recorded but not enforced until PRD 065.
+        browser_access:
+          oneOf:
+            - $ref: "#/components/schemas/BrowserAccess"
+            - type: "null"
+          description: |
+            Complete dormant browser-direct configuration. Null means browser
+            access is disabled. Client JWTs and CORS remain unavailable until
+            PRD 065.
         created_at:
           type: string
           format: date-time
@@ -3462,6 +3602,20 @@ components:
           maximum: 60
           default: 10
           description: Callback HTTP reply deadline for this App.
+        default_rate_limits:
+          oneOf:
+            - $ref: "#/components/schemas/AppDefaultRateLimits"
+            - type: "null"
+          description: |
+            Optional shared App admission ceilings. Browser access requires a
+            non-null value. Recorded but not enforced until PRD 065.
+        browser_access:
+          oneOf:
+            - $ref: "#/components/schemas/BrowserAccess"
+            - type: "null"
+          description: |
+            Optional complete browser configuration. Null and omission both
+            create the App with browser access disabled.
     UpdateAppRequest:
       type: object
       additionalProperties: false
@@ -3483,6 +3637,153 @@ components:
           minimum: 1
           maximum: 60
           description: New callback HTTP reply deadline for this App.
+        default_rate_limits:
+          oneOf:
+            - $ref: "#/components/schemas/AppDefaultRateLimits"
+            - type: "null"
+          description: |
+            Replace the whole member, or send null to restore unlimited
+            machine admission. Clearing is rejected while browser access
+            remains enabled. Omission preserves the stored value.
+        browser_access:
+          oneOf:
+            - $ref: "#/components/schemas/BrowserAccess"
+            - type: "null"
+          description: |
+            Replace the complete member, or send null to disable browser
+            access without deleting client keys. Omission preserves the
+            stored value.
+    AppDefaultRateLimits:
+      type: object
+      additionalProperties: false
+      required: [max_concurrent_invocations, max_admissions_per_minute]
+      properties:
+        max_concurrent_invocations:
+          type: integer
+          format: int64
+          minimum: 1
+        max_admissions_per_minute:
+          type: integer
+          format: int64
+          minimum: 1
+      description: |
+        The one App-wide admission contract shared by machine and future
+        client-token callers. Both positive values are required. They are
+        authoritative configuration but unenforced until PRD 065.
+    BrowserAccess:
+      type: object
+      additionalProperties: false
+      required: [allowed_origins, invocation_webhook, limits]
+      properties:
+        allowed_origins:
+          type: array
+          minItems: 1
+          maxItems: 16
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+          description: |
+            Canonical exact origins, returned sorted. Wildcards, userinfo,
+            paths, queries, and fragments are invalid. HTTPS is required,
+            except that exact localhost and loopback origins may use HTTP for
+            development. CORS is not emitted until PRD 065.
+        invocation_webhook:
+          $ref: "#/components/schemas/BrowserInvocationWebhook"
+        limits:
+          $ref: "#/components/schemas/BrowserRateLimits"
+      description: |
+        Complete dormant browser-direct configuration. Enabling it requires
+        App default_rate_limits and an active webhook-purpose signing key.
+    BrowserInvocationWebhook:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 2048
+          description: Guarded absolute HTTPS Invocation webhook endpoint.
+        events:
+          type: array
+          minItems: 2
+          maxItems: 3
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/WebhookEvent"
+          description: |
+            Must include invocation.waiting and invocation.ended. Omission
+            selects every current Invocation webhook event.
+    BrowserRateLimits:
+      type: object
+      additionalProperties: false
+      required: [max_concurrent_invocations_per_tenant, max_concurrent_invocations_per_user, max_admissions_per_user_per_minute]
+      properties:
+        max_concurrent_invocations_per_tenant:
+          type: integer
+          format: int64
+          minimum: 1
+        max_concurrent_invocations_per_user:
+          type: integer
+          format: int64
+          minimum: 1
+        max_admissions_per_user_per_minute:
+          type: integer
+          format: int64
+          minimum: 1
+      description: Dormant browser-specific ceilings enforced by PRD 065.
+    ClientKeyID:
+      type: string
+      minLength: 1
+      description: Opaque App client verification-key identifier with the public `ckey_` prefix.
+    CreateClientKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [name, public_key]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Bounded operator-facing display name.
+        public_key:
+          type: string
+          format: byte
+          minLength: 44
+          maxLength: 44
+          description: Standard padded base64 for exactly 32 Ed25519 public-key bytes.
+    ClientKey:
+      type: object
+      additionalProperties: false
+      required: [id, name, fingerprint, created_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/ClientKeyID"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        fingerprint:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{43}$"
+          description: Base64url-without-padding SHA-256 of the raw 32 public-key bytes.
+        created_at:
+          type: string
+          format: date-time
+      description: Public-key metadata only; no key bytes are returned.
+    ClientKeyList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/ClientKey"
     AgentList:
       type: object
       additionalProperties: false
@@ -3526,10 +3827,10 @@ components:
       type: string
       minLength: 1
       description: Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
-    BudgetID:
+    CreditAllocationID:
       type: string
       minLength: 1
-      description: Opaque identifier with the public `budg_` prefix. Treat the body as opaque.
+      description: Opaque identifier with the public `alloc_` prefix. Treat the body as opaque.
     CredentialID:
       type: string
       minLength: 1
@@ -3806,8 +4107,11 @@ components:
       additionalProperties: false
       required: [agent_key, idempotency_key, input]
       description: |
-        The request carries exactly one Agent Definition form: either
-        `agent_definition_id` or an inline `agent_definition` object.
+        Carries exactly one Agent Definition form. Use `agent_definition` for
+        an inline definition owned by this Invocation, or
+        `agent_definition_id` to reuse an App-owned resource. Admission always
+        pins immutable definition bytes; later resource updates affect only
+        future Invocations.
       oneOf:
         - required: [agent_definition]
           not:
@@ -3945,7 +4249,7 @@ components:
             A Session may observe at most 16 distinct names over its lifetime.
             Names are stored and shown to the model with the reserved `app-`
             prefix, which callers must omit here. Context is not part of the
-            Agent Definition and never changes its content-addressed ID.
+            Agent Definition and never advances its revision.
         input:
           $ref: "#/components/schemas/InvocationInput"
         webhook:
@@ -3953,16 +4257,16 @@ components:
         agent_definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
           description: |
-            Reuse an Agent Definition already registered for this App,
-            instead of sending it again. The ID is derived from the Agent
-            Definition's content, so it never points at anything else.
-
-            IDs from another app, or IDs that do not exist, return
-            `agent_definition_not_found`. Cannot be combined with `agent_definition`.
-            Sending the ID and sending the identical definition inline
-            count as the same request when retrying with an idempotency key.
+            Stable resource ID to resolve for this turn. IDs from another App,
+            or IDs that do not exist, return `agent_definition_not_found`.
+            Idempotent replay compares this stable ID and returns the original
+            admitted revision even when the resource has advanced.
         agent_definition:
-          $ref: "#/components/schemas/RegisterAgentDefinitionRequest"
+          $ref: "#/components/schemas/AgentDefinitionWrite"
+          description: |
+            Full definition for this turn. nvoken records an immutable snapshot
+            and returns its generated `agent_definition_id` and revision on the
+            Invocation. Mutually exclusive with `agent_definition_id`.
         mcp_server_headers:
           type: array
           maxItems: 8
@@ -4212,16 +4516,11 @@ components:
         the app's stored key when one exists, else the self-hosted
         installation's environment key (config_byok), else platform funding
         when the installation enables it.
-    BudgetScope:
-      type: string
-      enum: [app, tenant, user, agent, provider_key, credential]
-    CreateBudgetRequest:
+    AllocateCreditsRequest:
       type: object
       additionalProperties: false
-      required: [scope, window_start, window_end, max_estimated_cost_usd, idempotency_key]
+      required: [amount, idempotency_key]
       properties:
-        scope:
-          $ref: "#/components/schemas/BudgetScope"
         tenant_key:
           type: string
           minLength: 1
@@ -4229,105 +4528,43 @@ components:
         default_tenant:
           type: boolean
           default: false
-        user_key:
+        amount:
+          $ref: "#/components/schemas/Money"
+        reference:
           type: string
           minLength: 1
           maxLength: 255
-        agent_id:
-          $ref: "#/components/schemas/AgentID"
-        provider_key_id:
-          $ref: "#/components/schemas/ProviderKeyID"
-        credential_id:
-          $ref: "#/components/schemas/CredentialID"
-        window_start:
-          type: string
-          format: date-time
-          description: Inclusive UTC start.
-        window_end:
-          type: string
-          format: date-time
-          description: Exclusive UTC end.
-        max_estimated_cost_usd:
-          type: number
-          exclusiveMinimum: 0
-          multipleOf: 0.000001
         idempotency_key:
           type: string
           minLength: 1
           maxLength: 255
       description: |
-        The selected scope requires only its identity fields. `app` requires
-        none. `tenant` requires exactly one of `tenant_key` or
-        `default_tenant: true`. `user` also requires `user_key`. `agent`,
-        `provider_key`, and `credential` require `agent_id`,
-        `provider_key_id`, and `credential_id` respectively. A credential ID
-        resolves to its stable rotation family.
-    UpdateBudgetRequest:
+        Select exactly one account with `tenant_key` or
+        `default_tenant: true`. Amount must be positive USD with exactly six
+        fractional digits. The optional reference is host-owned correlation
+        text, not payment-provider state.
+    CreditAccount:
       type: object
       additionalProperties: false
-      required: [max_estimated_cost_usd]
+      required: [tenant_key, allocated, used, held, available, paused_invocations, created_at, updated_at]
       properties:
-        max_estimated_cost_usd:
-          type: number
-          exclusiveMinimum: 0
-          multipleOf: 0.000001
-    Budget:
-      type: object
-      additionalProperties: false
-      required: [id, scope, tenant_key, user_key, agent_id, provider_key_id,
-                 credential_family_id, window_start, window_end,
-                 max_estimated_cost_usd, spent_estimated_cost_usd,
-                 reserved_estimated_cost_usd, available_estimated_cost_usd,
-                 paused_invocations, created_at, updated_at]
-      properties:
-        id:
-          $ref: "#/components/schemas/BudgetID"
-        scope:
-          $ref: "#/components/schemas/BudgetScope"
         tenant_key:
           oneOf:
             - type: string
             - type: "null"
-        user_key:
-          oneOf:
-            - type: string
-            - type: "null"
-        agent_id:
-          oneOf:
-            - $ref: "#/components/schemas/AgentID"
-            - type: "null"
-        provider_key_id:
-          oneOf:
-            - $ref: "#/components/schemas/ProviderKeyID"
-            - type: "null"
-        credential_family_id:
-          oneOf:
-            - $ref: "#/components/schemas/CredentialID"
-            - type: "null"
-          description: Root API credential ID shared by its rotation chain.
-        window_start:
-          type: string
-          format: date-time
-        window_end:
-          type: string
-          format: date-time
-        max_estimated_cost_usd:
-          type: number
-          multipleOf: 0.000001
-        spent_estimated_cost_usd:
-          type: number
-          minimum: 0
-          multipleOf: 0.000001
-        reserved_estimated_cost_usd:
-          type: number
-          minimum: 0
-          multipleOf: 0.000001
-        available_estimated_cost_usd:
-          type: number
-          minimum: 0
-          multipleOf: 0.000001
+          description: Null identifies the App's default tenant.
+        allocated:
+          $ref: "#/components/schemas/Money"
+        used:
+          $ref: "#/components/schemas/Money"
+        held:
+          $ref: "#/components/schemas/Money"
+        available:
+          $ref: "#/components/schemas/Money"
+          description: max(0, allocated - used - held).
         paused_invocations:
           type: integer
+          format: int64
           minimum: 0
         created_at:
           type: string
@@ -4336,33 +4573,74 @@ components:
           type: string
           format: date-time
       description: |
-        What one spending limit has used up so far in its current window.
-        `spent_estimated_cost_usd` is spend from model calls whose cost is final;
-        `reserved_estimated_cost_usd` is spend committed to turns still
-        running; `available_estimated_cost_usd` is what is left. These are
-        nvoken's own running tally for deciding when to stop work — deleting
-        transcripts does not give quota back, and these numbers are an
-        estimate for enforcement, not a bill.
-    BudgetList:
+        One tenant's persistent, non-expiring spending capacity. These exact
+        USD counters are enforcement facts, not an invoice or payment record.
+        Deleting runtime transcripts never restores used credits.
+    CreditAllocation:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_key, amount, reference, created_by, created_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/CreditAllocationID"
+        tenant_key:
+          oneOf:
+            - type: string
+            - type: "null"
+          description: Null identifies the App's default tenant.
+        amount:
+          $ref: "#/components/schemas/Money"
+        reference:
+          oneOf:
+            - type: string
+            - type: "null"
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      description: |
+        One append-only addition to a tenant's credit account. Allocations are
+        never rewritten or deleted by this API.
+    AllocateCreditsResult:
+      type: object
+      additionalProperties: false
+      required: [allocation, account]
+      properties:
+        allocation:
+          $ref: "#/components/schemas/CreditAllocation"
+        account:
+          $ref: "#/components/schemas/CreditAccount"
+    CreditAccountList:
       type: object
       additionalProperties: false
       required: [items, next_cursor]
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/Budget" }
+          items: { $ref: "#/components/schemas/CreditAccount" }
         next_cursor:
           type: [string, "null"]
-    BudgetBlock:
+    CreditAllocationList:
       type: object
       additionalProperties: false
-      required: [id, scope]
+      required: [items, next_cursor]
       properties:
-        id:
-          $ref: "#/components/schemas/BudgetID"
-        scope:
-          $ref: "#/components/schemas/BudgetScope"
-      description: Exact first-class Budget that refused or paused work.
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CreditAllocation" }
+        next_cursor:
+          type: [string, "null"]
+    CreditBlock:
+      type: object
+      additionalProperties: false
+      required: [tenant_key]
+      properties:
+        tenant_key:
+          oneOf:
+            - type: string
+            - type: "null"
+          description: Account that could not fund the next provider attempt; null means the App's default tenant.
     ProviderStaticKey:
       type: object
       additionalProperties: false
@@ -4527,6 +4805,9 @@ components:
     ProviderKeySource:
       type: string
       enum: [caller_ephemeral, app_byok, tenant_byok, platform, config_byok]
+    AuthenticationMethod:
+      type: string
+      enum: [api_key, issuer_token, client_token, unknown]
     Money:
       type: object
       additionalProperties: false
@@ -4619,7 +4900,7 @@ components:
         end_at: { type: string, format: date-time }
         interval: { $ref: "#/components/schemas/UsageInterval" }
         timezone: { type: string }
-        group_by: { type: string, enum: [tenant_key, agent_id, model, tool_name] }
+        group_by: { type: string, enum: [tenant_key, agent_id, model, tool_name, authentication_method] }
         totals: { $ref: "#/components/schemas/UsageMetrics" }
         buckets:
           type: array
@@ -4648,7 +4929,7 @@ components:
     ModelCallRecord:
       type: object
       additionalProperties: false
-      required: [id, invocation_id, session_id, app_id, tenant_key, user_key, agent_id, credential_family_id, provider_key_source, provider_key_id, provider_key_version_id, call_kind, call_ordinal, lease_attempt, provider_attempt_ordinal, requested_provider, requested_model, served_provider, served_model, status, outcome, failure_class, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, reasoning_tokens, model_cost, cost_coverage, max_cost_at_risk, pricing_version, created_at, started_at, first_output_at, settled_at]
+      required: [id, invocation_id, session_id, app_id, tenant_key, user_key, agent_id, credential_family_id, authentication_method, provider_key_source, provider_key_id, provider_key_version_id, call_kind, call_ordinal, lease_attempt, provider_attempt_ordinal, requested_provider, requested_model, served_provider, served_model, status, outcome, failure_class, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, reasoning_tokens, model_cost, cost_coverage, max_cost_at_risk, pricing_version, created_at, started_at, first_output_at, settled_at]
       properties:
         id: { type: string, description: Opaque model-call fact ID with the mcall_ prefix. }
         invocation_id: { type: [string, "null"] }
@@ -4658,6 +4939,10 @@ components:
         user_key: { type: [string, "null"], description: Null after user erasure. }
         agent_id: { type: [string, "null"] }
         credential_family_id: { type: [string, "null"] }
+        authentication_method:
+          oneOf:
+            - $ref: "#/components/schemas/AuthenticationMethod"
+            - type: "null"
         provider_key_source: { $ref: "#/components/schemas/ProviderKeySource" }
         provider_key_id: { type: [string, "null"] }
         provider_key_version_id: { type: [string, "null"] }
@@ -4881,8 +5166,8 @@ components:
     AgentDefinitionID:
       type: string
       minLength: 1
-      description: Content-addressed Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-    RegisterAgentDefinitionRequest:
+      description: Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+    AgentDefinitionWrite:
       type: object
       additionalProperties: false
       required: [model]
@@ -4919,19 +5204,11 @@ components:
           maxItems: 4
           items:
             $ref: "#/components/schemas/ProviderTool"
+        client_interface:
+          $ref: "#/components/schemas/ClientInterface"
       description: |
-        One Agent Definition accepted by registration or nested under
-        `agent_definition` during Invocation creation. The model string shorthand
-        is accepted on write; the resolved Agent Definition returns object form.
-    AgentDefinitionRegistration:
-      type: object
-      additionalProperties: false
-      required: [agent_definition_id, agent_definition]
-      properties:
-        agent_definition_id:
-          $ref: "#/components/schemas/AgentDefinitionID"
-        agent_definition:
-          $ref: "#/components/schemas/AgentDefinition"
+        Complete writable Agent Definition fields. The model string shorthand
+        is accepted on write. Identity, revision, and timestamps are read-only.
     AgentDefinition:
       type: object
       additionalProperties: false
@@ -4968,14 +5245,12 @@ components:
           maxItems: 4
           items:
             $ref: "#/components/schemas/ProviderTool"
+        client_interface:
+          $ref: "#/components/schemas/ClientInterface"
       description: |
-        Immutable Agent Definition returned by registration and detailed
-        Invocation reads. The host owns the configuration and nvoken only records
-        the Agent Definition each turn ran with. Invocation creation nests these
-        execution fields under `agent_definition`; nvoken stores one immutable
-        Agent Definition and re-reads it unchanged on every model
-        iteration and recovery. Two registrations and Invocations with
-        byte-identical execution fields share one Agent Definition.
+        Immutable Agent Definition fields admitted by one Invocation. Detailed
+        Invocation reads nest these fields under `agent_definition`; the stable
+        resource ID and admitted revision remain top-level.
         Identity, session selection, input, idempotency, `if_active`, `webhook`,
         metadata, and provider key selection are durable elsewhere and
         never appear here. Invocation admission for callback declarations
@@ -4983,6 +5258,97 @@ components:
         headers are encrypted outside this Agent Definition and never returned.
         Tools or structured output require at least two model iterations;
         omission resolves to three or the lower installation maximum.
+    ClientInterface:
+      type: object
+      additionalProperties: false
+      properties:
+        context_names:
+          type: array
+          maxItems: 16
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: "^[a-z][a-z0-9-]*$"
+          description: |
+            Exact recorded-context names a future client-token principal may
+            append or supersede. Every item is contextual tier; clients never
+            author operator-tier context.
+        tool_names:
+          type: array
+          maxItems: 32
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: "^[A-Za-z0-9_-]+$"
+          description: |
+            Exact subset of this definition's declared host-mode tools whose
+            parked calls a future client-token principal may see and settle.
+      description: |
+        One immutable definition-specific authorization object. Omission means
+        the definition is not client-token-capable; an explicit empty object
+        opts in with no client-authored context or tools. Each set is sorted
+        before a revision snapshot is retained, so order alone cannot advance
+        a resource revision.
+
+        This object grants authorship and settlement only, never selective read
+        visibility. All public transcript content in a browser-reachable
+        Session, including operator-tier recorded context, must be treated as
+        client-visible. No lifetime, host_only, wildcard, generic tool-policy,
+        tier-switch, or disclosure field exists here. The object remains
+        dormant until PRD 065.
+    AgentDefinitionResource:
+      type: object
+      additionalProperties: false
+      required: [id, revision, model, created_at, updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/AgentDefinitionID"
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+        instructions:
+          type: string
+          minLength: 1
+        model:
+          $ref: "#/components/schemas/Model"
+        sampling:
+          $ref: "#/components/schemas/Sampling"
+        reasoning:
+          $ref: "#/components/schemas/Reasoning"
+        tool_choice:
+          $ref: "#/components/schemas/ToolChoice"
+        limits:
+          $ref: "#/components/schemas/Limits"
+        output_schema:
+          $ref: "#/components/schemas/OutputSchema"
+        tools:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/ToolDeclaration"
+        mcp_servers:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/MCPServer"
+        provider_tools:
+          type: array
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/ProviderTool"
+        created_at:
+          type: string
+          format: date-time
+        client_interface:
+          $ref: "#/components/schemas/ClientInterface"
+        updated_at:
+          type: string
+          format: date-time
     Sampling:
       type: object
       additionalProperties: false
@@ -5045,13 +5411,6 @@ components:
           $ref: "#/components/schemas/CompactionPolicy"
         retention:
           $ref: "#/components/schemas/RetentionPolicy"
-        max_estimated_cost_usd:
-          type: number
-          exclusiveMinimum: 0
-          multipleOf: 0.000001
-          description: |
-            Lifetime estimated-list-price cap across model calls committed to
-            this Session. This is a Session setting, not a Budget resource.
         metadata:
           $ref: "#/components/schemas/Metadata"
       description: |
@@ -5084,16 +5443,6 @@ components:
             Metadata merge patch. A string value sets the key, `null` deletes
             it, and an absent key is left alone. Bounds are enforced on the
             merged result.
-        max_estimated_cost_usd:
-          oneOf:
-            - type: number
-              exclusiveMinimum: 0
-              multipleOf: 0.000001
-            - type: "null"
-          description: |
-            Replaces the Session lifetime cost cap; null removes it. A finite
-            cap may not be lower than estimated cost already consumed. Raising
-            or removing it atomically requeues a turn paused on it.
     Metadata:
       type: object
       additionalProperties:
@@ -5597,8 +5946,7 @@ components:
             It does not reserve funds and is not a bill.
 
             The model must have a known price. If it does not, the turn fails
-            with `budget_exceeded` and
-            `details.kind = estimated_cost_unavailable` — and where nvoken can
+            with `cost_estimate_unavailable` — and where nvoken can
             tell in advance, it refuses before calling the provider at all, so
             you are not charged for a turn it cannot police.
 
@@ -5677,15 +6025,15 @@ components:
         restart it after an interruption; `attempt` tells the two apart, and
         the `revision` on each stream update tells you their order.
 
-        `paused` means an opt-in spending limit stopped the turn but left it
+        `paused` means a spending limit stopped the turn but left it
         resumable. Nothing is executing, and its deadlines are on hold, so a
-        turn cannot expire while you decide. Raise the turn's limit, or raise
-        or remove the Session cost cap, and it continues. It still accepts
-        interrupt, cancel, and nudge.
+        turn cannot expire while you decide. Raise the turn's limit or add
+        credits to the blocked tenant account and it continues. It still
+        accepts interrupt, cancel, and nudge.
     InvocationStopReason:
       type: string
       enum: [end_turn, interrupted, max_iterations, deadline,
-             max_output_tokens, max_estimated_cost, session_max_estimated_cost, shared_budget]
+             max_output_tokens, max_estimated_cost, insufficient_credits]
       description: |
         Why a turn stopped. Set on turns that did not fail, and which values
         can appear depends on the status.
@@ -5693,10 +6041,10 @@ components:
         A `completed` turn carries `end_turn` (the model finished on its own)
         or `interrupted` (you asked it to stop, and it stopped at the next
         clean point). An `incomplete` turn carries whichever limit ran out:
-        `max_iterations`, `deadline`, `max_output_tokens`,
-        `max_estimated_cost`, `session_max_estimated_cost`, or `shared_budget`. A `paused`
-        turn carries one of the spending limits, never `deadline`, because a
-        paused turn's deadlines are on hold.
+        `max_iterations`, `deadline`, `max_output_tokens`, or
+        `max_estimated_cost`. A `paused` turn carries `max_estimated_cost` or
+        `insufficient_credits`, never `deadline`, because a paused turn's
+        deadlines are on hold.
 
         An interrupt is deliberately `completed` rather than `incomplete`: you
         asked the turn to end there, so ending there is the result you wanted,
@@ -5706,7 +6054,7 @@ components:
     Invocation:
       type: object
       additionalProperties: false
-      required: [id, agent_id, session_id, user_key, agent_definition_id, agent_definition, context, status, stop_reason, blocking_budget,
+      required: [id, agent_id, session_id, user_key, agent_definition_id, agent_definition_revision, agent_definition, context, status, stop_reason, credit_block,
                  attempt, error, usage,
                  provenance, structured_output, structured_output_provenance,
                  metadata, limits, active_execution_ms, deadline_at,
@@ -5729,6 +6077,11 @@ components:
             user's data away from another.
         agent_definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
+        agent_definition_revision:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Immutable Agent Definition revision admitted for this turn.
         agent_definition:
           oneOf:
             - $ref: "#/components/schemas/AgentDefinition"
@@ -5739,7 +6092,8 @@ components:
             servers are never stored and never appear here.
 
             Present on `GET /v1/invocations/{id}` and on the result. Null in list
-            items, where `agent_definition_id` identifies it instead.
+            items, where `agent_definition_id` and `agent_definition_revision`
+            identify it instead.
         context:
           oneOf:
             - type: array
@@ -5770,11 +6124,11 @@ components:
             `incomplete`, and `paused`; null on every other status — a failure
             keeps `error` as the authority. Treat an unrecognized value as an
             ordinary end.
-        blocking_budget:
+        credit_block:
           oneOf:
-            - $ref: "#/components/schemas/BudgetBlock"
+            - $ref: "#/components/schemas/CreditBlock"
             - type: "null"
-          description: Exact first-class Budget for a shared-budget stop, otherwise null.
+          description: Tenant credit account for an insufficient-credits stop, otherwise null.
         attempt:
           type: integer
           minimum: 0
@@ -5891,6 +6245,80 @@ components:
             Non-null only when the turn completed and produced at least one piece
             of text. Failed and cancelled turns leave it null even if some text was
             produced, so read the messages directly if you need those.
+    ClientInvocation:
+      type: object
+      additionalProperties: false
+      required: [id, session_id, agent_definition_id, agent_definition_revision, status, stop_reason, attempt, error, structured_output, active_execution_ms, deadline_at, created_at, updated_at, ended_at]
+      properties:
+        id: { $ref: "#/components/schemas/InvocationID" }
+        session_id: { $ref: "#/components/schemas/SessionID" }
+        agent_definition_id: { $ref: "#/components/schemas/AgentDefinitionID" }
+        agent_definition_revision: { type: integer, minimum: 1 }
+        deduplicated: { type: boolean, description: Present only on Invocation admission. }
+        status: { $ref: "#/components/schemas/InvocationStatus" }
+        stop_reason:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationStopReason"
+            - type: "null"
+        attempt: { type: integer, minimum: 0 }
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/ClientInvocationFailure"
+            - type: "null"
+        structured_output:
+          oneOf:
+            - { type: object, additionalProperties: true }
+            - type: "null"
+        active_execution_ms: { type: integer, minimum: 0 }
+        deadline_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        pending_tool_calls:
+          type: array
+          items: { $ref: "#/components/schemas/PendingHostToolCall" }
+          description: Only eligible named host-mode tools declared by the admitted definition.
+      description: Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
+    ClientInvocationFailure:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+    ClientInvocationList:
+      type: object
+      additionalProperties: false
+      required: [items, has_more, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ClientInvocation" }
+        has_more: { type: boolean }
+        next_cursor: { type: [string, "null"] }
+    ClientInvocationResult:
+      type: object
+      additionalProperties: false
+      required: [invocation, messages, output_text]
+      properties:
+        invocation: { $ref: "#/components/schemas/ClientInvocation" }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/ClientSessionMessage" }
+        output_text: { type: [string, "null"] }
+    InvocationResponse:
+      description: Trusted machine projection or the smaller projection selected by client-token authentication.
+      oneOf:
+        - $ref: "#/components/schemas/Invocation"
+        - $ref: "#/components/schemas/ClientInvocation"
+    InvocationListResponse:
+      oneOf:
+        - $ref: "#/components/schemas/InvocationList"
+        - $ref: "#/components/schemas/ClientInvocationList"
+    InvocationResultResponse:
+      oneOf:
+        - $ref: "#/components/schemas/InvocationResult"
+        - $ref: "#/components/schemas/ClientInvocationResult"
     ModelUsage:
       type: object
       additionalProperties: false
@@ -6236,6 +6664,7 @@ components:
           enum:
             - deadline_exceeded
             - budget_exceeded
+            - cost_estimate_unavailable
             - provider_key_unavailable
             - context_window_exceeded
             - input_media_rejected
@@ -6261,13 +6690,12 @@ components:
         - `deadline_exceeded` sets `details.scope` to the deadline that ran
           out: `total`, `active_execution`, `execution_segment`, or `waiting`.
         - `budget_exceeded` sets `details.kind` to the limit the turn went
-          over: `output_tokens`, `estimated_cost`, or
-          `estimated_cost_unavailable`. A limit only shows up as a failure
+          over: `output_tokens` or `estimated_cost`. A limit only shows up as a failure
           when the turn could not stop cleanly; when it could, the turn ends
           `incomplete` with a matching `stop_reason` instead.
-          `estimated_cost_unavailable` always means failure, and it does not
+        - `cost_estimate_unavailable` does not
           mean you overspent — it means nvoken has no price for the model and
-          so cannot enforce the cost limit you set.
+          so cannot enforce mandatory credits or the cost limit you set.
         - `structured_output_unsatisfied` sets `details.reason` to `missing`,
           `invalid`, or `oversized`.
         - `context_window_exceeded` sets the integer keys `input_tokens`,
@@ -6352,7 +6780,7 @@ components:
     Session:
       type: object
       additionalProperties: false
-      required: [id, agent_id, tenant_key, session_key, user_key, forked_from, compaction, retention, max_estimated_cost_usd, expires_at, metadata, active_invocation_id, active_invocation_status, blocking_budget, context, usage, created_at, updated_at]
+      required: [id, agent_id, tenant_key, session_key, user_key, forked_from, compaction, retention, expires_at, metadata, active_invocation_id, active_invocation_status, credit_block, context, usage, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/SessionID"
@@ -6404,13 +6832,6 @@ components:
             when it is retained until deleted explicitly. A window outside the
             supported range is refused at creation rather than clamped, so
             what is read back is always exactly what applies.
-        max_estimated_cost_usd:
-          oneOf:
-            - type: number
-              exclusiveMinimum: 0
-              multipleOf: 0.000001
-            - type: "null"
-          description: The current mutable Session lifetime estimated-cost cap.
         expires_at:
           oneOf:
             - type: string
@@ -6440,11 +6861,11 @@ components:
               enum: [queued, running, waiting, paused]
             - type: "null"
           description: Status of active_invocation_id; null exactly when that ID is null.
-        blocking_budget:
+        credit_block:
           oneOf:
-            - $ref: "#/components/schemas/BudgetBlock"
+            - $ref: "#/components/schemas/CreditBlock"
             - type: "null"
-          description: First-class Budget blocking the active paused Invocation, otherwise null.
+          description: Tenant credit account blocking the active paused Invocation, otherwise null.
         context:
           oneOf:
             - $ref: "#/components/schemas/SessionContext"
@@ -6500,6 +6921,44 @@ components:
           oneOf:
             - type: string
             - type: "null"
+    ClientSession:
+      type: object
+      additionalProperties: false
+      required: [id, active_invocation_id, active_invocation_status, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/SessionID" }
+        active_invocation_id:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationID"
+            - type: "null"
+        active_invocation_status:
+          oneOf:
+            - { type: string, enum: [queued, running, waiting, paused] }
+            - type: "null"
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        pending_tool_calls:
+          type: array
+          items: { $ref: "#/components/schemas/PendingHostToolCall" }
+      description: Closed browser projection. Session keys, Agent/user/tenant identifiers, lineage, policies, cost settings, metadata, usage, budget, and derived host context are omitted.
+    ClientSessionList:
+      type: object
+      additionalProperties: false
+      required: [items, has_more, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ClientSession" }
+        has_more: { type: boolean }
+        next_cursor: { type: [string, "null"] }
+    SessionResponse:
+      oneOf:
+        - $ref: "#/components/schemas/Session"
+        - $ref: "#/components/schemas/ClientSession"
+    SessionListResponse:
+      oneOf:
+        - $ref: "#/components/schemas/SessionList"
+        - $ref: "#/components/schemas/ClientSessionList"
     SessionMessageRole:
       type: string
       enum: [system, user, assistant, tool]
@@ -6842,6 +7301,39 @@ components:
         created_at:
           type: string
           format: date-time
+    ClientSessionMessage:
+      type: object
+      additionalProperties: false
+      required: [id, session_id, invocation_id, sequence, role, content, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/SessionMessageID" }
+        session_id: { $ref: "#/components/schemas/SessionID" }
+        invocation_id:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationID"
+            - type: "null"
+        sequence: { type: integer, format: int64, minimum: 1 }
+        role: { $ref: "#/components/schemas/SessionMessageRole" }
+        content:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/SessionContentBlock" }
+        created_at: { type: string, format: date-time }
+      description: Public transcript content without Agent/user identity, runtime phase, copy origin, or host provenance.
+    ClientSessionMessageList:
+      type: object
+      additionalProperties: false
+      required: [items, has_more, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ClientSessionMessage" }
+        has_more: { type: boolean }
+        next_cursor: { type: [string, "null"] }
+    SessionMessageListResponse:
+      oneOf:
+        - $ref: "#/components/schemas/SessionMessageList"
+        - $ref: "#/components/schemas/ClientSessionMessageList"
     MessagePhase:
       type: string
       enum: [commentary, final_answer]
@@ -7101,6 +7593,42 @@ components:
           oneOf:
             - type: string
             - type: "null"
+    ClientInvocationChange:
+      type: object
+      additionalProperties: false
+      required: [invocation_id, revision, status, through_message_sequence, error, structured_output, occurred_at]
+      properties:
+        invocation_id: { $ref: "#/components/schemas/InvocationID" }
+        revision: { type: integer, format: int64, minimum: 1 }
+        status: { $ref: "#/components/schemas/InvocationStatus" }
+        through_message_sequence: { type: [integer, "null"], format: int64, minimum: 1 }
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/ClientInvocationFailure"
+            - type: "null"
+        structured_output:
+          oneOf:
+            - { type: object, additionalProperties: true }
+            - type: "null"
+        occurred_at: { type: string, format: date-time }
+    ClientTranscriptSnapshot:
+      type: object
+      additionalProperties: false
+      required: [messages, invocation_changes, has_more, resume_cursor, next_page_token]
+      properties:
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/ClientSessionMessage" }
+        invocation_changes:
+          type: array
+          items: { $ref: "#/components/schemas/ClientInvocationChange" }
+        has_more: { type: boolean }
+        resume_cursor: { type: string, minLength: 1 }
+        next_page_token: { type: [string, "null"] }
+    TranscriptSnapshotResponse:
+      oneOf:
+        - $ref: "#/components/schemas/TranscriptSnapshot"
+        - $ref: "#/components/schemas/ClientTranscriptSnapshot"
     TranscriptUpdate:
       type: object
       additionalProperties: false
@@ -7124,6 +7652,20 @@ components:
           type: string
           minLength: 1
           description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
+    ClientTranscriptUpdate:
+      type: object
+      additionalProperties: false
+      required: [type, session_id, messages, invocation_changes, resume_cursor]
+      properties:
+        type: { type: string, const: transcript.update }
+        session_id: { $ref: "#/components/schemas/SessionID" }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/ClientSessionMessage" }
+        invocation_changes:
+          type: array
+          items: { $ref: "#/components/schemas/ClientInvocationChange" }
+        resume_cursor: { type: string, minLength: 1 }
     OutputTextDeltaEvent:
       type: object
       additionalProperties: false
@@ -7246,6 +7788,17 @@ components:
         - $ref: "#/components/schemas/ThinkingDeltaEvent"
         - $ref: "#/components/schemas/StreamResyncEvent"
         - $ref: "#/components/schemas/StreamEndEvent"
+    ClientTranscriptStreamEvent:
+      description: Browser stream event. Thinking previews and host-only transcript fields are never emitted.
+      oneOf:
+        - $ref: "#/components/schemas/ClientTranscriptUpdate"
+        - $ref: "#/components/schemas/OutputTextDeltaEvent"
+        - $ref: "#/components/schemas/StreamResyncEvent"
+        - $ref: "#/components/schemas/StreamEndEvent"
+    TranscriptStreamResponse:
+      oneOf:
+        - $ref: "#/components/schemas/TranscriptStreamEvent"
+        - $ref: "#/components/schemas/ClientTranscriptStreamEvent"
     InvocationAcceptedEvent:
       type: object
       additionalProperties: false
@@ -7277,6 +7830,17 @@ components:
             can see what you got without a second request — worth checking when you
             left `max_iterations` out, since the default may be lower than you
             expect.
+    ClientInvocationAcceptedEvent:
+      type: object
+      additionalProperties: false
+      required: [type, session_id, invocation_id, status, deduplicated, deadline_at]
+      properties:
+        type: { type: string, const: invocation.accepted }
+        session_id: { $ref: "#/components/schemas/SessionID" }
+        invocation_id: { $ref: "#/components/schemas/InvocationID" }
+        status: { $ref: "#/components/schemas/InvocationStatus" }
+        deduplicated: { type: boolean }
+        deadline_at: { type: string, format: date-time }
     InvocationUpdateEvent:
       type: object
       additionalProperties: false
@@ -7296,6 +7860,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SessionMessage"
+    ClientInvocationUpdateEvent:
+      type: object
+      additionalProperties: false
+      required: [type, session_id, invocation_id, invocation, new_messages]
+      properties:
+        type: { type: string, const: invocation.update }
+        session_id: { $ref: "#/components/schemas/SessionID" }
+        invocation_id: { $ref: "#/components/schemas/InvocationID" }
+        invocation: { $ref: "#/components/schemas/ClientInvocation" }
+        new_messages:
+          type: array
+          items: { $ref: "#/components/schemas/ClientSessionMessage" }
     InvocationResultEvent:
       type: object
       additionalProperties: false
@@ -7311,6 +7887,15 @@ components:
           $ref: "#/components/schemas/InvocationID"
         result:
           $ref: "#/components/schemas/InvocationResult"
+    ClientInvocationResultEvent:
+      type: object
+      additionalProperties: false
+      required: [type, session_id, invocation_id, result]
+      properties:
+        type: { type: string, const: invocation.result }
+        session_id: { $ref: "#/components/schemas/SessionID" }
+        invocation_id: { $ref: "#/components/schemas/InvocationID" }
+        result: { $ref: "#/components/schemas/ClientInvocationResult" }
     InvocationStreamEvent:
       description: |
         Typed event from one Invocation stream. A minimal consumer prints
@@ -7323,11 +7908,26 @@ components:
         - $ref: "#/components/schemas/InvocationResultEvent"
         - $ref: "#/components/schemas/StreamResyncEvent"
         - $ref: "#/components/schemas/StreamEndEvent"
+    ClientInvocationStreamEvent:
+      description: Browser Invocation stream event. Thinking previews and host-only fields are never emitted.
+      oneOf:
+        - $ref: "#/components/schemas/ClientInvocationAcceptedEvent"
+        - $ref: "#/components/schemas/OutputTextDeltaEvent"
+        - $ref: "#/components/schemas/ClientInvocationUpdateEvent"
+        - $ref: "#/components/schemas/ClientInvocationResultEvent"
+        - $ref: "#/components/schemas/StreamResyncEvent"
+        - $ref: "#/components/schemas/StreamEndEvent"
+    InvocationStreamResponse:
+      oneOf:
+        - $ref: "#/components/schemas/InvocationStreamEvent"
+        - $ref: "#/components/schemas/ClientInvocationStreamEvent"
     ErrorCode:
       type: string
       enum:
         - invalid_request
         - agent_definition_not_found
+        - agent_definition_revision_conflict
+        - precondition_required
         - media_fetch_failed
         - model_retired
         - unauthenticated
@@ -7340,7 +7940,8 @@ components:
         - invocation_not_waiting
         - invocation_not_paused
         - budget_exceeded
-        - budget_conflict
+        - insufficient_credits
+        - cost_estimate_unavailable
         - tool_result_conflict
         - tool_result_expired
         - mcp_discovery_failed
@@ -7369,7 +7970,7 @@ components:
         execution and cannot be selected for an Org credential.
     Operation:
       type: string
-      enum: [create_invocation, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_budgets, write_budgets, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
+      enum: [create_invocation, create_agent_definition, get_agent_definition, update_agent_definition, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, interrupt_invocation, manage_invocation_nudges, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_credits, allocate_credits, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
     CredentialStatus:
       type: string
       enum: [active, revoked]
@@ -7535,6 +8136,34 @@ components:
             assurance:
               type: string
               const: bearer
+    ClientCurrentIdentity:
+      type: object
+      additionalProperties: false
+      required: [authentication]
+      properties:
+        authentication:
+          type: object
+          additionalProperties: false
+          required: [app_id, tenant_key, agent_key, agent_definition_id, agent_definition_revision, session_id, operations, method, assurance]
+          properties:
+            app_id: { $ref: "#/components/schemas/AppID" }
+            tenant_key: { type: string }
+            agent_key: { type: string }
+            agent_definition_id: { $ref: "#/components/schemas/AgentDefinitionID" }
+            agent_definition_revision: { type: integer, minimum: 1 }
+            session_id:
+              oneOf:
+                - $ref: "#/components/schemas/SessionID"
+                - type: "null"
+            operations:
+              type: array
+              items: { $ref: "#/components/schemas/Operation" }
+            method: { type: string, const: client_token }
+            assurance: { type: string, const: bearer }
+    CurrentIdentityResponse:
+      oneOf:
+        - $ref: "#/components/schemas/CurrentIdentity"
+        - $ref: "#/components/schemas/ClientCurrentIdentity"
   responses:
     InvalidRequest:
       description: The request is invalid or contains a deferred field.
@@ -7589,7 +8218,7 @@ components:
             message: The Invocation is not paused on a turn-level budget.
             request_id: req_01K0NVB0QFQP0YNSVD3CB7E97S
     RateLimited:
-      description: The deployment ingress rate limited the request; nvoken has no per-app quota yet.
+      description: A durable App, tenant, or opaque-user admission limit refused fresh work, or deployment ingress rate limited the request. No Invocation is created.
       headers:
         Retry-After:
           schema:

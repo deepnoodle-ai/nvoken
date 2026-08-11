@@ -3,7 +3,7 @@
 An Invocation is one durable agent turn. The host supplies `agent_key`,
 optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
 model, and tools travel with the turn as an `agent_definition`, either inline or
-referenced by a registered `agent_definition_id`.
+referenced by a reusable `agent_definition_id`.
 
 The package has three deliberate levels:
 
@@ -253,29 +253,28 @@ Sending the definition inline is the ordinary path. Register it instead when
 many turns share one configuration and you would rather send a short ID:
 
 ```python
-registration = await client.register_agent_definition(AgentDefinition(
+resource = await client.create_agent_definition(AgentDefinition(
     instructions="Help with billing questions.",
     model=Model(provider="anthropic", id="claude-sonnet-5"),
-))
+), idempotency_key="support-definition-v1")
 
 handle = await client.invoke(InvokeRequest(
     agent_key="support",
     input="Why was I charged twice?",
-    agent_definition_id=registration.agent_definition_id,
+    agent_definition_id=resource.id,
 ))
 ```
 
-A definition is content-addressed and immutable, so registering the same one
-twice returns the same `agent_definition_id`, and so does registering one an
-earlier inline turn already stored. Registering starts no turn and creates no
-Agent, Session, or message. There is no list, update, or delete: to change a
-definition, register the new one and reference that.
+Creating a definition starts no turn and creates no Agent, Session, or message.
+The resource has a stable ID and an increasing revision. Use
+`get_agent_definition()` and `update_agent_definition()` to read and replace
+it. An idempotency key makes create retries safe; equal content under another
+key creates an independent resource.
 
 Supply exactly one of `agent_definition` and `agent_definition_id`; the facade
-rejects a request carrying both or neither before it reaches the network. An
-`Agent` always sends its definition inline, because it serves the host tool
-handlers declared in it, which is why `AgentOptions` spells the definition's
-fields flat rather than nesting them: there is no choice there to express.
+rejects a request carrying both or neither before it reaches the network.
+`AgentOptions` supports the same choice; host tool handlers remain local when a
+reusable resource supplies the declarations.
 
 ## Record changing application state
 
@@ -344,8 +343,8 @@ request = InvokeRequest(
 )
 ```
 
-The declaration carries no secrets. An Agent Definition is content-addressed and
-reused across turns, so authentication headers travel per Invocation in
+The declaration carries no secrets. An Agent Definition may be reused across
+turns, so authentication headers travel per Invocation in
 `mcp_server_headers`, keyed to the server name. They are hidden from dataclass
 representation, are one-Invocation secret material, and never appear in durable
 Agent Definitions or public recovery surfaces.

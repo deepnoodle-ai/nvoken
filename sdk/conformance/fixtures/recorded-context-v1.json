@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Recorded application context is per-Invocation Session history, not part of the content-addressed Agent Definition. It travels at the top level of a create request, the Invocation echoes the accepted pre-deduplication list, and the transcript stores each snapshot as a typed reminder block.",
+  "note": "Recorded application context is per-Invocation Session history, not part of the Agent Definition. It travels at the top level of a create request, the Invocation echoes the accepted pre-deduplication list, and the transcript stores each snapshot as a typed reminder block.",
   "limits": {
     "items": 8,
     "name_characters": 64,

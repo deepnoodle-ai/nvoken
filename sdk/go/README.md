@@ -3,7 +3,7 @@
 An Invocation is one durable agent turn. The host supplies `agent_key`,
 optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
 model, and tools travel with the turn as an `AgentDefinition`, either inline or
-referenced by a registered `AgentDefinitionID`.
+referenced by a reusable `AgentDefinitionID`.
 
 The package has three deliberate levels:
 
@@ -228,32 +228,34 @@ Sending the definition inline is the ordinary path. Register it instead when
 many turns share one configuration and you would rather send a short ID:
 
 ```go
-registration, err := client.RegisterAgentDefinition(ctx, nvoken.AgentDefinition{
-	Instructions: "Help with billing questions.",
-	Model: nvoken.Model{
-		Provider: "anthropic",
-		ID:       "claude-sonnet-5",
+resource, err := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionInput{
+	IdempotencyKey: "support-definition-v1",
+	Definition: nvoken.AgentDefinition{
+		Instructions: "Help with billing questions.",
+		Model: nvoken.Model{
+			Provider: "anthropic",
+			ID:       "claude-sonnet-5",
+		},
 	},
 })
 
 handle, err := client.Invoke(ctx, nvoken.InvokeRequest{
 	AgentKey:          "support",
 	Input:             "Why was I charged twice?",
-	AgentDefinitionID: registration.AgentDefinitionID,
+	AgentDefinitionID: resource.ID,
 })
 ```
 
-A definition is content-addressed and immutable, so registering the same one
-twice returns the same `AgentDefinitionID`, and so does registering one an
-earlier inline turn already stored. Registering starts no turn and creates no
-Agent, Session, or message. There is no list, update, or delete: to change a
-definition, register the new one and reference that.
+Creating a definition starts no turn and creates no Agent, Session, or message.
+The resource has a stable ID and an increasing revision. Read it with
+`GetAgentDefinition`; replace its configuration with `UpdateAgentDefinition`
+and the revision you last read. An idempotency key makes create retries safe,
+while equal content under another key creates an independent resource.
 
 Supply exactly one of `AgentDefinition` and `AgentDefinitionID`; the facade
-rejects a request carrying both or neither before it reaches the network. An
-`Agent` always sends its definition inline, because it serves the host tool
-handlers declared in it, which is why `AgentOptions` spells the definition's
-fields flat rather than nesting them: there is no choice there to express.
+rejects a request carrying both or neither before it reaches the network.
+`AgentOptions` supports the same choice. Host tool handlers remain local even
+when the server resolves the matching declarations from a reusable resource.
 
 ## Record changing application state
 
@@ -314,8 +316,8 @@ request.MCPServerHeaders = []nvoken.MCPServerHeaders{{
 handle, err := client.Invoke(ctx, request)
 ```
 
-The declaration carries no secrets. An Agent Definition is content-addressed and
-reused across turns, so authentication headers travel per Invocation in
+The declaration carries no secrets. An Agent Definition may be reused across
+turns, so authentication headers travel per Invocation in
 `MCPServerHeaders`, keyed to the server name. They are one-Invocation secret
 material and never appear in durable Agent Definitions or public reads. The
 [recovery example](examples/mcp-recovery/README.md) exercises discovery,

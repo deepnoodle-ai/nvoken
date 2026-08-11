@@ -116,7 +116,7 @@ func run(ctx context.Context) error {
 		URL:          mcpURL,
 		AllowedTools: []string{"lookup"},
 	}
-	// The server declaration is part of a content-addressed Agent Definition, so
+	// The server declaration may be durable Agent Definition configuration, so
 	// the bearer token travels beside it rather than inside it.
 	headers := map[string]string{"Authorization": "Bearer " + token}
 	catalog, err := client.ListMCPTools(ctx, server, headers)

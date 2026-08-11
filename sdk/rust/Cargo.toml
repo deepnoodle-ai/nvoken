@@ -1,6 +1,6 @@
 [package]
 name = "nvoken"
-version = "0.13.0"
+version = "0.14.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Rust SDK for the nvoken durable agent runtime"
@@ -28,7 +28,7 @@ reqwest-middleware = { version = "0.5.2", features = ["json", "query"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 serde_repr = "0.1.20"
-serde_with = "3.15.1"
+serde_with = { version = "3.15.1", features = ["base64"] }
 sha2 = "0.10.9"
 thiserror = "2.0.12"
 tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread", "time", "sync"] }

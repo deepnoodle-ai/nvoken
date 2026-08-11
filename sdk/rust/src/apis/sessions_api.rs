@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -156,7 +156,7 @@ pub enum UpdateSessionError {
 pub async fn create_session(
     configuration: &configuration::Configuration,
     create_session_request: models::CreateSessionRequest,
-) -> Result<models::Session, Error<CreateSessionError>> {
+) -> Result<models::SessionResponse, Error<CreateSessionError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_body_create_session_request = create_session_request;
 
@@ -188,8 +188,8 @@ pub async fn create_session(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::Session`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::Session`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SessionResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SessionResponse`")))),
         }
     } else {
         let content = resp.text().await?;
@@ -249,7 +249,7 @@ pub async fn fork_session(
     configuration: &configuration::Configuration,
     session_id: &str,
     fork_session_request: models::ForkSessionRequest,
-) -> Result<models::Session, Error<ForkSessionError>> {
+) -> Result<models::SessionResponse, Error<ForkSessionError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_session_id = session_id;
     let p_body_fork_session_request = fork_session_request;
@@ -286,8 +286,8 @@ pub async fn fork_session(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::Session`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::Session`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SessionResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SessionResponse`")))),
         }
     } else {
         let content = resp.text().await?;
@@ -304,7 +304,7 @@ pub async fn fork_session(
 pub async fn get_session(
     configuration: &configuration::Configuration,
     session_id: &str,
-) -> Result<models::Session, Error<GetSessionError>> {
+) -> Result<models::SessionResponse, Error<GetSessionError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_session_id = session_id;
 
@@ -337,8 +337,8 @@ pub async fn get_session(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::Session`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::Session`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SessionResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SessionResponse`")))),
         }
     } else {
         let content = resp.text().await?;
@@ -358,7 +358,7 @@ pub async fn get_session_transcript(
     cursor: Option<&str>,
     page_token: Option<&str>,
     limit: Option<u32>,
-) -> Result<models::TranscriptSnapshot, Error<GetSessionTranscriptError>> {
+) -> Result<models::TranscriptSnapshotResponse, Error<GetSessionTranscriptError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_session_id = session_id;
     let p_query_cursor = cursor;
@@ -403,8 +403,8 @@ pub async fn get_session_transcript(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::TranscriptSnapshot`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::TranscriptSnapshot`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::TranscriptSnapshotResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::TranscriptSnapshotResponse`")))),
         }
     } else {
         let content = resp.text().await?;
@@ -484,7 +484,7 @@ pub async fn list_session_messages(
     session_id: &str,
     cursor: Option<&str>,
     limit: Option<u32>,
-) -> Result<models::SessionMessageList, Error<ListSessionMessagesError>> {
+) -> Result<models::SessionMessageListResponse, Error<ListSessionMessagesError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_session_id = session_id;
     let p_query_cursor = cursor;
@@ -525,8 +525,8 @@ pub async fn list_session_messages(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SessionMessageList`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SessionMessageList`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SessionMessageListResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SessionMessageListResponse`")))),
         }
     } else {
         let content = resp.text().await?;
@@ -550,7 +550,7 @@ pub async fn list_sessions(
     session_key: Option<&str>,
     cursor: Option<&str>,
     limit: Option<u32>,
-) -> Result<models::SessionList, Error<ListSessionsError>> {
+) -> Result<models::SessionListResponse, Error<ListSessionsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_query_tenant_key = tenant_key;
     let p_query_default_tenant = default_tenant;
@@ -610,8 +610,8 @@ pub async fn list_sessions(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SessionList`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SessionList`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SessionListResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SessionListResponse`")))),
         }
     } else {
         let content = resp.text().await?;
@@ -624,14 +624,14 @@ pub async fn list_sessions(
     }
 }
 
-/// Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.
+/// Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.  Client-token streams omit `thinking.delta` previews even when `deltas=true`.
 pub async fn stream_session_transcript(
     configuration: &configuration::Configuration,
     session_id: &str,
     cursor: Option<&str>,
     deltas: Option<bool>,
     last_event_id: Option<&str>,
-) -> Result<models::TranscriptStreamEvent, Error<StreamSessionTranscriptError>> {
+) -> Result<models::TranscriptStreamResponse, Error<StreamSessionTranscriptError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_session_id = session_id;
     let p_query_cursor = cursor;
@@ -676,8 +676,8 @@ pub async fn stream_session_transcript(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::TranscriptStreamEvent`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::TranscriptStreamEvent`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::TranscriptStreamResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::TranscriptStreamResponse`")))),
         }
     } else {
         let content = resp.text().await?;
@@ -690,12 +690,12 @@ pub async fn stream_session_transcript(
     }
 }
 
-/// Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget allows it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
+/// Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues a turn paused on its per-Invocation estimated-cost limit. A credit-paused turn resumes automatically after its account receives enough credits.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
 pub async fn update_session(
     configuration: &configuration::Configuration,
     session_id: &str,
     update_session_request: models::UpdateSessionRequest,
-) -> Result<models::Session, Error<UpdateSessionError>> {
+) -> Result<models::SessionResponse, Error<UpdateSessionError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_session_id = session_id;
     let p_body_update_session_request = update_session_request;
@@ -732,8 +732,8 @@ pub async fn update_session(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::Session`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::Session`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::SessionResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::SessionResponse`")))),
         }
     } else {
         let content = resp.text().await?;

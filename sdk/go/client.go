@@ -176,6 +176,70 @@ func responseHeader(response *http.Response) http.Header {
 	return response.Header
 }
 
+func machineInvocation(response *generated.InvocationResponse) (*generated.Invocation, error) {
+	if response == nil {
+		return nil, nil
+	}
+	value, err := response.AsInvocation()
+	return &value, err
+}
+
+func machineInvocationResult(response *generated.InvocationResultResponse) (*generated.InvocationResult, error) {
+	if response == nil {
+		return nil, nil
+	}
+	value, err := response.AsInvocationResult()
+	return &value, err
+}
+
+func machineCurrentIdentity(response *generated.CurrentIdentityResponse) (*generated.CurrentIdentity, error) {
+	if response == nil {
+		return nil, nil
+	}
+	value, err := response.AsCurrentIdentity()
+	return &value, err
+}
+
+func machineInvocationList(response *generated.InvocationListResponse) (*generated.InvocationList, error) {
+	if response == nil {
+		return nil, nil
+	}
+	value, err := response.AsInvocationList()
+	return &value, err
+}
+
+func machineSessionList(response *generated.SessionListResponse) (*generated.SessionList, error) {
+	if response == nil {
+		return nil, nil
+	}
+	value, err := response.AsSessionList()
+	return &value, err
+}
+
+func machineSession(response *generated.SessionResponse) (*generated.Session, error) {
+	if response == nil {
+		return nil, nil
+	}
+	value, err := response.AsSession()
+	return &value, err
+}
+
+func machineSessionMessageList(response *generated.SessionMessageListResponse) (*generated.SessionMessageList, error) {
+	if response == nil {
+		return nil, nil
+	}
+	value, err := response.AsSessionMessageList()
+	return &value, err
+}
+
+func machineTranscriptSnapshot(response *generated.TranscriptSnapshotResponse) (*generated.TranscriptSnapshot, error) {
+	if response == nil {
+		return nil, nil
+	}
+	value, err := response.AsTranscriptSnapshot()
+	return &value, err
+}
+
 func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*InvocationHandle, error) {
 	if request.IdempotencyKey == "" {
 		request.IdempotencyKey = generatedIdempotencyKey()
@@ -197,8 +261,16 @@ func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*Invocation
 		if callErr != nil {
 			return callResult[generated.Invocation]{}, callErr
 		}
+		var value *generated.Invocation
+		if response.JSON202 != nil {
+			invocation, decodeErr := response.JSON202.AsInvocation()
+			if decodeErr != nil {
+				return callResult[generated.Invocation]{}, decodeErr
+			}
+			value = &invocation
+		}
 		return callResult[generated.Invocation]{
-			Value:  response.JSON202,
+			Value:  value,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
@@ -223,47 +295,43 @@ func (c *Client) Invocation(invocationID string) *InvocationHandle {
 	return &InvocationHandle{client: c, InvocationID: invocationID}
 }
 
-// RegisterAgentDefinition stores one Agent Definition without starting a turn,
-// and returns the content-addressed ID that later Invocations reuse through
-// InvokeRequest.AgentDefinitionID.
-//
-// Registration is idempotent by content rather than by key. A first
-// registration, a repeat, and a definition an earlier turn already stored all
-// return the same response, so callers do not need to track whether they have
-// registered before.
-//
-// Only the definition's own content is checked here. Installation state, the
-// App callback signing key, budgets, provider keys, and model lifecycle are
-// checked again when a turn is admitted. A callback tool can therefore be
-// registered before its App signing key exists, while an Invocation using it is
-// still refused until delivery is configured.
-func (c *Client) RegisterAgentDefinition(
+// CreateAgentDefinition creates a stable App-owned Agent Definition resource.
+// The idempotency key makes retries safe; equal definitions created with
+// different keys receive different resource IDs.
+func (c *Client) CreateAgentDefinition(
 	ctx context.Context,
-	definition AgentDefinition,
-) (*AgentDefinitionRegistration, error) {
-	encoded, err := definition.encoded()
+	input CreateAgentDefinitionInput,
+) (*AgentDefinitionResource, error) {
+	if input.IdempotencyKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition idempotency key is required"}
+	}
+	encoded, err := input.Definition.encoded()
 	if err != nil {
+		if sdkError, ok := err.(*Error); ok {
+			return nil, sdkError
+		}
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
 	}
 	body, err := json.Marshal(encoded)
 	if err != nil {
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
 	}
-	registration, err := callReplaySafe(
+	resource, err := callReplaySafe(
 		ctx,
 		c.retry,
 		true,
-		func() (callResult[generated.AgentDefinitionRegistration], error) {
-			response, callErr := c.raw.RegisterAgentDefinitionWithBodyWithResponse(
+		func() (callResult[generated.AgentDefinitionResource], error) {
+			response, callErr := c.raw.CreateAgentDefinitionWithBodyWithResponse(
 				ctx,
+				&generated.CreateAgentDefinitionParams{IdempotencyKey: input.IdempotencyKey},
 				"application/json",
 				bytes.NewReader(body),
 			)
 			if callErr != nil {
-				return callResult[generated.AgentDefinitionRegistration]{}, callErr
+				return callResult[generated.AgentDefinitionResource]{}, callErr
 			}
-			return callResult[generated.AgentDefinitionRegistration]{
-				Value:  response.JSON200,
+			return callResult[generated.AgentDefinitionResource]{
+				Value:  response.JSON201,
 				Status: response.StatusCode(),
 				Header: responseHeader(response.HTTPResponse),
 				Body:   response.Body,
@@ -273,10 +341,61 @@ func (c *Client) RegisterAgentDefinition(
 	if err != nil {
 		return nil, err
 	}
-	return &AgentDefinitionRegistration{
-		AgentDefinitionID: registration.AgentDefinitionID,
-		AgentDefinition:   registration.AgentDefinition,
-	}, nil
+	return resource, nil
+}
+
+func (c *Client) GetAgentDefinition(ctx context.Context, id string) (*AgentDefinitionResource, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResource], error) {
+		response, err := c.raw.GetAgentDefinitionWithResponse(ctx, id)
+		if err != nil {
+			return callResult[generated.AgentDefinitionResource]{}, err
+		}
+		return callResult[generated.AgentDefinitionResource]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) UpdateAgentDefinition(
+	ctx context.Context,
+	id string,
+	input UpdateAgentDefinitionInput,
+) (*AgentDefinitionResource, error) {
+	if input.ExpectedRevision < 1 {
+		return nil, &Error{Category: ErrorValidation, Message: "expected Agent Definition revision must be positive"}
+	}
+	encoded, err := input.Definition.encoded()
+	if err != nil {
+		if sdkError, ok := err.(*Error); ok {
+			return nil, sdkError
+		}
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	body, err := json.Marshal(encoded)
+	if err != nil {
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResource], error) {
+		response, callErr := c.raw.UpdateAgentDefinitionWithBodyWithResponse(
+			ctx,
+			id,
+			&generated.UpdateAgentDefinitionParams{IfMatch: fmt.Sprintf("\"%d\"", input.ExpectedRevision)},
+			"application/json",
+			bytes.NewReader(body),
+		)
+		if callErr != nil {
+			return callResult[generated.AgentDefinitionResource]{}, callErr
+		}
+		return callResult[generated.AgentDefinitionResource]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
 }
 
 func (c *Client) GetInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
@@ -285,7 +404,8 @@ func (c *Client) GetInvocation(ctx context.Context, invocationID string) (*Invoc
 		if err != nil {
 			return callResult[generated.Invocation]{}, err
 		}
-		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineInvocation(response.JSON200)
+		return callResult[generated.Invocation]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -295,7 +415,8 @@ func (c *Client) GetInvocationResult(ctx context.Context, invocationID string) (
 		if err != nil {
 			return callResult[generated.InvocationResult]{}, err
 		}
-		return callResult[generated.InvocationResult]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineInvocationResult(response.JSON200)
+		return callResult[generated.InvocationResult]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -320,7 +441,8 @@ func (c *Client) CancelInvocation(ctx context.Context, invocationID string) (*In
 		if err != nil {
 			return callResult[generated.Invocation]{}, err
 		}
-		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineInvocation(response.JSON200)
+		return callResult[generated.Invocation]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -334,7 +456,8 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID string) (
 		if err != nil {
 			return callResult[generated.Invocation]{}, err
 		}
-		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineInvocation(response.JSON200)
+		return callResult[generated.Invocation]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -362,12 +485,13 @@ func (c *Client) ResumeInvocation(
 		if err != nil {
 			return callResult[generated.Invocation]{}, err
 		}
+		value, err := machineInvocation(response.JSON202)
 		return callResult[generated.Invocation]{
-			Value:  response.JSON202,
+			Value:  value,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
-		}, nil
+		}, err
 	})
 }
 
@@ -525,8 +649,8 @@ func (c *Client) ListModels(
 }
 
 // ListMCPTools discovers the tools a remote MCP server projects. Headers are a
-// separate argument because MCPServer is part of a content-addressed Agent
-// Definition and therefore carries no secrets; these are used for this one
+// separate argument because MCPServer is durable Agent Definition
+// configuration and therefore carries no secrets; these are used for this one
 // discovery request and never stored.
 func (c *Client) ListMCPTools(
 	ctx context.Context,
@@ -626,12 +750,13 @@ func (c *Client) GetCurrentIdentity(ctx context.Context) (*CurrentIdentity, erro
 		if err != nil {
 			return callResult[generated.CurrentIdentity]{}, err
 		}
+		value, err := machineCurrentIdentity(response.JSON200)
 		return callResult[generated.CurrentIdentity]{
-			Value:  response.JSON200,
+			Value:  value,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
-		}, nil
+		}, err
 	})
 }
 
@@ -925,29 +1050,23 @@ func (c *Client) ListUsageRecords(ctx context.Context, params *ListUsageRecordsP
 	})
 }
 
-func (c *Client) CreateBudget(ctx context.Context, input CreateBudgetInput) (*Budget, error) {
+func (c *Client) AllocateCredits(ctx context.Context, input AllocateCreditsInput) (*AllocateCreditsResult, error) {
 	if input.IdempotencyKey == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "budget idempotency key is required"}
+		return nil, &Error{Category: ErrorValidation, Message: "credit allocation idempotency key is required"}
 	}
-	body := generated.CreateBudgetRequest{
-		AgentID:             input.AgentID,
-		CredentialID:        input.CredentialID,
-		DefaultTenant:       input.DefaultTenant,
-		IdempotencyKey:      input.IdempotencyKey,
-		MaxEstimatedCostUsd: float32(input.MaxEstimatedCostUSD),
-		ProviderKeyID:       input.ProviderKeyID,
-		Scope:               input.Scope,
-		TenantKey:           input.TenantKey,
-		UserKey:             input.UserKey,
-		WindowEnd:           input.WindowEnd,
-		WindowStart:         input.WindowStart,
+	body := generated.AllocateCreditsRequest{
+		Amount:         input.Amount,
+		DefaultTenant:  input.DefaultTenant,
+		IdempotencyKey: input.IdempotencyKey,
+		Reference:      input.Reference,
+		TenantKey:      input.TenantKey,
 	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Budget], error) {
-		response, err := c.raw.CreateBudgetWithResponse(ctx, body)
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AllocateCreditsResult], error) {
+		response, err := c.raw.AllocateCreditsWithResponse(ctx, body)
 		if err != nil {
-			return callResult[generated.Budget]{}, err
+			return callResult[generated.AllocateCreditsResult]{}, err
 		}
-		return callResult[generated.Budget]{
+		return callResult[generated.AllocateCreditsResult]{
 			Value:  response.JSON201,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -956,13 +1075,13 @@ func (c *Client) CreateBudget(ctx context.Context, input CreateBudgetInput) (*Bu
 	})
 }
 
-func (c *Client) GetBudget(ctx context.Context, budgetID string) (*Budget, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Budget], error) {
-		response, err := c.raw.GetBudgetWithResponse(ctx, budgetID)
+func (c *Client) ListCreditAccounts(ctx context.Context, params *ListCreditAccountsParams) (*CreditAccountList, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.CreditAccountList], error) {
+		response, err := c.raw.ListCreditAccountsWithResponse(ctx, params)
 		if err != nil {
-			return callResult[generated.Budget]{}, err
+			return callResult[generated.CreditAccountList]{}, err
 		}
-		return callResult[generated.Budget]{
+		return callResult[generated.CreditAccountList]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
@@ -971,55 +1090,19 @@ func (c *Client) GetBudget(ctx context.Context, budgetID string) (*Budget, error
 	})
 }
 
-func (c *Client) ListBudgets(ctx context.Context, params *ListBudgetsParams) (*BudgetList, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.BudgetList], error) {
-		response, err := c.raw.ListBudgetsWithResponse(ctx, params)
+func (c *Client) ListCreditAllocations(ctx context.Context, params *ListCreditAllocationsParams) (*CreditAllocationList, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.CreditAllocationList], error) {
+		response, err := c.raw.ListCreditAllocationsWithResponse(ctx, params)
 		if err != nil {
-			return callResult[generated.BudgetList]{}, err
+			return callResult[generated.CreditAllocationList]{}, err
 		}
-		return callResult[generated.BudgetList]{
+		return callResult[generated.CreditAllocationList]{
 			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
 		}, nil
 	})
-}
-
-func (c *Client) UpdateBudget(ctx context.Context, budgetID string, maxEstimatedCostUSD float64) (*Budget, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Budget], error) {
-		response, err := c.raw.UpdateBudgetWithResponse(ctx, budgetID, generated.UpdateBudgetRequest{
-			MaxEstimatedCostUsd: float32(maxEstimatedCostUSD),
-		})
-		if err != nil {
-			return callResult[generated.Budget]{}, err
-		}
-		return callResult[generated.Budget]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-func (c *Client) DeleteBudget(ctx context.Context, budgetID string) error {
-	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
-		response, err := c.raw.DeleteBudgetWithResponse(ctx, budgetID)
-		if err != nil {
-			return callResult[struct{}]{}, err
-		}
-		result := callResult[struct{}]{
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}
-		if result.Status == http.StatusNoContent {
-			result.Value = &struct{}{}
-		}
-		return result, nil
-	})
-	return err
 }
 
 func (c *Client) RotateProviderKey(
@@ -1121,6 +1204,61 @@ func (c *Client) ListApps(ctx context.Context, options ListAppsOptions) (*AppLis
 			Body:   response.Body,
 		}, nil
 	})
+}
+
+func (c *Client) ListAppClientKeys(ctx context.Context, appID string) (*ClientKeyList, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ClientKeyList], error) {
+		response, err := c.raw.ListAppClientKeysWithResponse(ctx, appID)
+		if err != nil {
+			return callResult[generated.ClientKeyList]{}, err
+		}
+		return callResult[generated.ClientKeyList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) CreateAppClientKey(ctx context.Context, appID string, input CreateAppClientKeyInput) (*ClientKey, error) {
+	if input.Name == "" || len(input.PublicKey) == 0 {
+		return nil, &Error{Category: ErrorValidation, Message: "client key name and public key are required"}
+	}
+	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.ClientKey], error) {
+		response, err := c.raw.CreateAppClientKeyWithResponse(ctx, appID, generated.CreateClientKeyRequest{
+			Name:      input.Name,
+			PublicKey: input.PublicKey,
+		})
+		if err != nil {
+			return callResult[generated.ClientKey]{}, err
+		}
+		return callResult[generated.ClientKey]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) RevokeAppClientKey(ctx context.Context, appID, keyID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.RevokeAppClientKeyWithResponse(ctx, appID, keyID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
 }
 
 // UpdateApp changes an app's mutable presentation fields; name and
@@ -1288,7 +1426,8 @@ func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOpt
 		if err != nil {
 			return callResult[generated.InvocationList]{}, err
 		}
-		return callResult[generated.InvocationList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineInvocationList(response.JSON200)
+		return callResult[generated.InvocationList]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 	if err != nil {
 		return nil, err
@@ -1316,7 +1455,8 @@ func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) 
 		if err != nil {
 			return callResult[generated.SessionList]{}, err
 		}
-		return callResult[generated.SessionList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineSessionList(response.JSON200)
+		return callResult[generated.SessionList]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 	if err != nil {
 		return nil, err
@@ -1365,7 +1505,8 @@ func (c *Client) CreateSession(ctx context.Context, options CreateSessionOptions
 		if err != nil {
 			return callResult[generated.Session]{}, err
 		}
-		return callResult[generated.Session]{Value: response.JSON201, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineSession(response.JSON201)
+		return callResult[generated.Session]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -1405,12 +1546,13 @@ func (c *Client) ForkSession(
 		if err != nil {
 			return callResult[generated.Session]{}, err
 		}
+		value, err := machineSession(response.JSON201)
 		return callResult[generated.Session]{
-			Value:  response.JSON201,
+			Value:  value,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
-		}, nil
+		}, err
 	})
 }
 
@@ -1464,7 +1606,8 @@ func (c *Client) UpdateSession(
 		if err != nil {
 			return callResult[generated.Session]{}, err
 		}
-		return callResult[generated.Session]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineSession(response.JSON200)
+		return callResult[generated.Session]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -1474,7 +1617,8 @@ func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, er
 		if err != nil {
 			return callResult[generated.Session]{}, err
 		}
-		return callResult[generated.Session]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineSession(response.JSON200)
+		return callResult[generated.Session]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -1485,7 +1629,8 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID string, opti
 		if err != nil {
 			return callResult[generated.SessionMessageList]{}, err
 		}
-		return callResult[generated.SessionMessageList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
+		value, err := machineSessionMessageList(response.JSON200)
+		return callResult[generated.SessionMessageList]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 	if err != nil {
 		return nil, err
@@ -1541,12 +1686,13 @@ func (c *Client) GetTranscript(ctx context.Context, sessionID string, options Tr
 		if err != nil {
 			return callResult[generated.TranscriptSnapshot]{}, err
 		}
+		value, err := machineTranscriptSnapshot(response.JSON200)
 		return callResult[generated.TranscriptSnapshot]{
-			Value:  response.JSON200,
+			Value:  value,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
-		}, nil
+		}, err
 	})
 	if err != nil {
 		return nil, err

@@ -225,10 +225,7 @@ def test_shared_agent_request_fixture() -> None:
     client = Client(base_url="https://runtime.example.test", api_key="key")
     agent = client.agent(AgentOptions(
         agent_key="support",
-        model=Model(provider="anthropic", id="claude-sonnet-4-6"),
-        sampling=Sampling(temperature=0.2),
-        reasoning=Reasoning(effort="low"),
-        provider_tools=(web_search_tool(WebSearchTool(max_uses=5)),),
+        agent_definition_id="def_conformance",
     ))
     # Durable options apply on a new anonymous Session too, which is where a
     # short retention window matters most.
@@ -238,7 +235,6 @@ def test_shared_agent_request_fixture() -> None:
         metadata={"board": "brand-2026", "surface": "web"},
         session_options=SessionOptions(
             retention=SessionRetention(ttl_seconds=86400),
-            max_estimated_cost_usd=0.25,
         ),
     )
     assert client._invocation_body(agent._request("hello", options)).to_dict() == expected
@@ -418,8 +414,8 @@ def test_shared_agent_definition_reuse_fixture_is_expressible() -> None:
 
 
 # Registration and invocation must render the same object, or an SDK could
-# register one definition and then invoke a different, silently new one.
-def test_registration_sends_the_same_agent_definition_an_invocation_nests() -> None:
+# resource creation and inline invocation must render the same writable object.
+def test_resource_creation_matches_the_agent_definition_an_invocation_nests() -> None:
     fixture = json.loads(
         (
             Path(__file__).parents[2]
@@ -431,19 +427,19 @@ def test_registration_sends_the_same_agent_definition_an_invocation_nests() -> N
         instructions="You are a concise billing support agent.",
         model=Model(provider="anthropic", id="claude-sonnet-5"),
     )
-    registration = client._agent_definition_body(definition).to_dict()
-    assert registration == fixture["registration"]["request"]
+    creation = client._agent_definition_body(definition).to_dict()
+    assert creation == fixture["creation"]["request"]
     body = client._invocation_body(InvokeRequest(
         agent_key="support",
         input="hello",
         idempotency_key="agent-definition-inline",
         agent_definition=definition,
     )).to_dict()
-    assert body["agent_definition"] == registration
+    assert body["agent_definition"] == creation
 
 
-# A secret inside a content-addressed definition would change its identity, so
-# MCP headers must ride alongside it and never within it.
+# A reusable definition is durable configuration, so MCP headers must ride
+# alongside it and never within it.
 def test_mcp_secrets_stay_outside_the_agent_definition() -> None:
     client = Client(base_url="https://runtime.example.test", api_key="key")
     server = MCPServer(
@@ -634,24 +630,19 @@ async def test_shared_fault_server_semantics() -> None:
         assert exact_model.pricing.status == "unpriced"
 
         fixture = json.loads(
-            (Path(__file__).parents[2] / "conformance/fixtures/shared-budgets-v1.json").read_text()
+            (Path(__file__).parents[2] / "conformance/fixtures/credits-v1.json").read_text()
         )
-        assert fixture["scopes"] == [
-            "app", "tenant", "user", "agent", "provider_key", "credential"
-        ]
-        budget = await client.create_budget(
-            scope="app",
-            window_start=datetime(2026, 8, 1, tzinfo=timezone.utc),
-            window_end=datetime(2026, 9, 1, tzinfo=timezone.utc),
-            max_estimated_cost_usd=25,
-            idempotency_key="python-budget-conformance",
+        credits = await client.allocate_credits(
+            amount="25.000000",
+            default_tenant=True,
+            idempotency_key="python-credits-conformance",
         )
-        assert budget.id == fixture["budget"]["id"]
-        budget = await client.get_budget(budget.id)
-        assert budget.available_estimated_cost_usd == 20.25
-        budget = await client.update_budget(budget.id, 30)
-        assert budget.max_estimated_cost_usd == 30
-        await client.delete_budget(budget.id)
+        assert credits.allocation.id == fixture["allocation"]["id"]
+        assert credits.account.available.amount == "20.250000"
+        accounts = await client.list_credit_accounts(default_tenant=True)
+        assert accounts.items[0].available.amount == "20.250000"
+        allocations = await client.list_credit_allocations(default_tenant=True)
+        assert allocations.items[0].amount.amount == "25.000000"
 
         handle = await client.invoke(InvokeRequest(
             agent_key="support",

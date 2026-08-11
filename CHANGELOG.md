@@ -8,6 +8,17 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.14.0 - 2026-08-11
+
+- **Replace window Budgets with persistent Credits.** Allocate exact USD funds
+  to the default or a named tenant, then read its account and append-only
+  allocation history; Session spending ceilings are removed.
+- **Make reusable Agent Definitions stable revisioned resources.** Create, get,
+  and update them by ID; equal content no longer implies shared identity.
+- Invocation requests and all high-level SDKs accept exactly one of an inline
+  Agent Definition or `agent_definition_id`. Browser client-token requests
+  remain pinned to a reusable ID and revision.
+
 ## 0.13.0 - 2026-08-11
 
 - **Add recorded application context.** Send named state snapshots in `context`

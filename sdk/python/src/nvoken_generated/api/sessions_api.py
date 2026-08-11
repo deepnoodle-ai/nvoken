@@ -1,7 +1,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -20,12 +20,12 @@ from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.create_session_request import CreateSessionRequest
 from nvoken_generated.models.fork_session_request import ForkSessionRequest
-from nvoken_generated.models.session import Session
 from nvoken_generated.models.session_compaction_list import SessionCompactionList
-from nvoken_generated.models.session_list import SessionList
-from nvoken_generated.models.session_message_list import SessionMessageList
-from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot
-from nvoken_generated.models.transcript_stream_event import TranscriptStreamEvent
+from nvoken_generated.models.session_list_response import SessionListResponse
+from nvoken_generated.models.session_message_list_response import SessionMessageListResponse
+from nvoken_generated.models.session_response import SessionResponse
+from nvoken_generated.models.transcript_snapshot_response import TranscriptSnapshotResponse
+from nvoken_generated.models.transcript_stream_response import TranscriptStreamResponse
 from nvoken_generated.models.update_session_request import UpdateSessionRequest
 
 from nvoken_generated.api_client import ApiClient, RequestSerialized
@@ -62,7 +62,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> Session:
+    ) -> SessionResponse:
         """Create or seed a Session without creating an Invocation
 
         Creates an empty Session, optionally seeded with history you already have. Use this when you want a conversation to exist before the first turn runs — to show it in a UI, or to import messages from elsewhere.  Every field is optional. Leave out `agent_key` and the Session starts unbound: `agent_id` stays null until the first turn binds it permanently.
@@ -100,7 +100,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '201': "Session",
+            '201': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -136,7 +136,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[Session]:
+    ) -> ApiResponse[SessionResponse]:
         """Create or seed a Session without creating an Invocation
 
         Creates an empty Session, optionally seeded with history you already have. Use this when you want a conversation to exist before the first turn runs — to show it in a UI, or to import messages from elsewhere.  Every field is optional. Leave out `agent_key` and the Session starts unbound: `agent_id` stays null until the first turn binds it permanently.
@@ -174,7 +174,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '201': "Session",
+            '201': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -248,7 +248,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '201': "Session",
+            '201': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -640,7 +640,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> Session:
+    ) -> SessionResponse:
         """Copy a Session prefix into a new Session
 
         Creates a new Session in the source Session's tenant and Agent scope, copying every canonical message through `from_message` inclusively. The source is untouched. The child stores durable Session and message lineage, but copied messages no longer belong to the source Invocations. Their `origin`, per-turn `user_key`, and resolved message phase are preserved.  Usage and compaction summaries are not copied. Child usage starts at zero and the child starts uncompacted. Retention and metadata come only from `session_options` on this request; no Session option is inherited. A `session_key` has the same tenant/Agent-scoped upsert behavior as Session creation.
@@ -681,7 +681,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '201': "Session",
+            '201': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -718,7 +718,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[Session]:
+    ) -> ApiResponse[SessionResponse]:
         """Copy a Session prefix into a new Session
 
         Creates a new Session in the source Session's tenant and Agent scope, copying every canonical message through `from_message` inclusively. The source is untouched. The child stores durable Session and message lineage, but copied messages no longer belong to the source Invocations. Their `origin`, per-turn `user_key`, and resolved message phase are preserved.  Usage and compaction summaries are not copied. Child usage starts at zero and the child starts uncompacted. Retention and metadata come only from `session_options` on this request; no Session option is inherited. A `session_key` has the same tenant/Agent-scoped upsert behavior as Session creation.
@@ -759,7 +759,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '201': "Session",
+            '201': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -837,7 +837,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '201': "Session",
+            '201': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -949,7 +949,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> Session:
+    ) -> SessionResponse:
         """Read authoritative Session identity and current state
 
         An App credential without a tenant constraint may resolve a Session in any tenant partition in that App. A tenant-constrained credential resolves only Sessions in its partition. Missing, incompatible, and undisclosable resources use `not_found`; a credential denied the read operation itself receives `forbidden`.
@@ -987,7 +987,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Session",
+            '200': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1023,7 +1023,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[Session]:
+    ) -> ApiResponse[SessionResponse]:
         """Read authoritative Session identity and current state
 
         An App credential without a tenant constraint may resolve a Session in any tenant partition in that App. A tenant-constrained credential resolves only Sessions in its partition. Missing, incompatible, and undisclosable resources use `not_found`; a credential denied the read operation itself receives `forbidden`.
@@ -1061,7 +1061,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Session",
+            '200': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1135,7 +1135,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Session",
+            '200': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1234,7 +1234,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> TranscriptSnapshot:
+    ) -> TranscriptSnapshotResponse:
         """Drain a fixed-cut incremental transcript snapshot
 
         Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `resume_cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.
@@ -1281,7 +1281,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "TranscriptSnapshot",
+            '200': "TranscriptSnapshotResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1320,7 +1320,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[TranscriptSnapshot]:
+    ) -> ApiResponse[TranscriptSnapshotResponse]:
         """Drain a fixed-cut incremental transcript snapshot
 
         Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `resume_cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.
@@ -1367,7 +1367,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "TranscriptSnapshot",
+            '200': "TranscriptSnapshotResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1453,7 +1453,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "TranscriptSnapshot",
+            '200': "TranscriptSnapshotResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1882,7 +1882,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> SessionMessageList:
+    ) -> SessionMessageListResponse:
         """Page through the canonical Session transcript
 
         Returns persisted SessionMessage rows in ascending sequence order. The opaque forward cursor is bound to the authenticated caller and Session. This history endpoint contains no lifecycle or live-preview copies.
@@ -1926,7 +1926,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "SessionMessageList",
+            '200': "SessionMessageListResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1964,7 +1964,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[SessionMessageList]:
+    ) -> ApiResponse[SessionMessageListResponse]:
         """Page through the canonical Session transcript
 
         Returns persisted SessionMessage rows in ascending sequence order. The opaque forward cursor is bound to the authenticated caller and Session. This history endpoint contains no lifecycle or live-preview copies.
@@ -2008,7 +2008,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "SessionMessageList",
+            '200': "SessionMessageListResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2090,7 +2090,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "SessionMessageList",
+            '200': "SessionMessageListResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2203,7 +2203,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> SessionList:
+    ) -> SessionListResponse:
         """List authoritative Sessions
 
         Lists Sessions, newest first, each with the state of its currently running turn if it has one. Filters combine with AND. Tenant filtering and cursors work the same as on the Invocation list. `agent_id` and `agent_key` are mutually exclusive.
@@ -2262,7 +2262,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "SessionList",
+            '200': "SessionListResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2304,7 +2304,7 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[SessionList]:
+    ) -> ApiResponse[SessionListResponse]:
         """List authoritative Sessions
 
         Lists Sessions, newest first, each with the state of its currently running turn if it has one. Filters combine with AND. Tenant filtering and cursors work the same as on the Invocation list. `agent_id` and `agent_key` are mutually exclusive.
@@ -2363,7 +2363,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "SessionList",
+            '200': "SessionListResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2464,7 +2464,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "SessionList",
+            '200': "SessionListResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2585,7 +2585,7 @@ class SessionsApi:
         self,
         session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
-        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Defaults to true.")] = None,
+        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.")] = None,
         _request_timeout: Union[
             None,
@@ -2599,16 +2599,16 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> TranscriptStreamEvent:
+    ) -> TranscriptStreamResponse:
         """Follow a Session transcript over Server-Sent Events
 
-        Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.
+        Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.  Client-token streams omit `thinking.delta` previews even when `deltas=true`.
 
         :param session_id: (required)
         :type session_id: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
-        :param deltas: Include id-less output and thinking preview frames. Defaults to true.
+        :param deltas: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
         :type deltas: bool
         :param last_event_id: Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.
         :type last_event_id: str
@@ -2646,7 +2646,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "TranscriptStreamEvent",
+            '200': "TranscriptStreamResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2671,7 +2671,7 @@ class SessionsApi:
         self,
         session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
-        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Defaults to true.")] = None,
+        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.")] = None,
         _request_timeout: Union[
             None,
@@ -2685,16 +2685,16 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[TranscriptStreamEvent]:
+    ) -> ApiResponse[TranscriptStreamResponse]:
         """Follow a Session transcript over Server-Sent Events
 
-        Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.
+        Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.  Client-token streams omit `thinking.delta` previews even when `deltas=true`.
 
         :param session_id: (required)
         :type session_id: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
-        :param deltas: Include id-less output and thinking preview frames. Defaults to true.
+        :param deltas: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
         :type deltas: bool
         :param last_event_id: Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.
         :type last_event_id: str
@@ -2732,7 +2732,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "TranscriptStreamEvent",
+            '200': "TranscriptStreamResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2757,7 +2757,7 @@ class SessionsApi:
         self,
         session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
-        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Defaults to true.")] = None,
+        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.")] = None,
         _request_timeout: Union[
             None,
@@ -2774,13 +2774,13 @@ class SessionsApi:
     ) -> RESTResponseType:
         """Follow a Session transcript over Server-Sent Events
 
-        Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.
+        Streams a Session's transcript as it grows, and can be resumed after a dropped connection. It covers the same messages as the JSON transcript endpoint.  Every non-empty `transcript.update` frame carries `id: <resume_cursor>`. That opaque ID is your resume position and the only value you need to store — reconnect with it and you continue exactly where you left off. `output_text.delta`, `thinking.delta`, `stream.resync`, and `stream.end` never carry an `id`, because they are live previews and control frames rather than saved messages.  Previews can be lost. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages to arrive. Set `deltas=false` to skip previews entirely; nothing about replay, resumption, or how the stream ends changes.  `stream.end` with reason `terminal` means no turn is still running. Reason `rotate` means the server is cycling the connection — reconnect with your last `id`. A connection that just drops carries no meaning: reconnect and resume. Disconnecting never cancels a running turn.  The `cursor` query parameter wins over the `Last-Event-ID` header. Because this endpoint uses bearer authentication, you need an SSE client that can set the `Authorization` header — the browser's built-in `EventSource` cannot. The server suggests a 1000 ms reconnect delay.  Client-token streams omit `thinking.delta` previews even when `deltas=true`.
 
         :param session_id: (required)
         :type session_id: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
-        :param deltas: Include id-less output and thinking preview frames. Defaults to true.
+        :param deltas: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
         :type deltas: bool
         :param last_event_id: Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.
         :type last_event_id: str
@@ -2818,7 +2818,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "TranscriptStreamEvent",
+            '200': "TranscriptStreamResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2929,10 +2929,10 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> Session:
+    ) -> SessionResponse:
         """Update a Session
 
-        Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget allows it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
+        Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues a turn paused on its per-Invocation estimated-cost limit. A credit-paused turn resumes automatically after its account receives enough credits.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
 
         :param session_id: (required)
         :type session_id: str
@@ -2970,7 +2970,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Session",
+            '200': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -3007,10 +3007,10 @@ class SessionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[Session]:
+    ) -> ApiResponse[SessionResponse]:
         """Update a Session
 
-        Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget allows it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
+        Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues a turn paused on its per-Invocation estimated-cost limit. A credit-paused turn resumes automatically after its account receives enough credits.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
 
         :param session_id: (required)
         :type session_id: str
@@ -3048,7 +3048,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Session",
+            '200': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -3088,7 +3088,7 @@ class SessionsApi:
     ) -> RESTResponseType:
         """Update a Session
 
-        Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues the paused turn when every first-class Budget allows it.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
+        Replaces or removes the Session lifetime estimated-cost cap, and merges host metadata when present. Raising or removing an exhausted cap requeues a turn paused on its per-Invocation estimated-cost limit. A credit-paused turn resumes automatically after its account receives enough credits.  For metadata, a present key replaces its value, an explicit `null` deletes that key, and a key the patch does not mention survives.  Merge rather than replace, because independent writers share this map — a conversation UI writing a title, correlation tooling writing a trace id — and a full replacement would make each silently discard the other's keys. The merge happens under the Session lock, so two concurrent patches compose instead of one overwriting the other's read.  `\"metadata\": null` is refused rather than guessed at: it could mean \"clear everything\" or \"leave it alone\", and either reading is destructive or silent. Delete keys one at a time.  Bounds apply to the merged result, not to the patch, so a patch that deletes as many keys as it adds is not refused for a count it never produces. Requires the `update_session` operation.
 
         :param session_id: (required)
         :type session_id: str
@@ -3126,7 +3126,7 @@ class SessionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Session",
+            '200': "SessionResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",

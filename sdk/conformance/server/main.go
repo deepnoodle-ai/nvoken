@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 )
 
 const (
@@ -21,7 +20,7 @@ const (
 	toolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 	definitionID = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
 	exactModelID = "experimental/model?variant=雪%#1"
-	budgetID     = "budg_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
+	allocationID = "alloc_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
 )
 
 type state struct {
@@ -104,8 +103,8 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	case serveAgents(response, request):
 	case serveModels(response, request):
 	case serveMCP(response, request):
-	case serveBudgets(response, request):
-	case registerAgentDefinition(response, request):
+	case serveCredits(response, request):
+	case createAgentDefinition(response, request):
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
 		s.createInvocation(response, request)
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodGet:
@@ -121,68 +120,60 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
-func serveBudgets(response http.ResponseWriter, request *http.Request) bool {
-	if request.URL.Path == "/v1/budgets" && request.Method == http.MethodPost {
+func serveCredits(response http.ResponseWriter, request *http.Request) bool {
+	if request.URL.Path == "/v1/credits/allocations" && request.Method == http.MethodPost {
 		var body struct {
-			Scope               string    `json:"scope"`
-			WindowStart         time.Time `json:"window_start"`
-			WindowEnd           time.Time `json:"window_end"`
-			MaxEstimatedCostUSD float64   `json:"max_estimated_cost_usd"`
-			IdempotencyKey      string    `json:"idempotency_key"`
+			Amount struct {
+				Amount   string `json:"amount"`
+				Currency string `json:"currency"`
+			} `json:"amount"`
+			DefaultTenant  bool   `json:"default_tenant"`
+			IdempotencyKey string `json:"idempotency_key"`
 		}
-		wantStart := time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)
-		wantEnd := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
 		if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
-			body.Scope != "app" || !body.WindowStart.Equal(wantStart) ||
-			!body.WindowEnd.Equal(wantEnd) ||
-			body.MaxEstimatedCostUSD != 25 || body.IdempotencyKey == "" {
-			writeError(response, http.StatusBadRequest, "invalid_request", "Budget request did not round-trip")
+			body.Amount.Amount != "25.000000" || body.Amount.Currency != "USD" ||
+			!body.DefaultTenant || body.IdempotencyKey == "" {
+			writeError(response, http.StatusBadRequest, "invalid_request", "Credit allocation did not round-trip")
 			return true
 		}
-		writeJSON(response, http.StatusCreated, budget(body.MaxEstimatedCostUSD))
+		writeJSON(response, http.StatusCreated, map[string]any{
+			"account":    creditAccount(),
+			"allocation": creditAllocation(),
+		})
 		return true
 	}
-	if request.URL.Path != "/v1/budgets/"+budgetID {
-		return false
+	if request.URL.Path == "/v1/credits" && request.Method == http.MethodGet {
+		writeJSON(response, http.StatusOK, map[string]any{"items": []any{creditAccount()}, "next_cursor": nil})
+		return true
 	}
-	switch request.Method {
-	case http.MethodGet:
-		writeJSON(response, http.StatusOK, budget(25))
-	case http.MethodPatch:
-		var body struct {
-			MaxEstimatedCostUSD float64 `json:"max_estimated_cost_usd"`
-		}
-		if err := json.NewDecoder(request.Body).Decode(&body); err != nil || body.MaxEstimatedCostUSD <= 0 {
-			writeError(response, http.StatusBadRequest, "invalid_request", "Budget cap did not round-trip")
-			return true
-		}
-		writeJSON(response, http.StatusOK, budget(body.MaxEstimatedCostUSD))
-	case http.MethodDelete:
-		response.WriteHeader(http.StatusNoContent)
-	default:
-		return false
+	if request.URL.Path == "/v1/credits/allocations" && request.Method == http.MethodGet {
+		writeJSON(response, http.StatusOK, map[string]any{"items": []any{creditAllocation()}, "next_cursor": nil})
+		return true
 	}
-	return true
+	return false
 }
 
-func budget(cap float64) map[string]any {
+func money(amount string) map[string]any {
+	return map[string]any{"amount": amount, "currency": "USD"}
+}
+
+func creditAccount() map[string]any {
 	return map[string]any{
-		"id":                           budgetID,
-		"scope":                        "app",
-		"tenant_key":                   nil,
-		"user_key":                     nil,
-		"agent_id":                     nil,
-		"provider_key_id":              nil,
-		"credential_family_id":         nil,
-		"window_start":                 "2026-08-01T00:00:00Z",
-		"window_end":                   "2026-09-01T00:00:00Z",
-		"max_estimated_cost_usd":       cap,
-		"spent_estimated_cost_usd":     3.25,
-		"reserved_estimated_cost_usd":  1.5,
-		"available_estimated_cost_usd": cap - 4.75,
-		"paused_invocations":           2,
-		"created_at":                   "2026-08-01T00:00:00Z",
-		"updated_at":                   "2026-08-08T12:00:00Z",
+		"tenant_key":         nil,
+		"allocated":          money("25.000000"),
+		"used":               money("3.250000"),
+		"held":               money("1.500000"),
+		"available":          money("20.250000"),
+		"paused_invocations": 2,
+		"created_at":         "2026-08-01T00:00:00Z",
+		"updated_at":         "2026-08-08T12:00:00Z",
+	}
+}
+
+func creditAllocation() map[string]any {
+	return map[string]any{
+		"id": allocationID, "tenant_key": nil, "amount": money("25.000000"),
+		"reference": nil, "created_by": "cred_conformance", "created_at": "2026-08-01T00:00:00Z",
 	}
 }
 
@@ -250,9 +241,9 @@ func serveMCP(response http.ResponseWriter, request *http.Request) bool {
 	return true
 }
 
-// conformanceMCPServer carries no headers. An Agent Definition is
-// content-addressed, so a secret inside one would change its identity; secrets
-// arrive separately in mcp_server_headers, or in the discovery request.
+// conformanceMCPServer carries no headers. A reusable Agent Definition is
+// durable configuration, so secrets arrive separately in mcp_server_headers,
+// or in the discovery request.
 type conformanceMCPServer struct {
 	Name         string   `json:"name"`
 	URL          string   `json:"url"`
@@ -416,7 +407,7 @@ func catalogModel(provider, modelID, displayName string) map[string]any {
 }
 
 // conformanceDefinition is the execution configuration an Invocation nests
-// under agent_definition and registration sends on its own.
+// under agent_definition and resource creation sends on its own.
 type conformanceDefinition struct {
 	Instructions string                 `json:"instructions"`
 	Model        map[string]string      `json:"model"`
@@ -432,9 +423,8 @@ type conformanceDefinition struct {
 
 type conformanceMCPHeaders = conformanceMCPServerHeaders
 
-// registerAgentDefinition answers with the same ID for every registration of the
-// same content, so an SDK cannot pass by tracking whether it registered before.
-func registerAgentDefinition(response http.ResponseWriter, request *http.Request) bool {
+// createAgentDefinition creates one stable Agent Definition resource.
+func createAgentDefinition(response http.ResponseWriter, request *http.Request) bool {
 	if request.URL.Path != "/v1/agent-definitions" || request.Method != http.MethodPost {
 		return false
 	}
@@ -453,10 +443,11 @@ func registerAgentDefinition(response http.ResponseWriter, request *http.Request
 	if definition.Instructions != "" {
 		resolved["instructions"] = definition.Instructions
 	}
-	writeJSON(response, http.StatusOK, map[string]any{
-		"agent_definition_id": definitionID,
-		"agent_definition":    resolved,
-	})
+	resolved["id"] = definitionID
+	resolved["revision"] = 1
+	resolved["created_at"] = "2026-08-08T12:00:00Z"
+	resolved["updated_at"] = "2026-08-08T12:00:00Z"
+	writeJSON(response, http.StatusCreated, resolved)
 	return true
 }
 
@@ -471,8 +462,8 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 				APIKey string `json:"api_key"`
 			} `json:"key"`
 		} `json:"provider_keys"`
-		AgentDefinitionID string                  `json:"agent_definition_id"`
 		AgentDefinition   *conformanceDefinition  `json:"agent_definition"`
+		AgentDefinitionID string                  `json:"agent_definition_id"`
 		MCPServerHeaders  []conformanceMCPHeaders `json:"mcp_server_headers"`
 		Context           []conformanceContext    `json:"context"`
 	}
@@ -495,19 +486,13 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 			return
 		}
 	}
-	// Exactly one Agent Definition form. An SDK that leaks an execution field to
-	// the top level, or sends both forms, fails here rather than at the Runtime.
 	if (body.AgentDefinition == nil) == (body.AgentDefinitionID == "") {
 		writeError(response, http.StatusBadRequest, "invalid_request", "exactly one Agent Definition form is required")
 		return
 	}
-	definition := body.AgentDefinition
-	if definition == nil {
-		definition = &conformanceDefinition{}
-	}
-	if len(definition.MCPServers) > 0 &&
-		(len(definition.MCPServers) != 1 || !definition.MCPServers[0].valid()) {
-		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server declaration did not round-trip")
+	if body.AgentDefinition != nil &&
+		(body.AgentDefinition.Model["provider"] == "" || body.AgentDefinition.Model["id"] == "") {
+		writeError(response, http.StatusBadRequest, "invalid_request", "inline Agent Definition did not round-trip")
 		return
 	}
 	if len(body.MCPServerHeaders) > 0 &&
@@ -515,32 +500,11 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server headers did not round-trip")
 		return
 	}
-	if len(definition.MCPServers) > 0 && len(body.MCPServerHeaders) == 0 {
-		writeError(response, http.StatusBadRequest, "invalid_request", "MCP secret headers were dropped")
-		return
-	}
 	for _, item := range body.Context {
 		if !item.valid() {
 			writeError(response, http.StatusBadRequest, "invalid_request", "recorded context did not round-trip")
 			return
 		}
-	}
-	if strings.Contains(body.IdempotencyKey, "lost-ack") &&
-		!strings.HasPrefix(body.IdempotencyKey, "cli-") &&
-		(definition.Sampling == nil ||
-			definition.Sampling.Temperature == nil ||
-			*definition.Sampling.Temperature != 0) {
-		writeError(response, http.StatusBadRequest, "invalid_request", "explicit zero temperature did not round-trip")
-		return
-	}
-	if strings.Contains(body.IdempotencyKey, "lost-ack") &&
-		!strings.HasPrefix(body.IdempotencyKey, "cli-") &&
-		(definition.Reasoning == nil ||
-			definition.Reasoning.Effort == nil ||
-			*definition.Reasoning.Effort != "high" ||
-			definition.Reasoning.BudgetTokens != nil) {
-		writeError(response, http.StatusBadRequest, "invalid_request", "reasoning effort did not round-trip")
-		return
 	}
 	s.mu.Lock()
 	s.admissionAttempts++
@@ -897,11 +861,12 @@ func invocationWithID(id string, status string) map[string]any {
 		"session_id":                   sessionID,
 		"user_key":                     nil,
 		"agent_definition_id":          definitionID,
+		"agent_definition_revision":    1,
 		"agent_definition":             nil,
 		"context":                      nil,
 		"status":                       status,
 		"stop_reason":                  nullableStopReason(status),
-		"blocking_budget":              nil,
+		"credit_block":                 nil,
 		"attempt":                      1,
 		"error":                        nil,
 		"usage":                        nil,
@@ -968,7 +933,7 @@ func session() map[string]any {
 		"forked_from":              nil,
 		"active_invocation_id":     nil,
 		"active_invocation_status": nil,
-		"blocking_budget":          nil,
+		"credit_block":             nil,
 		"context": map[string]any{
 			"estimated_tokens":      12,
 			"context_window_tokens": 128000,
@@ -981,8 +946,7 @@ func session() map[string]any {
 		"retention": map[string]any{
 			"ttl_seconds": 86400,
 		},
-		"max_estimated_cost_usd": nil,
-		"expires_at":             "2026-07-22T12:00:03Z",
+		"expires_at": "2026-07-22T12:00:03Z",
 		"metadata": map[string]any{
 			"title": "Refund policy",
 		},

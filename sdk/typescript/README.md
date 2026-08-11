@@ -3,7 +3,7 @@
 An Invocation is one durable agent turn. The host supplies `agentKey`,
 optional `tenantKey`, `sessionKey`, and `idempotencyKey`; instructions, model,
 and tools travel with the turn as an `agentDefinition`, either inline or
-referenced by a registered `agentDefinitionId`.
+referenced by a reusable `agentDefinitionId`.
 
 The package has three deliberate levels:
 
@@ -285,30 +285,29 @@ schema. Sending it inline is the ordinary path. Register it instead when many
 turns share one configuration and you would rather send a short ID:
 
 ```ts
-const registration = await client.registerAgentDefinition({
+const resource = await client.createAgentDefinition({
   instructions: "Be concise and helpful.",
   model: { provider: "anthropic", id: "claude-sonnet-5" },
-});
+}, "support-definition-v1");
 
 const handle = await client.invoke({
   agentKey: "support",
   sessionKey: "ticket-483",
   input: "Why was I charged twice?",
-  agentDefinitionId: registration.agentDefinitionId,
+  agentDefinitionId: resource.id,
 });
 ```
 
-A definition is content-addressed and immutable, so registering the same one
-twice returns the same `agentDefinitionId`, and so does registering one an
-earlier inline turn already stored. Registering starts no turn and creates no
-Agent, Session, or message. There is no list, update, or delete: to change a
-definition, register the new one and reference that.
+Creating a definition starts no turn and creates no Agent, Session, or message.
+The resource has a stable ID and an increasing revision. Use
+`getAgentDefinition()` and `updateAgentDefinition()` to read and replace it.
+An idempotency key makes create retries safe; equal content under another key
+creates an independent resource.
 
 Send exactly one of `agentDefinition` and `agentDefinitionId`. The types make
 the pair mutually exclusive, and the facade rejects a request carrying both or
-neither before it reaches the network. `Agent` always sends its definition
-inline, because it serves the host tool handlers declared in it; reuse by ID
-belongs on the `client.invoke()` path.
+neither before it reaches the network. `Agent` supports the same choice; host
+tool handlers remain local when a reusable resource supplies the declarations.
 
 ## Record changing application state
 
@@ -375,8 +374,8 @@ const support = client.agent({
 });
 ```
 
-The declaration carries no secrets. An Agent Definition is content-addressed and
-reused across turns, so authentication headers travel per Invocation in
+The declaration carries no secrets. An Agent Definition may be reused across
+turns, so authentication headers travel per Invocation in
 `mcpServerHeaders`, keyed to the server name. They are one-Invocation secret
 material and are absent from durable Agent Definitions, responses, streams,
 transcripts, errors, and logs. The SDK checks the name and header values, and

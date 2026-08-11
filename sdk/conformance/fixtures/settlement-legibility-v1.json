@@ -8,8 +8,7 @@
       "deadline",
       "max_output_tokens",
       "max_estimated_cost",
-      "session_max_estimated_cost",
-      "shared_budget"
+      "insufficient_credits"
     ],
     "present_only_on_statuses": ["completed", "incomplete", "paused"],
     "by_status": {
@@ -18,16 +17,13 @@
         "max_iterations",
         "deadline",
         "max_output_tokens",
-        "max_estimated_cost",
-        "session_max_estimated_cost",
-        "shared_budget"
+        "max_estimated_cost"
       ],
       "paused": [
         "max_iterations",
         "max_output_tokens",
         "max_estimated_cost",
-        "session_max_estimated_cost",
-        "shared_budget"
+        "insufficient_credits"
       ]
     },
     "note": "`completed` means the turn ended the way it was asked to. A budget enforced at a coherent seam settles `incomplete` by default or `paused` when the caller opted into resumable exhaustion; deadlines never pause. An interrupt stays `completed` because the caller asked the turn to end there.",
@@ -38,8 +34,7 @@
       "execution_segment": "deadline",
       "output_tokens": "max_output_tokens",
       "estimated_cost": "max_estimated_cost",
-      "session_max_estimated_cost": "session_max_estimated_cost",
-      "shared_budget": "shared_budget"
+      "credits": "insufficient_credits"
     }
   },
   "message_phase": {
