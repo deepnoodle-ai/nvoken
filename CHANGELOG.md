@@ -16,7 +16,8 @@ without republishing every artifact.
 - **Nest the execution configuration under `agent_definition`.** Instructions,
   model, tools, and the rest move off the top level of an invocation create
   request into a first-class Agent Definition type. Supply exactly one of the
-  inline definition and `agent_definition_id`.
+  inline definition and `agent_definition_id`. Agent options keep these fields
+  flat, so only low-level invoke callers migrate.
 - **Add `POST /v1/agent-definitions`.** Register an Agent Definition without
   starting a turn, then reuse the returned ID. It is idempotent by content, so a
   repeat and a definition an earlier inline turn stored return the same response.
