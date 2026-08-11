@@ -11,32 +11,54 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum SessionMessageRole {
-    #[serde(rename = "system")]
-    System,
-    #[serde(rename = "user")]
-    User,
-    #[serde(rename = "assistant")]
-    Assistant,
-    #[serde(rename = "tool")]
-    Tool,
+/// ReminderBlock : One application-owned state snapshot recorded at Invocation admission. Contextual reminders use the user role; operator reminders use the system role. The typed tier remains authoritative for provider mapping.
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ReminderBlock {
+    #[serde(rename = "type")]
+    pub r#type: Type,
+    /// Caller name in nvoken's reserved application namespace.
+    #[serde(rename = "name")]
+    pub name: String,
+    #[serde(rename = "tier")]
+    pub tier: Tier,
+    #[serde(rename = "content")]
+    pub content: String,
 }
 
-impl std::fmt::Display for SessionMessageRole {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::System => write!(f, "system"),
-            Self::User => write!(f, "user"),
-            Self::Assistant => write!(f, "assistant"),
-            Self::Tool => write!(f, "tool"),
+impl ReminderBlock {
+    /// One application-owned state snapshot recorded at Invocation admission. Contextual reminders use the user role; operator reminders use the system role. The typed tier remains authoritative for provider mapping.
+    pub fn new(r#type: Type, name: String, tier: Tier, content: String) -> ReminderBlock {
+        ReminderBlock {
+            r#type,
+            name,
+            tier,
+            content,
         }
     }
 }
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum Type {
+    #[serde(rename = "reminder")]
+    TypeReminder,
+}
 
-impl Default for SessionMessageRole {
-    fn default() -> SessionMessageRole {
-        Self::System
+impl Default for Type {
+    fn default() -> Type {
+        Self::TypeReminder
+    }
+}
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum Tier {
+    #[serde(rename = "contextual")]
+    Contextual,
+    #[serde(rename = "operator")]
+    Operator,
+}
+
+impl Default for Tier {
+    fn default() -> Tier {
+        Self::Contextual
     }
 }

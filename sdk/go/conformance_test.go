@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -1412,4 +1413,137 @@ func equalJSON(t *testing.T, left, right json.RawMessage) bool {
 		t.Fatalf("decode right: %v", err)
 	}
 	return reflect.DeepEqual(decodedLeft, decodedRight)
+}
+
+type recordedContextFixture struct {
+	Limits struct {
+		Items             int `json:"items"`
+		NameCharacters    int `json:"name_characters"`
+		ContentBytes      int `json:"content_bytes"`
+		TotalContentBytes int `json:"total_content_bytes"`
+	} `json:"limits"`
+	Tiers    []string `json:"tiers"`
+	Accepted struct {
+		ID      string `json:"id"`
+		Request struct {
+			AgentKey          string        `json:"agent_key"`
+			SessionKey        string        `json:"session_key"`
+			IdempotencyKey    string        `json:"idempotency_key"`
+			Input             string        `json:"input"`
+			AgentDefinitionID string        `json:"agent_definition_id"`
+			Context           []ContextItem `json:"context"`
+		} `json:"request"`
+		Messages []json.RawMessage `json:"messages"`
+	} `json:"accepted"`
+	Rejected []struct {
+		ID      string        `json:"id"`
+		Context []ContextItem `json:"context"`
+	} `json:"rejected"`
+}
+
+// TestSharedRecordedContextFixtureIsExpressible proves recorded context reaches
+// the wire at the top level rather than inside the Agent Definition, and that
+// every locally checkable bound is refused before a request is spent.
+func TestSharedRecordedContextFixtureIsExpressible(t *testing.T) {
+	var fixture recordedContextFixture
+	decodeFile(t, "../conformance/fixtures/recorded-context-v1.json", &fixture)
+	if fixture.Limits.Items != maxContextItems ||
+		fixture.Limits.NameCharacters != maxContextNameRunes ||
+		fixture.Limits.ContentBytes != maxContextContentBytes ||
+		fixture.Limits.TotalContentBytes != maxContextTotalBytes {
+		t.Fatalf("context limits = %#v", fixture.Limits)
+	}
+	if !slices.Equal(fixture.Tiers, []string{
+		string(ContextTierContextual),
+		string(ContextTierOperator),
+	}) {
+		t.Fatalf("context tiers = %#v", fixture.Tiers)
+	}
+
+	accepted := fixture.Accepted.Request
+	encoded, err := (InvokeRequest{
+		AgentKey:          accepted.AgentKey,
+		SessionKey:        &accepted.SessionKey,
+		IdempotencyKey:    accepted.IdempotencyKey,
+		Input:             accepted.Input,
+		AgentDefinitionID: accepted.AgentDefinitionID,
+		Context:           accepted.Context,
+	}).encoded()
+	if err != nil {
+		t.Fatalf("encode recorded context: %v", err)
+	}
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &wire); err != nil {
+		t.Fatalf("decode recorded context: %v", err)
+	}
+	expected, err := json.Marshal(accepted.Context)
+	if err != nil {
+		t.Fatalf("encode fixture context: %v", err)
+	}
+	if !equalJSON(t, wire["context"], expected) {
+		t.Fatalf("context wire = %s", wire["context"])
+	}
+	if _, nested := wire["agent_definition"]; nested {
+		t.Fatal("recorded context must not carry an Agent Definition")
+	}
+
+	// The transcript stores each snapshot as a typed reminder block whose name
+	// carries the reserved prefix the request omits.
+	for _, encodedMessage := range fixture.Accepted.Messages {
+		var message SessionMessage
+		if err := json.Unmarshal(encodedMessage, &message); err != nil {
+			t.Fatalf("decode reminder message: %v", err)
+		}
+		if len(message.Content) != 1 {
+			t.Fatalf("reminder message content = %#v", message.Content)
+		}
+		reminder, err := message.Content[0].AsReminderBlock()
+		if err != nil {
+			t.Fatalf("decode reminder block: %v", err)
+		}
+		if reminder.Type != generated.TypeReminder ||
+			!strings.HasPrefix(reminder.Name, "app-") ||
+			reminder.Content == "" {
+			t.Fatalf("reminder block = %#v", reminder)
+		}
+	}
+
+	for _, rejected := range fixture.Rejected {
+		if _, err := (InvokeRequest{Context: rejected.Context}).encodedContext(); err == nil {
+			t.Fatalf("%s: recorded context was accepted", rejected.ID)
+		}
+	}
+	for _, generatedCase := range []struct {
+		id      string
+		context []ContextItem
+	}{
+		{"too-many-items", generatedContextItems(fixture.Limits.Items+1, 1)},
+		{"oversize-name", []ContextItem{{
+			Name:    strings.Repeat("a", fixture.Limits.NameCharacters+1),
+			Tier:    ContextTierContextual,
+			Content: "x",
+		}}},
+		{"oversize-content", []ContextItem{{
+			Name:    "customer",
+			Tier:    ContextTierContextual,
+			Content: strings.Repeat("a", fixture.Limits.ContentBytes+1),
+		}}},
+		{"oversize-total", generatedContextItems(3, fixture.Limits.ContentBytes)},
+	} {
+		if _, err := (InvokeRequest{Context: generatedCase.context}).encodedContext(); err == nil {
+			t.Fatalf("%s: recorded context was accepted", generatedCase.id)
+		}
+	}
+}
+
+func generatedContextItems(count, contentBytes int) []ContextItem {
+	items := make([]ContextItem, count)
+	for index := range items {
+		items[index] = ContextItem{
+			Name:    fmt.Sprintf("c%d", index),
+			Tier:    ContextTierContextual,
+			Content: strings.Repeat("a", contentBytes),
+		}
+	}
+	return items
 }

@@ -33,6 +33,13 @@ import {
     RedactedBlockFromJSONTyped,
     RedactedBlockToJSON,
 } from './RedactedBlock.js';
+import type { ReminderBlock } from './ReminderBlock.js';
+import {
+    instanceOfReminderBlock,
+    ReminderBlockFromJSON,
+    ReminderBlockFromJSONTyped,
+    ReminderBlockToJSON,
+} from './ReminderBlock.js';
 import type { ServerToolUseBlock } from './ServerToolUseBlock.js';
 import {
     instanceOfServerToolUseBlock,
@@ -75,7 +82,7 @@ import {
  *
  * @export
  */
-export type SessionContentBlock = { type: 'document' } & DocumentReferenceBlock | { type: 'image' } & ImageReferenceBlock | { type: 'redacted' } & RedactedBlock | { type: 'server_tool_use' } & ServerToolUseBlock | { type: 'text' } & TextBlock | { type: 'tool_result' } & ToolResultBlock | { type: 'tool_use' } & ToolUseBlock;
+export type SessionContentBlock = { type: 'document' } & DocumentReferenceBlock | { type: 'image' } & ImageReferenceBlock | { type: 'redacted' } & RedactedBlock | { type: 'reminder' } & ReminderBlock | { type: 'server_tool_use' } & ServerToolUseBlock | { type: 'text' } & TextBlock | { type: 'tool_result' } & ToolResultBlock | { type: 'tool_use' } & ToolUseBlock;
 
 export function SessionContentBlockFromJSON(json: any): SessionContentBlock {
     return SessionContentBlockFromJSONTyped(json, false);
@@ -92,6 +99,8 @@ export function SessionContentBlockFromJSONTyped(json: any, ignoreDiscriminator:
             return Object.assign({}, ImageReferenceBlockFromJSONTyped(json, true), { type: 'image' } as const);
         case 'redacted':
             return Object.assign({}, RedactedBlockFromJSONTyped(json, true), { type: 'redacted' } as const);
+        case 'reminder':
+            return Object.assign({}, ReminderBlockFromJSONTyped(json, true), { type: 'reminder' } as const);
         case 'server_tool_use':
             return Object.assign({}, ServerToolUseBlockFromJSONTyped(json, true), { type: 'server_tool_use' } as const);
         case 'text':
@@ -120,6 +129,8 @@ export function SessionContentBlockToJSONTyped(value?: SessionContentBlock | nul
             return Object.assign({}, ImageReferenceBlockToJSON(value), { type: 'image' } as const);
         case 'redacted':
             return Object.assign({}, RedactedBlockToJSON(value), { type: 'redacted' } as const);
+        case 'reminder':
+            return Object.assign({}, ReminderBlockToJSON(value), { type: 'reminder' } as const);
         case 'server_tool_use':
             return Object.assign({}, ServerToolUseBlockToJSON(value), { type: 'server_tool_use' } as const);
         case 'text':

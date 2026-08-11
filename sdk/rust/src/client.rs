@@ -687,6 +687,58 @@ impl McpServerHeaders {
     }
 }
 
+/// The recorded context bounds the Runtime enforces at admission.
+const MAX_CONTEXT_ITEMS: usize = 8;
+const MAX_CONTEXT_NAME_CHARS: usize = 64;
+const MAX_CONTEXT_CONTENT_BYTES: usize = 8 << 10;
+const MAX_CONTEXT_TOTAL_BYTES: usize = 16 << 10;
+
+/// Matches the contract's `^[a-z][a-z0-9-]*$` without pulling in a regex crate.
+fn valid_context_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_lowercase() => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// Controls how a recorded snapshot reaches the model.
+///
+/// `Contextual` is for conversation-adjacent facts, `Operator` for policy or
+/// other application-authoritative state. The tier stays typed in the
+/// transcript; the provider-native role is chosen when the turn generates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextTier {
+    Contextual,
+    Operator,
+}
+
+/// One application-owned state snapshot recorded ahead of a turn's input.
+///
+/// `name` is a stable identity: sending it again supersedes the earlier value,
+/// and an unchanged resend adds no transcript message, so a stateless host may
+/// resend its whole snapshot every turn. Omit the reserved `app-` prefix the
+/// model sees; nvoken adds it. Context is durable Session history rather than
+/// an Agent Definition field, so it never changes the content-addressed
+/// `agent_definition_id`.
+#[derive(Debug, Clone)]
+pub struct ContextItem {
+    pub name: String,
+    pub tier: ContextTier,
+    pub content: String,
+}
+
+impl ContextItem {
+    pub fn new(name: impl Into<String>, tier: ContextTier, content: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            tier,
+            content: content.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct InvokeRequest {
     pub agent_key: String,
@@ -710,6 +762,10 @@ pub struct InvokeRequest {
     /// Agent Definition. They live here rather than on `McpServer` because an
     /// Agent Definition is content-addressed and reused across turns.
     pub mcp_server_headers: Vec<McpServerHeaders>,
+    /// Ordered application state snapshots recorded before this turn's input.
+    /// The list is order-sensitive and material to idempotency: a replay that
+    /// reorders or edits an item conflicts rather than updating it.
+    pub context: Vec<ContextItem>,
     pub provider_keys: Vec<ProviderKeySelection>,
     /// Endpoint nvoken posts a signed webhook to when this Invocation
     /// parks awaiting host tool results or ends. An empty event list selects
@@ -740,6 +796,7 @@ impl InvokeRequest {
             agent_definition: Some(AgentDefinition::new(model)),
             agent_definition_id: None,
             mcp_server_headers: Vec::new(),
+            context: Vec::new(),
             provider_keys: Vec::new(),
             webhook: None,
             metadata: None,
@@ -776,6 +833,13 @@ impl InvokeRequest {
 
     pub fn mcp_server_headers(mut self, headers: McpServerHeaders) -> Self {
         self.mcp_server_headers.push(headers);
+        self
+    }
+
+    /// Appends one recorded context snapshot, in the order it should reach the
+    /// model.
+    pub fn context(mut self, item: ContextItem) -> Self {
+        self.context.push(item);
         self
     }
 
@@ -1351,6 +1415,66 @@ impl Client {
         Ok((!entries.is_empty()).then_some(entries))
     }
 
+    /// Checks the recorded context against the bounds the Runtime enforces at
+    /// admission, so a snapshot that cannot be admitted fails before a request
+    /// is spent. The per-Session limit of 16 distinct names is left to the
+    /// service, which is the only side that knows what a Session has already
+    /// recorded.
+    fn context_body(
+        request: &InvokeRequest,
+    ) -> Result<Option<Vec<models::InvocationContextItem>>, NvokenError> {
+        if request.context.len() > MAX_CONTEXT_ITEMS {
+            return Err(NvokenError::validation(format!(
+                "context accepts at most {MAX_CONTEXT_ITEMS} items"
+            )));
+        }
+        let mut seen = std::collections::HashSet::new();
+        let mut total = 0usize;
+        let mut entries = Vec::with_capacity(request.context.len());
+        for item in &request.context {
+            if item.name.chars().count() > MAX_CONTEXT_NAME_CHARS || !valid_context_name(&item.name)
+            {
+                return Err(NvokenError::validation(format!(
+                    "context name {} must match ^[a-z][a-z0-9-]*$ and be at most {MAX_CONTEXT_NAME_CHARS} characters",
+                    item.name
+                )));
+            }
+            if !seen.insert(item.name.clone()) {
+                return Err(NvokenError::validation(format!(
+                    "context name {} is repeated",
+                    item.name
+                )));
+            }
+            if item.content.is_empty() {
+                return Err(NvokenError::validation(format!(
+                    "context {} content cannot be empty",
+                    item.name
+                )));
+            }
+            if item.content.len() > MAX_CONTEXT_CONTENT_BYTES {
+                return Err(NvokenError::validation(format!(
+                    "context {} content exceeds {MAX_CONTEXT_CONTENT_BYTES} bytes",
+                    item.name
+                )));
+            }
+            total += item.content.len();
+            if total > MAX_CONTEXT_TOTAL_BYTES {
+                return Err(NvokenError::validation(format!(
+                    "context content totals more than {MAX_CONTEXT_TOTAL_BYTES} bytes"
+                )));
+            }
+            entries.push(models::InvocationContextItem::new(
+                item.name.clone(),
+                match item.tier {
+                    ContextTier::Contextual => models::invocation_context_item::Tier::Contextual,
+                    ContextTier::Operator => models::invocation_context_item::Tier::Operator,
+                },
+                item.content.clone(),
+            ));
+        }
+        Ok((!entries.is_empty()).then_some(entries))
+    }
+
     pub fn invocation_body(
         &self,
         request: InvokeRequest,
@@ -1372,6 +1496,7 @@ impl Client {
             preflight_input_blocks(&request.input_blocks)?;
         }
         let mcp_server_headers = Self::mcp_server_headers_body(&request)?;
+        let context = Self::context_body(&request)?;
         let agent_definition = request
             .agent_definition
             .map(|definition| self.agent_definition_body(definition))
@@ -1392,6 +1517,7 @@ impl Client {
         body.agent_definition_id = request.agent_definition_id;
         body.agent_definition = agent_definition;
         body.mcp_server_headers = mcp_server_headers;
+        body.context = context;
         body.tenant_key = request.tenant_key;
         body.session_id = request.session_id;
         body.session_key = request.session_key;

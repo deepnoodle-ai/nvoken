@@ -33,11 +33,14 @@ import {
   formatInvocationFailure,
   formatNvokenError,
   fetchTool,
+  isReminderContentBlock,
   mcpServer,
   preflightOutputSchema,
   toolInput,
   verifyCallback,
   type HostTool,
+  type ContextItem,
+  type ContextTier,
   type Credential,
   type CredentialIssuance,
   type CredentialList,
@@ -1129,6 +1132,7 @@ test("InvocationError is actionable without a formatter", () => {
     agentId,
     sessionId,
     userKey: null,
+    context: null,
     status: "failed",
     stopReason: null,
     blockingBudget: null,
@@ -2413,4 +2417,94 @@ test("shared invocation-nudge fixture pins the steering contract", async () => {
   });
   const drainedWire = raw.NudgeToJSON(drained) as unknown as Record<string, unknown>;
   assert.equal(drainedWire[fixture.nudge_status.drained_carries], 7);
+});
+
+// Recorded context must reach the wire at the top level rather than inside the
+// Agent Definition, and every locally checkable bound must be refused before a
+// request is spent.
+test("shared recorded-context fixture is expressible", async () => {
+  const fixture = JSON.parse(await readFile(
+    new URL("../../../conformance/fixtures/recorded-context-v1.json", import.meta.url),
+    "utf8",
+  )) as {
+    limits: { items: number; name_characters: number; content_bytes: number; total_content_bytes: number };
+    tiers: ContextTier[];
+    accepted: {
+      request: {
+        agent_key: string;
+        session_key: string;
+        idempotency_key: string;
+        input: string;
+        agent_definition_id: string;
+        context: ContextItem[];
+      };
+      messages: { role: string; content: SessionMessage["content"] }[];
+    };
+    rejected: { id: string; context: ContextItem[]; unrepresentable_in?: string[] }[];
+  };
+  assert.deepEqual(fixture.tiers, ["contextual", "operator"]);
+
+  let body: Record<string, unknown> | undefined;
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return admissionResponse();
+    },
+  });
+  const accepted = fixture.accepted.request;
+  await client.invoke({
+    agentKey: accepted.agent_key,
+    sessionKey: accepted.session_key,
+    idempotencyKey: accepted.idempotency_key,
+    input: accepted.input,
+    agentDefinitionId: accepted.agent_definition_id,
+    context: accepted.context,
+  });
+  assert.deepEqual(body?.context, accepted.context);
+  assert.equal(body?.agent_definition, undefined);
+
+  // The transcript stores each snapshot as a typed reminder block whose name
+  // carries the reserved prefix the request omits.
+  for (const message of fixture.accepted.messages) {
+    const [block] = message.content;
+    assert.ok(block !== undefined && isReminderContentBlock(block), message.role);
+    assert.ok(block.name.startsWith("app-"));
+    assert.ok(block.content.length > 0);
+  }
+
+  const refused = async (context: ContextItem[]): Promise<boolean> => {
+    try {
+      await client.invoke({
+        agentKey: "support",
+        input: "hello",
+        agentDefinitionId: accepted.agent_definition_id,
+        context,
+      });
+      return false;
+    } catch (error) {
+      return error instanceof NvokenError && error.category === "validation";
+    }
+  };
+  for (const rejected of fixture.rejected) {
+    if (rejected.unrepresentable_in?.includes("typescript")) continue;
+    assert.ok(await refused(rejected.context), rejected.id);
+  }
+  const item = (name: string, content: string): ContextItem =>
+    ({ name, tier: "contextual", content });
+  assert.ok(await refused(
+    Array.from({ length: fixture.limits.items + 1 }, (_value, index) => item(`c${index}`, "a")),
+  ), "too-many-items");
+  assert.ok(await refused(
+    [item("a".repeat(fixture.limits.name_characters + 1), "x")],
+  ), "oversize-name");
+  assert.ok(await refused(
+    [item("customer", "a".repeat(fixture.limits.content_bytes + 1))],
+  ), "oversize-content");
+  assert.ok(await refused(
+    Array.from({ length: 3 }, (_value, index) =>
+      item(`c${index}`, "a".repeat(fixture.limits.content_bytes))),
+  ), "oversize-total");
 });

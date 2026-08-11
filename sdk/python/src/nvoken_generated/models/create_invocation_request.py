@@ -20,6 +20,7 @@ import json
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
+from nvoken_generated.models.invocation_context_item import InvocationContextItem
 from nvoken_generated.models.invocation_input import InvocationInput
 from nvoken_generated.models.mcp_server_headers import MCPServerHeaders
 from nvoken_generated.models.provider_key_selection import ProviderKeySelection
@@ -44,6 +45,7 @@ class CreateInvocationRequest(BaseModel):
     idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Your key for making retries safe. Send the same unchanged request again after a 5xx, a timeout, a dropped connection, or any case where you never saw the response, and you get the original turn back instead of starting a second one.  Keys are scoped to the tenant and `agent_key`, so the same key under a different tenant is a different request. Deduplication lasts as long as the original turn still exists. ")
     if_active: Optional[StrictStr] = Field(default='reject', description="What to do when the Session already has a turn running. A Session runs one turn at a time.  - `reject` (the default) refuses this request with   `session_invocation_active` and leaves the running turn alone. - `supersede` cancels the running turn and starts this one in its   place. The cancelled turn's work is discarded and does not carry   forward — \"discard and redo\". - `interrupt` asks the running turn to stop cleanly and starts   this one only once it has, so this turn builds on what the   stopped one produced — \"stop and redo\".  Omitting the field and sending `reject` are the same request for idempotency purposes. ")
     on_budget_exhausted: Optional[StrictStr] = Field(default='stop', description="What to do when the turn runs out of one of its spending limits. `stop` ends it as `incomplete`. `pause` leaves it as `paused` so you can raise the limit and continue it.  Covers the iteration, output-token, per-turn cost, and Session cost limits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed. ")
+    context: Optional[Annotated[List[InvocationContextItem], Field(max_length=8)]] = Field(default=None, description="Ordered application-owned state snapshots to record before this turn's input. Send a name again to supersede its prior value. An unchanged latest value is deduplicated from the transcript, while this exact pre-deduplication payload remains part of the Invocation and of idempotency comparison.  A Session may observe at most 16 distinct names over its lifetime. Names are stored and shown to the model with the reserved `app-` prefix, which callers must omit here. Context is not part of the Agent Definition and never changes its content-addressed ID. ")
     input: InvocationInput
     webhook: Optional[WebhookTarget] = None
     agent_definition_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Reuse an Agent Definition already registered for this App, instead of sending it again. The ID is derived from the Agent Definition's content, so it never points at anything else.  IDs from another app, or IDs that do not exist, return `agent_definition_not_found`. Cannot be combined with `agent_definition`. Sending the ID and sending the identical definition inline count as the same request when retrying with an idempotency key. ")
@@ -51,7 +53,7 @@ class CreateInvocationRequest(BaseModel):
     mcp_server_headers: Optional[Annotated[List[MCPServerHeaders], Field(max_length=8)]] = Field(default=None, description="Per-Invocation secret headers keyed to MCP server names in the selected Agent Definition. Encrypted for this turn and never stored in, hashed into, or returned with the Agent Definition. ")
     provider_keys: Optional[Annotated[List[ProviderKeySelection], Field(min_length=1, max_length=1)]] = Field(default=None, description="Which key pays for the model on this turn. Names a source; never contains a secret.  Leave it out and nvoken works down its default order: your app's stored key for that provider, then a self-hosted installation's environment key (`config_byok`), then platform funding if the installation allows it.  Whichever source is chosen is fixed when the turn starts. A turn never silently falls through to a different payer partway through, so the bill cannot move once work has begun. ")
     additional_properties: Dict[str, Any] = {}
-    __properties: ClassVar[List[str]] = ["agent_key", "tenant_key", "user_key", "session_id", "session_key", "session_options", "metadata", "idempotency_key", "if_active", "on_budget_exhausted", "input", "webhook", "agent_definition_id", "agent_definition", "mcp_server_headers", "provider_keys"]
+    __properties: ClassVar[List[str]] = ["agent_key", "tenant_key", "user_key", "session_id", "session_key", "session_options", "metadata", "idempotency_key", "if_active", "on_budget_exhausted", "context", "input", "webhook", "agent_definition_id", "agent_definition", "mcp_server_headers", "provider_keys"]
 
     @field_validator('if_active')
     def if_active_validate_enum(cls, value):
@@ -117,6 +119,13 @@ class CreateInvocationRequest(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of session_options
         if self.session_options:
             _dict['session_options'] = self.session_options.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of each item in context (list)
+        _items = []
+        if self.context:
+            for _item_context in self.context:
+                if _item_context:
+                    _items.append(_item_context.to_dict())
+            _dict['context'] = _items
         # override the default output from pydantic by calling `to_dict()` of input
         if self.input:
             _dict['input'] = self.input.to_dict()
@@ -167,6 +176,7 @@ class CreateInvocationRequest(BaseModel):
             "idempotency_key": obj.get("idempotency_key"),
             "if_active": obj.get("if_active") if obj.get("if_active") is not None else 'reject',
             "on_budget_exhausted": obj.get("on_budget_exhausted") if obj.get("on_budget_exhausted") is not None else 'stop',
+            "context": [InvocationContextItem.from_dict(_item) for _item in obj["context"]] if obj.get("context") is not None else None,
             "input": InvocationInput.from_dict(obj["input"]) if obj.get("input") is not None else None,
             "webhook": WebhookTarget.from_dict(obj["webhook"]) if obj.get("webhook") is not None else None,
             "agent_definition_id": obj.get("agent_definition_id"),

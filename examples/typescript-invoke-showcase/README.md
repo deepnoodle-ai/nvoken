@@ -7,6 +7,8 @@ quickstart. It makes real provider requests and verifies:
 - exact idempotent admission replay and changed-request conflict;
 - Agent Definition registration, its content-addressed identity, and reuse of a
   registered `agentDefinitionId` on a later turn;
+- recorded application context reaching the model, deduplicating an unchanged
+  resend, and leaving the Agent Definition ID unchanged;
 - host ToolCall parking, Session visibility, result submission, and replay;
 - schema-bound host-tool input and structured output;
 - actionable waiting plus admission acknowledgement metadata;

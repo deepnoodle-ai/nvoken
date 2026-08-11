@@ -34,6 +34,13 @@ import {
     ModelUsageToJSON,
     ModelUsageToJSONTyped,
 } from './ModelUsage.js';
+import type { InvocationContextItem } from './InvocationContextItem.js';
+import {
+    InvocationContextItemFromJSON,
+    InvocationContextItemFromJSONTyped,
+    InvocationContextItemToJSON,
+    InvocationContextItemToJSONTyped,
+} from './InvocationContextItem.js';
 import type { ModelProvenance } from './ModelProvenance.js';
 import {
     ModelProvenanceFromJSON,
@@ -136,6 +143,17 @@ export interface Invocation {
      * @memberof Invocation
      */
     agentDefinition: AgentDefinition | null;
+    /**
+     * The ordered context payload accepted with this turn, before
+     * transcript deduplication. Null when omitted and in Invocation list
+     * items. Present on admission, point reads, results, and stream
+     * Invocation projections. Context is immutable and order-sensitive
+     * for idempotency.
+     *
+     * @type {Array<InvocationContextItem>}
+     * @memberof Invocation
+     */
+    context: Array<InvocationContextItem> | null;
     /**
      * Only present on the `POST /v1/invocations` response. False when this
      * call created a new turn, true when your idempotency key matched one
@@ -280,6 +298,7 @@ export function instanceOfInvocation(value: object): value is Invocation {
     if (!('userKey' in value) || value['userKey'] === undefined) return false;
     if (!('agentDefinitionId' in value) || value['agentDefinitionId'] === undefined) return false;
     if (!('agentDefinition' in value) || value['agentDefinition'] === undefined) return false;
+    if (!('context' in value) || value['context'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('stopReason' in value) || value['stopReason'] === undefined) return false;
     if (!('blockingBudget' in value) || value['blockingBudget'] === undefined) return false;
@@ -315,6 +334,7 @@ export function InvocationFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'userKey': json['user_key'],
         'agentDefinitionId': json['agent_definition_id'],
         'agentDefinition': AgentDefinitionFromJSON(json['agent_definition']),
+        'context': (json['context'] == null ? null : (json['context'] as Array<any>).map(InvocationContextItemFromJSON)),
         'deduplicated': json['deduplicated'] == null ? undefined : json['deduplicated'],
         'status': InvocationStatusFromJSON(json['status']),
         'stopReason': InvocationStopReasonFromJSON(json['stop_reason']),
@@ -353,6 +373,7 @@ export function InvocationToJSONTyped(value?: Invocation | null, ignoreDiscrimin
         'user_key': value['userKey'],
         'agent_definition_id': value['agentDefinitionId'],
         'agent_definition': AgentDefinitionToJSON(value['agentDefinition']),
+        'context': (value['context'] == null ? null : (value['context'] as Array<any>).map(InvocationContextItemToJSON)),
         'deduplicated': value['deduplicated'],
         'status': InvocationStatusToJSON(value['status']),
         'stop_reason': InvocationStopReasonToJSON(value['stopReason']),

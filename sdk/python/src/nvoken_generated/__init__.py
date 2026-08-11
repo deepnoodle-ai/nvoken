@@ -14,7 +14,7 @@
 """  # noqa: E501
 
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 # Define package exports
 __all__ = [
@@ -92,6 +92,7 @@ __all__ = [
     "Invocation",
     "InvocationAcceptedEvent",
     "InvocationChange",
+    "InvocationContextItem",
     "InvocationFailure",
     "InvocationInput",
     "InvocationList",
@@ -162,6 +163,7 @@ __all__ = [
     "RegisterAgentDefinitionRequest",
     "RegisterAppRequest",
     "RegisterOrgRequest",
+    "ReminderBlock",
     "ResolvedLimits",
     "ResumeInvocationRequest",
     "RetentionPolicy",
@@ -308,6 +310,7 @@ from nvoken_generated.models.input_block import InputBlock as InputBlock
 from nvoken_generated.models.invocation import Invocation as Invocation
 from nvoken_generated.models.invocation_accepted_event import InvocationAcceptedEvent as InvocationAcceptedEvent
 from nvoken_generated.models.invocation_change import InvocationChange as InvocationChange
+from nvoken_generated.models.invocation_context_item import InvocationContextItem as InvocationContextItem
 from nvoken_generated.models.invocation_failure import InvocationFailure as InvocationFailure
 from nvoken_generated.models.invocation_input import InvocationInput as InvocationInput
 from nvoken_generated.models.invocation_list import InvocationList as InvocationList
@@ -378,6 +381,7 @@ from nvoken_generated.models.redacted_block import RedactedBlock as RedactedBloc
 from nvoken_generated.models.register_agent_definition_request import RegisterAgentDefinitionRequest as RegisterAgentDefinitionRequest
 from nvoken_generated.models.register_app_request import RegisterAppRequest as RegisterAppRequest
 from nvoken_generated.models.register_org_request import RegisterOrgRequest as RegisterOrgRequest
+from nvoken_generated.models.reminder_block import ReminderBlock as ReminderBlock
 from nvoken_generated.models.resolved_limits import ResolvedLimits as ResolvedLimits
 from nvoken_generated.models.resume_invocation_request import ResumeInvocationRequest as ResumeInvocationRequest
 from nvoken_generated.models.retention_policy import RetentionPolicy as RetentionPolicy

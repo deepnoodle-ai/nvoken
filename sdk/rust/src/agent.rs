@@ -14,7 +14,7 @@ use futures_util::{pin_mut, StreamExt};
 use serde_json::{json, Value};
 
 use crate::client::{
-    AgentDefinition, BudgetExhaustionBehavior, Client, ErrorCategory, IfActivePolicy,
+    AgentDefinition, BudgetExhaustionBehavior, Client, ContextItem, ErrorCategory, IfActivePolicy,
     InvocationHandle, InvokeRequest, Limits, McpServer, McpServerHeaders, Model, NvokenError,
     ProviderKeySelection, ProviderTool, Reasoning, Sampling, SessionOptions, Tool, ToolChoice,
     ToolMode, ToolResult, WaitCondition, WaitOptions, WebhookTarget,
@@ -145,6 +145,10 @@ pub struct AgentInvocationOptions {
     pub on_budget_exhausted: Option<BudgetExhaustionBehavior>,
     pub webhook: Option<WebhookTarget>,
     pub wait: WaitOptions,
+    /// Application state snapshots to record ahead of this turn's input.
+    /// Per-call rather than per-Agent, because a snapshot is what changes
+    /// between turns while the Agent Definition stays fixed.
+    pub context: Vec<ContextItem>,
     /// Opaque host correlation data recorded on this Invocation. Immutable and
     /// material to idempotency: a replay carrying different metadata conflicts
     /// rather than updating it.
@@ -312,6 +316,7 @@ impl Agent {
             agent_definition: Some(agent_options.agent_definition.clone()),
             agent_definition_id: None,
             mcp_server_headers: agent_options.mcp_server_headers.clone(),
+            context: options.context.clone(),
             provider_keys: agent_options.provider_keys.clone(),
             // A per-call target overrides the Agent default so one Agent can
             // webhook different endpoints without a second Agent.

@@ -11,32 +11,39 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum SessionMessageRole {
-    #[serde(rename = "system")]
-    System,
-    #[serde(rename = "user")]
-    User,
-    #[serde(rename = "assistant")]
-    Assistant,
-    #[serde(rename = "tool")]
-    Tool,
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct InvocationContextItem {
+    /// Stable caller-owned name without the reserved `app-` prefix.
+    #[serde(rename = "name")]
+    pub name: String,
+    /// `contextual` is ordinary conversation context. `operator` is higher-authority application state; Dive maps the typed tier to each provider's native role.
+    #[serde(rename = "tier")]
+    pub tier: Tier,
+    /// Non-empty UTF-8 snapshot text, at most 8 KiB.
+    #[serde(rename = "content")]
+    pub content: String,
 }
 
-impl std::fmt::Display for SessionMessageRole {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::System => write!(f, "system"),
-            Self::User => write!(f, "user"),
-            Self::Assistant => write!(f, "assistant"),
-            Self::Tool => write!(f, "tool"),
+impl InvocationContextItem {
+    pub fn new(name: String, tier: Tier, content: String) -> InvocationContextItem {
+        InvocationContextItem {
+            name,
+            tier,
+            content,
         }
     }
 }
+/// `contextual` is ordinary conversation context. `operator` is higher-authority application state; Dive maps the typed tier to each provider's native role.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum Tier {
+    #[serde(rename = "contextual")]
+    Contextual,
+    #[serde(rename = "operator")]
+    Operator,
+}
 
-impl Default for SessionMessageRole {
-    fn default() -> SessionMessageRole {
-        Self::System
+impl Default for Tier {
+    fn default() -> Tier {
+        Self::Contextual
     }
 }

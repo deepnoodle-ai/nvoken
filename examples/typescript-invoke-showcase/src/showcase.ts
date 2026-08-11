@@ -8,6 +8,7 @@ import {
   defineJsonSchema,
   formatInvocationFailure,
   formatNvokenError,
+  isReminderContentBlock,
   toolInput,
   type InvocationHandle,
   type InvokeRequest,
@@ -153,6 +154,56 @@ async function main(): Promise<void> {
   assert.match(referenced.text, /registered/i);
   assert.equal(referenced.invocation.agentDefinitionId, registration.agentDefinitionId);
   console.log(`PASS Agent Definition registration is idempotent by content and reusable by ID: ${registration.agentDefinitionId}`);
+
+  // Recorded context is Session history rather than an Agent Definition field,
+  // so a turn carrying it reuses the same content-addressed ID. Resending an
+  // unchanged name adds no transcript message, while the Invocation still
+  // echoes the whole pre-deduplication list it accepted.
+  const contextSessionKey = `${runId}-context-session`;
+  const contextItems = [
+    { name: "customer", tier: "contextual", content: "plan: pro; confirmation code: ORCHID-724" },
+    { name: "reply-policy", tier: "operator", content: "Answer with one word and no punctuation." },
+  ] as const;
+  const recorded = await completed({
+    agentKey: primaryAgentKey,
+    tenantKey: tenantA,
+    sessionKey: contextSessionKey,
+    idempotencyKey: `${runId}:context-1`,
+    input: "Reply only with recorded.",
+    context: [...contextItems],
+    ...chatDefinition(),
+  });
+  assert.match(recorded.text, /recorded/i);
+  assert.equal(recorded.invocation.agentDefinitionId, registration.agentDefinitionId);
+  assert.deepEqual(recorded.invocation.context, [...contextItems]);
+
+  const contextMessages = await client.drainTranscript(recorded.handle.sessionId!, { pageSize: 50 });
+  const reminders = contextMessages.messages
+    .flatMap((message) => message.content)
+    .filter(isReminderContentBlock);
+  assert.deepEqual(
+    reminders.map((block) => block.name),
+    contextItems.map((item) => `app-${item.name}`),
+  );
+
+  // A second turn resending the identical snapshot records no new reminder,
+  // which is what lets a stateless host send its whole snapshot every turn.
+  const resent = await completed({
+    agentKey: primaryAgentKey,
+    tenantKey: tenantA,
+    sessionKey: contextSessionKey,
+    idempotencyKey: `${runId}:context-2`,
+    input: "What is my confirmation code? Reply only with the code.",
+    context: [...contextItems],
+    ...chatDefinition(),
+  });
+  assert.match(resent.text, /ORCHID-724/i);
+  const afterResend = await client.drainTranscript(resent.handle.sessionId!, { pageSize: 50 });
+  assert.equal(
+    afterResend.messages.flatMap((message) => message.content).filter(isReminderContentBlock).length,
+    reminders.length,
+  );
+  console.log("PASS recorded context reaches the model, deduplicates unchanged, and leaves the definition ID unchanged");
 
   const session = await client.getSession(first.handle.sessionId!);
   assert.equal(session.tenantKey, tenantA);

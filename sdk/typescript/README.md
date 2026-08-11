@@ -310,6 +310,46 @@ neither before it reaches the network. `Agent` always sends its definition
 inline, because it serves the host tool handlers declared in it; reuse by ID
 belongs on the `client.invoke()` path.
 
+## Record changing application state
+
+Keep `instructions` static. Product state that changes between turns — a board
+snapshot, customer facts, the current policy — belongs in `context`:
+
+```ts
+const support = client.agent({
+  agentKey: "support",
+  instructions: "Be concise and helpful.",
+});
+
+const answer = await support.text("Can I refund the duplicate charge?", {
+  sessionKey: "ticket-483",
+  context: [
+    { name: "customer", tier: "contextual", content: "plan: pro" },
+    { name: "refund-policy", tier: "operator", content: "Self-serve refunds cap at 50 USD" },
+  ],
+});
+```
+
+A name is a stable identity. Send it once and nvoken records it as a leading
+message the model reads as `app-customer`; omit that reserved prefix here.
+Send the same name again only when its value changes — a byte-identical resend
+is accepted but adds no message, so a stateless host may resend its whole
+snapshot every turn and get the same transcript as a host that tracks changes.
+
+Use `contextual` for conversation-adjacent facts and `operator` for policy or
+other application-authoritative state. Context is Session history, not an Agent
+Definition field: it never changes `agentDefinitionId`, and later turns keep
+sending it to the model even when you omit it. That is what keeps the prompt
+prefix stable enough for provider caching, which rewriting the same state into
+`instructions` would break on every turn.
+
+The list is order-sensitive and part of idempotency, so a replay that reorders
+or edits an item conflicts rather than updating it. A request accepts at most
+eight items, 8 KiB per item, and 16 KiB in total; the SDK checks all three
+before the request leaves the process. A Session may accumulate at most 16
+distinct names, which only the service can check. Retire a name by superseding
+it with a short current value such as `"ticket: closed"`.
+
 ## Remote MCP tools
 
 Probe the projected catalog, then attach the same declaration to an Agent:

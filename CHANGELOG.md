@@ -8,6 +8,24 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.13.0 - 2026-08-11
+
+- **Add recorded application context.** Send named state snapshots in `context`
+  on an invocation and nvoken records them as leading Session messages. Keep
+  instructions static and put changing product state here instead, so the prompt
+  prefix stays stable enough for provider caching.
+- A name is a stable identity. Resending it unchanged adds no transcript
+  message, so a stateless host can send its whole snapshot every turn. Use tier
+  `contextual` for conversation facts and `operator` for application-authoritative
+  policy.
+- Context is Session history, not an Agent Definition field, so it never changes
+  a content-addressed `agent_definition_id`. The SDKs check the eight-item,
+  8 KiB, and 16 KiB bounds before a request leaves the process.
+- Add the `reminder` content block and the `system` message role to the
+  transcript types. The CLI renders a reminder as its name and content.
+- Add `--context` and `--context-operator` to `nvoken invoke`, both taking
+  `name=content` and both repeatable.
+
 ## 0.12.0 - 2026-08-11
 
 - **Rename Definition to Agent Definition.** `definition_id` on an Invocation is

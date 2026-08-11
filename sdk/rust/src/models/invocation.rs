@@ -31,6 +31,9 @@ pub struct Invocation {
     /// The agent definition this turn actually ran with, stored when the turn started and returned exactly as it was. Request headers for remote MCP servers are never stored and never appear here.  Present on `GET /v1/invocations/{id}` and on the result. Null in list items, where `agent_definition_id` identifies it instead.
     #[serde(rename = "agent_definition", deserialize_with = "Option::deserialize")]
     pub agent_definition: Option<Box<models::AgentDefinition>>,
+    /// The ordered context payload accepted with this turn, before transcript deduplication. Null when omitted and in Invocation list items. Present on admission, point reads, results, and stream Invocation projections. Context is immutable and order-sensitive for idempotency.
+    #[serde(rename = "context", deserialize_with = "Option::deserialize")]
+    pub context: Option<Vec<models::InvocationContextItem>>,
     /// Only present on the `POST /v1/invocations` response. False when this call created a new turn, true when your idempotency key matched one that already existed and you got that one back.
     #[serde(rename = "deduplicated", skip_serializing_if = "Option::is_none")]
     pub deduplicated: Option<bool>,
@@ -89,6 +92,7 @@ impl Invocation {
         user_key: Option<String>,
         agent_definition_id: String,
         agent_definition: Option<models::AgentDefinition>,
+        context: Option<Vec<models::InvocationContextItem>>,
         status: models::InvocationStatus,
         stop_reason: Option<models::InvocationStopReason>,
         blocking_budget: Option<models::BudgetBlock>,
@@ -117,6 +121,7 @@ impl Invocation {
             } else {
                 None
             },
+            context,
             deduplicated: None,
             status,
             stop_reason,

@@ -23,6 +23,7 @@ from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.agent_definition import AgentDefinition
 from nvoken_generated.models.budget_block import BudgetBlock
+from nvoken_generated.models.invocation_context_item import InvocationContextItem
 from nvoken_generated.models.invocation_failure import InvocationFailure
 from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.invocation_stop_reason import InvocationStopReason
@@ -45,6 +46,7 @@ class Invocation(BaseModel):
     user_key: Optional[StrictStr] = Field(description="Your own label for the end user this turn belongs to. Useful for filtering lists. It is not a security boundary — no request is ever refused because of it, so do not rely on it to keep one user's data away from another. ")
     agent_definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Content-addressed Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
     agent_definition: Optional[AgentDefinition] = Field(description="The agent definition this turn actually ran with, stored when the turn started and returned exactly as it was. Request headers for remote MCP servers are never stored and never appear here.  Present on `GET /v1/invocations/{id}` and on the result. Null in list items, where `agent_definition_id` identifies it instead. ")
+    context: Optional[Annotated[List[InvocationContextItem], Field(max_length=8)]] = Field(description="The ordered context payload accepted with this turn, before transcript deduplication. Null when omitted and in Invocation list items. Present on admission, point reads, results, and stream Invocation projections. Context is immutable and order-sensitive for idempotency. ")
     deduplicated: Optional[StrictBool] = Field(default=None, description="Only present on the `POST /v1/invocations` response. False when this call created a new turn, true when your idempotency key matched one that already existed and you got that one back. ")
     status: InvocationStatus
     stop_reason: Optional[InvocationStopReason] = Field(description="Why the turn stopped or paused. Present on `completed`, `incomplete`, and `paused`; null on every other status — a failure keeps `error` as the authority. Treat an unrecognized value as an ordinary end. ")
@@ -63,7 +65,7 @@ class Invocation(BaseModel):
     updated_at: datetime
     ended_at: Optional[datetime]
     pending_tool_calls: Optional[List[PendingHostToolCall]] = Field(default=None, description="Present for a waiting Invocation with unresolved host or callback calls.")
-    __properties: ClassVar[List[str]] = ["id", "agent_id", "session_id", "user_key", "agent_definition_id", "agent_definition", "deduplicated", "status", "stop_reason", "blocking_budget", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "pending_tool_calls"]
+    __properties: ClassVar[List[str]] = ["id", "agent_id", "session_id", "user_key", "agent_definition_id", "agent_definition", "context", "deduplicated", "status", "stop_reason", "blocking_budget", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "pending_tool_calls"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -107,6 +109,13 @@ class Invocation(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of agent_definition
         if self.agent_definition:
             _dict['agent_definition'] = self.agent_definition.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of each item in context (list)
+        _items = []
+        if self.context:
+            for _item_context in self.context:
+                if _item_context:
+                    _items.append(_item_context.to_dict())
+            _dict['context'] = _items
         # override the default output from pydantic by calling `to_dict()` of blocking_budget
         if self.blocking_budget:
             _dict['blocking_budget'] = self.blocking_budget.to_dict()
@@ -141,6 +150,11 @@ class Invocation(BaseModel):
         # and model_fields_set contains the field
         if self.agent_definition is None and "agent_definition" in self.model_fields_set:
             _dict['agent_definition'] = None
+
+        # set to None if context (nullable) is None
+        # and model_fields_set contains the field
+        if self.context is None and "context" in self.model_fields_set:
+            _dict['context'] = None
 
         # set to None if stop_reason (nullable) is None
         # and model_fields_set contains the field
@@ -210,6 +224,7 @@ class Invocation(BaseModel):
             "user_key": obj.get("user_key"),
             "agent_definition_id": obj.get("agent_definition_id"),
             "agent_definition": AgentDefinition.from_dict(obj["agent_definition"]) if obj.get("agent_definition") is not None else None,
+            "context": [InvocationContextItem.from_dict(_item) for _item in obj["context"]] if obj.get("context") is not None else None,
             "deduplicated": obj.get("deduplicated"),
             "status": obj.get("status"),
             "stop_reason": obj.get("stop_reason"),

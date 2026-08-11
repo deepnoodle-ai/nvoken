@@ -61,6 +61,9 @@ from nvoken_generated.models.register_agent_definition_request import (
 )
 from nvoken_generated.models.invocation import Invocation
 from nvoken_generated.models.invocation_change import InvocationChange
+from nvoken_generated.models.invocation_context_item import (
+    InvocationContextItem as GeneratedInvocationContextItem,
+)
 from nvoken_generated.models.limits import Limits as GeneratedLimits
 from nvoken_generated.models.invocation_input import InvocationInput
 from nvoken_generated.models.invocation_list import InvocationList
@@ -407,6 +410,40 @@ class MCPServerHeaders:
     headers: dict[str, str] = field(default_factory=dict, repr=False)
 
 
+# The recorded context bounds the Runtime enforces at admission.
+_MAX_CONTEXT_ITEMS = 8
+_MAX_CONTEXT_NAME_LENGTH = 64
+_MAX_CONTEXT_CONTENT_BYTES = 8 * 1024
+_MAX_CONTEXT_TOTAL_BYTES = 16 * 1024
+_CONTEXT_NAME_PATTERN = re.compile(r"[a-z][a-z0-9-]*")
+
+
+ContextTier = Literal["contextual", "operator"]
+"""How a recorded snapshot reaches the model.
+
+``contextual`` is for conversation-adjacent facts, ``operator`` for policy or
+other application-authoritative state. The tier stays typed in the transcript;
+the provider-native role is chosen when the turn generates.
+"""
+
+
+@dataclass(frozen=True)
+class ContextItem:
+    """One application-owned state snapshot recorded ahead of a turn's input.
+
+    ``name`` is a stable identity: sending it again supersedes the earlier
+    value, and an unchanged resend adds no transcript message, so a stateless
+    host may resend its whole snapshot every turn. Omit the reserved ``app-``
+    prefix the model sees; nvoken adds it. Context is durable Session history
+    rather than an Agent Definition field, so it never changes the
+    content-addressed ``agent_definition_id``.
+    """
+
+    name: str
+    tier: ContextTier
+    content: str
+
+
 WebhookEvent = Literal["invocation.waiting", "invocation.paused", "invocation.ended"]
 
 
@@ -477,6 +514,12 @@ class InvokeRequest:
     session_options: SessionOptions | None = None
     provider_keys: tuple[ProviderKeySelection, ...] = ()
     webhook: WebhookTarget | None = None
+    context: tuple[ContextItem, ...] = ()
+    """Ordered application state snapshots recorded before this turn's input.
+
+    The list is order-sensitive and material to idempotency: a replay that
+    reorders or edits an item conflicts rather than updating it.
+    """
     # Opaque host correlation data recorded on this Invocation. It is part of
     # the admitted input, so it is immutable and material to idempotency: a
     # replay carrying different metadata conflicts rather than updating it.
@@ -792,6 +835,68 @@ class Client:
             ))
         return entries or None
 
+    def _context(
+        self,
+        request: InvokeRequest,
+    ) -> list[GeneratedInvocationContextItem] | None:
+        """Check the recorded context against the bounds the Runtime enforces.
+
+        Checked here so a snapshot that cannot be admitted fails before a
+        request is spent. The per-Session limit of 16 distinct names is left to
+        the service, which is the only side that knows what a Session has
+        already recorded.
+        """
+        if len(request.context) > _MAX_CONTEXT_ITEMS:
+            raise NvokenError(
+                "validation",
+                f"context accepts at most {_MAX_CONTEXT_ITEMS} items",
+            )
+        seen: set[str] = set()
+        total = 0
+        items: list[GeneratedInvocationContextItem] = []
+        for item in request.context:
+            if (
+                len(item.name) > _MAX_CONTEXT_NAME_LENGTH
+                or not _CONTEXT_NAME_PATTERN.fullmatch(item.name)
+            ):
+                raise NvokenError(
+                    "validation",
+                    f"context name {item.name} must match ^[a-z][a-z0-9-]*$ "
+                    f"and be at most {_MAX_CONTEXT_NAME_LENGTH} characters",
+                )
+            if item.name in seen:
+                raise NvokenError("validation", f"context name {item.name} is repeated")
+            seen.add(item.name)
+            if item.tier not in ("contextual", "operator"):
+                raise NvokenError(
+                    "validation",
+                    f"context {item.name} tier must be contextual or operator",
+                )
+            if not item.content:
+                raise NvokenError(
+                    "validation",
+                    f"context {item.name} content cannot be empty",
+                )
+            content_bytes = len(item.content.encode("utf-8"))
+            if content_bytes > _MAX_CONTEXT_CONTENT_BYTES:
+                raise NvokenError(
+                    "validation",
+                    f"context {item.name} content exceeds "
+                    f"{_MAX_CONTEXT_CONTENT_BYTES} bytes",
+                )
+            total += content_bytes
+            if total > _MAX_CONTEXT_TOTAL_BYTES:
+                raise NvokenError(
+                    "validation",
+                    f"context content totals more than {_MAX_CONTEXT_TOTAL_BYTES} bytes",
+                )
+            items.append(GeneratedInvocationContextItem(
+                name=item.name,
+                tier=item.tier,
+                content=item.content,
+            ))
+        return items or None
+
     def _invocation_body(self, request: InvokeRequest) -> CreateInvocationRequest:
         if not request.agent_key or not request.input:
             raise NvokenError("validation", "agent_key and input are required")
@@ -832,6 +937,7 @@ class Client:
             if request.agent_definition is not None
             else None,
             mcp_server_headers=self._mcp_server_headers(request),
+            context=self._context(request),
             provider_keys=[
                 _provider_key_selection(selection)
                 for selection in request.provider_keys

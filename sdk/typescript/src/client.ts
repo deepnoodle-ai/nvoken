@@ -317,6 +317,13 @@ export type ModelProvider = string;
 
 export type TextContentBlock = Extract<SessionContentBlock, { type: "text" }>;
 
+/**
+ * A recorded application context snapshot as it appears in the transcript. Its
+ * `name` carries the reserved `app-` prefix nvoken adds, so it never collides
+ * with anything the model wrote.
+ */
+export type ReminderContentBlock = Extract<SessionContentBlock, { type: "reminder" }>;
+
 export interface TextInputBlock {
   type: "text";
   text: string;
@@ -416,6 +423,12 @@ export function documentURLBlock(
 
 export function isTextContentBlock(block: SessionContentBlock): block is TextContentBlock {
   return block.type === "text" && typeof block.text === "string";
+}
+
+export function isReminderContentBlock(
+  block: SessionContentBlock,
+): block is ReminderContentBlock {
+  return block.type === "reminder" && typeof block.content === "string";
 }
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -731,6 +744,29 @@ export interface MCPServerHeaders {
   headers: Record<string, string>;
 }
 
+/**
+ * Controls how a recorded snapshot reaches the model: `contextual` for
+ * conversation-adjacent facts, `operator` for policy or other
+ * application-authoritative state. The tier stays typed in the transcript; the
+ * provider-native role is chosen when the turn generates.
+ */
+export type ContextTier = "contextual" | "operator";
+
+/**
+ * One application-owned state snapshot recorded ahead of a turn's input. `name`
+ * is a stable identity: sending it again supersedes the earlier value, and an
+ * unchanged resend adds no transcript message, so a stateless host may resend
+ * its whole snapshot every turn. Omit the reserved `app-` prefix the model
+ * sees; nvoken adds it. Context is durable Session history rather than an Agent
+ * Definition field, so it never changes the content-addressed
+ * `agentDefinitionId`.
+ */
+export interface ContextItem {
+  name: string;
+  tier: ContextTier;
+  content: string;
+}
+
 export type InvokeInput = string | readonly InputBlock[];
 export type IfActivePolicy = "reject" | "supersede" | "interrupt";
 export type BudgetExhaustionBehavior = "stop" | "pause";
@@ -761,6 +797,12 @@ interface InvokeRequestBase {
    * Agent Definition is content-addressed and reused across turns.
    */
   mcpServerHeaders?: readonly MCPServerHeaders[];
+  /**
+   * Ordered application state snapshots recorded before this turn's input. The
+   * list is order-sensitive and material to idempotency: a replay that reorders
+   * or edits an item conflicts rather than updating it.
+   */
+  context?: readonly ContextItem[];
   /**
    * Opaque host correlation data recorded on this Invocation. It is part of
    * the admitted input, so it is immutable and material to idempotency: a
@@ -848,6 +890,12 @@ export interface InvocationOptions {
   ifActive?: IfActivePolicy;
   onBudgetExhausted?: BudgetExhaustionBehavior;
   webhook?: WebhookTarget;
+  /**
+   * Application state snapshots to record ahead of this turn's input. Per-call
+   * rather than per-Agent, because a snapshot is what changes between turns
+   * while the Agent Definition stays fixed.
+   */
+  context?: readonly ContextItem[];
   /**
    * Opaque host correlation data recorded on this Invocation. Per-call rather
    * than per-Agent: it is immutable and material to idempotency, so an
@@ -2115,6 +2163,7 @@ export class Agent<TOutput extends object = JsonObject> {
       // A per-call target overrides the agent default so one Agent can webhook
       // different endpoints without a second Agent.
       webhook: options.webhook ?? this.options.webhook,
+      context: options.context,
       metadata: options.metadata,
     };
     if (options.sessionId) {
@@ -2781,6 +2830,9 @@ function invocationRequestToWire<TOutput extends object>(
   idempotencyKey: string,
 ): CreateInvocationRequest {
   preflightInput(request.input);
+  // Checked here rather than in invoke() so the Agent stream path, which
+  // renders its own wire request, gets the same bounds.
+  validateContext(request.context);
   return {
     agentKey: request.agentKey,
     tenantKey: request.tenantKey,
@@ -2802,6 +2854,7 @@ function invocationRequestToWire<TOutput extends object>(
       name: entry.name,
       headers: { ...entry.headers },
     })),
+    context: request.context?.map((item) => ({ ...item })),
     providerKeys: request.providerKeys,
     webhook: request.webhook === undefined ? undefined : {
       url: request.webhook.url,
@@ -2861,6 +2914,70 @@ function validateMCPServerHeaders<TOutput extends object>(
       throw new NvokenError(
         "validation",
         `mcpServerHeaders name ${entry.name} matches no declared mcp server`,
+      );
+    }
+  }
+}
+
+/**
+ * The recorded context bounds the Runtime enforces. They are checked here so a
+ * snapshot that cannot be admitted fails before a request is spent. The
+ * per-Session limit of 16 distinct names is left to the service, which is the
+ * only side that knows what a Session has already recorded.
+ */
+const MAX_CONTEXT_ITEMS = 8;
+const MAX_CONTEXT_NAME_LENGTH = 64;
+const MAX_CONTEXT_CONTENT_BYTES = 8 * 1024;
+const MAX_CONTEXT_TOTAL_BYTES = 16 * 1024;
+const CONTEXT_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+
+function utf8Bytes(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+/**
+ * Checks the recorded context snapshots against the bounds the Runtime enforces
+ * at admission.
+ */
+function validateContext(items: readonly ContextItem[] | undefined): void {
+  if (items === undefined) return;
+  if (items.length > MAX_CONTEXT_ITEMS) {
+    throw new NvokenError("validation", `context accepts at most ${MAX_CONTEXT_ITEMS} items`);
+  }
+  const seen = new Set<string>();
+  let total = 0;
+  for (const item of items) {
+    if (item.name.length > MAX_CONTEXT_NAME_LENGTH || !CONTEXT_NAME_PATTERN.test(item.name)) {
+      throw new NvokenError(
+        "validation",
+        `context name ${item.name} must match ^[a-z][a-z0-9-]*$ and be at most ${MAX_CONTEXT_NAME_LENGTH} characters`,
+      );
+    }
+    if (seen.has(item.name)) {
+      throw new NvokenError("validation", `context name ${item.name} is repeated`);
+    }
+    seen.add(item.name);
+    if (item.tier !== "contextual" && item.tier !== "operator") {
+      throw new NvokenError(
+        "validation",
+        `context ${item.name} tier must be contextual or operator`,
+      );
+    }
+    if (!item.content) {
+      throw new NvokenError("validation", `context ${item.name} content cannot be empty`);
+    }
+    const bytes = utf8Bytes(item.content);
+    if (bytes > MAX_CONTEXT_CONTENT_BYTES) {
+      throw new NvokenError(
+        "validation",
+        `context ${item.name} content exceeds ${MAX_CONTEXT_CONTENT_BYTES} bytes`,
+      );
+    }
+    total += bytes;
+    if (total > MAX_CONTEXT_TOTAL_BYTES) {
+      throw new NvokenError(
+        "validation",
+        `context content totals more than ${MAX_CONTEXT_TOTAL_BYTES} bytes`,
       );
     }
   }
