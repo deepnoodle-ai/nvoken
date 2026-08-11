@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -25,12 +25,12 @@ pub struct Invocation {
     /// Your own label for the end user this turn belongs to. Useful for filtering lists. It is not a security boundary — no request is ever refused because of it, so do not rely on it to keep one user's data away from another.
     #[serde(rename = "user_key", deserialize_with = "Option::deserialize")]
     pub user_key: Option<String>,
-    /// Opaque identifier with the public `def_` prefix. Treat the body as opaque.
-    #[serde(rename = "definition_id")]
-    pub definition_id: String,
-    /// The agent definition this turn actually ran with, stored when the turn started and returned exactly as it was. Request headers for remote MCP servers are never stored and never appear here.  Present on `GET /v1/invocations/{id}` and on the result. Null in list items, where `definition_id` identifies it instead.
-    #[serde(rename = "definition", deserialize_with = "Option::deserialize")]
-    pub definition: Option<Box<models::Definition>>,
+    /// Content-addressed Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+    #[serde(rename = "agent_definition_id")]
+    pub agent_definition_id: String,
+    /// The agent definition this turn actually ran with, stored when the turn started and returned exactly as it was. Request headers for remote MCP servers are never stored and never appear here.  Present on `GET /v1/invocations/{id}` and on the result. Null in list items, where `agent_definition_id` identifies it instead.
+    #[serde(rename = "agent_definition", deserialize_with = "Option::deserialize")]
+    pub agent_definition: Option<Box<models::AgentDefinition>>,
     /// Only present on the `POST /v1/invocations` response. False when this call created a new turn, true when your idempotency key matched one that already existed and you got that one back.
     #[serde(rename = "deduplicated", skip_serializing_if = "Option::is_none")]
     pub deduplicated: Option<bool>,
@@ -76,7 +76,7 @@ pub struct Invocation {
     pub updated_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "ended_at", deserialize_with = "Option::deserialize")]
     pub ended_at: Option<chrono::DateTime<chrono::FixedOffset>>,
-    /// Present for a waiting Invocation with unresolved host calls.
+    /// Present for a waiting Invocation with unresolved host or callback calls.
     #[serde(rename = "pending_tool_calls", skip_serializing_if = "Option::is_none")]
     pub pending_tool_calls: Option<Vec<models::PendingHostToolCall>>,
 }
@@ -87,8 +87,8 @@ impl Invocation {
         agent_id: String,
         session_id: String,
         user_key: Option<String>,
-        definition_id: String,
-        definition: Option<models::Definition>,
+        agent_definition_id: String,
+        agent_definition: Option<models::AgentDefinition>,
         status: models::InvocationStatus,
         stop_reason: Option<models::InvocationStopReason>,
         blocking_budget: Option<models::BudgetBlock>,
@@ -111,8 +111,8 @@ impl Invocation {
             agent_id,
             session_id,
             user_key,
-            definition_id,
-            definition: if let Some(x) = definition {
+            agent_definition_id,
+            agent_definition: if let Some(x) = agent_definition {
                 Some(Box::new(x))
             } else {
                 None

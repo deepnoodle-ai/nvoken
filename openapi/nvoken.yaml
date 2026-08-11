@@ -7,8 +7,8 @@ info:
     name: Apache-2.0
     identifier: Apache-2.0
   description: |
-    nvoken runs agent turns for you. You describe a turn — an agent
-    definition, a model, and some input — and nvoken queues it, runs it in the
+    nvoken runs agent turns for you. You describe a turn — an Agent Definition
+    and some input — and nvoken queues it, runs it in the
     background, keeps running it across restarts and failures, and lets you
     either watch it live or come back for the result later.
 
@@ -32,8 +32,8 @@ info:
       out.
 
     Also here: tools nvoken calls back to over HTTPS, remote MCP servers,
-    structured output validated against your JSON Schema, reusable agent
-    definitions, image and document input, your own model provider keys, and
+    structured output validated against your JSON Schema, reusable Agent
+    Definitions, image and document input, your own model provider keys, and
     spending limits.
 
     ## Authorization
@@ -72,7 +72,7 @@ info:
     resource.
 
     A turn reports the `limits` it is really running under, after defaults and
-    minimums; the `definition` it ran with, exactly as stored; and
+    minimums; the `agent_definition` it ran with, exactly as stored; and
     `provenance`, which records what actually served the request. A Session
     reports its compaction (summarization) policy with `auto` already resolved to a real
     number and a real model, and its retention window as accepted. New
@@ -93,6 +93,8 @@ tags:
     description: Curated model discovery and exact model-selection inspection.
   - name: MCP
     description: Stateless remote MCP server discovery.
+  - name: Agent Definitions
+    description: Immutable, content-addressed agent configurations registered without starting a turn.
   - name: Sessions
     description: Durable conversation identity and state. A Session is what OpenAI and Mistral call a Conversation.
   - name: Provider keys
@@ -459,6 +461,78 @@ paths:
           $ref: "#/components/responses/MCPDiscoveryFailed"
         "503":
           $ref: "#/components/responses/Unavailable"
+  /v1/agent-definitions:
+    post:
+      tags: [Agent Definitions]
+      operationId: registerAgentDefinition
+      summary: Register one immutable Agent Definition without starting a turn
+      description: |
+        Validates and stores the same content-addressed Agent Definition that an
+        inline `POST /v1/invocations` request would store, but creates no Agent,
+        Session, message, or Invocation. The response is the same for a first
+        registration, a repeat, or an Agent Definition an earlier turn already stored.
+
+        Registration canonicalizes accepted model-provider aliases and resolves
+        MCP defaults before hashing. Registering with an alias and invoking with
+        its canonical provider name therefore produces the same `agent_definition_id`.
+        The ID is not a mutable version or an agent name, and there is no list,
+        read, update, or delete endpoint for Agent Definitions.
+
+        Registration checks only the Agent Definition's own content: schema and size
+        bounds, model controls, provider-tool support, and tool declarations.
+        Turn admission checks installation, App signing-key, builtin-gate,
+        budget, provider-key, Session, and current model-lifecycle state again.
+        In particular, a callback tool can be registered before its App callback
+        signing key exists, but an Invocation using it is refused until delivery
+        is configured.
+
+        Remote MCP headers are per-Invocation secrets and are not part of this
+        request shape. Supply them through `mcp_server_headers` when creating an
+        Invocation, whether its Agent Definition is inline or referenced by ID.
+
+        The caller needs `create_invocation` on an App-bound credential. App-less
+        installation credentials and tenant- or Session-constrained credentials
+        are refused because registration creates an App-wide claim. The body may
+        be at most 1 MiB.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterAgentDefinitionRequest"
+            examples:
+              supportDefinition:
+                value:
+                  instructions: You are a concise billing support agent.
+                  model:
+                    provider: anthropic
+                    id: claude-sonnet-5
+      responses:
+        "200":
+          description: The resolved immutable Agent Definition and its content-addressed ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDefinitionRegistration"
+              example:
+                agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                agent_definition:
+                  instructions: You are a concise billing support agent.
+                  model:
+                    provider: anthropic
+                    id: claude-sonnet-5
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
   /v1/invocations:
     get:
       tags: [Invocations]
@@ -528,7 +602,7 @@ paths:
       description: |
         Starts one agent turn and returns immediately. In a single database
         transaction nvoken finds or creates the Agent and Session, resolves
-        the agent definition you sent inline or referenced by `definition_id`,
+        the agent definition you sent inline or referenced by `agent_definition_id`,
         appends your input as one message, and queues the turn. You get a
         response only after that transaction commits, so a `202` means the
         work is safely recorded and will run even if nvoken restarts. The
@@ -552,8 +626,8 @@ paths:
         finished. Keys are scoped to the tenant and `agent_key`.
 
         A repeat counts as the same request only if the Session selector, the
-        resolved definition, and the input all match. A `definition_id` and
-        the identical inline definition count as the same. Limits are compared
+        resolved Agent Definition, and the input all match. An `agent_definition_id`
+        and the identical inline Agent Definition count as the same. Limits are compared
         as you sent them, so sending a value that happens to equal the default
         is not the same as omitting it. Key order inside JSON objects does not
         matter; array order does. Change anything that matters and you get
@@ -664,9 +738,10 @@ paths:
                   tenant_key: tenant-acme
                   idempotency_key: ticket-483:first-reply
                   input: Why was I charged twice?
-                  model:
-                    provider: anthropic
-                    id: claude-sonnet-5
+                  agent_definition:
+                    model:
+                      provider: anthropic
+                      id: claude-sonnet-5
               keyedSession:
                 summary: Resolve or create a tenant-partitioned host Session key
                 value:
@@ -677,10 +752,11 @@ paths:
                   input:
                     - type: text
                       text: Can you show me the two charge dates?
-                  instructions: You are a concise billing support agent.
-                  model:
-                    provider: anthropic
-                    id: claude-sonnet-5
+                  agent_definition:
+                    instructions: You are a concise billing support agent.
+                    model:
+                      provider: anthropic
+                      id: claude-sonnet-5
               existingSession:
                 summary: Continue an existing Session by durable ID
                 value:
@@ -690,17 +766,18 @@ paths:
                   input:
                     - type: text
                       text: Please summarize what happened.
-                  instructions: You are a concise billing support agent.
-                  model:
-                    provider: openai
-                    id: gpt-5.4
+                  agent_definition:
+                    instructions: You are a concise billing support agent.
+                    model:
+                      provider: openai
+                      id: gpt-5.4
               reusedDefinition:
-                summary: Reuse an immutable Definition already created for this App
+                summary: Reuse an immutable Agent Definition already registered for this App
                 value:
                   agent_key: support-triage
                   session_key: ticket-483
                   idempotency_key: ticket-483:follow-up-4
-                  definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                  agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                   input: Please draft the reply.
               outputSchema:
                 summary: Require one validated machine-readable object
@@ -711,18 +788,19 @@ paths:
                   input:
                     - type: text
                       text: Classify the billing problem.
-                  instructions: Classify the request, then submit the result.
-                  model:
-                    provider: anthropic
-                    id: claude-sonnet-5
-                  output_schema:
-                    type: object
-                    properties:
-                      category:
-                        type: string
-                        enum: [duplicate_charge, refund, other]
-                    required: [category]
-                    additionalProperties: false
+                  agent_definition:
+                    instructions: Classify the request, then submit the result.
+                    model:
+                      provider: anthropic
+                      id: claude-sonnet-5
+                    output_schema:
+                      type: object
+                      properties:
+                        category:
+                          type: string
+                          enum: [duplicate_charge, refund, other]
+                      required: [category]
+                      additionalProperties: false
       responses:
         "202":
           description: |
@@ -747,8 +825,8 @@ paths:
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                    definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
-                    definition: null
+                    agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                    agent_definition: null
                     status: queued
                     stop_reason: null
                     blocking_budget: null
@@ -777,8 +855,8 @@ paths:
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                    definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
-                    definition: null
+                    agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                    agent_definition: null
                     status: running
                     stop_reason: null
                     blocking_budget: null
@@ -807,8 +885,8 @@ paths:
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                    definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
-                    definition: null
+                    agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                    agent_definition: null
                     status: completed
                     stop_reason: end_turn
                     blocking_budget: null
@@ -842,7 +920,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The referenced Session, Invocation, or definition is not visible to this app.
+          description: The referenced Session, Invocation, or Agent Definition is not visible to this app.
           content:
             application/json:
               schema:
@@ -850,11 +928,11 @@ paths:
               examples:
                 definitionNotFound:
                   value:
-                    code: definition_not_found
-                    message: The definition does not exist in this app.
+                    code: agent_definition_not_found
+                    message: The Agent Definition does not exist in this app.
                     request_id: req_01K0NV9K7Z9WR3Y3Q3RMV2G7H2
                     details:
-                      definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                      agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
         "409":
           description: The idempotency key, supplied Session options, or active Session state conflicts.
           content:
@@ -953,8 +1031,8 @@ paths:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
-                    definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
-                    definition:
+                    agent_definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
+                    agent_definition:
                       model:
                         provider: anthropic
                         id: claude-sonnet-5
@@ -1026,8 +1104,8 @@ paths:
                       agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                       session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                       user_key: null
-                      definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
-                      definition:
+                      agent_definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
+                      agent_definition:
                         model:
                           provider: anthropic
                           id: claude-sonnet-5
@@ -1151,6 +1229,7 @@ paths:
                     created_at: "2026-08-08T17:02:11Z"
                     ended_at: "2026-08-08T17:02:19Z"
                     attempts: 0
+                    result_origin: callback
                     delivery:
                       outcome: succeeded
                       attempts: 2
@@ -1539,7 +1618,7 @@ paths:
     post:
       tags: [Invocations]
       operationId: submitHostToolResults
-      summary: Submit durable results for pending host ToolCalls
+      summary: Submit durable results for pending host and callback ToolCalls
       description: |
         Atomically accepts one bounded batch for a waiting Invocation. The
         first committed result for each ToolCall wins. An equal replay is
@@ -1548,7 +1627,7 @@ paths:
         queues the same Invocation and its successor dispatch before
         returning `202`.
 
-        This command accepts only host-mode calls owned by the path
+        This command accepts only host- or callback-mode calls owned by the path
         Invocation and authenticated tenant scope. It is not a generic
         Session append endpoint. The body is limited to 1 MiB; each result
         content value is valid JSON limited to 256 KiB and 32 nesting levels.
@@ -1599,7 +1678,7 @@ paths:
                 notWaiting:
                   value:
                     code: invocation_not_waiting
-                    message: The Invocation is not waiting for this host tool result.
+                    message: The Invocation is not waiting for this tool result.
                     request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR3
                 conflict:
                   value:
@@ -1609,7 +1688,7 @@ paths:
                 expired:
                   value:
                     code: tool_result_expired
-                    message: The host tool result deadline has expired.
+                    message: The tool result deadline has expired.
                     request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR3
         "500":
           $ref: "#/components/responses/Internal"
@@ -2881,13 +2960,22 @@ webhooks:
         rather than re-serialized JSON, and reject timestamps too far from your
         own clock.
 
+        For work that may outlive the App's callback reply deadline, return
+        HTTP 202 with an empty body. That acknowledges the delivery without
+        settling the ToolCall; later submit its result through
+        `POST /v1/invocations/{invocation_id}/tool-results`. An acknowledged
+        call waits under the host's responsibility and is bounded only when
+        the Invocation opted into `waiting_timeout_seconds`.
+
         **If you never reply successfully, the turn still moves on.** nvoken
         retries with exponential backoff, up to five attempts, on connection
         failures and on HTTP 408, 425, 429, 500, 502, 503, and 504. A reply
         that arrives but is malformed is not retried. Once attempts run out,
         nvoken records the tool call as failed with `is_error: true` and
         content `{"code":"callback_delivery_failed"}`, and the turn continues
-        from there — so your agent sees a failed tool rather than hanging.
+        from there. This fail-loud guarantee applies to unacknowledged
+        delivery exhaustion; an acknowledged call remains parked as described
+        above.
       parameters:
         - name: X-Nvoken-Signature
           in: header
@@ -2953,11 +3041,13 @@ webhooks:
       responses:
         "2XX":
           description: |
-            The ToolCall result. The body must be an object with exactly
-            `content` and optional `is_error`. Content may be any JSON value.
-            Its encoded size is at most 256 KiB and its nesting depth is at
-            most 32. Unknown or duplicate members, trailing data, and any other
-            shape are invalid.
+            HTTP 202 with an empty body acknowledges delivery without settling
+            the ToolCall. Any 2xx response carrying a body is the ToolCall
+            result: the body must be an object with exactly `content` and
+            optional `is_error`. Content may be any JSON value. Its encoded
+            size is at most 256 KiB and its nesting depth is at most 32.
+            Unknown or duplicate members, trailing data, and any other shape
+            are invalid.
           content:
             application/json:
               schema:
@@ -3247,7 +3337,7 @@ components:
     App:
       type: object
       additionalProperties: false
-      required: [id, org_id, name, external_ref, display_name, created_at]
+      required: [id, org_id, name, external_ref, display_name, callback_timeout_seconds, created_at]
       properties:
         id:
           $ref: "#/components/schemas/AppID"
@@ -3273,6 +3363,14 @@ components:
           type: [string, "null"]
           maxLength: 255
           description: Human-facing label; `name` stays the unique handle.
+        callback_timeout_seconds:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 60
+          description: |
+            Resolved deadline for each callback HTTP request. Defaults to 10.
+            Webhook delivery is unaffected.
         created_at:
           type: string
           format: date-time
@@ -3352,6 +3450,13 @@ components:
           minLength: 1
           maxLength: 255
           description: Optional human-facing label.
+        callback_timeout_seconds:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 60
+          default: 10
+          description: Callback HTTP reply deadline for this App.
     UpdateAppRequest:
       type: object
       additionalProperties: false
@@ -3367,6 +3472,12 @@ components:
           description: |
             New owning Org. Supplying this field transfers ownership and is
             restricted to installation administrators.
+        callback_timeout_seconds:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 60
+          description: New callback HTTP reply deadline for this App.
     AgentList:
       type: object
       additionalProperties: false
@@ -3690,9 +3801,15 @@ components:
       additionalProperties: false
       required: [agent_key, idempotency_key, input]
       description: |
-        The request carries one definition form. It either carries
-        definition_id or an inline definition with model. The two forms are
-        mutually exclusive.
+        The request carries exactly one Agent Definition form: either
+        `agent_definition_id` or an inline `agent_definition` object.
+      oneOf:
+        - required: [agent_definition]
+          not:
+            required: [agent_definition_id]
+        - required: [agent_definition_id]
+          not:
+            required: [agent_definition]
       allOf:
         - not:
             required: [session_id, session_key]
@@ -3811,48 +3928,28 @@ components:
           $ref: "#/components/schemas/InvocationInput"
         webhook:
           $ref: "#/components/schemas/WebhookTarget"
-        definition_id:
-          $ref: "#/components/schemas/DefinitionID"
+        agent_definition_id:
+          $ref: "#/components/schemas/AgentDefinitionID"
           description: |
-            Reuse an agent definition you already sent inline on an earlier turn,
-            instead of sending it again. The ID is derived from the definition's
-            own content, so it never points at anything but that exact definition.
+            Reuse an Agent Definition already registered for this App,
+            instead of sending it again. The ID is derived from the Agent
+            Definition's content, so it never points at anything else.
 
             IDs from another app, or IDs that do not exist, return
-            `definition_not_found`. Cannot be combined with the inline definition
-            fields. Sending the ID and sending the identical definition inline
+            `agent_definition_not_found`. Cannot be combined with `agent_definition`.
+            Sending the ID and sending the identical definition inline
             count as the same request when retrying with an idempotency key.
-        instructions:
-          type: string
-          minLength: 1
-          description: Optional model instructions. Omission adds no hidden default.
-        model:
-          $ref: "#/components/schemas/ModelInput"
-        sampling:
-          $ref: "#/components/schemas/Sampling"
-        reasoning:
-          $ref: "#/components/schemas/Reasoning"
-        tool_choice:
-          $ref: "#/components/schemas/ToolChoice"
-        limits:
-          $ref: "#/components/schemas/Limits"
-        output_schema:
-          $ref: "#/components/schemas/OutputSchema"
-        tools:
-          type: array
-          maxItems: 32
-          items:
-            $ref: "#/components/schemas/ToolDeclaration"
-        mcp_servers:
+        agent_definition:
+          $ref: "#/components/schemas/RegisterAgentDefinitionRequest"
+        mcp_server_headers:
           type: array
           maxItems: 8
           items:
-            $ref: "#/components/schemas/MCPServer"
-        provider_tools:
-          type: array
-          maxItems: 4
-          items:
-            $ref: "#/components/schemas/ProviderTool"
+            $ref: "#/components/schemas/MCPServerHeaders"
+          description: |
+            Per-Invocation secret headers keyed to MCP server names in the
+            selected Agent Definition. Encrypted for this turn and never stored
+            in, hashed into, or returned with the Agent Definition.
         provider_keys:
           type: array
           minItems: 1
@@ -3989,8 +4086,8 @@ components:
         Optional endpoint nvoken posts a signed webhook to when this
         Invocation parks awaiting host tool results or reaches a terminal
         status. It is delivery configuration rather than model input, so it is
-        excluded from the reusable Definition. Two otherwise identical turns
-        that differ only in endpoint therefore share one Definition.
+        excluded from the reusable Agent Definition. Two otherwise identical
+        turns that differ only in endpoint therefore share one Agent Definition.
 
         Delivery is at least once and ordered within one Invocation, and the
         webhook ID is repeated in `Idempotency-Key` on every attempt. nvoken
@@ -4736,11 +4833,61 @@ components:
             determines the real media type from the bytes it received.
             `media_type` is optional here; if you do send it, it must be
             `application/pdf`.
-    DefinitionID:
+    AgentDefinitionID:
       type: string
       minLength: 1
-      description: Opaque identifier with the public `def_` prefix. Treat the body as opaque.
-    Definition:
+      description: Content-addressed Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+    RegisterAgentDefinitionRequest:
+      type: object
+      additionalProperties: false
+      required: [model]
+      properties:
+        instructions:
+          type: string
+          minLength: 1
+          description: Optional model instructions. Omission adds no hidden default.
+        model:
+          $ref: "#/components/schemas/ModelInput"
+        sampling:
+          $ref: "#/components/schemas/Sampling"
+        reasoning:
+          $ref: "#/components/schemas/Reasoning"
+        tool_choice:
+          $ref: "#/components/schemas/ToolChoice"
+        limits:
+          $ref: "#/components/schemas/Limits"
+        output_schema:
+          $ref: "#/components/schemas/OutputSchema"
+        tools:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/ToolDeclaration"
+        mcp_servers:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/MCPServer"
+          description: MCP server declarations for later Invocations. Secrets are never part of an Agent Definition.
+        provider_tools:
+          type: array
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/ProviderTool"
+      description: |
+        One Agent Definition accepted by registration or nested under
+        `agent_definition` during Invocation creation. The model string shorthand
+        is accepted on write; the resolved Agent Definition returns object form.
+    AgentDefinitionRegistration:
+      type: object
+      additionalProperties: false
+      required: [agent_definition_id, agent_definition]
+      properties:
+        agent_definition_id:
+          $ref: "#/components/schemas/AgentDefinitionID"
+        agent_definition:
+          $ref: "#/components/schemas/AgentDefinition"
+    AgentDefinition:
       type: object
       additionalProperties: false
       required: [model]
@@ -4777,19 +4924,20 @@ components:
           items:
             $ref: "#/components/schemas/ProviderTool"
       description: |
-        Immutable Definition returned on detailed Invocation reads. The
-        host owns the agent definition; nvoken only records the definition
-        each turn ran with. The create request exposes these execution fields
-        at its top level; nvoken selects them, stores one immutable Definition,
-        and re-reads it unchanged on every model iteration and recovery. Two
-        Invocations with byte-identical execution fields share one Definition.
+        Immutable Agent Definition returned by registration and detailed
+        Invocation reads. The host owns the configuration and nvoken only records
+        the Agent Definition each turn ran with. Invocation creation nests these
+        execution fields under `agent_definition`; nvoken stores one immutable
+        Agent Definition and re-reads it unchanged on every model
+        iteration and recovery. Two registrations and Invocations with
+        byte-identical execution fields share one Agent Definition.
         Identity, session selection, input, idempotency, `if_active`, `webhook`,
         metadata, and provider key selection are durable elsewhere and
-        never appear here. Callback declarations require installation callback
-        signing configuration. Remote MCP authentication headers are encrypted
-        outside this Definition and never returned. Tools or structured output
-        require at least two model iterations; omission resolves to three or
-        the lower installation maximum.
+        never appear here. Invocation admission for callback declarations
+        requires App callback-signing configuration. Remote MCP authentication
+        headers are encrypted outside this Agent Definition and never returned.
+        Tools or structured output require at least two model iterations;
+        omission resolves to three or the lower installation maximum.
     Sampling:
       type: object
       additionalProperties: false
@@ -5089,8 +5237,22 @@ components:
             minLength: 1
             maxLength: 128
           description: Optional ordered allowlist. Every named tool must be discovered and projectable.
+        timeouts:
+          $ref: "#/components/schemas/MCPTimeouts"
+    MCPServerHeaders:
+      type: object
+      additionalProperties: false
+      required: [name, headers]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 24
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: Exact name of one MCP server in the selected Agent Definition.
         headers:
           type: object
+          minProperties: 1
           maxProperties: 16
           additionalProperties:
             type: string
@@ -5100,8 +5262,6 @@ components:
             Secret request headers, limited to 8 KiB encoded. Routing,
             framing, proxy, cookie, hop-by-hop, and MCP session headers are
             rejected. Headers are encrypted per Invocation and never returned.
-        timeouts:
-          $ref: "#/components/schemas/MCPTimeouts"
     MCPTimeouts:
       type: object
       additionalProperties: false
@@ -5123,6 +5283,14 @@ components:
       properties:
         server:
           $ref: "#/components/schemas/MCPServer"
+        headers:
+          type: object
+          maxProperties: 16
+          additionalProperties:
+            type: string
+            minLength: 1
+          writeOnly: true
+          description: Optional secret headers used only for this discovery request.
     MCPToolAnnotations:
       description: >-
         What the remote server said about a tool's behavior, plus whether it
@@ -5493,7 +5661,7 @@ components:
     Invocation:
       type: object
       additionalProperties: false
-      required: [id, agent_id, session_id, user_key, definition_id, definition, status, stop_reason, blocking_budget,
+      required: [id, agent_id, session_id, user_key, agent_definition_id, agent_definition, status, stop_reason, blocking_budget,
                  attempt, error, usage,
                  provenance, structured_output, structured_output_provenance,
                  metadata, limits, active_execution_ms, deadline_at,
@@ -5514,11 +5682,11 @@ components:
             filtering lists. It is not a security boundary — no request is
             ever refused because of it, so do not rely on it to keep one
             user's data away from another.
-        definition_id:
-          $ref: "#/components/schemas/DefinitionID"
-        definition:
+        agent_definition_id:
+          $ref: "#/components/schemas/AgentDefinitionID"
+        agent_definition:
           oneOf:
-            - $ref: "#/components/schemas/Definition"
+            - $ref: "#/components/schemas/AgentDefinition"
             - type: "null"
           description: |
             The agent definition this turn actually ran with, stored when the turn
@@ -5526,7 +5694,7 @@ components:
             servers are never stored and never appear here.
 
             Present on `GET /v1/invocations/{id}` and on the result. Null in list
-            items, where `definition_id` identifies it instead.
+            items, where `agent_definition_id` identifies it instead.
         deduplicated:
           type: boolean
           description: |
@@ -5622,7 +5790,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PendingHostToolCall"
-          description: Present for a waiting Invocation with unresolved host calls.
+          description: Present for a waiting Invocation with unresolved host or callback calls.
     InvocationList:
       type: object
       additionalProperties: false
@@ -5673,18 +5841,30 @@ components:
         input_tokens:
           type: integer
           minimum: 0
+          description: |
+            Uncached input tokens. The three input buckets are disjoint across
+            every provider, so total prompt size is input_tokens +
+            cache_creation_input_tokens + cache_read_input_tokens. Cached tokens
+            are never also counted here.
         output_tokens:
           type: integer
           minimum: 0
         cache_creation_input_tokens:
           type: integer
           minimum: 0
+          description: |
+            Input tokens written to the provider's prompt cache. Absent on
+            providers that report cache hits but not cache writes.
         cache_read_input_tokens:
           type: integer
           minimum: 0
+          description: Input tokens served from the provider's prompt cache.
         reasoning_tokens:
           type: integer
           minimum: 0
+          description: |
+            Output tokens spent on reasoning. A subset of output_tokens, not an
+            additive bucket.
         model_calls:
           type: integer
           minimum: 0
@@ -5785,12 +5965,20 @@ components:
     ToolCallStatus:
       type: string
       enum: [pending, running, completed, failed, cancelled]
+    ToolCallResultOrigin:
+      type: string
+      enum: [builtin, callback, host, mcp, system]
+      description: |
+        The component that committed the result. `callback` is an inline
+        callback response; `host` includes settlement through `tool-results`.
     CallbackDeliveryOutcome:
       type: string
-      enum: [pending, succeeded, failed, abandoned]
+      enum: [pending, acknowledged, succeeded, failed, abandoned]
       description: |
         `pending` means nvoken has not reached a final transport outcome.
-        The other values are terminal transport outcomes.
+        `acknowledged` means the endpoint returned 202 with an empty body and
+        the ToolCall still awaits settlement. The other values are terminal
+        transport outcomes.
     ToolCallDelivery:
       type: object
       additionalProperties: false
@@ -5813,7 +6001,7 @@ components:
     ToolCall:
       type: object
       additionalProperties: false
-      required: [id, mode, name, status, iteration, created_at, ended_at, attempts]
+      required: [id, mode, name, status, iteration, created_at, ended_at, attempts, result_origin]
       properties:
         id:
           $ref: "#/components/schemas/ToolCallID"
@@ -5840,6 +6028,11 @@ components:
           type: integer
           minimum: 0
           description: Number of runtime execution attempts for this ToolCall.
+        result_origin:
+          oneOf:
+            - $ref: "#/components/schemas/ToolCallResultOrigin"
+            - type: "null"
+          description: Null until a ToolCall has a committed result.
         delivery:
           $ref: "#/components/schemas/ToolCallDelivery"
           description: Present only when mode is callback.
@@ -5974,6 +6167,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PendingHostToolCall"
+          description: Remaining open host- and callback-mode ToolCalls.
     InvocationFailure:
       type: object
       additionalProperties: false
@@ -6220,7 +6414,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PendingHostToolCall"
-          description: Pending host calls for the active waiting Invocation.
+          description: Pending host and callback calls for the active waiting Invocation.
     SessionForkLineage:
       type: object
       additionalProperties: false
@@ -7047,7 +7241,7 @@ components:
       type: string
       enum:
         - invalid_request
-        - definition_not_found
+        - agent_definition_not_found
         - media_fetch_failed
         - model_retired
         - unauthenticated

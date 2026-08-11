@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs agent turns for you. You describe a turn — an agent definition, a model, and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable agent definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -50,31 +50,17 @@ pub struct CreateInvocationRequest {
     pub input: Box<models::InvocationInput>,
     #[serde(rename = "webhook", skip_serializing_if = "Option::is_none")]
     pub webhook: Option<Box<models::WebhookTarget>>,
-    /// Reuse an agent definition you already sent inline on an earlier turn, instead of sending it again. The ID is derived from the definition's own content, so it never points at anything but that exact definition.  IDs from another app, or IDs that do not exist, return `definition_not_found`. Cannot be combined with the inline definition fields. Sending the ID and sending the identical definition inline count as the same request when retrying with an idempotency key.
-    #[serde(rename = "definition_id", skip_serializing_if = "Option::is_none")]
-    pub definition_id: Option<String>,
-    /// Optional model instructions. Omission adds no hidden default.
-    #[serde(rename = "instructions", skip_serializing_if = "Option::is_none")]
-    pub instructions: Option<String>,
-    #[serde(rename = "model", skip_serializing_if = "Option::is_none")]
-    pub model: Option<Box<models::ModelInput>>,
-    #[serde(rename = "sampling", skip_serializing_if = "Option::is_none")]
-    pub sampling: Option<Box<models::Sampling>>,
-    #[serde(rename = "reasoning", skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<Box<models::Reasoning>>,
-    #[serde(rename = "tool_choice", skip_serializing_if = "Option::is_none")]
-    pub tool_choice: Option<Box<models::ToolChoice>>,
-    #[serde(rename = "limits", skip_serializing_if = "Option::is_none")]
-    pub limits: Option<Box<models::Limits>>,
-    /// Self-contained JSON Schema for an object result. Compact canonical JSON is limited to 32 KiB and 16 schema positions. Supported keywords are type, title, description, properties, required, additionalProperties, items, enum, pattern, minLength, maxLength, minItems, maxItems, uniqueItems, minimum, and maximum. Every schema position has one string type; pattern values are limited to 1,024 UTF-8 bytes; references and other keywords are rejected. Numeric bounds are read as values, not spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken exposes a reserved durable submit tool and publishes only a server-validated terminal object. This does not enable host-defined tools.
-    #[serde(rename = "output_schema", skip_serializing_if = "Option::is_none")]
-    pub output_schema: Option<std::collections::HashMap<String, serde_json::Value>>,
-    #[serde(rename = "tools", skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<models::ToolDeclaration>>,
-    #[serde(rename = "mcp_servers", skip_serializing_if = "Option::is_none")]
-    pub mcp_servers: Option<Vec<models::McpServer>>,
-    #[serde(rename = "provider_tools", skip_serializing_if = "Option::is_none")]
-    pub provider_tools: Option<Vec<models::ProviderTool>>,
+    /// Reuse an Agent Definition already registered for this App, instead of sending it again. The ID is derived from the Agent Definition's content, so it never points at anything else.  IDs from another app, or IDs that do not exist, return `agent_definition_not_found`. Cannot be combined with `agent_definition`. Sending the ID and sending the identical definition inline count as the same request when retrying with an idempotency key.
+    #[serde(
+        rename = "agent_definition_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub agent_definition_id: Option<String>,
+    #[serde(rename = "agent_definition", skip_serializing_if = "Option::is_none")]
+    pub agent_definition: Option<Box<models::RegisterAgentDefinitionRequest>>,
+    /// Per-Invocation secret headers keyed to MCP server names in the selected Agent Definition. Encrypted for this turn and never stored in, hashed into, or returned with the Agent Definition.
+    #[serde(rename = "mcp_server_headers", skip_serializing_if = "Option::is_none")]
+    pub mcp_server_headers: Option<Vec<models::McpServerHeaders>>,
     /// Which key pays for the model on this turn. Names a source; never contains a secret.  Leave it out and nvoken works down its default order: your app's stored key for that provider, then a self-hosted installation's environment key (`config_byok`), then platform funding if the installation allows it.  Whichever source is chosen is fixed when the turn starts. A turn never silently falls through to a different payer partway through, so the bill cannot move once work has begun.
     #[serde(rename = "provider_keys", skip_serializing_if = "Option::is_none")]
     pub provider_keys: Option<Vec<models::ProviderKeySelection>>,
@@ -99,17 +85,9 @@ impl CreateInvocationRequest {
             on_budget_exhausted: None,
             input: Box::new(input),
             webhook: None,
-            definition_id: None,
-            instructions: None,
-            model: None,
-            sampling: None,
-            reasoning: None,
-            tool_choice: None,
-            limits: None,
-            output_schema: None,
-            tools: None,
-            mcp_servers: None,
-            provider_tools: None,
+            agent_definition_id: None,
+            agent_definition: None,
+            mcp_server_headers: None,
             provider_keys: None,
         }
     }

@@ -18,6 +18,22 @@ trap cleanup EXIT
 
 cd "$ROOT"
 
+# The contract states Agent Definition exclusivity as a constraint-only `oneOf`
+# on CreateInvocationRequest: two branches that carry `required`/`not` and no
+# properties. No generator handles that shape. openapi-generator's Java
+# generators drop the model outright, so TypeScript, Python, and Rust lose
+# CreateInvocationRequest entirely, and the Rust generator additionally aborts
+# with "oneOf size does not match the model". oapi-codegen keeps the model but
+# turns it into an opaque json.RawMessage union with hand-rolled marshalling and
+# two `interface{}` branch aliases. Generate from a copy without the constraint;
+# each facade enforces the exclusivity before it builds a request.
+readonly SPEC="$WORK/nvoken.yaml"
+cp openapi/nvoken.yaml "$SPEC"
+perl -0pi -e '
+  my $removed = s/^      oneOf:\n        - required: \[agent_definition\]\n          not:\n            required: \[agent_definition_id\]\n        - required: \[agent_definition_id\]\n          not:\n            required: \[agent_definition\]\n//m;
+  die "CreateInvocationRequest exclusivity constraint not found; update sdk/scripts/generate.sh\n" unless $removed;
+' "$SPEC"
+
 curl --fail --silent --show-error --location \
   "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/${OPENAPI_GENERATOR_VERSION}/openapi-generator-cli-${OPENAPI_GENERATOR_VERSION}.jar" \
   --output "$JAR"
@@ -31,25 +47,25 @@ fi
 go run "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@${OAPI_CODEGEN_VERSION}" \
   --config sdk/go/oapi-codegen.yaml \
   --o "$WORK/nvoken.gen.go" \
-  openapi/nvoken.yaml
+  "$SPEC"
 
 java -jar "$JAR" generate \
   --generator-name typescript-fetch \
-  --input-spec openapi/nvoken.yaml \
+  --input-spec "$SPEC" \
   --output "$WORK/typescript" \
   --additional-properties "npmName=@deepnoodle/nvoken,npmVersion=${TYPESCRIPT_VERSION},supportsES6=true,useSingleRequestParameter=true,importFileExtension=.js,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 java -jar "$JAR" generate \
   --generator-name python \
-  --input-spec openapi/nvoken.yaml \
+  --input-spec "$SPEC" \
   --output "$WORK/python" \
   --additional-properties "packageName=nvoken_generated,projectName=nvoken,packageVersion=${PYTHON_VERSION},library=httpx,supportHttpxSync=true,generateSourceCodeOnly=true,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
 
 java -jar "$JAR" generate \
   --generator-name rust \
-  --input-spec openapi/nvoken.yaml \
+  --input-spec "$SPEC" \
   --output "$WORK/rust" \
   --additional-properties "packageName=nvoken,packageVersion=${RUST_VERSION},library=reqwest,supportAsync=true,supportMiddleware=true,hideGenerationTimestamp=true,disallowAdditionalPropertiesIfNotPresent=false,preferUnsignedInt=true" \
   --global-property 'apiDocs=false,modelDocs=false,apiTests=false,modelTests=false'
