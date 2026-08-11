@@ -193,8 +193,10 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 		AgentKey:       "support",
 		IdempotencyKey: "conformance",
 		Input:          "hello",
-		Model:          Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
-		ProviderTools:  []ProviderTool{WebSearchProviderTool()},
+		AgentDefinition: &AgentDefinition{
+			Model:         Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
+			ProviderTools: []ProviderTool{WebSearchProviderTool()},
+		},
 		SessionKey:     &sessionKey,
 		SessionOptions: &SessionOptions{Retention: &SessionRetention{TTLSeconds: 86400}},
 		Metadata:       fixture.InvocationMetadata,
@@ -208,7 +210,13 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 	}
 	assertEncodesTo(t, wire["metadata"], mustEncode(t, fixture.InvocationMetadata))
 	assertEncodesTo(t, wire["session_options"], fixture.SessionOptions.RetentionOnly)
-	assertEncodesTo(t, wire["provider_tools"], fixture.ProviderTools.Defaults)
+	// Execution fields belong to the Agent Definition now. Reading them back
+	// through that key is what proves the nesting actually happened.
+	definition, ok := wire["agent_definition"].(map[string]any)
+	if !ok {
+		t.Fatalf("agent_definition = %#v, want an object", wire["agent_definition"])
+	}
+	assertEncodesTo(t, definition["provider_tools"], fixture.ProviderTools.Defaults)
 
 	// Session options with no members would serialize to `{}`, which the
 	// Runtime rejects for minProperties — catching it locally names the field.
@@ -216,7 +224,9 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 		AgentKey:       "support",
 		IdempotencyKey: "conformance",
 		Input:          "hello",
-		Model:          Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
+		AgentDefinition: &AgentDefinition{
+			Model: Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
+		},
 		SessionKey:     &sessionKey,
 		SessionOptions: &SessionOptions{},
 	}).encoded(); err == nil {
@@ -242,14 +252,16 @@ func TestSharedAgentRequestFixture(t *testing.T) {
 	temperature := Sampling{Temperature: 0.2}
 	effort := ReasoningEffortLow
 	agent, err := client.Agent(AgentOptions{
-		AgentKey:  "support",
-		Model:     Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
-		Sampling:  &temperature,
-		Reasoning: &Reasoning{Effort: &effort},
-		ProviderTools: []ProviderTool{{
-			Type:      ProviderToolWebSearch,
-			WebSearch: &WebSearchTool{MaxUses: 5},
-		}},
+		AgentKey: "support",
+		AgentDefinition: AgentDefinition{
+			Model:     Model{Provider: "anthropic", ID: "claude-sonnet-4-6"},
+			Sampling:  &temperature,
+			Reasoning: &Reasoning{Effort: &effort},
+			ProviderTools: []ProviderTool{{
+				Type:      ProviderToolWebSearch,
+				WebSearch: &WebSearchTool{MaxUses: 5},
+			}},
+		},
 	})
 	if err != nil {
 		t.Fatalf("agent: %v", err)
@@ -488,26 +500,27 @@ func TestSharedMediaInputFixtureMatchesPreflight(t *testing.T) {
 	}
 }
 
-func TestSharedDefinitionReuseFixtureIsExpressible(t *testing.T) {
+func TestSharedAgentDefinitionReuseFixtureIsExpressible(t *testing.T) {
 	var fixture struct {
-		DefinitionID string `json:"definition_id"`
+		AgentDefinitionID string `json:"agent_definition_id"`
 	}
-	decodeFile(t, "../conformance/fixtures/definition-reuse-v1.json", &fixture)
+	decodeFile(t, "../conformance/fixtures/agent-definition-reuse-v1.json", &fixture)
 	encoded, err := (InvokeRequest{
-		AgentKey:       "support",
-		IdempotencyKey: "definition-reference",
-		Input:          "hello",
-		DefinitionID:   fixture.DefinitionID,
+		AgentKey:          "support",
+		IdempotencyKey:    "agent-definition-reference",
+		Input:             "hello",
+		AgentDefinitionID: fixture.AgentDefinitionID,
 	}).encoded()
 	if err != nil {
-		t.Fatalf("encode definition reference: %v", err)
+		t.Fatalf("encode Agent Definition reference: %v", err)
 	}
 	var wire map[string]any
 	if err := json.Unmarshal(encoded, &wire); err != nil {
-		t.Fatalf("decode definition reference: %v", err)
+		t.Fatalf("decode Agent Definition reference: %v", err)
 	}
-	if wire["definition_id"] != fixture.DefinitionID || wire["model"] != nil {
-		t.Fatalf("definition reference wire = %#v", wire)
+	if wire["agent_definition_id"] != fixture.AgentDefinitionID ||
+		wire["agent_definition"] != nil {
+		t.Fatalf("Agent Definition reference wire = %#v", wire)
 	}
 }
 
@@ -649,12 +662,15 @@ func TestConformance(t *testing.T) {
 		len(models.Items[0].Controls.Reasoning.Effort.Values) != 5 {
 		t.Fatalf("model controls did not decode: %#v", models.Items[0].Controls)
 	}
-	mcpTools, err := client.ListMCPTools(context.Background(), MCPServer{
-		Name:         "support",
-		URL:          "https://mcp.example.test/rpc",
-		AllowedTools: []string{"lookup"},
-		Headers:      map[string]string{"Authorization": "Bearer conformance-mcp-secret"},
-	})
+	mcpTools, err := client.ListMCPTools(
+		context.Background(),
+		MCPServer{
+			Name:         "support",
+			URL:          "https://mcp.example.test/rpc",
+			AllowedTools: []string{"lookup"},
+		},
+		map[string]string{"Authorization": "Bearer conformance-mcp-secret"},
+	)
 	if err != nil || len(mcpTools.Tools) != 1 ||
 		mcpTools.Tools[0].ProjectedName != "support__lookup" {
 		t.Fatalf("list MCP tools: %#v err=%v", mcpTools, err)
@@ -694,21 +710,26 @@ func TestConformance(t *testing.T) {
 		IdempotencyKey: "conformance-lost-ack",
 		IfActive:       IfActiveSupersede,
 		Input:          "hello",
-		Instructions:   "help",
-		Model: Model{
-			Provider: "openai",
-			ID:       "gpt-test",
+		AgentDefinition: &AgentDefinition{
+			Instructions: "help",
+			Model: Model{
+				Provider: "openai",
+				ID:       "gpt-test",
+			},
+			Sampling: &Sampling{Temperature: 0},
+			Reasoning: &Reasoning{Effort: func() *ReasoningEffort {
+				value := ReasoningEffortHigh
+				return &value
+			}()},
+			MCPServers: []MCPServer{{
+				Name:         "support",
+				URL:          "https://mcp.example.test/rpc",
+				AllowedTools: []string{"lookup"},
+			}},
 		},
-		Sampling: &Sampling{Temperature: 0},
-		Reasoning: &Reasoning{Effort: func() *ReasoningEffort {
-			value := ReasoningEffortHigh
-			return &value
-		}()},
-		MCPServers: []MCPServer{{
-			Name:         "support",
-			URL:          "https://mcp.example.test/rpc",
-			AllowedTools: []string{"lookup"},
-			Headers:      map[string]string{"Authorization": "Bearer conformance-mcp-secret"},
+		MCPServerHeaders: []MCPServerHeaders{{
+			Name:    "support",
+			Headers: map[string]string{"Authorization": "Bearer conformance-mcp-secret"},
 		}},
 		ProviderKeys: []ProviderKeySelection{{
 			Provider: "openai",
@@ -1123,7 +1144,9 @@ func TestSharedInvocationWebhookFixture(t *testing.T) {
 		AgentKey:       "support-bot",
 		IdempotencyKey: "req-1",
 		Input:          "hello",
-		Model:          Model{Provider: "anthropic", ID: "claude-sonnet-4-5"},
+		AgentDefinition: &AgentDefinition{
+			Model: Model{Provider: "anthropic", ID: "claude-sonnet-4-5"},
+		},
 		Webhook: &WebhookTarget{
 			URL:    fixture.ExampleRequest.Webhook.URL,
 			Events: events,

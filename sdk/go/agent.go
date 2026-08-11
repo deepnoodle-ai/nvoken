@@ -10,18 +10,17 @@ import (
 )
 
 type AgentOptions struct {
-	AgentKey          string
-	TenantKey         *string
-	Instructions      string
-	Model             Model
-	Sampling          *Sampling
-	Reasoning         *Reasoning
-	ToolChoice        *ToolChoice
-	Limits            *Limits
-	Tools             []Tool
-	MCPServers        []MCPServer
-	ProviderTools     []ProviderTool
-	OutputSchema      map[string]any
+	AgentKey  string
+	TenantKey *string
+	// AgentDefinition is the execution configuration every turn from this Agent
+	// runs with. An Agent always sends it inline rather than by ID, because it
+	// serves the host tool handlers declared in it. Reuse a registered
+	// AgentDefinitionID through Client.Invoke instead.
+	AgentDefinition AgentDefinition
+	// MCPServerHeaders carries per-turn secret headers for the MCP servers the
+	// definition declares. They stay outside the definition so its
+	// content-addressed identity does not depend on a secret.
+	MCPServerHeaders  []MCPServerHeaders
 	ProviderKeys      []ProviderKeySelection
 	Webhook           *WebhookTarget
 	OnBudgetExhausted BudgetExhaustionBehavior
@@ -97,9 +96,15 @@ func (e *NoOutputTextError) Error() string {
 }
 
 type Agent struct {
-	client    *Client
-	options   AgentOptions
-	hostTools map[string]Tool
+	client  *Client
+	options AgentOptions
+	// hostTools serves the calls this Agent answers locally. callbackTools
+	// names the ones nvoken delivers over HTTPS instead: those can appear in a
+	// waiting Invocation's pending calls once the endpoint has acknowledged a
+	// delivery without settling it, and they are answered by whatever accepted
+	// that acknowledgement, not from here.
+	hostTools     map[string]Tool
+	callbackTools map[string]struct{}
 }
 
 func (c *Client) Agent(options AgentOptions) (*Agent, error) {
@@ -119,25 +124,30 @@ func NewAgent(client *Client, options AgentOptions) (*Agent, error) {
 			Message:  "Agent key is required",
 		}
 	}
-	if options.Model == (Model{}) {
+	if options.AgentDefinition.Model == (Model{}) {
 		if client.DefaultModel == nil {
 			return nil, &Error{
 				Category: ErrorValidation,
 				Message:  "Agent model is required",
 			}
 		}
-		options.Model = *client.DefaultModel
+		options.AgentDefinition.Model = *client.DefaultModel
 	}
 	hostTools := make(map[string]Tool)
-	for _, tool := range options.Tools {
-		if tool.Mode == ToolModeHost {
+	callbackTools := make(map[string]struct{})
+	for _, tool := range options.AgentDefinition.Tools {
+		switch tool.Mode {
+		case ToolModeHost:
 			hostTools[tool.Name] = tool
+		case ToolModeCallback:
+			callbackTools[tool.Name] = struct{}{}
 		}
 	}
 	return &Agent{
-		client:    client,
-		options:   options,
-		hostTools: hostTools,
+		client:        client,
+		options:       options,
+		hostTools:     hostTools,
+		callbackTools: callbackTools,
 	}, nil
 }
 
@@ -161,6 +171,7 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 	if onBudgetExhausted == "" {
 		onBudgetExhausted = a.options.OnBudgetExhausted
 	}
+	definition := a.options.AgentDefinition
 	return InvokeRequest{
 		AgentKey:          a.options.AgentKey,
 		TenantKey:         tenantKey,
@@ -171,16 +182,8 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		IfActive:          options.IfActive,
 		OnBudgetExhausted: onBudgetExhausted,
 		Input:             input,
-		Instructions:      a.options.Instructions,
-		Model:             a.options.Model,
-		Sampling:          a.options.Sampling,
-		Reasoning:         a.options.Reasoning,
-		ToolChoice:        a.options.ToolChoice,
-		Limits:            a.options.Limits,
-		Tools:             a.options.Tools,
-		MCPServers:        a.options.MCPServers,
-		ProviderTools:     a.options.ProviderTools,
-		OutputSchema:      a.options.OutputSchema,
+		AgentDefinition:   &definition,
+		MCPServerHeaders:  a.options.MCPServerHeaders,
 		ProviderKeys:      a.options.ProviderKeys,
 		// A per-call target overrides the agent default so one Agent can
 		// webhook different endpoints without a second Agent.
@@ -279,7 +282,7 @@ func (a *Agent) textFromResult(result *AgentResult) (string, error) {
 	resultKind := "no assistant output"
 	if len(result.StructuredOutput) > 0 && string(result.StructuredOutput) != "null" {
 		resultKind = "structured output"
-	} else if len(a.options.Tools) > 0 {
+	} else if len(a.options.AgentDefinition.Tools) > 0 {
 		resultKind = "tool-only output"
 	}
 	return "", &NoOutputTextError{
@@ -380,6 +383,9 @@ func (a *Agent) dispatchWaiting(
 	results := make([]ToolResult, 0, len(*invocation.PendingToolCalls))
 	for _, pending := range *invocation.PendingToolCalls {
 		if _, alreadySubmitted := submitted[pending.ID]; alreadySubmitted {
+			continue
+		}
+		if _, isCallback := a.callbackTools[pending.Name]; isCallback {
 			continue
 		}
 		tool, ok := a.hostTools[pending.Name]
@@ -653,6 +659,9 @@ func (a *Agent) AnswerPendingToolCalls(
 	handle := a.client.Invocation(invocationID)
 	results := make([]ToolResult, 0, len(*invocation.PendingToolCalls))
 	for _, pending := range *invocation.PendingToolCalls {
+		if _, isCallback := a.callbackTools[pending.Name]; isCallback {
+			continue
+		}
 		tool, ok := a.hostTools[pending.Name]
 		if !ok || tool.Handler == nil {
 			if options.LeaveWaitingOnMissingHandler {

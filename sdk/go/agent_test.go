@@ -31,25 +31,27 @@ func TestAgentFiveVerbsDispatchAndStructuredOutput(t *testing.T) {
 	var handlerCalls atomic.Int64
 	agent, err := client.Agent(AgentOptions{
 		AgentKey: "support",
-		Model: Model{
-			Provider: "openai",
-			ID:       "gpt-test",
-		},
-		Tools: []Tool{{
-			Mode:        ToolModeHost,
-			Name:        "weather",
-			Description: "Weather lookup",
-			InputSchema: map[string]any{"type": "object"},
-			Handler: func(_ context.Context, input any) (any, error) {
-				handlerCalls.Add(1)
-				value, ok := input.(map[string]any)
-				if !ok || value["city"] != "Paris" {
-					t.Fatalf("unexpected tool input: %#v", input)
-				}
-				return map[string]any{"temperature": 21}, nil
+		AgentDefinition: AgentDefinition{
+			Model: Model{
+				Provider: "openai",
+				ID:       "gpt-test",
 			},
-		}},
-		OutputSchema: map[string]any{"type": "object"},
+			Tools: []Tool{{
+				Mode:        ToolModeHost,
+				Name:        "weather",
+				Description: "Weather lookup",
+				InputSchema: map[string]any{"type": "object"},
+				Handler: func(_ context.Context, input any) (any, error) {
+					handlerCalls.Add(1)
+					value, ok := input.(map[string]any)
+					if !ok || value["city"] != "Paris" {
+						t.Fatalf("unexpected tool input: %#v", input)
+					}
+					return map[string]any{"temperature": 21}, nil
+				},
+			}},
+			OutputSchema: map[string]any{"type": "object"},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -151,11 +153,13 @@ func TestAgentMissingHandlerPolicyAndNoOutputKinds(t *testing.T) {
 	}
 	agent, err := client.Agent(AgentOptions{
 		AgentKey: "support",
-		Model: Model{
-			Provider: "openai",
-			ID:       "gpt-test",
+		AgentDefinition: AgentDefinition{
+			Model: Model{
+				Provider: "openai",
+				ID:       "gpt-test",
+			},
+			Tools: []Tool{missingTool},
 		},
-		Tools: []Tool{missingTool},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -217,9 +221,11 @@ func TestBoundSessionSerializesAdmission(t *testing.T) {
 	}
 	agent, err := client.Agent(AgentOptions{
 		AgentKey: "support",
-		Model: Model{
-			Provider: "openai",
-			ID:       "gpt-test",
+		AgentDefinition: AgentDefinition{
+			Model: Model{
+				Provider: "openai",
+				ID:       "gpt-test",
+			},
 		},
 	})
 	if err != nil {
@@ -286,9 +292,11 @@ func TestWaitOptionsOverallTimeoutAndCondition(t *testing.T) {
 	}
 	handle, err := client.Agent(AgentOptions{
 		AgentKey: "support",
-		Model: Model{
-			Provider: "openai",
-			ID:       "gpt-test",
+		AgentDefinition: AgentDefinition{
+			Model: Model{
+				Provider: "openai",
+				ID:       "gpt-test",
+			},
 		},
 	})
 	if err != nil {

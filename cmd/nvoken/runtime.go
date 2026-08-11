@@ -44,6 +44,7 @@ var operationCommands = map[string]string{
 	"cancelNudge":             "invocation cancel-nudge",
 	"createCredential":        "credentials create",
 	"createInvocation":        "invoke",
+	"registerAgentDefinition": "agent-definition register",
 	"createSession":           "session create",
 	"forkSession":             "session fork",
 	"createProviderKey":       "provider-key create",
@@ -105,10 +106,10 @@ func registerRuntimeCommands(app *cli.App) {
 		Flags(
 			cli.String("agent", "a").Required().Help("Stable Agent key"),
 			cli.String("idempotency-key", "i").Help("Stable admission identity; reuse it unchanged after any uncertain acknowledgement"),
-			cli.String("definition-id").Help("Reuse an immutable definition previously admitted by this app"),
+			cli.String("agent-definition-id").Help("Reuse an immutable Agent Definition already registered for this app"),
 			cli.String("instructions").Help("Agent instructions"),
-			cli.String("provider").Help("Model provider; required without --definition-id"),
-			cli.String("model", "m").Help("Exact model ID; required without --definition-id"),
+			cli.String("provider").Help("Model provider; required without --agent-definition-id"),
+			cli.String("model", "m").Help("Exact model ID; required without --agent-definition-id"),
 			cli.String("tenant").Help("Tenant partition"),
 			cli.String("user").Help("End-user label recorded on this Invocation and its messages; filtering only"),
 			cli.String("session-id").Help("Existing Session ID"),
@@ -124,6 +125,18 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runInvoke)
 
+	agentDefinitions := app.Group("agent-definition").
+		Description("Register immutable, content-addressed agent configurations")
+	agentDefinitions.Command("register").
+		Description("Store one Agent Definition and print its ID, without starting a turn").
+		Flags(
+			cli.String("file", "f").Help("JSON Agent Definition to register; - reads stdin"),
+			cli.String("instructions").Help("Agent instructions; ignored with --file"),
+			cli.String("provider").Help("Model provider; required without --file"),
+			cli.String("model", "m").Help("Exact model ID; required without --file"),
+		).
+		Run(runRegisterAgentDefinition)
+
 	apps := app.Group("app").Description("Register and read host applications")
 	apps.Command("register").
 		Description("Register one app; requires a credential not associated with an app").
@@ -132,6 +145,7 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("external-ref").Help("Opaque owner reference grounding console issuer tokens"),
 			cli.String("display-name").Help("Human-facing label; name stays the unique handle"),
 			cli.String("org-id").Help("Owning Org; Org-scoped callers may omit this to use their own"),
+			cli.Int("callback-timeout").Help("Callback HTTP reply deadline in seconds, 1 to 60; default 10"),
 		).
 		Run(runAppRegister)
 	apps.Command("get").Args("app-id").Run(runAppGet)
@@ -147,6 +161,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Flags(
 			cli.String("display-name").Help("Replacement human-facing label"),
 			cli.String("org-id").Help("Replacement owning Org; installation administrators only"),
+			cli.Int("callback-timeout").Help("Replacement callback HTTP reply deadline in seconds, 1 to 60"),
 		).
 		Run(runAppUpdate)
 
@@ -467,17 +482,19 @@ func runModelCheck(command *cli.Context) error {
 		return errors.New("--max-output-tokens must be positive")
 	}
 	handle, err := client.Invoke(command.Context(), nvoken.InvokeRequest{
-		AgentKey:     command.String("agent"),
-		TenantKey:    optionalString(command.String("tenant")),
-		Input:        "Reply with exactly OK.",
-		Instructions: "Reply with exactly OK and no other text.",
-		Model: nvoken.Model{
-			Provider: provider,
-			ID:       modelID,
-		},
-		Limits: &nvoken.Limits{
-			MaxOutputTokens: &maxOutputTokens,
-			MaxIterations:   &maxIterations,
+		AgentKey:  command.String("agent"),
+		TenantKey: optionalString(command.String("tenant")),
+		Input:     "Reply with exactly OK.",
+		AgentDefinition: &nvoken.AgentDefinition{
+			Instructions: "Reply with exactly OK and no other text.",
+			Model: nvoken.Model{
+				Provider: provider,
+				ID:       modelID,
+			},
+			Limits: &nvoken.Limits{
+				MaxOutputTokens: &maxOutputTokens,
+				MaxIterations:   &maxIterations,
+			},
 		},
 	})
 	if err != nil {
@@ -579,6 +596,71 @@ func attachedInputBlocks(command *cli.Context) ([]nvoken.InputBlock, error) {
 	return blocks, nil
 }
 
+func runRegisterAgentDefinition(command *cli.Context) error {
+	definition, err := agentDefinitionFlags(command)
+	if err != nil {
+		return err
+	}
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	registration, err := client.RegisterAgentDefinition(command.Context(), *definition)
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, registration, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(writer, "%s\n", registration.AgentDefinitionID)
+		return err
+	})
+}
+
+// agentDefinitionFlags reads a whole definition from a file, or builds the
+// minimal one the inline flags can express. Tools, MCP servers, and output
+// schemas have no flag spelling that stays readable, so a definition using them
+// is supplied as JSON.
+func agentDefinitionFlags(command *cli.Context) (*nvoken.AgentDefinition, error) {
+	path := command.String("file")
+	provider := command.String("provider")
+	model := command.String("model")
+	if path == "" {
+		if provider == "" || model == "" {
+			return nil, errors.New("--provider and --model are required without --file")
+		}
+		return &nvoken.AgentDefinition{
+			Instructions: command.String("instructions"),
+			Model:        nvoken.Model{Provider: provider, ID: model},
+		}, nil
+	}
+	if provider != "" || model != "" {
+		return nil, errors.New("--file is mutually exclusive with --provider and --model")
+	}
+	payload, err := readDefinitionFile(command, path)
+	if err != nil {
+		return nil, err
+	}
+	definition := &nvoken.AgentDefinition{}
+	if err := json.Unmarshal(payload, definition); err != nil {
+		return nil, fmt.Errorf("parse agent definition: %w", err)
+	}
+	return definition, nil
+}
+
+func readDefinitionFile(command *cli.Context, path string) ([]byte, error) {
+	if path == "-" {
+		payload, err := io.ReadAll(command.Stdin())
+		if err != nil {
+			return nil, fmt.Errorf("read agent definition from stdin: %w", err)
+		}
+		return payload, nil
+	}
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	return payload, nil
+}
+
 func attachedFileBlock(path string, blockType string) (nvoken.InputBlock, error) {
 	payload, err := os.ReadFile(path)
 	if err != nil {
@@ -627,14 +709,14 @@ func runInvoke(command *cli.Context) error {
 	}
 	provider := command.String("provider")
 	model := command.String("model")
-	definitionID := command.String("definition-id")
+	agentDefinitionID := command.String("agent-definition-id")
 	instructions := command.String("instructions")
-	if definitionID != "" {
+	if agentDefinitionID != "" {
 		if provider != "" || model != "" || instructions != "" {
-			return errors.New("--definition-id is mutually exclusive with --provider, --model, and --instructions")
+			return errors.New("--agent-definition-id is mutually exclusive with --provider, --model, and --instructions")
 		}
 	} else if provider == "" || model == "" {
-		return errors.New("--provider and --model are required without --definition-id")
+		return errors.New("--provider and --model are required without --agent-definition-id")
 	}
 	blocks, err := attachedInputBlocks(command)
 	if err != nil {
@@ -645,17 +727,21 @@ func runInvoke(command *cli.Context) error {
 		input = ""
 	}
 	request := nvoken.InvokeRequest{
-		AgentKey:       command.String("agent"),
-		IdempotencyKey: command.String("idempotency-key"),
-		IfActive:       nvoken.IfActivePolicy(command.String("if-active")),
-		Input:          input,
-		InputBlocks:    blocks,
-		DefinitionID:   definitionID,
-		Instructions:   instructions,
-		Model: nvoken.Model{
-			Provider: provider,
-			ID:       model,
-		},
+		AgentKey:          command.String("agent"),
+		IdempotencyKey:    command.String("idempotency-key"),
+		IfActive:          nvoken.IfActivePolicy(command.String("if-active")),
+		Input:             input,
+		InputBlocks:       blocks,
+		AgentDefinitionID: agentDefinitionID,
+	}
+	if agentDefinitionID == "" {
+		request.AgentDefinition = &nvoken.AgentDefinition{
+			Instructions: instructions,
+			Model: nvoken.Model{
+				Provider: provider,
+				ID:       model,
+			},
+		}
 	}
 	request.TenantKey = optionalString(command.String("tenant"))
 	request.UserKey = optionalString(command.String("user"))
@@ -977,15 +1063,27 @@ func runInvocationCancelNudge(command *cli.Context) error {
 	})
 }
 
+// optionalCallbackTimeout distinguishes an unset flag from a supplied one. Zero
+// is outside the contract's 1 to 60 range, so it can stand for absent.
+func optionalCallbackTimeout(command *cli.Context) *int64 {
+	seconds := command.Int("callback-timeout")
+	if seconds == 0 {
+		return nil
+	}
+	value := int64(seconds)
+	return &value
+}
+
 func runAppRegister(command *cli.Context) error {
 	client, err := runtimeClient(command)
 	if err != nil {
 		return err
 	}
 	registered, err := client.RegisterApp(command.Context(), command.Arg(0), nvoken.RegisterAppOptions{
-		ExternalRef: optionalString(command.String("external-ref")),
-		DisplayName: optionalString(command.String("display-name")),
-		OrgID:       optionalString(command.String("org-id")),
+		ExternalRef:            optionalString(command.String("external-ref")),
+		DisplayName:            optionalString(command.String("display-name")),
+		OrgID:                  optionalString(command.String("org-id")),
+		CallbackTimeoutSeconds: optionalCallbackTimeout(command),
 	})
 	if err != nil {
 		return err
@@ -1024,8 +1122,9 @@ func runAppUpdate(command *cli.Context) error {
 		return err
 	}
 	updated, err := client.UpdateApp(command.Context(), command.Arg(0), nvoken.UpdateAppOptions{
-		DisplayName: optionalString(command.String("display-name")),
-		OrgID:       optionalString(command.String("org-id")),
+		DisplayName:            optionalString(command.String("display-name")),
+		OrgID:                  optionalString(command.String("org-id")),
+		CallbackTimeoutSeconds: optionalCallbackTimeout(command),
 	})
 	if err != nil {
 		return err

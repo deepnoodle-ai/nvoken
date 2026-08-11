@@ -105,6 +105,7 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	case serveModels(response, request):
 	case serveMCP(response, request):
 	case serveBudgets(response, request):
+	case registerAgentDefinition(response, request):
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
 		s.createInvocation(response, request)
 	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodGet:
@@ -218,10 +219,12 @@ func serveMCP(response http.ResponseWriter, request *http.Request) bool {
 		return false
 	}
 	var body struct {
-		Server conformanceMCPServer `json:"server"`
+		Server  conformanceMCPServer `json:"server"`
+		Headers map[string]string    `json:"headers"`
 	}
 	if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
-		!body.Server.valid() {
+		!body.Server.valid() ||
+		body.Headers["Authorization"] != "Bearer conformance-mcp-secret" {
 		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server declaration did not round-trip")
 		return true
 	}
@@ -247,11 +250,14 @@ func serveMCP(response http.ResponseWriter, request *http.Request) bool {
 	return true
 }
 
+// conformanceMCPServer carries no headers. An Agent Definition is
+// content-addressed, so a secret inside one would change its identity; secrets
+// arrive separately in mcp_server_headers, or in the discovery request.
 type conformanceMCPServer struct {
-	Name         string            `json:"name"`
-	URL          string            `json:"url"`
-	AllowedTools []string          `json:"allowed_tools"`
-	Headers      map[string]string `json:"headers"`
+	Name         string   `json:"name"`
+	URL          string   `json:"url"`
+	AllowedTools []string `json:"allowed_tools"`
+	Headers      any      `json:"headers"`
 }
 
 func (s conformanceMCPServer) valid() bool {
@@ -259,7 +265,18 @@ func (s conformanceMCPServer) valid() bool {
 		s.URL == "https://mcp.example.test/rpc" &&
 		len(s.AllowedTools) == 1 &&
 		s.AllowedTools[0] == "lookup" &&
-		s.Headers["Authorization"] == "Bearer conformance-mcp-secret"
+		s.Headers == nil
+}
+
+// conformanceMCPServerHeaders is one entry of the per-Invocation secret headers.
+type conformanceMCPServerHeaders struct {
+	Name    string            `json:"name"`
+	Headers map[string]string `json:"headers"`
+}
+
+func (h conformanceMCPServerHeaders) valid() bool {
+	return h.Name == "support" &&
+		h.Headers["Authorization"] == "Bearer conformance-mcp-secret"
 }
 
 func serveModels(response http.ResponseWriter, request *http.Request) bool {
@@ -382,6 +399,51 @@ func catalogModel(provider, modelID, displayName string) map[string]any {
 	}
 }
 
+// conformanceDefinition is the execution configuration an Invocation nests
+// under agent_definition and registration sends on its own.
+type conformanceDefinition struct {
+	Instructions string                 `json:"instructions"`
+	Model        map[string]string      `json:"model"`
+	MCPServers   []conformanceMCPServer `json:"mcp_servers"`
+	Sampling     *struct {
+		Temperature *float64 `json:"temperature"`
+	} `json:"sampling"`
+	Reasoning *struct {
+		Effort       *string `json:"effort"`
+		BudgetTokens *int    `json:"budget_tokens"`
+	} `json:"reasoning"`
+}
+
+type conformanceMCPHeaders = conformanceMCPServerHeaders
+
+// registerAgentDefinition answers with the same ID for every registration of the
+// same content, so an SDK cannot pass by tracking whether it registered before.
+func registerAgentDefinition(response http.ResponseWriter, request *http.Request) bool {
+	if request.URL.Path != "/v1/agent-definitions" || request.Method != http.MethodPost {
+		return false
+	}
+	var definition conformanceDefinition
+	if err := json.NewDecoder(request.Body).Decode(&definition); err != nil ||
+		definition.Model["provider"] == "" || definition.Model["id"] == "" {
+		writeError(response, http.StatusBadRequest, "invalid_request", "Agent Definition did not round-trip")
+		return true
+	}
+	if len(definition.MCPServers) > 0 &&
+		(len(definition.MCPServers) != 1 || !definition.MCPServers[0].valid()) {
+		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server declaration did not round-trip")
+		return true
+	}
+	resolved := map[string]any{"model": definition.Model}
+	if definition.Instructions != "" {
+		resolved["instructions"] = definition.Instructions
+	}
+	writeJSON(response, http.StatusOK, map[string]any{
+		"agent_definition_id": definitionID,
+		"agent_definition":    resolved,
+	})
+	return true
+}
+
 func (s *state) createInvocation(response http.ResponseWriter, request *http.Request) {
 	var body struct {
 		IdempotencyKey string `json:"idempotency_key"`
@@ -393,14 +455,9 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 				APIKey string `json:"api_key"`
 			} `json:"key"`
 		} `json:"provider_keys"`
-		MCPServers []conformanceMCPServer `json:"mcp_servers"`
-		Sampling   *struct {
-			Temperature *float64 `json:"temperature"`
-		} `json:"sampling"`
-		Reasoning *struct {
-			Effort       *string `json:"effort"`
-			BudgetTokens *int    `json:"budget_tokens"`
-		} `json:"reasoning"`
+		AgentDefinitionID string                  `json:"agent_definition_id"`
+		AgentDefinition   *conformanceDefinition  `json:"agent_definition"`
+		MCPServerHeaders  []conformanceMCPHeaders `json:"mcp_server_headers"`
 	}
 	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 		writeError(response, http.StatusBadRequest, "invalid_request", "invalid conformance admission")
@@ -421,25 +478,44 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 			return
 		}
 	}
-	if len(body.MCPServers) > 0 &&
-		(len(body.MCPServers) != 1 || !body.MCPServers[0].valid()) {
+	// Exactly one Agent Definition form. An SDK that leaks an execution field to
+	// the top level, or sends both forms, fails here rather than at the Runtime.
+	if (body.AgentDefinition == nil) == (body.AgentDefinitionID == "") {
+		writeError(response, http.StatusBadRequest, "invalid_request", "exactly one Agent Definition form is required")
+		return
+	}
+	definition := body.AgentDefinition
+	if definition == nil {
+		definition = &conformanceDefinition{}
+	}
+	if len(definition.MCPServers) > 0 &&
+		(len(definition.MCPServers) != 1 || !definition.MCPServers[0].valid()) {
 		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server declaration did not round-trip")
+		return
+	}
+	if len(body.MCPServerHeaders) > 0 &&
+		(len(body.MCPServerHeaders) != 1 || !body.MCPServerHeaders[0].valid()) {
+		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server headers did not round-trip")
+		return
+	}
+	if len(definition.MCPServers) > 0 && len(body.MCPServerHeaders) == 0 {
+		writeError(response, http.StatusBadRequest, "invalid_request", "MCP secret headers were dropped")
 		return
 	}
 	if strings.Contains(body.IdempotencyKey, "lost-ack") &&
 		!strings.HasPrefix(body.IdempotencyKey, "cli-") &&
-		(body.Sampling == nil ||
-			body.Sampling.Temperature == nil ||
-			*body.Sampling.Temperature != 0) {
+		(definition.Sampling == nil ||
+			definition.Sampling.Temperature == nil ||
+			*definition.Sampling.Temperature != 0) {
 		writeError(response, http.StatusBadRequest, "invalid_request", "explicit zero temperature did not round-trip")
 		return
 	}
 	if strings.Contains(body.IdempotencyKey, "lost-ack") &&
 		!strings.HasPrefix(body.IdempotencyKey, "cli-") &&
-		(body.Reasoning == nil ||
-			body.Reasoning.Effort == nil ||
-			*body.Reasoning.Effort != "high" ||
-			body.Reasoning.BudgetTokens != nil) {
+		(definition.Reasoning == nil ||
+			definition.Reasoning.Effort == nil ||
+			*definition.Reasoning.Effort != "high" ||
+			definition.Reasoning.BudgetTokens != nil) {
 		writeError(response, http.StatusBadRequest, "invalid_request", "reasoning effort did not round-trip")
 		return
 	}
@@ -570,22 +646,36 @@ func toolCallRecords() map[string]any {
 				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb324", "mode": "builtin",
 				"name": "nvoken_fetch", "status": "completed", "iteration": 1,
 				"created_at": "2026-08-08T17:02:11Z", "ended_at": "2026-08-08T17:02:12Z", "attempts": 1,
+				"result_origin": "builtin",
 			},
 			map[string]any{
 				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325", "mode": "host",
 				"name": "ask_user", "status": "running", "iteration": 1,
 				"created_at": "2026-08-08T17:02:13Z", "ended_at": nil, "attempts": 0,
+				"result_origin": nil,
 			},
 			map[string]any{
 				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb326", "mode": "callback",
 				"name": "create_ticket", "status": "completed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:14Z", "ended_at": "2026-08-08T17:02:19Z", "attempts": 0,
-				"delivery": map[string]any{"outcome": "succeeded", "attempts": 2, "last_http_status": 200},
+				"result_origin": "callback",
+				"delivery":      map[string]any{"outcome": "succeeded", "attempts": 2, "last_http_status": 200},
 			},
 			map[string]any{
 				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb327", "mode": "mcp",
 				"name": "support__lookup", "status": "failed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:20Z", "ended_at": "2026-08-08T17:02:22Z", "attempts": 1,
+				"result_origin": "mcp",
+			},
+			// An acknowledged callback: the endpoint returned 202 with no body,
+			// and the result arrived later through tool-results, so the origin
+			// is host even though the mode is callback.
+			map[string]any{
+				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb32a", "mode": "callback",
+				"name": "run_migration", "status": "completed", "iteration": 3,
+				"created_at": "2026-08-08T17:02:23Z", "ended_at": "2026-08-08T17:09:41Z", "attempts": 0,
+				"result_origin": "host",
+				"delivery":      map[string]any{"outcome": "acknowledged", "attempts": 1, "last_http_status": 202},
 			},
 		},
 		"has_more":    false,
@@ -783,8 +873,8 @@ func invocationWithID(id string, status string) map[string]any {
 		"agent_id":                     agentID,
 		"session_id":                   sessionID,
 		"user_key":                     nil,
-		"definition_id":                definitionID,
-		"definition":                   nil,
+		"agent_definition_id":          definitionID,
+		"agent_definition":             nil,
 		"status":                       status,
 		"stop_reason":                  nullableStopReason(status),
 		"blocking_budget":              nil,

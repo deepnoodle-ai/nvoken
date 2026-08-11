@@ -101,7 +101,9 @@ func TestInvokeProviderKeySelections(t *testing.T) {
 		AgentKey:       "support",
 		IdempotencyKey: "credential-selection",
 		Input:          "hello",
-		Model:          Model{Provider: "openai", ID: "gpt-test"},
+		AgentDefinition: &AgentDefinition{
+			Model: Model{Provider: "openai", ID: "gpt-test"},
+		},
 	}
 
 	for _, test := range []struct {
