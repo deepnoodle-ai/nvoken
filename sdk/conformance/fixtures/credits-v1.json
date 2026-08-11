@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "note": "Credits are persistent tenant spending capacity, not a recurring allowance. Allocations append funding and exact USD Money values preserve six decimal places.",
+  "allocation_request": {
+    "amount": {
+      "amount": "25.000000",
+      "currency": "USD"
+    },
+    "default_tenant": true,
+    "idempotency_key": "credits-conformance-1"
+  },
+  "account": {
+    "tenant_key": null,
+    "allocated": {
+      "amount": "25.000000",
+      "currency": "USD"
+    },
+    "used": {
+      "amount": "3.250000",
+      "currency": "USD"
+    },
+    "held": {
+      "amount": "1.500000",
+      "currency": "USD"
+    },
+    "available": {
+      "amount": "20.250000",
+      "currency": "USD"
+    },
+    "paused_invocations": 2,
+    "created_at": "2026-08-01T00:00:00Z",
+    "updated_at": "2026-08-08T12:00:00Z"
+  },
+  "allocation": {
+    "id": "alloc_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+    "tenant_key": null,
+    "amount": {
+      "amount": "25.000000",
+      "currency": "USD"
+    },
+    "reference": null,
+    "created_by": "cred_conformance",
+    "created_at": "2026-08-01T00:00:00Z"
+  },
+  "credit_block": {
+    "tenant_key": null,
+    "required": {
+      "amount": "0.500000",
+      "currency": "USD"
+    },
+    "available": {
+      "amount": "0.125000",
+      "currency": "USD"
+    }
+  },
+  "refusals": {
+    "insufficient": {
+      "status": 402,
+      "code": "insufficient_credits"
+    },
+    "unpriced": {
+      "status": 422,
+      "code": "cost_estimate_unavailable"
+    }
+  }
+}

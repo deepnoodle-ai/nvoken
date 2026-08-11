@@ -44,17 +44,20 @@ var operationCommands = map[string]string{
 	"cancelNudge":             "invocation cancel-nudge",
 	"createCredential":        "credentials create",
 	"createInvocation":        "invoke",
-	"registerAgentDefinition": "agent-definition register",
+	"createAgentDefinition":   "agent-definition create",
+	"getAgentDefinition":      "agent-definition get",
+	"updateAgentDefinition":   "agent-definition update",
+	"createAppClientKey":      "client-key create",
+	"listAppClientKeys":       "client-key list",
+	"revokeAppClientKey":      "client-key revoke",
 	"createSession":           "session create",
 	"forkSession":             "session fork",
 	"createProviderKey":       "provider-key create",
-	"createBudget":            "budget create",
-	"getBudget":               "budget get",
-	"listBudgets":             "budget list",
+	"allocateCredits":         "credits allocate",
+	"listCreditAccounts":      "credits accounts",
+	"listCreditAllocations":   "credits allocations",
 	"getCredential":           "credentials get",
 	"getCurrentIdentity":      "auth status",
-	"updateBudget":            "budget update",
-	"deleteBudget":            "budget delete",
 	"getAgent":                "agent get",
 	"getApp":                  "app get",
 	"listApps":                "app list",
@@ -106,10 +109,10 @@ func registerRuntimeCommands(app *cli.App) {
 		Flags(
 			cli.String("agent", "a").Required().Help("Stable Agent key"),
 			cli.String("idempotency-key", "i").Help("Stable admission identity; reuse it unchanged after any uncertain acknowledgement"),
-			cli.String("agent-definition-id").Help("Reuse an immutable Agent Definition already registered for this app"),
-			cli.String("instructions").Help("Agent instructions"),
-			cli.String("provider").Help("Model provider; required without --agent-definition-id"),
-			cli.String("model", "m").Help("Exact model ID; required without --agent-definition-id"),
+			cli.String("agent-definition-id").Help("App-owned Agent Definition resource to run instead of inline fields"),
+			cli.String("instructions").Help("Inline Agent instructions"),
+			cli.String("provider").Help("Inline model provider; required without --agent-definition-id"),
+			cli.String("model", "m").Help("Inline exact model ID; required without --agent-definition-id"),
 			cli.String("tenant").Help("Tenant partition"),
 			cli.String("user").Help("End-user label recorded on this Invocation and its messages; filtering only"),
 			cli.String("session-id").Help("Existing Session ID"),
@@ -128,16 +131,29 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runInvoke)
 
 	agentDefinitions := app.Group("agent-definition").
-		Description("Register immutable, content-addressed agent configurations")
-	agentDefinitions.Command("register").
-		Description("Store one Agent Definition and print its ID, without starting a turn").
+		Description("Create, read, and revise App-owned Agent Definitions")
+	agentDefinitions.Command("create").
+		Description("Create one Agent Definition resource without starting a turn").
 		Flags(
-			cli.String("file", "f").Help("JSON Agent Definition to register; - reads stdin"),
+			cli.String("file", "f").Help("JSON Agent Definition to create; - reads stdin"),
 			cli.String("instructions").Help("Agent instructions; ignored with --file"),
 			cli.String("provider").Help("Model provider; required without --file"),
 			cli.String("model", "m").Help("Exact model ID; required without --file"),
+			cli.String("idempotency-key").Required().Help("Stable create request identity"),
 		).
-		Run(runRegisterAgentDefinition)
+		Run(runCreateAgentDefinition)
+	agentDefinitions.Command("get").Args("agent-definition-id").Run(runGetAgentDefinition)
+	agentDefinitions.Command("update").
+		Description("Replace one Agent Definition at an expected revision").
+		Args("agent-definition-id").
+		Flags(
+			cli.String("file", "f").Help("Replacement JSON Agent Definition; - reads stdin"),
+			cli.String("instructions").Help("Agent instructions; ignored with --file"),
+			cli.String("provider").Help("Model provider; required without --file"),
+			cli.String("model", "m").Help("Exact model ID; required without --file"),
+			cli.Int("revision").Required().Help("Current revision from GET"),
+		).
+		Run(runUpdateAgentDefinition)
 
 	apps := app.Group("app").Description("Register and read host applications")
 	apps.Command("register").
@@ -484,9 +500,10 @@ func runModelCheck(command *cli.Context) error {
 		return errors.New("--max-output-tokens must be positive")
 	}
 	handle, err := client.Invoke(command.Context(), nvoken.InvokeRequest{
-		AgentKey:  command.String("agent"),
-		TenantKey: optionalString(command.String("tenant")),
-		Input:     "Reply with exactly OK.",
+		AgentKey:       command.String("agent"),
+		TenantKey:      optionalString(command.String("tenant")),
+		Input:          "Reply with exactly OK.",
+		IdempotencyKey: fmt.Sprintf("model-check:%s:%s:%d", provider, modelID, time.Now().UnixNano()),
 		AgentDefinition: &nvoken.AgentDefinition{
 			Instructions: "Reply with exactly OK and no other text.",
 			Model: nvoken.Model{
@@ -598,7 +615,7 @@ func attachedInputBlocks(command *cli.Context) ([]nvoken.InputBlock, error) {
 	return blocks, nil
 }
 
-func runRegisterAgentDefinition(command *cli.Context) error {
+func runCreateAgentDefinition(command *cli.Context) error {
 	definition, err := agentDefinitionFlags(command)
 	if err != nil {
 		return err
@@ -607,12 +624,52 @@ func runRegisterAgentDefinition(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	registration, err := client.RegisterAgentDefinition(command.Context(), *definition)
+	resource, err := client.CreateAgentDefinition(command.Context(), nvoken.CreateAgentDefinitionInput{
+		Definition:     *definition,
+		IdempotencyKey: command.String("idempotency-key"),
+	})
 	if err != nil {
 		return err
 	}
-	return writeOutput(command, registration, func(writer io.Writer) error {
-		_, err := fmt.Fprintf(writer, "%s\n", registration.AgentDefinitionID)
+	return writeOutput(command, resource, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(writer, "%s\trevision=%d\n", resource.ID, resource.Revision)
+		return err
+	})
+}
+
+func runGetAgentDefinition(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	resource, err := client.GetAgentDefinition(command.Context(), command.Arg(0))
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, resource, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(writer, "%s\trevision=%d\t%s/%s\n", resource.ID, resource.Revision, resource.Model.Provider, resource.Model.ID)
+		return err
+	})
+}
+
+func runUpdateAgentDefinition(command *cli.Context) error {
+	definition, err := agentDefinitionFlags(command)
+	if err != nil {
+		return err
+	}
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	resource, err := client.UpdateAgentDefinition(command.Context(), command.Arg(0), nvoken.UpdateAgentDefinitionInput{
+		Definition:       *definition,
+		ExpectedRevision: int64(command.Int("revision")),
+	})
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, resource, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(writer, "%s\trevision=%d\n", resource.ID, resource.Revision)
 		return err
 	})
 }

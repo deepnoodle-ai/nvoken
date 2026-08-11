@@ -44,7 +44,7 @@ func TestSharedOutputSchemaPreflightFixtures(t *testing.T) {
 	}
 }
 
-func TestInvokePreflightsOutputSchemaBeforeTransport(t *testing.T) {
+func TestCreateAgentDefinitionPreflightsOutputSchemaBeforeTransport(t *testing.T) {
 	var attempts atomic.Int64
 	client, err := NewClient(
 		"https://runtime.example.test",
@@ -58,10 +58,9 @@ func TestInvokePreflightsOutputSchemaBeforeTransport(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 	for _, test := range loadOutputSchemaFixture(t).Rejected {
-		_, err = client.Invoke(context.Background(), InvokeRequest{
-			AgentKey: "support",
-			Input:    "help",
-			AgentDefinition: &AgentDefinition{
+		_, err = client.CreateAgentDefinition(context.Background(), CreateAgentDefinitionInput{
+			IdempotencyKey: "schema-preflight",
+			Definition: AgentDefinition{
 				Model: Model{
 					Provider: "anthropic",
 					ID:       "test-model",
@@ -80,22 +79,16 @@ func TestInvokePreflightsOutputSchemaBeforeTransport(t *testing.T) {
 	}
 }
 
-func TestInvokeRequestOutputSchemaEncodesDirectly(t *testing.T) {
-	body, err := InvokeRequest{
-		AgentKey: "support",
-		Input:    "help",
-		AgentDefinition: &AgentDefinition{
-			Model:        Model{Provider: "anthropic", ID: "test-model"},
-			OutputSchema: map[string]any{"type": "object"},
-		},
-	}.encoded()
+func TestAgentDefinitionOutputSchemaEncodesDirectly(t *testing.T) {
+	body, err := json.Marshal(AgentDefinition{
+		Model:        Model{Provider: "anthropic", ID: "test-model"},
+		OutputSchema: map[string]any{"type": "object"},
+	})
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
 	var wire struct {
-		AgentDefinition struct {
-			OutputSchema map[string]any `json:"output_schema"`
-		} `json:"agent_definition"`
+		OutputSchema     map[string]any  `json:"output_schema"`
 		StructuredOutput json.RawMessage `json:"structured_output"`
 	}
 	if err := json.Unmarshal(body, &wire); err != nil {
@@ -104,10 +97,10 @@ func TestInvokeRequestOutputSchemaEncodesDirectly(t *testing.T) {
 	if wire.StructuredOutput != nil {
 		t.Fatalf("structured_output = %s, want absent", wire.StructuredOutput)
 	}
-	if wire.AgentDefinition.OutputSchema["type"] != "object" {
+	if wire.OutputSchema["type"] != "object" {
 		t.Fatalf(
-			"agent_definition.output_schema = %#v, want the supplied OutputSchema",
-			wire.AgentDefinition.OutputSchema,
+			"output_schema = %#v, want the supplied OutputSchema",
+			wire.OutputSchema,
 		)
 	}
 }

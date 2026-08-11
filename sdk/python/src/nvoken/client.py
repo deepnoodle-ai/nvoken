@@ -14,8 +14,8 @@ import httpx
 
 from nvoken_generated import __version__ as SDK_VERSION
 from nvoken_generated.api.agents_api import AgentsApi
-from nvoken_generated.api.budgets_api import BudgetsApi
 from nvoken_generated.api.agent_definitions_api import AgentDefinitionsApi
+from nvoken_generated.api.credits_api import CreditsApi
 from nvoken_generated.api.invocations_api import InvocationsApi
 from nvoken_generated.api.mcp_api import MCPApi
 from nvoken_generated.api.models_api import ModelsApi
@@ -27,14 +27,17 @@ from nvoken_generated.exceptions import ApiException
 from nvoken_generated.models.agent import Agent as AgentIdentity
 from nvoken_generated.models.agent_list import AgentList
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
-from nvoken_generated.models.budget import Budget
-from nvoken_generated.models.budget_scope import BudgetScope
+from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
+from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite
+from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest
+from nvoken_generated.models.allocate_credits_result import AllocateCreditsResult
+from nvoken_generated.models.credit_account_list import CreditAccountList
+from nvoken_generated.models.credit_allocation_list import CreditAllocationList
 from nvoken_generated.models.callback_target import CallbackTarget as GeneratedCallbackTarget
 from nvoken_generated.models.callback_tool_declaration import CallbackToolDeclaration
 from nvoken_generated.models.create_provider_key_request import (
     CreateProviderKeyRequest,
 )
-from nvoken_generated.models.create_budget_request import CreateBudgetRequest
 from nvoken_generated.models.compaction_policy import CompactionPolicy
 from nvoken_generated.models.compaction_policy_trigger_tokens import (
     CompactionPolicyTriggerTokens,
@@ -53,12 +56,8 @@ from nvoken_generated.models.web_search_location import (
     WebSearchLocation as GeneratedWebSearchLocation,
 )
 from nvoken_generated.models.host_tool_declaration import HostToolDeclaration
-from nvoken_generated.models.agent_definition_registration import AgentDefinitionRegistration
 from nvoken_generated.models.create_invocation_request import CreateInvocationRequest
 from nvoken_generated.models.mcp_server_headers import MCPServerHeaders as GeneratedMCPServerHeaders
-from nvoken_generated.models.register_agent_definition_request import (
-    RegisterAgentDefinitionRequest,
-)
 from nvoken_generated.models.invocation import Invocation
 from nvoken_generated.models.invocation_change import InvocationChange
 from nvoken_generated.models.invocation_context_item import (
@@ -90,6 +89,7 @@ from nvoken_generated.models.model_input import ModelInput as GeneratedModelInpu
 from nvoken_generated.models.model_descriptor import ModelDescriptor
 from nvoken_generated.models.model_list import ModelList
 from nvoken_generated.models.model_tool_choice_mode import ModelToolChoiceMode
+from nvoken_generated.models.money import Money
 from nvoken_generated.models.provider_key import ProviderKey
 from nvoken_generated.models.provider_key_list import ProviderKeyList
 from nvoken_generated.models.provider_key_scope import ProviderKeyScope
@@ -112,7 +112,6 @@ from nvoken_generated.models.session_compaction import SessionCompaction
 from nvoken_generated.models.session_compaction_list import SessionCompactionList
 from nvoken_generated.models.session_list import SessionList
 from nvoken_generated.models.update_session_request import UpdateSessionRequest
-from nvoken_generated.models.update_budget_request import UpdateBudgetRequest
 from nvoken_generated.models.session_message import SessionMessage
 from nvoken_generated.models.session_message_list import SessionMessageList
 from nvoken_generated.models.submit_host_tool_results_request import SubmitHostToolResultsRequest
@@ -322,7 +321,6 @@ class SessionOptions:
     # but create_session still cannot set it.
     compaction: ContextCompaction | None = None
     retention: SessionRetention | None = None
-    max_estimated_cost_usd: float | None = None
     metadata: dict[str, str] | None = None
 
 
@@ -386,7 +384,7 @@ class MCPTimeouts:
 class MCPServer:
     """Declares a remote MCP server.
 
-    It carries no secrets: an Agent Definition is content-addressed and shared
+    It carries no secrets: an Agent Definition may be shared
     across turns, so authentication headers travel per Invocation in
     :class:`MCPServerHeaders` instead.
     """
@@ -435,8 +433,8 @@ class ContextItem:
     value, and an unchanged resend adds no transcript message, so a stateless
     host may resend its whole snapshot every turn. Omit the reserved ``app-``
     prefix the model sees; nvoken adds it. Context is durable Session history
-    rather than an Agent Definition field, so it never changes the
-    content-addressed ``agent_definition_id``.
+    rather than an Agent Definition field, so it never changes the admitted
+    Agent Definition revision.
     """
 
     name: str
@@ -471,12 +469,9 @@ class ProviderKeySelection:
 
 @dataclass(frozen=True)
 class AgentDefinition:
-    """The immutable execution configuration a turn runs with.
+    """The execution configuration a turn runs with.
 
-    nvoken content-addresses it, so two turns whose definitions serialize
-    identically share one Agent Definition and one ``agent_definition_id``.
-    Identity, session selection, input, idempotency, webhooks, metadata, and
-    provider key selection are durable elsewhere and deliberately absent here.
+    Send it inline on an Invocation or create an App-owned reusable resource.
     """
 
     model: Model
@@ -502,7 +497,7 @@ class InvokeRequest:
     Supply exactly one of ``agent_definition`` and ``agent_definition_id``.
     """
     agent_definition_id: str | None = None
-    """Reuse a definition already registered for this App."""
+    """Reuse an App-owned Agent Definition resource."""
     mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
     """Per-turn secret headers, keyed to MCP server names in the definition."""
     idempotency_key: str | None = None
@@ -583,7 +578,7 @@ class Client:
         configuration.discard_unknown_keys = False
         self.api_client = ApiClient(configuration)
         self.agents = AgentsApi(self.api_client)
-        self.budgets = BudgetsApi(self.api_client)
+        self.credits = CreditsApi(self.api_client)
         self.invocations = InvocationsApi(self.api_client)
         self.agent_definitions = AgentDefinitionsApi(self.api_client)
         self.mcp = MCPApi(self.api_client)
@@ -620,14 +615,14 @@ class Client:
 
     def raw(
         self,
-    ) -> tuple[InvocationsApi, ModelsApi, ProviderKeysApi, SessionsApi, AgentsApi, BudgetsApi]:
+    ) -> tuple[InvocationsApi, ModelsApi, ProviderKeysApi, SessionsApi, AgentsApi, CreditsApi]:
         return (
             self.invocations,
             self.models,
             self.provider_keys,
             self.sessions,
             self.agents,
-            self.budgets,
+            self.credits,
         )
 
     def agent(self, options: AgentOptions) -> Agent:
@@ -671,7 +666,7 @@ class Client:
         """Discover the tools a remote MCP server projects.
 
         Headers are a separate argument because :class:`MCPServer` is part of a
-        content-addressed Agent Definition and therefore carries no secrets;
+        reusable Agent Definition and therefore carries no secrets;
         these are used for this one discovery request and never stored.
         """
         return await self._replay_safe(lambda: self.mcp.list_mcp_tools(
@@ -692,7 +687,9 @@ class Client:
     async def invoke(self, request: InvokeRequest) -> InvocationHandle:
         body = self._invocation_body(request)
         idempotency_key = body.idempotency_key
-        invocation = await self._replay_safe(lambda: self.invocations.create_invocation(body))
+        invocation = _machine_projection(
+            await self._replay_safe(lambda: self.invocations.create_invocation(body))
+        )
         return InvocationHandle(
             self,
             invocation.id,
@@ -707,12 +704,12 @@ class Client:
     def _agent_definition_body(
         self,
         definition: AgentDefinition,
-    ) -> RegisterAgentDefinitionRequest:
+    ) -> AgentDefinitionWrite:
         """Render one Agent Definition.
 
-        Invocation creation and registration both send exactly this object, so a
+        Invocation creation and resource creation both send exactly this object, so a
         field either reaches the wire for both or neither. Only the definition's
-        own content is checked; installation state, App signing keys, budgets,
+        own content is checked; installation state, App signing keys, credits,
         provider keys, and model lifecycle are checked again at turn admission.
         """
         if definition.model is None:
@@ -757,7 +754,7 @@ class Client:
                     input_schema=tool.input_schema,
                     callback=GeneratedCallbackTarget(url=tool.callback_url),
                 )))
-        return RegisterAgentDefinitionRequest(
+        return AgentDefinitionWrite(
             instructions=definition.instructions,
             model=GeneratedModelInput(GeneratedModel(
                 provider=definition.model.provider,
@@ -945,36 +942,63 @@ class Client:
             webhook=_generated_webhook_target(request.webhook),
         )
 
-    async def register_agent_definition(
+    async def create_agent_definition(
         self,
         definition: AgentDefinition,
-    ) -> AgentDefinitionRegistration:
-        """Store one Agent Definition without starting a turn.
-
-        Returns the content-addressed ID later Invocations reuse through
-        :attr:`InvokeRequest.agent_definition_id`. Registration is idempotent by
-        content rather than by key: a first registration, a repeat, and a
-        definition an earlier turn already stored all return the same response,
-        so callers need not track whether they have registered before.
-        """
+        *,
+        idempotency_key: str | None = None,
+    ) -> AgentDefinitionResource:
+        """Create one reusable App-owned Agent Definition resource."""
         body = self._agent_definition_body(definition)
         return await self._replay_safe(
-            lambda: self.agent_definitions.register_agent_definition(body)
+            lambda: self.agent_definitions.create_agent_definition(
+                idempotency_key or f"nvoken-{uuid.uuid4()}",
+                body,
+            )
+        )
+
+    async def get_agent_definition(
+        self,
+        agent_definition_id: str,
+    ) -> AgentDefinitionResource:
+        return await self._replay_safe(
+            lambda: self.agent_definitions.get_agent_definition(agent_definition_id)
+        )
+
+    async def update_agent_definition(
+        self,
+        agent_definition_id: str,
+        expected_revision: int,
+        definition: AgentDefinition,
+    ) -> AgentDefinitionResource:
+        body = self._agent_definition_body(definition)
+        return await self._replay_safe(
+            lambda: self.agent_definitions.update_agent_definition(
+                f'"{expected_revision}"',
+                agent_definition_id,
+                body,
+            )
         )
 
     def invocation(self, invocation_id: str) -> InvocationHandle:
         return InvocationHandle(self, invocation_id)
 
     async def get_invocation(self, invocation_id: str) -> Invocation:
-        return await self._replay_safe(lambda: self.invocations.get_invocation(invocation_id))
+        return _machine_projection(
+            await self._replay_safe(lambda: self.invocations.get_invocation(invocation_id))
+        )
 
     async def get_invocation_result(self, invocation_id: str) -> InvocationResult:
-        return await self._replay_safe(
-            lambda: self.invocations.get_invocation_result(invocation_id)
+        return _machine_projection(
+            await self._replay_safe(
+                lambda: self.invocations.get_invocation_result(invocation_id)
+            )
         )
 
     async def cancel_invocation(self, invocation_id: str) -> Invocation:
-        return await self._replay_safe(lambda: self.invocations.cancel_invocation(invocation_id))
+        return _machine_projection(
+            await self._replay_safe(lambda: self.invocations.cancel_invocation(invocation_id))
+        )
 
     async def interrupt_invocation(self, invocation_id: str) -> Invocation:
         """Stop an Invocation gracefully and keep its work.
@@ -983,8 +1007,10 @@ class Client:
         reaches an execution seam, so the messages it already produced stay in
         the Session. :meth:`cancel_invocation` is the discarding stop.
         """
-        return await self._replay_safe(
-            lambda: self.invocations.interrupt_invocation(invocation_id)
+        return _machine_projection(
+            await self._replay_safe(
+                lambda: self.invocations.interrupt_invocation(invocation_id)
+            )
         )
 
     async def create_nudge(
@@ -1094,20 +1120,22 @@ class Client:
         cursor: str | None = None,
         limit: int | None = None,
     ) -> InvocationList:
-        return await self._replay_safe(lambda: self.invocations.list_invocations(
-            tenant_key=tenant_key,
-            default_tenant=default_tenant,
-            session_id=session_id,
-            agent_id=agent_id,
-            agent_key=agent_key,
-            status=(
-                status
-                if isinstance(status, list)
-                else [status] if status is not None else None
-            ),
-            cursor=cursor,
-            limit=limit,
-        ))
+        return _machine_projection(
+            await self._replay_safe(lambda: self.invocations.list_invocations(
+                tenant_key=tenant_key,
+                default_tenant=default_tenant,
+                session_id=session_id,
+                agent_id=agent_id,
+                agent_key=agent_key,
+                status=(
+                    status
+                    if isinstance(status, list)
+                    else [status] if status is not None else None
+                ),
+                cursor=cursor,
+                limit=limit,
+            ))
+        )
 
     async def invocation_items(
         self,
@@ -1149,15 +1177,17 @@ class Client:
         cursor: str | None = None,
         limit: int | None = None,
     ) -> SessionList:
-        return await self._replay_safe(lambda: self.sessions.list_sessions(
-            tenant_key=tenant_key,
-            default_tenant=default_tenant,
-            agent_id=agent_id,
-            agent_key=agent_key,
-            session_key=session_key,
-            cursor=cursor,
-            limit=limit,
-        ))
+        return _machine_projection(
+            await self._replay_safe(lambda: self.sessions.list_sessions(
+                tenant_key=tenant_key,
+                default_tenant=default_tenant,
+                agent_id=agent_id,
+                agent_key=agent_key,
+                session_key=session_key,
+                cursor=cursor,
+                limit=limit,
+            ))
+        )
 
     async def session_items(
         self,
@@ -1187,7 +1217,9 @@ class Client:
                 return
 
     async def get_session(self, session_id: str) -> Session:
-        return await self._replay_safe(lambda: self.sessions.get_session(session_id))
+        return _machine_projection(
+            await self._replay_safe(lambda: self.sessions.get_session(session_id))
+        )
 
     async def delete_session(self, session_id: str) -> None:
         """Erase a Session and everything under it.
@@ -1265,11 +1297,13 @@ class Client:
         cursor: str | None = None,
         limit: int | None = None,
     ) -> SessionMessageList:
-        return await self._replay_safe(
-            lambda: self.sessions.list_session_messages(
-                session_id,
-                cursor=cursor,
-                limit=limit,
+        return _machine_projection(
+            await self._replay_safe(
+                lambda: self.sessions.list_session_messages(
+                    session_id,
+                    cursor=cursor,
+                    limit=limit,
+                )
             )
         )
 
@@ -1335,12 +1369,14 @@ class Client:
         page_token: str | None = None,
         limit: int | None = None,
     ) -> TranscriptSnapshot:
-        return await self._replay_safe(
-            lambda: self.sessions.get_session_transcript(
-                session_id,
-                cursor=cursor,
-                page_token=page_token,
-                limit=limit,
+        return _machine_projection(
+            await self._replay_safe(
+                lambda: self.sessions.get_session_transcript(
+                    session_id,
+                    cursor=cursor,
+                    page_token=page_token,
+                    limit=limit,
+                )
             )
         )
 
@@ -1503,53 +1539,57 @@ class Client:
             )
         )
 
-    async def create_budget(
+    async def allocate_credits(
         self,
         *,
-        scope: Literal["app", "tenant", "user", "agent", "provider_key", "credential"],
-        window_start: datetime,
-        window_end: datetime,
-        max_estimated_cost_usd: float,
+        amount: str,
         tenant_key: str | None = None,
         default_tenant: bool = False,
-        user_key: str | None = None,
-        agent_id: str | None = None,
-        provider_key_id: str | None = None,
-        credential_id: str | None = None,
+        reference: str | None = None,
         idempotency_key: str | None = None,
-    ) -> Budget:
-        body = CreateBudgetRequest(
-            scope=BudgetScope(scope),
+    ) -> AllocateCreditsResult:
+        body = AllocateCreditsRequest(
             tenant_key=tenant_key,
             default_tenant=default_tenant,
-            user_key=user_key,
-            agent_id=agent_id,
-            provider_key_id=provider_key_id,
-            credential_id=credential_id,
-            window_start=window_start,
-            window_end=window_end,
-            max_estimated_cost_usd=max_estimated_cost_usd,
+            amount=Money(amount=amount, currency="USD"),
+            reference=reference,
             idempotency_key=idempotency_key or f"nvoken-{uuid.uuid4()}",
         )
-        return await self._replay_safe(lambda: self.budgets.create_budget(body))
+        return await self._replay_safe(lambda: self.credits.allocate_credits(body))
 
-    async def get_budget(self, budget_id: str) -> Budget:
-        return await self._replay_safe(lambda: self.budgets.get_budget(budget_id))
-
-    async def update_budget(
+    async def list_credit_accounts(
         self,
-        budget_id: str,
-        max_estimated_cost_usd: float,
-    ) -> Budget:
+        *,
+        tenant_key: str | None = None,
+        default_tenant: bool | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> CreditAccountList:
         return await self._replay_safe(
-            lambda: self.budgets.update_budget(
-                budget_id,
-                UpdateBudgetRequest(max_estimated_cost_usd=max_estimated_cost_usd),
+            lambda: self.credits.list_credit_accounts(
+                tenant_key=tenant_key,
+                default_tenant=default_tenant,
+                cursor=cursor,
+                limit=limit,
             )
         )
 
-    async def delete_budget(self, budget_id: str) -> None:
-        await self._replay_safe(lambda: self.budgets.delete_budget(budget_id))
+    async def list_credit_allocations(
+        self,
+        *,
+        tenant_key: str | None = None,
+        default_tenant: bool | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> CreditAllocationList:
+        return await self._replay_safe(
+            lambda: self.credits.list_credit_allocations(
+                tenant_key=tenant_key,
+                default_tenant=default_tenant,
+                cursor=cursor,
+                limit=limit,
+            )
+        )
 
     async def stream_session(
         self,
@@ -1583,6 +1623,11 @@ class Client:
         raise last_error or NvokenError("unexpected_response", "request did not run")
 
 
+def _machine_projection(response: Any) -> Any:
+    """Unwrap a generated machine-or-browser response union."""
+    return getattr(response, "actual_instance", response)
+
+
 def _generated_mcp_server(server: MCPServer) -> GeneratedMCPServer:
     timeouts = server.timeouts
     return GeneratedMCPServer(
@@ -1605,7 +1650,6 @@ def _generated_session_options(
     if (
         options.compaction is None
         and options.retention is None
-        and options.max_estimated_cost_usd is None
         and not options.metadata
     ):
         raise NvokenError("validation", "session_options requires at least one member")
@@ -1621,7 +1665,6 @@ def _generated_session_options(
         retention=GeneratedRetentionPolicy(ttl_seconds=options.retention.ttl_seconds)
         if options.retention is not None
         else None,
-        max_estimated_cost_usd=options.max_estimated_cost_usd,
         metadata=dict(options.metadata) if options.metadata else None,
     )
 

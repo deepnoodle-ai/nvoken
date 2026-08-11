@@ -42,10 +42,14 @@ func runAuthLogin(ctx *cli.Context) error {
 	if verified.JSON200 == nil {
 		return responseError(verified.StatusCode(), verified.Body)
 	}
+	identity, err := verified.JSON200.AsCurrentIdentity()
+	if err != nil {
+		return fmt.Errorf("decode identity: %w", err)
+	}
 	profile := authstore.Profile{
 		Endpoint:     auth.BaseURL,
 		Token:        auth.APIKey,
-		CredentialID: verified.JSON200.Authentication.CredentialID,
+		CredentialID: identity.Authentication.CredentialID,
 		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
 	}
 	name := profileName(ctx)
@@ -73,7 +77,10 @@ func runAuthStatus(ctx *cli.Context) error {
 	if jsonOutput(ctx) {
 		return renderJSON(ctx, response.JSON200)
 	}
-	identity := response.JSON200
+	identity, err := response.JSON200.AsCurrentIdentity()
+	if err != nil {
+		return fmt.Errorf("decode identity: %w", err)
+	}
 	ctx.Printf("Credential: %s\n", identity.Authentication.CredentialID)
 	ctx.Printf("Effective profile: %s\n", identity.Authentication.EffectiveProfile)
 	ctx.Printf("Endpoint: %s\n", auth.BaseURL)

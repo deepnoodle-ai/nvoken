@@ -9,35 +9,33 @@ import (
 	"time"
 )
 
-// AgentOptions fixes one identity and the Agent Definition every turn from this
-// Agent runs with. The definition's fields read flat here rather than nested,
-// because an Agent always sends it inline: it serves the host tool handlers
-// declared in it, so there is no inline-or-by-ID choice for a nested field to
-// express. Reuse a registered AgentDefinitionID through Client.Invoke instead.
+// AgentOptions fixes one identity and Agent Definition every turn from this
+// Agent runs with. Supply AgentDefinitionID to reuse a resource, or leave it
+// empty and provide the flat inline definition fields. Tools always register
+// local handlers; for inline definitions they are also sent as declarations.
 type AgentOptions struct {
-	AgentKey      string
-	TenantKey     *string
-	Instructions  string
-	Model         Model
-	Sampling      *Sampling
-	Reasoning     *Reasoning
-	ToolChoice    *ToolChoice
-	Limits        *Limits
-	Tools         []Tool
-	MCPServers    []MCPServer
-	ProviderTools []ProviderTool
-	OutputSchema  map[string]any
+	AgentKey          string
+	AgentDefinitionID string
+	TenantKey         *string
+	Instructions      string
+	Model             Model
+	Sampling          *Sampling
+	Reasoning         *Reasoning
+	ToolChoice        *ToolChoice
+	Limits            *Limits
+	Tools             []Tool
+	MCPServers        []MCPServer
+	ProviderTools     []ProviderTool
+	OutputSchema      map[string]any
 	// MCPServerHeaders carries per-turn secret headers for the MCP servers this
-	// Agent declares. They stay outside the Agent Definition so its
-	// content-addressed identity does not depend on a secret.
+	// Agent declares. They stay outside the Agent Definition so no reusable
+	// revision depends on a secret.
 	MCPServerHeaders  []MCPServerHeaders
 	ProviderKeys      []ProviderKeySelection
 	Webhook           *WebhookTarget
 	OnBudgetExhausted BudgetExhaustionBehavior
 }
 
-// agentDefinition gathers the flat execution fields into the value the wire
-// shape nests, so the Agent and Client.Invoke paths render one definition type.
 func (o AgentOptions) agentDefinition() AgentDefinition {
 	return AgentDefinition{
 		Instructions:  o.Instructions,
@@ -51,6 +49,12 @@ func (o AgentOptions) agentDefinition() AgentDefinition {
 		ProviderTools: o.ProviderTools,
 		OutputSchema:  o.OutputSchema,
 	}
+}
+
+func (o AgentOptions) hasInlineDefinitionFields() bool {
+	return o.Instructions != "" || o.Model != (Model{}) || o.Sampling != nil ||
+		o.Reasoning != nil || o.ToolChoice != nil || o.Limits != nil ||
+		len(o.MCPServers) != 0 || len(o.ProviderTools) != 0 || o.OutputSchema != nil
 }
 
 type AgentInvocationOptions struct {
@@ -155,11 +159,17 @@ func NewAgent(client *Client, options AgentOptions) (*Agent, error) {
 			Message:  "Agent key is required",
 		}
 	}
-	if options.Model == (Model{}) {
+	if options.AgentDefinitionID != "" && options.hasInlineDefinitionFields() {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "Supply an Agent Definition ID or inline definition fields, not both",
+		}
+	}
+	if options.AgentDefinitionID == "" && options.Model == (Model{}) {
 		if client.DefaultModel == nil {
 			return nil, &Error{
 				Category: ErrorValidation,
-				Message:  "Agent model is required",
+				Message:  "Agent model is required for an inline definition",
 			}
 		}
 		options.Model = *client.DefaultModel
@@ -202,8 +212,7 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 	if onBudgetExhausted == "" {
 		onBudgetExhausted = a.options.OnBudgetExhausted
 	}
-	definition := a.options.agentDefinition()
-	return InvokeRequest{
+	request := InvokeRequest{
 		AgentKey:          a.options.AgentKey,
 		TenantKey:         tenantKey,
 		SessionID:         options.SessionID,
@@ -213,7 +222,6 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		IfActive:          options.IfActive,
 		OnBudgetExhausted: onBudgetExhausted,
 		Input:             input,
-		AgentDefinition:   &definition,
 		MCPServerHeaders:  a.options.MCPServerHeaders,
 		ProviderKeys:      a.options.ProviderKeys,
 		// A per-call target overrides the agent default so one Agent can
@@ -222,6 +230,13 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		Context:  options.Context,
 		Metadata: options.Metadata,
 	}
+	if a.options.AgentDefinitionID != "" {
+		request.AgentDefinitionID = a.options.AgentDefinitionID
+	} else {
+		definition := a.options.agentDefinition()
+		request.AgentDefinition = &definition
+	}
+	return request
 }
 
 func (a *Agent) Stream(

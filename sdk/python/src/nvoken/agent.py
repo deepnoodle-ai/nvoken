@@ -81,14 +81,14 @@ class NoOutputTextError(NvokenError):
 class AgentOptions(Generic[StructuredT]):
     """One identity and the Agent Definition every turn from this Agent runs with.
 
-    The definition's fields read flat here rather than nested, because an Agent
-    always sends it inline: it serves the host tool handlers declared in it, so
-    there is no inline-or-by-ID choice for a nested field to express. Reuse a
-    registered ``agent_definition_id`` through :meth:`Client.invoke` instead.
-    ``model`` may be omitted when the Client carries a default.
+    Set ``agent_definition_id`` for a reusable resource, or leave it unset and
+    provide the flat inline definition fields. ``tools`` registers local host
+    handlers in either form. Inline ``model`` may be omitted when the Client
+    carries a default.
     """
 
     agent_key: str
+    agent_definition_id: str | None = None
     model: Model | None = None
     instructions: str | None = None
     sampling: Sampling | None = None
@@ -102,8 +102,8 @@ class AgentOptions(Generic[StructuredT]):
     mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
     """Per-turn secret headers for the MCP servers this Agent declares.
 
-    They stay outside the Agent Definition so its content-addressed identity
-    does not depend on a secret.
+    They stay outside the Agent Definition so no reusable revision contains a
+    secret.
     """
     tenant_key: str | None = None
     provider_keys: tuple[ProviderKeySelection, ...] = ()
@@ -171,29 +171,45 @@ class Agent(Generic[StructuredT]):
     def __init__(self, client: Client, options: AgentOptions[StructuredT]) -> None:
         if not options.agent_key:
             raise NvokenError("validation", "agent_key is required")
-        model = options.model or client.default_model
-        if model is None:
-            raise NvokenError("validation", "model is required")
-        # The flat options gather into the value the wire shape nests, so the
-        # Agent and Client.invoke paths render one definition type.
-        definition = AgentDefinition(
-            model=model,
-            instructions=options.instructions,
-            sampling=options.sampling,
-            reasoning=options.reasoning,
-            tool_choice=options.tool_choice,
-            limits=options.limits,
-            tools=options.tools,
-            mcp_servers=options.mcp_servers,
-            provider_tools=options.provider_tools,
-            output_schema=options.output_schema,
-        )
+        has_inline_fields = any((
+            options.model is not None,
+            options.instructions is not None,
+            options.sampling is not None,
+            options.reasoning is not None,
+            options.tool_choice is not None,
+            options.limits is not None,
+            bool(options.mcp_servers),
+            bool(options.provider_tools),
+            options.output_schema is not None,
+        ))
+        if options.agent_definition_id is not None and has_inline_fields:
+            raise NvokenError(
+                "validation",
+                "supply agent_definition_id or inline definition fields, not both",
+            )
+        definition: AgentDefinition | None = None
+        if options.agent_definition_id is None:
+            model = options.model or client.default_model
+            if model is None:
+                raise NvokenError("validation", "model is required for inline definition")
+            definition = AgentDefinition(
+                model=model,
+                instructions=options.instructions,
+                sampling=options.sampling,
+                reasoning=options.reasoning,
+                tool_choice=options.tool_choice,
+                limits=options.limits,
+                tools=options.tools,
+                mcp_servers=options.mcp_servers,
+                provider_tools=options.provider_tools,
+                output_schema=options.output_schema,
+            )
         self.client = client
         self.options = options
         self.definition = definition
         self._host_tools = {
             tool.name: tool
-            for tool in definition.tools
+            for tool in options.tools
             if not isinstance(tool, BuiltinTool) and tool.mode == "host"
         }
         # Tools nvoken delivers over HTTPS. They can appear in a waiting
@@ -202,7 +218,7 @@ class Agent(Generic[StructuredT]):
         # that acknowledgement rather than from local handlers.
         self._callback_tools = {
             tool.name
-            for tool in definition.tools
+            for tool in options.tools
             if not isinstance(tool, BuiltinTool) and tool.mode == "callback"
         }
 
@@ -252,7 +268,7 @@ class Agent(Generic[StructuredT]):
             "structured output"
             if result.raw_structured_output is not None
             else "tool-only output"
-            if self.definition.tools
+            if self.options.tools
             else "no assistant output"
         )
         raise NoOutputTextError(result.handle.invocation_id, result_kind)
@@ -393,6 +409,7 @@ class Agent(Generic[StructuredT]):
             agent_key=self.options.agent_key,
             input=input,
             agent_definition=self.definition,
+            agent_definition_id=self.options.agent_definition_id,
             mcp_server_headers=self.options.mcp_server_headers,
             idempotency_key=options.idempotency_key,
             if_active=options.if_active,

@@ -76,6 +76,18 @@ func usageWindow(command *cli.Context) (time.Time, time.Time, error) {
 	return startAt, endAt, nil
 }
 
+func utcRFC3339(value, name string) (time.Time, error) {
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%s must be an RFC3339 timestamp", name)
+	}
+	_, offset := parsed.Zone()
+	if offset != 0 {
+		return time.Time{}, fmt.Errorf("%s must be UTC", name)
+	}
+	return parsed.UTC(), nil
+}
+
 func runUsageTimeseries(command *cli.Context) error {
 	client, err := runtimeClient(command)
 	if err != nil {

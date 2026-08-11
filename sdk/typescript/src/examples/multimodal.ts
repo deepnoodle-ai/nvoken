@@ -27,11 +27,7 @@ const client = new Client({
 
 const agent = client.agent({
   agentKey: "invoice-review",
-  instructions: "Answer only from the attached file.",
-  model: {
-    provider: process.env.NVOKEN_PROVIDER ?? "anthropic",
-    id: process.env.NVOKEN_MODEL ?? "claude-sonnet-5",
-  },
+	agentDefinitionId: process.env.NVOKEN_AGENT_DEFINITION_ID ?? "",
 });
 
 // Bytes are inlined, so nvoken never fetches a URL. Public message reads later

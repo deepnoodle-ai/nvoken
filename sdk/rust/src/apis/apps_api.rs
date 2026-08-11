@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -13,10 +13,35 @@ use crate::{apis::ResponseContent, models};
 use reqwest;
 use serde::{de::Error as _, Deserialize, Serialize};
 
+/// struct for typed errors of method [`create_app_client_key`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CreateAppClientKeyError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`get_app`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAppError {
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`list_app_client_keys`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ListAppClientKeysError {
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
     Status404(models::ErrorResponse),
@@ -49,6 +74,18 @@ pub enum RegisterAppError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`revoke_app_client_key`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RevokeAppClientKeyError {
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`update_app`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -60,6 +97,62 @@ pub enum UpdateAppError {
     Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
     UnknownValue(serde_json::Value),
+}
+
+/// Registers one standard-base64-encoded, exactly 32-byte Ed25519 public key. nvoken stores no seed or private key and never returns the public bytes. At most five keys may exist for one App so hosts can overlap a bounded rotation. Duplicate public bytes within one App are rejected; another App may independently register the same bytes.  Registration remains dormant in this version: a JWT signed by the key still receives the existing unauthenticated response and creates no runtime or credential rows.
+pub async fn create_app_client_key(
+    configuration: &configuration::Configuration,
+    app_id: &str,
+    create_client_key_request: models::CreateClientKeyRequest,
+) -> Result<models::ClientKey, Error<CreateAppClientKeyError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_app_id = app_id;
+    let p_body_create_client_key_request = create_client_key_request;
+
+    let uri_str = format!(
+        "{}/v1/apps/{app_id}/client-keys",
+        configuration.base_path,
+        app_id = crate::apis::urlencode(p_path_app_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+    req_builder = req_builder.json(&p_body_create_client_key_request);
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::ClientKey`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::ClientKey`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<CreateAppClientKeyError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
 }
 
 /// Returns one registered App. App- and Org-scoped credentials receive `404` for Apps outside their durable containment boundary.
@@ -105,6 +198,57 @@ pub async fn get_app(
     } else {
         let content = resp.text().await?;
         let entity: Option<GetAppError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Lists the App's dormant Ed25519 verification-key records in creation order. Responses contain only the generated key ID, display name, SHA-256 fingerprint, and creation time; public-key bytes are never returned. This route requires the same non-client Operator authority as updating the visible App. Cross-App targets return `404`.
+pub async fn list_app_client_keys(
+    configuration: &configuration::Configuration,
+    app_id: &str,
+) -> Result<models::ClientKeyList, Error<ListAppClientKeysError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_app_id = app_id;
+
+    let uri_str = format!(
+        "{}/v1/apps/{app_id}/client-keys",
+        configuration.base_path,
+        app_id = crate::apis::urlencode(p_path_app_id)
+    );
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::ClientKeyList`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::ClientKeyList`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ListAppClientKeysError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
@@ -213,7 +357,52 @@ pub async fn register_app(
     }
 }
 
-/// Updates an App's display name. An installation administrator may also transfer the App to another registered Org by changing `org_id`. Org- and App-scoped callers receive `404` outside their containment boundary, and cannot move an App. The unique `name` and transitional `external_ref` cannot be changed.
+/// Deletes only the named App-owned verification record. A repeated, unknown, or cross-App key ID returns the same `404`. Agent Definitions and App configuration are never changed by revocation.
+pub async fn revoke_app_client_key(
+    configuration: &configuration::Configuration,
+    app_id: &str,
+    key_id: &str,
+) -> Result<(), Error<RevokeAppClientKeyError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_app_id = app_id;
+    let p_path_key_id = key_id;
+
+    let uri_str = format!(
+        "{}/v1/apps/{app_id}/client-keys/{key_id}",
+        configuration.base_path,
+        app_id = crate::apis::urlencode(p_path_app_id),
+        key_id = crate::apis::urlencode(p_path_key_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::DELETE, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<RevokeAppClientKeyError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Updates an App's display name, callback timeout, or dormant browser configuration. An installation administrator may also transfer the App to another registered Org by changing `org_id`. Org- and App-scoped callers receive `404` outside their containment boundary, and cannot move an App. The unique `name` and transitional `external_ref` cannot be changed.
 pub async fn update_app(
     configuration: &configuration::Configuration,
     app_id: &str,

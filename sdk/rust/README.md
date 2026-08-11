@@ -3,7 +3,7 @@
 An Invocation is one durable agent turn. The host supplies `agent_key`,
 optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
 model, and tools travel with the turn as an `AgentDefinition`, either inline or
-referenced by a registered `agent_definition_id`.
+referenced by a reusable `agent_definition_id`.
 
 The handwritten level covers both transport plus durable handle, and a
 high-level Agent facade on top of it:
@@ -247,27 +247,28 @@ turns share a configuration and you would rather send a short ID:
 ```rust
 let definition = AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
     .instructions("Help with billing questions.");
-let registration = client.register_agent_definition(definition).await?;
+let resource = client
+    .create_agent_definition("support-definition-v1", definition)
+    .await?;
 
 let request = InvokeRequest::from_agent_definition(
     "support",
     "Why was I charged twice?",
-    registration.agent_definition_id,
+    resource.id,
 );
 ```
 
-A definition is content-addressed and immutable, so registering the same one
-twice returns the same `agent_definition_id`, and so does registering one an
-earlier inline turn already stored. Registering starts no turn and creates no
-Agent, Session, or message. There is no list, update, or delete: to change a
-definition, register the new one and reference that.
+Creating a definition starts no turn and creates no Agent, Session, or message.
+The resource has a stable ID and an increasing revision. Use
+`get_agent_definition` and `update_agent_definition` to read and replace it. An
+idempotency key makes create retries safe; equal content under another key
+creates an independent resource.
 
 Exactly one of the inline definition and the ID may be set. Calling a
 write-through builder on a request that names an ID grows an inline definition,
 so the exclusivity check reports the conflict rather than silently dropping the
-field. An `Agent` always sends its definition inline, because it serves the host
-tool handlers declared in it, which is why `AgentOptions` writes the definition's
-fields through its own builders: there is no choice there to express.
+field. `AgentOptions::from_definition_id` selects a reusable resource; host tool
+handlers attached to the options remain local.
 
 ## Record changing application state
 
@@ -333,8 +334,8 @@ let request = InvokeRequest::new("support", "hello", Model::new("anthropic", "cl
     .mcp_server_headers(McpServerHeaders::new("support", headers));
 ```
 
-The declaration carries no secrets. An Agent Definition is content-addressed and
-reused across turns, so authentication headers travel per Invocation in
+The declaration carries no secrets. An Agent Definition may be reused across
+turns, so authentication headers travel per Invocation in
 `mcp_server_headers`, keyed to the server name. They are one-Invocation secret
 material and never appear in durable Agent Definitions or public recovery
 surfaces.

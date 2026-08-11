@@ -5,7 +5,7 @@
 import {
   AgentDefinitionsApi,
   AgentsApi,
-  BudgetsApi,
+  CreditsApi,
   IdentityApi,
   InvocationsApi,
   MCPApi,
@@ -15,13 +15,15 @@ import {
 } from "./generated/apis/index.js";
 import type {
   Agent as AgentIdentity,
-  AgentDefinitionRegistration,
+  AgentDefinitionResource,
+  AgentDefinitionWrite,
   AgentList,
-  Budget,
-  BudgetScope,
+  AllocateCreditsResult,
+  CreditAccountList,
+  CreditAllocationList,
+  Money,
   CreateInvocationRequest,
   CreateSessionRequest,
-  RegisterAgentDefinitionRequest,
   ForkSessionRequest,
   Invocation,
   InvocationChange,
@@ -632,16 +634,12 @@ export interface SessionOptions {
    */
   compaction?: ContextCompaction;
   retention?: SessionRetention;
-  maxEstimatedCostUsd?: number;
   metadata?: Metadata;
 }
 
 /**
- * The immutable execution configuration a turn runs with. nvoken
- * content-addresses it, so two turns whose definitions serialize identically
- * share one Agent Definition and one `agentDefinitionId`. Identity, session
- * selection, input, idempotency, webhooks, metadata, and provider key selection
- * are durable elsewhere and deliberately absent here.
+ * The execution configuration a turn runs with. Send it inline on an
+ * Invocation or create an App-owned resource and reuse its stable ID.
  */
 export interface AgentDefinition<TOutput extends object = JsonObject> {
   instructions?: string;
@@ -710,9 +708,8 @@ export type ToolChoice =
   | { mode: "named"; name: string };
 
 /**
- * Declares a remote MCP server. It carries no secrets: an Agent Definition is
- * content-addressed and shared across turns, so authentication headers travel
- * per Invocation in {@link InvokeRequestBase.mcpServerHeaders} instead.
+ * Declares a remote MCP server. It carries no secrets, so authentication
+ * headers travel per Invocation in {@link InvokeRequestBase.mcpServerHeaders}.
  */
 export interface MCPServerOptions {
   name: string;
@@ -758,8 +755,7 @@ export type ContextTier = "contextual" | "operator";
  * unchanged resend adds no transcript message, so a stateless host may resend
  * its whole snapshot every turn. Omit the reserved `app-` prefix the model
  * sees; nvoken adds it. Context is durable Session history rather than an Agent
- * Definition field, so it never changes the content-addressed
- * `agentDefinitionId`.
+ * Definition field, so it never changes the admitted Definition revision.
  */
 export interface ContextItem {
   name: string;
@@ -794,7 +790,7 @@ interface InvokeRequestBase {
   /**
    * Per-turn secret headers, keyed to MCP server names in the selected Agent
    * Definition. They live here rather than on {@link MCPServer} because an
-   * Agent Definition is content-addressed and reused across turns.
+   * Agent Definition may be reused across turns.
    */
   mcpServerHeaders?: readonly MCPServerHeaders[];
   /**
@@ -813,18 +809,18 @@ interface InvokeRequestBase {
   metadata?: Metadata;
 }
 
-type InlineAgentDefinitionRequest<TOutput extends object> = {
-  agentDefinition: AgentDefinition<TOutput>;
-  agentDefinitionId?: never;
-};
-
 type ReferencedAgentDefinitionRequest = {
   agentDefinitionId: string;
   agentDefinition?: never;
 };
 
+type InlineAgentDefinitionRequest<TOutput extends object> = {
+  agentDefinition: AgentDefinition<TOutput>;
+  agentDefinitionId?: never;
+};
+
 export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBase & (
-  InlineAgentDefinitionRequest<TOutput> | ReferencedAgentDefinitionRequest
+  ReferencedAgentDefinitionRequest | InlineAgentDefinitionRequest<TOutput>
 ) & (
   | { sessionId: string; sessionKey?: never; sessionOptions?: SessionOptions }
   | { sessionKey: string; sessionId?: never; sessionOptions?: SessionOptions }
@@ -857,23 +853,39 @@ export interface ClientOptions {
 }
 
 /**
- * The Agent Definition fields read flat here rather than nested under
- * `agentDefinition`. An Agent always sends its definition inline, because it
- * serves the host tool handlers declared in it, so there is no inline-or-by-ID
- * choice for a wrapper to express. Reuse a registered `agentDefinitionId`
- * through {@link Client.invoke} instead. Spreading a whole definition
- * (`{ agentKey, ...definition }`) therefore also works. `model` may be omitted
- * when the Client carries a default.
+ * Use `agentDefinitionId` for a reusable resource, or provide the Agent
+ * Definition fields inline. Inline `model` may be omitted when the Client has
+ * a default. `tools` also registers local host handlers in either form.
  */
-export type AgentOptions<TOutput extends object = JsonObject> =
+type ReferencedAgentOptions = {
+  agentDefinitionId: string;
+  instructions?: never;
+  model?: never;
+  sampling?: never;
+  reasoning?: never;
+  toolChoice?: never;
+  limits?: never;
+  mcpServers?: never;
+  providerTools?: never;
+  outputSchema?: never;
+  tools?: Array<Tool<object>>;
+};
+
+type InlineAgentOptions<TOutput extends object> =
   & Omit<AgentDefinition<TOutput>, "model">
   & {
-    agentKey: string;
     model?: Model;
+    agentDefinitionId?: never;
+  };
+
+export type AgentOptions<TOutput extends object = JsonObject> =
+  & (ReferencedAgentOptions | InlineAgentOptions<TOutput>)
+  & {
+    agentKey: string;
     /**
      * Per-turn secret headers for the MCP servers this Agent declares. They
-     * stay outside the Agent Definition so its content-addressed identity does
-     * not depend on a secret.
+     * stay outside the Agent Definition so no reusable revision contains a
+     * secret.
      */
     mcpServerHeaders?: readonly MCPServerHeaders[];
     providerKeys?: ProviderKeySelection[];
@@ -971,18 +983,19 @@ export interface CreateProviderKeyOptions {
   idempotencyKey?: string;
 }
 
-export interface CreateBudgetOptions {
-  scope: BudgetScope;
+export interface AllocateCreditsOptions {
+  amount: Money;
   tenantKey?: string;
   defaultTenant?: boolean;
-  userKey?: string;
-  agentId?: string;
-  providerKeyId?: string;
-  credentialId?: string;
-  windowStart: Date;
-  windowEnd: Date;
-  maxEstimatedCostUsd: number;
+  reference?: string;
   idempotencyKey?: string;
+}
+
+export interface ListCreditsOptions {
+  tenantKey?: string;
+  defaultTenant?: boolean;
+  cursor?: string;
+  limit?: number;
 }
 
 export interface ListProviderKeysOptions {
@@ -1090,7 +1103,7 @@ export interface WaitOptions {
 
 export class Client {
   readonly agents: AgentsApi;
-  readonly budgets: BudgetsApi;
+  readonly credits: CreditsApi;
   readonly invocations: InvocationsApi;
   readonly agentDefinitions: AgentDefinitionsApi;
   readonly mcp: MCPApi;
@@ -1127,7 +1140,7 @@ export class Client {
       headers: { "User-Agent": `@deepnoodle/nvoken/${VERSION}` },
     });
     this.agents = new AgentsApi(this.configuration);
-    this.budgets = new BudgetsApi(this.configuration);
+    this.credits = new CreditsApi(this.configuration);
     this.invocations = new InvocationsApi(this.configuration);
     this.agentDefinitions = new AgentDefinitionsApi(this.configuration);
     this.mcp = new MCPApi(this.configuration);
@@ -1157,7 +1170,7 @@ export class Client {
 
   raw(): {
     agents: AgentsApi;
-    budgets: BudgetsApi;
+    credits: CreditsApi;
     invocations: InvocationsApi;
     agentDefinitions: AgentDefinitionsApi;
     mcp: MCPApi;
@@ -1168,7 +1181,7 @@ export class Client {
   } {
     return {
       agents: this.agents,
-      budgets: this.budgets,
+      credits: this.credits,
       invocations: this.invocations,
       agentDefinitions: this.agentDefinitions,
       mcp: this.mcp,
@@ -1211,8 +1224,8 @@ export class Client {
 
   /**
    * Discovers the tools a remote MCP server projects. Headers are a separate
-   * argument because {@link MCPServer} is part of a content-addressed Agent
-   * Definition and therefore carries no secrets; these are used for this one
+   * argument because {@link MCPServer} is durable Agent Definition
+   * configuration and therefore carries no secrets; these are used for this one
    * discovery request and never stored.
    */
   listMcpTools(
@@ -1248,7 +1261,10 @@ export class Client {
   }
 
   getCurrentIdentity(signal?: AbortSignal): Promise<CurrentIdentity> {
-    return this.replaySafe(() => this.identity.getCurrentIdentity({ signal }), signal);
+    return this.replaySafe(
+      () => this.identity.getCurrentIdentity({ signal }),
+      signal,
+    ) as Promise<CurrentIdentity>;
   }
 
   listCredentials(
@@ -1472,21 +1488,18 @@ export class Client {
     );
   }
 
-  createBudget(options: CreateBudgetOptions, signal?: AbortSignal): Promise<Budget> {
+  allocateCredits(
+    options: AllocateCreditsOptions,
+    signal?: AbortSignal,
+  ): Promise<AllocateCreditsResult> {
     const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
     return this.replaySafe(
-      () => this.budgets.createBudget({
-        createBudgetRequest: {
-          scope: options.scope,
+      () => this.credits.allocateCredits({
+        allocateCreditsRequest: {
+          amount: options.amount,
           tenantKey: options.tenantKey,
           defaultTenant: options.defaultTenant,
-          userKey: options.userKey,
-          agentId: options.agentId,
-          providerKeyId: options.providerKeyId,
-          credentialId: options.credentialId,
-          windowStart: options.windowStart,
-          windowEnd: options.windowEnd,
-          maxEstimatedCostUsd: options.maxEstimatedCostUsd,
+          reference: options.reference,
           idempotencyKey,
         },
       }, { signal }),
@@ -1494,30 +1507,22 @@ export class Client {
     );
   }
 
-  getBudget(budgetId: string, signal?: AbortSignal): Promise<Budget> {
-    return this.replaySafe(
-      () => this.budgets.getBudget({ budgetId }, { signal }),
-      signal,
-    );
-  }
-
-  updateBudget(
-    budgetId: string,
-    maxEstimatedCostUsd: number,
+  listCreditAccounts(
+    options: ListCreditsOptions = {},
     signal?: AbortSignal,
-  ): Promise<Budget> {
+  ): Promise<CreditAccountList> {
     return this.replaySafe(
-      () => this.budgets.updateBudget({
-        budgetId,
-        updateBudgetRequest: { maxEstimatedCostUsd },
-      }, { signal }),
+      () => this.credits.listCreditAccounts(options, { signal }),
       signal,
     );
   }
 
-  deleteBudget(budgetId: string, signal?: AbortSignal): Promise<void> {
+  listCreditAllocations(
+    options: ListCreditsOptions = {},
+    signal?: AbortSignal,
+  ): Promise<CreditAllocationList> {
     return this.replaySafe(
-      () => this.budgets.deleteBudget({ budgetId }, { signal }),
+      () => this.credits.listCreditAllocations(options, { signal }),
       signal,
     );
   }
@@ -1552,20 +1557,19 @@ export class Client {
         "onBudgetExhausted must be stop or pause",
       );
     }
-    if ((request.agentDefinition === undefined) === (request.agentDefinitionId === undefined)) {
+    const hasInlineDefinition = request.agentDefinition !== undefined;
+    const hasDefinitionId = request.agentDefinitionId !== undefined
+      && request.agentDefinitionId.length > 0;
+    if (hasInlineDefinition === hasDefinitionId) {
       throw new NvokenError(
         "validation",
         "supply exactly one of agentDefinition and agentDefinitionId",
       );
     }
-    if (request.agentDefinitionId !== undefined) {
-      if (!request.agentDefinitionId) {
-        throw new NvokenError("validation", "agentDefinitionId cannot be empty");
-      }
-    } else {
+    if (request.agentDefinition !== undefined) {
       validateAgentDefinition(request.agentDefinition);
     }
-    validateMCPServerHeaders(request.mcpServerHeaders, request.agentDefinition);
+    validateMCPServerHeaders(request.mcpServerHeaders);
     const idempotencyKey = request.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
     const generatedRequest = invocationRequestToWire(request, idempotencyKey);
     const ack = await this.replaySafe(
@@ -1574,7 +1578,7 @@ export class Client {
         { signal },
       ),
       signal,
-    );
+    ) as unknown as Invocation;
     return new InvocationHandle<TOutput>(
       this,
       ack.id,
@@ -1584,36 +1588,53 @@ export class Client {
       ack.status,
       ack.deduplicated,
       ack.deadlineAt,
-      request.agentDefinition?.model?.provider,
+      undefined,
     );
   }
 
   /**
-   * Stores one Agent Definition without starting a turn, and returns the
-   * content-addressed ID later Invocations reuse through
-   * {@link InvokeRequest.agentDefinitionId}.
-   *
-   * Registration is idempotent by content rather than by key. A first
-   * registration, a repeat, and a definition an earlier turn already stored all
-   * return the same response, so callers need not track whether they have
-   * registered before.
-   *
-   * Only the definition's own content is checked here. Installation state, the
-   * App callback signing key, budgets, provider keys, and model lifecycle are
-   * checked again when a turn is admitted. A callback tool can therefore be
-   * registered before its App signing key exists, while an Invocation using it
-   * is still refused until delivery is configured.
+   * Creates one reusable App-owned Agent Definition resource. The idempotency
+   * key makes retries safe; equal definitions created under different keys get
+   * independent resource IDs.
    */
-  async registerAgentDefinition<TOutput extends object = JsonObject>(
+  async createAgentDefinition<TOutput extends object = JsonObject>(
     definition: AgentDefinition<TOutput>,
+    idempotencyKey = `nvoken-${globalThis.crypto.randomUUID()}`,
     signal?: AbortSignal,
-  ): Promise<AgentDefinitionRegistration> {
+  ): Promise<AgentDefinitionResource> {
     validateAgentDefinition(definition);
     return await this.replaySafe(
-      () => this.agentDefinitions.registerAgentDefinition(
-        { registerAgentDefinitionRequest: agentDefinitionToWire(definition) },
+      () => this.agentDefinitions.createAgentDefinition(
+        { idempotencyKey, agentDefinitionWrite: agentDefinitionToWire(definition) },
         { signal },
       ),
+      signal,
+    );
+  }
+
+  getAgentDefinition(
+    agentDefinitionId: string,
+    signal?: AbortSignal,
+  ): Promise<AgentDefinitionResource> {
+    return this.replaySafe(
+      () => this.agentDefinitions.getAgentDefinition({ agentDefinitionId }, { signal }),
+      signal,
+    );
+  }
+
+  updateAgentDefinition<TOutput extends object = JsonObject>(
+    agentDefinitionId: string,
+    expectedRevision: number,
+    definition: AgentDefinition<TOutput>,
+    signal?: AbortSignal,
+  ): Promise<AgentDefinitionResource> {
+    validateAgentDefinition(definition);
+    return this.replaySafe(
+      () => this.agentDefinitions.updateAgentDefinition({
+        agentDefinitionId,
+        ifMatch: `"${expectedRevision}"`,
+        agentDefinitionWrite: agentDefinitionToWire(definition),
+      }, { signal }),
       signal,
     );
   }
@@ -1796,10 +1817,10 @@ export class Client {
         ? undefined
         : Array.isArray(options.status) ? options.status : [options.status],
     };
-    return this.replaySafe(
+	return this.replaySafe(
       () => this.invocations.listInvocations(request, { signal }),
       signal,
-    );
+	) as Promise<InvocationList>;
   }
 
   async *invocationPages(
@@ -1818,7 +1839,10 @@ export class Client {
     options: ListSessionOptions = {},
     signal?: AbortSignal,
   ): Promise<SessionList> {
-    return this.replaySafe(() => this.sessions.listSessions(options, { signal }), signal);
+	return this.replaySafe(
+	  () => this.sessions.listSessions(options, { signal }),
+	  signal,
+	) as Promise<SessionList>;
   }
 
   async *sessionPages(
@@ -1834,7 +1858,10 @@ export class Client {
   }
 
   getSession(sessionId: string, signal?: AbortSignal): Promise<Session> {
-    return this.replaySafe(() => this.sessions.getSession({ sessionId }, { signal }), signal);
+	return this.replaySafe(
+	  () => this.sessions.getSession({ sessionId }, { signal }),
+	  signal,
+	) as Promise<Session>;
   }
 
   /**
@@ -1847,10 +1874,10 @@ export class Client {
     const call = () =>
       this.sessions.createSession({ createSessionRequest: request }, { signal });
     if (request.sessionKey != null) {
-      return this.replaySafe(call, signal);
+	  return this.replaySafe(call, signal) as Promise<Session>;
     }
     try {
-      return await call();
+	  return await call() as Session;
     } catch (error) {
       throw await normalizeError(error);
     }
@@ -1872,10 +1899,10 @@ export class Client {
         { signal },
       );
     if (request.sessionKey != null) {
-      return this.replaySafe(call, signal);
+	  return this.replaySafe(call, signal) as Promise<Session>;
     }
     try {
-      return await call();
+	  return await call() as Session;
     } catch (error) {
       throw await normalizeError(error);
     }
@@ -1919,10 +1946,10 @@ export class Client {
     // expressible in the generated type. The cast keeps it expressible here
     // rather than forcing callers to drop to raw fetch to delete a key.
     const request = { metadata } as unknown as UpdateSessionRequest;
-    return this.replaySafe(
+	return this.replaySafe(
       () => this.sessions.updateSession({ sessionId, updateSessionRequest: request }, { signal }),
       signal,
-    );
+	) as Promise<Session>;
   }
 
   async getSessionByKey(
@@ -1956,10 +1983,10 @@ export class Client {
     options: ListMessageOptions = {},
     signal?: AbortSignal,
   ): Promise<SessionMessageList> {
-    return this.replaySafe(
+	return this.replaySafe(
       () => this.sessions.listSessionMessages({ sessionId, ...options }, { signal }),
       signal,
-    );
+	) as Promise<SessionMessageList>;
   }
 
   async *messagePages(
@@ -2005,10 +2032,10 @@ export class Client {
     options: TranscriptPageOptions = {},
     signal?: AbortSignal,
   ): Promise<TranscriptSnapshot> {
-    return this.replaySafe(
+	return this.replaySafe(
       () => this.sessions.getSessionTranscript({ sessionId, ...options }, { signal }),
       signal,
-    );
+	) as Promise<TranscriptSnapshot>;
   }
 
   async drainTranscript(
@@ -2089,8 +2116,9 @@ export interface AnswerPendingToolCallsOptions {
 }
 
 export class Agent<TOutput extends object = JsonObject> {
-  readonly model: Model;
-  private readonly definition: AgentDefinition<TOutput>;
+  readonly model?: Model;
+  private readonly definition?: AgentDefinition<TOutput>;
+  private readonly definitionId?: string;
   private readonly hostTools: Map<string, HostTool<object>>;
   /**
    * Tools nvoken delivers over HTTPS. They can appear in a waiting Invocation's
@@ -2107,28 +2135,36 @@ export class Agent<TOutput extends object = JsonObject> {
     if (!options.agentKey) {
       throw new NvokenError("validation", "agentKey is required");
     }
-    const {
-      agentKey: _agentKey,
-      model,
-      mcpServerHeaders: _mcpServerHeaders,
-      providerKeys: _providerKeys,
-      webhook: _webhook,
-      onBudgetExhausted: _onBudgetExhausted,
-      ...execution
-    } = options;
-    if (execution.instructions !== undefined && !execution.instructions.trim()) {
-      throw new NvokenError("validation", "instructions cannot be blank");
+    if ("agentDefinitionId" in options && options.agentDefinitionId !== undefined) {
+      if (!options.agentDefinitionId) {
+        throw new NvokenError("validation", "agentDefinitionId cannot be empty");
+      }
+      this.definitionId = options.agentDefinitionId;
+    } else {
+      const {
+        agentKey: _agentKey,
+        agentDefinitionId: _agentDefinitionId,
+        model,
+        mcpServerHeaders: _mcpServerHeaders,
+        providerKeys: _providerKeys,
+        webhook: _webhook,
+        onBudgetExhausted: _onBudgetExhausted,
+        ...execution
+      } = options;
+      if (execution.instructions !== undefined && !execution.instructions.trim()) {
+        throw new NvokenError("validation", "instructions cannot be blank");
+      }
+      this.model = model ?? client.defaultModel ?? missingModel();
+      validateModel(this.model);
+      this.definition = { ...execution, model: this.model } as AgentDefinition<TOutput>;
     }
-    this.model = model ?? client.defaultModel ?? missingModel();
-    validateModel(this.model);
-    this.definition = { ...execution, model: this.model } as AgentDefinition<TOutput>;
     this.hostTools = new Map(
-      (this.definition.tools ?? [])
+      (options.tools ?? [])
         .filter((tool): tool is HostTool<object> => tool.mode === "host")
         .map((tool) => [tool.name, tool]),
     );
     this.callbackTools = new Set(
-      (this.definition.tools ?? [])
+      (options.tools ?? [])
         .filter((tool) => tool.mode === "callback")
         .map((tool) => tool.name),
     );
@@ -2150,14 +2186,20 @@ export class Agent<TOutput extends object = JsonObject> {
     options: InvocationOptions,
     idempotencyKey = options.idempotencyKey,
   ): InvokeRequest<TOutput> {
-    const request: InvokeRequestBase & InlineAgentDefinitionRequest<TOutput> = {
+    const definitionSelection: ReferencedAgentDefinitionRequest | InlineAgentDefinitionRequest<TOutput> =
+      this.definitionId !== undefined
+        ? { agentDefinitionId: this.definitionId }
+        : { agentDefinition: this.definition! };
+    const request: InvokeRequestBase & (
+      ReferencedAgentDefinitionRequest | InlineAgentDefinitionRequest<TOutput>
+    ) = {
       agentKey: this.options.agentKey,
       tenantKey: options.tenantKey,
       idempotencyKey,
       ifActive: options.ifActive,
       onBudgetExhausted: options.onBudgetExhausted ?? this.options.onBudgetExhausted,
       input,
-      agentDefinition: this.definition,
+      ...definitionSelection,
       mcpServerHeaders: this.options.mcpServerHeaders,
       providerKeys: this.options.providerKeys,
       // A per-call target overrides the agent default so one Agent can webhook
@@ -2237,7 +2279,7 @@ export class Agent<TOutput extends object = JsonObject> {
           event.status,
           event.deduplicated,
           event.deadlineAt,
-          this.model.provider,
+		  undefined,
         );
       } else if (event.type === "invocation.update") {
         handle?.applyInvocation(event.invocation);
@@ -2736,9 +2778,8 @@ function sessionOptionsToWire(
   options: SessionOptions | undefined,
 ): GeneratedSessionOptions | undefined {
   if (options === undefined) return undefined;
-  if (options.compaction === undefined && options.retention === undefined
-    && options.maxEstimatedCostUsd === undefined
-    && options.metadata === undefined) {
+	if (options.compaction === undefined && options.retention === undefined
+	  && options.metadata === undefined) {
     throw new NvokenError("validation", "sessionOptions requires at least one member");
   }
   return {
@@ -2751,18 +2792,17 @@ function sessionOptionsToWire(
     retention: options.retention === undefined
       ? undefined
       : { ttlSeconds: options.retention.ttlSeconds },
-    maxEstimatedCostUsd: options.maxEstimatedCostUsd,
-    metadata: options.metadata === undefined ? undefined : { ...options.metadata },
+	metadata: options.metadata === undefined ? undefined : { ...options.metadata },
   };
 }
 
 /**
- * Renders one Agent Definition. Invocation creation and registration both send
+ * Renders one Agent Definition. Invocation and resource creation both send
  * exactly this object, so a field either reaches the wire for both or neither.
  */
 function agentDefinitionToWire<TOutput extends object>(
   definition: AgentDefinition<TOutput>,
-): RegisterAgentDefinitionRequest {
+): AgentDefinitionWrite {
   const outputSchema = definition.outputSchema
     ? schemaToJSON(definition.outputSchema, "output")
     : undefined;
@@ -2886,9 +2926,8 @@ function validateAgentDefinition<TOutput extends object>(
  * must name a server it declares; a referenced definition is opaque here, so
  * those names are left to the service.
  */
-function validateMCPServerHeaders<TOutput extends object>(
+function validateMCPServerHeaders(
   entries: readonly MCPServerHeaders[] | undefined,
-  definition: AgentDefinition<TOutput> | undefined,
 ): void {
   if (entries === undefined) return;
   const seen = new Set<string>();
@@ -2909,13 +2948,6 @@ function validateMCPServerHeaders<TOutput extends object>(
       );
     }
     seen.add(entry.name);
-    if (definition === undefined) continue;
-    if (!definition.mcpServers?.some((server) => server.name === entry.name)) {
-      throw new NvokenError(
-        "validation",
-        `mcpServerHeaders name ${entry.name} matches no declared mcp server`,
-      );
-    }
   }
 }
 

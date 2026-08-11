@@ -1,6 +1,9 @@
 import { Client } from "../index.js";
 
-const agent = new Client().agent({ agentKey: "storyteller" });
+const agent = new Client().agent({
+	agentKey: "storyteller",
+	agentDefinitionId: process.env.NVOKEN_AGENT_DEFINITION_ID ?? "",
+});
 
 for await (const event of agent.stream("Tell me a tiny story.")) {
   if (event.type === "output_text.delta") process.stdout.write(event.text);

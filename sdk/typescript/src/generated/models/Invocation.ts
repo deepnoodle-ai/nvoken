@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -76,6 +76,13 @@ import {
     PendingHostToolCallToJSON,
     PendingHostToolCallToJSONTyped,
 } from './PendingHostToolCall.js';
+import type { CreditBlock } from './CreditBlock.js';
+import {
+    CreditBlockFromJSON,
+    CreditBlockFromJSONTyped,
+    CreditBlockToJSON,
+    CreditBlockToJSONTyped,
+} from './CreditBlock.js';
 import type { StructuredOutputProvenance } from './StructuredOutputProvenance.js';
 import {
     StructuredOutputProvenanceFromJSON,
@@ -83,13 +90,6 @@ import {
     StructuredOutputProvenanceToJSON,
     StructuredOutputProvenanceToJSONTyped,
 } from './StructuredOutputProvenance.js';
-import type { BudgetBlock } from './BudgetBlock.js';
-import {
-    BudgetBlockFromJSON,
-    BudgetBlockFromJSONTyped,
-    BudgetBlockToJSON,
-    BudgetBlockToJSONTyped,
-} from './BudgetBlock.js';
 
 /**
  *
@@ -126,18 +126,25 @@ export interface Invocation {
      */
     userKey: string | null;
     /**
-     * Content-addressed Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+     * Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
      * @type {string}
      * @memberof Invocation
      */
     agentDefinitionId: string;
+    /**
+     * Immutable Agent Definition revision admitted for this turn.
+     * @type {number}
+     * @memberof Invocation
+     */
+    agentDefinitionRevision: number;
     /**
      * The agent definition this turn actually ran with, stored when the turn
      * started and returned exactly as it was. Request headers for remote MCP
      * servers are never stored and never appear here.
      *
      * Present on `GET /v1/invocations/{id}` and on the result. Null in list
-     * items, where `agent_definition_id` identifies it instead.
+     * items, where `agent_definition_id` and `agent_definition_revision`
+     * identify it instead.
      *
      * @type {AgentDefinition}
      * @memberof Invocation
@@ -180,11 +187,11 @@ export interface Invocation {
      */
     stopReason: InvocationStopReason | null;
     /**
-     * Exact first-class Budget for a shared-budget stop, otherwise null.
-     * @type {BudgetBlock}
+     * Tenant credit account for an insufficient-credits stop, otherwise null.
+     * @type {CreditBlock}
      * @memberof Invocation
      */
-    blockingBudget: BudgetBlock | null;
+    creditBlock: CreditBlock | null;
     /**
      * Execution attempts this Invocation has been claimed for. It
      * increases on every claim, so an attempt increase across a
@@ -297,11 +304,12 @@ export function instanceOfInvocation(value: object): value is Invocation {
     if (!('sessionId' in value) || value['sessionId'] === undefined) return false;
     if (!('userKey' in value) || value['userKey'] === undefined) return false;
     if (!('agentDefinitionId' in value) || value['agentDefinitionId'] === undefined) return false;
+    if (!('agentDefinitionRevision' in value) || value['agentDefinitionRevision'] === undefined) return false;
     if (!('agentDefinition' in value) || value['agentDefinition'] === undefined) return false;
     if (!('context' in value) || value['context'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('stopReason' in value) || value['stopReason'] === undefined) return false;
-    if (!('blockingBudget' in value) || value['blockingBudget'] === undefined) return false;
+    if (!('creditBlock' in value) || value['creditBlock'] === undefined) return false;
     if (!('attempt' in value) || value['attempt'] === undefined) return false;
     if (!('error' in value) || value['error'] === undefined) return false;
     if (!('usage' in value) || value['usage'] === undefined) return false;
@@ -333,12 +341,13 @@ export function InvocationFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'sessionId': json['session_id'],
         'userKey': json['user_key'],
         'agentDefinitionId': json['agent_definition_id'],
+        'agentDefinitionRevision': json['agent_definition_revision'],
         'agentDefinition': AgentDefinitionFromJSON(json['agent_definition']),
         'context': (json['context'] == null ? null : (json['context'] as Array<any>).map(InvocationContextItemFromJSON)),
         'deduplicated': json['deduplicated'] == null ? undefined : json['deduplicated'],
         'status': InvocationStatusFromJSON(json['status']),
         'stopReason': InvocationStopReasonFromJSON(json['stop_reason']),
-        'blockingBudget': BudgetBlockFromJSON(json['blocking_budget']),
+        'creditBlock': CreditBlockFromJSON(json['credit_block']),
         'attempt': json['attempt'],
         'error': InvocationFailureFromJSON(json['error']),
         'usage': ModelUsageFromJSON(json['usage']),
@@ -372,12 +381,13 @@ export function InvocationToJSONTyped(value?: Invocation | null, ignoreDiscrimin
         'session_id': value['sessionId'],
         'user_key': value['userKey'],
         'agent_definition_id': value['agentDefinitionId'],
+        'agent_definition_revision': value['agentDefinitionRevision'],
         'agent_definition': AgentDefinitionToJSON(value['agentDefinition']),
         'context': (value['context'] == null ? null : (value['context'] as Array<any>).map(InvocationContextItemToJSON)),
         'deduplicated': value['deduplicated'],
         'status': InvocationStatusToJSON(value['status']),
         'stop_reason': InvocationStopReasonToJSON(value['stopReason']),
-        'blocking_budget': BudgetBlockToJSON(value['blockingBudget']),
+        'credit_block': CreditBlockToJSON(value['creditBlock']),
         'attempt': value['attempt'],
         'error': InvocationFailureToJSON(value['error']),
         'usage': ModelUsageToJSON(value['usage']),

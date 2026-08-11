@@ -5,10 +5,10 @@ quickstart. It makes real provider requests and verifies:
 
 - two turns sharing one durable Session;
 - exact idempotent admission replay and changed-request conflict;
-- Agent Definition registration, its content-addressed identity, and reuse of a
-  registered `agentDefinitionId` on a later turn;
-- recorded application context reaching the model, deduplicating an unchanged
-  resend, and leaving the Agent Definition ID unchanged;
+- creation and reuse of a revisioned Agent Definition resource by
+  `agentDefinitionId` on a later turn;
+- recorded application context reaching the model and deduplicating an
+  unchanged resend;
 - host ToolCall parking, Session visibility, result submission, and replay;
 - schema-bound host-tool input and structured output;
 - actionable waiting plus admission acknowledgement metadata;

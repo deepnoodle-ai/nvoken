@@ -1,7 +1,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -15,8 +15,10 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from nvoken_generated.models.agent_definition_registration import AgentDefinitionRegistration
-from nvoken_generated.models.register_agent_definition_request import RegisterAgentDefinitionRequest
+from pydantic import Field, StrictStr
+from typing_extensions import Annotated
+from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
+from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite
 
 from nvoken_generated.api_client import ApiClient, RequestSerialized
 from nvoken_generated.api_response import ApiResponse
@@ -37,9 +39,10 @@ class AgentDefinitionsApi:
 
 
     @validate_call
-    async def register_agent_definition(
+    async def create_agent_definition(
         self,
-        register_agent_definition_request: RegisterAgentDefinitionRequest,
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
+        agent_definition_write: AgentDefinitionWrite,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -52,13 +55,15 @@ class AgentDefinitionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> AgentDefinitionRegistration:
-        """Register one immutable Agent Definition without starting a turn
+    ) -> AgentDefinitionResource:
+        """Create an Agent Definition resource
 
-        Validates and stores the same content-addressed Agent Definition that an inline `POST /v1/invocations` request would store, but creates no Agent, Session, message, or Invocation. The response is the same for a first registration, a repeat, or an Agent Definition an earlier turn already stored.  Registration canonicalizes accepted model-provider aliases and resolves MCP defaults before hashing. Registering with an alias and invoking with its canonical provider name therefore produces the same `agent_definition_id`. The ID is not a mutable version or an agent name, and there is no list, read, update, or delete endpoint for Agent Definitions.  Registration checks only the Agent Definition's own content: schema and size bounds, model controls, provider-tool support, and tool declarations. Turn admission checks installation, App signing-key, builtin-gate, budget, provider-key, Session, and current model-lifecycle state again. In particular, a callback tool can be registered before its App callback signing key exists, but an Invocation using it is refused until delivery is configured.  Remote MCP headers are per-Invocation secrets and are not part of this request shape. Supply them through `mcp_server_headers` when creating an Invocation, whether its Agent Definition is inline or referenced by ID.  The caller needs `create_invocation` on an App-bound credential. App-less installation credentials and tenant- or Session-constrained credentials are refused because registration creates an App-wide claim. The body may be at most 1 MiB.
+        Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
 
-        :param register_agent_definition_request: (required)
-        :type register_agent_definition_request: RegisterAgentDefinitionRequest
+        :param idempotency_key: (required)
+        :type idempotency_key: str
+        :param agent_definition_write: (required)
+        :type agent_definition_write: AgentDefinitionWrite
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -81,8 +86,9 @@ class AgentDefinitionsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._register_agent_definition_serialize(
-            register_agent_definition_request=register_agent_definition_request,
+        _param = self._create_agent_definition_serialize(
+            idempotency_key=idempotency_key,
+            agent_definition_write=agent_definition_write,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -90,7 +96,7 @@ class AgentDefinitionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "AgentDefinitionRegistration",
+            '201': "AgentDefinitionResource",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -110,9 +116,10 @@ class AgentDefinitionsApi:
 
 
     @validate_call
-    async def register_agent_definition_with_http_info(
+    async def create_agent_definition_with_http_info(
         self,
-        register_agent_definition_request: RegisterAgentDefinitionRequest,
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
+        agent_definition_write: AgentDefinitionWrite,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -125,13 +132,15 @@ class AgentDefinitionsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[AgentDefinitionRegistration]:
-        """Register one immutable Agent Definition without starting a turn
+    ) -> ApiResponse[AgentDefinitionResource]:
+        """Create an Agent Definition resource
 
-        Validates and stores the same content-addressed Agent Definition that an inline `POST /v1/invocations` request would store, but creates no Agent, Session, message, or Invocation. The response is the same for a first registration, a repeat, or an Agent Definition an earlier turn already stored.  Registration canonicalizes accepted model-provider aliases and resolves MCP defaults before hashing. Registering with an alias and invoking with its canonical provider name therefore produces the same `agent_definition_id`. The ID is not a mutable version or an agent name, and there is no list, read, update, or delete endpoint for Agent Definitions.  Registration checks only the Agent Definition's own content: schema and size bounds, model controls, provider-tool support, and tool declarations. Turn admission checks installation, App signing-key, builtin-gate, budget, provider-key, Session, and current model-lifecycle state again. In particular, a callback tool can be registered before its App callback signing key exists, but an Invocation using it is refused until delivery is configured.  Remote MCP headers are per-Invocation secrets and are not part of this request shape. Supply them through `mcp_server_headers` when creating an Invocation, whether its Agent Definition is inline or referenced by ID.  The caller needs `create_invocation` on an App-bound credential. App-less installation credentials and tenant- or Session-constrained credentials are refused because registration creates an App-wide claim. The body may be at most 1 MiB.
+        Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
 
-        :param register_agent_definition_request: (required)
-        :type register_agent_definition_request: RegisterAgentDefinitionRequest
+        :param idempotency_key: (required)
+        :type idempotency_key: str
+        :param agent_definition_write: (required)
+        :type agent_definition_write: AgentDefinitionWrite
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -154,8 +163,9 @@ class AgentDefinitionsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._register_agent_definition_serialize(
-            register_agent_definition_request=register_agent_definition_request,
+        _param = self._create_agent_definition_serialize(
+            idempotency_key=idempotency_key,
+            agent_definition_write=agent_definition_write,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -163,7 +173,7 @@ class AgentDefinitionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "AgentDefinitionRegistration",
+            '201': "AgentDefinitionResource",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -183,9 +193,10 @@ class AgentDefinitionsApi:
 
 
     @validate_call
-    async def register_agent_definition_without_preload_content(
+    async def create_agent_definition_without_preload_content(
         self,
-        register_agent_definition_request: RegisterAgentDefinitionRequest,
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
+        agent_definition_write: AgentDefinitionWrite,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -199,12 +210,14 @@ class AgentDefinitionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Register one immutable Agent Definition without starting a turn
+        """Create an Agent Definition resource
 
-        Validates and stores the same content-addressed Agent Definition that an inline `POST /v1/invocations` request would store, but creates no Agent, Session, message, or Invocation. The response is the same for a first registration, a repeat, or an Agent Definition an earlier turn already stored.  Registration canonicalizes accepted model-provider aliases and resolves MCP defaults before hashing. Registering with an alias and invoking with its canonical provider name therefore produces the same `agent_definition_id`. The ID is not a mutable version or an agent name, and there is no list, read, update, or delete endpoint for Agent Definitions.  Registration checks only the Agent Definition's own content: schema and size bounds, model controls, provider-tool support, and tool declarations. Turn admission checks installation, App signing-key, builtin-gate, budget, provider-key, Session, and current model-lifecycle state again. In particular, a callback tool can be registered before its App callback signing key exists, but an Invocation using it is refused until delivery is configured.  Remote MCP headers are per-Invocation secrets and are not part of this request shape. Supply them through `mcp_server_headers` when creating an Invocation, whether its Agent Definition is inline or referenced by ID.  The caller needs `create_invocation` on an App-bound credential. App-less installation credentials and tenant- or Session-constrained credentials are refused because registration creates an App-wide claim. The body may be at most 1 MiB.
+        Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
 
-        :param register_agent_definition_request: (required)
-        :type register_agent_definition_request: RegisterAgentDefinitionRequest
+        :param idempotency_key: (required)
+        :type idempotency_key: str
+        :param agent_definition_write: (required)
+        :type agent_definition_write: AgentDefinitionWrite
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -227,8 +240,9 @@ class AgentDefinitionsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._register_agent_definition_serialize(
-            register_agent_definition_request=register_agent_definition_request,
+        _param = self._create_agent_definition_serialize(
+            idempotency_key=idempotency_key,
+            agent_definition_write=agent_definition_write,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -236,7 +250,7 @@ class AgentDefinitionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "AgentDefinitionRegistration",
+            '201': "AgentDefinitionResource",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -251,9 +265,10 @@ class AgentDefinitionsApi:
         return response_data.response
 
 
-    def _register_agent_definition_serialize(
+    def _create_agent_definition_serialize(
         self,
-        register_agent_definition_request,
+        idempotency_key,
+        agent_definition_write,
         _request_auth,
         _content_type,
         _headers,
@@ -277,10 +292,12 @@ class AgentDefinitionsApi:
         # process the path parameters
         # process the query parameters
         # process the header parameters
+        if idempotency_key is not None:
+            _header_params['Idempotency-Key'] = idempotency_key
         # process the form parameters
         # process the body parameter
-        if register_agent_definition_request is not None:
-            _body_params = register_agent_definition_request
+        if agent_definition_write is not None:
+            _body_params = agent_definition_write
 
 
         # set the HTTP header `Accept`
@@ -313,6 +330,604 @@ class AgentDefinitionsApi:
         return self.api_client.param_serialize(
             method='POST',
             resource_path='/v1/agent-definitions',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    async def get_agent_definition(
+        self,
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AgentDefinitionResource:
+        """Get the current Agent Definition revision
+
+
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_agent_definition_serialize(
+            agent_definition_id=agent_definition_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResource",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def get_agent_definition_with_http_info(
+        self,
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AgentDefinitionResource]:
+        """Get the current Agent Definition revision
+
+
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_agent_definition_serialize(
+            agent_definition_id=agent_definition_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResource",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def get_agent_definition_without_preload_content(
+        self,
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Get the current Agent Definition revision
+
+
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_agent_definition_serialize(
+            agent_definition_id=agent_definition_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResource",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _get_agent_definition_serialize(
+        self,
+        agent_definition_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if agent_definition_id is not None:
+            _path_params['agent_definition_id'] = agent_definition_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='GET',
+            resource_path='/v1/agent-definitions/{agent_definition_id}',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    async def update_agent_definition(
+        self,
+        if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT.")],
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_definition_write: AgentDefinitionWrite,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AgentDefinitionResource:
+        """Replace an Agent Definition and create its next revision
+
+
+        :param if_match: One strong decimal revision ETag returned by GET or PUT. (required)
+        :type if_match: str
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param agent_definition_write: (required)
+        :type agent_definition_write: AgentDefinitionWrite
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._update_agent_definition_serialize(
+            if_match=if_match,
+            agent_definition_id=agent_definition_id,
+            agent_definition_write=agent_definition_write,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResource",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '412': "ErrorResponse",
+            '428': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def update_agent_definition_with_http_info(
+        self,
+        if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT.")],
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_definition_write: AgentDefinitionWrite,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AgentDefinitionResource]:
+        """Replace an Agent Definition and create its next revision
+
+
+        :param if_match: One strong decimal revision ETag returned by GET or PUT. (required)
+        :type if_match: str
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param agent_definition_write: (required)
+        :type agent_definition_write: AgentDefinitionWrite
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._update_agent_definition_serialize(
+            if_match=if_match,
+            agent_definition_id=agent_definition_id,
+            agent_definition_write=agent_definition_write,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResource",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '412': "ErrorResponse",
+            '428': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def update_agent_definition_without_preload_content(
+        self,
+        if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT.")],
+        agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_definition_write: AgentDefinitionWrite,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Replace an Agent Definition and create its next revision
+
+
+        :param if_match: One strong decimal revision ETag returned by GET or PUT. (required)
+        :type if_match: str
+        :param agent_definition_id: (required)
+        :type agent_definition_id: str
+        :param agent_definition_write: (required)
+        :type agent_definition_write: AgentDefinitionWrite
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._update_agent_definition_serialize(
+            if_match=if_match,
+            agent_definition_id=agent_definition_id,
+            agent_definition_write=agent_definition_write,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResource",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '412': "ErrorResponse",
+            '428': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _update_agent_definition_serialize(
+        self,
+        if_match,
+        agent_definition_id,
+        agent_definition_write,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if agent_definition_id is not None:
+            _path_params['agent_definition_id'] = agent_definition_id
+        # process the query parameters
+        # process the header parameters
+        if if_match is not None:
+            _header_params['If-Match'] = if_match
+        # process the form parameters
+        # process the body parameter
+        if agent_definition_write is not None:
+            _body_params = agent_definition_write
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='PUT',
+            resource_path='/v1/agent-definitions/{agent_definition_id}',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,

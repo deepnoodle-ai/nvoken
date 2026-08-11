@@ -346,7 +346,7 @@ pub struct McpTimeouts {
 #[derive(Debug, Clone)]
 /// Declares a remote MCP server.
 ///
-/// It carries no secrets: an Agent Definition is content-addressed and shared
+/// It carries no secrets: an Agent Definition may be shared
 /// across turns, so authentication headers travel per Invocation in
 /// `McpServerHeaders` instead.
 pub struct McpServer {
@@ -477,8 +477,6 @@ pub struct SessionOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retention: Option<SessionRetention>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_estimated_cost_usd: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
 }
 
@@ -490,11 +488,6 @@ impl SessionOptions {
 
     pub fn retention(mut self, ttl_seconds: u32) -> Self {
         self.retention = Some(SessionRetention { ttl_seconds });
-        self
-    }
-
-    pub fn max_estimated_cost_usd(mut self, max_estimated_cost_usd: f64) -> Self {
-        self.max_estimated_cost_usd = Some(max_estimated_cost_usd);
         self
     }
 
@@ -594,12 +587,8 @@ pub enum ToolChoice {
     Named(String),
 }
 
-/// The immutable execution configuration a turn runs with.
-///
-/// nvoken content-addresses it, so two turns whose definitions serialize
-/// identically share one Agent Definition and one `agent_definition_id`.
-/// Identity, session selection, input, idempotency, webhooks, metadata, and
-/// provider key selection are durable elsewhere and deliberately absent here.
+/// The execution configuration a turn runs with. Send it inline on an
+/// Invocation or create an App-owned reusable resource.
 #[derive(Debug, Clone, Default)]
 pub struct AgentDefinition {
     pub model: Model,
@@ -720,7 +709,7 @@ pub enum ContextTier {
 /// and an unchanged resend adds no transcript message, so a stateless host may
 /// resend its whole snapshot every turn. Omit the reserved `app-` prefix the
 /// model sees; nvoken adds it. Context is durable Session history rather than
-/// an Agent Definition field, so it never changes the content-addressed
+/// an Agent Definition field, so it never changes the selected
 /// `agent_definition_id`.
 #[derive(Debug, Clone)]
 pub struct ContextItem {
@@ -756,11 +745,11 @@ pub struct InvokeRequest {
     /// The configuration this turn runs with, sent inline. Supply exactly one
     /// of `agent_definition` and `agent_definition_id`.
     pub agent_definition: Option<AgentDefinition>,
-    /// Reuse an Agent Definition already registered for this App.
+    /// Reuse an App-owned Agent Definition resource.
     pub agent_definition_id: Option<String>,
     /// Per-turn secret headers, keyed to MCP server names in the selected
     /// Agent Definition. They live here rather than on `McpServer` because an
-    /// Agent Definition is content-addressed and reused across turns.
+    /// Agent Definition may be reused across turns.
     pub mcp_server_headers: Vec<McpServerHeaders>,
     /// Ordered application state snapshots recorded before this turn's input.
     /// The list is order-sensitive and material to idempotency: a replay that
@@ -810,8 +799,7 @@ impl InvokeRequest {
         Self::new(agent_key, input, Model::default())
     }
 
-    /// Builds a request that reuses an Agent Definition already registered for
-    /// this App, whether by an earlier turn or by `register_agent_definition`.
+    /// Builds a request that reuses an App-owned Agent Definition resource.
     pub fn from_agent_definition(
         agent_key: impl Into<String>,
         input: impl Into<String>,
@@ -824,7 +812,7 @@ impl InvokeRequest {
     }
 
     /// Replaces the whole inline Agent Definition, for a definition built
-    /// separately and shared with `register_agent_definition`.
+    /// separately and shared across inline calls.
     pub fn agent_definition(mut self, definition: AgentDefinition) -> Self {
         self.agent_definition = Some(definition);
         self.agent_definition_id = None;
@@ -1109,6 +1097,70 @@ pub struct Client {
     session_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
+fn machine_invocation(
+    response: models::InvocationResponse,
+) -> Result<models::Invocation, NvokenError> {
+    match response {
+        models::InvocationResponse::Invocation(value) => Ok(*value),
+        models::InvocationResponse::ClientInvocation(_) => Err(NvokenError::unexpected(
+            "machine credentials received a browser Invocation projection",
+        )),
+    }
+}
+
+fn machine_invocation_result(
+    response: models::InvocationResultResponse,
+) -> Result<models::InvocationResult, NvokenError> {
+    match response {
+        models::InvocationResultResponse::InvocationResult(value) => Ok(*value),
+        models::InvocationResultResponse::ClientInvocationResult(_) => Err(
+            NvokenError::unexpected("machine credentials received a browser result projection"),
+        ),
+    }
+}
+
+fn machine_invocation_list(
+    response: models::InvocationListResponse,
+) -> Result<models::InvocationList, NvokenError> {
+    match response {
+        models::InvocationListResponse::InvocationList(value) => Ok(*value),
+        models::InvocationListResponse::ClientInvocationList(_) => Err(NvokenError::unexpected(
+            "machine credentials received a browser Invocation list",
+        )),
+    }
+}
+
+fn machine_session(response: models::SessionResponse) -> Result<models::Session, NvokenError> {
+    match response {
+        models::SessionResponse::Session(value) => Ok(*value),
+        models::SessionResponse::ClientSession(_) => Err(NvokenError::unexpected(
+            "machine credentials received a browser Session projection",
+        )),
+    }
+}
+
+fn machine_session_list(
+    response: models::SessionListResponse,
+) -> Result<models::SessionList, NvokenError> {
+    match response {
+        models::SessionListResponse::SessionList(value) => Ok(*value),
+        models::SessionListResponse::ClientSessionList(_) => Err(NvokenError::unexpected(
+            "machine credentials received a browser Session list",
+        )),
+    }
+}
+
+fn machine_session_message_list(
+    response: models::SessionMessageListResponse,
+) -> Result<models::SessionMessageList, NvokenError> {
+    match response {
+        models::SessionMessageListResponse::SessionMessageList(value) => Ok(*value),
+        models::SessionMessageListResponse::ClientSessionMessageList(_) => Err(
+            NvokenError::unexpected("machine credentials received a browser message list"),
+        ),
+    }
+}
+
 impl Client {
     pub fn new(
         base_url: impl Into<String>,
@@ -1186,39 +1238,49 @@ impl Client {
         &self.configuration
     }
 
-    pub async fn create_budget(
+    pub async fn allocate_credits(
         &self,
-        request: models::CreateBudgetRequest,
-    ) -> Result<models::Budget, NvokenError> {
-        apis::budgets_api::create_budget(&self.configuration, request)
+        request: models::AllocateCreditsRequest,
+    ) -> Result<models::AllocateCreditsResult, NvokenError> {
+        apis::credits_api::allocate_credits(&self.configuration, request)
             .await
             .map_err(|error| self.normalize_generated_error(error))
     }
 
-    pub async fn get_budget(&self, budget_id: &str) -> Result<models::Budget, NvokenError> {
-        apis::budgets_api::get_budget(&self.configuration, budget_id)
-            .await
-            .map_err(|error| self.normalize_generated_error(error))
-    }
-
-    pub async fn update_budget(
+    pub async fn list_credit_accounts(
         &self,
-        budget_id: &str,
-        max_estimated_cost_usd: f64,
-    ) -> Result<models::Budget, NvokenError> {
-        apis::budgets_api::update_budget(
+        tenant_key: Option<&str>,
+        default_tenant: Option<bool>,
+        cursor: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<models::CreditAccountList, NvokenError> {
+        apis::credits_api::list_credit_accounts(
             &self.configuration,
-            budget_id,
-            models::UpdateBudgetRequest::new(max_estimated_cost_usd),
+            tenant_key,
+            default_tenant,
+            cursor,
+            limit,
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
     }
 
-    pub async fn delete_budget(&self, budget_id: &str) -> Result<(), NvokenError> {
-        apis::budgets_api::delete_budget(&self.configuration, budget_id)
-            .await
-            .map_err(|error| self.normalize_generated_error(error))
+    pub async fn list_credit_allocations(
+        &self,
+        tenant_key: Option<&str>,
+        default_tenant: Option<bool>,
+        cursor: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<models::CreditAllocationList, NvokenError> {
+        apis::credits_api::list_credit_allocations(
+            &self.configuration,
+            tenant_key,
+            default_tenant,
+            cursor,
+            limit,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn invoke(&self, request: InvokeRequest) -> Result<InvocationHandle, NvokenError> {
@@ -1233,7 +1295,8 @@ impl Client {
             None,
         )
         .await
-        .map_err(|error| self.normalize_generated_error(error))?;
+        .map_err(|error| self.normalize_generated_error(error))
+        .and_then(machine_invocation)?;
         Ok(InvocationHandle {
             client: self.clone(),
             invocation_id: invocation.id,
@@ -1251,15 +1314,15 @@ impl Client {
     /// admission will carry without making one.
     /// Renders one Agent Definition.
     ///
-    /// Invocation creation and registration both send exactly this object, so a
+    /// Invocation creation and resource creation both send exactly this object, so a
     /// field either reaches the wire for both or neither. Only the definition's
     /// own content is checked here; installation state, App signing keys,
-    /// budgets, provider keys, and model lifecycle are checked again when a turn
+    /// credits, provider keys, and model lifecycle are checked again when a turn
     /// is admitted.
     pub fn agent_definition_body(
         &self,
         mut definition: AgentDefinition,
-    ) -> Result<models::RegisterAgentDefinitionRequest, NvokenError> {
+    ) -> Result<models::AgentDefinitionWrite, NvokenError> {
         if definition.model.is_unset() {
             definition.model = self
                 .default_model
@@ -1342,7 +1405,7 @@ impl Client {
             };
             tools.push(mode);
         }
-        let mut body = models::RegisterAgentDefinitionRequest::new(model);
+        let mut body = models::AgentDefinitionWrite::new(model);
         body.instructions = definition.instructions;
         body.sampling = sampling;
         body.reasoning = reasoning;
@@ -1526,7 +1589,6 @@ impl Client {
             .map(|value| {
                 if value.compaction.is_none()
                     && value.retention.is_none()
-                    && value.max_estimated_cost_usd.is_none()
                     && value.metadata.is_none()
                 {
                     return Err(NvokenError::validation(
@@ -1563,7 +1625,6 @@ impl Client {
                 options.retention = value
                     .retention
                     .map(|retention| Box::new(models::RetentionPolicy::new(retention.ttl_seconds)));
-                options.max_estimated_cost_usd = value.max_estimated_cost_usd;
                 options.metadata = value.metadata;
                 Ok::<_, NvokenError>(Box::new(options))
             })
@@ -1664,8 +1725,8 @@ impl Client {
 
     /// Discovers the tools a remote MCP server projects.
     ///
-    /// Headers are a separate argument because `McpServer` is part of a
-    /// content-addressed Agent Definition and therefore carries no secrets;
+    /// Headers are a separate argument because `McpServer` is durable Agent
+    /// Definition configuration and therefore carries no secrets;
     /// these are used for this one discovery request and never stored.
     pub async fn list_mcp_tools(
         &self,
@@ -1679,26 +1740,48 @@ impl Client {
             .map_err(|error| self.normalize_generated_error(error))
     }
 
-    /// Stores one Agent Definition without starting a turn, and returns the
-    /// content-addressed ID later Invocations reuse through
-    /// `InvokeRequest::agent_definition_id`.
-    ///
-    /// Registration is idempotent by content rather than by key. A first
-    /// registration, a repeat, and a definition an earlier turn already stored
-    /// all return the same response, so callers need not track whether they
-    /// have registered before.
-    ///
-    /// Only the definition's own content is checked. Installation state, the
-    /// App callback signing key, budgets, provider keys, and model lifecycle
-    /// are checked again when a turn is admitted.
-    pub async fn register_agent_definition(
+    /// Creates one reusable App-owned Agent Definition resource. The
+    /// idempotency key makes retries safe; equal content under another key gets
+    /// an independent resource ID.
+    pub async fn create_agent_definition(
         &self,
+        idempotency_key: &str,
         definition: AgentDefinition,
-    ) -> Result<models::AgentDefinitionRegistration, NvokenError> {
+    ) -> Result<models::AgentDefinitionResource, NvokenError> {
         let body = self.agent_definition_body(definition)?;
-        apis::agent_definitions_api::register_agent_definition(&self.configuration, body)
+        apis::agent_definitions_api::create_agent_definition(
+            &self.configuration,
+            idempotency_key,
+            body,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn get_agent_definition(
+        &self,
+        agent_definition_id: &str,
+    ) -> Result<models::AgentDefinitionResource, NvokenError> {
+        apis::agent_definitions_api::get_agent_definition(&self.configuration, agent_definition_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn update_agent_definition(
+        &self,
+        agent_definition_id: &str,
+        expected_revision: u32,
+        definition: AgentDefinition,
+    ) -> Result<models::AgentDefinitionResource, NvokenError> {
+        let body = self.agent_definition_body(definition)?;
+        apis::agent_definitions_api::update_agent_definition(
+            &self.configuration,
+            &format!("\"{expected_revision}\""),
+            agent_definition_id,
+            body,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn get_model(&self, model: &Model) -> Result<models::ModelDescriptor, NvokenError> {
@@ -1718,6 +1801,7 @@ impl Client {
         apis::invocations_api::get_invocation(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
+            .and_then(machine_invocation)
     }
 
     pub async fn get_agent_identity(&self, agent_id: &str) -> Result<models::Agent, NvokenError> {
@@ -1747,6 +1831,7 @@ impl Client {
         apis::invocations_api::get_invocation_result(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
+            .and_then(machine_invocation_result)
     }
 
     pub async fn cancel_invocation(
@@ -1756,6 +1841,7 @@ impl Client {
         apis::invocations_api::cancel_invocation(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
+            .and_then(machine_invocation)
     }
 
     /// Stops an Invocation gracefully and keeps its work. The turn settles
@@ -1769,6 +1855,7 @@ impl Client {
         apis::invocations_api::interrupt_invocation(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
+            .and_then(machine_invocation)
     }
 
     /// Appends steering to a running Invocation without ending it. The turn
@@ -1891,12 +1978,14 @@ impl Client {
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
+        .and_then(machine_invocation_list)
     }
 
     pub async fn get_session(&self, session_id: &str) -> Result<models::Session, NvokenError> {
         apis::sessions_api::get_session(&self.configuration, session_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
+            .and_then(machine_session)
     }
 
     /// Erases a Session and everything under it: its Invocations, transcript,
@@ -1980,6 +2069,7 @@ impl Client {
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
+        .and_then(machine_session_list)
     }
 
     pub async fn list_session_messages(
@@ -1995,6 +2085,7 @@ impl Client {
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
+        .and_then(machine_session_message_list)
     }
 
     /// Returns newest-first immutable records for applied and fell-through

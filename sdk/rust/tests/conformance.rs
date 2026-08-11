@@ -153,15 +153,7 @@ fn shared_agent_request_fixture_is_expressible() {
     .unwrap();
     let expected = &fixture["agent_request"]["web_search_metadata_unbound"];
     let client = Client::new("https://runtime.example.test", "key").unwrap();
-    let mut options = AgentOptions::new("support", Model::new("anthropic", "claude-sonnet-4-6"));
-    options.agent_definition.sampling = Some(Sampling { temperature: 0.2 });
-    options.agent_definition.reasoning = Some(Reasoning {
-        effort: Some(ReasoningEffort::Low),
-        budget_tokens: None,
-    });
-    options.agent_definition.provider_tools = vec![ProviderTool::WebSearch(
-        WebSearchTool::default().max_uses(5),
-    )];
+    let options = AgentOptions::from_definition_id("support", "def_conformance");
     let agent = client.agent(options).unwrap();
 
     // Durable options apply on a new anonymous Session too, which is where a
@@ -177,11 +169,7 @@ fn shared_agent_request_fixture_is_expressible() {
             .into_iter()
             .collect(),
         ),
-        session_options: Some(
-            SessionOptions::default()
-                .retention(86400)
-                .max_estimated_cost_usd(0.25),
-        ),
+        session_options: Some(SessionOptions::default().retention(86400)),
         ..AgentInvocationOptions::default()
     };
     let body = client
@@ -426,10 +414,10 @@ fn shared_agent_definition_reuse_fixture_is_expressible() {
     assert!(body.agent_definition.is_none());
 }
 
-// Registration and invocation must render the same object, or an SDK could
-// register one definition and then invoke a different, silently new one.
+// Resource creation and inline invocation must render the same writable
+// object, or one SDK path could silently drop configuration.
 #[test]
-fn registration_sends_the_same_agent_definition_an_invocation_nests() {
+fn resource_creation_matches_the_agent_definition_an_invocation_nests() {
     let fixture: Value = serde_json::from_str(include_str!(
         "../../conformance/fixtures/agent-definition-reuse-v1.json"
     ))
@@ -437,10 +425,10 @@ fn registration_sends_the_same_agent_definition_an_invocation_nests() {
     let client = Client::new("https://runtime.example.test", "key").unwrap();
     let definition = AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
         .instructions("You are a concise billing support agent.");
-    let registration = client.agent_definition_body(definition.clone()).unwrap();
+    let creation = client.agent_definition_body(definition.clone()).unwrap();
     assert_eq!(
-        serde_json::to_value(&registration).unwrap(),
-        fixture["registration"]["request"]
+        serde_json::to_value(&creation).unwrap(),
+        fixture["creation"]["request"]
     );
     let body = client
         .invocation_body(
@@ -449,12 +437,12 @@ fn registration_sends_the_same_agent_definition_an_invocation_nests() {
         .unwrap();
     assert_eq!(
         serde_json::to_value(body.agent_definition.unwrap()).unwrap(),
-        serde_json::to_value(&registration).unwrap()
+        serde_json::to_value(&creation).unwrap()
     );
 }
 
-// A secret inside a content-addressed definition would change its identity, so
-// MCP headers must ride alongside it and never within it.
+// A reusable definition is durable configuration, so MCP headers must ride
+// alongside it and never within it.
 #[test]
 fn mcp_secrets_stay_outside_the_agent_definition() {
     let client = Client::new("https://runtime.example.test", "key").unwrap();
@@ -760,36 +748,31 @@ async fn shared_fault_server_semantics() {
         exact_model.pricing.status,
         nvoken::models::model_pricing::Status::Unpriced
     );
-    let budget_fixture: Value = serde_json::from_str(include_str!(
-        "../../conformance/fixtures/shared-budgets-v1.json"
-    ))
-    .unwrap();
+    let credits_fixture: Value =
+        serde_json::from_str(include_str!("../../conformance/fixtures/credits-v1.json")).unwrap();
+    let mut request = models::AllocateCreditsRequest::new(
+        models::Money::new("25.000000".to_owned(), models::money::Currency::Usd),
+        "rust-credits-conformance".to_owned(),
+    );
+    request.default_tenant = Some(true);
+    let allocation = client.allocate_credits(request).await.unwrap();
     assert_eq!(
-        budget_fixture["scopes"],
-        json!([
-            "app",
-            "tenant",
-            "user",
-            "agent",
-            "provider_key",
-            "credential"
-        ])
+        allocation.allocation.id,
+        credits_fixture["allocation"]["id"]
     );
-    let mut request = models::CreateBudgetRequest::new(
-        models::BudgetScope::App,
-        chrono::DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z").unwrap(),
-        chrono::DateTime::parse_from_rfc3339("2026-09-01T00:00:00Z").unwrap(),
-        25.0,
-        "rust-budget-conformance".to_owned(),
+    let accounts = client
+        .list_credit_accounts(None, Some(true), None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        accounts.items[0].available.amount,
+        credits_fixture["account"]["available"]["amount"]
     );
-    request.default_tenant = None;
-    let mut budget = client.create_budget(request).await.unwrap();
-    assert_eq!(budget.id, budget_fixture["budget"]["id"]);
-    budget = client.get_budget(&budget.id).await.unwrap();
-    assert_eq!(budget.available_estimated_cost_usd, 20.25);
-    budget = client.update_budget(&budget.id, 30.0).await.unwrap();
-    assert_eq!(budget.max_estimated_cost_usd, 30.0);
-    client.delete_budget(&budget.id).await.unwrap();
+    let allocations = client
+        .list_credit_allocations(None, Some(true), None, None)
+        .await
+        .unwrap();
+    assert_eq!(allocations.items[0].id, credits_fixture["allocation"]["id"]);
     let handle = client
         .invoke(InvokeRequest {
             agent_key: "support".to_owned(),
@@ -1082,8 +1065,7 @@ fn shared_settlement_legibility_fixture_pins_the_stop_reasons() {
             nvoken::models::InvocationStopReason::Deadline,
             nvoken::models::InvocationStopReason::MaxOutputTokens,
             nvoken::models::InvocationStopReason::MaxEstimatedCost,
-            nvoken::models::InvocationStopReason::SessionMaxEstimatedCost,
-            nvoken::models::InvocationStopReason::SharedBudget,
+            nvoken::models::InvocationStopReason::InsufficientCredits,
         ]
     );
     assert_eq!(

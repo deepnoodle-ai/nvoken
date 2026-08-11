@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+ * nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI\'s limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant\'s text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken\'s defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -14,23 +14,34 @@
 
 import * as runtime from '../runtime.js';
 import {
-    type AgentDefinitionRegistration,
-    AgentDefinitionRegistrationFromJSON,
-    AgentDefinitionRegistrationToJSON,
-} from '../models/AgentDefinitionRegistration.js';
+    type AgentDefinitionResource,
+    AgentDefinitionResourceFromJSON,
+    AgentDefinitionResourceToJSON,
+} from '../models/AgentDefinitionResource.js';
+import {
+    type AgentDefinitionWrite,
+    AgentDefinitionWriteFromJSON,
+    AgentDefinitionWriteToJSON,
+} from '../models/AgentDefinitionWrite.js';
 import {
     type ErrorResponse,
     ErrorResponseFromJSON,
     ErrorResponseToJSON,
 } from '../models/ErrorResponse.js';
-import {
-    type RegisterAgentDefinitionRequest,
-    RegisterAgentDefinitionRequestFromJSON,
-    RegisterAgentDefinitionRequestToJSON,
-} from '../models/RegisterAgentDefinitionRequest.js';
 
-export interface RegisterAgentDefinitionOperationRequest {
-    registerAgentDefinitionRequest: RegisterAgentDefinitionRequest;
+export interface CreateAgentDefinitionRequest {
+    idempotencyKey: string;
+    agentDefinitionWrite: AgentDefinitionWrite;
+}
+
+export interface GetAgentDefinitionRequest {
+    agentDefinitionId: string;
+}
+
+export interface UpdateAgentDefinitionRequest {
+    ifMatch: string;
+    agentDefinitionId: string;
+    agentDefinitionWrite: AgentDefinitionWrite;
 }
 
 /**
@@ -39,13 +50,20 @@ export interface RegisterAgentDefinitionOperationRequest {
 export class AgentDefinitionsApi extends runtime.BaseAPI {
 
     /**
-     * Creates request options for registerAgentDefinition without sending the request
+     * Creates request options for createAgentDefinition without sending the request
      */
-    async registerAgentDefinitionRequestOpts(requestParameters: RegisterAgentDefinitionOperationRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['registerAgentDefinitionRequest'] == null) {
+    async createAgentDefinitionRequestOpts(requestParameters: CreateAgentDefinitionRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['idempotencyKey'] == null) {
             throw new runtime.RequiredError(
-                'registerAgentDefinitionRequest',
-                'Required parameter "registerAgentDefinitionRequest" was null or undefined when calling registerAgentDefinition().'
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createAgentDefinition().'
+            );
+        }
+
+        if (requestParameters['agentDefinitionWrite'] == null) {
+            throw new runtime.RequiredError(
+                'agentDefinitionWrite',
+                'Required parameter "agentDefinitionWrite" was null or undefined when calling createAgentDefinition().'
             );
         }
 
@@ -54,6 +72,10 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
         const headerParameters: runtime.HTTPHeaders = {};
 
         headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
 
         if (this.configuration && this.configuration.accessToken) {
             const token = this.configuration.accessToken;
@@ -71,27 +93,154 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: RegisterAgentDefinitionRequestToJSON(requestParameters['registerAgentDefinitionRequest']),
+            body: AgentDefinitionWriteToJSON(requestParameters['agentDefinitionWrite']),
         };
     }
 
     /**
-     * Validates and stores the same content-addressed Agent Definition that an inline `POST /v1/invocations` request would store, but creates no Agent, Session, message, or Invocation. The response is the same for a first registration, a repeat, or an Agent Definition an earlier turn already stored.  Registration canonicalizes accepted model-provider aliases and resolves MCP defaults before hashing. Registering with an alias and invoking with its canonical provider name therefore produces the same `agent_definition_id`. The ID is not a mutable version or an agent name, and there is no list, read, update, or delete endpoint for Agent Definitions.  Registration checks only the Agent Definition\'s own content: schema and size bounds, model controls, provider-tool support, and tool declarations. Turn admission checks installation, App signing-key, builtin-gate, budget, provider-key, Session, and current model-lifecycle state again. In particular, a callback tool can be registered before its App callback signing key exists, but an Invocation using it is refused until delivery is configured.  Remote MCP headers are per-Invocation secrets and are not part of this request shape. Supply them through `mcp_server_headers` when creating an Invocation, whether its Agent Definition is inline or referenced by ID.  The caller needs `create_invocation` on an App-bound credential. App-less installation credentials and tenant- or Session-constrained credentials are refused because registration creates an App-wide claim. The body may be at most 1 MiB.
-     * Register one immutable Agent Definition without starting a turn
+     * Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
+     * Create an Agent Definition resource
      */
-    async registerAgentDefinitionRaw(requestParameters: RegisterAgentDefinitionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionRegistration>> {
-        const requestOptions = await this.registerAgentDefinitionRequestOpts(requestParameters);
+    async createAgentDefinitionRaw(requestParameters: CreateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionResource>> {
+        const requestOptions = await this.createAgentDefinitionRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => AgentDefinitionRegistrationFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => AgentDefinitionResourceFromJSON(jsonValue));
     }
 
     /**
-     * Validates and stores the same content-addressed Agent Definition that an inline `POST /v1/invocations` request would store, but creates no Agent, Session, message, or Invocation. The response is the same for a first registration, a repeat, or an Agent Definition an earlier turn already stored.  Registration canonicalizes accepted model-provider aliases and resolves MCP defaults before hashing. Registering with an alias and invoking with its canonical provider name therefore produces the same `agent_definition_id`. The ID is not a mutable version or an agent name, and there is no list, read, update, or delete endpoint for Agent Definitions.  Registration checks only the Agent Definition\'s own content: schema and size bounds, model controls, provider-tool support, and tool declarations. Turn admission checks installation, App signing-key, builtin-gate, budget, provider-key, Session, and current model-lifecycle state again. In particular, a callback tool can be registered before its App callback signing key exists, but an Invocation using it is refused until delivery is configured.  Remote MCP headers are per-Invocation secrets and are not part of this request shape. Supply them through `mcp_server_headers` when creating an Invocation, whether its Agent Definition is inline or referenced by ID.  The caller needs `create_invocation` on an App-bound credential. App-less installation credentials and tenant- or Session-constrained credentials are refused because registration creates an App-wide claim. The body may be at most 1 MiB.
-     * Register one immutable Agent Definition without starting a turn
+     * Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
+     * Create an Agent Definition resource
      */
-    async registerAgentDefinition(requestParameters: RegisterAgentDefinitionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionRegistration> {
-        const response = await this.registerAgentDefinitionRaw(requestParameters, initOverrides);
+    async createAgentDefinition(requestParameters: CreateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResource> {
+        const response = await this.createAgentDefinitionRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getAgentDefinition without sending the request
+     */
+    async getAgentDefinitionRequestOpts(requestParameters: GetAgentDefinitionRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['agentDefinitionId'] == null) {
+            throw new runtime.RequiredError(
+                'agentDefinitionId',
+                'Required parameter "agentDefinitionId" was null or undefined when calling getAgentDefinition().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agent-definitions/{agent_definition_id}`;
+        urlPath = urlPath.replace('{agent_definition_id}', encodeURIComponent(String(requestParameters['agentDefinitionId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Get the current Agent Definition revision
+     */
+    async getAgentDefinitionRaw(requestParameters: GetAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionResource>> {
+        const requestOptions = await this.getAgentDefinitionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AgentDefinitionResourceFromJSON(jsonValue));
+    }
+
+    /**
+     * Get the current Agent Definition revision
+     */
+    async getAgentDefinition(requestParameters: GetAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResource> {
+        const response = await this.getAgentDefinitionRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for updateAgentDefinition without sending the request
+     */
+    async updateAgentDefinitionRequestOpts(requestParameters: UpdateAgentDefinitionRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['ifMatch'] == null) {
+            throw new runtime.RequiredError(
+                'ifMatch',
+                'Required parameter "ifMatch" was null or undefined when calling updateAgentDefinition().'
+            );
+        }
+
+        if (requestParameters['agentDefinitionId'] == null) {
+            throw new runtime.RequiredError(
+                'agentDefinitionId',
+                'Required parameter "agentDefinitionId" was null or undefined when calling updateAgentDefinition().'
+            );
+        }
+
+        if (requestParameters['agentDefinitionWrite'] == null) {
+            throw new runtime.RequiredError(
+                'agentDefinitionWrite',
+                'Required parameter "agentDefinitionWrite" was null or undefined when calling updateAgentDefinition().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['ifMatch'] != null) {
+            headerParameters['If-Match'] = String(requestParameters['ifMatch']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agent-definitions/{agent_definition_id}`;
+        urlPath = urlPath.replace('{agent_definition_id}', encodeURIComponent(String(requestParameters['agentDefinitionId'])));
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: AgentDefinitionWriteToJSON(requestParameters['agentDefinitionWrite']),
+        };
+    }
+
+    /**
+     * Replace an Agent Definition and create its next revision
+     */
+    async updateAgentDefinitionRaw(requestParameters: UpdateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionResource>> {
+        const requestOptions = await this.updateAgentDefinitionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AgentDefinitionResourceFromJSON(jsonValue));
+    }
+
+    /**
+     * Replace an Agent Definition and create its next revision
+     */
+    async updateAgentDefinition(requestParameters: UpdateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResource> {
+        const response = await this.updateAgentDefinitionRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

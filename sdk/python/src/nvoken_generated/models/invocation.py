@@ -3,7 +3,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.agent_definition import AgentDefinition
-from nvoken_generated.models.budget_block import BudgetBlock
+from nvoken_generated.models.credit_block import CreditBlock
 from nvoken_generated.models.invocation_context_item import InvocationContextItem
 from nvoken_generated.models.invocation_failure import InvocationFailure
 from nvoken_generated.models.invocation_status import InvocationStatus
@@ -44,13 +44,14 @@ class Invocation(BaseModel):
     agent_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
     session_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `sess_` prefix. Treat the body as opaque.")
     user_key: Optional[StrictStr] = Field(description="Your own label for the end user this turn belongs to. Useful for filtering lists. It is not a security boundary — no request is ever refused because of it, so do not rely on it to keep one user's data away from another. ")
-    agent_definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Content-addressed Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
-    agent_definition: Optional[AgentDefinition] = Field(description="The agent definition this turn actually ran with, stored when the turn started and returned exactly as it was. Request headers for remote MCP servers are never stored and never appear here.  Present on `GET /v1/invocations/{id}` and on the result. Null in list items, where `agent_definition_id` identifies it instead. ")
+    agent_definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
+    agent_definition_revision: Annotated[int, Field(strict=True, ge=1)] = Field(description="Immutable Agent Definition revision admitted for this turn.")
+    agent_definition: Optional[AgentDefinition] = Field(description="The agent definition this turn actually ran with, stored when the turn started and returned exactly as it was. Request headers for remote MCP servers are never stored and never appear here.  Present on `GET /v1/invocations/{id}` and on the result. Null in list items, where `agent_definition_id` and `agent_definition_revision` identify it instead. ")
     context: Optional[Annotated[List[InvocationContextItem], Field(max_length=8)]] = Field(description="The ordered context payload accepted with this turn, before transcript deduplication. Null when omitted and in Invocation list items. Present on admission, point reads, results, and stream Invocation projections. Context is immutable and order-sensitive for idempotency. ")
     deduplicated: Optional[StrictBool] = Field(default=None, description="Only present on the `POST /v1/invocations` response. False when this call created a new turn, true when your idempotency key matched one that already existed and you got that one back. ")
     status: InvocationStatus
     stop_reason: Optional[InvocationStopReason] = Field(description="Why the turn stopped or paused. Present on `completed`, `incomplete`, and `paused`; null on every other status — a failure keeps `error` as the authority. Treat an unrecognized value as an ordinary end. ")
-    blocking_budget: Optional[BudgetBlock] = Field(description="Exact first-class Budget for a shared-budget stop, otherwise null.")
+    credit_block: Optional[CreditBlock] = Field(description="Tenant credit account for an insufficient-credits stop, otherwise null.")
     attempt: Annotated[int, Field(strict=True, ge=0)] = Field(description="Execution attempts this Invocation has been claimed for. It increases on every claim, so an attempt increase across a `running → queued → running` transition is the retry signal that status alone cannot give, and it is the durable anchor for discarding provisional output from an earlier attempt. Zero before the first claim. ")
     error: Optional[InvocationFailure]
     usage: Optional[ModelUsage] = Field(description="One normalized terminal aggregate, not a billing ledger.")
@@ -65,7 +66,7 @@ class Invocation(BaseModel):
     updated_at: datetime
     ended_at: Optional[datetime]
     pending_tool_calls: Optional[List[PendingHostToolCall]] = Field(default=None, description="Present for a waiting Invocation with unresolved host or callback calls.")
-    __properties: ClassVar[List[str]] = ["id", "agent_id", "session_id", "user_key", "agent_definition_id", "agent_definition", "context", "deduplicated", "status", "stop_reason", "blocking_budget", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "pending_tool_calls"]
+    __properties: ClassVar[List[str]] = ["id", "agent_id", "session_id", "user_key", "agent_definition_id", "agent_definition_revision", "agent_definition", "context", "deduplicated", "status", "stop_reason", "credit_block", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "pending_tool_calls"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -116,9 +117,9 @@ class Invocation(BaseModel):
                 if _item_context:
                     _items.append(_item_context.to_dict())
             _dict['context'] = _items
-        # override the default output from pydantic by calling `to_dict()` of blocking_budget
-        if self.blocking_budget:
-            _dict['blocking_budget'] = self.blocking_budget.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of credit_block
+        if self.credit_block:
+            _dict['credit_block'] = self.credit_block.to_dict()
         # override the default output from pydantic by calling `to_dict()` of error
         if self.error:
             _dict['error'] = self.error.to_dict()
@@ -161,10 +162,10 @@ class Invocation(BaseModel):
         if self.stop_reason is None and "stop_reason" in self.model_fields_set:
             _dict['stop_reason'] = None
 
-        # set to None if blocking_budget (nullable) is None
+        # set to None if credit_block (nullable) is None
         # and model_fields_set contains the field
-        if self.blocking_budget is None and "blocking_budget" in self.model_fields_set:
-            _dict['blocking_budget'] = None
+        if self.credit_block is None and "credit_block" in self.model_fields_set:
+            _dict['credit_block'] = None
 
         # set to None if error (nullable) is None
         # and model_fields_set contains the field
@@ -223,12 +224,13 @@ class Invocation(BaseModel):
             "session_id": obj.get("session_id"),
             "user_key": obj.get("user_key"),
             "agent_definition_id": obj.get("agent_definition_id"),
+            "agent_definition_revision": obj.get("agent_definition_revision"),
             "agent_definition": AgentDefinition.from_dict(obj["agent_definition"]) if obj.get("agent_definition") is not None else None,
             "context": [InvocationContextItem.from_dict(_item) for _item in obj["context"]] if obj.get("context") is not None else None,
             "deduplicated": obj.get("deduplicated"),
             "status": obj.get("status"),
             "stop_reason": obj.get("stop_reason"),
-            "blocking_budget": BudgetBlock.from_dict(obj["blocking_budget"]) if obj.get("blocking_budget") is not None else None,
+            "credit_block": CreditBlock.from_dict(obj["credit_block"]) if obj.get("credit_block") is not None else None,
             "attempt": obj.get("attempt"),
             "error": InvocationFailure.from_dict(obj["error"]) if obj.get("error") is not None else None,
             "usage": ModelUsage.from_dict(obj["usage"]) if obj.get("usage") is not None else None,

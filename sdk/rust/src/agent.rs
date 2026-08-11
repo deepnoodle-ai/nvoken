@@ -28,11 +28,13 @@ use crate::stream::StreamEvent;
 pub struct AgentOptions {
     pub agent_key: String,
     pub tenant_key: Option<String>,
-    /// The configuration every turn from this Agent runs with. An Agent always
-    /// sends it inline rather than by ID, because it serves the host tool
-    /// handlers declared in it. Reuse a registered `agent_definition_id`
-    /// through `Client::invoke` instead.
+    /// The inline configuration every turn from this Agent runs with. When
+    /// `agent_definition_id` is set, only its host tool handlers are used
+    /// locally; nvoken resolves the reusable definition resource.
     pub agent_definition: AgentDefinition,
+    /// An App-owned reusable Agent Definition. Exactly one of this ID or the
+    /// inline configuration is sent on every Invocation.
+    pub agent_definition_id: Option<String>,
     /// Per-turn secret headers for the MCP servers the definition declares.
     pub mcp_server_headers: Vec<McpServerHeaders>,
     pub provider_keys: Vec<ProviderKeySelection>,
@@ -48,6 +50,26 @@ impl AgentOptions {
             agent_key: agent_key.into(),
             tenant_key: None,
             agent_definition: AgentDefinition::new(model),
+            agent_definition_id: None,
+            mcp_server_headers: Vec::new(),
+            provider_keys: Vec::new(),
+            webhook: None,
+            on_budget_exhausted: None,
+        }
+    }
+
+    /// Builds an Agent backed by an App-owned reusable Agent Definition.
+    /// Host tool handlers may still be attached with `tool`; the matching
+    /// declarations must already exist on the resource.
+    pub fn from_definition_id(
+        agent_key: impl Into<String>,
+        agent_definition_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            agent_key: agent_key.into(),
+            tenant_key: None,
+            agent_definition: AgentDefinition::default(),
+            agent_definition_id: Some(agent_definition_id.into()),
             mcp_server_headers: Vec::new(),
             provider_keys: Vec::new(),
             webhook: None,
@@ -120,10 +142,10 @@ impl AgentOptions {
         self
     }
 
-    /// Replaces the whole Agent Definition, for one built separately and shared
-    /// with `Client::register_agent_definition`.
+    /// Replaces the whole inline Agent Definition.
     pub fn agent_definition(mut self, definition: AgentDefinition) -> Self {
         self.agent_definition = definition;
+        self.agent_definition_id = None;
         self
     }
 
@@ -249,14 +271,35 @@ pub struct Agent {
 }
 
 impl Client {
-    /// Builds a high-level Agent. Resolves an unset `model` from the
-    /// client's default model once, here, exactly like the Go and Python
-    /// bindings; the server keeps requiring exact selection regardless.
+    /// Builds a high-level Agent. Inline definitions resolve an unset `model`
+    /// from the client's default model once. Reusable definitions are selected
+    /// by ID and may still carry local host tool handlers.
     pub fn agent(&self, mut options: AgentOptions) -> Result<Agent, NvokenError> {
         if options.agent_key.is_empty() {
             return Err(NvokenError::validation("agent_key is required"));
         }
-        if options.agent_definition.model.is_unset() {
+        if let Some(definition_id) = options.agent_definition_id.as_ref() {
+            if definition_id.is_empty() {
+                return Err(NvokenError::validation(
+                    "agent_definition_id must not be empty",
+                ));
+            }
+            let definition = &options.agent_definition;
+            if !definition.model.is_unset()
+                || definition.instructions.is_some()
+                || definition.sampling.is_some()
+                || definition.reasoning.is_some()
+                || definition.tool_choice.is_some()
+                || definition.limits.is_some()
+                || !definition.mcp_servers.is_empty()
+                || !definition.provider_tools.is_empty()
+                || definition.output_schema.is_some()
+            {
+                return Err(NvokenError::validation(
+                    "agent_definition_id cannot be combined with inline Agent Definition fields",
+                ));
+            }
+        } else if options.agent_definition.model.is_unset() {
             options.agent_definition.model = self
                 .default_model()
                 .ok_or_else(|| NvokenError::validation("model is required"))?;
@@ -313,8 +356,11 @@ impl Agent {
                 .or(agent_options.on_budget_exhausted),
             input,
             input_blocks: Vec::new(),
-            agent_definition: Some(agent_options.agent_definition.clone()),
-            agent_definition_id: None,
+            agent_definition: agent_options
+                .agent_definition_id
+                .is_none()
+                .then(|| agent_options.agent_definition.clone()),
+            agent_definition_id: agent_options.agent_definition_id.clone(),
             mcp_server_headers: agent_options.mcp_server_headers.clone(),
             context: options.context.clone(),
             provider_keys: agent_options.provider_keys.clone(),

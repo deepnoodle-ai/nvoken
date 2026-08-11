@@ -398,12 +398,8 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 		"support",
 		"--idempotency-key",
 		"flat-admission-test",
-		"--provider",
-		"openai",
-		"--model",
-		"gpt-test",
-		"--instructions",
-		"Preserve this exact public shape.",
+		"--agent-definition-id",
+		"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
 	)
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("flat admission output=%q err=%v", output, err)
@@ -413,16 +409,8 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 			t.Fatalf("execution field %q leaked to the top level: %#v", leaked, admission)
 		}
 	}
-	definition, ok := admission["agent_definition"].(map[string]any)
-	if !ok {
-		t.Fatalf("admission carried no agent_definition: %#v", admission)
-	}
-	if definition["instructions"] != "Preserve this exact public shape." {
-		t.Fatalf("admitted instructions=%#v", definition["instructions"])
-	}
-	model, ok := definition["model"].(map[string]any)
-	if !ok || model["provider"] != "openai" || model["id"] != "gpt-test" {
-		t.Fatalf("admitted model=%#v", definition["model"])
+	if admission["agent_definition_id"] != "def_019b0a12-8d51-7f34-aed2-0e07c1bdb330" || admission["agent_definition"] != nil {
+		t.Fatalf("admission did not carry only the Agent Definition ID: %#v", admission)
 	}
 
 	output, err = executeCLI(
@@ -521,11 +509,11 @@ func TestModelCheckProbeCarriesAUsableOutputBudget(t *testing.T) {
 		t.Fatalf("model check: %v", err)
 	}
 
-	probeDefinition, ok := admission["agent_definition"].(map[string]any)
+	definition, ok := admission["agent_definition"].(map[string]any)
 	if !ok {
-		t.Fatalf("probe request carried no agent_definition: %#v", admission)
+		t.Fatalf("probe request carried no inline Agent Definition: %#v", admission)
 	}
-	limits, ok := probeDefinition["limits"].(map[string]any)
+	limits, ok := definition["limits"].(map[string]any)
 	if !ok {
 		t.Fatalf("probe request carried no limits: %#v", admission)
 	}

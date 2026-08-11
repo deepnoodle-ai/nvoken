@@ -1,7 +1,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -20,11 +20,11 @@ from typing import List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.create_invocation_request import CreateInvocationRequest
 from nvoken_generated.models.create_nudge_request import CreateNudgeRequest
-from nvoken_generated.models.invocation import Invocation
-from nvoken_generated.models.invocation_list import InvocationList
-from nvoken_generated.models.invocation_result import InvocationResult
+from nvoken_generated.models.invocation_list_response import InvocationListResponse
+from nvoken_generated.models.invocation_response import InvocationResponse
+from nvoken_generated.models.invocation_result_response import InvocationResultResponse
 from nvoken_generated.models.invocation_status import InvocationStatus
-from nvoken_generated.models.invocation_stream_event import InvocationStreamEvent
+from nvoken_generated.models.invocation_stream_response import InvocationStreamResponse
 from nvoken_generated.models.invocation_timeline import InvocationTimeline
 from nvoken_generated.models.nudge import Nudge
 from nvoken_generated.models.nudge_acknowledgement import NudgeAcknowledgement
@@ -69,7 +69,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> Invocation:
+    ) -> InvocationResponse:
         """Stop a turn and discard its work
 
         Stops a turn and discards what it produced. The turn ends `cancelled` and its work does not carry into the next turn — use interrupt instead if you want to keep it.  Safe to repeat. Cancelling a turn that already finished returns it unchanged rather than failing. A successful response means the cancellation is recorded and will stick. Work already sent to the model provider stops as soon as it can, so you may still be billed for what had run by then.  Send an empty request body.
@@ -107,7 +107,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Invocation",
+            '200': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -142,7 +142,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[Invocation]:
+    ) -> ApiResponse[InvocationResponse]:
         """Stop a turn and discard its work
 
         Stops a turn and discards what it produced. The turn ends `cancelled` and its work does not carry into the next turn — use interrupt instead if you want to keep it.  Safe to repeat. Cancelling a turn that already finished returns it unchanged rather than failing. A successful response means the cancellation is recorded and will stick. Work already sent to the model provider stops as soon as it can, so you may still be billed for what had run by then.  Send an empty request body.
@@ -180,7 +180,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Invocation",
+            '200': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -253,7 +253,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Invocation",
+            '200': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -649,10 +649,10 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> Invocation:
+    ) -> InvocationResponse:
         """Start one background agent turn
 
-        Starts one agent turn and returns immediately. In a single database transaction nvoken finds or creates the Agent and Session, resolves the agent definition you sent inline or referenced by `agent_definition_id`, appends your input as one message, and queues the turn. You get a response only after that transaction commits, so a `202` means the work is safely recorded and will run even if nvoken restarts. The model does not run on this request — it runs in the background, and you follow it with the stream or by polling.  Pick the Session with either `session_id` or `session_key`, not both. A Session ID must belong to the Agent you named, or to a Session created without an Agent — in which case this turn binds that Agent permanently. An App credential without a tenant constraint may omit `tenant_key` and use whichever tenant the Session already belongs to. A credential locked to one tenant cannot reach another; naming a different one returns `403 forbidden` without revealing whether the resource exists.  ## Retrying safely  Send `idempotency_key` and you can retry this request without risking a second turn. A repeat with the same key returns the original turn and does not add your input again, even if that turn has already finished. Keys are scoped to the tenant and `agent_key`.  A repeat counts as the same request only if the Session selector, the resolved Agent Definition, and the input all match. An `agent_definition_id` and the identical inline Agent Definition count as the same. Limits are compared as you sent them, so sending a value that happens to equal the default is not the same as omitting it. Key order inside JSON objects does not matter; array order does. Change anything that matters and you get `idempotency_conflict` rather than a surprise second turn.  ## When the Session is already busy  A Session runs one turn at a time, and `if_active` decides what happens when you start another. The default, `reject`, returns `session_invocation_active`.  `supersede` cancels the running turn and starts yours in its place, atomically — there is no moment where the Session has no turn or two turns. It requires permission to both create and cancel. Retrying the same request returns your original turn and never cancels newer work that started in the meantime.  `interrupt` needs the same permission but stops the running turn cleanly instead of discarding its work. If that turn can stop immediately, yours starts in the same transaction. If it is mid-step, nvoken records the interrupt and this request waits for it. If it has not stopped by the time the wait is up, you get `session_invocation_active` with `details.interrupt_requested = true` — the interrupt is still in effect, so just send the request again.  ## Retired models  A deprecated model keeps working. On and after its `retires_at` date, new turns are refused with `422 model_retired`, and `details` tells you what to do about it: the `model` you asked for, its `retires_at` date, the exact `replacement` provider and id to switch to, and the request `path`. Retrying an idempotency key from before the retirement still returns that original turn.  ## Size limits  A text-only body may be up to 1 MiB. A body with images or documents may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB of decoded media in total, 5 MiB per image, and 16 MiB per document. Anything over these is rejected before a turn is created.  URLs are fetched after the idempotency check and before anything is saved, so a retry does not download twice. nvoken accepts public HTTPS only, stops reading at the size limit, and checks what the bytes actually are. It stores them and never fetches the URL again.  ## Streaming  Start the turn with a plain JSON POST, then follow it with `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to build on: it survives a dropped connection without starting the turn over, and it works the same everywhere.  You can instead send `Accept: text/event-stream` on this request and have the response stream directly, starting with `invocation.accepted` and running through `invocation.result`. Treat that as a convenience, not something to depend on — it needs your deployment's front end to stream a non-`200` POST response without buffering. Some managed platforms, Cloud Run among them, buffer it until the turn finishes. On those, a turn that stops to wait for your tools appears to hang, because you never see the `waiting` state.
+        Starts one agent turn and returns immediately. In a single database transaction nvoken finds or creates the Agent and Session, resolves either the inline `agent_definition` or the current revision of the referenced `agent_definition_id`, appends your input as one message, and queues the turn. You get a response only after that transaction commits, so a `202` means the work is safely recorded and will run even if nvoken restarts. The model does not run on this request — it runs in the background, and you follow it with the stream or by polling.  Pick the Session with either `session_id` or `session_key`, not both. A Session ID must belong to the Agent you named, or to a Session created without an Agent — in which case this turn binds that Agent permanently. An App credential without a tenant constraint may omit `tenant_key` and use whichever tenant the Session already belongs to. A credential locked to one tenant cannot reach another; naming a different one returns `403 forbidden` without revealing whether the resource exists.  ## Retrying safely  Send `idempotency_key` and you can retry this request without risking a second turn. A repeat with the same key returns the original turn and does not add your input again, even if that turn has already finished. Keys are scoped to the tenant and `agent_key`.  A repeat counts as the same request only if the Session selector, the stable Agent Definition ID, and the input all match. The original admitted revision is returned even if that resource has advanced. Limits are compared as you sent them, so sending a value that happens to equal the default is not the same as omitting it. Key order inside JSON objects does not matter; array order does. Change anything that matters and you get `idempotency_conflict` rather than a surprise second turn.  ## When the Session is already busy  A Session runs one turn at a time, and `if_active` decides what happens when you start another. The default, `reject`, returns `session_invocation_active`.  `supersede` cancels the running turn and starts yours in its place, atomically — there is no moment where the Session has no turn or two turns. It requires permission to both create and cancel. Retrying the same request returns your original turn and never cancels newer work that started in the meantime.  `interrupt` needs the same permission but stops the running turn cleanly instead of discarding its work. If that turn can stop immediately, yours starts in the same transaction. If it is mid-step, nvoken records the interrupt and this request waits for it. If it has not stopped by the time the wait is up, you get `session_invocation_active` with `details.interrupt_requested = true` — the interrupt is still in effect, so just send the request again.  ## Retired models  A deprecated model keeps working. On and after its `retires_at` date, new turns are refused with `422 model_retired`, and `details` tells you what to do about it: the `model` you asked for, its `retires_at` date, the exact `replacement` provider and id to switch to, and the request `path`. Retrying an idempotency key from before the retirement still returns that original turn.  ## Size limits  A text-only body may be up to 1 MiB. A body with images or documents may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB of decoded media in total, 5 MiB per image, and 16 MiB per document. Anything over these is rejected before a turn is created.  URLs are fetched after the idempotency check and before anything is saved, so a retry does not download twice. nvoken accepts public HTTPS only, stops reading at the size limit, and checks what the bytes actually are. It stores them and never fetches the URL again.  ## Streaming  Start the turn with a plain JSON POST, then follow it with `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to build on: it survives a dropped connection without starting the turn over, and it works the same everywhere.  You can instead send `Accept: text/event-stream` on this request and have the response stream directly, starting with `invocation.accepted` and running through `invocation.result`. Treat that as a convenience, not something to depend on — it needs your deployment's front end to stream a non-`200` POST response without buffering. Some managed platforms, Cloud Run among them, buffer it until the turn finishes. On those, a turn that stops to wait for your tools appears to hang, because you never see the `waiting` state.
 
         :param create_invocation_request: (required)
         :type create_invocation_request: CreateInvocationRequest
@@ -699,7 +699,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '202': "Invocation",
+            '202': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -741,10 +741,10 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[Invocation]:
+    ) -> ApiResponse[InvocationResponse]:
         """Start one background agent turn
 
-        Starts one agent turn and returns immediately. In a single database transaction nvoken finds or creates the Agent and Session, resolves the agent definition you sent inline or referenced by `agent_definition_id`, appends your input as one message, and queues the turn. You get a response only after that transaction commits, so a `202` means the work is safely recorded and will run even if nvoken restarts. The model does not run on this request — it runs in the background, and you follow it with the stream or by polling.  Pick the Session with either `session_id` or `session_key`, not both. A Session ID must belong to the Agent you named, or to a Session created without an Agent — in which case this turn binds that Agent permanently. An App credential without a tenant constraint may omit `tenant_key` and use whichever tenant the Session already belongs to. A credential locked to one tenant cannot reach another; naming a different one returns `403 forbidden` without revealing whether the resource exists.  ## Retrying safely  Send `idempotency_key` and you can retry this request without risking a second turn. A repeat with the same key returns the original turn and does not add your input again, even if that turn has already finished. Keys are scoped to the tenant and `agent_key`.  A repeat counts as the same request only if the Session selector, the resolved Agent Definition, and the input all match. An `agent_definition_id` and the identical inline Agent Definition count as the same. Limits are compared as you sent them, so sending a value that happens to equal the default is not the same as omitting it. Key order inside JSON objects does not matter; array order does. Change anything that matters and you get `idempotency_conflict` rather than a surprise second turn.  ## When the Session is already busy  A Session runs one turn at a time, and `if_active` decides what happens when you start another. The default, `reject`, returns `session_invocation_active`.  `supersede` cancels the running turn and starts yours in its place, atomically — there is no moment where the Session has no turn or two turns. It requires permission to both create and cancel. Retrying the same request returns your original turn and never cancels newer work that started in the meantime.  `interrupt` needs the same permission but stops the running turn cleanly instead of discarding its work. If that turn can stop immediately, yours starts in the same transaction. If it is mid-step, nvoken records the interrupt and this request waits for it. If it has not stopped by the time the wait is up, you get `session_invocation_active` with `details.interrupt_requested = true` — the interrupt is still in effect, so just send the request again.  ## Retired models  A deprecated model keeps working. On and after its `retires_at` date, new turns are refused with `422 model_retired`, and `details` tells you what to do about it: the `model` you asked for, its `retires_at` date, the exact `replacement` provider and id to switch to, and the request `path`. Retrying an idempotency key from before the retirement still returns that original turn.  ## Size limits  A text-only body may be up to 1 MiB. A body with images or documents may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB of decoded media in total, 5 MiB per image, and 16 MiB per document. Anything over these is rejected before a turn is created.  URLs are fetched after the idempotency check and before anything is saved, so a retry does not download twice. nvoken accepts public HTTPS only, stops reading at the size limit, and checks what the bytes actually are. It stores them and never fetches the URL again.  ## Streaming  Start the turn with a plain JSON POST, then follow it with `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to build on: it survives a dropped connection without starting the turn over, and it works the same everywhere.  You can instead send `Accept: text/event-stream` on this request and have the response stream directly, starting with `invocation.accepted` and running through `invocation.result`. Treat that as a convenience, not something to depend on — it needs your deployment's front end to stream a non-`200` POST response without buffering. Some managed platforms, Cloud Run among them, buffer it until the turn finishes. On those, a turn that stops to wait for your tools appears to hang, because you never see the `waiting` state.
+        Starts one agent turn and returns immediately. In a single database transaction nvoken finds or creates the Agent and Session, resolves either the inline `agent_definition` or the current revision of the referenced `agent_definition_id`, appends your input as one message, and queues the turn. You get a response only after that transaction commits, so a `202` means the work is safely recorded and will run even if nvoken restarts. The model does not run on this request — it runs in the background, and you follow it with the stream or by polling.  Pick the Session with either `session_id` or `session_key`, not both. A Session ID must belong to the Agent you named, or to a Session created without an Agent — in which case this turn binds that Agent permanently. An App credential without a tenant constraint may omit `tenant_key` and use whichever tenant the Session already belongs to. A credential locked to one tenant cannot reach another; naming a different one returns `403 forbidden` without revealing whether the resource exists.  ## Retrying safely  Send `idempotency_key` and you can retry this request without risking a second turn. A repeat with the same key returns the original turn and does not add your input again, even if that turn has already finished. Keys are scoped to the tenant and `agent_key`.  A repeat counts as the same request only if the Session selector, the stable Agent Definition ID, and the input all match. The original admitted revision is returned even if that resource has advanced. Limits are compared as you sent them, so sending a value that happens to equal the default is not the same as omitting it. Key order inside JSON objects does not matter; array order does. Change anything that matters and you get `idempotency_conflict` rather than a surprise second turn.  ## When the Session is already busy  A Session runs one turn at a time, and `if_active` decides what happens when you start another. The default, `reject`, returns `session_invocation_active`.  `supersede` cancels the running turn and starts yours in its place, atomically — there is no moment where the Session has no turn or two turns. It requires permission to both create and cancel. Retrying the same request returns your original turn and never cancels newer work that started in the meantime.  `interrupt` needs the same permission but stops the running turn cleanly instead of discarding its work. If that turn can stop immediately, yours starts in the same transaction. If it is mid-step, nvoken records the interrupt and this request waits for it. If it has not stopped by the time the wait is up, you get `session_invocation_active` with `details.interrupt_requested = true` — the interrupt is still in effect, so just send the request again.  ## Retired models  A deprecated model keeps working. On and after its `retires_at` date, new turns are refused with `422 model_retired`, and `details` tells you what to do about it: the `model` you asked for, its `retires_at` date, the exact `replacement` provider and id to switch to, and the request `path`. Retrying an idempotency key from before the retirement still returns that original turn.  ## Size limits  A text-only body may be up to 1 MiB. A body with images or documents may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB of decoded media in total, 5 MiB per image, and 16 MiB per document. Anything over these is rejected before a turn is created.  URLs are fetched after the idempotency check and before anything is saved, so a retry does not download twice. nvoken accepts public HTTPS only, stops reading at the size limit, and checks what the bytes actually are. It stores them and never fetches the URL again.  ## Streaming  Start the turn with a plain JSON POST, then follow it with `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to build on: it survives a dropped connection without starting the turn over, and it works the same everywhere.  You can instead send `Accept: text/event-stream` on this request and have the response stream directly, starting with `invocation.accepted` and running through `invocation.result`. Treat that as a convenience, not something to depend on — it needs your deployment's front end to stream a non-`200` POST response without buffering. Some managed platforms, Cloud Run among them, buffer it until the turn finishes. On those, a turn that stops to wait for your tools appears to hang, because you never see the `waiting` state.
 
         :param create_invocation_request: (required)
         :type create_invocation_request: CreateInvocationRequest
@@ -791,7 +791,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '202': "Invocation",
+            '202': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -836,7 +836,7 @@ class InvocationsApi:
     ) -> RESTResponseType:
         """Start one background agent turn
 
-        Starts one agent turn and returns immediately. In a single database transaction nvoken finds or creates the Agent and Session, resolves the agent definition you sent inline or referenced by `agent_definition_id`, appends your input as one message, and queues the turn. You get a response only after that transaction commits, so a `202` means the work is safely recorded and will run even if nvoken restarts. The model does not run on this request — it runs in the background, and you follow it with the stream or by polling.  Pick the Session with either `session_id` or `session_key`, not both. A Session ID must belong to the Agent you named, or to a Session created without an Agent — in which case this turn binds that Agent permanently. An App credential without a tenant constraint may omit `tenant_key` and use whichever tenant the Session already belongs to. A credential locked to one tenant cannot reach another; naming a different one returns `403 forbidden` without revealing whether the resource exists.  ## Retrying safely  Send `idempotency_key` and you can retry this request without risking a second turn. A repeat with the same key returns the original turn and does not add your input again, even if that turn has already finished. Keys are scoped to the tenant and `agent_key`.  A repeat counts as the same request only if the Session selector, the resolved Agent Definition, and the input all match. An `agent_definition_id` and the identical inline Agent Definition count as the same. Limits are compared as you sent them, so sending a value that happens to equal the default is not the same as omitting it. Key order inside JSON objects does not matter; array order does. Change anything that matters and you get `idempotency_conflict` rather than a surprise second turn.  ## When the Session is already busy  A Session runs one turn at a time, and `if_active` decides what happens when you start another. The default, `reject`, returns `session_invocation_active`.  `supersede` cancels the running turn and starts yours in its place, atomically — there is no moment where the Session has no turn or two turns. It requires permission to both create and cancel. Retrying the same request returns your original turn and never cancels newer work that started in the meantime.  `interrupt` needs the same permission but stops the running turn cleanly instead of discarding its work. If that turn can stop immediately, yours starts in the same transaction. If it is mid-step, nvoken records the interrupt and this request waits for it. If it has not stopped by the time the wait is up, you get `session_invocation_active` with `details.interrupt_requested = true` — the interrupt is still in effect, so just send the request again.  ## Retired models  A deprecated model keeps working. On and after its `retires_at` date, new turns are refused with `422 model_retired`, and `details` tells you what to do about it: the `model` you asked for, its `retires_at` date, the exact `replacement` provider and id to switch to, and the request `path`. Retrying an idempotency key from before the retirement still returns that original turn.  ## Size limits  A text-only body may be up to 1 MiB. A body with images or documents may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB of decoded media in total, 5 MiB per image, and 16 MiB per document. Anything over these is rejected before a turn is created.  URLs are fetched after the idempotency check and before anything is saved, so a retry does not download twice. nvoken accepts public HTTPS only, stops reading at the size limit, and checks what the bytes actually are. It stores them and never fetches the URL again.  ## Streaming  Start the turn with a plain JSON POST, then follow it with `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to build on: it survives a dropped connection without starting the turn over, and it works the same everywhere.  You can instead send `Accept: text/event-stream` on this request and have the response stream directly, starting with `invocation.accepted` and running through `invocation.result`. Treat that as a convenience, not something to depend on — it needs your deployment's front end to stream a non-`200` POST response without buffering. Some managed platforms, Cloud Run among them, buffer it until the turn finishes. On those, a turn that stops to wait for your tools appears to hang, because you never see the `waiting` state.
+        Starts one agent turn and returns immediately. In a single database transaction nvoken finds or creates the Agent and Session, resolves either the inline `agent_definition` or the current revision of the referenced `agent_definition_id`, appends your input as one message, and queues the turn. You get a response only after that transaction commits, so a `202` means the work is safely recorded and will run even if nvoken restarts. The model does not run on this request — it runs in the background, and you follow it with the stream or by polling.  Pick the Session with either `session_id` or `session_key`, not both. A Session ID must belong to the Agent you named, or to a Session created without an Agent — in which case this turn binds that Agent permanently. An App credential without a tenant constraint may omit `tenant_key` and use whichever tenant the Session already belongs to. A credential locked to one tenant cannot reach another; naming a different one returns `403 forbidden` without revealing whether the resource exists.  ## Retrying safely  Send `idempotency_key` and you can retry this request without risking a second turn. A repeat with the same key returns the original turn and does not add your input again, even if that turn has already finished. Keys are scoped to the tenant and `agent_key`.  A repeat counts as the same request only if the Session selector, the stable Agent Definition ID, and the input all match. The original admitted revision is returned even if that resource has advanced. Limits are compared as you sent them, so sending a value that happens to equal the default is not the same as omitting it. Key order inside JSON objects does not matter; array order does. Change anything that matters and you get `idempotency_conflict` rather than a surprise second turn.  ## When the Session is already busy  A Session runs one turn at a time, and `if_active` decides what happens when you start another. The default, `reject`, returns `session_invocation_active`.  `supersede` cancels the running turn and starts yours in its place, atomically — there is no moment where the Session has no turn or two turns. It requires permission to both create and cancel. Retrying the same request returns your original turn and never cancels newer work that started in the meantime.  `interrupt` needs the same permission but stops the running turn cleanly instead of discarding its work. If that turn can stop immediately, yours starts in the same transaction. If it is mid-step, nvoken records the interrupt and this request waits for it. If it has not stopped by the time the wait is up, you get `session_invocation_active` with `details.interrupt_requested = true` — the interrupt is still in effect, so just send the request again.  ## Retired models  A deprecated model keeps working. On and after its `retires_at` date, new turns are refused with `422 model_retired`, and `details` tells you what to do about it: the `model` you asked for, its `retires_at` date, the exact `replacement` provider and id to switch to, and the request `path`. Retrying an idempotency key from before the retirement still returns that original turn.  ## Size limits  A text-only body may be up to 1 MiB. A body with images or documents may be up to 24 MiB, and within that: at most 8 media blocks, 16 MiB of decoded media in total, 5 MiB per image, and 16 MiB per document. Anything over these is rejected before a turn is created.  URLs are fetched after the idempotency check and before anything is saved, so a retry does not download twice. nvoken accepts public HTTPS only, stops reading at the size limit, and checks what the bytes actually are. It stores them and never fetches the URL again.  ## Streaming  Start the turn with a plain JSON POST, then follow it with `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to build on: it survives a dropped connection without starting the turn over, and it works the same everywhere.  You can instead send `Accept: text/event-stream` on this request and have the response stream directly, starting with `invocation.accepted` and running through `invocation.result`. Treat that as a convenience, not something to depend on — it needs your deployment's front end to stream a non-`200` POST response without buffering. Some managed platforms, Cloud Run among them, buffer it until the turn finishes. On those, a turn that stops to wait for your tools appears to hang, because you never see the `waiting` state.
 
         :param create_invocation_request: (required)
         :type create_invocation_request: CreateInvocationRequest
@@ -883,7 +883,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '202': "Invocation",
+            '202': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1317,7 +1317,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> Invocation:
+    ) -> InvocationResponse:
         """Read authoritative Invocation identity and state
 
         The turn's current state, including anything that went wrong after it started.  A credential that can authenticate but lacks permission for this read gets `forbidden`. A turn belonging to another tenant is reported as `not_found` rather than `forbidden`, so you cannot use this endpoint to discover whether an ID exists outside your scope.
@@ -1355,7 +1355,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Invocation",
+            '200': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1391,7 +1391,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[Invocation]:
+    ) -> ApiResponse[InvocationResponse]:
         """Read authoritative Invocation identity and state
 
         The turn's current state, including anything that went wrong after it started.  A credential that can authenticate but lacks permission for this read gets `forbidden`. A turn belonging to another tenant is reported as `not_found` rather than `forbidden`, so you cannot use this endpoint to discover whether an ID exists outside your scope.
@@ -1429,7 +1429,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Invocation",
+            '200': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1503,7 +1503,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Invocation",
+            '200': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1599,7 +1599,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> InvocationResult:
+    ) -> InvocationResultResponse:
         """Read a turn together with its messages
 
         Returns the turn and the messages it produced, at any status. This is the convenient read for \"what did the agent say?\" — `output_text` gives you the assistant's text already joined into a single string, so you do not have to walk the message blocks yourself.  The turn and its messages are read from one consistent database snapshot, so you will never see a finished turn whose last message is missing.  Authentication, tenant scoping, and the not-found behavior are the same as reading the Invocation on its own.
@@ -1637,7 +1637,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "InvocationResult",
+            '200': "InvocationResultResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1673,7 +1673,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[InvocationResult]:
+    ) -> ApiResponse[InvocationResultResponse]:
         """Read a turn together with its messages
 
         Returns the turn and the messages it produced, at any status. This is the convenient read for \"what did the agent say?\" — `output_text` gives you the assistant's text already joined into a single string, so you do not have to walk the message blocks yourself.  The turn and its messages are read from one consistent database snapshot, so you will never see a finished turn whose last message is missing.  Authentication, tenant scoping, and the not-found behavior are the same as reading the Invocation on its own.
@@ -1711,7 +1711,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "InvocationResult",
+            '200': "InvocationResultResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1785,7 +1785,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "InvocationResult",
+            '200': "InvocationResultResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2160,7 +2160,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> Invocation:
+    ) -> InvocationResponse:
         """Stop a turn but keep what it produced
 
         Asks a running turn to stop at its next clean stopping point. It ends `completed` with `stop_reason: interrupted`, and everything it produced — the model's replies and any tool results — stays in the conversation for the next turn. That is the whole difference from cancelling, which throws the turn's work away.  The request is recorded and safe to repeat. What happens next depends on what the turn was doing:  - Between steps (`queued`, `waiting`, or `running` with nothing   actively executing) it stops before this call returns. Any tool   calls you still owed results for are closed out, so submitting one   afterwards returns `409`. - Mid-step, nvoken records the request and returns the turn still   `running`. It stops at the next checkpoint, at worst one model call   later. Watch the stream or re-read the turn to see it end.  Interrupting a turn that has already finished changes nothing and returns it as-is. A turn that was asked for structured output but never produced a valid object ends `failed` with `structured_output_unsatisfied` rather than `completed`. Either way usage is reported in full and billed, because the work was kept.  Send an empty request body.
@@ -2198,7 +2198,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Invocation",
+            '200': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2233,7 +2233,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[Invocation]:
+    ) -> ApiResponse[InvocationResponse]:
         """Stop a turn but keep what it produced
 
         Asks a running turn to stop at its next clean stopping point. It ends `completed` with `stop_reason: interrupted`, and everything it produced — the model's replies and any tool results — stays in the conversation for the next turn. That is the whole difference from cancelling, which throws the turn's work away.  The request is recorded and safe to repeat. What happens next depends on what the turn was doing:  - Between steps (`queued`, `waiting`, or `running` with nothing   actively executing) it stops before this call returns. Any tool   calls you still owed results for are closed out, so submitting one   afterwards returns `409`. - Mid-step, nvoken records the request and returns the turn still   `running`. It stops at the next checkpoint, at worst one model call   later. Watch the stream or re-read the turn to see it end.  Interrupting a turn that has already finished changes nothing and returns it as-is. A turn that was asked for structured output but never produced a valid object ends `failed` with `structured_output_unsatisfied` rather than `completed`. Either way usage is reported in full and billed, because the work was kept.  Send an empty request body.
@@ -2271,7 +2271,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Invocation",
+            '200': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2344,7 +2344,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "Invocation",
+            '200': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2447,7 +2447,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> InvocationList:
+    ) -> InvocationListResponse:
         """List authoritative Invocations
 
         Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.
@@ -2509,7 +2509,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "InvocationList",
+            '200': "InvocationListResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2552,7 +2552,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[InvocationList]:
+    ) -> ApiResponse[InvocationListResponse]:
         """List authoritative Invocations
 
         Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.
@@ -2614,7 +2614,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "InvocationList",
+            '200': "InvocationListResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -2719,7 +2719,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "InvocationList",
+            '200': "InvocationListResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -3504,7 +3504,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> Invocation:
+    ) -> InvocationResponse:
         """Raise a paused turn's limit and continue it
 
         Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused on the Session maximum estimated cost rather than its own limit, raise or remove that Session cap instead — this endpoint will not resume it. Deadlines never pause a turn, so they never bring you here.
@@ -3545,7 +3545,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '202': "Invocation",
+            '202': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -3583,7 +3583,7 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[Invocation]:
+    ) -> ApiResponse[InvocationResponse]:
         """Raise a paused turn's limit and continue it
 
         Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused on the Session maximum estimated cost rather than its own limit, raise or remove that Session cap instead — this endpoint will not resume it. Deadlines never pause a turn, so they never bring you here.
@@ -3624,7 +3624,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '202': "Invocation",
+            '202': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -3703,7 +3703,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '202': "Invocation",
+            '202': "InvocationResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -3805,7 +3805,7 @@ class InvocationsApi:
         self,
         invocation_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
-        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Defaults to true.")] = None,
+        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor from the last durable frame; ignored when `cursor` is supplied.")] = None,
         _request_timeout: Union[
             None,
@@ -3819,16 +3819,16 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> InvocationStreamEvent:
+    ) -> InvocationStreamResponse:
         """Follow one turn over Server-Sent Events
 
-        Follows one turn as it runs, and can be resumed after a dropped connection. Pass `cursor` to pick up after a position you already received; the stream replays everything saved since then, then continues live until the turn finishes.  Saved updates carry an SSE `id` — that is your resume position, and the only value you need to store. Live text previews and control frames carry no `id` because they are not saved state. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages; previews can be lost, saved updates cannot.  The `cursor` query parameter wins over the `Last-Event-ID` header. `stream.end` with reason `rotate` means the server is cycling the connection — reconnect using your last saved `id`. Set `deltas=false` to skip previews; nothing about replay, resumption, or how the stream ends changes.  Disconnecting never cancels the turn. It keeps running, and you can reconnect or read it later.
+        Follows one turn as it runs, and can be resumed after a dropped connection. Pass `cursor` to pick up after a position you already received; the stream replays everything saved since then, then continues live until the turn finishes.  Saved updates carry an SSE `id` — that is your resume position, and the only value you need to store. Live text previews and control frames carry no `id` because they are not saved state. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages; previews can be lost, saved updates cannot.  The `cursor` query parameter wins over the `Last-Event-ID` header. `stream.end` with reason `rotate` means the server is cycling the connection — reconnect using your last saved `id`. Set `deltas=false` to skip previews; nothing about replay, resumption, or how the stream ends changes.  Disconnecting never cancels the turn. It keeps running, and you can reconnect or read it later.  Client-token streams omit `thinking.delta` previews even when `deltas=true`.
 
         :param invocation_id: (required)
         :type invocation_id: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
-        :param deltas: Include id-less output and thinking preview frames. Defaults to true.
+        :param deltas: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
         :type deltas: bool
         :param last_event_id: Opaque cursor from the last durable frame; ignored when `cursor` is supplied.
         :type last_event_id: str
@@ -3866,7 +3866,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "InvocationStreamEvent",
+            '200': "InvocationStreamResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -3891,7 +3891,7 @@ class InvocationsApi:
         self,
         invocation_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
-        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Defaults to true.")] = None,
+        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor from the last durable frame; ignored when `cursor` is supplied.")] = None,
         _request_timeout: Union[
             None,
@@ -3905,16 +3905,16 @@ class InvocationsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[InvocationStreamEvent]:
+    ) -> ApiResponse[InvocationStreamResponse]:
         """Follow one turn over Server-Sent Events
 
-        Follows one turn as it runs, and can be resumed after a dropped connection. Pass `cursor` to pick up after a position you already received; the stream replays everything saved since then, then continues live until the turn finishes.  Saved updates carry an SSE `id` — that is your resume position, and the only value you need to store. Live text previews and control frames carry no `id` because they are not saved state. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages; previews can be lost, saved updates cannot.  The `cursor` query parameter wins over the `Last-Event-ID` header. `stream.end` with reason `rotate` means the server is cycling the connection — reconnect using your last saved `id`. Set `deltas=false` to skip previews; nothing about replay, resumption, or how the stream ends changes.  Disconnecting never cancels the turn. It keeps running, and you can reconnect or read it later.
+        Follows one turn as it runs, and can be resumed after a dropped connection. Pass `cursor` to pick up after a position you already received; the stream replays everything saved since then, then continues live until the turn finishes.  Saved updates carry an SSE `id` — that is your resume position, and the only value you need to store. Live text previews and control frames carry no `id` because they are not saved state. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages; previews can be lost, saved updates cannot.  The `cursor` query parameter wins over the `Last-Event-ID` header. `stream.end` with reason `rotate` means the server is cycling the connection — reconnect using your last saved `id`. Set `deltas=false` to skip previews; nothing about replay, resumption, or how the stream ends changes.  Disconnecting never cancels the turn. It keeps running, and you can reconnect or read it later.  Client-token streams omit `thinking.delta` previews even when `deltas=true`.
 
         :param invocation_id: (required)
         :type invocation_id: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
-        :param deltas: Include id-less output and thinking preview frames. Defaults to true.
+        :param deltas: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
         :type deltas: bool
         :param last_event_id: Opaque cursor from the last durable frame; ignored when `cursor` is supplied.
         :type last_event_id: str
@@ -3952,7 +3952,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "InvocationStreamEvent",
+            '200': "InvocationStreamResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -3977,7 +3977,7 @@ class InvocationsApi:
         self,
         invocation_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
-        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Defaults to true.")] = None,
+        deltas: Annotated[Optional[StrictBool], Field(description="Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor from the last durable frame; ignored when `cursor` is supplied.")] = None,
         _request_timeout: Union[
             None,
@@ -3994,13 +3994,13 @@ class InvocationsApi:
     ) -> RESTResponseType:
         """Follow one turn over Server-Sent Events
 
-        Follows one turn as it runs, and can be resumed after a dropped connection. Pass `cursor` to pick up after a position you already received; the stream replays everything saved since then, then continues live until the turn finishes.  Saved updates carry an SSE `id` — that is your resume position, and the only value you need to store. Live text previews and control frames carry no `id` because they are not saved state. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages; previews can be lost, saved updates cannot.  The `cursor` query parameter wins over the `Last-Event-ID` header. `stream.end` with reason `rotate` means the server is cycling the connection — reconnect using your last saved `id`. Set `deltas=false` to skip previews; nothing about replay, resumption, or how the stream ends changes.  Disconnecting never cancels the turn. It keeps running, and you can reconnect or read it later.
+        Follows one turn as it runs, and can be resumed after a dropped connection. Pass `cursor` to pick up after a position you already received; the stream replays everything saved since then, then continues live until the turn finishes.  Saved updates carry an SSE `id` — that is your resume position, and the only value you need to store. Live text previews and control frames carry no `id` because they are not saved state. If you receive `stream.resync`, discard the preview text you have accumulated and wait for the saved messages; previews can be lost, saved updates cannot.  The `cursor` query parameter wins over the `Last-Event-ID` header. `stream.end` with reason `rotate` means the server is cycling the connection — reconnect using your last saved `id`. Set `deltas=false` to skip previews; nothing about replay, resumption, or how the stream ends changes.  Disconnecting never cancels the turn. It keeps running, and you can reconnect or read it later.  Client-token streams omit `thinking.delta` previews even when `deltas=true`.
 
         :param invocation_id: (required)
         :type invocation_id: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
-        :param deltas: Include id-less output and thinking preview frames. Defaults to true.
+        :param deltas: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
         :type deltas: bool
         :param last_event_id: Opaque cursor from the last durable frame; ignored when `cursor` is supplied.
         :type last_event_id: str
@@ -4038,7 +4038,7 @@ class InvocationsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "InvocationStreamEvent",
+            '200': "InvocationStreamResponse",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
