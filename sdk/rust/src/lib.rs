@@ -27,13 +27,13 @@ pub use callback::{
 };
 pub use client::{
     fetch_tool, AgentDefinition, BudgetExhaustionBehavior, Client, CompactionListOptions,
-    ContextCompaction, ContextCompactionTrigger, ErrorCategory, HostToolHandler, IfActivePolicy,
-    InvocationHandle, InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions,
-    ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
-    NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
-    RetryPolicy, Sampling, SessionOptions, SessionRetention, StreamOptions, Tool,
-    ToolCallListOptions, ToolChoice, ToolHandlerError, ToolMode, ToolResult, WaitCondition,
-    WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
+    ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier, ErrorCategory,
+    HostToolHandler, IfActivePolicy, InvocationHandle, InvokeRequest, Limits, ListAgentsOptions,
+    ListInvocationsOptions, ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders,
+    MessageListOptions, Model, NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool,
+    Reasoning, ReasoningEffort, RetryPolicy, Sampling, SessionOptions, SessionRetention,
+    StreamOptions, Tool, ToolCallListOptions, ToolChoice, ToolHandlerError, ToolMode, ToolResult,
+    WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
 };
 pub use media_preflight::{
     document_block, document_url_block, image_block, image_url_block, preflight_input_blocks,

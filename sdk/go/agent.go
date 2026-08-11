@@ -62,6 +62,10 @@ type AgentInvocationOptions struct {
 	IfActive          IfActivePolicy
 	OnBudgetExhausted BudgetExhaustionBehavior
 	Webhook           *WebhookTarget
+	// Context carries the application state snapshots to record ahead of this
+	// turn's input. Per-call rather than per-Agent, because a snapshot is what
+	// changes between turns while the Agent Definition stays fixed.
+	Context []ContextItem
 	// Metadata is opaque host correlation data recorded on this Invocation.
 	// Per-call rather than per-Agent: it is immutable and material to
 	// idempotency, so an Agent-level default would make two otherwise distinct
@@ -215,6 +219,7 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		// A per-call target overrides the agent default so one Agent can
 		// webhook different endpoints without a second Agent.
 		Webhook:  webhookTarget(options.Webhook, a.options.Webhook),
+		Context:  options.Context,
 		Metadata: options.Metadata,
 	}
 }

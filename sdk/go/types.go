@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+	"unicode/utf8"
 
 	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
@@ -133,9 +134,9 @@ const (
 	UsageIntervalDay                                = generated.Day
 	UsageIntervalWeek                               = generated.Week
 	UsageIntervalMonth                              = generated.Month
-	CredentialProfileRuntime                        = generated.Runtime
-	CredentialProfileViewer                         = generated.Viewer
-	CredentialProfileOperator                       = generated.Operator
+	CredentialProfileRuntime                        = generated.CredentialProfileRuntime
+	CredentialProfileViewer                         = generated.CredentialProfileViewer
+	CredentialProfileOperator                       = generated.CredentialProfileOperator
 	CredentialStatusActive                          = generated.CredentialStatusActive
 	CredentialStatusRevoked                         = generated.CredentialStatusRevoked
 	OperationCreateInvocation                       = generated.CreateInvocation
@@ -507,6 +508,34 @@ type MCPServerHeaders struct {
 	Headers map[string]string `json:"headers"`
 }
 
+// ContextTier controls how a recorded snapshot reaches the model. Use
+// ContextTierContextual for conversation-adjacent facts and ContextTierOperator
+// for policy or other application-authoritative state. The tier stays typed in
+// the transcript; the provider-native role is chosen when the turn generates.
+type ContextTier string
+
+const (
+	ContextTierContextual ContextTier = "contextual"
+	ContextTierOperator   ContextTier = "operator"
+)
+
+func (t ContextTier) valid() bool {
+	return t == ContextTierContextual || t == ContextTierOperator
+}
+
+// ContextItem is one application-owned state snapshot recorded ahead of a
+// turn's input. Name is a stable identity: sending it again supersedes the
+// earlier value, and an unchanged resend adds no transcript message, so a
+// stateless host may resend its whole snapshot every turn. Omit the reserved
+// "app-" prefix the model sees; nvoken adds it. Context is durable Session
+// history rather than an Agent Definition field, so it never changes the
+// content-addressed AgentDefinitionID.
+type ContextItem struct {
+	Name    string      `json:"name"`
+	Tier    ContextTier `json:"tier"`
+	Content string      `json:"content"`
+}
+
 // ProviderTool selects one provider server-side tool. Web search is Anthropic
 // only for now, and a model that does not declare controls.tools.web_search is
 // refused at admission rather than served a search the provider would ignore.
@@ -603,6 +632,10 @@ type InvokeRequest struct {
 	// MCPServer because an Agent Definition is content-addressed and reused.
 	MCPServerHeaders []MCPServerHeaders
 	ProviderKeys     []ProviderKeySelection
+	// Context carries ordered application state snapshots recorded before this
+	// turn's input. It is order-sensitive and material to idempotency: a replay
+	// that reorders or edits an item conflicts rather than updating it.
+	Context []ContextItem
 	// Metadata is opaque host correlation data recorded on this Invocation. It
 	// is part of the admitted input, so it is immutable and material to
 	// idempotency: a replay carrying different metadata conflicts rather than
@@ -996,6 +1029,67 @@ func (r InvokeRequest) encodedMCPServerHeaders() ([]MCPServerHeaders, error) {
 	return r.MCPServerHeaders, nil
 }
 
+// The recorded context bounds the Runtime enforces. They are checked here so a
+// snapshot that cannot be admitted fails before a request is spent, and the
+// per-Session limit of 16 distinct names is left to the service, which is the
+// only side that knows what a Session has already recorded.
+const (
+	maxContextItems        = 8
+	maxContextNameRunes    = 64
+	maxContextContentBytes = 8 << 10
+	maxContextTotalBytes   = 16 << 10
+)
+
+var contextNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+// encodedContext checks the recorded context snapshots against the bounds the
+// Runtime enforces at admission.
+func (r InvokeRequest) encodedContext() ([]ContextItem, error) {
+	if len(r.Context) > maxContextItems {
+		return nil, fmt.Errorf("context accepts at most %d items", maxContextItems)
+	}
+	seen := make(map[string]struct{}, len(r.Context))
+	total := 0
+	for _, item := range r.Context {
+		if utf8.RuneCountInString(item.Name) > maxContextNameRunes ||
+			!contextNamePattern.MatchString(item.Name) {
+			return nil, fmt.Errorf(
+				"context name %q must match ^[a-z][a-z0-9-]*$ and be at most %d characters",
+				item.Name,
+				maxContextNameRunes,
+			)
+		}
+		if _, duplicate := seen[item.Name]; duplicate {
+			return nil, fmt.Errorf("context name %q is repeated", item.Name)
+		}
+		seen[item.Name] = struct{}{}
+		if !item.Tier.valid() {
+			return nil, fmt.Errorf(
+				"context %q tier must be contextual or operator",
+				item.Name,
+			)
+		}
+		if item.Content == "" {
+			return nil, fmt.Errorf("context %q content cannot be empty", item.Name)
+		}
+		if len(item.Content) > maxContextContentBytes {
+			return nil, fmt.Errorf(
+				"context %q content exceeds %d bytes",
+				item.Name,
+				maxContextContentBytes,
+			)
+		}
+		total += len(item.Content)
+		if total > maxContextTotalBytes {
+			return nil, fmt.Errorf(
+				"context content totals more than %d bytes",
+				maxContextTotalBytes,
+			)
+		}
+	}
+	return r.Context, nil
+}
+
 func (r InvokeRequest) encoded() ([]byte, error) {
 	if r.AgentKey == "" {
 		return nil, fmt.Errorf("agent key is required")
@@ -1037,6 +1131,13 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 	}
 	if len(headers) > 0 {
 		wire["mcp_server_headers"] = headers
+	}
+	recorded, err := r.encodedContext()
+	if err != nil {
+		return nil, err
+	}
+	if len(recorded) > 0 {
+		wire["context"] = recorded
 	}
 	if r.TenantKey != nil {
 		wire["tenant_key"] = *r.TenantKey
