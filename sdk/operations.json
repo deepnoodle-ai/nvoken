@@ -67,6 +67,11 @@
       "path": "/v1/sessions"
     },
     {
+      "operation_id": "deleteMemory",
+      "method": "DELETE",
+      "path": "/v1/memories/{memory_id}"
+    },
+    {
       "operation_id": "deleteSession",
       "method": "DELETE",
       "path": "/v1/sessions/{session_id}"
@@ -122,6 +127,11 @@
       "path": "/v1/invocations/{invocation_id}/timeline"
     },
     {
+      "operation_id": "getMemory",
+      "method": "GET",
+      "path": "/v1/memories/{memory_id}"
+    },
+    {
       "operation_id": "getModel",
       "method": "GET",
       "path": "/v1/models/{provider}/{model_id}"
@@ -170,6 +180,11 @@
       "operation_id": "interruptInvocation",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/interrupt"
+    },
+    {
+      "operation_id": "issueAnonymousToken",
+      "method": "POST",
+      "path": "/v1/apps/{app_id}/anonymous-tokens"
     },
     {
       "operation_id": "listAdmissions",
@@ -230,6 +245,11 @@
       "operation_id": "listMCPTools",
       "method": "POST",
       "path": "/v1/mcp/list-tools"
+    },
+    {
+      "operation_id": "listMemories",
+      "method": "GET",
+      "path": "/v1/memories"
     },
     {
       "operation_id": "listModels",

@@ -106,6 +106,14 @@ type CredentialProfile = generated.CredentialProfile
 type CredentialStatus = generated.CredentialStatus
 type CurrentIdentity = generated.CurrentIdentity
 type RuntimeOperation = generated.Operation
+type Memory = generated.Memory
+type MemoryList = generated.MemoryList
+type MemoryKind = generated.MemoryKind
+type MemorySearchMode = generated.MemorySearchMode
+type MemoryConfig = generated.MemoryConfig
+type MemoryConfigScope = generated.MemoryConfigScope
+type MemoryContextConfig = generated.MemoryContextConfig
+type MemoryContextMode = generated.MemoryContextMode
 
 type CredentialIssuance struct {
 	Credential        Credential
@@ -198,6 +206,18 @@ const (
 	OperationListOrgs                            = generated.ListOrgs
 	OperationRegisterOrg                         = generated.RegisterOrg
 	OperationUpdateOrg                           = generated.UpdateOrg
+	MemoryKindEpisode                            = generated.Episode
+	MemoryKindFact                               = generated.Fact
+	MemoryKindPreference                         = generated.Preference
+	MemoryKindSummary                            = generated.Summary
+	MemorySearchModeHybrid                       = generated.Hybrid
+	MemorySearchModeKeyword                      = generated.Keyword
+	MemorySearchModeSemantic                     = generated.Semantic
+	MemoryConfigScopeTenant                      = generated.MemoryConfigScopeTenant
+	MemoryConfigScopeUser                        = generated.MemoryConfigScopeUser
+	MemoryContextModeFull                        = generated.MemoryContextModeFull
+	MemoryContextModeIndex                       = generated.MemoryContextModeIndex
+	MemoryContextModeOff                         = generated.MemoryContextModeOff
 )
 
 type ModelList struct {
@@ -613,6 +633,7 @@ type AgentDefinition struct {
 	Tools         []Tool         `json:"tools,omitempty"`
 	MCPServers    []MCPServer    `json:"mcp_servers,omitempty"`
 	ProviderTools []ProviderTool `json:"provider_tools,omitempty"`
+	Memory        *MemoryConfig  `json:"memory,omitempty"`
 	OutputSchema  map[string]any `json:"output_schema,omitempty"`
 }
 
@@ -850,6 +871,17 @@ type ListAgentsOptions struct {
 	Limit    *int
 }
 
+type ListMemoriesOptions struct {
+	AgentID    string
+	TenantKey  *string
+	UserKey    *string
+	Query      *string
+	SearchMode *MemorySearchMode
+	Kind       *MemoryKind
+	Cursor     *string
+	Limit      *int
+}
+
 type RegisterAppOptions struct {
 	ExternalRef *string
 	DisplayName *string
@@ -1016,6 +1048,9 @@ func (d AgentDefinition) encoded() (map[string]any, error) {
 	}
 	if len(d.ProviderTools) > 0 {
 		body["provider_tools"] = d.ProviderTools
+	}
+	if d.Memory != nil {
+		body["memory"] = d.Memory
 	}
 	if d.OutputSchema != nil {
 		body["output_schema"] = d.OutputSchema

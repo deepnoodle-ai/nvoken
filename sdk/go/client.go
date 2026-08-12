@@ -1390,6 +1390,68 @@ func (c *Client) GetApp(ctx context.Context, appID string) (*App, error) {
 	})
 }
 
+// ListMemories browses or searches durable memories for one Agent and scope.
+func (c *Client) ListMemories(ctx context.Context, options ListMemoriesOptions) (*MemoryList, error) {
+	params := &generated.ListMemoriesParams{
+		AgentID:    options.AgentID,
+		TenantKey:  options.TenantKey,
+		UserKey:    options.UserKey,
+		Query:      options.Query,
+		SearchMode: options.SearchMode,
+		Kind:       options.Kind,
+		Cursor:     options.Cursor,
+		Limit:      options.Limit,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.MemoryList], error) {
+		response, err := c.raw.ListMemoriesWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.MemoryList]{}, err
+		}
+		return callResult[generated.MemoryList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// GetMemory reads one durable memory by its opaque ID.
+func (c *Client) GetMemory(ctx context.Context, memoryID string) (*Memory, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Memory], error) {
+		response, err := c.raw.GetMemoryWithResponse(ctx, memoryID)
+		if err != nil {
+			return callResult[generated.Memory]{}, err
+		}
+		return callResult[generated.Memory]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// DeleteMemory erases one durable memory and its derived search projection.
+func (c *Client) DeleteMemory(ctx context.Context, memoryID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.DeleteMemoryWithResponse(ctx, memoryID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
 func (c *Client) ListApps(ctx context.Context, options ListAppsOptions) (*AppList, error) {
 	var status *generated.ListAppsParamsStatus
 	if options.Status != nil {

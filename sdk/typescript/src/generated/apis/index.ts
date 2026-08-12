@@ -8,6 +8,7 @@ export * from './CreditsApi.js';
 export * from './IdentityApi.js';
 export * from './InvocationsApi.js';
 export * from './MCPApi.js';
+export * from './MemoriesApi.js';
 export * from './ModelsApi.js';
 export * from './OrgsApi.js';
 export * from './ProviderKeysApi.js';

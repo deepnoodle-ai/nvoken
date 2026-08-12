@@ -130,6 +130,7 @@ pub mod credits_api;
 pub mod identity_api;
 pub mod invocations_api;
 pub mod mcp_api;
+pub mod memories_api;
 pub mod models_api;
 pub mod orgs_api;
 pub mod provider_keys_api;

@@ -72,6 +72,7 @@ var operationCommands = map[string]string{
 	"getInvocation":           "invocation get",
 	"getInvocationResult":     "invocation result",
 	"getInvocationTimeline":   "invocation timeline",
+	"getMemory":               "memory get",
 	"getTrace":                "trace get",
 	"getModel":                "model get",
 	"getOrg":                  "org get",
@@ -92,6 +93,7 @@ var operationCommands = map[string]string{
 	"listInvocationLogs":      "invocation logs",
 	"listInvocationTraces":    "invocation traces",
 	"listMCPTools":            "mcp list-tools",
+	"listMemories":            "memory list",
 	"listModels":              "model list",
 	"listOrgs":                "org list",
 	"listProviderKeys":        "provider-key list",
@@ -109,6 +111,8 @@ var operationCommands = map[string]string{
 	"streamSessionTranscript": "session stream",
 	"submitHostToolResults":   "tool-result submit",
 	"summarizeAdmissions":     "admission summary",
+	"deleteMemory":            "memory delete",
+	"issueAnonymousToken":     "app anonymous-token",
 	"updateOrg":               "org update",
 }
 
@@ -208,6 +212,14 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runAppUpdate)
 	apps.Command("archive").Args("app-id").Run(runAppArchive)
 	apps.Command("restore").Args("app-id").Run(runAppRestore)
+	apps.Command("anonymous-token").
+		Description("Mint public browser access without machine authentication").
+		Args("app-id").
+		Flags(
+			cli.String("origin").Required().Help("Exact browser origin configured on the App"),
+			cli.String("visitor-token").Help("Previously returned visitor token; omit on a first visit"),
+		).
+		Run(runAppAnonymousToken)
 
 	agents := app.Group("agent").Description("Read installation-wide Agent identity anchors")
 	agents.Command("get").

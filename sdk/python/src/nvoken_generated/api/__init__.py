@@ -9,6 +9,7 @@ from nvoken_generated.api.credits_api import CreditsApi
 from nvoken_generated.api.identity_api import IdentityApi
 from nvoken_generated.api.invocations_api import InvocationsApi
 from nvoken_generated.api.mcp_api import MCPApi
+from nvoken_generated.api.memories_api import MemoriesApi
 from nvoken_generated.api.models_api import ModelsApi
 from nvoken_generated.api.orgs_api import OrgsApi
 from nvoken_generated.api.provider_keys_api import ProviderKeysApi

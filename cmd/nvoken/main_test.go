@@ -715,6 +715,102 @@ func TestEveryOperationHasACommand(t *testing.T) {
 	}
 }
 
+func TestAnonymousTokenAndMemoryCommands(t *testing.T) {
+	t.Setenv("NVOKEN_API_KEY", "operator-key")
+	const (
+		testAppID    = "app_test"
+		testMemoryID = "mem_test"
+	)
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requests++
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/apps/"+testAppID+"/anonymous-tokens":
+			if authorization := request.Header.Get("Authorization"); authorization != "" {
+				t.Errorf("anonymous-token Authorization = %q", authorization)
+			}
+			if origin := request.Header.Get("Origin"); origin != "https://chat.example.test" {
+				t.Errorf("anonymous-token Origin = %q", origin)
+			}
+			var body struct {
+				VisitorToken *string `json:"visitor_token"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Errorf("decode anonymous-token request: %v", err)
+			} else if body.VisitorToken == nil || *body.VisitorToken != "visitor-old" {
+				t.Errorf("visitor_token = %#v", body.VisitorToken)
+			}
+			response.WriteHeader(http.StatusCreated)
+			_, _ = response.Write([]byte(`{"access_token":"access-new","access_token_expires_at":"2026-08-12T12:15:00Z","visitor_token":"visitor-new","visitor_token_expires_at":"2027-08-12T12:00:00Z","session_id":null}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/memories":
+			if authorization := request.Header.Get("Authorization"); authorization != "Bearer operator-key" {
+				t.Errorf("memory list Authorization = %q", authorization)
+			}
+			query := request.URL.Query()
+			if query.Get("agent_id") != testAgentID ||
+				query.Get("tenant_key") != "acme" ||
+				query.Get("query") != "theme" ||
+				query.Get("search_mode") != "hybrid" ||
+				query.Get("kind") != "preference" ||
+				query.Get("limit") != "10" {
+				t.Errorf("memory list query = %q", request.URL.RawQuery)
+			}
+			_, _ = response.Write([]byte(`{"items":[{"memory":{"id":"mem_test","agent_id":"` + testAgentID + `","tenant_key":"acme","key":"preference.theme","kind":"preference","content":"Use dark mode.","importance":80,"pinned":true,"version":1,"last_accessed_at":"2026-08-12T12:00:00Z","created_at":"2026-08-12T12:00:00Z","updated_at":"2026-08-12T12:00:00Z"},"score":0.875}],"search_coverage":{"indexed_entries":1,"total_entries":1,"complete":true,"semantic_available":true},"has_more":false,"next_cursor":null}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/memories/"+testMemoryID:
+			_, _ = response.Write([]byte(`{"id":"mem_test","agent_id":"` + testAgentID + `","tenant_key":"acme","key":"preference.theme","kind":"preference","content":"Use dark mode.","importance":80,"pinned":true,"version":1,"last_accessed_at":"2026-08-12T12:00:00Z","created_at":"2026-08-12T12:00:00Z","updated_at":"2026-08-12T12:00:00Z"}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/v1/memories/"+testMemoryID:
+			response.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+
+	output, err := executeCLI(
+		t,
+		server.URL,
+		true,
+		"app", "anonymous-token", testAppID,
+		"--origin", "https://chat.example.test",
+		"--visitor-token", "visitor-old",
+	)
+	if err != nil || !strings.Contains(output, `"access_token":"access-new"`) ||
+		!strings.Contains(output, `"visitor_token":"visitor-new"`) {
+		t.Fatalf("anonymous-token output=%q err=%v", output, err)
+	}
+
+	output, err = executeCLI(
+		t,
+		server.URL,
+		false,
+		"memory", "list",
+		"--agent-id", testAgentID,
+		"--tenant-key", "acme",
+		"--query", "theme",
+		"--search-mode", "hybrid",
+		"--kind", "preference",
+		"--limit", "10",
+	)
+	if err != nil ||
+		!strings.Contains(output, "mem_test\tpreference\tpreference.theme\tscore=0.875000") ||
+		!strings.Contains(output, "search_coverage\tindexed=1\ttotal=1\tcomplete=true\tsemantic_available=true") {
+		t.Fatalf("memory list output=%q err=%v", output, err)
+	}
+
+	output, err = executeCLI(t, server.URL, false, "memory", "get", testMemoryID)
+	if err != nil || !strings.Contains(output, "mem_test\tpreference\tpreference.theme") ||
+		!strings.Contains(output, "Use dark mode.") {
+		t.Fatalf("memory get output=%q err=%v", output, err)
+	}
+	if _, err = executeCLI(t, server.URL, false, "memory", "delete", testMemoryID); err != nil {
+		t.Fatalf("memory delete: %v", err)
+	}
+	if requests != 4 {
+		t.Fatalf("requests = %d, want 4", requests)
+	}
+}
+
 func TestArchiveLifecycleCommands(t *testing.T) {
 	t.Setenv("NVOKEN_API_KEY", "operator-key")
 	requests := 0

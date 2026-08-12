@@ -21,16 +21,19 @@ import (
 
 // Defines values for AdmissionAttemptAuthenticationMethod.
 const (
-	AdmissionAttemptAuthenticationMethodAPIKey      AdmissionAttemptAuthenticationMethod = "api_key"
-	AdmissionAttemptAuthenticationMethodClientToken AdmissionAttemptAuthenticationMethod = "client_token"
-	AdmissionAttemptAuthenticationMethodIssuerToken AdmissionAttemptAuthenticationMethod = "issuer_token"
-	AdmissionAttemptAuthenticationMethodLessThanNil AdmissionAttemptAuthenticationMethod = "<nil>"
+	AdmissionAttemptAuthenticationMethodAPIKey         AdmissionAttemptAuthenticationMethod = "api_key"
+	AdmissionAttemptAuthenticationMethodAnonymousToken AdmissionAttemptAuthenticationMethod = "anonymous_token"
+	AdmissionAttemptAuthenticationMethodClientToken    AdmissionAttemptAuthenticationMethod = "client_token"
+	AdmissionAttemptAuthenticationMethodIssuerToken    AdmissionAttemptAuthenticationMethod = "issuer_token"
+	AdmissionAttemptAuthenticationMethodLessThanNil    AdmissionAttemptAuthenticationMethod = "<nil>"
 )
 
 // Valid indicates whether the value is a known member of the AdmissionAttemptAuthenticationMethod enum.
 func (e AdmissionAttemptAuthenticationMethod) Valid() bool {
 	switch e {
 	case AdmissionAttemptAuthenticationMethodAPIKey:
+		return true
+	case AdmissionAttemptAuthenticationMethodAnonymousToken:
 		return true
 	case AdmissionAttemptAuthenticationMethodClientToken:
 		return true
@@ -81,16 +84,19 @@ func (e AppSigningKeyPurpose) Valid() bool {
 
 // Defines values for AuthenticationMethod.
 const (
-	AuthenticationMethodAPIKey      AuthenticationMethod = "api_key"
-	AuthenticationMethodClientToken AuthenticationMethod = "client_token"
-	AuthenticationMethodIssuerToken AuthenticationMethod = "issuer_token"
-	AuthenticationMethodUnknown     AuthenticationMethod = "unknown"
+	AuthenticationMethodAPIKey         AuthenticationMethod = "api_key"
+	AuthenticationMethodAnonymousToken AuthenticationMethod = "anonymous_token"
+	AuthenticationMethodClientToken    AuthenticationMethod = "client_token"
+	AuthenticationMethodIssuerToken    AuthenticationMethod = "issuer_token"
+	AuthenticationMethodUnknown        AuthenticationMethod = "unknown"
 )
 
 // Valid indicates whether the value is a known member of the AuthenticationMethod enum.
 func (e AuthenticationMethod) Valid() bool {
 	switch e {
 	case AuthenticationMethodAPIKey:
+		return true
+	case AuthenticationMethodAnonymousToken:
 		return true
 	case AuthenticationMethodClientToken:
 		return true
@@ -207,12 +213,15 @@ func (e ClientCurrentIdentityAuthenticationAssurance) Valid() bool {
 
 // Defines values for ClientCurrentIdentityAuthenticationMethod.
 const (
-	ClientCurrentIdentityAuthenticationMethodClientToken ClientCurrentIdentityAuthenticationMethod = "client_token"
+	ClientCurrentIdentityAuthenticationMethodAnonymousToken ClientCurrentIdentityAuthenticationMethod = "anonymous_token"
+	ClientCurrentIdentityAuthenticationMethodClientToken    ClientCurrentIdentityAuthenticationMethod = "client_token"
 )
 
 // Valid indicates whether the value is a known member of the ClientCurrentIdentityAuthenticationMethod enum.
 func (e ClientCurrentIdentityAuthenticationMethod) Valid() bool {
 	switch e {
+	case ClientCurrentIdentityAuthenticationMethodAnonymousToken:
+		return true
 	case ClientCurrentIdentityAuthenticationMethodClientToken:
 		return true
 	default:
@@ -423,16 +432,16 @@ func (e CredentialStatus) Valid() bool {
 
 // Defines values for CreditPolicy.
 const (
-	Off      CreditPolicy = "off"
-	Required CreditPolicy = "required"
+	CreditPolicyOff      CreditPolicy = "off"
+	CreditPolicyRequired CreditPolicy = "required"
 )
 
 // Valid indicates whether the value is a known member of the CreditPolicy enum.
 func (e CreditPolicy) Valid() bool {
 	switch e {
-	case Off:
+	case CreditPolicyOff:
 		return true
-	case Required:
+	case CreditPolicyRequired:
 		return true
 	default:
 		return false
@@ -549,6 +558,8 @@ const (
 	ErrorCodeInvocationNotWaiting            ErrorCode = "invocation_not_waiting"
 	ErrorCodeMcpDiscoveryFailed              ErrorCode = "mcp_discovery_failed"
 	ErrorCodeMediaFetchFailed                ErrorCode = "media_fetch_failed"
+	ErrorCodeMemoryContextOverflow           ErrorCode = "memory_context_overflow"
+	ErrorCodeMemorySemanticSearchUnavailable ErrorCode = "memory_semantic_search_unavailable"
 	ErrorCodeModelRetired                    ErrorCode = "model_retired"
 	ErrorCodeNotFound                        ErrorCode = "not_found"
 	ErrorCodeOrgArchived                     ErrorCode = "org_archived"
@@ -597,6 +608,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeMcpDiscoveryFailed:
 		return true
 	case ErrorCodeMediaFetchFailed:
+		return true
+	case ErrorCodeMemoryContextOverflow:
+		return true
+	case ErrorCodeMemorySemanticSearchUnavailable:
 		return true
 	case ErrorCodeModelRetired:
 		return true
@@ -985,6 +1000,90 @@ func (e MCPToolExclusionReason) Valid() bool {
 	}
 }
 
+// Defines values for MemoryConfigScope.
+const (
+	MemoryConfigScopeTenant MemoryConfigScope = "tenant"
+	MemoryConfigScopeUser   MemoryConfigScope = "user"
+)
+
+// Valid indicates whether the value is a known member of the MemoryConfigScope enum.
+func (e MemoryConfigScope) Valid() bool {
+	switch e {
+	case MemoryConfigScopeTenant:
+		return true
+	case MemoryConfigScopeUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MemoryContextMode.
+const (
+	MemoryContextModeFull  MemoryContextMode = "full"
+	MemoryContextModeIndex MemoryContextMode = "index"
+	MemoryContextModeOff   MemoryContextMode = "off"
+)
+
+// Valid indicates whether the value is a known member of the MemoryContextMode enum.
+func (e MemoryContextMode) Valid() bool {
+	switch e {
+	case MemoryContextModeFull:
+		return true
+	case MemoryContextModeIndex:
+		return true
+	case MemoryContextModeOff:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MemoryKind.
+const (
+	Episode    MemoryKind = "episode"
+	Fact       MemoryKind = "fact"
+	Preference MemoryKind = "preference"
+	Summary    MemoryKind = "summary"
+)
+
+// Valid indicates whether the value is a known member of the MemoryKind enum.
+func (e MemoryKind) Valid() bool {
+	switch e {
+	case Episode:
+		return true
+	case Fact:
+		return true
+	case Preference:
+		return true
+	case Summary:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MemorySearchMode.
+const (
+	Hybrid   MemorySearchMode = "hybrid"
+	Keyword  MemorySearchMode = "keyword"
+	Semantic MemorySearchMode = "semantic"
+)
+
+// Valid indicates whether the value is a known member of the MemorySearchMode enum.
+func (e MemorySearchMode) Valid() bool {
+	switch e {
+	case Hybrid:
+		return true
+	case Keyword:
+		return true
+	case Semantic:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessagePhase.
 const (
 	Commentary  MessagePhase = "commentary"
@@ -1264,6 +1363,7 @@ const (
 	CreateInvocation       Operation = "create_invocation"
 	CreateProviderKey      Operation = "create_provider_key"
 	CreateSession          Operation = "create_session"
+	DeleteMemory           Operation = "delete_memory"
 	DeleteSession          Operation = "delete_session"
 	DeleteTenant           Operation = "delete_tenant"
 	GetAgent               Operation = "get_agent"
@@ -1288,6 +1388,7 @@ const (
 	ListSessions           Operation = "list_sessions"
 	ManageInvocationNudges Operation = "manage_invocation_nudges"
 	ReadCredits            Operation = "read_credits"
+	ReadMemories           Operation = "read_memories"
 	ReadUsage              Operation = "read_usage"
 	RegisterApp            Operation = "register_app"
 	RegisterOrg            Operation = "register_org"
@@ -1319,6 +1420,8 @@ func (e Operation) Valid() bool {
 	case CreateProviderKey:
 		return true
 	case CreateSession:
+		return true
+	case DeleteMemory:
 		return true
 	case DeleteSession:
 		return true
@@ -1367,6 +1470,8 @@ func (e Operation) Valid() bool {
 	case ManageInvocationNudges:
 		return true
 	case ReadCredits:
+		return true
+	case ReadMemories:
 		return true
 	case ReadUsage:
 		return true
@@ -2514,8 +2619,7 @@ type AgentDefinition struct {
 	// visibility. All public transcript content in a browser-reachable
 	// Session, including operator-tier recorded context, must be treated as
 	// client-visible. No lifetime, host_only, wildcard, generic tool-policy,
-	// tier-switch, or disclosure field exists here. The object remains
-	// dormant until PRD 065.
+	// tier-switch, or disclosure field exists here.
 	ClientInterface *BrowserClientInterface `json:"client_interface,omitempty"`
 
 	// Instructions Optional model instructions. Omission adds no hidden default.
@@ -2529,7 +2633,12 @@ type AgentDefinition struct {
 	// Installation maxima may be lower than the schema's numeric range.
 	Limits     *Limits      `json:"limits,omitempty"`
 	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
-	Model      Model        `json:"model"`
+
+	// Memory Opts this Agent Definition into durable memory and automatically
+	// attaches nvoken_memory_remember, nvoken_memory_recall, and
+	// nvoken_memory_forget. Omission attaches no memory capability.
+	Memory *MemoryConfig `json:"memory,omitempty"`
+	Model  Model         `json:"model"`
 
 	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
 	// is limited to 32 KiB and 16 schema positions. Supported keywords are
@@ -2577,8 +2686,7 @@ type AgentDefinitionResource struct {
 	// visibility. All public transcript content in a browser-reachable
 	// Session, including operator-tier recorded context, must be treated as
 	// client-visible. No lifetime, host_only, wildcard, generic tool-policy,
-	// tier-switch, or disclosure field exists here. The object remains
-	// dormant until PRD 065.
+	// tier-switch, or disclosure field exists here.
 	ClientInterface *BrowserClientInterface `json:"client_interface,omitempty"`
 	CreatedAt       time.Time               `json:"created_at"`
 
@@ -2594,7 +2702,12 @@ type AgentDefinitionResource struct {
 	// Installation maxima may be lower than the schema's numeric range.
 	Limits     *Limits      `json:"limits,omitempty"`
 	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
-	Model      Model        `json:"model"`
+
+	// Memory Opts this Agent Definition into durable memory and automatically
+	// attaches nvoken_memory_remember, nvoken_memory_recall, and
+	// nvoken_memory_forget. Omission attaches no memory capability.
+	Memory *MemoryConfig `json:"memory,omitempty"`
+	Model  Model         `json:"model"`
 
 	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
 	// is limited to 32 KiB and 16 schema positions. Supported keywords are
@@ -2643,8 +2756,7 @@ type AgentDefinitionWrite struct {
 	// visibility. All public transcript content in a browser-reachable
 	// Session, including operator-tier recorded context, must be treated as
 	// client-visible. No lifetime, host_only, wildcard, generic tool-policy,
-	// tier-switch, or disclosure field exists here. The object remains
-	// dormant until PRD 065.
+	// tier-switch, or disclosure field exists here.
 	ClientInterface *BrowserClientInterface `json:"client_interface,omitempty"`
 
 	// Instructions Optional model instructions. Omission adds no hidden default.
@@ -2660,6 +2772,11 @@ type AgentDefinitionWrite struct {
 
 	// McpServers MCP server declarations for later Invocations. Secrets are never part of an Agent Definition.
 	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
+
+	// Memory Opts this Agent Definition into durable memory and automatically
+	// attaches nvoken_memory_remember, nvoken_memory_recall, and
+	// nvoken_memory_forget. Omission attaches no memory capability.
+	Memory *MemoryConfig `json:"memory,omitempty"`
 
 	// Model Which model to use. The object form — separate `provider` and `id` — is
 	// the real shape. You may also send a single `provider/id` string for
@@ -2726,17 +2843,63 @@ type AllocateCreditsResult struct {
 	Allocation CreditAllocation `json:"allocation"`
 }
 
+// AnonymousAccess Complete managed-anonymous mode. The Definition must be live,
+// App-owned, client-capable, and either have no memory or explicitly use
+// user-scoped memory. The positive USD allowance is a lifetime retained-
+// cost ceiling for one opaque visitor subject. Clearing browser storage
+// can create a new subject, so the anonymous admission ceiling, tenant
+// Credits, and App admission limits remain aggregate hard caps.
+type AnonymousAccess struct {
+	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
+
+	// AgentKey Stable Agent identity used for every anonymous turn.
+	AgentKey string `json:"agent_key"`
+
+	// MaxAdmissionsPerMinute Admission ceiling shared across all anonymous visitor subjects in this tenant.
+	MaxAdmissionsPerMinute int64 `json:"max_admissions_per_minute"`
+
+	// TenantKey App-local tenant partition funded for public traffic.
+	TenantKey        string `json:"tenant_key"`
+	VisitorAllowance Money  `json:"visitor_allowance"`
+}
+
+// AnonymousTokenRequest defines model for AnonymousTokenRequest.
+type AnonymousTokenRequest struct {
+	// VisitorToken Previously returned visitor token; omit on a first visit.
+	VisitorToken *string `json:"visitor_token,omitempty"`
+}
+
+// AnonymousTokenResponse defines model for AnonymousTokenResponse.
+type AnonymousTokenResponse struct {
+	// AccessToken Short-lived bearer for browser-direct runtime requests.
+	AccessToken          string    `json:"access_token"`
+	AccessTokenExpiresAt time.Time `json:"access_token_expires_at"`
+
+	// SessionID Canonical conversation for this visitor, or null before its first
+	// turn. Anonymous Invocations that omit Session selectors resume this
+	// Session automatically.
+	SessionID *SessionID `json:"session_id"`
+
+	// VisitorToken Renewable continuity bearer accepted only by this route.
+	VisitorToken          string    `json:"visitor_token"`
+	VisitorTokenExpiresAt time.Time `json:"visitor_token_expires_at"`
+}
+
 // App defines model for App.
 type App struct {
+	// AnonymousAccess Managed public-browser mode. Null means nvoken will not mint
+	// anonymous tokens for this App.
+	AnonymousAccess *AnonymousAccess `json:"anonymous_access"`
+
 	// ArchivedAt When the App was archived, or null while it is live. An archived
 	// App refuses admission and grant-minting with `409 app_archived`
 	// while every read, settlement, erasure, configuration, and
 	// revocation path stays open. Its credentials keep authenticating.
 	ArchivedAt *time.Time `json:"archived_at"`
 
-	// BrowserAccess Complete dormant browser-direct configuration. Null means browser
-	// access is disabled. Client JWTs and CORS remain unavailable until
-	// PRD 065.
+	// BrowserAccess Complete browser-direct configuration. Null means browser access
+	// is disabled and client JWTs receive no browser CORS permission.
 	BrowserAccess *BrowserAccess `json:"browser_access"`
 
 	// CallbackTimeoutSeconds Resolved deadline for each callback HTTP request. Defaults to 10.
@@ -2760,9 +2923,9 @@ type App struct {
 	// nvoken's own provider key, credits are always required.
 	CreditPolicy CreditPolicy `json:"credit_policy"`
 
-	// DefaultRateLimits Dormant App-wide admission ceilings shared by machine and future
-	// client-token callers. Null means unlimited machine admission.
-	// These values are recorded but not enforced until PRD 065.
+	// DefaultRateLimits App-wide admission ceilings shared by machine, client-token, and
+	// anonymous-token callers. Null means unlimited machine admission;
+	// browser access requires finite values.
 	DefaultRateLimits *AppDefaultRateLimits `json:"default_rate_limits"`
 
 	// DisplayName Human-facing label; `name` stays the unique handle.
@@ -2784,9 +2947,8 @@ type App struct {
 	OrgID *OrgID `json:"org_id"`
 }
 
-// AppDefaultRateLimits The one App-wide admission contract shared by machine and future
-// client-token callers. Both positive values are required. They are
-// authoritative configuration but unenforced until PRD 065.
+// AppDefaultRateLimits The one App-wide admission contract shared by machine and browser
+// callers. Both positive values are required and enforced at admission.
 type AppDefaultRateLimits struct {
 	MaxAdmissionsPerMinute   int64 `json:"max_admissions_per_minute"`
 	MaxConcurrentInvocations int64 `json:"max_concurrent_invocations"`
@@ -2830,17 +2992,18 @@ type AppSigningKeySecret struct {
 // AuthenticationMethod defines model for AuthenticationMethod.
 type AuthenticationMethod string
 
-// BrowserAccess Complete dormant browser-direct configuration. Enabling it requires
+// BrowserAccess Complete browser-direct configuration. Enabling it requires
 // App default_rate_limits and an active webhook-purpose signing key.
 type BrowserAccess struct {
 	// AllowedOrigins Canonical exact origins, returned sorted. Wildcards, userinfo,
 	// paths, queries, and fragments are invalid. HTTPS is required,
 	// except that exact localhost and loopback origins may use HTTP for
-	// development. CORS is not emitted until PRD 065.
+	// development. Browser requests must match exactly before CORS is
+	// emitted.
 	AllowedOrigins    []string                 `json:"allowed_origins"`
 	InvocationWebhook BrowserInvocationWebhook `json:"invocation_webhook"`
 
-	// Limits Dormant browser-specific ceilings enforced by PRD 065.
+	// Limits Browser-specific ceilings enforced at Invocation admission.
 	Limits BrowserRateLimits `json:"limits"`
 }
 
@@ -2854,16 +3017,15 @@ type BrowserAccess struct {
 // visibility. All public transcript content in a browser-reachable
 // Session, including operator-tier recorded context, must be treated as
 // client-visible. No lifetime, host_only, wildcard, generic tool-policy,
-// tier-switch, or disclosure field exists here. The object remains
-// dormant until PRD 065.
+// tier-switch, or disclosure field exists here.
 type BrowserClientInterface struct {
-	// ContextNames Exact recorded-context names a future client-token principal may
+	// ContextNames Exact recorded-context names a browser client principal may
 	// append or supersede. Every item is contextual tier; clients never
 	// author operator-tier context.
 	ContextNames *[]string `json:"context_names,omitempty"`
 
 	// ToolNames Exact subset of this definition's declared host-mode tools whose
-	// parked calls a future client-token principal may see and settle.
+	// parked calls a browser client principal may see and settle.
 	ToolNames *[]string `json:"tool_names,omitempty"`
 }
 
@@ -2877,7 +3039,7 @@ type BrowserInvocationWebhook struct {
 	URL string `json:"url"`
 }
 
-// BrowserRateLimits Dormant browser-specific ceilings enforced by PRD 065.
+// BrowserRateLimits Browser-specific ceilings enforced at Invocation admission.
 type BrowserRateLimits struct {
 	MaxAdmissionsPerUserPerMinute     int64 `json:"max_admissions_per_user_per_minute"`
 	MaxConcurrentInvocationsPerTenant int64 `json:"max_concurrent_invocations_per_tenant"`
@@ -4677,6 +4839,82 @@ type MCPToolExclusion struct {
 // MCPToolExclusionReason defines model for MCPToolExclusion.Reason.
 type MCPToolExclusionReason string
 
+// Memory defines model for Memory.
+type Memory struct {
+	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	AgentID   AgentID   `json:"agent_id"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// ID Opaque durable-memory identifier with the public `mem_` prefix.
+	ID             MemoryID                `json:"id"`
+	Importance     int                     `json:"importance"`
+	Key            string                  `json:"key"`
+	Kind           MemoryKind              `json:"kind"`
+	LastAccessedAt time.Time               `json:"last_accessed_at"`
+	Metadata       *map[string]interface{} `json:"metadata,omitempty"`
+	Pinned         bool                    `json:"pinned"`
+	Summary        *string                 `json:"summary,omitempty"`
+	TenantKey      *string                 `json:"tenant_key"`
+	UpdatedAt      time.Time               `json:"updated_at"`
+	UserKey        *string                 `json:"user_key,omitempty"`
+	Version        int64                   `json:"version"`
+}
+
+// MemoryConfig Opts this Agent Definition into durable memory and automatically
+// attaches nvoken_memory_remember, nvoken_memory_recall, and
+// nvoken_memory_forget. Omission attaches no memory capability.
+type MemoryConfig struct {
+	Context *MemoryContextConfig `json:"context,omitempty"`
+
+	// Scope User scope requires user_key on every admitted Invocation.
+	Scope *MemoryConfigScope `json:"scope,omitempty"`
+}
+
+// MemoryConfigScope User scope requires user_key on every admitted Invocation.
+type MemoryConfigScope string
+
+// MemoryContextConfig defines model for MemoryContextConfig.
+type MemoryContextConfig struct {
+	// MaxBytes Defaults to 1536 for index and 131072 for full; must be zero for off.
+	MaxBytes *int               `json:"max_bytes,omitempty"`
+	Mode     *MemoryContextMode `json:"mode,omitempty"`
+}
+
+// MemoryContextMode defines model for MemoryContextMode.
+type MemoryContextMode string
+
+// MemoryID Opaque durable-memory identifier with the public `mem_` prefix.
+type MemoryID = string
+
+// MemoryKind defines model for MemoryKind.
+type MemoryKind string
+
+// MemoryList defines model for MemoryList.
+type MemoryList struct {
+	HasMore        bool                 `json:"has_more"`
+	Items          []MemorySearchResult `json:"items"`
+	NextCursor     *string              `json:"next_cursor"`
+	SearchCoverage MemorySearchCoverage `json:"search_coverage"`
+}
+
+// MemorySearchCoverage defines model for MemorySearchCoverage.
+type MemorySearchCoverage struct {
+	Complete          bool `json:"complete"`
+	IndexedEntries    int  `json:"indexed_entries"`
+	SemanticAvailable bool `json:"semantic_available"`
+	TotalEntries      int  `json:"total_entries"`
+}
+
+// MemorySearchMode defines model for MemorySearchMode.
+type MemorySearchMode string
+
+// MemorySearchResult defines model for MemorySearchResult.
+type MemorySearchResult struct {
+	Memory Memory  `json:"memory"`
+	Score  float64 `json:"score"`
+}
+
 // MessagePhase Tells you which assistant message is the actual answer, so you can
 // render a turn without guessing.
 //
@@ -5375,7 +5613,7 @@ type RegisterAppRequest struct {
 	CreditPolicy *CreditPolicy `json:"credit_policy,omitempty"`
 
 	// DefaultRateLimits Optional shared App admission ceilings. Browser access requires a
-	// non-null value. Recorded but not enforced until PRD 065.
+	// non-null value.
 	DefaultRateLimits *AppDefaultRateLimits `json:"default_rate_limits,omitempty"`
 
 	// DisplayName Optional human-facing label.
@@ -6359,6 +6597,12 @@ type URLCitationType string
 
 // UpdateAppRequest defines model for UpdateAppRequest.
 type UpdateAppRequest struct {
+	// AnonymousAccess Replace the complete anonymous-browser mode, or send null to stop
+	// minting and reject new anonymous-token requests. Enabling requires
+	// browser access, finite App limits, and `credit_policy: required`.
+	// Omission preserves the stored value.
+	AnonymousAccess *AnonymousAccess `json:"anonymous_access,omitempty"`
+
 	// BrowserAccess Replace the complete member, or send null to disable browser
 	// access without deleting client keys. Omission preserves the
 	// stored value.
@@ -6728,6 +6972,12 @@ type ListAppsParams struct {
 // ListAppsParamsStatus defines parameters for ListApps.
 type ListAppsParamsStatus string
 
+// IssueAnonymousTokenParams defines parameters for IssueAnonymousToken.
+type IssueAnonymousTokenParams struct {
+	// Origin One canonical browser origin configured on the App.
+	Origin string `json:"Origin"`
+}
+
 // ListCreditAccountsParams defines parameters for ListCreditAccounts.
 type ListCreditAccountsParams struct {
 	// TenantKey Exact non-default tenant partition reference.
@@ -6877,6 +7127,20 @@ type ListInvocationTracesParams struct {
 
 	// Limit Maximum items in this page. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListMemoriesParams defines parameters for ListMemories.
+type ListMemoriesParams struct {
+	AgentID    AgentID           `form:"agent_id" json:"agent_id"`
+	TenantKey  *string           `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
+	UserKey    *string           `form:"user_key,omitempty" json:"user_key,omitempty"`
+	Query      *string           `form:"query,omitempty" json:"query,omitempty"`
+	SearchMode *MemorySearchMode `form:"search_mode,omitempty" json:"search_mode,omitempty"`
+	Kind       *MemoryKind       `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListModelsParams defines parameters for ListModels.
@@ -7150,6 +7414,9 @@ type RegisterAppJSONRequestBody = RegisterAppRequest
 
 // UpdateAppJSONRequestBody defines body for UpdateApp for application/json ContentType.
 type UpdateAppJSONRequestBody = UpdateAppRequest
+
+// IssueAnonymousTokenJSONRequestBody defines body for IssueAnonymousToken for application/json ContentType.
+type IssueAnonymousTokenJSONRequestBody = AnonymousTokenRequest
 
 // CreateAppClientKeyJSONRequestBody defines body for CreateAppClientKey for application/json ContentType.
 type CreateAppClientKeyJSONRequestBody = CreateClientKeyRequest
@@ -9655,12 +9922,16 @@ type ClientInterface interface {
 
 	// UpdateAgentDefinitionWithBody Replace an Agent Definition and create its next revision
 	//
+	// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /v1/agent-definitions/{agent_definition_id} (the `UpdateAgentDefinition` operationId).
 	UpdateAgentDefinitionWithBody(ctx context.Context, agentDefinitionID AgentDefinitionID, params *UpdateAgentDefinitionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateAgentDefinition Replace an Agent Definition and create its next revision
+	//
+	// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -9793,8 +10064,8 @@ type ClientInterface interface {
 
 	// UpdateAppWithBody Update an app
 	//
-	// Updates an App's display name, callback timeout, or dormant browser
-	// configuration. An installation administrator may also transfer the
+	// Updates an App's display name, callback timeout, browser configuration,
+	// anonymous access mode, or credit policy. An installation administrator may also transfer the
 	// App to another registered Org by changing `org_id`.
 	// Org- and App-scoped callers receive `404` outside their containment
 	// boundary, and cannot move an App. The unique `name` and transitional
@@ -9807,8 +10078,8 @@ type ClientInterface interface {
 
 	// UpdateApp Update an app
 	//
-	// Updates an App's display name, callback timeout, or dormant browser
-	// configuration. An installation administrator may also transfer the
+	// Updates an App's display name, callback timeout, browser configuration,
+	// anonymous access mode, or credit policy. An installation administrator may also transfer the
 	// App to another registered Org by changing `org_id`.
 	// Org- and App-scoped callers receive `404` outside their containment
 	// boundary, and cannot move an App. The unique `name` and transitional
@@ -9819,9 +10090,51 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
 	UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// IssueAnonymousTokenWithBody Mint anonymous browser access for one configured App
+	//
+	// Public, credential-free exchange for Apps that explicitly enable
+	// anonymous access. The request must carry exactly one canonical Origin
+	// that appears in the App's browser allowlist. Omit `visitor_token` on a
+	// first visit; persist the returned visitor token in browser storage and
+	// present it on renewal to preserve the same opaque visitor partition,
+	// App-scoped Agent, and canonical Session. The response returns that
+	// Session ID once the visitor has completed a first turn, allowing the
+	// page to load its transcript immediately.
+	//
+	// The access token lasts 15 minutes and is the bearer for browser-direct
+	// runtime calls. The visitor token lasts at most one year and is accepted
+	// only by this route. Responses are exact-origin CORS-enabled and use
+	// `Cache-Control: no-store`. Neither token proves a human identity.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/apps/{app_id}/anonymous-tokens (the `IssueAnonymousToken` operationId).
+	IssueAnonymousTokenWithBody(ctx context.Context, appID AppID, params *IssueAnonymousTokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// IssueAnonymousToken Mint anonymous browser access for one configured App
+	//
+	// Public, credential-free exchange for Apps that explicitly enable
+	// anonymous access. The request must carry exactly one canonical Origin
+	// that appears in the App's browser allowlist. Omit `visitor_token` on a
+	// first visit; persist the returned visitor token in browser storage and
+	// present it on renewal to preserve the same opaque visitor partition,
+	// App-scoped Agent, and canonical Session. The response returns that
+	// Session ID once the visitor has completed a first turn, allowing the
+	// page to load its transcript immediately.
+	//
+	// The access token lasts 15 minutes and is the bearer for browser-direct
+	// runtime calls. The visitor token lasts at most one year and is accepted
+	// only by this route. Responses are exact-origin CORS-enabled and use
+	// `Cache-Control: no-store`. Neither token proves a human identity.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/apps/{app_id}/anonymous-tokens (the `IssueAnonymousToken` operationId).
+	IssueAnonymousToken(ctx context.Context, appID AppID, params *IssueAnonymousTokenParams, body IssueAnonymousTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAppClientKeys List an App's client-token verification keys
 	//
-	// Lists the App's dormant Ed25519 verification-key records in creation
+	// Lists the App's Ed25519 client-token verification-key records in creation
 	// order. Responses contain only the generated key ID, display name,
 	// SHA-256 fingerprint, and creation time; public-key bytes are never
 	// returned. This route requires the same non-client Operator authority
@@ -9838,9 +10151,8 @@ type ClientInterface interface {
 	// bounded rotation. Duplicate public bytes within one App are rejected;
 	// another App may independently register the same bytes.
 	//
-	// Registration remains dormant in this version: a JWT signed by the key
-	// still receives the existing unauthenticated response and creates no
-	// runtime or credential rows.
+	// A conforming App-issued JWT signed by an active key is accepted by the
+	// browser-direct runtime boundary.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -9855,9 +10167,8 @@ type ClientInterface interface {
 	// bounded rotation. Duplicate public bytes within one App are rejected;
 	// another App may independently register the same bytes.
 	//
-	// Registration remains dormant in this version: a JWT signed by the key
-	// still receives the existing unauthenticated response and creates no
-	// runtime or credential rows.
+	// A conforming App-issued JWT signed by an active key is accepted by the
+	// browser-direct runtime boundary.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -10567,6 +10878,27 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
 	ListMCPTools(ctx context.Context, body ListMCPToolsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListMemories Browse or search durable Agent memories
+	//
+	// Reads the authenticated App's memory store without changing eviction
+	// recency. `hybrid` is the default search mode and combines lexical and
+	// semantic rank. During indexing or an embedding outage it still returns
+	// keyword results with explicit incomplete coverage. `semantic` fails
+	// typed when no query embedding can be produced.
+	//
+	// Corresponds with GET /v1/memories (the `ListMemories` operationId).
+	ListMemories(ctx context.Context, params *ListMemoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteMemory Erase one durable memory and its embedding projection
+	//
+	// Corresponds with DELETE /v1/memories/{memory_id} (the `DeleteMemory` operationId).
+	DeleteMemory(ctx context.Context, memoryID MemoryID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMemory Read one durable memory
+	//
+	// Corresponds with GET /v1/memories/{memory_id} (the `GetMemory` operationId).
+	GetMemory(ctx context.Context, memoryID MemoryID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListModels List nvoken's curated model catalog
 	//
 	// Returns the complete bounded set of text-generation models nvoken
@@ -11044,7 +11376,8 @@ type ClientInterface interface {
 	// deliberately narrow.
 	//
 	// A tenant with any Session, Invocation, retained model-call fact,
-	// provider key, or dispatch is refused with `409 tenant_in_use` and the
+	// durable memory, provider key, or dispatch is refused with
+	// `409 tenant_in_use` and the
 	// counts that made it load-bearing. This is not a policy choice: every
 	// runtime table references `tenants` with ON DELETE RESTRICT, and the
 	// retained usage facts must outlive the transcripts they describe, so
@@ -11264,6 +11597,8 @@ func (c *Client) GetAgentDefinition(ctx context.Context, agentDefinitionID Agent
 
 // UpdateAgentDefinitionWithBody Replace an Agent Definition and create its next revision
 //
+// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with PUT /v1/agent-definitions/{agent_definition_id} (the `UpdateAgentDefinition` operationId).
@@ -11280,6 +11615,8 @@ func (c *Client) UpdateAgentDefinitionWithBody(ctx context.Context, agentDefinit
 }
 
 // UpdateAgentDefinition Replace an Agent Definition and create its next revision
+//
+// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -11502,8 +11839,8 @@ func (c *Client) GetApp(ctx context.Context, appID AppID, reqEditors ...RequestE
 
 // UpdateAppWithBody Update an app
 //
-// Updates an App's display name, callback timeout, or dormant browser
-// configuration. An installation administrator may also transfer the
+// Updates an App's display name, callback timeout, browser configuration,
+// anonymous access mode, or credit policy. An installation administrator may also transfer the
 // App to another registered Org by changing `org_id`.
 // Org- and App-scoped callers receive `404` outside their containment
 // boundary, and cannot move an App. The unique `name` and transitional
@@ -11526,8 +11863,8 @@ func (c *Client) UpdateAppWithBody(ctx context.Context, appID AppID, contentType
 
 // UpdateApp Update an app
 //
-// Updates an App's display name, callback timeout, or dormant browser
-// configuration. An installation administrator may also transfer the
+// Updates an App's display name, callback timeout, browser configuration,
+// anonymous access mode, or credit policy. An installation administrator may also transfer the
 // App to another registered Org by changing `org_id`.
 // Org- and App-scoped callers receive `404` outside their containment
 // boundary, and cannot move an App. The unique `name` and transitional
@@ -11548,9 +11885,71 @@ func (c *Client) UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONR
 	return c.Client.Do(req)
 }
 
+// IssueAnonymousTokenWithBody Mint anonymous browser access for one configured App
+//
+// Public, credential-free exchange for Apps that explicitly enable
+// anonymous access. The request must carry exactly one canonical Origin
+// that appears in the App's browser allowlist. Omit `visitor_token` on a
+// first visit; persist the returned visitor token in browser storage and
+// present it on renewal to preserve the same opaque visitor partition,
+// App-scoped Agent, and canonical Session. The response returns that
+// Session ID once the visitor has completed a first turn, allowing the
+// page to load its transcript immediately.
+//
+// The access token lasts 15 minutes and is the bearer for browser-direct
+// runtime calls. The visitor token lasts at most one year and is accepted
+// only by this route. Responses are exact-origin CORS-enabled and use
+// `Cache-Control: no-store`. Neither token proves a human identity.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/apps/{app_id}/anonymous-tokens (the `IssueAnonymousToken` operationId).
+func (c *Client) IssueAnonymousTokenWithBody(ctx context.Context, appID AppID, params *IssueAnonymousTokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewIssueAnonymousTokenRequestWithBody(c.Server, appID, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// IssueAnonymousToken Mint anonymous browser access for one configured App
+//
+// Public, credential-free exchange for Apps that explicitly enable
+// anonymous access. The request must carry exactly one canonical Origin
+// that appears in the App's browser allowlist. Omit `visitor_token` on a
+// first visit; persist the returned visitor token in browser storage and
+// present it on renewal to preserve the same opaque visitor partition,
+// App-scoped Agent, and canonical Session. The response returns that
+// Session ID once the visitor has completed a first turn, allowing the
+// page to load its transcript immediately.
+//
+// The access token lasts 15 minutes and is the bearer for browser-direct
+// runtime calls. The visitor token lasts at most one year and is accepted
+// only by this route. Responses are exact-origin CORS-enabled and use
+// `Cache-Control: no-store`. Neither token proves a human identity.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/apps/{app_id}/anonymous-tokens (the `IssueAnonymousToken` operationId).
+func (c *Client) IssueAnonymousToken(ctx context.Context, appID AppID, params *IssueAnonymousTokenParams, body IssueAnonymousTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewIssueAnonymousTokenRequest(c.Server, appID, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListAppClientKeys List an App's client-token verification keys
 //
-// Lists the App's dormant Ed25519 verification-key records in creation
+// Lists the App's Ed25519 client-token verification-key records in creation
 // order. Responses contain only the generated key ID, display name,
 // SHA-256 fingerprint, and creation time; public-key bytes are never
 // returned. This route requires the same non-client Operator authority
@@ -11577,9 +11976,8 @@ func (c *Client) ListAppClientKeys(ctx context.Context, appID AppID, reqEditors 
 // bounded rotation. Duplicate public bytes within one App are rejected;
 // another App may independently register the same bytes.
 //
-// Registration remains dormant in this version: a JWT signed by the key
-// still receives the existing unauthenticated response and creates no
-// runtime or credential rows.
+// A conforming App-issued JWT signed by an active key is accepted by the
+// browser-direct runtime boundary.
 //
 // Takes any type of body and a specified content type.
 //
@@ -11604,9 +12002,8 @@ func (c *Client) CreateAppClientKeyWithBody(ctx context.Context, appID AppID, co
 // bounded rotation. Duplicate public bytes within one App are rejected;
 // another App may independently register the same bytes.
 //
-// Registration remains dormant in this version: a JWT signed by the key
-// still receives the existing unauthenticated response and creates no
-// runtime or credential rows.
+// A conforming App-issued JWT signed by an active key is accepted by the
+// browser-direct runtime boundary.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -12686,6 +13083,57 @@ func (c *Client) ListMCPTools(ctx context.Context, body ListMCPToolsJSONRequestB
 	return c.Client.Do(req)
 }
 
+// ListMemories Browse or search durable Agent memories
+//
+// Reads the authenticated App's memory store without changing eviction
+// recency. `hybrid` is the default search mode and combines lexical and
+// semantic rank. During indexing or an embedding outage it still returns
+// keyword results with explicit incomplete coverage. `semantic` fails
+// typed when no query embedding can be produced.
+//
+// Corresponds with GET /v1/memories (the `ListMemories` operationId).
+func (c *Client) ListMemories(ctx context.Context, params *ListMemoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMemoriesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteMemory Erase one durable memory and its embedding projection
+//
+// Corresponds with DELETE /v1/memories/{memory_id} (the `DeleteMemory` operationId).
+func (c *Client) DeleteMemory(ctx context.Context, memoryID MemoryID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteMemoryRequest(c.Server, memoryID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMemory Read one durable memory
+//
+// Corresponds with GET /v1/memories/{memory_id} (the `GetMemory` operationId).
+func (c *Client) GetMemory(ctx context.Context, memoryID MemoryID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMemoryRequest(c.Server, memoryID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListModels List nvoken's curated model catalog
 //
 // Returns the complete bounded set of text-generation models nvoken
@@ -13483,7 +13931,8 @@ func (c *Client) ListTenants(ctx context.Context, params *ListTenantsParams, req
 // deliberately narrow.
 //
 // A tenant with any Session, Invocation, retained model-call fact,
-// provider key, or dispatch is refused with `409 tenant_in_use` and the
+// durable memory, provider key, or dispatch is refused with
+// `409 tenant_in_use` and the
 // counts that made it load-bearing. This is not a policy choice: every
 // runtime table references `tenants` with ON DELETE RESTRICT, and the
 // retained usage facts must outlive the transcripts they describe, so
@@ -14412,6 +14861,66 @@ func NewUpdateAppRequestWithBody(server string, appID AppID, contentType string,
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewIssueAnonymousTokenRequest calls the generic IssueAnonymousToken builder with application/json body
+func NewIssueAnonymousTokenRequest(server string, appID AppID, params *IssueAnonymousTokenParams, body IssueAnonymousTokenJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewIssueAnonymousTokenRequestWithBody(server, appID, params, "application/json", bodyReader)
+}
+
+// NewIssueAnonymousTokenRequestWithBody constructs an http.Request for the IssueAnonymousToken method, with any body, and a specified content type
+func NewIssueAnonymousTokenRequestWithBody(server string, appID AppID, params *IssueAnonymousTokenParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "app_id", appID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/apps/%s/anonymous-tokens", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Origin", params.Origin, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Origin", headerParam0)
+
+	}
 
 	return req, nil
 }
@@ -16108,6 +16617,208 @@ func NewListMCPToolsRequestWithBody(server string, contentType string, body io.R
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListMemoriesRequest constructs an http.Request for the ListMemories method
+func NewListMemoriesRequest(server string, params *ListMemoriesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/memories")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "agent_id", params.AgentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.TenantKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.UserKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "user_key", *params.UserKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Query != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "query", *params.Query, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.SearchMode != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "search_mode", *params.SearchMode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Kind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteMemoryRequest constructs an http.Request for the DeleteMemory method
+func NewDeleteMemoryRequest(server string, memoryID MemoryID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "memory_id", memoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/memories/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMemoryRequest constructs an http.Request for the GetMemory method
+func NewGetMemoryRequest(server string, memoryID MemoryID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "memory_id", memoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/memories/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -18528,12 +19239,16 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateAgentDefinitionWithBodyWithResponse Replace an Agent Definition and create its next revision
 	//
+	// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /v1/agent-definitions/{agent_definition_id} (the `UpdateAgentDefinition` operationId).
 	UpdateAgentDefinitionWithBodyWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, params *UpdateAgentDefinitionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionHTTPResponse, error)
 
 	// UpdateAgentDefinitionWithResponse Replace an Agent Definition and create its next revision
+	//
+	// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18678,8 +19393,8 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateAppWithBodyWithResponse Update an app
 	//
-	// Updates an App's display name, callback timeout, or dormant browser
-	// configuration. An installation administrator may also transfer the
+	// Updates an App's display name, callback timeout, browser configuration,
+	// anonymous access mode, or credit policy. An installation administrator may also transfer the
 	// App to another registered Org by changing `org_id`.
 	// Org- and App-scoped callers receive `404` outside their containment
 	// boundary, and cannot move an App. The unique `name` and transitional
@@ -18692,8 +19407,8 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateAppWithResponse Update an app
 	//
-	// Updates an App's display name, callback timeout, or dormant browser
-	// configuration. An installation administrator may also transfer the
+	// Updates an App's display name, callback timeout, browser configuration,
+	// anonymous access mode, or credit policy. An installation administrator may also transfer the
 	// App to another registered Org by changing `org_id`.
 	// Org- and App-scoped callers receive `404` outside their containment
 	// boundary, and cannot move an App. The unique `name` and transitional
@@ -18704,9 +19419,51 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/apps/{app_id} (the `UpdateApp` operationId).
 	UpdateAppWithResponse(ctx context.Context, appID AppID, body UpdateAppJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAppHTTPResponse, error)
 
+	// IssueAnonymousTokenWithBodyWithResponse Mint anonymous browser access for one configured App
+	//
+	// Public, credential-free exchange for Apps that explicitly enable
+	// anonymous access. The request must carry exactly one canonical Origin
+	// that appears in the App's browser allowlist. Omit `visitor_token` on a
+	// first visit; persist the returned visitor token in browser storage and
+	// present it on renewal to preserve the same opaque visitor partition,
+	// App-scoped Agent, and canonical Session. The response returns that
+	// Session ID once the visitor has completed a first turn, allowing the
+	// page to load its transcript immediately.
+	//
+	// The access token lasts 15 minutes and is the bearer for browser-direct
+	// runtime calls. The visitor token lasts at most one year and is accepted
+	// only by this route. Responses are exact-origin CORS-enabled and use
+	// `Cache-Control: no-store`. Neither token proves a human identity.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/apps/{app_id}/anonymous-tokens (the `IssueAnonymousToken` operationId).
+	IssueAnonymousTokenWithBodyWithResponse(ctx context.Context, appID AppID, params *IssueAnonymousTokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IssueAnonymousTokenHTTPResponse, error)
+
+	// IssueAnonymousTokenWithResponse Mint anonymous browser access for one configured App
+	//
+	// Public, credential-free exchange for Apps that explicitly enable
+	// anonymous access. The request must carry exactly one canonical Origin
+	// that appears in the App's browser allowlist. Omit `visitor_token` on a
+	// first visit; persist the returned visitor token in browser storage and
+	// present it on renewal to preserve the same opaque visitor partition,
+	// App-scoped Agent, and canonical Session. The response returns that
+	// Session ID once the visitor has completed a first turn, allowing the
+	// page to load its transcript immediately.
+	//
+	// The access token lasts 15 minutes and is the bearer for browser-direct
+	// runtime calls. The visitor token lasts at most one year and is accepted
+	// only by this route. Responses are exact-origin CORS-enabled and use
+	// `Cache-Control: no-store`. Neither token proves a human identity.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/apps/{app_id}/anonymous-tokens (the `IssueAnonymousToken` operationId).
+	IssueAnonymousTokenWithResponse(ctx context.Context, appID AppID, params *IssueAnonymousTokenParams, body IssueAnonymousTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*IssueAnonymousTokenHTTPResponse, error)
+
 	// ListAppClientKeysWithResponse List an App's client-token verification keys
 	//
-	// Lists the App's dormant Ed25519 verification-key records in creation
+	// Lists the App's Ed25519 client-token verification-key records in creation
 	// order. Responses contain only the generated key ID, display name,
 	// SHA-256 fingerprint, and creation time; public-key bytes are never
 	// returned. This route requires the same non-client Operator authority
@@ -18725,9 +19482,8 @@ type ClientWithResponsesInterface interface {
 	// bounded rotation. Duplicate public bytes within one App are rejected;
 	// another App may independently register the same bytes.
 	//
-	// Registration remains dormant in this version: a JWT signed by the key
-	// still receives the existing unauthenticated response and creates no
-	// runtime or credential rows.
+	// A conforming App-issued JWT signed by an active key is accepted by the
+	// browser-direct runtime boundary.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18742,9 +19498,8 @@ type ClientWithResponsesInterface interface {
 	// bounded rotation. Duplicate public bytes within one App are rejected;
 	// another App may independently register the same bytes.
 	//
-	// Registration remains dormant in this version: a JWT signed by the key
-	// still receives the existing unauthenticated response and creates no
-	// runtime or credential rows.
+	// A conforming App-issued JWT signed by an active key is accepted by the
+	// browser-direct runtime boundary.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19494,6 +20249,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/mcp/list-tools (the `ListMCPTools` operationId).
 	ListMCPToolsWithResponse(ctx context.Context, body ListMCPToolsJSONRequestBody, reqEditors ...RequestEditorFn) (*ListMCPToolsHTTPResponse, error)
 
+	// ListMemoriesWithResponse Browse or search durable Agent memories
+	//
+	// Reads the authenticated App's memory store without changing eviction
+	// recency. `hybrid` is the default search mode and combines lexical and
+	// semantic rank. During indexing or an embedding outage it still returns
+	// keyword results with explicit incomplete coverage. `semantic` fails
+	// typed when no query embedding can be produced.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/memories (the `ListMemories` operationId).
+	ListMemoriesWithResponse(ctx context.Context, params *ListMemoriesParams, reqEditors ...RequestEditorFn) (*ListMemoriesHTTPResponse, error)
+
+	// DeleteMemoryWithResponse Erase one durable memory and its embedding projection
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/memories/{memory_id} (the `DeleteMemory` operationId).
+	DeleteMemoryWithResponse(ctx context.Context, memoryID MemoryID, reqEditors ...RequestEditorFn) (*DeleteMemoryHTTPResponse, error)
+
+	// GetMemoryWithResponse Read one durable memory
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/memories/{memory_id} (the `GetMemory` operationId).
+	GetMemoryWithResponse(ctx context.Context, memoryID MemoryID, reqEditors ...RequestEditorFn) (*GetMemoryHTTPResponse, error)
+
 	// ListModelsWithResponse List nvoken's curated model catalog
 	//
 	// Returns the complete bounded set of text-generation models nvoken
@@ -20007,7 +20789,8 @@ type ClientWithResponsesInterface interface {
 	// deliberately narrow.
 	//
 	// A tenant with any Session, Invocation, retained model-call fact,
-	// provider key, or dispatch is refused with `409 tenant_in_use` and the
+	// durable memory, provider key, or dispatch is refused with
+	// `409 tenant_in_use` and the
 	// counts that made it load-bearing. This is not a policy choice: every
 	// runtime table references `tenants` with ON DELETE RESTRICT, and the
 	// retained usage facts must outlive the transcripts they describe, so
@@ -21380,6 +22163,103 @@ func (r UpdateAppHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateAppHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// IssueAnonymousTokenHTTPResponse201Headers the declared response headers of an HTTP 201 response for IssueAnonymousToken
+type IssueAnonymousTokenHTTPResponse201Headers struct {
+	CacheControl *string
+}
+
+type IssueAnonymousTokenHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *AnonymousTokenResponse
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *AppArchived
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *IssueAnonymousTokenHTTPResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r IssueAnonymousTokenHTTPResponse) GetJSON201() *AnonymousTokenResponse {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r IssueAnonymousTokenHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r IssueAnonymousTokenHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r IssueAnonymousTokenHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r IssueAnonymousTokenHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r IssueAnonymousTokenHTTPResponse) GetJSON409() *AppArchived {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r IssueAnonymousTokenHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r IssueAnonymousTokenHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r IssueAnonymousTokenHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r IssueAnonymousTokenHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r IssueAnonymousTokenHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r IssueAnonymousTokenHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -23891,6 +24771,206 @@ func (r ListMCPToolsHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListMCPToolsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListMemoriesHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MemoryList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *ErrorResponse
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListMemoriesHTTPResponse) GetJSON200() *MemoryList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListMemoriesHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListMemoriesHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListMemoriesHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListMemoriesHTTPResponse) GetJSON503() *ErrorResponse {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListMemoriesHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMemoriesHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMemoriesHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListMemoriesHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteMemoryHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteMemoryHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteMemoryHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteMemoryHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteMemoryHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteMemoryHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteMemoryHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteMemoryHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteMemoryHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetMemoryHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Memory
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMemoryHTTPResponse) GetJSON200() *Memory {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetMemoryHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetMemoryHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetMemoryHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetMemoryHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMemoryHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMemoryHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMemoryHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMemoryHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -26661,6 +27741,8 @@ func (c *ClientWithResponses) GetAgentDefinitionWithResponse(ctx context.Context
 
 // UpdateAgentDefinitionWithBodyWithResponse Replace an Agent Definition and create its next revision
 //
+// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PUT /v1/agent-definitions/{agent_definition_id} (the `UpdateAgentDefinition` operationId).
@@ -26673,6 +27755,8 @@ func (c *ClientWithResponses) UpdateAgentDefinitionWithBodyWithResponse(ctx cont
 }
 
 // UpdateAgentDefinitionWithResponse Replace an Agent Definition and create its next revision
+//
+// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -26871,8 +27955,8 @@ func (c *ClientWithResponses) GetAppWithResponse(ctx context.Context, appID AppI
 
 // UpdateAppWithBodyWithResponse Update an app
 //
-// Updates an App's display name, callback timeout, or dormant browser
-// configuration. An installation administrator may also transfer the
+// Updates an App's display name, callback timeout, browser configuration,
+// anonymous access mode, or credit policy. An installation administrator may also transfer the
 // App to another registered Org by changing `org_id`.
 // Org- and App-scoped callers receive `404` outside their containment
 // boundary, and cannot move an App. The unique `name` and transitional
@@ -26891,8 +27975,8 @@ func (c *ClientWithResponses) UpdateAppWithBodyWithResponse(ctx context.Context,
 
 // UpdateAppWithResponse Update an app
 //
-// Updates an App's display name, callback timeout, or dormant browser
-// configuration. An installation administrator may also transfer the
+// Updates an App's display name, callback timeout, browser configuration,
+// anonymous access mode, or credit policy. An installation administrator may also transfer the
 // App to another registered Org by changing `org_id`.
 // Org- and App-scoped callers receive `404` outside their containment
 // boundary, and cannot move an App. The unique `name` and transitional
@@ -26909,9 +27993,63 @@ func (c *ClientWithResponses) UpdateAppWithResponse(ctx context.Context, appID A
 	return ParseUpdateAppHTTPResponse(rsp)
 }
 
+// IssueAnonymousTokenWithBodyWithResponse Mint anonymous browser access for one configured App
+//
+// Public, credential-free exchange for Apps that explicitly enable
+// anonymous access. The request must carry exactly one canonical Origin
+// that appears in the App's browser allowlist. Omit `visitor_token` on a
+// first visit; persist the returned visitor token in browser storage and
+// present it on renewal to preserve the same opaque visitor partition,
+// App-scoped Agent, and canonical Session. The response returns that
+// Session ID once the visitor has completed a first turn, allowing the
+// page to load its transcript immediately.
+//
+// The access token lasts 15 minutes and is the bearer for browser-direct
+// runtime calls. The visitor token lasts at most one year and is accepted
+// only by this route. Responses are exact-origin CORS-enabled and use
+// `Cache-Control: no-store`. Neither token proves a human identity.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/apps/{app_id}/anonymous-tokens (the `IssueAnonymousToken` operationId).
+func (c *ClientWithResponses) IssueAnonymousTokenWithBodyWithResponse(ctx context.Context, appID AppID, params *IssueAnonymousTokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IssueAnonymousTokenHTTPResponse, error) {
+	rsp, err := c.IssueAnonymousTokenWithBody(ctx, appID, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseIssueAnonymousTokenHTTPResponse(rsp)
+}
+
+// IssueAnonymousTokenWithResponse Mint anonymous browser access for one configured App
+//
+// Public, credential-free exchange for Apps that explicitly enable
+// anonymous access. The request must carry exactly one canonical Origin
+// that appears in the App's browser allowlist. Omit `visitor_token` on a
+// first visit; persist the returned visitor token in browser storage and
+// present it on renewal to preserve the same opaque visitor partition,
+// App-scoped Agent, and canonical Session. The response returns that
+// Session ID once the visitor has completed a first turn, allowing the
+// page to load its transcript immediately.
+//
+// The access token lasts 15 minutes and is the bearer for browser-direct
+// runtime calls. The visitor token lasts at most one year and is accepted
+// only by this route. Responses are exact-origin CORS-enabled and use
+// `Cache-Control: no-store`. Neither token proves a human identity.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/apps/{app_id}/anonymous-tokens (the `IssueAnonymousToken` operationId).
+func (c *ClientWithResponses) IssueAnonymousTokenWithResponse(ctx context.Context, appID AppID, params *IssueAnonymousTokenParams, body IssueAnonymousTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*IssueAnonymousTokenHTTPResponse, error) {
+	rsp, err := c.IssueAnonymousToken(ctx, appID, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseIssueAnonymousTokenHTTPResponse(rsp)
+}
+
 // ListAppClientKeysWithResponse List an App's client-token verification keys
 //
-// Lists the App's dormant Ed25519 verification-key records in creation
+// Lists the App's Ed25519 client-token verification-key records in creation
 // order. Responses contain only the generated key ID, display name,
 // SHA-256 fingerprint, and creation time; public-key bytes are never
 // returned. This route requires the same non-client Operator authority
@@ -26936,9 +28074,8 @@ func (c *ClientWithResponses) ListAppClientKeysWithResponse(ctx context.Context,
 // bounded rotation. Duplicate public bytes within one App are rejected;
 // another App may independently register the same bytes.
 //
-// Registration remains dormant in this version: a JWT signed by the key
-// still receives the existing unauthenticated response and creates no
-// runtime or credential rows.
+// A conforming App-issued JWT signed by an active key is accepted by the
+// browser-direct runtime boundary.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -26959,9 +28096,8 @@ func (c *ClientWithResponses) CreateAppClientKeyWithBodyWithResponse(ctx context
 // bounded rotation. Duplicate public bytes within one App are rejected;
 // another App may independently register the same bytes.
 //
-// Registration remains dormant in this version: a JWT signed by the key
-// still receives the existing unauthenticated response and creates no
-// runtime or credential rows.
+// A conforming App-issued JWT signed by an active key is accepted by the
+// browser-direct runtime boundary.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -27933,6 +29069,51 @@ func (c *ClientWithResponses) ListMCPToolsWithResponse(ctx context.Context, body
 	return ParseListMCPToolsHTTPResponse(rsp)
 }
 
+// ListMemoriesWithResponse Browse or search durable Agent memories
+//
+// Reads the authenticated App's memory store without changing eviction
+// recency. `hybrid` is the default search mode and combines lexical and
+// semantic rank. During indexing or an embedding outage it still returns
+// keyword results with explicit incomplete coverage. `semantic` fails
+// typed when no query embedding can be produced.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/memories (the `ListMemories` operationId).
+func (c *ClientWithResponses) ListMemoriesWithResponse(ctx context.Context, params *ListMemoriesParams, reqEditors ...RequestEditorFn) (*ListMemoriesHTTPResponse, error) {
+	rsp, err := c.ListMemories(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMemoriesHTTPResponse(rsp)
+}
+
+// DeleteMemoryWithResponse Erase one durable memory and its embedding projection
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/memories/{memory_id} (the `DeleteMemory` operationId).
+func (c *ClientWithResponses) DeleteMemoryWithResponse(ctx context.Context, memoryID MemoryID, reqEditors ...RequestEditorFn) (*DeleteMemoryHTTPResponse, error) {
+	rsp, err := c.DeleteMemory(ctx, memoryID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteMemoryHTTPResponse(rsp)
+}
+
+// GetMemoryWithResponse Read one durable memory
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/memories/{memory_id} (the `GetMemory` operationId).
+func (c *ClientWithResponses) GetMemoryWithResponse(ctx context.Context, memoryID MemoryID, reqEditors ...RequestEditorFn) (*GetMemoryHTTPResponse, error) {
+	rsp, err := c.GetMemory(ctx, memoryID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMemoryHTTPResponse(rsp)
+}
+
 // ListModelsWithResponse List nvoken's curated model catalog
 //
 // Returns the complete bounded set of text-generation models nvoken
@@ -28638,7 +29819,8 @@ func (c *ClientWithResponses) ListTenantsWithResponse(ctx context.Context, param
 // deliberately narrow.
 //
 // A tenant with any Session, Invocation, retained model-call fact,
-// provider key, or dispatch is refused with `409 tenant_in_use` and the
+// durable memory, provider key, or dispatch is refused with
+// `409 tenant_in_use` and the
 // counts that made it load-bearing. This is not a policy choice: every
 // runtime table references `tenants` with ON DELETE RESTRICT, and the
 // retained usage facts must outlive the transcripts they describe, so
@@ -29894,6 +31076,94 @@ func ParseUpdateAppHTTPResponse(rsp *http.Response) (*UpdateAppHTTPResponse, err
 			headers.RetryAfter = &value
 		}
 		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseIssueAnonymousTokenHTTPResponse parses an HTTP response from a IssueAnonymousTokenWithResponse call
+func ParseIssueAnonymousTokenHTTPResponse(rsp *http.Response) (*IssueAnonymousTokenHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &IssueAnonymousTokenHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AnonymousTokenResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest AppArchived
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers IssueAnonymousTokenHTTPResponse201Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers201 = &headers
 	}
 
 	return response, nil
@@ -32042,6 +33312,164 @@ func ParseListMCPToolsHTTPResponse(rsp *http.Response) (*ListMCPToolsHTTPRespons
 			headers.RetryAfter = &value
 		}
 		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListMemoriesHTTPResponse parses an HTTP response from a ListMemoriesWithResponse call
+func ParseListMemoriesHTTPResponse(rsp *http.Response) (*ListMemoriesHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMemoriesHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MemoryList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteMemoryHTTPResponse parses an HTTP response from a DeleteMemoryWithResponse call
+func ParseDeleteMemoryHTTPResponse(rsp *http.Response) (*DeleteMemoryHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteMemoryHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMemoryHTTPResponse parses an HTTP response from a GetMemoryWithResponse call
+func ParseGetMemoryHTTPResponse(rsp *http.Response) (*GetMemoryHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMemoryHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Memory
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil
