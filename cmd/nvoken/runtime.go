@@ -54,6 +54,7 @@ var operationCommands = map[string]string{
 	"listAppClientKeys":       "client-key list",
 	"revokeAppClientKey":      "client-key revoke",
 	"createSession":           "session create",
+	"deleteTenant":            "tenant delete",
 	"forkSession":             "session fork",
 	"createProviderKey":       "provider-key create",
 	"allocateCredits":         "credits allocate",
@@ -71,6 +72,7 @@ var operationCommands = map[string]string{
 	"getInvocation":           "invocation get",
 	"getInvocationResult":     "invocation result",
 	"getInvocationTimeline":   "invocation timeline",
+	"getTrace":                "trace get",
 	"getModel":                "model get",
 	"getOrg":                  "org get",
 	"archiveOrg":              "org archive",
@@ -86,6 +88,9 @@ var operationCommands = map[string]string{
 	"listAgents":              "agent list",
 	"listCredentials":         "credentials list",
 	"listInvocations":         "invocation list",
+	"listAdmissions":          "admission list",
+	"listInvocationLogs":      "invocation logs",
+	"listInvocationTraces":    "invocation traces",
 	"listMCPTools":            "mcp list-tools",
 	"listModels":              "model list",
 	"listOrgs":                "org list",
@@ -93,6 +98,7 @@ var operationCommands = map[string]string{
 	"listSessionCompactions":  "session compactions",
 	"listSessionMessages":     "session messages",
 	"listSessions":            "session list",
+	"listTenants":             "tenant list",
 	"listUsageRecords":        "usage records",
 	"registerOrg":             "org register",
 	"revokeProviderKey":       "provider-key revoke",
@@ -102,6 +108,7 @@ var operationCommands = map[string]string{
 	"streamInvocation":        "invocation stream",
 	"streamSessionTranscript": "session stream",
 	"submitHostToolResults":   "tool-result submit",
+	"summarizeAdmissions":     "admission summary",
 	"updateOrg":               "org update",
 }
 
@@ -225,6 +232,23 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Read the durable execution waterfall without prompts or tool payloads").
 		Args("invocation-id").
 		Run(runInvocationTimeline)
+	invocations.Command("traces").
+		Description("List hosted agent traces; the durable timeline remains authoritative").
+		Args("invocation-id").
+		Flags(
+			cli.String("cursor").Help("Opaque continuation cursor"),
+			cli.Int("limit").Help("Maximum page size"),
+		).
+		Run(runInvocationTraces)
+	invocations.Command("logs").
+		Description("List bounded operational logs without prompt or tool payload content").
+		Args("invocation-id").
+		Flags(
+			cli.String("cursor").Help("Opaque continuation cursor"),
+			cli.Int("limit").Help("Maximum page size"),
+			cli.String("trace-id").Help("Return only logs correlated to one trace"),
+		).
+		Run(runInvocationLogs)
 	invocations.Command("wait").
 		Description("Wait until terminal or actionable; waiting requires a tool result or cancellation").
 		Args("invocation-id").
@@ -293,6 +317,12 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.Strings("status").Help("Filter by Invocation status; repeat for a union"),
 		).
 		Run(runInvocationList)
+
+	traces := app.Group("trace").Description("Inspect hosted agent traces")
+	traces.Command("get").
+		Description("Read the bounded span tree for one trace").
+		Args("trace-id").
+		Run(runTraceGet)
 
 	models := app.Group("model").Description("Discover and inspect models")
 	models.Command("list").
@@ -966,6 +996,125 @@ func runInvocationTimeline(command *cli.Context) error {
 				step.Kind,
 				step.Status,
 				step.DetailID,
+				duration,
+			); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func runInvocationTraces(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	page, err := client.ListInvocationTraces(
+		command.Context(),
+		command.Arg(0),
+		nvoken.ObservationListOptions{
+			Cursor: optionalString(command.String("cursor")),
+			Limit:  optionalInt(command.Int("limit")),
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, page, func(writer io.Writer) error {
+		if page.Status == "disabled" {
+			_, err := fmt.Fprintln(writer, "hosted observations disabled")
+			return err
+		}
+		for _, trace := range page.Items {
+			duration := 0
+			if trace.DurationMs != nil {
+				duration = *trace.DurationMs
+			}
+			completeness := "complete"
+			if trace.IsPartial {
+				completeness = "partial"
+			}
+			if _, err := fmt.Fprintf(
+				writer,
+				"%s\t%s\t%s\t%s\tattempt=%s\t%d\t%dms\n",
+				trace.StartedAt.UTC().Format(time.RFC3339Nano),
+				trace.TraceID,
+				trace.Status,
+				completeness,
+				optionalIntText(trace.Attempt),
+				trace.SpanCount,
+				duration,
+			); err != nil {
+				return err
+			}
+		}
+		return writeNextCursor(writer, page.NextCursor)
+	})
+}
+
+func runInvocationLogs(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	page, err := client.ListInvocationLogs(
+		command.Context(),
+		command.Arg(0),
+		nvoken.ObservationListOptions{
+			Cursor:  optionalString(command.String("cursor")),
+			Limit:   optionalInt(command.Int("limit")),
+			TraceID: optionalString(command.String("trace-id")),
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, page, func(writer io.Writer) error {
+		if page.Status == "disabled" {
+			_, err := fmt.Fprintln(writer, "hosted observations disabled")
+			return err
+		}
+		for _, log := range page.Items {
+			if _, err := fmt.Fprintf(
+				writer,
+				"%s\t%s\tattempt=%s\titeration=%s\tlease_attempt=%s\t%s\n",
+				log.Timestamp.UTC().Format(time.RFC3339Nano),
+				log.Severity,
+				optionalIntText(log.Attempt),
+				optionalIntText(log.Iteration),
+				optionalIntText(log.LeaseAttempt),
+				log.Message,
+			); err != nil {
+				return err
+			}
+		}
+		return writeNextCursor(writer, page.NextCursor)
+	})
+}
+
+func runTraceGet(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	trace, err := client.GetTrace(command.Context(), command.Arg(0))
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, trace, func(writer io.Writer) error {
+		for _, span := range trace.Spans {
+			duration := 0
+			if span.DurationMs != nil {
+				duration = *span.DurationMs
+			}
+			if _, err := fmt.Fprintf(
+				writer,
+				"%s\t%s\t%s\t%s\t%dms\n",
+				span.StartedAt.UTC().Format(time.RFC3339Nano),
+				span.SpanID,
+				span.Status,
+				span.Name,
 				duration,
 			); err != nil {
 				return err
@@ -1893,6 +2042,13 @@ func writeNextCursor(writer io.Writer, cursor *string) error {
 	}
 	_, err := fmt.Fprintf(writer, "next_cursor\t%s\n", *cursor)
 	return err
+}
+
+func optionalIntText(value *int) string {
+	if value == nil {
+		return "-"
+	}
+	return strconv.Itoa(*value)
 }
 
 func optionalString(value string) *string {

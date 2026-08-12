@@ -48,6 +48,22 @@ type ListCreditAllocationsParams = generated.ListCreditAllocationsParams
 type InvocationTimeline = generated.InvocationTimeline
 type InvocationTimelineStep = generated.InvocationTimelineStep
 type InvocationTimelineStepKind = generated.InvocationTimelineStepKind
+type ObservationStatus = generated.ObservationStatus
+type TraceSummary = generated.TraceSummary
+type TraceList = generated.TraceList
+type TraceSpan = generated.TraceSpan
+type Trace = generated.Trace
+type InvocationLog = generated.InvocationLog
+type InvocationLogList = generated.InvocationLogList
+type AdmissionAttempt = generated.AdmissionAttempt
+type AdmissionAttemptList = generated.AdmissionAttemptList
+type AdmissionOutcome = generated.AdmissionOutcome
+type AdmissionSummary = generated.AdmissionSummary
+type ListAdmissionsParams = generated.ListAdmissionsParams
+type SummarizeAdmissionsParams = generated.SummarizeAdmissionsParams
+type Tenant = generated.Tenant
+type TenantList = generated.TenantList
+type ListTenantsParams = generated.ListTenantsParams
 type Org = generated.Org
 type OrgList = generated.OrgList
 type UsageBreakdown = generated.UsageBreakdown
@@ -227,6 +243,17 @@ type ToolCallList = generated.ToolCallList
 type ListToolCallsOptions struct {
 	Cursor *string
 	Limit  *int
+}
+
+// ObservationListOptions pages hosted traces or logs associated with one
+// Invocation. The service reports a disabled status when no observation store
+// is configured.
+type ObservationListOptions struct {
+	Cursor *string
+	Limit  *int
+	// TraceID applies only to Invocation log lists and narrows the page to
+	// records correlated with one trace.
+	TraceID *string
 }
 
 // ListNudgesOptions filters and pages the staged-input queue. A nil

@@ -111,10 +111,49 @@ pub enum GetInvocationTimelineError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`get_trace`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GetTraceError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`interrupt_invocation`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum InterruptInvocationError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`list_invocation_logs`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ListInvocationLogsError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`list_invocation_traces`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ListInvocationTracesError {
     Status400(models::ErrorResponse),
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
@@ -595,6 +634,57 @@ pub async fn get_invocation_timeline(
     }
 }
 
+/// Returns a content-free projection of up to 200 OpenTelemetry spans. Use the pageable Invocation log endpoint with `trace_id` for associated logs. `is_partial` says when the agent root has not arrived or the bounded read omitted spans. nvoken grounds the trace's Invocation attribution in its durable Invocation record before returning it; knowing a W3C trace ID grants no authority.
+pub async fn get_trace(
+    configuration: &configuration::Configuration,
+    trace_id: &str,
+) -> Result<models::Trace, Error<GetTraceError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_trace_id = trace_id;
+
+    let uri_str = format!(
+        "{}/v1/traces/{trace_id}",
+        configuration.base_path,
+        trace_id = crate::apis::urlencode(p_path_trace_id)
+    );
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::Trace`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::Trace`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<GetTraceError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
 /// Asks a running turn to stop at its next clean stopping point. It ends `completed` with `stop_reason: interrupted`, and everything it produced — the model's replies and any tool results — stays in the conversation for the next turn. That is the whole difference from cancelling, which throws the turn's work away.  The request is recorded and safe to repeat. What happens next depends on what the turn was doing:  - Between steps (`queued`, `waiting`, or `running` with nothing   actively executing) it stops before this call returns. Any tool   calls you still owed results for are closed out, so submitting one   afterwards returns `409`. - Mid-step, nvoken records the request and returns the turn still   `running`. It stops at the next checkpoint, at worst one model call   later. Watch the stream or re-read the turn to see it end.  Interrupting a turn that has already finished changes nothing and returns it as-is. A turn that was asked for structured output but never produced a valid object ends `failed` with `structured_output_unsatisfied` rather than `completed`. Either way usage is reported in full and billed, because the work was kept.  Send an empty request body.
 pub async fn interrupt_invocation(
     configuration: &configuration::Configuration,
@@ -640,6 +730,133 @@ pub async fn interrupt_invocation(
     } else {
         let content = resp.text().await?;
         let entity: Option<InterruptInvocationError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no configured observation store.
+pub async fn list_invocation_logs(
+    configuration: &configuration::Configuration,
+    invocation_id: &str,
+    cursor: Option<&str>,
+    limit: Option<u32>,
+    trace_id: Option<&str>,
+) -> Result<models::InvocationLogList, Error<ListInvocationLogsError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_invocation_id = invocation_id;
+    let p_query_cursor = cursor;
+    let p_query_limit = limit;
+    let p_query_trace_id = trace_id;
+
+    let uri_str = format!(
+        "{}/v1/invocations/{invocation_id}/logs",
+        configuration.base_path,
+        invocation_id = crate::apis::urlencode(p_path_invocation_id)
+    );
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref param_value) = p_query_cursor {
+        req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_trace_id {
+        req_builder = req_builder.query(&[("trace_id", &param_value.to_string())]);
+    }
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::InvocationLogList`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::InvocationLogList`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ListInvocationLogsError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Returns newest-first, content-free summaries exported from Dive through OpenTelemetry. A child-only trace is returned as `is_partial: true` while its agent root is still open or if the process exits before that root is exported. Traces remain diagnostic and best-effort; the durable Invocation timeline is the execution authority. `status` is `disabled` when this installation has no configured observation store.
+pub async fn list_invocation_traces(
+    configuration: &configuration::Configuration,
+    invocation_id: &str,
+    cursor: Option<&str>,
+    limit: Option<u32>,
+) -> Result<models::TraceList, Error<ListInvocationTracesError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_invocation_id = invocation_id;
+    let p_query_cursor = cursor;
+    let p_query_limit = limit;
+
+    let uri_str = format!(
+        "{}/v1/invocations/{invocation_id}/traces",
+        configuration.base_path,
+        invocation_id = crate::apis::urlencode(p_path_invocation_id)
+    );
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref param_value) = p_query_cursor {
+        req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::TraceList`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::TraceList`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ListInvocationTracesError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,

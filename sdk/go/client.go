@@ -496,6 +496,147 @@ func (c *Client) GetInvocationTimeline(ctx context.Context, invocationID string)
 	})
 }
 
+// ListInvocationTraces reads the hosted agent traces associated with one
+// Invocation. The durable Invocation timeline remains the execution authority.
+func (c *Client) ListInvocationTraces(
+	ctx context.Context,
+	invocationID string,
+	options ObservationListOptions,
+) (*TraceList, error) {
+	params := &generated.ListInvocationTracesParams{
+		Cursor: options.Cursor,
+		Limit:  options.Limit,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.TraceList], error) {
+		response, err := c.raw.ListInvocationTracesWithResponse(ctx, invocationID, params)
+		if err != nil {
+			return callResult[generated.TraceList]{}, err
+		}
+		return callResult[generated.TraceList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// ListInvocationLogs reads the bounded operational logs associated with one
+// Invocation. Prompt, response, and tool payload content is not exposed here.
+func (c *Client) ListInvocationLogs(
+	ctx context.Context,
+	invocationID string,
+	options ObservationListOptions,
+) (*InvocationLogList, error) {
+	params := &generated.ListInvocationLogsParams{
+		Cursor:  options.Cursor,
+		Limit:   options.Limit,
+		TraceID: options.TraceID,
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationLogList], error) {
+		response, err := c.raw.ListInvocationLogsWithResponse(ctx, invocationID, params)
+		if err != nil {
+			return callResult[generated.InvocationLogList]{}, err
+		}
+		return callResult[generated.InvocationLogList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// GetTrace reads one hosted trace after the service re-establishes access from
+// its Invocation association. Possession of a trace ID alone grants no access.
+func (c *Client) GetTrace(ctx context.Context, traceID string) (*Trace, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Trace], error) {
+		response, err := c.raw.GetTraceWithResponse(ctx, traceID)
+		if err != nil {
+			return callResult[generated.Trace]{}, err
+		}
+		return callResult[generated.Trace]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) ListAdmissions(
+	ctx context.Context,
+	params *ListAdmissionsParams,
+) (*AdmissionAttemptList, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AdmissionAttemptList], error) {
+		response, err := c.raw.ListAdmissionsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.AdmissionAttemptList]{}, err
+		}
+		return callResult[generated.AdmissionAttemptList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) SummarizeAdmissions(
+	ctx context.Context,
+	params *SummarizeAdmissionsParams,
+) (*AdmissionSummary, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AdmissionSummary], error) {
+		response, err := c.raw.SummarizeAdmissionsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.AdmissionSummary]{}, err
+		}
+		return callResult[generated.AdmissionSummary]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) ListTenants(
+	ctx context.Context,
+	params *ListTenantsParams,
+) (*TenantList, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.TenantList], error) {
+		response, err := c.raw.ListTenantsWithResponse(ctx, params)
+		if err != nil {
+			return callResult[generated.TenantList]{}, err
+		}
+		return callResult[generated.TenantList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) DeleteTenant(ctx context.Context, tenantID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, callErr := c.raw.DeleteTenantWithResponse(ctx, tenantID)
+		if callErr != nil {
+			return callResult[struct{}]{}, callErr
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
 func (c *Client) CancelInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
 		response, err := c.raw.CancelInvocationWithResponse(ctx, invocationID)

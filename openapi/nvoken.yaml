@@ -116,6 +116,14 @@ tags:
     description: Token and cost totals, calculated from the stored record of what actually ran.
   - name: Credits
     description: Persistent tenant spending capacity and its append-only allocation history.
+  - name: Tenants
+    description: |
+      The App's interned tenant keys with their credit position. nvoken holds
+      no tenant configuration; a tenant row is a key made referenceable.
+  - name: Admissions
+    description: |
+      What happened to every request to start a turn, including the refused
+      ones that never became an Invocation.
   - name: Identity
     description: |
       Durable machine credential lifecycle and caller introspection. These
@@ -1585,6 +1593,92 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/invocations/{invocation_id}/traces:
+    parameters:
+      - $ref: "#/components/parameters/InvocationID"
+    get:
+      tags: [Invocations]
+      operationId: listInvocationTraces
+      summary: Page through hosted agent traces for one turn
+      description: |
+        Returns newest-first, content-free summaries exported from Dive through
+        OpenTelemetry. A child-only trace is returned as `is_partial: true`
+        while its agent root is still open or if the process exits before that
+        root is exported. Traces remain diagnostic and best-effort; the durable
+        Invocation timeline is the execution authority. `status` is `disabled`
+        when this installation has no configured observation store.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One bounded page of trace summaries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TraceList" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/invocations/{invocation_id}/logs:
+    parameters:
+      - $ref: "#/components/parameters/InvocationID"
+    get:
+      tags: [Invocations]
+      operationId: listInvocationLogs
+      summary: Page through hosted structured logs for one turn
+      description: |
+        Returns the content-free structured lifecycle logs associated by the
+        Invocation ID. Arbitrary attributes and raw error values are omitted.
+        `status` is `disabled` when this installation has no configured
+        observation store.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: trace_id
+          in: query
+          description: Return only logs correlated to this W3C trace ID.
+          schema: { $ref: "#/components/schemas/TraceID" }
+      responses:
+        "200":
+          description: One bounded page of associated logs.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvocationLogList" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/traces/{trace_id}:
+    parameters:
+      - $ref: "#/components/parameters/TraceID"
+    get:
+      tags: [Invocations]
+      operationId: getTrace
+      summary: Read one hosted agent trace
+      description: |
+        Returns a content-free projection of up to 200 OpenTelemetry spans.
+        Use the pageable Invocation log endpoint with `trace_id` for associated
+        logs. `is_partial` says when the
+        agent root has not arrived or the bounded read omitted spans. nvoken
+        grounds the trace's Invocation attribution in its durable Invocation
+        record before returning it; knowing a W3C trace ID grants no authority.
+      responses:
+        "200":
+          description: The authorized, bounded trace tree.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Trace" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /v1/invocations/{invocation_id}/tool-calls:
     parameters:
       - $ref: "#/components/parameters/InvocationID"
@@ -2099,6 +2193,181 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
+  /v1/admissions:
+    get:
+      tags: [Admissions]
+      operationId: listAdmissions
+      summary: List attempts to start a turn, admitted and refused
+      description: |
+        Every request to create an Invocation leaves one record here, whether
+        or not an Invocation was created. Newest first.
+
+        This is the surface for a turn that never became an Invocation. A
+        refusal aborts the admission transaction, which also discards the
+        tenant it interned along the way, so before this log a refused request
+        left nothing behind anywhere: no Invocation, no tenant, no spend. The
+        record is written after that transaction resolves, so the rollback no
+        longer takes the evidence with it.
+
+        `tenant_key` is the key the caller sent, not a resolved reference. For
+        a refusal it is usually a key nvoken has never interned -- which is
+        exactly the point when a host derives tenant keys and one of them is
+        subtly wrong.
+
+        Records are diagnostics, not accounting evidence: they age out after
+        30 days, while the retained usage facts they sit beside never do.
+      parameters:
+        - name: outcome
+          in: query
+          description: Limit to admitted or refused attempts.
+          schema:
+            $ref: "#/components/schemas/AdmissionOutcome"
+        - name: error_code
+          in: query
+          description: Limit to one refusal code, for example `insufficient_credits`.
+          schema: { type: string, maxLength: 64 }
+        - $ref: "#/components/parameters/TenantKeyFilter"
+        - $ref: "#/components/parameters/UserKeyFilter"
+        - name: start_at
+          in: query
+          description: Inclusive RFC 3339 lower bound on `attempted_at`.
+          schema: { type: string, format: date-time }
+        - name: end_at
+          in: query
+          description: Exclusive RFC 3339 upper bound on `attempted_at`.
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Cursor"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: One page of admission attempts, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdmissionAttemptList" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/admissions/summary:
+    get:
+      tags: [Admissions]
+      operationId: summarizeAdmissions
+      summary: Count a window of admission attempts by outcome, reason, and key
+      description: |
+        The counts behind the log. `GET /v1/admissions` answers "what happened
+        to this request"; this answers the question that comes first and that a
+        page of records cannot: "is anything being refused at all".
+
+        A host whose turns are failing has no reason to open a request log it
+        does not know it needs, so this is the number worth putting somewhere
+        an operator already looks.
+
+        `reasons` covers every refusal in the window -- the error codes are a
+        small fixed vocabulary. `tenants` is truncated to the ten keys refused
+        most, and lists raw keys rather than tenants, because the key with no
+        tenant behind it is the one worth seeing.
+      parameters:
+        - name: start_at
+          in: query
+          description: |
+            Inclusive RFC 3339 lower bound. Defaults to 24 hours ago; the
+            window is always bounded, since an unbounded count would change
+            meaning silently as records age out.
+          schema: { type: string, format: date-time }
+        - name: end_at
+          in: query
+          description: Exclusive RFC 3339 upper bound. Defaults to now.
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Counts over the requested window.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdmissionSummary" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/tenants:
+    get:
+      tags: [Tenants]
+      operationId: listTenants
+      summary: List the App's interned tenants
+      description: |
+        One row per tenant key nvoken has interned for this App, with its
+        credit position and the last time it ran a turn.
+
+        A tenant row is an interning of a key, not tenant state: nvoken stores
+        no configuration, profile, or entitlement for it. What this list
+        reports is therefore what is attached to the key, not what is
+        configured on it.
+
+        A key that has only ever been refused does not appear here, because it
+        was never interned. Those keys are in `GET /v1/admissions`, and the
+        difference between the two lists is the set of tenants a host is
+        addressing but has never successfully run.
+      parameters:
+        - $ref: "#/components/parameters/TenantKeyFilter"
+        - $ref: "#/components/parameters/Cursor"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: One page of tenants, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantList" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/tenants/{tenant_id}:
+    delete:
+      tags: [Tenants]
+      operationId: deleteTenant
+      summary: Delete a tenant that never ran anything
+      description: |
+        Removes a tenant along with the credit account and allocations that
+        belong to it alone. It exists to undo a mistake -- a key funded with a
+        typo in it, a tenant created by a misconfigured client -- and is
+        deliberately narrow.
+
+        A tenant with any Session, Invocation, retained model-call fact,
+        provider key, or dispatch is refused with `409 tenant_in_use` and the
+        counts that made it load-bearing. This is not a policy choice: every
+        runtime table references `tenants` with ON DELETE RESTRICT, and the
+        retained usage facts must outlive the transcripts they describe, so
+        deleting a tenant that has run work would mean destroying accounting
+        evidence. To remove transcripts, delete the Sessions; the facts and
+        their spend stay.
+
+        The default tenant is never deletable. Deleting a funded tenant
+        destroys its allocation history, and allocations cannot be recreated
+        with their original identity, so the released amount is written to the
+        operator log at deletion.
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/TenantID" }
+      responses:
+        "204": { description: The tenant and its credit state were removed. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The tenant has runtime history, or is the default tenant.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /v1/credits:
     get:
       tags: [Credits]
@@ -3494,6 +3763,12 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/InvocationID"
+    TraceID:
+      name: trace_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/TraceID"
     NudgeID:
       name: nudge_id
       in: path
@@ -3745,7 +4020,7 @@ components:
     App:
       type: object
       additionalProperties: false
-      required: [id, org_id, name, external_ref, display_name, callback_timeout_seconds, default_rate_limits, browser_access, created_at, archived_at]
+      required: [id, org_id, name, external_ref, display_name, callback_timeout_seconds, default_rate_limits, browser_access, credit_policy, created_at, archived_at]
       properties:
         id:
           $ref: "#/components/schemas/AppID"
@@ -3795,6 +4070,8 @@ components:
             Complete dormant browser-direct configuration. Null means browser
             access is disabled. Client JWTs and CORS remain unavailable until
             PRD 065.
+        credit_policy:
+          $ref: "#/components/schemas/CreditPolicy"
         created_at:
           type: string
           format: date-time
@@ -3903,6 +4180,9 @@ components:
           description: |
             Optional complete browser configuration. Null and omission both
             create the App with browser access disabled.
+        credit_policy:
+          $ref: "#/components/schemas/CreditPolicy"
+          description: Defaults to `off`. See the schema for what each value enforces.
     UpdateAppRequest:
       type: object
       additionalProperties: false
@@ -3940,6 +4220,31 @@ components:
             Replace the complete member, or send null to disable browser
             access without deleting client keys. Omission preserves the
             stored value.
+        credit_policy:
+          $ref: "#/components/schemas/CreditPolicy"
+          description: |
+            Change credit enforcement for turns admitted from now on.
+            Invocations already running keep the policy they were admitted
+            under. Omission preserves the stored value.
+    CreditPolicy:
+      type: string
+      enum: [off, required]
+      default: off
+      description: |
+        Whether nvoken refuses a turn whose tenant has no available credits.
+
+        `off`, the default, admits turns without consulting the tenant's
+        credit account. It is the right setting when the provider account
+        paying for the call is yours -- an App provider key, or the
+        deployment's own -- because nvoken is not the party at risk and your
+        own billing system already meters the end user.
+
+        `required` refuses admission, and each later provider call, unless the
+        tenant has enough available credits. Choose it when you want nvoken to
+        hold the line per tenant.
+
+        Neither value governs platform-funded work. When a call is paid for by
+        nvoken's own provider key, credits are always required.
     AppDefaultRateLimits:
       type: object
       additionalProperties: false
@@ -4090,6 +4395,10 @@ components:
       type: string
       minLength: 1
       description: Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+    TenantID:
+      type: string
+      minLength: 1
+      description: Opaque identifier with the public `tnt_` prefix. Treat the body as opaque.
     SessionID:
       type: string
       minLength: 1
@@ -4106,6 +4415,10 @@ components:
       type: string
       minLength: 1
       description: Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+    TraceID:
+      type: string
+      pattern: "^[0-9a-f]{32}$"
+      description: Lowercase W3C trace ID. Possession does not grant access.
     NudgeID:
       type: string
       minLength: 1
@@ -5316,6 +5629,179 @@ components:
         steps:
           type: array
           items: { $ref: "#/components/schemas/InvocationTimelineStep" }
+    ObservationStatus:
+      type: string
+      enum: [available, disabled]
+      description: Whether this installation has a hosted observation store.
+    TraceSummary:
+      type: object
+      additionalProperties: false
+      required: [trace_id, root_span_id, name, status, started_at, span_count, error_count, is_partial]
+      properties:
+        trace_id: { $ref: "#/components/schemas/TraceID" }
+        root_span_id:
+          type: string
+          pattern: "^[0-9a-f]{16}$"
+        name: { type: string }
+        status: { type: string, enum: [unset, ok, error] }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        duration_ms: { type: integer, minimum: 0 }
+        span_count: { type: integer, minimum: 1 }
+        error_count: { type: integer, minimum: 0 }
+        is_partial:
+          type: boolean
+          description: |
+            True when the agent root has not arrived or the bounded trace read
+            omitted spans. Partial traces are useful live diagnostics and must
+            not be interpreted as the complete execution record.
+        attempt:
+          type: integer
+          minimum: 1
+          description: Durable Invocation lease attempt associated with this trace.
+    TraceList:
+      type: object
+      additionalProperties: false
+      required: [status, items, next_cursor]
+      properties:
+        status: { $ref: "#/components/schemas/ObservationStatus" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TraceSummary" }
+        next_cursor: { type: [string, "null"] }
+    TraceSpan:
+      type: object
+      additionalProperties: false
+      required: [trace_id, span_id, name, kind, status, started_at]
+      properties:
+        trace_id: { $ref: "#/components/schemas/TraceID" }
+        span_id:
+          type: string
+          pattern: "^[0-9a-f]{16}$"
+        parent_span_id:
+          type: string
+          pattern: "^[0-9a-f]{16}$"
+        name: { type: string }
+        kind:
+          type: string
+          description: OpenTelemetry span kind; known values include internal, client, server, producer, consumer, and unspecified.
+        operation:
+          type: string
+          description: GenAI operation name. Dive currently emits invoke_agent, chat, and execute_tool.
+        status: { type: string, enum: [unset, ok, error] }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        duration_ms: { type: integer, minimum: 0 }
+        provider: { type: string }
+        request_model: { type: string }
+        response_model: { type: string }
+        tool_name: { type: string }
+        error_type: { type: string }
+        input_tokens:
+          type: integer
+          minimum: 0
+          description: Provider-reported input tokens; cache fields may overlap this total.
+        output_tokens:
+          type: integer
+          minimum: 0
+          description: Provider-reported output tokens; reasoning tokens are a subset when reported.
+        cache_creation_input_tokens:
+          type: integer
+          minimum: 0
+          description: Input tokens used to create a provider cache entry; do not add blindly to input_tokens.
+        cache_read_input_tokens:
+          type: integer
+          minimum: 0
+          description: Input tokens served from provider cache; do not add blindly to input_tokens.
+        reasoning_tokens:
+          type: integer
+          minimum: 0
+          description: Reasoning tokens included within output_tokens when the provider reports them.
+        finish_reasons:
+          type: array
+          maxItems: 8
+          items: { type: string }
+        time_to_first_token_ms:
+          type: integer
+          minimum: 0
+          description: Time from model-call start to the first streamed output token.
+        model_cost: { $ref: "#/components/schemas/Money" }
+    InvocationLog:
+      type: object
+      additionalProperties: false
+      required: [id, timestamp, severity, severity_number, message]
+      properties:
+        id: { type: string }
+        timestamp: { type: string, format: date-time }
+        severity: { type: string }
+        severity_number: { type: integer, minimum: 0, maximum: 24 }
+        message: { type: string }
+        service_name: { type: string }
+        trace_id: { $ref: "#/components/schemas/TraceID" }
+        span_id:
+          type: string
+          pattern: "^[0-9a-f]{16}$"
+        event: { type: string }
+        component: { type: string }
+        outcome: { type: string }
+        error_class: { type: string }
+        request_id: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        tool_name: { type: string }
+        status: { type: string }
+        attempt: { type: integer, minimum: 1 }
+        iteration: { type: integer, minimum: 1 }
+        lease_attempt: { type: integer, minimum: 1 }
+    InvocationLogList:
+      type: object
+      additionalProperties: false
+      required: [status, items, next_cursor]
+      properties:
+        status: { $ref: "#/components/schemas/ObservationStatus" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InvocationLog" }
+        next_cursor: { type: [string, "null"] }
+    Trace:
+      type: object
+      additionalProperties: false
+      required:
+        - trace_id
+        - root_span_id
+        - name
+        - status
+        - started_at
+        - span_count
+        - error_count
+        - is_partial
+        - invocation_id
+        - session_id
+        - spans
+      properties:
+        trace_id: { $ref: "#/components/schemas/TraceID" }
+        root_span_id:
+          type: string
+          pattern: "^[0-9a-f]{16}$"
+        name: { type: string }
+        status: { type: string, enum: [unset, ok, error] }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        duration_ms: { type: integer, minimum: 0 }
+        span_count: { type: integer, minimum: 1 }
+        error_count: { type: integer, minimum: 0 }
+        is_partial:
+          type: boolean
+          description: True when this response contains only a bounded or rootless partial trace.
+        attempt:
+          type: integer
+          minimum: 1
+          description: Durable Invocation lease attempt associated with this trace.
+        invocation_id: { $ref: "#/components/schemas/InvocationID" }
+        session_id: { $ref: "#/components/schemas/SessionID" }
+        spans:
+          type: array
+          items: { $ref: "#/components/schemas/TraceSpan" }
     InvocationInput:
       description: |
         A plain string is shorthand for one text block; an array is ordered
@@ -8229,6 +8715,190 @@ components:
       oneOf:
         - $ref: "#/components/schemas/InvocationStreamEvent"
         - $ref: "#/components/schemas/ClientInvocationStreamEvent"
+    AdmissionOutcome:
+      type: string
+      enum: [admitted, refused]
+      description: |
+        `admitted` created an Invocation; `refused` did not. A refusal is the
+        only record that the request happened at all.
+    AdmissionAttempt:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - attempted_at
+        - outcome
+        - error_code
+        - http_status
+        - tenant_key
+        - user_key
+        - agent_key
+        - provider
+        - model
+        - credential_family_id
+        - authentication_method
+        - request_id
+        - invocation_id
+        - deduplicated
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Opaque identifier with the public `adm_` prefix.
+        attempted_at:
+          type: string
+          format: date-time
+        outcome:
+          $ref: "#/components/schemas/AdmissionOutcome"
+        error_code:
+          oneOf:
+            - $ref: "#/components/schemas/ErrorCode"
+            - type: "null"
+          description: The refusal code, or null when the turn was admitted.
+        http_status:
+          type: integer
+          minimum: 100
+          maximum: 599
+          description: The status the caller received.
+        tenant_key:
+          type: [string, "null"]
+          description: |
+            The tenant key as sent, or null for the App's default tenant. It is
+            raw text, not a resolved reference: a refused attempt commonly
+            names a tenant that was never interned.
+        user_key:
+          type: [string, "null"]
+        agent_key:
+          type: [string, "null"]
+        provider:
+          type: [string, "null"]
+        model:
+          type: [string, "null"]
+        credential_family_id:
+          type: [string, "null"]
+        authentication_method:
+          type: [string, "null"]
+          enum: [api_key, issuer_token, client_token, null]
+        request_id:
+          type: [string, "null"]
+        invocation_id:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationID"
+            - type: "null"
+          description: |
+            The admitted Invocation, or null for a refusal. It carries no
+            foreign key: the record outlives Session erasure, so a deleted
+            transcript never erases the evidence that the request happened.
+        deduplicated:
+          type: boolean
+          description: Whether the request replayed an existing Invocation.
+        details:
+          type: object
+          additionalProperties: true
+          description: |
+            The refusal's own detail object, the same one the caller received.
+            For `insufficient_credits` it carries the tenant key with exact
+            available and required amounts.
+    AdmissionAttemptList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdmissionAttempt" }
+        next_cursor:
+          type: [string, "null"]
+    AdmissionSummary:
+      type: object
+      additionalProperties: false
+      required: [start_at, end_at, admitted, refused, reasons, tenants]
+      properties:
+        start_at:
+          type: string
+          format: date-time
+          description: Inclusive lower bound the counts cover.
+        end_at:
+          type: [string, "null"]
+          format: date-time
+          description: Exclusive upper bound, or null when the window runs to now.
+        admitted:
+          type: integer
+          format: int64
+        refused:
+          type: integer
+          format: int64
+        reasons:
+          type: array
+          description: Every refusal in the window, grouped by code. Never truncated.
+          items: { $ref: "#/components/schemas/AdmissionReasonCount" }
+        tenants:
+          type: array
+          description: |
+            The ten keys refused most, worst first. Raw keys, not tenants: a
+            key here may have no tenant behind it, which is the case worth
+            acting on.
+          items: { $ref: "#/components/schemas/AdmissionTenantCount" }
+    AdmissionReasonCount:
+      type: object
+      additionalProperties: false
+      required: [error_code, count]
+      properties:
+        error_code: { type: string }
+        count: { type: integer, format: int64 }
+    AdmissionTenantCount:
+      type: object
+      additionalProperties: false
+      required: [tenant_key, refusals, last_refused_at]
+      properties:
+        tenant_key: { type: string }
+        refusals: { type: integer, format: int64 }
+        last_refused_at: { type: string, format: date-time }
+    TenantCredits:
+      type: object
+      additionalProperties: false
+      required: [funded, allocated, used, held, available]
+      properties:
+        funded:
+          type: boolean
+          description: |
+            Whether a credit account exists at all. False means nothing was
+            ever allocated, which reads as zero everywhere else here.
+        allocated: { $ref: "#/components/schemas/Money" }
+        used: { $ref: "#/components/schemas/Money" }
+        held: { $ref: "#/components/schemas/Money" }
+        available: { $ref: "#/components/schemas/Money" }
+    Tenant:
+      type: object
+      additionalProperties: false
+      required: [id, tenant_key, credits, last_invocation_at, created_at]
+      properties:
+        id: { $ref: "#/components/schemas/TenantID" }
+        tenant_key:
+          type: [string, "null"]
+          description: The interned key, or null for the App's default tenant.
+        credits: { $ref: "#/components/schemas/TenantCredits" }
+        last_invocation_at:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            When this tenant last had a turn admitted, or null if it never
+            has. Read from retained Invocation facts, so Session deletion does
+            not change it.
+        created_at:
+          type: string
+          format: date-time
+          description: When the key was first interned, by any path.
+    TenantList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Tenant" }
+        next_cursor:
+          type: [string, "null"]
     ErrorCode:
       type: string
       enum:
@@ -8251,6 +8921,7 @@ components:
         - org_archived
         - agent_definition_archived
         - org_has_active_apps
+        - tenant_in_use
         - budget_exceeded
         - insufficient_credits
         - cost_estimate_unavailable
@@ -8282,7 +8953,7 @@ components:
         execution and cannot be selected for an Org credential.
     Operation:
       type: string
-      enum: [create_invocation, create_agent_definition, get_agent_definition, list_agent_definitions, update_agent_definition, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, interrupt_invocation, manage_invocation_nudges, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_credits, allocate_credits, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
+      enum: [create_invocation, create_agent_definition, get_agent_definition, list_agent_definitions, update_agent_definition, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, interrupt_invocation, manage_invocation_nudges, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_credits, allocate_credits, delete_tenant, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
     CredentialStatus:
       type: string
       enum: [active, revoked]

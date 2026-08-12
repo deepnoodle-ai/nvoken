@@ -18,6 +18,7 @@ __version__ = "0.14.0"
 
 # Define package exports
 __all__ = [
+    "AdmissionsApi",
     "AgentDefinitionsApi",
     "AgentsApi",
     "AppsApi",
@@ -29,6 +30,7 @@ __all__ = [
     "OrgsApi",
     "ProviderKeysApi",
     "SessionsApi",
+    "TenantsApi",
     "UsageApi",
     "ApiResponse",
     "ApiClient",
@@ -40,6 +42,12 @@ __all__ = [
     "ApiAttributeError",
     "ApiException",
     "ActivityMetrics",
+    "AdmissionAttempt",
+    "AdmissionAttemptList",
+    "AdmissionOutcome",
+    "AdmissionReasonCount",
+    "AdmissionSummary",
+    "AdmissionTenantCount",
     "Agent",
     "AgentDefinition",
     "AgentDefinitionResource",
@@ -104,6 +112,7 @@ __all__ = [
     "CreditAllocation",
     "CreditAllocationList",
     "CreditBlock",
+    "CreditPolicy",
     "CurrentIdentity",
     "CurrentIdentityAuthentication",
     "CurrentIdentityResponse",
@@ -129,6 +138,8 @@ __all__ = [
     "InvocationInput",
     "InvocationList",
     "InvocationListResponse",
+    "InvocationLog",
+    "InvocationLogList",
     "InvocationResponse",
     "InvocationResult",
     "InvocationResultEvent",
@@ -178,6 +189,7 @@ __all__ = [
     "NudgeAcknowledgement",
     "NudgeList",
     "NudgeStatus",
+    "ObservationStatus",
     "Operation",
     "Org",
     "OrgList",
@@ -229,6 +241,9 @@ __all__ = [
     "SubmitHostToolResultsRequest",
     "SubmitHostToolResultsRequestResultsInner",
     "SubmitHostToolResultsResponse",
+    "Tenant",
+    "TenantCredits",
+    "TenantList",
     "TextBlock",
     "TextInputBlock",
     "ThinkingDeltaEvent",
@@ -246,6 +261,10 @@ __all__ = [
     "ToolMetrics",
     "ToolResultBlock",
     "ToolUseBlock",
+    "Trace",
+    "TraceList",
+    "TraceSpan",
+    "TraceSummary",
     "TranscriptSnapshot",
     "TranscriptSnapshotResponse",
     "TranscriptStreamEvent",
@@ -271,6 +290,7 @@ __all__ = [
 ]
 
 # import apis into sdk package
+from nvoken_generated.api.admissions_api import AdmissionsApi as AdmissionsApi
 from nvoken_generated.api.agent_definitions_api import AgentDefinitionsApi as AgentDefinitionsApi
 from nvoken_generated.api.agents_api import AgentsApi as AgentsApi
 from nvoken_generated.api.apps_api import AppsApi as AppsApi
@@ -282,6 +302,7 @@ from nvoken_generated.api.models_api import ModelsApi as ModelsApi
 from nvoken_generated.api.orgs_api import OrgsApi as OrgsApi
 from nvoken_generated.api.provider_keys_api import ProviderKeysApi as ProviderKeysApi
 from nvoken_generated.api.sessions_api import SessionsApi as SessionsApi
+from nvoken_generated.api.tenants_api import TenantsApi as TenantsApi
 from nvoken_generated.api.usage_api import UsageApi as UsageApi
 
 # import ApiClient
@@ -297,6 +318,12 @@ from nvoken_generated.exceptions import ApiException as ApiException
 
 # import models into sdk package
 from nvoken_generated.models.activity_metrics import ActivityMetrics as ActivityMetrics
+from nvoken_generated.models.admission_attempt import AdmissionAttempt as AdmissionAttempt
+from nvoken_generated.models.admission_attempt_list import AdmissionAttemptList as AdmissionAttemptList
+from nvoken_generated.models.admission_outcome import AdmissionOutcome as AdmissionOutcome
+from nvoken_generated.models.admission_reason_count import AdmissionReasonCount as AdmissionReasonCount
+from nvoken_generated.models.admission_summary import AdmissionSummary as AdmissionSummary
+from nvoken_generated.models.admission_tenant_count import AdmissionTenantCount as AdmissionTenantCount
 from nvoken_generated.models.agent import Agent as Agent
 from nvoken_generated.models.agent_definition import AgentDefinition as AgentDefinition
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource as AgentDefinitionResource
@@ -361,6 +388,7 @@ from nvoken_generated.models.credit_account_list import CreditAccountList as Cre
 from nvoken_generated.models.credit_allocation import CreditAllocation as CreditAllocation
 from nvoken_generated.models.credit_allocation_list import CreditAllocationList as CreditAllocationList
 from nvoken_generated.models.credit_block import CreditBlock as CreditBlock
+from nvoken_generated.models.credit_policy import CreditPolicy as CreditPolicy
 from nvoken_generated.models.current_identity import CurrentIdentity as CurrentIdentity
 from nvoken_generated.models.current_identity_authentication import CurrentIdentityAuthentication as CurrentIdentityAuthentication
 from nvoken_generated.models.current_identity_response import CurrentIdentityResponse as CurrentIdentityResponse
@@ -386,6 +414,8 @@ from nvoken_generated.models.invocation_failure import InvocationFailure as Invo
 from nvoken_generated.models.invocation_input import InvocationInput as InvocationInput
 from nvoken_generated.models.invocation_list import InvocationList as InvocationList
 from nvoken_generated.models.invocation_list_response import InvocationListResponse as InvocationListResponse
+from nvoken_generated.models.invocation_log import InvocationLog as InvocationLog
+from nvoken_generated.models.invocation_log_list import InvocationLogList as InvocationLogList
 from nvoken_generated.models.invocation_response import InvocationResponse as InvocationResponse
 from nvoken_generated.models.invocation_result import InvocationResult as InvocationResult
 from nvoken_generated.models.invocation_result_event import InvocationResultEvent as InvocationResultEvent
@@ -435,6 +465,7 @@ from nvoken_generated.models.nudge import Nudge as Nudge
 from nvoken_generated.models.nudge_acknowledgement import NudgeAcknowledgement as NudgeAcknowledgement
 from nvoken_generated.models.nudge_list import NudgeList as NudgeList
 from nvoken_generated.models.nudge_status import NudgeStatus as NudgeStatus
+from nvoken_generated.models.observation_status import ObservationStatus as ObservationStatus
 from nvoken_generated.models.operation import Operation as Operation
 from nvoken_generated.models.org import Org as Org
 from nvoken_generated.models.org_list import OrgList as OrgList
@@ -486,6 +517,9 @@ from nvoken_generated.models.structured_output_provenance import StructuredOutpu
 from nvoken_generated.models.submit_host_tool_results_request import SubmitHostToolResultsRequest as SubmitHostToolResultsRequest
 from nvoken_generated.models.submit_host_tool_results_request_results_inner import SubmitHostToolResultsRequestResultsInner as SubmitHostToolResultsRequestResultsInner
 from nvoken_generated.models.submit_host_tool_results_response import SubmitHostToolResultsResponse as SubmitHostToolResultsResponse
+from nvoken_generated.models.tenant import Tenant as Tenant
+from nvoken_generated.models.tenant_credits import TenantCredits as TenantCredits
+from nvoken_generated.models.tenant_list import TenantList as TenantList
 from nvoken_generated.models.text_block import TextBlock as TextBlock
 from nvoken_generated.models.text_input_block import TextInputBlock as TextInputBlock
 from nvoken_generated.models.thinking_delta_event import ThinkingDeltaEvent as ThinkingDeltaEvent
@@ -503,6 +537,10 @@ from nvoken_generated.models.tool_declaration import ToolDeclaration as ToolDecl
 from nvoken_generated.models.tool_metrics import ToolMetrics as ToolMetrics
 from nvoken_generated.models.tool_result_block import ToolResultBlock as ToolResultBlock
 from nvoken_generated.models.tool_use_block import ToolUseBlock as ToolUseBlock
+from nvoken_generated.models.trace import Trace as Trace
+from nvoken_generated.models.trace_list import TraceList as TraceList
+from nvoken_generated.models.trace_span import TraceSpan as TraceSpan
+from nvoken_generated.models.trace_summary import TraceSummary as TraceSummary
 from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot as TranscriptSnapshot
 from nvoken_generated.models.transcript_snapshot_response import TranscriptSnapshotResponse as TranscriptSnapshotResponse
 from nvoken_generated.models.transcript_stream_event import TranscriptStreamEvent as TranscriptStreamEvent

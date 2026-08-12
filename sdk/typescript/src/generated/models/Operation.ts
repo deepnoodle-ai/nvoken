@@ -53,6 +53,7 @@ export const Operation = {
     ReadUsage: 'read_usage',
     ReadCredits: 'read_credits',
     AllocateCredits: 'allocate_credits',
+    DeleteTenant: 'delete_tenant',
     RegisterApp: 'register_app',
     ListApps: 'list_apps',
     GetApp: 'get_app',

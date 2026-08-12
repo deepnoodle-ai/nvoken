@@ -72,6 +72,11 @@
       "path": "/v1/sessions/{session_id}"
     },
     {
+      "operation_id": "deleteTenant",
+      "method": "DELETE",
+      "path": "/v1/tenants/{tenant_id}"
+    },
+    {
       "operation_id": "forkSession",
       "method": "POST",
       "path": "/v1/sessions/{session_id}/fork"
@@ -147,6 +152,11 @@
       "path": "/v1/sessions/{session_id}/transcript"
     },
     {
+      "operation_id": "getTrace",
+      "method": "GET",
+      "path": "/v1/traces/{trace_id}"
+    },
+    {
       "operation_id": "getUsageBreakdown",
       "method": "GET",
       "path": "/v1/usage/breakdown"
@@ -160,6 +170,11 @@
       "operation_id": "interruptInvocation",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/interrupt"
+    },
+    {
+      "operation_id": "listAdmissions",
+      "method": "GET",
+      "path": "/v1/admissions"
     },
     {
       "operation_id": "listAgentDefinitions",
@@ -195,6 +210,16 @@
       "operation_id": "listCreditAllocations",
       "method": "GET",
       "path": "/v1/credits/allocations"
+    },
+    {
+      "operation_id": "listInvocationLogs",
+      "method": "GET",
+      "path": "/v1/invocations/{invocation_id}/logs"
+    },
+    {
+      "operation_id": "listInvocationTraces",
+      "method": "GET",
+      "path": "/v1/invocations/{invocation_id}/traces"
     },
     {
       "operation_id": "listInvocations",
@@ -240,6 +265,11 @@
       "operation_id": "listSessions",
       "method": "GET",
       "path": "/v1/sessions"
+    },
+    {
+      "operation_id": "listTenants",
+      "method": "GET",
+      "path": "/v1/tenants"
     },
     {
       "operation_id": "listToolCalls",
@@ -320,6 +350,11 @@
       "operation_id": "submitHostToolResults",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/tool-results"
+    },
+    {
+      "operation_id": "summarizeAdmissions",
+      "method": "GET",
+      "path": "/v1/admissions/summary"
     },
     {
       "operation_id": "updateAgentDefinition",

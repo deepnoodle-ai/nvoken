@@ -61,6 +61,7 @@ class Operation(str, Enum):
     READ_USAGE = 'read_usage'
     READ_CREDITS = 'read_credits'
     ALLOCATE_CREDITS = 'allocate_credits'
+    DELETE_TENANT = 'delete_tenant'
     REGISTER_APP = 'register_app'
     LIST_APPS = 'list_apps'
     GET_APP = 'get_app'

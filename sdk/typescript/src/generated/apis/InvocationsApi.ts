@@ -34,6 +34,11 @@ import {
     InvocationListResponseToJSON,
 } from '../models/InvocationListResponse.js';
 import {
+    type InvocationLogList,
+    InvocationLogListFromJSON,
+    InvocationLogListToJSON,
+} from '../models/InvocationLogList.js';
+import {
     type InvocationResponse,
     InvocationResponseFromJSON,
     InvocationResponseToJSON,
@@ -98,6 +103,16 @@ import {
     ToolCallListFromJSON,
     ToolCallListToJSON,
 } from '../models/ToolCallList.js';
+import {
+    type Trace,
+    TraceFromJSON,
+    TraceToJSON,
+} from '../models/Trace.js';
+import {
+    type TraceList,
+    TraceListFromJSON,
+    TraceListToJSON,
+} from '../models/TraceList.js';
 
 export interface CancelInvocationRequest {
     invocationId: string;
@@ -133,8 +148,25 @@ export interface GetInvocationTimelineRequest {
     invocationId: string;
 }
 
+export interface GetTraceRequest {
+    traceId: string;
+}
+
 export interface InterruptInvocationRequest {
     invocationId: string;
+}
+
+export interface ListInvocationLogsRequest {
+    invocationId: string;
+    cursor?: string;
+    limit?: number;
+    traceId?: string;
+}
+
+export interface ListInvocationTracesRequest {
+    invocationId: string;
+    cursor?: string;
+    limit?: number;
 }
 
 export interface ListInvocationsRequest {
@@ -606,6 +638,61 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for getTrace without sending the request
+     */
+    async getTraceRequestOpts(requestParameters: GetTraceRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['traceId'] == null) {
+            throw new runtime.RequiredError(
+                'traceId',
+                'Required parameter "traceId" was null or undefined when calling getTrace().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/traces/{trace_id}`;
+        urlPath = urlPath.replace('{trace_id}', encodeURIComponent(String(requestParameters['traceId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns a content-free projection of up to 200 OpenTelemetry spans. Use the pageable Invocation log endpoint with `trace_id` for associated logs. `is_partial` says when the agent root has not arrived or the bounded read omitted spans. nvoken grounds the trace\'s Invocation attribution in its durable Invocation record before returning it; knowing a W3C trace ID grants no authority.
+     * Read one hosted agent trace
+     */
+    async getTraceRaw(requestParameters: GetTraceRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Trace>> {
+        const requestOptions = await this.getTraceRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => TraceFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns a content-free projection of up to 200 OpenTelemetry spans. Use the pageable Invocation log endpoint with `trace_id` for associated logs. `is_partial` says when the agent root has not arrived or the bounded read omitted spans. nvoken grounds the trace\'s Invocation attribution in its durable Invocation record before returning it; knowing a W3C trace ID grants no authority.
+     * Read one hosted agent trace
+     */
+    async getTrace(requestParameters: GetTraceRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Trace> {
+        const response = await this.getTraceRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for interruptInvocation without sending the request
      */
     async interruptInvocationRequestOpts(requestParameters: InterruptInvocationRequest): Promise<runtime.RequestOpts> {
@@ -657,6 +744,136 @@ export class InvocationsApi extends runtime.BaseAPI {
      */
     async interruptInvocation(requestParameters: InterruptInvocationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<InvocationResponse> {
         const response = await this.interruptInvocationRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listInvocationLogs without sending the request
+     */
+    async listInvocationLogsRequestOpts(requestParameters: ListInvocationLogsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['invocationId'] == null) {
+            throw new runtime.RequiredError(
+                'invocationId',
+                'Required parameter "invocationId" was null or undefined when calling listInvocationLogs().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['traceId'] != null) {
+            queryParameters['trace_id'] = requestParameters['traceId'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/invocations/{invocation_id}/logs`;
+        urlPath = urlPath.replace('{invocation_id}', encodeURIComponent(String(requestParameters['invocationId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no configured observation store.
+     * Page through hosted structured logs for one turn
+     */
+    async listInvocationLogsRaw(requestParameters: ListInvocationLogsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<InvocationLogList>> {
+        const requestOptions = await this.listInvocationLogsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => InvocationLogListFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns the content-free structured lifecycle logs associated by the Invocation ID. Arbitrary attributes and raw error values are omitted. `status` is `disabled` when this installation has no configured observation store.
+     * Page through hosted structured logs for one turn
+     */
+    async listInvocationLogs(requestParameters: ListInvocationLogsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<InvocationLogList> {
+        const response = await this.listInvocationLogsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listInvocationTraces without sending the request
+     */
+    async listInvocationTracesRequestOpts(requestParameters: ListInvocationTracesRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['invocationId'] == null) {
+            throw new runtime.RequiredError(
+                'invocationId',
+                'Required parameter "invocationId" was null or undefined when calling listInvocationTraces().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/invocations/{invocation_id}/traces`;
+        urlPath = urlPath.replace('{invocation_id}', encodeURIComponent(String(requestParameters['invocationId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns newest-first, content-free summaries exported from Dive through OpenTelemetry. A child-only trace is returned as `is_partial: true` while its agent root is still open or if the process exits before that root is exported. Traces remain diagnostic and best-effort; the durable Invocation timeline is the execution authority. `status` is `disabled` when this installation has no configured observation store.
+     * Page through hosted agent traces for one turn
+     */
+    async listInvocationTracesRaw(requestParameters: ListInvocationTracesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<TraceList>> {
+        const requestOptions = await this.listInvocationTracesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => TraceListFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns newest-first, content-free summaries exported from Dive through OpenTelemetry. A child-only trace is returned as `is_partial: true` while its agent root is still open or if the process exits before that root is exported. Traces remain diagnostic and best-effort; the durable Invocation timeline is the execution authority. `status` is `disabled` when this installation has no configured observation store.
+     * Page through hosted agent traces for one turn
+     */
+    async listInvocationTraces(requestParameters: ListInvocationTracesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<TraceList> {
+        const response = await this.listInvocationTracesRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

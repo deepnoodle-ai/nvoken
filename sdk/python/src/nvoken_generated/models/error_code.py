@@ -45,6 +45,7 @@ class ErrorCode(str, Enum):
     ORG_ARCHIVED = 'org_archived'
     AGENT_DEFINITION_ARCHIVED = 'agent_definition_archived'
     ORG_HAS_ACTIVE_APPS = 'org_has_active_apps'
+    TENANT_IN_USE = 'tenant_in_use'
     BUDGET_EXCEEDED = 'budget_exceeded'
     INSUFFICIENT_CREDITS = 'insufficient_credits'
     COST_ESTIMATE_UNAVAILABLE = 'cost_estimate_unavailable'

@@ -20,6 +20,13 @@ import {
     AppDefaultRateLimitsToJSON,
     AppDefaultRateLimitsToJSONTyped,
 } from './AppDefaultRateLimits.js';
+import type { CreditPolicy } from './CreditPolicy.js';
+import {
+    CreditPolicyFromJSON,
+    CreditPolicyFromJSONTyped,
+    CreditPolicyToJSON,
+    CreditPolicyToJSONTyped,
+} from './CreditPolicy.js';
 import type { BrowserAccess } from './BrowserAccess.js';
 import {
     BrowserAccessFromJSON,
@@ -97,6 +104,12 @@ export interface App {
     browserAccess: BrowserAccess | null;
     /**
      *
+     * @type {CreditPolicy}
+     * @memberof App
+     */
+    creditPolicy: CreditPolicy;
+    /**
+     *
      * @type {Date}
      * @memberof App
      */
@@ -113,6 +126,8 @@ export interface App {
     archivedAt: Date | null;
 }
 
+
+
 /**
  * Check if a given object implements the App interface.
  */
@@ -125,6 +140,7 @@ export function instanceOfApp(value: object): value is App {
     if (!('callbackTimeoutSeconds' in value) || value['callbackTimeoutSeconds'] === undefined) return false;
     if (!('defaultRateLimits' in value) || value['defaultRateLimits'] === undefined) return false;
     if (!('browserAccess' in value) || value['browserAccess'] === undefined) return false;
+    if (!('creditPolicy' in value) || value['creditPolicy'] === undefined) return false;
     if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
     if (!('archivedAt' in value) || value['archivedAt'] === undefined) return false;
     return true;
@@ -148,6 +164,7 @@ export function AppFromJSONTyped(json: any, ignoreDiscriminator: boolean): App {
         'callbackTimeoutSeconds': json['callback_timeout_seconds'],
         'defaultRateLimits': AppDefaultRateLimitsFromJSON(json['default_rate_limits']),
         'browserAccess': BrowserAccessFromJSON(json['browser_access']),
+        'creditPolicy': CreditPolicyFromJSON(json['credit_policy']),
         'createdAt': (new Date(json['created_at'])),
         'archivedAt': (json['archived_at'] == null ? null : new Date(json['archived_at'])),
     };
@@ -172,6 +189,7 @@ export function AppToJSONTyped(value?: App | null, ignoreDiscriminator: boolean 
         'callback_timeout_seconds': value['callbackTimeoutSeconds'],
         'default_rate_limits': AppDefaultRateLimitsToJSON(value['defaultRateLimits']),
         'browser_access': BrowserAccessToJSON(value['browserAccess']),
+        'credit_policy': CreditPolicyToJSON(value['creditPolicy']),
         'created_at': value['createdAt'].toISOString(),
         'archived_at': value['archivedAt'] == null ? value['archivedAt'] : value['archivedAt'].toISOString(),
     };

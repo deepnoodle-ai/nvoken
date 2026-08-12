@@ -22,6 +22,7 @@ from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.app_default_rate_limits import AppDefaultRateLimits
 from nvoken_generated.models.browser_access import BrowserAccess
+from nvoken_generated.models.credit_policy import CreditPolicy
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -35,7 +36,8 @@ class UpdateAppRequest(BaseModel):
     callback_timeout_seconds: Optional[Annotated[int, Field(le=60, strict=True, ge=1)]] = Field(default=None, description="New callback HTTP reply deadline for this App.")
     default_rate_limits: Optional[AppDefaultRateLimits] = Field(default=None, description="Replace the whole member, or send null to restore unlimited machine admission. Clearing is rejected while browser access remains enabled. Omission preserves the stored value. ")
     browser_access: Optional[BrowserAccess] = Field(default=None, description="Replace the complete member, or send null to disable browser access without deleting client keys. Omission preserves the stored value. ")
-    __properties: ClassVar[List[str]] = ["display_name", "org_id", "callback_timeout_seconds", "default_rate_limits", "browser_access"]
+    credit_policy: Optional[CreditPolicy] = Field(default=None, description="Change credit enforcement for turns admitted from now on. Invocations already running keep the policy they were admitted under. Omission preserves the stored value. ")
+    __properties: ClassVar[List[str]] = ["display_name", "org_id", "callback_timeout_seconds", "default_rate_limits", "browser_access", "credit_policy"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -108,6 +110,7 @@ class UpdateAppRequest(BaseModel):
             "org_id": obj.get("org_id"),
             "callback_timeout_seconds": obj.get("callback_timeout_seconds"),
             "default_rate_limits": AppDefaultRateLimits.from_dict(obj["default_rate_limits"]) if obj.get("default_rate_limits") is not None else None,
-            "browser_access": BrowserAccess.from_dict(obj["browser_access"]) if obj.get("browser_access") is not None else None
+            "browser_access": BrowserAccess.from_dict(obj["browser_access"]) if obj.get("browser_access") is not None else None,
+            "credit_policy": obj.get("credit_policy")
         })
         return _obj

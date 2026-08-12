@@ -84,6 +84,8 @@ pub enum Operation {
     ReadCredits,
     #[serde(rename = "allocate_credits")]
     AllocateCredits,
+    #[serde(rename = "delete_tenant")]
+    DeleteTenant,
     #[serde(rename = "register_app")]
     RegisterApp,
     #[serde(rename = "list_apps")]
@@ -140,6 +142,7 @@ impl std::fmt::Display for Operation {
             Self::ReadUsage => write!(f, "read_usage"),
             Self::ReadCredits => write!(f, "read_credits"),
             Self::AllocateCredits => write!(f, "allocate_credits"),
+            Self::DeleteTenant => write!(f, "delete_tenant"),
             Self::RegisterApp => write!(f, "register_app"),
             Self::ListApps => write!(f, "list_apps"),
             Self::GetApp => write!(f, "get_app"),

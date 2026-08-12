@@ -37,6 +37,7 @@ export const ErrorCode = {
     OrgArchived: 'org_archived',
     AgentDefinitionArchived: 'agent_definition_archived',
     OrgHasActiveApps: 'org_has_active_apps',
+    TenantInUse: 'tenant_in_use',
     BudgetExceeded: 'budget_exceeded',
     InsufficientCredits: 'insufficient_credits',
     CostEstimateUnavailable: 'cost_estimate_unavailable',
