@@ -8,6 +8,19 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.15.0 - 2026-08-12
+
+- **Add durable Agent memory across every SDK.** Agent Definitions can select
+  tenant or user memory and choose how it enters model context; list, search,
+  get, and delete memory records through the generated transports, Go helpers,
+  and new CLI memory commands.
+- **Enable managed anonymous browser access.** Configure anonymous access on an
+  App and exchange an origin-bound visitor token for short-lived client access
+  through every SDK or `nvoken app anonymous-token`.
+- **Expose Invocation traces and bounded operational logs.** Inspect paginated
+  trace summaries, complete span trees, correlated log records, and explicit
+  partial or truncated state through the SDKs, Go client, and CLI.
+
 ## 0.14.0 - 2026-08-11
 
 - **Replace window Budgets with persistent Credits.** Allocate exact USD funds
