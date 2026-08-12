@@ -634,7 +634,7 @@ pub async fn get_invocation_timeline(
     }
 }
 
-/// Returns a content-free projection of the complete OpenTelemetry span tree plus the first 200 trace-correlated log records. nvoken grounds the trace's Invocation attribution in Postgres before returning it; knowing a W3C trace ID grants no authority.
+/// Returns a content-free projection of up to 200 OpenTelemetry spans. Use the pageable Invocation log endpoint with `trace_id` for associated logs. `is_partial` says when the agent root has not arrived or the bounded read omitted spans. nvoken grounds the trace's Invocation attribution in its durable Invocation record before returning it; knowing a W3C trace ID grants no authority.
 pub async fn get_trace(
     configuration: &configuration::Configuration,
     trace_id: &str,
@@ -744,11 +744,13 @@ pub async fn list_invocation_logs(
     invocation_id: &str,
     cursor: Option<&str>,
     limit: Option<u32>,
+    trace_id: Option<&str>,
 ) -> Result<models::InvocationLogList, Error<ListInvocationLogsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_invocation_id = invocation_id;
     let p_query_cursor = cursor;
     let p_query_limit = limit;
+    let p_query_trace_id = trace_id;
 
     let uri_str = format!(
         "{}/v1/invocations/{invocation_id}/logs",
@@ -762,6 +764,9 @@ pub async fn list_invocation_logs(
     }
     if let Some(ref param_value) = p_query_limit {
         req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_trace_id {
+        req_builder = req_builder.query(&[("trace_id", &param_value.to_string())]);
     }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
@@ -799,7 +804,7 @@ pub async fn list_invocation_logs(
     }
 }
 
-/// Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
+/// Returns newest-first, content-free summaries exported from Dive through OpenTelemetry. A child-only trace is returned as `is_partial: true` while its agent root is still open or if the process exits before that root is exported. Traces remain diagnostic and best-effort; the durable Invocation timeline is the execution authority. `status` is `disabled` when this installation has no configured observation store.
 pub async fn list_invocation_traces(
     configuration: &configuration::Configuration,
     invocation_id: &str,

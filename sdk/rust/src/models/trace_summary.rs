@@ -32,6 +32,12 @@ pub struct TraceSummary {
     pub span_count: u32,
     #[serde(rename = "error_count")]
     pub error_count: u32,
+    /// True when the agent root has not arrived or the bounded trace read omitted spans. Partial traces are useful live diagnostics and must not be interpreted as the complete execution record.
+    #[serde(rename = "is_partial")]
+    pub is_partial: bool,
+    /// Durable Invocation lease attempt associated with this trace.
+    #[serde(rename = "attempt", skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u32>,
 }
 
 impl TraceSummary {
@@ -43,6 +49,7 @@ impl TraceSummary {
         started_at: chrono::DateTime<chrono::FixedOffset>,
         span_count: u32,
         error_count: u32,
+        is_partial: bool,
     ) -> TraceSummary {
         TraceSummary {
             trace_id,
@@ -54,6 +61,8 @@ impl TraceSummary {
             duration_ms: None,
             span_count,
             error_count,
+            is_partial,
+            attempt: None,
         }
     }
 }

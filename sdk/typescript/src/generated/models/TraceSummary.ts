@@ -73,6 +73,21 @@ export interface TraceSummary {
      * @memberof TraceSummary
      */
     errorCount: number;
+    /**
+     * True when the agent root has not arrived or the bounded trace read
+     * omitted spans. Partial traces are useful live diagnostics and must
+     * not be interpreted as the complete execution record.
+     *
+     * @type {boolean}
+     * @memberof TraceSummary
+     */
+    isPartial: boolean;
+    /**
+     * Durable Invocation lease attempt associated with this trace.
+     * @type {number}
+     * @memberof TraceSummary
+     */
+    attempt?: number;
 }
 
 
@@ -98,6 +113,7 @@ export function instanceOfTraceSummary(value: object): value is TraceSummary {
     if (!('startedAt' in value) || value['startedAt'] === undefined) return false;
     if (!('spanCount' in value) || value['spanCount'] === undefined) return false;
     if (!('errorCount' in value) || value['errorCount'] === undefined) return false;
+    if (!('isPartial' in value) || value['isPartial'] === undefined) return false;
     return true;
 }
 
@@ -120,6 +136,8 @@ export function TraceSummaryFromJSONTyped(json: any, ignoreDiscriminator: boolea
         'durationMs': json['duration_ms'] == null ? undefined : json['duration_ms'],
         'spanCount': json['span_count'],
         'errorCount': json['error_count'],
+        'isPartial': json['is_partial'],
+        'attempt': json['attempt'] == null ? undefined : json['attempt'],
     };
 }
 
@@ -143,5 +161,7 @@ export function TraceSummaryToJSONTyped(value?: TraceSummary | null, ignoreDiscr
         'duration_ms': value['durationMs'],
         'span_count': value['spanCount'],
         'error_count': value['errorCount'],
+        'is_partial': value['isPartial'],
+        'attempt': value['attempt'],
     };
 }

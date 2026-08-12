@@ -2164,9 +2164,9 @@ class InvocationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> Trace:
-        """Read one hosted agent trace and its associated logs
+        """Read one hosted agent trace
 
-        Returns a content-free projection of the complete OpenTelemetry span tree plus the first 200 trace-correlated log records. nvoken grounds the trace's Invocation attribution in Postgres before returning it; knowing a W3C trace ID grants no authority.
+        Returns a content-free projection of up to 200 OpenTelemetry spans. Use the pageable Invocation log endpoint with `trace_id` for associated logs. `is_partial` says when the agent root has not arrived or the bounded read omitted spans. nvoken grounds the trace's Invocation attribution in its durable Invocation record before returning it; knowing a W3C trace ID grants no authority.
 
         :param trace_id: (required)
         :type trace_id: str
@@ -2237,9 +2237,9 @@ class InvocationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[Trace]:
-        """Read one hosted agent trace and its associated logs
+        """Read one hosted agent trace
 
-        Returns a content-free projection of the complete OpenTelemetry span tree plus the first 200 trace-correlated log records. nvoken grounds the trace's Invocation attribution in Postgres before returning it; knowing a W3C trace ID grants no authority.
+        Returns a content-free projection of up to 200 OpenTelemetry spans. Use the pageable Invocation log endpoint with `trace_id` for associated logs. `is_partial` says when the agent root has not arrived or the bounded read omitted spans. nvoken grounds the trace's Invocation attribution in its durable Invocation record before returning it; knowing a W3C trace ID grants no authority.
 
         :param trace_id: (required)
         :type trace_id: str
@@ -2310,9 +2310,9 @@ class InvocationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Read one hosted agent trace and its associated logs
+        """Read one hosted agent trace
 
-        Returns a content-free projection of the complete OpenTelemetry span tree plus the first 200 trace-correlated log records. nvoken grounds the trace's Invocation attribution in Postgres before returning it; knowing a W3C trace ID grants no authority.
+        Returns a content-free projection of up to 200 OpenTelemetry spans. Use the pageable Invocation log endpoint with `trace_id` for associated logs. `is_partial` says when the agent root has not arrived or the bounded read omitted spans. nvoken grounds the trace's Invocation attribution in its durable Invocation record before returning it; knowing a W3C trace ID grants no authority.
 
         :param trace_id: (required)
         :type trace_id: str
@@ -2711,6 +2711,7 @@ class InvocationsApi:
         invocation_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        trace_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Return only logs correlated to this W3C trace ID.")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2734,6 +2735,8 @@ class InvocationsApi:
         :type cursor: str
         :param limit: Maximum items in this page. Defaults to 100.
         :type limit: int
+        :param trace_id: Return only logs correlated to this W3C trace ID.
+        :type trace_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2760,6 +2763,7 @@ class InvocationsApi:
             invocation_id=invocation_id,
             cursor=cursor,
             limit=limit,
+            trace_id=trace_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2792,6 +2796,7 @@ class InvocationsApi:
         invocation_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        trace_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Return only logs correlated to this W3C trace ID.")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2815,6 +2820,8 @@ class InvocationsApi:
         :type cursor: str
         :param limit: Maximum items in this page. Defaults to 100.
         :type limit: int
+        :param trace_id: Return only logs correlated to this W3C trace ID.
+        :type trace_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2841,6 +2848,7 @@ class InvocationsApi:
             invocation_id=invocation_id,
             cursor=cursor,
             limit=limit,
+            trace_id=trace_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2873,6 +2881,7 @@ class InvocationsApi:
         invocation_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        trace_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Return only logs correlated to this W3C trace ID.")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2896,6 +2905,8 @@ class InvocationsApi:
         :type cursor: str
         :param limit: Maximum items in this page. Defaults to 100.
         :type limit: int
+        :param trace_id: Return only logs correlated to this W3C trace ID.
+        :type trace_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2922,6 +2933,7 @@ class InvocationsApi:
             invocation_id=invocation_id,
             cursor=cursor,
             limit=limit,
+            trace_id=trace_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2949,6 +2961,7 @@ class InvocationsApi:
         invocation_id,
         cursor,
         limit,
+        trace_id,
         _request_auth,
         _content_type,
         _headers,
@@ -2980,6 +2993,10 @@ class InvocationsApi:
         if limit is not None:
 
             _query_params.append(('limit', limit))
+
+        if trace_id is not None:
+
+            _query_params.append(('trace_id', trace_id))
 
         # process the header parameters
         # process the form parameters
@@ -3039,7 +3056,7 @@ class InvocationsApi:
     ) -> TraceList:
         """Page through hosted agent traces for one turn
 
-        Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
+        Returns newest-first, content-free summaries exported from Dive through OpenTelemetry. A child-only trace is returned as `is_partial: true` while its agent root is still open or if the process exits before that root is exported. Traces remain diagnostic and best-effort; the durable Invocation timeline is the execution authority. `status` is `disabled` when this installation has no configured observation store.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -3120,7 +3137,7 @@ class InvocationsApi:
     ) -> ApiResponse[TraceList]:
         """Page through hosted agent traces for one turn
 
-        Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
+        Returns newest-first, content-free summaries exported from Dive through OpenTelemetry. A child-only trace is returned as `is_partial: true` while its agent root is still open or if the process exits before that root is exported. Traces remain diagnostic and best-effort; the durable Invocation timeline is the execution authority. `status` is `disabled` when this installation has no configured observation store.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -3201,7 +3218,7 @@ class InvocationsApi:
     ) -> RESTResponseType:
         """Page through hosted agent traces for one turn
 
-        Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
+        Returns newest-first, content-free summaries exported from Dive through OpenTelemetry. A child-only trace is returned as `is_partial: true` while its agent root is still open or if the process exits before that root is exported. Traces remain diagnostic and best-effort; the durable Invocation timeline is the execution authority. `status` is `disabled` when this installation has no configured observation store.
 
         :param invocation_id: (required)
         :type invocation_id: str

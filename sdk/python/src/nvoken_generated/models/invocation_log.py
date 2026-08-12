@@ -46,7 +46,10 @@ class InvocationLog(BaseModel):
     model: Optional[StrictStr] = None
     tool_name: Optional[StrictStr] = None
     status: Optional[StrictStr] = None
-    __properties: ClassVar[List[str]] = ["id", "timestamp", "severity", "severity_number", "message", "service_name", "trace_id", "span_id", "event", "component", "outcome", "error_class", "request_id", "provider", "model", "tool_name", "status"]
+    attempt: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
+    iteration: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
+    lease_attempt: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
+    __properties: ClassVar[List[str]] = ["id", "timestamp", "severity", "severity_number", "message", "service_name", "trace_id", "span_id", "event", "component", "outcome", "error_class", "request_id", "provider", "model", "tool_name", "status", "attempt", "iteration", "lease_attempt"]
 
     @field_validator('trace_id')
     def trace_id_validate_regular_expression(cls, value):
@@ -141,6 +144,9 @@ class InvocationLog(BaseModel):
             "provider": obj.get("provider"),
             "model": obj.get("model"),
             "tool_name": obj.get("tool_name"),
-            "status": obj.get("status")
+            "status": obj.get("status"),
+            "attempt": obj.get("attempt"),
+            "iteration": obj.get("iteration"),
+            "lease_attempt": obj.get("lease_attempt")
         })
         return _obj

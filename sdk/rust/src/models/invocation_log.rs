@@ -48,6 +48,12 @@ pub struct InvocationLog {
     pub tool_name: Option<String>,
     #[serde(rename = "status", skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
+    #[serde(rename = "attempt", skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u32>,
+    #[serde(rename = "iteration", skip_serializing_if = "Option::is_none")]
+    pub iteration: Option<u32>,
+    #[serde(rename = "lease_attempt", skip_serializing_if = "Option::is_none")]
+    pub lease_attempt: Option<u32>,
 }
 
 impl InvocationLog {
@@ -76,6 +82,9 @@ impl InvocationLog {
             model: None,
             tool_name: None,
             status: None,
+            attempt: None,
+            iteration: None,
+            lease_attempt: None,
         }
     }
 }

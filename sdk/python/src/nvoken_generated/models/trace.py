@@ -21,7 +21,6 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
-from nvoken_generated.models.invocation_log import InvocationLog
 from nvoken_generated.models.trace_span import TraceSpan
 from typing import Optional, Set
 from typing_extensions import Self
@@ -40,12 +39,12 @@ class Trace(BaseModel):
     duration_ms: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
     span_count: Annotated[int, Field(strict=True, ge=1)]
     error_count: Annotated[int, Field(strict=True, ge=0)]
+    is_partial: StrictBool = Field(description="True when this response contains only a bounded or rootless partial trace.")
+    attempt: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(default=None, description="Durable Invocation lease attempt associated with this trace.")
     invocation_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `inv_` prefix. Treat the body as opaque.")
     session_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `sess_` prefix. Treat the body as opaque.")
     spans: List[TraceSpan]
-    logs: List[InvocationLog]
-    logs_has_more: StrictBool
-    __properties: ClassVar[List[str]] = ["trace_id", "root_span_id", "name", "status", "started_at", "ended_at", "duration_ms", "span_count", "error_count", "invocation_id", "session_id", "spans", "logs", "logs_has_more"]
+    __properties: ClassVar[List[str]] = ["trace_id", "root_span_id", "name", "status", "started_at", "ended_at", "duration_ms", "span_count", "error_count", "is_partial", "attempt", "invocation_id", "session_id", "spans"]
 
     @field_validator('trace_id')
     def trace_id_validate_regular_expression(cls, value):
@@ -120,13 +119,6 @@ class Trace(BaseModel):
                 if _item_spans:
                     _items.append(_item_spans.to_dict())
             _dict['spans'] = _items
-        # override the default output from pydantic by calling `to_dict()` of each item in logs (list)
-        _items = []
-        if self.logs:
-            for _item_logs in self.logs:
-                if _item_logs:
-                    _items.append(_item_logs.to_dict())
-            _dict['logs'] = _items
         return _dict
 
     @classmethod
@@ -148,10 +140,10 @@ class Trace(BaseModel):
             "duration_ms": obj.get("duration_ms"),
             "span_count": obj.get("span_count"),
             "error_count": obj.get("error_count"),
+            "is_partial": obj.get("is_partial"),
+            "attempt": obj.get("attempt"),
             "invocation_id": obj.get("invocation_id"),
             "session_id": obj.get("session_id"),
-            "spans": [TraceSpan.from_dict(_item) for _item in obj["spans"]] if obj.get("spans") is not None else None,
-            "logs": [InvocationLog.from_dict(_item) for _item in obj["logs"]] if obj.get("logs") is not None else None,
-            "logs_has_more": obj.get("logs_has_more")
+            "spans": [TraceSpan.from_dict(_item) for _item in obj["spans"]] if obj.get("spans") is not None else None
         })
         return _obj

@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from typing import Optional, Set
@@ -38,7 +38,9 @@ class TraceSummary(BaseModel):
     duration_ms: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
     span_count: Annotated[int, Field(strict=True, ge=1)]
     error_count: Annotated[int, Field(strict=True, ge=0)]
-    __properties: ClassVar[List[str]] = ["trace_id", "root_span_id", "name", "status", "started_at", "ended_at", "duration_ms", "span_count", "error_count"]
+    is_partial: StrictBool = Field(description="True when the agent root has not arrived or the bounded trace read omitted spans. Partial traces are useful live diagnostics and must not be interpreted as the complete execution record. ")
+    attempt: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(default=None, description="Durable Invocation lease attempt associated with this trace.")
+    __properties: ClassVar[List[str]] = ["trace_id", "root_span_id", "name", "status", "started_at", "ended_at", "duration_ms", "span_count", "error_count", "is_partial", "attempt"]
 
     @field_validator('trace_id')
     def trace_id_validate_regular_expression(cls, value):
@@ -126,6 +128,8 @@ class TraceSummary(BaseModel):
             "ended_at": obj.get("ended_at"),
             "duration_ms": obj.get("duration_ms"),
             "span_count": obj.get("span_count"),
-            "error_count": obj.get("error_count")
+            "error_count": obj.get("error_count"),
+            "is_partial": obj.get("is_partial"),
+            "attempt": obj.get("attempt")
         })
         return _obj

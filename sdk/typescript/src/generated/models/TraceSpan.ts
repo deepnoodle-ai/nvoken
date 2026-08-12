@@ -52,17 +52,17 @@ export interface TraceSpan {
      */
     name: string;
     /**
-     *
-     * @type {TraceSpanKindEnum}
+     * OpenTelemetry span kind; known values include internal, client, server, producer, consumer, and unspecified.
+     * @type {string}
      * @memberof TraceSpan
      */
-    kind: TraceSpanKindEnum;
+    kind: string;
     /**
-     *
-     * @type {TraceSpanOperationEnum}
+     * GenAI operation name. Dive currently emits invoke_agent, chat, and execute_tool.
+     * @type {string}
      * @memberof TraceSpan
      */
-    operation?: TraceSpanOperationEnum;
+    operation?: string;
     /**
      *
      * @type {TraceSpanStatusEnum}
@@ -118,35 +118,47 @@ export interface TraceSpan {
      */
     errorType?: string;
     /**
-     *
+     * Provider-reported input tokens; cache fields may overlap this total.
      * @type {number}
      * @memberof TraceSpan
      */
     inputTokens?: number;
     /**
-     *
+     * Provider-reported output tokens; reasoning tokens are a subset when reported.
      * @type {number}
      * @memberof TraceSpan
      */
     outputTokens?: number;
     /**
-     *
+     * Input tokens used to create a provider cache entry; do not add blindly to input_tokens.
      * @type {number}
      * @memberof TraceSpan
      */
     cacheCreationInputTokens?: number;
     /**
-     *
+     * Input tokens served from provider cache; do not add blindly to input_tokens.
      * @type {number}
      * @memberof TraceSpan
      */
     cacheReadInputTokens?: number;
     /**
-     *
+     * Reasoning tokens included within output_tokens when the provider reports them.
      * @type {number}
      * @memberof TraceSpan
      */
     reasoningTokens?: number;
+    /**
+     *
+     * @type {Array<string>}
+     * @memberof TraceSpan
+     */
+    finishReasons?: Array<string>;
+    /**
+     * Time from model-call start to the first streamed output token.
+     * @type {number}
+     * @memberof TraceSpan
+     */
+    timeToFirstTokenMs?: number;
     /**
      *
      * @type {Money}
@@ -155,28 +167,6 @@ export interface TraceSpan {
     modelCost?: Money;
 }
 
-
-/**
- * @export
- */
-export const TraceSpanKindEnum = {
-    Internal: 'internal',
-    Client: 'client',
-    Server: 'server',
-    Producer: 'producer',
-    Consumer: 'consumer'
-} as const;
-export type TraceSpanKindEnum = typeof TraceSpanKindEnum[keyof typeof TraceSpanKindEnum];
-
-/**
- * @export
- */
-export const TraceSpanOperationEnum = {
-    InvokeAgent: 'invoke_agent',
-    Chat: 'chat',
-    ExecuteTool: 'execute_tool'
-} as const;
-export type TraceSpanOperationEnum = typeof TraceSpanOperationEnum[keyof typeof TraceSpanOperationEnum];
 
 /**
  * @export
@@ -232,6 +222,8 @@ export function TraceSpanFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'cacheCreationInputTokens': json['cache_creation_input_tokens'] == null ? undefined : json['cache_creation_input_tokens'],
         'cacheReadInputTokens': json['cache_read_input_tokens'] == null ? undefined : json['cache_read_input_tokens'],
         'reasoningTokens': json['reasoning_tokens'] == null ? undefined : json['reasoning_tokens'],
+        'finishReasons': json['finish_reasons'] == null ? undefined : json['finish_reasons'],
+        'timeToFirstTokenMs': json['time_to_first_token_ms'] == null ? undefined : json['time_to_first_token_ms'],
         'modelCost': json['model_cost'] == null ? undefined : MoneyFromJSON(json['model_cost']),
     };
 }
@@ -267,6 +259,8 @@ export function TraceSpanToJSONTyped(value?: TraceSpan | null, ignoreDiscriminat
         'cache_creation_input_tokens': value['cacheCreationInputTokens'],
         'cache_read_input_tokens': value['cacheReadInputTokens'],
         'reasoning_tokens': value['reasoningTokens'],
+        'finish_reasons': value['finishReasons'],
+        'time_to_first_token_ms': value['timeToFirstTokenMs'],
         'model_cost': MoneyToJSON(value['modelCost']),
     };
 }

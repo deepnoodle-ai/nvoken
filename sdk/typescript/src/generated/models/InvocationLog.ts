@@ -121,6 +121,24 @@ export interface InvocationLog {
      * @memberof InvocationLog
      */
     status?: string;
+    /**
+     *
+     * @type {number}
+     * @memberof InvocationLog
+     */
+    attempt?: number;
+    /**
+     *
+     * @type {number}
+     * @memberof InvocationLog
+     */
+    iteration?: number;
+    /**
+     *
+     * @type {number}
+     * @memberof InvocationLog
+     */
+    leaseAttempt?: number;
 }
 
 /**
@@ -162,6 +180,9 @@ export function InvocationLogFromJSONTyped(json: any, ignoreDiscriminator: boole
         'model': json['model'] == null ? undefined : json['model'],
         'toolName': json['tool_name'] == null ? undefined : json['tool_name'],
         'status': json['status'] == null ? undefined : json['status'],
+        'attempt': json['attempt'] == null ? undefined : json['attempt'],
+        'iteration': json['iteration'] == null ? undefined : json['iteration'],
+        'leaseAttempt': json['lease_attempt'] == null ? undefined : json['lease_attempt'],
     };
 }
 
@@ -193,5 +214,8 @@ export function InvocationLogToJSONTyped(value?: InvocationLog | null, ignoreDis
         'model': value['model'],
         'tool_name': value['toolName'],
         'status': value['status'],
+        'attempt': value['attempt'],
+        'iteration': value['iteration'],
+        'lease_attempt': value['leaseAttempt'],
     };
 }

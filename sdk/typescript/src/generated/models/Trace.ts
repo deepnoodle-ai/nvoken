@@ -20,13 +20,6 @@ import {
     TraceSpanToJSON,
     TraceSpanToJSONTyped,
 } from './TraceSpan.js';
-import type { InvocationLog } from './InvocationLog.js';
-import {
-    InvocationLogFromJSON,
-    InvocationLogFromJSONTyped,
-    InvocationLogToJSON,
-    InvocationLogToJSONTyped,
-} from './InvocationLog.js';
 
 /**
  *
@@ -89,6 +82,18 @@ export interface Trace {
      */
     errorCount: number;
     /**
+     * True when this response contains only a bounded or rootless partial trace.
+     * @type {boolean}
+     * @memberof Trace
+     */
+    isPartial: boolean;
+    /**
+     * Durable Invocation lease attempt associated with this trace.
+     * @type {number}
+     * @memberof Trace
+     */
+    attempt?: number;
+    /**
      * Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
      * @type {string}
      * @memberof Trace
@@ -106,18 +111,6 @@ export interface Trace {
      * @memberof Trace
      */
     spans: Array<TraceSpan>;
-    /**
-     *
-     * @type {Array<InvocationLog>}
-     * @memberof Trace
-     */
-    logs: Array<InvocationLog>;
-    /**
-     *
-     * @type {boolean}
-     * @memberof Trace
-     */
-    logsHasMore: boolean;
 }
 
 
@@ -143,11 +136,10 @@ export function instanceOfTrace(value: object): value is Trace {
     if (!('startedAt' in value) || value['startedAt'] === undefined) return false;
     if (!('spanCount' in value) || value['spanCount'] === undefined) return false;
     if (!('errorCount' in value) || value['errorCount'] === undefined) return false;
+    if (!('isPartial' in value) || value['isPartial'] === undefined) return false;
     if (!('invocationId' in value) || value['invocationId'] === undefined) return false;
     if (!('sessionId' in value) || value['sessionId'] === undefined) return false;
     if (!('spans' in value) || value['spans'] === undefined) return false;
-    if (!('logs' in value) || value['logs'] === undefined) return false;
-    if (!('logsHasMore' in value) || value['logsHasMore'] === undefined) return false;
     return true;
 }
 
@@ -170,11 +162,11 @@ export function TraceFromJSONTyped(json: any, ignoreDiscriminator: boolean): Tra
         'durationMs': json['duration_ms'] == null ? undefined : json['duration_ms'],
         'spanCount': json['span_count'],
         'errorCount': json['error_count'],
+        'isPartial': json['is_partial'],
+        'attempt': json['attempt'] == null ? undefined : json['attempt'],
         'invocationId': json['invocation_id'],
         'sessionId': json['session_id'],
         'spans': ((json['spans'] as Array<any>).map(TraceSpanFromJSON)),
-        'logs': ((json['logs'] as Array<any>).map(InvocationLogFromJSON)),
-        'logsHasMore': json['logs_has_more'],
     };
 }
 
@@ -198,10 +190,10 @@ export function TraceToJSONTyped(value?: Trace | null, ignoreDiscriminator: bool
         'duration_ms': value['durationMs'],
         'span_count': value['spanCount'],
         'error_count': value['errorCount'],
+        'is_partial': value['isPartial'],
+        'attempt': value['attempt'],
         'invocation_id': value['invocationId'],
         'session_id': value['sessionId'],
         'spans': ((value['spans'] as Array<any>).map(TraceSpanToJSON)),
-        'logs': ((value['logs'] as Array<any>).map(InvocationLogToJSON)),
-        'logs_has_more': value['logsHasMore'],
     };
 }

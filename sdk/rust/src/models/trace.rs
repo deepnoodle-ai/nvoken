@@ -32,6 +32,12 @@ pub struct Trace {
     pub span_count: u32,
     #[serde(rename = "error_count")]
     pub error_count: u32,
+    /// True when this response contains only a bounded or rootless partial trace.
+    #[serde(rename = "is_partial")]
+    pub is_partial: bool,
+    /// Durable Invocation lease attempt associated with this trace.
+    #[serde(rename = "attempt", skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u32>,
     /// Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
     #[serde(rename = "invocation_id")]
     pub invocation_id: String,
@@ -40,10 +46,6 @@ pub struct Trace {
     pub session_id: String,
     #[serde(rename = "spans")]
     pub spans: Vec<models::TraceSpan>,
-    #[serde(rename = "logs")]
-    pub logs: Vec<models::InvocationLog>,
-    #[serde(rename = "logs_has_more")]
-    pub logs_has_more: bool,
 }
 
 impl Trace {
@@ -55,11 +57,10 @@ impl Trace {
         started_at: chrono::DateTime<chrono::FixedOffset>,
         span_count: u32,
         error_count: u32,
+        is_partial: bool,
         invocation_id: String,
         session_id: String,
         spans: Vec<models::TraceSpan>,
-        logs: Vec<models::InvocationLog>,
-        logs_has_more: bool,
     ) -> Trace {
         Trace {
             trace_id,
@@ -71,11 +72,11 @@ impl Trace {
             duration_ms: None,
             span_count,
             error_count,
+            is_partial,
+            attempt: None,
             invocation_id,
             session_id,
             spans,
-            logs,
-            logs_has_more,
         }
     }
 }

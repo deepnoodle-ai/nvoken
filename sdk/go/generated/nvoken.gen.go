@@ -2008,54 +2008,6 @@ func (e TraceStatus) Valid() bool {
 	}
 }
 
-// Defines values for TraceSpanKind.
-const (
-	TraceSpanKindClient   TraceSpanKind = "client"
-	TraceSpanKindConsumer TraceSpanKind = "consumer"
-	TraceSpanKindInternal TraceSpanKind = "internal"
-	TraceSpanKindProducer TraceSpanKind = "producer"
-	TraceSpanKindServer   TraceSpanKind = "server"
-)
-
-// Valid indicates whether the value is a known member of the TraceSpanKind enum.
-func (e TraceSpanKind) Valid() bool {
-	switch e {
-	case TraceSpanKindClient:
-		return true
-	case TraceSpanKindConsumer:
-		return true
-	case TraceSpanKindInternal:
-		return true
-	case TraceSpanKindProducer:
-		return true
-	case TraceSpanKindServer:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for TraceSpanOperation.
-const (
-	Chat        TraceSpanOperation = "chat"
-	ExecuteTool TraceSpanOperation = "execute_tool"
-	InvokeAgent TraceSpanOperation = "invoke_agent"
-)
-
-// Valid indicates whether the value is a known member of the TraceSpanOperation enum.
-func (e TraceSpanOperation) Valid() bool {
-	switch e {
-	case Chat:
-		return true
-	case ExecuteTool:
-		return true
-	case InvokeAgent:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for TraceSpanStatus.
 const (
 	TraceSpanStatusError TraceSpanStatus = "error"
@@ -4394,10 +4346,13 @@ type InvocationListResponse struct {
 
 // InvocationLog defines model for InvocationLog.
 type InvocationLog struct {
+	Attempt        *int      `json:"attempt,omitempty"`
 	Component      *string   `json:"component,omitempty"`
 	ErrorClass     *string   `json:"error_class,omitempty"`
 	Event          *string   `json:"event,omitempty"`
 	ID             string    `json:"id"`
+	Iteration      *int      `json:"iteration,omitempty"`
+	LeaseAttempt   *int      `json:"lease_attempt,omitempty"`
 	Message        string    `json:"message"`
 	Model          *string   `json:"model,omitempty"`
 	Outcome        *string   `json:"outcome,omitempty"`
@@ -6234,16 +6189,19 @@ type ToolUseBlockType string
 
 // Trace defines model for Trace.
 type Trace struct {
+	// Attempt Durable Invocation lease attempt associated with this trace.
+	Attempt    *int       `json:"attempt,omitempty"`
 	DurationMs *int       `json:"duration_ms,omitempty"`
 	EndedAt    *time.Time `json:"ended_at,omitempty"`
 	ErrorCount int        `json:"error_count"`
 
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID    `json:"invocation_id"`
-	Logs         []InvocationLog `json:"logs"`
-	LogsHasMore  bool            `json:"logs_has_more"`
-	Name         string          `json:"name"`
-	RootSpanID   string          `json:"root_span_id"`
+	InvocationID InvocationID `json:"invocation_id"`
+
+	// IsPartial True when this response contains only a bounded or rootless partial trace.
+	IsPartial  bool   `json:"is_partial"`
+	Name       string `json:"name"`
+	RootSpanID string `json:"root_span_id"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID   `json:"session_id"`
@@ -6273,45 +6231,63 @@ type TraceList struct {
 
 // TraceSpan defines model for TraceSpan.
 type TraceSpan struct {
-	CacheCreationInputTokens *int                `json:"cache_creation_input_tokens,omitempty"`
-	CacheReadInputTokens     *int                `json:"cache_read_input_tokens,omitempty"`
-	DurationMs               *int                `json:"duration_ms,omitempty"`
-	EndedAt                  *time.Time          `json:"ended_at,omitempty"`
-	ErrorType                *string             `json:"error_type,omitempty"`
-	InputTokens              *int                `json:"input_tokens,omitempty"`
-	Kind                     TraceSpanKind       `json:"kind"`
-	ModelCost                *Money              `json:"model_cost,omitempty"`
-	Name                     string              `json:"name"`
-	Operation                *TraceSpanOperation `json:"operation,omitempty"`
-	OutputTokens             *int                `json:"output_tokens,omitempty"`
-	ParentSpanID             *string             `json:"parent_span_id,omitempty"`
-	Provider                 *string             `json:"provider,omitempty"`
-	ReasoningTokens          *int                `json:"reasoning_tokens,omitempty"`
-	RequestModel             *string             `json:"request_model,omitempty"`
-	ResponseModel            *string             `json:"response_model,omitempty"`
-	SpanID                   string              `json:"span_id"`
-	StartedAt                time.Time           `json:"started_at"`
-	Status                   TraceSpanStatus     `json:"status"`
-	ToolName                 *string             `json:"tool_name,omitempty"`
+	// CacheCreationInputTokens Input tokens used to create a provider cache entry; do not add blindly to input_tokens.
+	CacheCreationInputTokens *int `json:"cache_creation_input_tokens,omitempty"`
+
+	// CacheReadInputTokens Input tokens served from provider cache; do not add blindly to input_tokens.
+	CacheReadInputTokens *int       `json:"cache_read_input_tokens,omitempty"`
+	DurationMs           *int       `json:"duration_ms,omitempty"`
+	EndedAt              *time.Time `json:"ended_at,omitempty"`
+	ErrorType            *string    `json:"error_type,omitempty"`
+	FinishReasons        *[]string  `json:"finish_reasons,omitempty"`
+
+	// InputTokens Provider-reported input tokens; cache fields may overlap this total.
+	InputTokens *int `json:"input_tokens,omitempty"`
+
+	// Kind OpenTelemetry span kind; known values include internal, client, server, producer, consumer, and unspecified.
+	Kind      string `json:"kind"`
+	ModelCost *Money `json:"model_cost,omitempty"`
+	Name      string `json:"name"`
+
+	// Operation GenAI operation name. Dive currently emits invoke_agent, chat, and execute_tool.
+	Operation *string `json:"operation,omitempty"`
+
+	// OutputTokens Provider-reported output tokens; reasoning tokens are a subset when reported.
+	OutputTokens *int    `json:"output_tokens,omitempty"`
+	ParentSpanID *string `json:"parent_span_id,omitempty"`
+	Provider     *string `json:"provider,omitempty"`
+
+	// ReasoningTokens Reasoning tokens included within output_tokens when the provider reports them.
+	ReasoningTokens *int            `json:"reasoning_tokens,omitempty"`
+	RequestModel    *string         `json:"request_model,omitempty"`
+	ResponseModel   *string         `json:"response_model,omitempty"`
+	SpanID          string          `json:"span_id"`
+	StartedAt       time.Time       `json:"started_at"`
+	Status          TraceSpanStatus `json:"status"`
+
+	// TimeToFirstTokenMs Time from model-call start to the first streamed output token.
+	TimeToFirstTokenMs *int    `json:"time_to_first_token_ms,omitempty"`
+	ToolName           *string `json:"tool_name,omitempty"`
 
 	// TraceID Lowercase W3C trace ID. Possession does not grant access.
 	TraceID TraceID `json:"trace_id"`
 }
-
-// TraceSpanKind defines model for TraceSpan.Kind.
-type TraceSpanKind string
-
-// TraceSpanOperation defines model for TraceSpan.Operation.
-type TraceSpanOperation string
 
 // TraceSpanStatus defines model for TraceSpan.Status.
 type TraceSpanStatus string
 
 // TraceSummary defines model for TraceSummary.
 type TraceSummary struct {
-	DurationMs *int               `json:"duration_ms,omitempty"`
-	EndedAt    *time.Time         `json:"ended_at,omitempty"`
-	ErrorCount int                `json:"error_count"`
+	// Attempt Durable Invocation lease attempt associated with this trace.
+	Attempt    *int       `json:"attempt,omitempty"`
+	DurationMs *int       `json:"duration_ms,omitempty"`
+	EndedAt    *time.Time `json:"ended_at,omitempty"`
+	ErrorCount int        `json:"error_count"`
+
+	// IsPartial True when the agent root has not arrived or the bounded trace read
+	// omitted spans. Partial traces are useful live diagnostics and must
+	// not be interpreted as the complete execution record.
+	IsPartial  bool               `json:"is_partial"`
 	Name       string             `json:"name"`
 	RootSpanID string             `json:"root_span_id"`
 	SpanCount  int                `json:"span_count"`
@@ -6856,6 +6832,9 @@ type ListInvocationLogsParams struct {
 
 	// Limit Maximum items in this page. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// TraceID Return only logs correlated to this W3C trace ID.
+	TraceID *TraceID `form:"trace_id,omitempty" json:"trace_id,omitempty"`
 }
 
 // ListNudgesParams defines parameters for ListNudges.
@@ -10546,10 +10525,12 @@ type ClientInterface interface {
 
 	// ListInvocationTraces Page through hosted agent traces for one turn
 	//
-	// Returns the content-free root summaries exported from Dive through
-	// OpenTelemetry. Traces are diagnostic and best-effort; the durable
-	// Invocation timeline remains the execution authority. `status` is
-	// `disabled` when this installation has no configured observation store.
+	// Returns newest-first, content-free summaries exported from Dive through
+	// OpenTelemetry. A child-only trace is returned as `is_partial: true`
+	// while its agent root is still open or if the process exits before that
+	// root is exported. Traces remain diagnostic and best-effort; the durable
+	// Invocation timeline is the execution authority. `status` is `disabled`
+	// when this installation has no configured observation store.
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id}/traces (the `ListInvocationTraces` operationId).
 	ListInvocationTraces(ctx context.Context, invocationID InvocationID, params *ListInvocationTracesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -11079,12 +11060,14 @@ type ClientInterface interface {
 	// Corresponds with DELETE /v1/tenants/{tenant_id} (the `DeleteTenant` operationId).
 	DeleteTenant(ctx context.Context, tenantID TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetTrace Read one hosted agent trace and its associated logs
+	// GetTrace Read one hosted agent trace
 	//
-	// Returns a content-free projection of the complete OpenTelemetry span
-	// tree plus the first 200 trace-correlated log records. nvoken grounds
-	// the trace's Invocation attribution in Postgres before returning it;
-	// knowing a W3C trace ID grants no authority.
+	// Returns a content-free projection of up to 200 OpenTelemetry spans.
+	// Use the pageable Invocation log endpoint with `trace_id` for associated
+	// logs. `is_partial` says when the
+	// agent root has not arrived or the bounded read omitted spans. nvoken
+	// grounds the trace's Invocation attribution in its durable Invocation
+	// record before returning it; knowing a W3C trace ID grants no authority.
 	//
 	// Corresponds with GET /v1/traces/{trace_id} (the `GetTrace` operationId).
 	GetTrace(ctx context.Context, traceID TraceID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -12631,10 +12614,12 @@ func (c *Client) SubmitHostToolResults(ctx context.Context, invocationID Invocat
 
 // ListInvocationTraces Page through hosted agent traces for one turn
 //
-// Returns the content-free root summaries exported from Dive through
-// OpenTelemetry. Traces are diagnostic and best-effort; the durable
-// Invocation timeline remains the execution authority. `status` is
-// `disabled` when this installation has no configured observation store.
+// Returns newest-first, content-free summaries exported from Dive through
+// OpenTelemetry. A child-only trace is returned as `is_partial: true`
+// while its agent root is still open or if the process exits before that
+// root is exported. Traces remain diagnostic and best-effort; the durable
+// Invocation timeline is the execution authority. `status` is `disabled`
+// when this installation has no configured observation store.
 //
 // Corresponds with GET /v1/invocations/{invocation_id}/traces (the `ListInvocationTraces` operationId).
 func (c *Client) ListInvocationTraces(ctx context.Context, invocationID InvocationID, params *ListInvocationTracesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -13524,12 +13509,14 @@ func (c *Client) DeleteTenant(ctx context.Context, tenantID TenantID, reqEditors
 	return c.Client.Do(req)
 }
 
-// GetTrace Read one hosted agent trace and its associated logs
+// GetTrace Read one hosted agent trace
 //
-// Returns a content-free projection of the complete OpenTelemetry span
-// tree plus the first 200 trace-correlated log records. nvoken grounds
-// the trace's Invocation attribution in Postgres before returning it;
-// knowing a W3C trace ID grants no authority.
+// Returns a content-free projection of up to 200 OpenTelemetry spans.
+// Use the pageable Invocation log endpoint with `trace_id` for associated
+// logs. `is_partial` says when the
+// agent root has not arrived or the bounded read omitted spans. nvoken
+// grounds the trace's Invocation attribution in its durable Invocation
+// record before returning it; knowing a W3C trace ID grants no authority.
 //
 // Corresponds with GET /v1/traces/{trace_id} (the `GetTrace` operationId).
 func (c *Client) GetTrace(ctx context.Context, traceID TraceID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -15481,6 +15468,18 @@ func NewListInvocationLogsRequest(server string, invocationID InvocationID, para
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TraceID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "trace_id", *params.TraceID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -19451,10 +19450,12 @@ type ClientWithResponsesInterface interface {
 
 	// ListInvocationTracesWithResponse Page through hosted agent traces for one turn
 	//
-	// Returns the content-free root summaries exported from Dive through
-	// OpenTelemetry. Traces are diagnostic and best-effort; the durable
-	// Invocation timeline remains the execution authority. `status` is
-	// `disabled` when this installation has no configured observation store.
+	// Returns newest-first, content-free summaries exported from Dive through
+	// OpenTelemetry. A child-only trace is returned as `is_partial: true`
+	// while its agent root is still open or if the process exits before that
+	// root is exported. Traces remain diagnostic and best-effort; the durable
+	// Invocation timeline is the execution authority. `status` is `disabled`
+	// when this installation has no configured observation store.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -20024,12 +20025,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /v1/tenants/{tenant_id} (the `DeleteTenant` operationId).
 	DeleteTenantWithResponse(ctx context.Context, tenantID TenantID, reqEditors ...RequestEditorFn) (*DeleteTenantHTTPResponse, error)
 
-	// GetTraceWithResponse Read one hosted agent trace and its associated logs
+	// GetTraceWithResponse Read one hosted agent trace
 	//
-	// Returns a content-free projection of the complete OpenTelemetry span
-	// tree plus the first 200 trace-correlated log records. nvoken grounds
-	// the trace's Invocation attribution in Postgres before returning it;
-	// knowing a W3C trace ID grants no authority.
+	// Returns a content-free projection of up to 200 OpenTelemetry spans.
+	// Use the pageable Invocation log endpoint with `trace_id` for associated
+	// logs. `is_partial` says when the
+	// agent root has not arrived or the bounded read omitted spans. nvoken
+	// grounds the trace's Invocation attribution in its durable Invocation
+	// record before returning it; knowing a W3C trace ID grants no authority.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -27868,10 +27871,12 @@ func (c *ClientWithResponses) SubmitHostToolResultsWithResponse(ctx context.Cont
 
 // ListInvocationTracesWithResponse Page through hosted agent traces for one turn
 //
-// Returns the content-free root summaries exported from Dive through
-// OpenTelemetry. Traces are diagnostic and best-effort; the durable
-// Invocation timeline remains the execution authority. `status` is
-// `disabled` when this installation has no configured observation store.
+// Returns newest-first, content-free summaries exported from Dive through
+// OpenTelemetry. A child-only trace is returned as `is_partial: true`
+// while its agent root is still open or if the process exits before that
+// root is exported. Traces remain diagnostic and best-effort; the durable
+// Invocation timeline is the execution authority. `status` is `disabled`
+// when this installation has no configured observation store.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28657,12 +28662,14 @@ func (c *ClientWithResponses) DeleteTenantWithResponse(ctx context.Context, tena
 	return ParseDeleteTenantHTTPResponse(rsp)
 }
 
-// GetTraceWithResponse Read one hosted agent trace and its associated logs
+// GetTraceWithResponse Read one hosted agent trace
 //
-// Returns a content-free projection of the complete OpenTelemetry span
-// tree plus the first 200 trace-correlated log records. nvoken grounds
-// the trace's Invocation attribution in Postgres before returning it;
-// knowing a W3C trace ID grants no authority.
+// Returns a content-free projection of up to 200 OpenTelemetry spans.
+// Use the pageable Invocation log endpoint with `trace_id` for associated
+// logs. `is_partial` says when the
+// agent root has not arrived or the bounded read omitted spans. nvoken
+// grounds the trace's Invocation attribution in its durable Invocation
+// record before returning it; knowing a W3C trace ID grants no authority.
 //
 // Returns a wrapper object for the known response body format(s).
 //

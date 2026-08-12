@@ -22,10 +22,12 @@ pub struct TraceSpan {
     pub parent_span_id: Option<String>,
     #[serde(rename = "name")]
     pub name: String,
+    /// OpenTelemetry span kind; known values include internal, client, server, producer, consumer, and unspecified.
     #[serde(rename = "kind")]
-    pub kind: Kind,
+    pub kind: String,
+    /// GenAI operation name. Dive currently emits invoke_agent, chat, and execute_tool.
     #[serde(rename = "operation", skip_serializing_if = "Option::is_none")]
-    pub operation: Option<Operation>,
+    pub operation: Option<String>,
     #[serde(rename = "status")]
     pub status: Status,
     #[serde(rename = "started_at")]
@@ -44,22 +46,35 @@ pub struct TraceSpan {
     pub tool_name: Option<String>,
     #[serde(rename = "error_type", skip_serializing_if = "Option::is_none")]
     pub error_type: Option<String>,
+    /// Provider-reported input tokens; cache fields may overlap this total.
     #[serde(rename = "input_tokens", skip_serializing_if = "Option::is_none")]
     pub input_tokens: Option<u32>,
+    /// Provider-reported output tokens; reasoning tokens are a subset when reported.
     #[serde(rename = "output_tokens", skip_serializing_if = "Option::is_none")]
     pub output_tokens: Option<u32>,
+    /// Input tokens used to create a provider cache entry; do not add blindly to input_tokens.
     #[serde(
         rename = "cache_creation_input_tokens",
         skip_serializing_if = "Option::is_none"
     )]
     pub cache_creation_input_tokens: Option<u32>,
+    /// Input tokens served from provider cache; do not add blindly to input_tokens.
     #[serde(
         rename = "cache_read_input_tokens",
         skip_serializing_if = "Option::is_none"
     )]
     pub cache_read_input_tokens: Option<u32>,
+    /// Reasoning tokens included within output_tokens when the provider reports them.
     #[serde(rename = "reasoning_tokens", skip_serializing_if = "Option::is_none")]
     pub reasoning_tokens: Option<u32>,
+    #[serde(rename = "finish_reasons", skip_serializing_if = "Option::is_none")]
+    pub finish_reasons: Option<Vec<String>>,
+    /// Time from model-call start to the first streamed output token.
+    #[serde(
+        rename = "time_to_first_token_ms",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub time_to_first_token_ms: Option<u32>,
     #[serde(rename = "model_cost", skip_serializing_if = "Option::is_none")]
     pub model_cost: Option<Box<models::Money>>,
 }
@@ -69,7 +84,7 @@ impl TraceSpan {
         trace_id: String,
         span_id: String,
         name: String,
-        kind: Kind,
+        kind: String,
         status: Status,
         started_at: chrono::DateTime<chrono::FixedOffset>,
     ) -> TraceSpan {
@@ -94,44 +109,10 @@ impl TraceSpan {
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
             reasoning_tokens: None,
+            finish_reasons: None,
+            time_to_first_token_ms: None,
             model_cost: None,
         }
-    }
-}
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum Kind {
-    #[serde(rename = "internal")]
-    Internal,
-    #[serde(rename = "client")]
-    Client,
-    #[serde(rename = "server")]
-    Server,
-    #[serde(rename = "producer")]
-    Producer,
-    #[serde(rename = "consumer")]
-    Consumer,
-}
-
-impl Default for Kind {
-    fn default() -> Kind {
-        Self::Internal
-    }
-}
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum Operation {
-    #[serde(rename = "invoke_agent")]
-    InvokeAgent,
-    #[serde(rename = "chat")]
-    Chat,
-    #[serde(rename = "execute_tool")]
-    ExecuteTool,
-}
-
-impl Default for Operation {
-    fn default() -> Operation {
-        Self::InvokeAgent
     }
 }
 ///

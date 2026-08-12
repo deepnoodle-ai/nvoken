@@ -334,6 +334,71 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	}
 }
 
+func TestObservationCommandsSurfaceCorrelationAndNextCursor(t *testing.T) {
+	t.Setenv("NVOKEN_API_KEY", "test-key")
+	const traceID = "11111111111111111111111111111111"
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/v1/invocations/" + testInvocationID + "/traces":
+			_, _ = io.WriteString(response, `{
+				"status":"available",
+				"items":[{
+					"trace_id":"`+traceID+`",
+					"root_span_id":"1111111111111111",
+					"name":"invoke_agent support",
+					"status":"unset",
+					"started_at":"2026-08-11T12:00:00Z",
+					"span_count":1,
+					"error_count":0,
+					"is_partial":true,
+					"attempt":2
+				}],
+				"next_cursor":"trace-page-2"
+			}`)
+		case "/v1/invocations/" + testInvocationID + "/logs":
+			if got := request.URL.Query().Get("trace_id"); got != traceID {
+				t.Errorf("trace_id = %q", got)
+			}
+			_, _ = io.WriteString(response, `{
+				"status":"available",
+				"items":[{
+					"id":"log-1",
+					"timestamp":"2026-08-11T12:00:01Z",
+					"severity":"INFO",
+					"severity_number":9,
+					"message":"Invocation claimed",
+					"attempt":2,
+					"iteration":1,
+					"lease_attempt":2
+				}],
+				"next_cursor":"logs-page-2"
+			}`)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	output, err := executeCLI(t, server.URL, false, "invocation", "traces", testInvocationID)
+	if err != nil || output != "2026-08-11T12:00:00Z\t"+traceID+"\tunset\tpartial\tattempt=2\t1\t0ms\nnext_cursor\ttrace-page-2\n" {
+		t.Fatalf("trace output=%q err=%v", output, err)
+	}
+	output, err = executeCLI(
+		t,
+		server.URL,
+		false,
+		"invocation",
+		"logs",
+		testInvocationID,
+		"--trace-id",
+		traceID,
+	)
+	if err != nil || output != "2026-08-11T12:00:01Z\tINFO\tattempt=2\titeration=1\tlease_attempt=2\tInvocation claimed\nnext_cursor\tlogs-page-2\n" {
+		t.Fatalf("log output=%q err=%v", output, err)
+	}
+}
+
 // The CLI's invoke flags are flat, but the admitted body nests every execution
 // field under agent_definition. Pinning both halves keeps a flag from silently
 // landing at the top level, where the Runtime would reject it.

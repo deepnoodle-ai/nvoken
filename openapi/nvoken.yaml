@@ -1601,10 +1601,12 @@ paths:
       operationId: listInvocationTraces
       summary: Page through hosted agent traces for one turn
       description: |
-        Returns the content-free root summaries exported from Dive through
-        OpenTelemetry. Traces are diagnostic and best-effort; the durable
-        Invocation timeline remains the execution authority. `status` is
-        `disabled` when this installation has no configured observation store.
+        Returns newest-first, content-free summaries exported from Dive through
+        OpenTelemetry. A child-only trace is returned as `is_partial: true`
+        while its agent root is still open or if the process exits before that
+        root is exported. Traces remain diagnostic and best-effort; the durable
+        Invocation timeline is the execution authority. `status` is `disabled`
+        when this installation has no configured observation store.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -1635,6 +1637,10 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
+        - name: trace_id
+          in: query
+          description: Return only logs correlated to this W3C trace ID.
+          schema: { $ref: "#/components/schemas/TraceID" }
       responses:
         "200":
           description: One bounded page of associated logs.
@@ -1653,15 +1659,17 @@ paths:
     get:
       tags: [Invocations]
       operationId: getTrace
-      summary: Read one hosted agent trace and its associated logs
+      summary: Read one hosted agent trace
       description: |
-        Returns a content-free projection of the complete OpenTelemetry span
-        tree plus the first 200 trace-correlated log records. nvoken grounds
-        the trace's Invocation attribution in Postgres before returning it;
-        knowing a W3C trace ID grants no authority.
+        Returns a content-free projection of up to 200 OpenTelemetry spans.
+        Use the pageable Invocation log endpoint with `trace_id` for associated
+        logs. `is_partial` says when the
+        agent root has not arrived or the bounded read omitted spans. nvoken
+        grounds the trace's Invocation attribution in its durable Invocation
+        record before returning it; knowing a W3C trace ID grants no authority.
       responses:
         "200":
-          description: The authorized trace tree and associated logs.
+          description: The authorized, bounded trace tree.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Trace" }
@@ -5628,7 +5636,7 @@ components:
     TraceSummary:
       type: object
       additionalProperties: false
-      required: [trace_id, root_span_id, name, status, started_at, span_count, error_count]
+      required: [trace_id, root_span_id, name, status, started_at, span_count, error_count, is_partial]
       properties:
         trace_id: { $ref: "#/components/schemas/TraceID" }
         root_span_id:
@@ -5641,6 +5649,16 @@ components:
         duration_ms: { type: integer, minimum: 0 }
         span_count: { type: integer, minimum: 1 }
         error_count: { type: integer, minimum: 0 }
+        is_partial:
+          type: boolean
+          description: |
+            True when the agent root has not arrived or the bounded trace read
+            omitted spans. Partial traces are useful live diagnostics and must
+            not be interpreted as the complete execution record.
+        attempt:
+          type: integer
+          minimum: 1
+          description: Durable Invocation lease attempt associated with this trace.
     TraceList:
       type: object
       additionalProperties: false
@@ -5664,8 +5682,12 @@ components:
           type: string
           pattern: "^[0-9a-f]{16}$"
         name: { type: string }
-        kind: { type: string, enum: [internal, client, server, producer, consumer] }
-        operation: { type: string, enum: [invoke_agent, chat, execute_tool] }
+        kind:
+          type: string
+          description: OpenTelemetry span kind; known values include internal, client, server, producer, consumer, and unspecified.
+        operation:
+          type: string
+          description: GenAI operation name. Dive currently emits invoke_agent, chat, and execute_tool.
         status: { type: string, enum: [unset, ok, error] }
         started_at: { type: string, format: date-time }
         ended_at: { type: string, format: date-time }
@@ -5675,11 +5697,34 @@ components:
         response_model: { type: string }
         tool_name: { type: string }
         error_type: { type: string }
-        input_tokens: { type: integer, minimum: 0 }
-        output_tokens: { type: integer, minimum: 0 }
-        cache_creation_input_tokens: { type: integer, minimum: 0 }
-        cache_read_input_tokens: { type: integer, minimum: 0 }
-        reasoning_tokens: { type: integer, minimum: 0 }
+        input_tokens:
+          type: integer
+          minimum: 0
+          description: Provider-reported input tokens; cache fields may overlap this total.
+        output_tokens:
+          type: integer
+          minimum: 0
+          description: Provider-reported output tokens; reasoning tokens are a subset when reported.
+        cache_creation_input_tokens:
+          type: integer
+          minimum: 0
+          description: Input tokens used to create a provider cache entry; do not add blindly to input_tokens.
+        cache_read_input_tokens:
+          type: integer
+          minimum: 0
+          description: Input tokens served from provider cache; do not add blindly to input_tokens.
+        reasoning_tokens:
+          type: integer
+          minimum: 0
+          description: Reasoning tokens included within output_tokens when the provider reports them.
+        finish_reasons:
+          type: array
+          maxItems: 8
+          items: { type: string }
+        time_to_first_token_ms:
+          type: integer
+          minimum: 0
+          description: Time from model-call start to the first streamed output token.
         model_cost: { $ref: "#/components/schemas/Money" }
     InvocationLog:
       type: object
@@ -5705,6 +5750,9 @@ components:
         model: { type: string }
         tool_name: { type: string }
         status: { type: string }
+        attempt: { type: integer, minimum: 1 }
+        iteration: { type: integer, minimum: 1 }
+        lease_attempt: { type: integer, minimum: 1 }
     InvocationLogList:
       type: object
       additionalProperties: false
@@ -5726,11 +5774,10 @@ components:
         - started_at
         - span_count
         - error_count
+        - is_partial
         - invocation_id
         - session_id
         - spans
-        - logs
-        - logs_has_more
       properties:
         trace_id: { $ref: "#/components/schemas/TraceID" }
         root_span_id:
@@ -5743,15 +5790,18 @@ components:
         duration_ms: { type: integer, minimum: 0 }
         span_count: { type: integer, minimum: 1 }
         error_count: { type: integer, minimum: 0 }
+        is_partial:
+          type: boolean
+          description: True when this response contains only a bounded or rootless partial trace.
+        attempt:
+          type: integer
+          minimum: 1
+          description: Durable Invocation lease attempt associated with this trace.
         invocation_id: { $ref: "#/components/schemas/InvocationID" }
         session_id: { $ref: "#/components/schemas/SessionID" }
         spans:
           type: array
           items: { $ref: "#/components/schemas/TraceSpan" }
-        logs:
-          type: array
-          items: { $ref: "#/components/schemas/InvocationLog" }
-        logs_has_more: { type: boolean }
     InvocationInput:
       description: |
         A plain string is shorthand for one text block; an array is ordered

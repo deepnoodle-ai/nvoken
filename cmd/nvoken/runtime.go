@@ -246,6 +246,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Flags(
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
+			cli.String("trace-id").Help("Return only logs correlated to one trace"),
 		).
 		Run(runInvocationLogs)
 	invocations.Command("wait").
@@ -319,7 +320,7 @@ func registerRuntimeCommands(app *cli.App) {
 
 	traces := app.Group("trace").Description("Inspect hosted agent traces")
 	traces.Command("get").
-		Description("Read spans and associated bounded logs for one trace").
+		Description("Read the bounded span tree for one trace").
 		Args("trace-id").
 		Run(runTraceGet)
 
@@ -1030,19 +1031,25 @@ func runInvocationTraces(command *cli.Context) error {
 			if trace.DurationMs != nil {
 				duration = *trace.DurationMs
 			}
+			completeness := "complete"
+			if trace.IsPartial {
+				completeness = "partial"
+			}
 			if _, err := fmt.Fprintf(
 				writer,
-				"%s\t%s\t%s\t%d\t%dms\n",
+				"%s\t%s\t%s\t%s\tattempt=%s\t%d\t%dms\n",
 				trace.StartedAt.UTC().Format(time.RFC3339Nano),
 				trace.TraceID,
 				trace.Status,
+				completeness,
+				optionalIntText(trace.Attempt),
 				trace.SpanCount,
 				duration,
 			); err != nil {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, page.NextCursor)
 	})
 }
 
@@ -1055,8 +1062,9 @@ func runInvocationLogs(command *cli.Context) error {
 		command.Context(),
 		command.Arg(0),
 		nvoken.ObservationListOptions{
-			Cursor: optionalString(command.String("cursor")),
-			Limit:  optionalInt(command.Int("limit")),
+			Cursor:  optionalString(command.String("cursor")),
+			Limit:   optionalInt(command.Int("limit")),
+			TraceID: optionalString(command.String("trace-id")),
 		},
 	)
 	if err != nil {
@@ -1070,15 +1078,18 @@ func runInvocationLogs(command *cli.Context) error {
 		for _, log := range page.Items {
 			if _, err := fmt.Fprintf(
 				writer,
-				"%s\t%s\t%s\n",
+				"%s\t%s\tattempt=%s\titeration=%s\tlease_attempt=%s\t%s\n",
 				log.Timestamp.UTC().Format(time.RFC3339Nano),
 				log.Severity,
+				optionalIntText(log.Attempt),
+				optionalIntText(log.Iteration),
+				optionalIntText(log.LeaseAttempt),
 				log.Message,
 			); err != nil {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, page.NextCursor)
 	})
 }
 
@@ -2031,6 +2042,13 @@ func writeNextCursor(writer io.Writer, cursor *string) error {
 	}
 	_, err := fmt.Fprintf(writer, "next_cursor\t%s\n", *cursor)
 	return err
+}
+
+func optionalIntText(value *int) string {
+	if value == nil {
+		return "-"
+	}
+	return strconv.Itoa(*value)
 }
 
 func optionalString(value string) *string {

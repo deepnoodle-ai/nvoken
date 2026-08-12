@@ -19,7 +19,7 @@ import json
 
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.money import Money
 from typing import Optional, Set
@@ -34,8 +34,8 @@ class TraceSpan(BaseModel):
     span_id: Annotated[str, Field(strict=True)]
     parent_span_id: Optional[Annotated[str, Field(strict=True)]] = None
     name: StrictStr
-    kind: StrictStr
-    operation: Optional[StrictStr] = None
+    kind: StrictStr = Field(description="OpenTelemetry span kind; known values include internal, client, server, producer, consumer, and unspecified.")
+    operation: Optional[StrictStr] = Field(default=None, description="GenAI operation name. Dive currently emits invoke_agent, chat, and execute_tool.")
     status: StrictStr
     started_at: datetime
     ended_at: Optional[datetime] = None
@@ -45,13 +45,15 @@ class TraceSpan(BaseModel):
     response_model: Optional[StrictStr] = None
     tool_name: Optional[StrictStr] = None
     error_type: Optional[StrictStr] = None
-    input_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
-    output_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
-    cache_creation_input_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
-    cache_read_input_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
-    reasoning_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
+    input_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="Provider-reported input tokens; cache fields may overlap this total.")
+    output_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="Provider-reported output tokens; reasoning tokens are a subset when reported.")
+    cache_creation_input_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="Input tokens used to create a provider cache entry; do not add blindly to input_tokens.")
+    cache_read_input_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="Input tokens served from provider cache; do not add blindly to input_tokens.")
+    reasoning_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="Reasoning tokens included within output_tokens when the provider reports them.")
+    finish_reasons: Optional[Annotated[List[StrictStr], Field(max_length=8)]] = None
+    time_to_first_token_ms: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="Time from model-call start to the first streamed output token.")
     model_cost: Optional[Money] = None
-    __properties: ClassVar[List[str]] = ["trace_id", "span_id", "parent_span_id", "name", "kind", "operation", "status", "started_at", "ended_at", "duration_ms", "provider", "request_model", "response_model", "tool_name", "error_type", "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "reasoning_tokens", "model_cost"]
+    __properties: ClassVar[List[str]] = ["trace_id", "span_id", "parent_span_id", "name", "kind", "operation", "status", "started_at", "ended_at", "duration_ms", "provider", "request_model", "response_model", "tool_name", "error_type", "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "reasoning_tokens", "finish_reasons", "time_to_first_token_ms", "model_cost"]
 
     @field_validator('trace_id')
     def trace_id_validate_regular_expression(cls, value):
@@ -84,23 +86,6 @@ class TraceSpan(BaseModel):
 
         if not re.match(r"^[0-9a-f]{16}$", value):
             raise ValueError(r"must validate the regular expression /^[0-9a-f]{16}$/")
-        return value
-
-    @field_validator('kind')
-    def kind_validate_enum(cls, value):
-        """Validates the enum"""
-        if value not in set(['internal', 'client', 'server', 'producer', 'consumer']):
-            raise ValueError("must be one of enum values ('internal', 'client', 'server', 'producer', 'consumer')")
-        return value
-
-    @field_validator('operation')
-    def operation_validate_enum(cls, value):
-        """Validates the enum"""
-        if value is None:
-            return value
-
-        if value not in set(['invoke_agent', 'chat', 'execute_tool']):
-            raise ValueError("must be one of enum values ('invoke_agent', 'chat', 'execute_tool')")
         return value
 
     @field_validator('status')
@@ -184,6 +169,8 @@ class TraceSpan(BaseModel):
             "cache_creation_input_tokens": obj.get("cache_creation_input_tokens"),
             "cache_read_input_tokens": obj.get("cache_read_input_tokens"),
             "reasoning_tokens": obj.get("reasoning_tokens"),
+            "finish_reasons": obj.get("finish_reasons"),
+            "time_to_first_token_ms": obj.get("time_to_first_token_ms"),
             "model_cost": Money.from_dict(obj["model_cost"]) if obj.get("model_cost") is not None else None
         })
         return _obj

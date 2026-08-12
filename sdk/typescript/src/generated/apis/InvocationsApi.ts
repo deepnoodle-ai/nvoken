@@ -160,6 +160,7 @@ export interface ListInvocationLogsRequest {
     invocationId: string;
     cursor?: string;
     limit?: number;
+    traceId?: string;
 }
 
 export interface ListInvocationTracesRequest {
@@ -672,8 +673,8 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns a content-free projection of the complete OpenTelemetry span tree plus the first 200 trace-correlated log records. nvoken grounds the trace\'s Invocation attribution in Postgres before returning it; knowing a W3C trace ID grants no authority.
-     * Read one hosted agent trace and its associated logs
+     * Returns a content-free projection of up to 200 OpenTelemetry spans. Use the pageable Invocation log endpoint with `trace_id` for associated logs. `is_partial` says when the agent root has not arrived or the bounded read omitted spans. nvoken grounds the trace\'s Invocation attribution in its durable Invocation record before returning it; knowing a W3C trace ID grants no authority.
+     * Read one hosted agent trace
      */
     async getTraceRaw(requestParameters: GetTraceRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Trace>> {
         const requestOptions = await this.getTraceRequestOpts(requestParameters);
@@ -683,8 +684,8 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns a content-free projection of the complete OpenTelemetry span tree plus the first 200 trace-correlated log records. nvoken grounds the trace\'s Invocation attribution in Postgres before returning it; knowing a W3C trace ID grants no authority.
-     * Read one hosted agent trace and its associated logs
+     * Returns a content-free projection of up to 200 OpenTelemetry spans. Use the pageable Invocation log endpoint with `trace_id` for associated logs. `is_partial` says when the agent root has not arrived or the bounded read omitted spans. nvoken grounds the trace\'s Invocation attribution in its durable Invocation record before returning it; knowing a W3C trace ID grants no authority.
+     * Read one hosted agent trace
      */
     async getTrace(requestParameters: GetTraceRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Trace> {
         const response = await this.getTraceRaw(requestParameters, initOverrides);
@@ -765,6 +766,10 @@ export class InvocationsApi extends runtime.BaseAPI {
 
         if (requestParameters['limit'] != null) {
             queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['traceId'] != null) {
+            queryParameters['trace_id'] = requestParameters['traceId'];
         }
 
         const headerParameters: runtime.HTTPHeaders = {};
@@ -853,7 +858,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
+     * Returns newest-first, content-free summaries exported from Dive through OpenTelemetry. A child-only trace is returned as `is_partial: true` while its agent root is still open or if the process exits before that root is exported. Traces remain diagnostic and best-effort; the durable Invocation timeline is the execution authority. `status` is `disabled` when this installation has no configured observation store.
      * Page through hosted agent traces for one turn
      */
     async listInvocationTracesRaw(requestParameters: ListInvocationTracesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<TraceList>> {
@@ -864,7 +869,7 @@ export class InvocationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the content-free root summaries exported from Dive through OpenTelemetry. Traces are diagnostic and best-effort; the durable Invocation timeline remains the execution authority. `status` is `disabled` when this installation has no configured observation store.
+     * Returns newest-first, content-free summaries exported from Dive through OpenTelemetry. A child-only trace is returned as `is_partial: true` while its agent root is still open or if the process exits before that root is exported. Traces remain diagnostic and best-effort; the durable Invocation timeline is the execution authority. `status` is `disabled` when this installation has no configured observation store.
      * Page through hosted agent traces for one turn
      */
     async listInvocationTraces(requestParameters: ListInvocationTracesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<TraceList> {

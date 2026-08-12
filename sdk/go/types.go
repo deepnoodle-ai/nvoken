@@ -251,6 +251,9 @@ type ListToolCallsOptions struct {
 type ObservationListOptions struct {
 	Cursor *string
 	Limit  *int
+	// TraceID applies only to Invocation log lists and narrows the page to
+	// records correlated with one trace.
+	TraceID *string
 }
 
 // ListNudgesOptions filters and pages the staged-input queue. A nil

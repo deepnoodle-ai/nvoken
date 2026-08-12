@@ -529,8 +529,9 @@ func (c *Client) ListInvocationLogs(
 	options ObservationListOptions,
 ) (*InvocationLogList, error) {
 	params := &generated.ListInvocationLogsParams{
-		Cursor: options.Cursor,
-		Limit:  options.Limit,
+		Cursor:  options.Cursor,
+		Limit:   options.Limit,
+		TraceID: options.TraceID,
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationLogList], error) {
 		response, err := c.raw.ListInvocationLogsWithResponse(ctx, invocationID, params)
