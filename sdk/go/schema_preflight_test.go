@@ -80,8 +80,11 @@ func TestCreateAgentDefinitionPreflightsOutputSchemaBeforeTransport(t *testing.T
 }
 
 func TestAgentDefinitionOutputSchemaEncodesDirectly(t *testing.T) {
+	scope := MemoryConfigScopeUser
+	mode := MemoryContextModeFull
 	body, err := json.Marshal(AgentDefinition{
 		Model:        Model{Provider: "anthropic", ID: "test-model"},
+		Memory:       &MemoryConfig{Scope: &scope, Context: &MemoryContextConfig{Mode: &mode}},
 		OutputSchema: map[string]any{"type": "object"},
 	})
 	if err != nil {
@@ -90,6 +93,7 @@ func TestAgentDefinitionOutputSchemaEncodesDirectly(t *testing.T) {
 	var wire struct {
 		OutputSchema     map[string]any  `json:"output_schema"`
 		StructuredOutput json.RawMessage `json:"structured_output"`
+		Memory           *MemoryConfig   `json:"memory"`
 	}
 	if err := json.Unmarshal(body, &wire); err != nil {
 		t.Fatalf("decode wire body: %v", err)
@@ -102,6 +106,10 @@ func TestAgentDefinitionOutputSchemaEncodesDirectly(t *testing.T) {
 			"output_schema = %#v, want the supplied OutputSchema",
 			wire.OutputSchema,
 		)
+	}
+	if wire.Memory == nil || wire.Memory.Scope == nil || *wire.Memory.Scope != MemoryConfigScopeUser ||
+		wire.Memory.Context == nil || wire.Memory.Context.Mode == nil || *wire.Memory.Context.Mode != MemoryContextModeFull {
+		t.Fatalf("memory = %#v, want user-scoped full context", wire.Memory)
 	}
 }
 

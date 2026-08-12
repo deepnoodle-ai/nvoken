@@ -5,7 +5,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Apps may register dormant browser-access configuration and Ed25519 client public keys. This version does not accept App-issued client JWTs, apply the registered admission limits, or emit CORS headers; PRD 065 activates that complete boundary. The host remains the identity provider and alone holds token-minting keys.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
+    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Browser-direct callers use narrow JWTs, exact-origin CORS, client-safe projections, and App/tenant/user admission limits. A host may mint client tokens from its own Ed25519 key. An App that explicitly enables anonymous access may instead let nvoken mint a short-lived access token and renewable visitor token from one allowed public origin.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -26,6 +26,7 @@ __all__ = [
     "IdentityApi",
     "InvocationsApi",
     "MCPApi",
+    "MemoriesApi",
     "ModelsApi",
     "OrgsApi",
     "ProviderKeysApi",
@@ -56,6 +57,9 @@ __all__ = [
     "AgentList",
     "AllocateCreditsRequest",
     "AllocateCreditsResult",
+    "AnonymousAccess",
+    "AnonymousTokenRequest",
+    "AnonymousTokenResponse",
     "App",
     "AppDefaultRateLimits",
     "AppList",
@@ -160,6 +164,15 @@ __all__ = [
     "MCPTimeouts",
     "MCPToolAnnotations",
     "MCPToolExclusion",
+    "Memory",
+    "MemoryConfig",
+    "MemoryContextConfig",
+    "MemoryContextMode",
+    "MemoryKind",
+    "MemoryList",
+    "MemorySearchCoverage",
+    "MemorySearchMode",
+    "MemorySearchResult",
     "MessagePhase",
     "Model",
     "ModelCallFactStatus",
@@ -298,6 +311,7 @@ from nvoken_generated.api.credits_api import CreditsApi as CreditsApi
 from nvoken_generated.api.identity_api import IdentityApi as IdentityApi
 from nvoken_generated.api.invocations_api import InvocationsApi as InvocationsApi
 from nvoken_generated.api.mcp_api import MCPApi as MCPApi
+from nvoken_generated.api.memories_api import MemoriesApi as MemoriesApi
 from nvoken_generated.api.models_api import ModelsApi as ModelsApi
 from nvoken_generated.api.orgs_api import OrgsApi as OrgsApi
 from nvoken_generated.api.provider_keys_api import ProviderKeysApi as ProviderKeysApi
@@ -332,6 +346,9 @@ from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite 
 from nvoken_generated.models.agent_list import AgentList as AgentList
 from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest as AllocateCreditsRequest
 from nvoken_generated.models.allocate_credits_result import AllocateCreditsResult as AllocateCreditsResult
+from nvoken_generated.models.anonymous_access import AnonymousAccess as AnonymousAccess
+from nvoken_generated.models.anonymous_token_request import AnonymousTokenRequest as AnonymousTokenRequest
+from nvoken_generated.models.anonymous_token_response import AnonymousTokenResponse as AnonymousTokenResponse
 from nvoken_generated.models.app import App as App
 from nvoken_generated.models.app_default_rate_limits import AppDefaultRateLimits as AppDefaultRateLimits
 from nvoken_generated.models.app_list import AppList as AppList
@@ -436,6 +453,15 @@ from nvoken_generated.models.mcp_server_headers import MCPServerHeaders as MCPSe
 from nvoken_generated.models.mcp_timeouts import MCPTimeouts as MCPTimeouts
 from nvoken_generated.models.mcp_tool_annotations import MCPToolAnnotations as MCPToolAnnotations
 from nvoken_generated.models.mcp_tool_exclusion import MCPToolExclusion as MCPToolExclusion
+from nvoken_generated.models.memory import Memory as Memory
+from nvoken_generated.models.memory_config import MemoryConfig as MemoryConfig
+from nvoken_generated.models.memory_context_config import MemoryContextConfig as MemoryContextConfig
+from nvoken_generated.models.memory_context_mode import MemoryContextMode as MemoryContextMode
+from nvoken_generated.models.memory_kind import MemoryKind as MemoryKind
+from nvoken_generated.models.memory_list import MemoryList as MemoryList
+from nvoken_generated.models.memory_search_coverage import MemorySearchCoverage as MemorySearchCoverage
+from nvoken_generated.models.memory_search_mode import MemorySearchMode as MemorySearchMode
+from nvoken_generated.models.memory_search_result import MemorySearchResult as MemorySearchResult
 from nvoken_generated.models.message_phase import MessagePhase as MessagePhase
 from nvoken_generated.models.model import Model as Model
 from nvoken_generated.models.model_call_fact_status import ModelCallFactStatus as ModelCallFactStatus

@@ -68,6 +68,7 @@ func newApp() *cli.App {
 	registerCredentialCommands(app)
 	registerAdmissionCommands(app)
 	registerTenantCommands(app)
+	registerMemoryCommands(app)
 	return app
 }
 
