@@ -4,7 +4,7 @@
 specification we have committed to freezing. Rough edges are listed at the end
 and we expect to resolve some of them, which will change parts of this
 document.
-**Verified against:** `nvoken-cloud@d8090df`
+**Verified against:** `nvoken-cloud@0faa8c9`
 (`internal/adapters/httpapi/stream.go`), the contract snapshot pinned in
 [`openapi/SOURCE.json`](../../openapi/SOURCE.json), and the four SDK
 implementations in this repository.
