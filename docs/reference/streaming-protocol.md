@@ -43,6 +43,73 @@ separately for this reason. See the note in
 [`sdk/typescript/src/stream.ts`](../../sdk/typescript/src/stream.ts) above
 `admitInvocation`.
 
+## Streams, connections, and scope
+
+A stream is not a connection. The stream is a durable, ordered log addressed
+by cursor; a connection is one HTTP response reading it for a while. Losing
+that distinction is the most common way to misread this protocol, so the
+vocabulary here is deliberate.
+
+**Scope.** The Invocation stream is bounded to exactly one turn. It ends
+when that turn settles and never carries another. The Session transcript
+stream is the multi-turn surface: one connection follows every Invocation in
+the Session, interleaved, which is why its reducer keys previews by
+`invocation_id`. A client that wants to follow a conversation opens one
+Session stream, not one Invocation stream per turn. Cursors are
+Session-scoped on both routes, so a position taken from either stream
+resumes either stream.
+
+**Connections are disposable; the stream is not.** A connection ends by
+rotation (`stream.end` reason `rotate`, at the 55 minute lifetime or on
+server shutdown), by termination (`stream.end` reason `terminal`: the turn
+settled, or on the Session stream, no turn is running), by a slow-consumer
+drop, or by ordinary network failure. None of these says anything about the
+turn. Work continues, the log keeps growing, and the next connection opened
+with the last durable cursor sees everything the previous one did not. The
+timing machinery in [Server behavior and timings](#server-behavior-and-timings),
+the keepalive, the lifetime, the write timeout, all belongs to the
+connection, never to the stream.
+
+**Any number of connections may read one stream.** Readers are independent.
+They can sit at different cursors, join mid-turn, or replay a turn that
+settled last week, and none of them affects the turn or each other.
+Disconnecting never cancels anything. A support console can watch a
+customer's live turn while the customer's own client streams it, with no
+fan-out machinery in the host application; the cost is the per-connection
+queries noted in R1 and R2.
+
+**The lifecycle of one connection**, in order: it opens with or without a
+cursor; the server writes the `retry: 1000` opener; saved state replays,
+from the cursor if one was given, otherwise from the Invocation's beginning
+or the Session's origin, or, for an already settled Invocation, collapsing
+to `invocation.result`; the connection goes live, interleaving durable
+frames with previews; and it ends with `stream.end` or a silent drop. From
+the client's side the whole algorithm is one loop: connect, fold frames,
+remember the last durable `id`, reconnect with it until a terminal signal.
+
+### The transport
+
+Both streams speak Server-Sent Events today, and SSE is the only binding.
+Almost nothing in the protocol depends on it: the semantics live in the
+frames, durable frames carry a cursor, ephemeral frames do not, and resume
+is an explicit position handed back at reconnect. The SSE-specific surface
+is exactly three mechanics, the `id:` line, the `retry:` opener, and comment
+keepalives, each of which has an obvious equivalent in any framed transport.
+A WebSocket binding is possible in principle and does not exist; see
+[design 003](../design/003-streaming-protocol-target.md) for the stance on
+whether it should.
+
+### What the stream carries
+
+Frames are JSON, and their content is structure and text. Images and
+documents in a transcript travel as descriptor blocks, carrying media type,
+size, and `sha256:` digest, never inline bytes. That keeps frame sizes
+bounded by text alone, which is why C9 is only about large replay pages, and
+keeps the stream cheap to fan out to many readers. It also means a client
+cannot render described media from the stream by itself; retrieving the
+bytes is outside the protocol today, recorded as I13 and given a direction
+in [design 003](../design/003-streaming-protocol-target.md).
+
 ## Durable and ephemeral frames
 
 This is the organizing idea. Every frame is one or the other, and the
