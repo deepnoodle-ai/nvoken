@@ -501,6 +501,8 @@ the ordinary sync described in
 
 - [Design direction](DIRECTION.md), the standing direction this document
   predates and does not satisfy. It outranks this one.
+- [Design 004](004-protocol-end-state.md), the end-state design DIRECTION
+  called for. It is the target this document's file name claims to be.
 - [The streaming protocol](../reference/streaming-protocol.md), the
   description of the current protocol and the source of every rough edge ID.
 - [Streaming protocol assessment](../reference/streaming-protocol-assessment.md),

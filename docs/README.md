@@ -8,6 +8,9 @@ Read it before proposing a change to either.
 - [Session options conflict scope](design/002-session-options-conflict-scope.md)
 - [Streaming protocol remediation](design/003-streaming-protocol-target.md),
   which is a remediation list and not the target its file name claims
+- [The end-state protocol](design/004-protocol-end-state.md), the actual
+  target: the protocol designed with no compatibility budget, and the path
+  to it
 - [SDK and contract development](guides/sdk-development.md)
 - [CLI development and release](guides/cli.md)
 - [The streaming protocol](reference/streaming-protocol.md)
