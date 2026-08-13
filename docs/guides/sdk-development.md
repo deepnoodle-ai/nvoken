@@ -50,7 +50,9 @@ directory. Preserve these cross-language reliability rules:
 - reuse the exact request and idempotency key after ambiguous admission;
 - honor `Retry-After` and do not retry semantic conflicts;
 - resume SSE from the last durable cursor and reconcile through authoritative
-  reads after a resync;
+  reads after a resync (see
+  [The streaming protocol](../reference/streaming-protocol.md) for the frames,
+  their durability, and the shared reducer);
 - preserve ToolCall IDs when submitting results;
 - treat local wait cancellation and remote Invocation cancellation as different
   operations;
