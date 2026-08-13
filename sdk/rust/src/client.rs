@@ -1109,7 +1109,7 @@ fn machine_invocation(
 ) -> Result<models::Invocation, NvokenError> {
     match response {
         models::InvocationResponse::Invocation(value) => Ok(*value),
-        models::InvocationResponse::ClientInvocation(_) => Err(NvokenError::unexpected(
+        models::InvocationResponse::BrowserInvocation(_) => Err(NvokenError::unexpected(
             "machine credentials received a browser Invocation projection",
         )),
     }
@@ -1120,7 +1120,7 @@ fn machine_invocation_result(
 ) -> Result<models::InvocationResult, NvokenError> {
     match response {
         models::InvocationResultResponse::InvocationResult(value) => Ok(*value),
-        models::InvocationResultResponse::ClientInvocationResult(_) => Err(
+        models::InvocationResultResponse::BrowserInvocationResult(_) => Err(
             NvokenError::unexpected("machine credentials received a browser result projection"),
         ),
     }
@@ -1131,7 +1131,7 @@ fn machine_invocation_list(
 ) -> Result<models::InvocationList, NvokenError> {
     match response {
         models::InvocationListResponse::InvocationList(value) => Ok(*value),
-        models::InvocationListResponse::ClientInvocationList(_) => Err(NvokenError::unexpected(
+        models::InvocationListResponse::BrowserInvocationList(_) => Err(NvokenError::unexpected(
             "machine credentials received a browser Invocation list",
         )),
     }
@@ -1140,7 +1140,7 @@ fn machine_invocation_list(
 fn machine_session(response: models::SessionResponse) -> Result<models::Session, NvokenError> {
     match response {
         models::SessionResponse::Session(value) => Ok(*value),
-        models::SessionResponse::ClientSession(_) => Err(NvokenError::unexpected(
+        models::SessionResponse::BrowserSession(_) => Err(NvokenError::unexpected(
             "machine credentials received a browser Session projection",
         )),
     }
@@ -1151,7 +1151,7 @@ fn machine_session_list(
 ) -> Result<models::SessionList, NvokenError> {
     match response {
         models::SessionListResponse::SessionList(value) => Ok(*value),
-        models::SessionListResponse::ClientSessionList(_) => Err(NvokenError::unexpected(
+        models::SessionListResponse::BrowserSessionList(_) => Err(NvokenError::unexpected(
             "machine credentials received a browser Session list",
         )),
     }
@@ -1162,7 +1162,7 @@ fn machine_session_message_list(
 ) -> Result<models::SessionMessageList, NvokenError> {
     match response {
         models::SessionMessageListResponse::SessionMessageList(value) => Ok(*value),
-        models::SessionMessageListResponse::ClientSessionMessageList(_) => Err(
+        models::SessionMessageListResponse::BrowserSessionMessageList(_) => Err(
             NvokenError::unexpected("machine credentials received a browser message list"),
         ),
     }

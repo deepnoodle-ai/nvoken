@@ -591,7 +591,7 @@ impl Agent {
                     continue;
                 }
             }
-            let input = pending.input.clone().unwrap_or(Value::Null);
+            let input = Value::Object(pending.input.clone().into_iter().collect());
             results.push(match handler(input).await {
                 Ok(content) => ToolResult {
                     tool_call_id: pending.id.clone(),
@@ -644,7 +644,7 @@ impl Agent {
                     .missing_tool_handler(handle, &pending.name, leave_waiting)
                     .await);
             };
-            let input = pending.input.clone().unwrap_or(Value::Null);
+            let input = Value::Object(pending.input.clone().into_iter().collect());
             let result = match handler(input).await {
                 Ok(content) => ToolResult {
                     tool_call_id: pending.id.clone(),

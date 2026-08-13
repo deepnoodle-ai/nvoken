@@ -2080,6 +2080,7 @@ test("shared reducer vector", async () => {
         attempt: number;
         iteration: number;
         content_index: number;
+        message_id?: string;
         output_text: string;
         thinking: string;
       }>;
@@ -2111,6 +2112,7 @@ test("shared reducer vector", async () => {
         attempt: preview.attempt,
         iteration: preview.iteration,
         content_index: preview.contentIndex,
+        ...(preview.messageId === undefined ? {} : { message_id: preview.messageId }),
         output_text: preview.outputText,
         thinking: preview.thinking,
       })),

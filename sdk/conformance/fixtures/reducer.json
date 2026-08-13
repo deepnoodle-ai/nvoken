@@ -15,7 +15,12 @@
             "user_key": null,
             "sequence": 1,
             "role": "user",
-            "content": [{"type": "text", "text": "hello"}],
+            "content": [
+              {
+                "type": "text",
+                "text": "hello"
+              }
+            ],
             "created_at": "2026-07-21T12:00:00Z"
           }
         ],
@@ -51,7 +56,12 @@
             "user_key": null,
             "sequence": 1,
             "role": "user",
-            "content": [{"type": "text", "text": "hello"}],
+            "content": [
+              {
+                "type": "text",
+                "text": "hello"
+              }
+            ],
             "created_at": "2026-07-21T12:00:00Z"
           },
           {
@@ -62,7 +72,12 @@
             "user_key": null,
             "sequence": 2,
             "role": "assistant",
-            "content": [{"type": "text", "text": "world"}],
+            "content": [
+              {
+                "type": "text",
+                "text": "world"
+              }
+            ],
             "created_at": "2026-07-21T12:00:02Z"
           }
         ],
@@ -89,7 +104,15 @@
             "provenance": null,
             "structured_output": null,
             "structured_output_provenance": null,
-            "occurred_at": "2026-07-21T12:00:03Z"
+            "occurred_at": "2026-07-21T12:00:03Z",
+            "stop_reason": "end_turn",
+            "tool_calls": [
+              {
+                "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+                "status": "completed",
+                "updated_at": "2026-07-21T12:00:02Z"
+              }
+            ]
           }
         ],
         "resume_cursor": "cursor-2"
@@ -136,7 +159,8 @@
             "iteration": 1,
             "content_index": 0,
             "text": "Hel",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
           }
         },
         {
@@ -150,7 +174,8 @@
             "iteration": 1,
             "content_index": 0,
             "thinking": "plan",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
           }
         },
         {
@@ -164,7 +189,8 @@
             "iteration": 1,
             "content_index": 0,
             "text": "lo",
-            "emitted_at": "2026-07-21T12:00:02Z"
+            "emitted_at": "2026-07-21T12:00:02Z",
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
           }
         }
       ],
@@ -175,7 +201,8 @@
           "iteration": 1,
           "content_index": 0,
           "output_text": "Hello",
-          "thinking": "plan"
+          "thinking": "plan",
+          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
         }
       ]
     },
@@ -298,7 +325,12 @@
                 "user_key": null,
                 "sequence": 2,
                 "role": "assistant",
-                "content": [{"type": "text", "text": "canonical"}],
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "canonical"
+                  }
+                ],
                 "created_at": "2026-07-21T12:00:02Z"
               }
             ],
@@ -308,11 +340,76 @@
         }
       ],
       "expected_previews": []
+    },
+    {
+      "name": "preview identity holds once published and is optional before",
+      "events": [
+        {
+          "id": "",
+          "event": "output_text.delta",
+          "data": {
+            "type": "output_text.delta",
+            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "attempt": 1,
+            "iteration": 1,
+            "content_index": 0,
+            "text": "Un",
+            "emitted_at": "2026-07-21T12:00:01Z"
+          }
+        },
+        {
+          "id": "",
+          "event": "output_text.delta",
+          "data": {
+            "type": "output_text.delta",
+            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "attempt": 1,
+            "iteration": 1,
+            "content_index": 0,
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "text": "named",
+            "emitted_at": "2026-07-21T12:00:01Z"
+          }
+        },
+        {
+          "id": "",
+          "event": "output_text.delta",
+          "data": {
+            "type": "output_text.delta",
+            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "attempt": 1,
+            "iteration": 1,
+            "content_index": 0,
+            "text": " still",
+            "emitted_at": "2026-07-21T12:00:02Z"
+          }
+        }
+      ],
+      "expected_previews": [
+        {
+          "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "attempt": 1,
+          "iteration": 1,
+          "content_index": 0,
+          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+          "output_text": "Unnamed still",
+          "thinking": ""
+        }
+      ]
     }
   ],
   "expected": {
-    "message_sequences": [1, 2],
-    "invocation_revisions": [1, 2],
+    "message_sequences": [
+      1,
+      2
+    ],
+    "invocation_revisions": [
+      1,
+      2
+    ],
     "resume_cursor": "cursor-2",
     "previews": []
   }

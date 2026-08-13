@@ -863,6 +863,7 @@ def test_shared_reducer_vector() -> None:
                 "attempt": preview.attempt,
                 "iteration": preview.iteration,
                 "content_index": preview.content_index,
+                **({} if preview.message_id is None else {"message_id": preview.message_id}),
                 "output_text": preview.output_text,
                 "thinking": preview.thinking,
             }
