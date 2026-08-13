@@ -551,6 +551,12 @@ has gaps; the design document is the record of what changed and why. Reasoning
 blocks (N5) were corrected rather than removed, because the answer turned out
 to be that the contract was right and the note was wrong.
 
+This list is shaped by the protocol we have. Working through it produces a
+sanded version of that protocol, not the one we would design today, and it
+does not name the places where the protocol says one thing twice. Those are
+in [Design direction](../design/DIRECTION.md), which is where the protocol is
+actually headed.
+
 Items marked **(wire)** change what the server sends or what the contract
 promises, so they land in `nvoken-cloud` and reach this repository through a
 contract sync. Items marked **(names only)** change generated symbol names

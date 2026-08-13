@@ -1,5 +1,12 @@
 # The streaming protocol becomes implementable from the contract alone
 
+> **This document is not the target, despite its file name.** It is a
+> remediation list against the protocol we happen to have. It never asked what
+> the protocol should be, and in two places it made existing redundancy
+> permanent by writing it into the contract. The direction we are actually
+> aiming for, and what this document got wrong, is in
+> [Design direction](DIRECTION.md). Read that first.
+
 **Status:** Implemented, with two documented deviations. Areas 1 through 9 and
 area 10's contract boundary landed on 2026-08-13. Area 7's durable half was
 not implemented and area 5's revision bump is scoped to settlement; both are
@@ -7,12 +14,14 @@ explained under Implementation notes. The four open decisions were resolved
 with Curtis on 2026-08-13 and are recorded under Decisions.
 **Author:** Claude Fable 5 with Curtis Myzie
 **Date:** 2026-08-13
-**Workflow:** Target-state specification. The
+**Workflow:** Remediation specification, written as though it were a
+target-state one. The
 [streaming protocol reference](../reference/streaming-protocol.md) describes
 what is; the [assessment](../reference/streaming-protocol-assessment.md)
 argues what to change and in what order; this document specifies the state
-those changes converge on. One target, several waves, so incremental changes
-cannot drift.
+those particular changes converge on. That is narrower than a target, because
+the set of changes was drawn from the rough-edge list rather than from what
+the protocol should be. See [Design direction](DIRECTION.md).
 **Applies to:** `nvoken-cloud` for the contract and runtime behavior; this
 repository for regenerated types, SDK changes, and conformance fixtures.
 
@@ -35,6 +44,13 @@ Two properties define the target, and every change below serves one of them:
 Today neither holds. Our four SDKs disagree with each other despite a shared
 fixture, the guarantee every read loop depends on is unwritten, and every
 event schema is closed to extension.
+
+Both properties are necessary and neither is sufficient. A protocol can be
+implementable and evolvable while still saying the same thing three ways, and
+this one does. The missing third property is that it says each thing once.
+Nothing below serves it, and the browser and machine response unions violate
+property 1 outright and survive this document untouched. See
+[Design direction](DIRECTION.md).
 
 ## Scope
 
@@ -483,6 +499,8 @@ the ordinary sync described in
 
 ## Related
 
+- [Design direction](DIRECTION.md), the standing direction this document
+  predates and does not satisfy. It outranks this one.
 - [The streaming protocol](../reference/streaming-protocol.md), the
   description of the current protocol and the source of every rough edge ID.
 - [Streaming protocol assessment](../reference/streaming-protocol-assessment.md),
