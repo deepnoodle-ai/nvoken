@@ -104,37 +104,38 @@ perl -0pi -e '
 ' sdk/typescript/src/generated/models/InvocationInput.ts
 
 # Wrapper unions between the machine and browser projections have no single
-# discriminator guard. The handwritten SDK currently authenticates only as a
-# machine client, so select that projection and remove imports the generator
-# emits for nonexistent union guards.
+# discriminator guard: which arm arrives is decided by the caller's credential,
+# not by anything in the payload. The handwritten SDK currently authenticates
+# only as a machine client, so select that projection and remove imports the
+# generator emits for guards that a discriminated union never exports.
 for projection in \
-  "CurrentIdentityResponse ClientCurrentIdentity CurrentIdentity" \
-  "InvocationListResponse ClientInvocationList InvocationList" \
-  "InvocationResponse ClientInvocation Invocation" \
-  "InvocationResultResponse ClientInvocationResult InvocationResult" \
-  "SessionListResponse ClientSessionList SessionList" \
-  "SessionMessageListResponse ClientSessionMessageList SessionMessageList" \
-  "SessionResponse ClientSession Session" \
-  "TranscriptSnapshotResponse ClientTranscriptSnapshot TranscriptSnapshot"
+  "CurrentIdentityResponse BrowserCurrentIdentity CurrentIdentity" \
+  "InvocationListResponse BrowserInvocationList InvocationList" \
+  "InvocationResponse BrowserInvocation Invocation" \
+  "InvocationResultResponse BrowserInvocationResult InvocationResult" \
+  "SessionListResponse BrowserSessionList SessionList" \
+  "SessionMessageListResponse BrowserSessionMessageList SessionMessageList" \
+  "SessionResponse BrowserSession Session" \
+  "TranscriptSnapshotResponse BrowserTranscriptSnapshot TranscriptSnapshot"
 do
-  read -r wrapper client_projection machine_projection <<<"$projection"
+  read -r wrapper browser_projection machine_projection <<<"$projection"
   perl -0pi -e "
-    s/^\\s*instanceOf${client_projection},\\n//m;
+    s/^\\s*instanceOf${browser_projection},\\n//m;
     s/^\\s*instanceOf${machine_projection},\\n//m;
-    s/instanceOf${client_projection}\\([^)]*\\)/false/g;
+    s/instanceOf${browser_projection}\\([^)]*\\)/false/g;
     s/instanceOf${machine_projection}\\([^)]*\\)/true/g;
   " "sdk/typescript/src/generated/models/${wrapper}.ts"
 done
 perl -0pi -e '
-  s/^\s*instanceOfClientInvocationStreamEvent,\n//m;
+  s/^\s*instanceOfBrowserInvocationStreamEvent,\n//m;
   s/^\s*instanceOfInvocationStreamEvent,\n//m;
-  s/instanceOfClientInvocationStreamEvent\([^)]*\)/false/g;
+  s/instanceOfBrowserInvocationStreamEvent\([^)]*\)/false/g;
   s/instanceOfInvocationStreamEvent\([^)]*\)/true/g;
 ' sdk/typescript/src/generated/models/InvocationStreamResponse.ts
 perl -0pi -e '
-  s/^\s*instanceOfClientTranscriptStreamEvent,\n//m;
+  s/^\s*instanceOfBrowserTranscriptStreamEvent,\n//m;
   s/^\s*instanceOfTranscriptStreamEvent,\n//m;
-  s/instanceOfClientTranscriptStreamEvent\([^)]*\)/false/g;
+  s/instanceOfBrowserTranscriptStreamEvent\([^)]*\)/false/g;
   s/instanceOfTranscriptStreamEvent\([^)]*\)/true/g;
 ' sdk/typescript/src/generated/models/TranscriptStreamResponse.ts
 

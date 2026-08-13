@@ -85,6 +85,93 @@ info:
     settings will work the same way: a default you cannot read back is a
     setting only the server knows about.
 
+    ## Streaming
+
+    A turn and an Invocation are the same thing. The endpoint summaries say
+    turn; the schemas say Invocation.
+
+    Two streams carry the same frames.
+    `GET /v1/invocations/{invocation_id}/stream` follows one turn and ends
+    when that turn settles. `GET /v1/sessions/{session_id}/transcript/stream`
+    follows every turn in a Session, and is the surface to use for a
+    conversation. `POST /v1/invocations` with `Accept: text/event-stream`
+    admits and streams one turn inline.
+
+    ### Saved frames and live frames
+
+    Every frame is one or the other, and the difference decides what you may
+    store. A saved frame carries an SSE `id`. That ID is your resume position
+    and the only value you need to keep. A live frame carries no `id`: it is a
+    preview or a control signal, it is never stored, and it is never replayed.
+
+    The Invocation stream's saved frames are `invocation.accepted`,
+    `invocation.update`, and `invocation.result`. The Session stream's only
+    saved frame is `transcript.update`. Every other frame on either stream is
+    live.
+
+    ### Resuming and finishing
+
+    The resume position has four spellings and one value: the SSE `id` line,
+    `resume_cursor` inside a frame payload, the `cursor` query parameter, and
+    the `Last-Event-ID` header. Send it back as `cursor` or as
+    `Last-Event-ID`; `cursor` wins when a request carries both. Cursors are
+    Session-scoped on both streams, so a position taken from one stream
+    resumes the other.
+
+    Reconnecting to a turn that has already settled always yields
+    `invocation.result` followed by `stream.end` with reason `terminal`, at
+    any cursor. Both are valid signals that a turn is over, and a client may
+    exit on either.
+
+    `invocation.accepted` is emitted only by the inline `POST` path. The `GET`
+    stream never sends it, so a client that admits separately never sees it.
+    The nvoken SDKs synthesize an equivalent locally so their callers see the
+    same first event either way.
+
+    An `invocation.update` never carries a terminal status. Terminal state
+    arrives as `invocation.result` and nowhere else on that stream. The
+    `invocation` it carries is re-read when the frame is written, so it is
+    current state with a resume position attached rather than a snapshot taken
+    at the cursor.
+
+    ### Previews
+
+    `output_text.delta` and `thinking.delta` preview one model iteration.
+    Their identity is `(invocation_id, attempt, iteration, content_index)`.
+    Accumulate by that tuple, and discard everything provisional when
+    `attempt` increases, when `stream.resync` arrives, when the saved message
+    lands, and when the turn reaches a terminal status. One model iteration
+    produces exactly one saved assistant message, so previews sharing an
+    `(invocation_id, attempt, iteration)` build one message. Never store
+    preview text as a message, and never use it to decide whether a turn
+    succeeded.
+
+    `attempt`, `iteration`, `revision`, and `sequence` count from 1.
+    `content_index` counts from 0.
+
+    ### Compatibility
+
+    Stream events may gain fields over time. Ignore fields you do not
+    recognize rather than refusing the frame. New enum values may appear too.
+    Treat an unknown `stream.resync` reason as `live_delivery_gap` and discard
+    your previews. Treat an unknown `stream.end` reason as `rotate` and
+    reconnect with your last saved `id`. Reconnecting is always safe: a turn
+    that has settled re-yields its result.
+
+    ### Transport
+
+    The protocol is the frames and their durability rules. Server-Sent Events
+    is how they travel today and the only binding. Three mechanics belong to
+    SSE itself: the `id:` line, the `retry:` opener, and comment keepalives.
+    Everything else, resumption included, lives in the frames.
+
+    ### What the stream carries
+
+    Frames carry structure and text. Images and documents travel as
+    descriptors, with media type, size in bytes, and a `sha256:` digest, never
+    as inline bytes. Frame sizes stay bounded by text no matter what a turn
+    produced.
+
 servers:
   - url: /
     description: Current nvoken installation
@@ -1421,7 +1508,7 @@ paths:
                   summary: Supplied options differ from the stored Session
                   value:
                     code: session_options_conflict
-                    message: The supplied Session options conflict with the stored Session.
+                    message: "The supplied Session options conflict with the stored Session at /session_options/compaction: stored {trigger_tokens: 40000, model: anthropic/claude-haiku-4-5}, supplied {trigger_tokens: 80000, model: anthropic/claude-haiku-4-5}."
                     request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR4
                     details:
                       conflicting_paths: [/session_options/compaction]
@@ -1829,13 +1916,22 @@ paths:
         Disconnecting never cancels the turn. It keeps running, and you can
         reconnect or read it later.
 
-        Client-token streams omit `thinking.delta` previews even when
-        `deltas=true`.
+        This stream's saved frames are `invocation.accepted` (inline `POST`
+        only), `invocation.update`, and `invocation.result`. An
+        `invocation.update` never carries a terminal status, and the
+        Invocation it carries is re-read when the frame is written.
+        Reconnecting to a turn that already settled always yields
+        `invocation.result` and then `stream.end` with reason `terminal`, at
+        any cursor, so either frame is a valid signal to stop reading.
+
+        Browser and machine callers receive the same frame types, including
+        `thinking.delta`. Browser payloads carry fewer fields; see the
+        `Browser*` schemas.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - name: deltas
           in: query
-          description: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
+          description: Include id-less output and thinking preview frames. Defaults to true.
           schema:
             type: boolean
             default: true
@@ -3535,13 +3631,24 @@ paths:
         built-in `EventSource` cannot. The server suggests a 1000 ms
         reconnect delay.
 
-        Client-token streams omit `thinking.delta` previews even when
-        `deltas=true`.
+        Cursors are Session-scoped, so a position taken from an Invocation
+        stream resumes this one and the other way round.
+
+        This stream is strictly forward: a message past your cursor is never
+        sent again. A message's `phase` is worked out when it is read, so this
+        stream is not the place to learn which message was the answer. Derive
+        that instead from facts you already hold: a turn has a final answer
+        only once it settled `completed` with stop reason `end_turn`, and that
+        answer is the turn's last assistant message.
+
+        Browser and machine callers receive the same frame types, including
+        `thinking.delta`. Browser payloads carry fewer fields; see the
+        `Browser*` schemas.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - name: deltas
           in: query
-          description: Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
+          description: Include id-less output and thinking preview frames. Defaults to true.
           schema:
             type: boolean
             default: true
@@ -3555,8 +3662,8 @@ paths:
         "200":
           description: |
             SSE frames named `transcript.update`, `output_text.delta`,
-            `thinking.delta`, `stream.resync`, and `stream.end`. Client-token
-            streams never emit `thinking.delta`.
+            `thinking.delta`, `stream.resync`, and `stream.end`. Only
+            `transcript.update` carries an `id`.
           content:
             text/event-stream:
               schema:
@@ -5096,15 +5203,21 @@ components:
           description: |
             Settings stored on the Session itself, rather than on this turn.
 
-            On a new Session these are saved. On a Session that already exists they
-            are checked rather than applied: matching values are fine, and a
-            different value returns `session_options_conflict` telling you which
-            paths disagreed. This keeps two callers from silently reconfiguring
-            each other's conversation.
+            On a new Session these are saved. On a Session that already exists,
+            `compaction` and `retention` are checked rather than applied:
+            matching values are fine, and a different value returns
+            `session_options_conflict` telling you which paths disagreed. This
+            keeps two callers from silently reconfiguring each other's
+            conversation.
 
-            Compaction is the exception — if no compaction policy is stored yet,
-            this turn can install one, because the policy needs a model to validate
-            against and only a turn supplies that.
+            `metadata` merges instead, exactly as
+            `PATCH /v1/sessions/{session_id}` does: a present key replaces and
+            an absent key survives. It never conflicts, so a label that drifted
+            since the last turn cannot fail this one.
+
+            If no compaction policy is stored yet, this turn can install one,
+            because the policy needs a model to validate against and only a turn
+            supplies that.
         metadata:
           $ref: "#/components/schemas/Metadata"
           description: |
@@ -6548,11 +6661,16 @@ components:
         least one.
 
         On a new Session these are saved. When you reach an existing Session,
-        by ID or by key, they are checked rather than applied: matching values
-        are accepted, and a different value returns `session_options_conflict`
-        with `details.conflicting_paths` naming exactly what disagreed.
-        Compaction needs a turn to install it, because the policy is validated
-        against that turn's model.
+        by ID or by key, `compaction` and `retention` are checked rather than
+        applied: matching values are accepted, and a different value returns
+        `session_options_conflict` with `details.conflicting_paths` naming
+        exactly what disagreed. Compaction needs a turn to install it, because
+        the policy is validated against that turn's model.
+
+        `metadata` is merged rather than checked, on the same terms as
+        `PATCH /v1/sessions/{session_id}`: a present key replaces, an absent key
+        survives, and it never conflicts. Deleting a key stays a PATCH, since a
+        null value is not accepted here.
     UpdateSessionRequest:
       type: object
       additionalProperties: false
@@ -7333,6 +7451,13 @@ components:
           items:
             $ref: "#/components/schemas/PendingHostToolCall"
           description: Present for a waiting Invocation with unresolved host or callback calls.
+        tool_calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCallSummary"
+          description: |
+            Every tool call this turn has made, with its current status.
+            Omitted when the turn has made none.
     InvocationList:
       type: object
       additionalProperties: false
@@ -7375,7 +7500,7 @@ components:
             Non-null only when the turn completed and produced at least one piece
             of text. Failed and cancelled turns leave it null even if some text was
             produced, so read the messages directly if you need those.
-    ClientInvocation:
+    BrowserInvocation:
       type: object
       additionalProperties: false
       required: [id, session_id, agent_definition_id, agent_definition_revision, status, stop_reason, attempt, error, structured_output, active_execution_ms, deadline_at, created_at, updated_at, ended_at]
@@ -7393,7 +7518,7 @@ components:
         attempt: { type: integer, minimum: 0 }
         error:
           oneOf:
-            - $ref: "#/components/schemas/ClientInvocationFailure"
+            - $ref: "#/components/schemas/BrowserInvocationFailure"
             - type: "null"
         structured_output:
           oneOf:
@@ -7408,47 +7533,53 @@ components:
           type: array
           items: { $ref: "#/components/schemas/PendingHostToolCall" }
           description: Only eligible named host-mode tools declared by the admitted definition.
+        tool_calls:
+          type: array
+          items: { $ref: "#/components/schemas/ToolCallSummary" }
+          description: |
+            Every tool call this turn has made, with its current status.
+            Omitted when the turn has made none.
       description: Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
-    ClientInvocationFailure:
+    BrowserInvocationFailure:
       type: object
       additionalProperties: false
       required: [code, message]
       properties:
         code: { type: string }
         message: { type: string }
-    ClientInvocationList:
+    BrowserInvocationList:
       type: object
       additionalProperties: false
       required: [items, has_more, next_cursor]
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/ClientInvocation" }
+          items: { $ref: "#/components/schemas/BrowserInvocation" }
         has_more: { type: boolean }
         next_cursor: { type: [string, "null"] }
-    ClientInvocationResult:
+    BrowserInvocationResult:
       type: object
       additionalProperties: false
       required: [invocation, messages, output_text]
       properties:
-        invocation: { $ref: "#/components/schemas/ClientInvocation" }
+        invocation: { $ref: "#/components/schemas/BrowserInvocation" }
         messages:
           type: array
-          items: { $ref: "#/components/schemas/ClientSessionMessage" }
+          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
         output_text: { type: [string, "null"] }
     InvocationResponse:
       description: Trusted machine projection or the smaller projection selected by client-token authentication.
       oneOf:
         - $ref: "#/components/schemas/Invocation"
-        - $ref: "#/components/schemas/ClientInvocation"
+        - $ref: "#/components/schemas/BrowserInvocation"
     InvocationListResponse:
       oneOf:
         - $ref: "#/components/schemas/InvocationList"
-        - $ref: "#/components/schemas/ClientInvocationList"
+        - $ref: "#/components/schemas/BrowserInvocationList"
     InvocationResultResponse:
       oneOf:
         - $ref: "#/components/schemas/InvocationResult"
-        - $ref: "#/components/schemas/ClientInvocationResult"
+        - $ref: "#/components/schemas/BrowserInvocationResult"
     ModelUsage:
       type: object
       additionalProperties: false
@@ -7581,6 +7712,31 @@ components:
     ToolCallStatus:
       type: string
       enum: [pending, running, completed, failed, cancelled]
+      description: |
+        Where one tool call stands. `pending` means the model asked for it and
+        nothing has started it yet; `running` means it is executing or, for a
+        host tool, waiting on you. The last three are final.
+    ToolCallSummary:
+      type: object
+      additionalProperties: false
+      required: [id, status, updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/ToolCallID"
+        status:
+          $ref: "#/components/schemas/ToolCallStatus"
+        updated_at:
+          type: string
+          format: date-time
+          description: When this call last changed state.
+      description: |
+        One tool call as a stream sees it: which call, what state it is in,
+        and when it reached that state. The `id` is the `id` of the `tool_use`
+        block that opened it, so a client can show a call as failed or still
+        running without waiting for the message that carries its result.
+
+        Names, modes, attempts, and delivery detail live on the ToolCall
+        resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
     ToolCallResultOrigin:
       type: string
       enum: [builtin, callback, host, mcp, system]
@@ -7722,7 +7878,14 @@ components:
           $ref: "#/components/schemas/ToolCallID"
         name:
           type: string
-        input: {}
+        input:
+          type: object
+          additionalProperties: true
+          description: |
+            The arguments the model produced for this call, as a JSON object
+            whose shape is the `input_schema` you declared for the tool named
+            above. nvoken does not narrow it further, because only your tool
+            declaration knows what belongs there.
         deadline_at:
           oneOf:
             - type: string
@@ -8051,7 +8214,7 @@ components:
           oneOf:
             - type: string
             - type: "null"
-    ClientSession:
+    BrowserSession:
       type: object
       additionalProperties: false
       required: [id, active_invocation_id, active_invocation_status, created_at, updated_at]
@@ -8071,24 +8234,24 @@ components:
           type: array
           items: { $ref: "#/components/schemas/PendingHostToolCall" }
       description: Closed browser projection. Session keys, Agent/user/tenant identifiers, lineage, policies, cost settings, metadata, usage, budget, and derived host context are omitted.
-    ClientSessionList:
+    BrowserSessionList:
       type: object
       additionalProperties: false
       required: [items, has_more, next_cursor]
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/ClientSession" }
+          items: { $ref: "#/components/schemas/BrowserSession" }
         has_more: { type: boolean }
         next_cursor: { type: [string, "null"] }
     SessionResponse:
       oneOf:
         - $ref: "#/components/schemas/Session"
-        - $ref: "#/components/schemas/ClientSession"
+        - $ref: "#/components/schemas/BrowserSession"
     SessionListResponse:
       oneOf:
         - $ref: "#/components/schemas/SessionList"
-        - $ref: "#/components/schemas/ClientSessionList"
+        - $ref: "#/components/schemas/BrowserSessionList"
     SessionMessageRole:
       type: string
       enum: [system, user, assistant, tool]
@@ -8428,10 +8591,19 @@ components:
             It is worked out when you read, from how the turn ended, and it is
             frozen onto forked copies so a fork keeps the phases it had. Your own
             input never carries a phase.
+
+            Because it is worked out on read, it is authoritative on ordinary
+            reads and on `invocation.result`, and not on the Session
+            transcript stream: a message delivered there before its turn
+            settled carries `commentary` forever, and no later frame corrects
+            it. On that stream, derive the answer instead. A turn has a final
+            answer only once it settled `completed` with stop reason
+            `end_turn`, and that answer is the turn's last assistant message.
+            That is the same rule nvoken applies.
         created_at:
           type: string
           format: date-time
-    ClientSessionMessage:
+    BrowserSessionMessage:
       type: object
       additionalProperties: false
       required: [id, session_id, invocation_id, sequence, role, content, created_at]
@@ -8450,20 +8622,20 @@ components:
           items: { $ref: "#/components/schemas/SessionContentBlock" }
         created_at: { type: string, format: date-time }
       description: Public transcript content without Agent/user identity, runtime phase, copy origin, or host provenance.
-    ClientSessionMessageList:
+    BrowserSessionMessageList:
       type: object
       additionalProperties: false
       required: [items, has_more, next_cursor]
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/ClientSessionMessage" }
+          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
         has_more: { type: boolean }
         next_cursor: { type: [string, "null"] }
     SessionMessageListResponse:
       oneOf:
         - $ref: "#/components/schemas/SessionMessageList"
-        - $ref: "#/components/schemas/ClientSessionMessageList"
+        - $ref: "#/components/schemas/BrowserSessionMessageList"
     MessagePhase:
       type: string
       enum: [commentary, final_answer]
@@ -8659,8 +8831,17 @@ components:
             - type: "null"
     InvocationChange:
       type: object
-      additionalProperties: false
       required: [invocation_id, revision, status, through_message_sequence, error, usage, provenance, structured_output, structured_output_provenance, occurred_at]
+      description: |
+        One lifecycle step of one turn, as the Session transcript stream and
+        the JSON transcript deliver it. Order changes by `revision` and fold
+        to the highest one to get current state.
+
+        A change carries what a turn's own projection carries about where it
+        stands: `stop_reason` for a turn that ended, `pending_tool_calls` for
+        one waiting on you, `credit_block` for one paused on spend, and
+        `tool_calls` for what its tools are doing. You never need a second
+        request to find out why a turn is not moving.
       properties:
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
@@ -8670,6 +8851,35 @@ components:
           minimum: 1
         status:
           $ref: "#/components/schemas/InvocationStatus"
+        stop_reason:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationStopReason"
+            - type: "null"
+          description: |
+            Why the turn stopped. Present once it has stopped, so an
+            `incomplete` change names the limit that ran out.
+        credit_block:
+          oneOf:
+            - $ref: "#/components/schemas/CreditBlock"
+            - type: "null"
+          description: Present while the turn is paused on spending capacity.
+        pending_tool_calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingHostToolCall"
+          description: |
+            What a waiting turn is waiting for. Omitted when nothing is
+            pending.
+        tool_calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCallSummary"
+          description: |
+            Every tool call this turn has made, with its current status.
+            Omitted when the turn has made none. A tool call changing state is
+            itself a change, so a failed or long-running call is visible
+            before its result message arrives, and a client that was
+            disconnected sees it on replay.
         through_message_sequence:
           oneOf:
             - type: integer
@@ -8723,45 +8933,62 @@ components:
           oneOf:
             - type: string
             - type: "null"
-    ClientInvocationChange:
+    BrowserInvocationChange:
       type: object
-      additionalProperties: false
       required: [invocation_id, revision, status, through_message_sequence, error, structured_output, occurred_at]
+      description: |
+        One lifecycle step of one turn, in the browser projection. It carries
+        the same lifecycle detail as the browser Invocation projection, and
+        nothing the browser projection withholds.
       properties:
         invocation_id: { $ref: "#/components/schemas/InvocationID" }
         revision: { type: integer, format: int64, minimum: 1 }
         status: { $ref: "#/components/schemas/InvocationStatus" }
+        stop_reason:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationStopReason"
+            - type: "null"
+          description: Why the turn stopped. Present once it has stopped.
+        pending_tool_calls:
+          type: array
+          items: { $ref: "#/components/schemas/PendingHostToolCall" }
+          description: Only eligible named host-mode tools declared by the admitted definition.
+        tool_calls:
+          type: array
+          items: { $ref: "#/components/schemas/ToolCallSummary" }
+          description: |
+            Every tool call this turn has made, with its current status.
+            Omitted when the turn has made none.
         through_message_sequence: { type: [integer, "null"], format: int64, minimum: 1 }
         error:
           oneOf:
-            - $ref: "#/components/schemas/ClientInvocationFailure"
+            - $ref: "#/components/schemas/BrowserInvocationFailure"
             - type: "null"
         structured_output:
           oneOf:
             - { type: object, additionalProperties: true }
             - type: "null"
         occurred_at: { type: string, format: date-time }
-    ClientTranscriptSnapshot:
+    BrowserTranscriptSnapshot:
       type: object
       additionalProperties: false
       required: [messages, invocation_changes, has_more, resume_cursor, next_page_token]
       properties:
         messages:
           type: array
-          items: { $ref: "#/components/schemas/ClientSessionMessage" }
+          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
         invocation_changes:
           type: array
-          items: { $ref: "#/components/schemas/ClientInvocationChange" }
+          items: { $ref: "#/components/schemas/BrowserInvocationChange" }
         has_more: { type: boolean }
         resume_cursor: { type: string, minLength: 1 }
         next_page_token: { type: [string, "null"] }
     TranscriptSnapshotResponse:
       oneOf:
         - $ref: "#/components/schemas/TranscriptSnapshot"
-        - $ref: "#/components/schemas/ClientTranscriptSnapshot"
-    TranscriptUpdate:
+        - $ref: "#/components/schemas/BrowserTranscriptSnapshot"
+    TranscriptUpdateEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, messages, invocation_changes, resume_cursor]
       properties:
         type:
@@ -8782,23 +9009,21 @@ components:
           type: string
           minLength: 1
           description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
-    ClientTranscriptUpdate:
+    BrowserTranscriptUpdateEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, messages, invocation_changes, resume_cursor]
       properties:
         type: { type: string, const: transcript.update }
         session_id: { $ref: "#/components/schemas/SessionID" }
         messages:
           type: array
-          items: { $ref: "#/components/schemas/ClientSessionMessage" }
+          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
         invocation_changes:
           type: array
-          items: { $ref: "#/components/schemas/ClientInvocationChange" }
+          items: { $ref: "#/components/schemas/BrowserInvocationChange" }
         resume_cursor: { type: string, minLength: 1 }
     OutputTextDeltaEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, invocation_id, attempt, iteration, content_index, text, emitted_at]
       properties:
         type:
@@ -8823,15 +9048,20 @@ components:
         content_index:
           type: integer
           minimum: 0
+        message_id:
+          $ref: "#/components/schemas/PreviewMessageID"
         text:
           type: string
           minLength: 1
         emitted_at:
           type: string
           format: date-time
+      description: |
+        A live preview of assistant text. Not saved, never replayed, and never
+        a message. Accumulate it by `(invocation_id, attempt, iteration,
+        content_index)` and discard it under the rules in Streaming above.
     ThinkingDeltaEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, invocation_id, attempt, iteration, content_index, thinking, emitted_at]
       properties:
         type:
@@ -8856,15 +9086,25 @@ components:
         content_index:
           type: integer
           minimum: 0
+        message_id:
+          $ref: "#/components/schemas/PreviewMessageID"
         thinking:
           type: string
           minLength: 1
         emitted_at:
           type: string
           format: date-time
+      description: |
+        A live preview of the model's reasoning, carried on machine and
+        browser streams alike. What an end user sees is your application's
+        decision, made in your application.
+
+        Reasoning is watchable and not stored: no content block carries it,
+        and no read returns it. Watch the stream if you want to see the model
+        think. A turn that runs under explicit `reasoning` controls emits no
+        reasoning previews at all, to either audience.
     StreamResyncEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, invocation_id, reason]
       properties:
         type:
@@ -8877,13 +9117,13 @@ components:
           oneOf:
             - $ref: "#/components/schemas/InvocationID"
             - type: "null"
+          description: |
+            The Invocation whose previews are void, or null for every
+            Invocation in the Session.
         reason:
-          type: string
-          enum: [live_delivery_gap]
-          x-enum-varnames: [ReasonLiveDeliveryGap]
+          $ref: "#/components/schemas/StreamResyncReason"
     StreamEndEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, invocation_id, reason, resume_cursor]
       properties:
         type:
@@ -8896,42 +9136,106 @@ components:
           oneOf:
             - $ref: "#/components/schemas/InvocationID"
             - type: "null"
-        reason:
-          type: string
-          enum: [terminal, rotate]
           description: |
-            `rotate` means the server is cycling the connection — reconnect with
-            your last `resume_cursor`. `terminal` means there is nothing more
-            coming: the turn finished, or for a Session stream, nothing is running
-            any more.
+            The Invocation this connection was following, or null on a Session
+            stream.
+        reason:
+          $ref: "#/components/schemas/StreamEndReason"
         resume_cursor:
           type: string
           minLength: 1
+    StreamResyncReason:
+      type: string
+      enum: [live_delivery_gap]
+      x-enum-varnames: [ReasonLiveDeliveryGap]
+      description: |
+        Why previews were invalidated. `live_delivery_gap` means the live
+        delivery path could not prove continuity, so previews were lost;
+        discard what you accumulated and wait for saved frames.
+
+        Expect new values here over time. Treat a value you do not recognize
+        the same way you treat `live_delivery_gap`.
+    StreamEndReason:
+      type: string
+      enum: [terminal, rotate, slow_consumer]
+      x-enum-varnames: [ReasonTerminal, ReasonRotate, ReasonSlowConsumer]
+      description: |
+        Why this connection is closing. Only the connection is ending; the
+        turn is unaffected.
+
+        `terminal` means there is nothing more coming: the turn finished, or
+        for a Session stream, nothing is running any more. `rotate` means the
+        server is cycling the connection, so reconnect with your last
+        `resume_cursor`. `slow_consumer` means this connection could not keep
+        up with what was being written to it and was dropped; reconnect, and
+        read faster or buffer more.
+
+        Expect new values here over time. Treat a value you do not recognize
+        as `rotate` and reconnect with your last `resume_cursor`. Reconnecting
+        is safe even when the turn is over, because a settled turn re-yields
+        its result.
+    PreviewMessageID:
+      type: string
+      minLength: 1
+      description: |
+        The identifier the saved assistant message will carry when this
+        iteration lands, with the same `msg_` prefix every message ID has. Key
+        your preview by it and the handoff becomes an update to a row that
+        already has its permanent identity, rather than one row disappearing
+        and another taking its place.
+
+        Optional: a runtime that has not allocated the identifier yet leaves
+        it out. It is stable within one attempt. A retried attempt allocates a
+        new one, which is harmless, because a higher `attempt` already voids
+        every earlier preview.
     TranscriptStreamEvent:
       description: |
-        The JSON value carried by one Session-stream SSE `data:` field.
-        Durable `transcript.update` frames carry the resume cursor as both
-        payload data and SSE `id`; preview and control frames never carry IDs.
+        The JSON value carried by one Session-stream SSE `data:` field. Switch
+        on `type`. Saved `transcript.update` frames carry the resume cursor as
+        both payload data and SSE `id`; preview and control frames never carry
+        IDs.
+
+        New frame types may appear here over time, and existing ones may gain
+        fields. Handle the types you know and ignore the rest.
       oneOf:
-        - $ref: "#/components/schemas/TranscriptUpdate"
+        - $ref: "#/components/schemas/TranscriptUpdateEvent"
         - $ref: "#/components/schemas/OutputTextDeltaEvent"
         - $ref: "#/components/schemas/ThinkingDeltaEvent"
         - $ref: "#/components/schemas/StreamResyncEvent"
         - $ref: "#/components/schemas/StreamEndEvent"
-    ClientTranscriptStreamEvent:
-      description: Browser stream event. Thinking previews and host-only transcript fields are never emitted.
+      discriminator:
+        propertyName: type
+        mapping:
+          transcript.update: "#/components/schemas/TranscriptUpdateEvent"
+          output_text.delta: "#/components/schemas/OutputTextDeltaEvent"
+          thinking.delta: "#/components/schemas/ThinkingDeltaEvent"
+          stream.resync: "#/components/schemas/StreamResyncEvent"
+          stream.end: "#/components/schemas/StreamEndEvent"
+    BrowserTranscriptStreamEvent:
+      description: |
+        Browser stream event. Switch on `type`. Host-only transcript fields are
+        never emitted. New frame types may appear here over time, and existing
+        ones may gain fields.
       oneOf:
-        - $ref: "#/components/schemas/ClientTranscriptUpdate"
+        - $ref: "#/components/schemas/BrowserTranscriptUpdateEvent"
         - $ref: "#/components/schemas/OutputTextDeltaEvent"
+        - $ref: "#/components/schemas/ThinkingDeltaEvent"
         - $ref: "#/components/schemas/StreamResyncEvent"
         - $ref: "#/components/schemas/StreamEndEvent"
+      discriminator:
+        propertyName: type
+        mapping:
+          transcript.update: "#/components/schemas/BrowserTranscriptUpdateEvent"
+          output_text.delta: "#/components/schemas/OutputTextDeltaEvent"
+          thinking.delta: "#/components/schemas/ThinkingDeltaEvent"
+          stream.resync: "#/components/schemas/StreamResyncEvent"
+          stream.end: "#/components/schemas/StreamEndEvent"
     TranscriptStreamResponse:
       oneOf:
         - $ref: "#/components/schemas/TranscriptStreamEvent"
-        - $ref: "#/components/schemas/ClientTranscriptStreamEvent"
+        - $ref: "#/components/schemas/BrowserTranscriptStreamEvent"
     InvocationAcceptedEvent:
       type: object
-      additionalProperties: false
       required: [type, agent_id, session_id, invocation_id, status, deduplicated, deadline_at, limits]
       properties:
         type:
@@ -8960,9 +9264,8 @@ components:
             can see what you got without a second request — worth checking when you
             left `max_iterations` out, since the default may be lower than you
             expect.
-    ClientInvocationAcceptedEvent:
+    BrowserInvocationAcceptedEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, invocation_id, status, deduplicated, deadline_at]
       properties:
         type: { type: string, const: invocation.accepted }
@@ -8973,7 +9276,6 @@ components:
         deadline_at: { type: string, format: date-time }
     InvocationUpdateEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, invocation_id, invocation, new_messages]
       properties:
         type:
@@ -8990,21 +9292,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SessionMessage"
-    ClientInvocationUpdateEvent:
+    BrowserInvocationUpdateEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, invocation_id, invocation, new_messages]
       properties:
         type: { type: string, const: invocation.update }
         session_id: { $ref: "#/components/schemas/SessionID" }
         invocation_id: { $ref: "#/components/schemas/InvocationID" }
-        invocation: { $ref: "#/components/schemas/ClientInvocation" }
+        invocation: { $ref: "#/components/schemas/BrowserInvocation" }
         new_messages:
           type: array
-          items: { $ref: "#/components/schemas/ClientSessionMessage" }
+          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
     InvocationResultEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, invocation_id, result]
       properties:
         type:
@@ -9017,19 +9317,22 @@ components:
           $ref: "#/components/schemas/InvocationID"
         result:
           $ref: "#/components/schemas/InvocationResult"
-    ClientInvocationResultEvent:
+    BrowserInvocationResultEvent:
       type: object
-      additionalProperties: false
       required: [type, session_id, invocation_id, result]
       properties:
         type: { type: string, const: invocation.result }
         session_id: { $ref: "#/components/schemas/SessionID" }
         invocation_id: { $ref: "#/components/schemas/InvocationID" }
-        result: { $ref: "#/components/schemas/ClientInvocationResult" }
+        result: { $ref: "#/components/schemas/BrowserInvocationResult" }
     InvocationStreamEvent:
       description: |
-        Typed event from one Invocation stream. A minimal consumer prints
-        `output_text.delta` and finishes on `invocation.result`.
+        Typed event from one Invocation stream. Switch on `type`. A minimal
+        consumer prints `output_text.delta` and finishes on
+        `invocation.result`.
+
+        New frame types may appear here over time, and existing ones may gain
+        fields. Handle the types you know and ignore the rest.
       oneOf:
         - $ref: "#/components/schemas/InvocationAcceptedEvent"
         - $ref: "#/components/schemas/OutputTextDeltaEvent"
@@ -9038,19 +9341,43 @@ components:
         - $ref: "#/components/schemas/InvocationResultEvent"
         - $ref: "#/components/schemas/StreamResyncEvent"
         - $ref: "#/components/schemas/StreamEndEvent"
-    ClientInvocationStreamEvent:
-      description: Browser Invocation stream event. Thinking previews and host-only fields are never emitted.
+      discriminator:
+        propertyName: type
+        mapping:
+          invocation.accepted: "#/components/schemas/InvocationAcceptedEvent"
+          output_text.delta: "#/components/schemas/OutputTextDeltaEvent"
+          thinking.delta: "#/components/schemas/ThinkingDeltaEvent"
+          invocation.update: "#/components/schemas/InvocationUpdateEvent"
+          invocation.result: "#/components/schemas/InvocationResultEvent"
+          stream.resync: "#/components/schemas/StreamResyncEvent"
+          stream.end: "#/components/schemas/StreamEndEvent"
+    BrowserInvocationStreamEvent:
+      description: |
+        Browser Invocation stream event. Switch on `type`. Host-only fields are
+        never emitted. New frame types may appear here over time, and existing
+        ones may gain fields.
       oneOf:
-        - $ref: "#/components/schemas/ClientInvocationAcceptedEvent"
+        - $ref: "#/components/schemas/BrowserInvocationAcceptedEvent"
         - $ref: "#/components/schemas/OutputTextDeltaEvent"
-        - $ref: "#/components/schemas/ClientInvocationUpdateEvent"
-        - $ref: "#/components/schemas/ClientInvocationResultEvent"
+        - $ref: "#/components/schemas/ThinkingDeltaEvent"
+        - $ref: "#/components/schemas/BrowserInvocationUpdateEvent"
+        - $ref: "#/components/schemas/BrowserInvocationResultEvent"
         - $ref: "#/components/schemas/StreamResyncEvent"
         - $ref: "#/components/schemas/StreamEndEvent"
+      discriminator:
+        propertyName: type
+        mapping:
+          invocation.accepted: "#/components/schemas/BrowserInvocationAcceptedEvent"
+          output_text.delta: "#/components/schemas/OutputTextDeltaEvent"
+          thinking.delta: "#/components/schemas/ThinkingDeltaEvent"
+          invocation.update: "#/components/schemas/BrowserInvocationUpdateEvent"
+          invocation.result: "#/components/schemas/BrowserInvocationResultEvent"
+          stream.resync: "#/components/schemas/StreamResyncEvent"
+          stream.end: "#/components/schemas/StreamEndEvent"
     InvocationStreamResponse:
       oneOf:
         - $ref: "#/components/schemas/InvocationStreamEvent"
-        - $ref: "#/components/schemas/ClientInvocationStreamEvent"
+        - $ref: "#/components/schemas/BrowserInvocationStreamEvent"
     AdmissionOutcome:
       type: string
       enum: [admitted, refused]
@@ -9457,7 +9784,7 @@ components:
             assurance:
               type: string
               const: bearer
-    ClientCurrentIdentity:
+    BrowserCurrentIdentity:
       type: object
       additionalProperties: false
       required: [authentication]
@@ -9484,7 +9811,7 @@ components:
     CurrentIdentityResponse:
       oneOf:
         - $ref: "#/components/schemas/CurrentIdentity"
-        - $ref: "#/components/schemas/ClientCurrentIdentity"
+        - $ref: "#/components/schemas/BrowserCurrentIdentity"
   responses:
     InvalidRequest:
       description: The request is invalid or contains a deferred field.

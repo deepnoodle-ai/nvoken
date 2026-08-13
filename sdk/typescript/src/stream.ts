@@ -22,7 +22,7 @@ import {
   StreamEndEventFromJSON,
   StreamResyncEventFromJSON,
   ThinkingDeltaEventFromJSON,
-  TranscriptUpdateFromJSON,
+  TranscriptUpdateEventFromJSON,
 } from "./generated/models/index.js";
 
 export interface StreamEvent {
@@ -48,6 +48,13 @@ export interface StreamPreview {
   attempt: number;
   iteration: number;
   contentIndex: number;
+  /**
+   * The saved assistant message this preview is building, when the server
+   * published it. Key a rendered preview by it and the handoff to the saved
+   * message updates a row that already has its permanent identity. Undefined
+   * when the server did not publish one.
+   */
+  messageId?: string;
   outputText: string;
   thinking: string;
 }
@@ -102,6 +109,7 @@ export class Reducer {
         delta.attempt,
         delta.iteration,
         delta.contentIndex,
+        delta.messageId,
         delta.text,
         "",
       );
@@ -114,6 +122,7 @@ export class Reducer {
         delta.attempt,
         delta.iteration,
         delta.contentIndex,
+        delta.messageId,
         "",
         delta.thinking,
       );
@@ -130,7 +139,7 @@ export class Reducer {
       return;
     }
     if (event.type !== "transcript.update") return;
-    const update = TranscriptUpdateFromJSON(event.data);
+    const update = TranscriptUpdateEventFromJSON(event.data);
     for (const message of update.messages) {
       this.messages.set(message.sequence, message);
       if (message.role === "assistant" && message.invocationId !== null) {
@@ -171,6 +180,7 @@ export class Reducer {
     attempt: number,
     iteration: number,
     contentIndex: number,
+    messageId: string | undefined,
     outputText: string,
     thinking: string,
   ): void {
@@ -190,6 +200,7 @@ export class Reducer {
       outputText: "",
       thinking: "",
     };
+    if (messageId) preview.messageId = messageId;
     preview.outputText += outputText;
     preview.thinking += thinking;
     this.previews.set(key, preview);

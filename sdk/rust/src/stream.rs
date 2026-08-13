@@ -33,6 +33,12 @@ pub struct StreamPreview {
     pub attempt: u64,
     pub iteration: u32,
     pub content_index: u32,
+    /// The saved assistant message this preview is building, when the server
+    /// published it. Key a rendered preview by it and the handoff to the saved
+    /// message updates a row that already has its permanent identity. `None`
+    /// when the server did not publish one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
     pub output_text: String,
     pub thinking: String,
 }
@@ -63,6 +69,7 @@ impl Reducer {
                     delta.attempt,
                     delta.iteration,
                     delta.content_index,
+                    delta.message_id,
                     delta.text,
                     String::new(),
                 );
@@ -81,6 +88,7 @@ impl Reducer {
                     delta.attempt,
                     delta.iteration,
                     delta.content_index,
+                    delta.message_id,
                     String::new(),
                     delta.thinking,
                 );
@@ -107,8 +115,8 @@ impl Reducer {
         if event.event_type != "transcript.update" {
             return Ok(());
         }
-        let update: models::TranscriptUpdate =
-            serde_json::from_value(event.data.clone()).map_err(|error| {
+        let update: models::TranscriptUpdateEvent = serde_json::from_value(event.data.clone())
+            .map_err(|error| {
                 NvokenError::unexpected(format!(
                     "decode {} event payload: {error}",
                     event.event_type
@@ -164,6 +172,7 @@ impl Reducer {
         attempt: u64,
         iteration: u32,
         content_index: u32,
+        message_id: Option<String>,
         output_text: String,
         thinking: String,
     ) {
@@ -187,6 +196,9 @@ impl Reducer {
             content_index,
             ..StreamPreview::default()
         });
+        if message_id.is_some() {
+            preview.message_id = message_id;
+        }
         preview.output_text.push_str(&output_text);
         preview.thinking.push_str(&thinking);
     }

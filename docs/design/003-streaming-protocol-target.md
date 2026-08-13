@@ -1,7 +1,10 @@
 # The streaming protocol becomes implementable from the contract alone
 
-**Status:** Proposed. The four open decisions were resolved with Curtis on
-2026-08-13 and are recorded under Decisions. Nothing has landed yet.
+**Status:** Implemented, with two documented deviations. Areas 1 through 9 and
+area 10's contract boundary landed on 2026-08-13. Area 7's durable half was
+not implemented and area 5's revision bump is scoped to settlement; both are
+explained under Implementation notes. The four open decisions were resolved
+with Curtis on 2026-08-13 and are recorded under Decisions.
 **Author:** Claude Fable 5 with Curtis Myzie
 **Date:** 2026-08-13
 **Workflow:** Target-state specification. The
@@ -401,40 +404,81 @@ The end state, as acceptance criteria:
   and can show a failed tool call as failed before its result message
   arrives.
 - A browser client and a host client watching the same turn see the same
-  thinking content, live and durable.
+  thinking content, live. Durable was ruled out: see Implementation notes.
 - An image or PDF a tool produced is renderable: its descriptor arrives on
   the stream at text cost, and its bytes are one authorized HTTP read away.
 - `reducer.json` exercises all seven frame types and every terminal status,
   and a loop fixture pins termination, cursor resume, and result re-emission
-  (delivered by wave 1, assumed here).
+  (delivered by wave 1, assumed here). Still open: this change added the
+  preview-identity case, not the missing frame types, so T1 and T2 stand.
 - Adding the next field or enum value to any stream event breaks nothing.
 - The rough edges resolved here are deleted from the reference, not
   annotated. The reference stays a description of what is.
 - The protocol is one naming-and-versioning decision away from publishable,
   with the conformance suite as its compliance kit.
 
+## Implementation notes
+
+What landed, area by area. Areas 1 through 6, 8, and 9 are complete as
+specified.
+
+**Area 7 shipped its live half only.** The durable half is unimplementable as
+written, and the reason is a policy decision that predates this document.
+Reasoning is deliberately never stored as public transcript content: the
+generator routes non-`{tool_use, text, server_tool_use}` blocks to the private
+provider-artifact sidecar, the checkpoint refuses private block types in
+visible content, and the reasoning-lineage rule has to be able to withhold
+those artifacts from a later provider request when the reasoning
+configuration changes. Adding `ThinkingBlock` to `SessionContentBlock` would
+re-send reasoning the runtime must be free to drop, and would put a block in
+the contract that no read can return. The live half did ship: browser callers
+now receive `thinking.delta` on the same terms machine callers do, which is
+what decision 4 asked for. The contract states the rule instead of promising
+the block, and N5 in the reference was corrected rather than deleted.
+
+**Area 5's revision bump is scoped to settlement.** A tool call reaching a
+terminal state reserves a lifecycle revision, so its new state is delivered
+and replayed. The `pending` to `running` transition does not, because
+`StartBuiltinToolCall` and `StartMCPToolCall` deliberately take no Session row
+lock, and reserving a revision there would either violate the Session-before-
+Invocation lock order or add a lock to the hot path. Settlement is the
+transition a client acts on; a call that started and a call that is about to
+start look the same to a spinner.
+
+**Area 10 landed its contract boundary, not its read endpoint.** The contract
+states that frames carry descriptors and never inline bytes, which is what
+bounds frame size. The content-addressed read that would make a transcript
+image renderable is not implemented, so I13 stays open.
+
+**One bug was found by the tests written for this work.** The first
+implementation of area 5 reserved the lifecycle revision in a second
+`UPDATE sessions` arm of `CommitToolResult`. Postgres applies at most one
+update per row per statement, so that arm silently matched nothing and no
+transition was ever written. Both counters are now reserved in one arm.
+
 ## Migration path
 
-The assessment's waves, mapped onto this document's areas:
+The assessment's waves, mapped onto this document's areas. Every area below
+landed in one change rather than across the planned waves, which was possible
+because area 1 was written first and the rest built on it.
 
-| Area | Wave | Lands in |
-| --- | --- | --- |
-| 1. Compatibility policy | 3 | `nvoken-cloud` contract |
-| 2. Stated guarantees | 5 | `nvoken-cloud` contract prose |
-| 3. Lifecycle parity | 4 (wire); P3 lands as prose in 5 | `nvoken-cloud` runtime and contract |
-| 4. Preview identity | 4 | `nvoken-cloud` runtime and contract |
-| 5. Tool-call visibility | 4 | `nvoken-cloud` runtime and contract |
-| 6. Flow control | 4 | `nvoken-cloud` runtime and contract |
-| 7. The thinking story | 4 | `nvoken-cloud` contract and runtime |
-| 8. Name cleanups | 6 | `nvoken-cloud` contract, names only |
-| 9. Transport stance | 5 | `nvoken-cloud` contract prose |
-| 10. Bulk content boundary | 4 | `nvoken-cloud` contract and runtime |
-| 11. Tool boundary streaming | stance only, unscheduled | `nvoken-cloud` contract and runtime, later |
+| Area | Wave | Lands in | Status |
+| --- | --- | --- | --- |
+| 1. Compatibility policy | 3 | `nvoken-cloud` contract | Done |
+| 2. Stated guarantees | 5 | `nvoken-cloud` contract prose | Done |
+| 3. Lifecycle parity | 4 (wire); P3 lands as prose in 5 | `nvoken-cloud` runtime and contract | Done |
+| 4. Preview identity | 4 | `nvoken-cloud` runtime and contract | Done |
+| 5. Tool-call visibility | 4 | `nvoken-cloud` runtime and contract | Settlement only |
+| 6. Flow control | 4 | `nvoken-cloud` runtime and contract | Done |
+| 7. The thinking story | 4 | `nvoken-cloud` contract and runtime | Live half only |
+| 8. Name cleanups | 6 | `nvoken-cloud` contract, names only | Done |
+| 9. Transport stance | 5 | `nvoken-cloud` contract prose | Done |
+| 10. Bulk content boundary | 4 | `nvoken-cloud` contract and runtime | Contract only |
+| 11. Tool boundary streaming | stance only, unscheduled | `nvoken-cloud` contract and runtime, later | Unscheduled |
 
-Area 1 must land before areas 3 through 7 ship anything on the wire. Area 2
-can land anytime. Waves 1 and 7, the SDK work, run independently of all of
-this in this repository, and every contract change above reaches this
-repository through the ordinary sync described in
+Waves 1 and 7, the SDK work, run independently of all of this in this
+repository, and every contract change above reached this repository through
+the ordinary sync described in
 [SDK and contract development](../guides/sdk-development.md).
 
 ## Related

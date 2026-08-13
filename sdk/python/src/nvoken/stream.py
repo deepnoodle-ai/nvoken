@@ -7,7 +7,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, TYPE_CHECKING
 
 from nvoken_generated.models.invocation_change import InvocationChange
 from nvoken_generated.models.session_message import SessionMessage
-from nvoken_generated.models.transcript_update import TranscriptUpdate
+from nvoken_generated.models.transcript_update_event import TranscriptUpdateEvent
 
 if TYPE_CHECKING:
     from .client import Client, InvocationHandle
@@ -31,12 +31,21 @@ class ReducedSnapshot:
 
 @dataclass(frozen=True)
 class StreamPreview:
+    """One model iteration as it streams, before its message is saved.
+
+    ``message_id`` names the saved assistant message this preview is building,
+    when the server published it. Key a rendered preview by it and the handoff
+    to the saved message updates a row that already has its permanent identity.
+    ``None`` when the server did not publish one.
+    """
+
     invocation_id: str
     attempt: int
     iteration: int
     content_index: int
     output_text: str
     thinking: str
+    message_id: str | None = None
 
 
 class Reducer:
@@ -56,6 +65,7 @@ class Reducer:
                 attempt=data["attempt"],
                 iteration=data["iteration"],
                 content_index=data["content_index"],
+                message_id=data.get("message_id"),
                 output_text=data.get("text", ""),
                 thinking=data.get("thinking", ""),
             )
@@ -70,7 +80,7 @@ class Reducer:
             return
         if event.type != "transcript.update":
             return
-        update = TranscriptUpdate.from_dict(event.data)
+        update = TranscriptUpdateEvent.from_dict(event.data)
         assert update is not None
         for message in update.messages:
             self._messages[message.sequence] = message
@@ -109,6 +119,7 @@ class Reducer:
         attempt: int,
         iteration: int,
         content_index: int,
+        message_id: str | None,
         output_text: str,
         thinking: str,
     ) -> None:
@@ -129,6 +140,7 @@ class Reducer:
             content_index=content_index,
             output_text=(current.output_text if current else "") + output_text,
             thinking=(current.thinking if current else "") + thinking,
+            message_id=message_id or (current.message_id if current else None),
         )
 
     def _discard_previews(self, invocation_id: str) -> None:

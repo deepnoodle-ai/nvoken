@@ -109,6 +109,123 @@ func (e AuthenticationMethod) Valid() bool {
 	}
 }
 
+// Defines values for BrowserCurrentIdentityAuthenticationAssurance.
+const (
+	BrowserCurrentIdentityAuthenticationAssuranceBearer BrowserCurrentIdentityAuthenticationAssurance = "bearer"
+)
+
+// Valid indicates whether the value is a known member of the BrowserCurrentIdentityAuthenticationAssurance enum.
+func (e BrowserCurrentIdentityAuthenticationAssurance) Valid() bool {
+	switch e {
+	case BrowserCurrentIdentityAuthenticationAssuranceBearer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BrowserCurrentIdentityAuthenticationMethod.
+const (
+	BrowserCurrentIdentityAuthenticationMethodAnonymousToken BrowserCurrentIdentityAuthenticationMethod = "anonymous_token"
+	BrowserCurrentIdentityAuthenticationMethodClientToken    BrowserCurrentIdentityAuthenticationMethod = "client_token"
+)
+
+// Valid indicates whether the value is a known member of the BrowserCurrentIdentityAuthenticationMethod enum.
+func (e BrowserCurrentIdentityAuthenticationMethod) Valid() bool {
+	switch e {
+	case BrowserCurrentIdentityAuthenticationMethodAnonymousToken:
+		return true
+	case BrowserCurrentIdentityAuthenticationMethodClientToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BrowserInvocationAcceptedEventType.
+const (
+	InvocationAccepted BrowserInvocationAcceptedEventType = "invocation.accepted"
+)
+
+// Valid indicates whether the value is a known member of the BrowserInvocationAcceptedEventType enum.
+func (e BrowserInvocationAcceptedEventType) Valid() bool {
+	switch e {
+	case InvocationAccepted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BrowserInvocationResultEventType.
+const (
+	BrowserInvocationResultEventTypeInvocationResult BrowserInvocationResultEventType = "invocation.result"
+)
+
+// Valid indicates whether the value is a known member of the BrowserInvocationResultEventType enum.
+func (e BrowserInvocationResultEventType) Valid() bool {
+	switch e {
+	case BrowserInvocationResultEventTypeInvocationResult:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BrowserInvocationUpdateEventType.
+const (
+	InvocationUpdate BrowserInvocationUpdateEventType = "invocation.update"
+)
+
+// Valid indicates whether the value is a known member of the BrowserInvocationUpdateEventType enum.
+func (e BrowserInvocationUpdateEventType) Valid() bool {
+	switch e {
+	case InvocationUpdate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BrowserSessionActiveInvocationStatus.
+const (
+	BrowserSessionActiveInvocationStatusPaused  BrowserSessionActiveInvocationStatus = "paused"
+	BrowserSessionActiveInvocationStatusQueued  BrowserSessionActiveInvocationStatus = "queued"
+	BrowserSessionActiveInvocationStatusRunning BrowserSessionActiveInvocationStatus = "running"
+	BrowserSessionActiveInvocationStatusWaiting BrowserSessionActiveInvocationStatus = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the BrowserSessionActiveInvocationStatus enum.
+func (e BrowserSessionActiveInvocationStatus) Valid() bool {
+	switch e {
+	case BrowserSessionActiveInvocationStatusPaused:
+		return true
+	case BrowserSessionActiveInvocationStatusQueued:
+		return true
+	case BrowserSessionActiveInvocationStatusRunning:
+		return true
+	case BrowserSessionActiveInvocationStatusWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BrowserTranscriptUpdateEventType.
+const (
+	TranscriptUpdate BrowserTranscriptUpdateEventType = "transcript.update"
+)
+
+// Valid indicates whether the value is a known member of the BrowserTranscriptUpdateEventType enum.
+func (e BrowserTranscriptUpdateEventType) Valid() bool {
+	switch e {
+	case TranscriptUpdate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BuiltinToolDeclarationMode.
 const (
 	ModeBuiltin BuiltinToolDeclarationMode = "builtin"
@@ -190,123 +307,6 @@ const (
 func (e CharLocationCitationType) Valid() bool {
 	switch e {
 	case TypeCharLocation:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientCurrentIdentityAuthenticationAssurance.
-const (
-	ClientCurrentIdentityAuthenticationAssuranceBearer ClientCurrentIdentityAuthenticationAssurance = "bearer"
-)
-
-// Valid indicates whether the value is a known member of the ClientCurrentIdentityAuthenticationAssurance enum.
-func (e ClientCurrentIdentityAuthenticationAssurance) Valid() bool {
-	switch e {
-	case ClientCurrentIdentityAuthenticationAssuranceBearer:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientCurrentIdentityAuthenticationMethod.
-const (
-	ClientCurrentIdentityAuthenticationMethodAnonymousToken ClientCurrentIdentityAuthenticationMethod = "anonymous_token"
-	ClientCurrentIdentityAuthenticationMethodClientToken    ClientCurrentIdentityAuthenticationMethod = "client_token"
-)
-
-// Valid indicates whether the value is a known member of the ClientCurrentIdentityAuthenticationMethod enum.
-func (e ClientCurrentIdentityAuthenticationMethod) Valid() bool {
-	switch e {
-	case ClientCurrentIdentityAuthenticationMethodAnonymousToken:
-		return true
-	case ClientCurrentIdentityAuthenticationMethodClientToken:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientInvocationAcceptedEventType.
-const (
-	InvocationAccepted ClientInvocationAcceptedEventType = "invocation.accepted"
-)
-
-// Valid indicates whether the value is a known member of the ClientInvocationAcceptedEventType enum.
-func (e ClientInvocationAcceptedEventType) Valid() bool {
-	switch e {
-	case InvocationAccepted:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientInvocationResultEventType.
-const (
-	ClientInvocationResultEventTypeInvocationResult ClientInvocationResultEventType = "invocation.result"
-)
-
-// Valid indicates whether the value is a known member of the ClientInvocationResultEventType enum.
-func (e ClientInvocationResultEventType) Valid() bool {
-	switch e {
-	case ClientInvocationResultEventTypeInvocationResult:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientInvocationUpdateEventType.
-const (
-	InvocationUpdate ClientInvocationUpdateEventType = "invocation.update"
-)
-
-// Valid indicates whether the value is a known member of the ClientInvocationUpdateEventType enum.
-func (e ClientInvocationUpdateEventType) Valid() bool {
-	switch e {
-	case InvocationUpdate:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientSessionActiveInvocationStatus.
-const (
-	ClientSessionActiveInvocationStatusPaused  ClientSessionActiveInvocationStatus = "paused"
-	ClientSessionActiveInvocationStatusQueued  ClientSessionActiveInvocationStatus = "queued"
-	ClientSessionActiveInvocationStatusRunning ClientSessionActiveInvocationStatus = "running"
-	ClientSessionActiveInvocationStatusWaiting ClientSessionActiveInvocationStatus = "waiting"
-)
-
-// Valid indicates whether the value is a known member of the ClientSessionActiveInvocationStatus enum.
-func (e ClientSessionActiveInvocationStatus) Valid() bool {
-	switch e {
-	case ClientSessionActiveInvocationStatusPaused:
-		return true
-	case ClientSessionActiveInvocationStatusQueued:
-		return true
-	case ClientSessionActiveInvocationStatusRunning:
-		return true
-	case ClientSessionActiveInvocationStatusWaiting:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientTranscriptUpdateType.
-const (
-	ClientTranscriptUpdateTypeTranscriptUpdate ClientTranscriptUpdateType = "transcript.update"
-)
-
-// Valid indicates whether the value is a known member of the ClientTranscriptUpdateType enum.
-func (e ClientTranscriptUpdateType) Valid() bool {
-	switch e {
-	case ClientTranscriptUpdateTypeTranscriptUpdate:
 		return true
 	default:
 		return false
@@ -1846,24 +1846,6 @@ func (e SessionMessageRole) Valid() bool {
 	}
 }
 
-// Defines values for StreamEndEventReason.
-const (
-	Rotate   StreamEndEventReason = "rotate"
-	Terminal StreamEndEventReason = "terminal"
-)
-
-// Valid indicates whether the value is a known member of the StreamEndEventReason enum.
-func (e StreamEndEventReason) Valid() bool {
-	switch e {
-	case Rotate:
-		return true
-	case Terminal:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for StreamEndEventType.
 const (
 	EventStreamEnd StreamEndEventType = "stream.end"
@@ -1879,15 +1861,21 @@ func (e StreamEndEventType) Valid() bool {
 	}
 }
 
-// Defines values for StreamResyncEventReason.
+// Defines values for StreamEndReason.
 const (
-	ReasonLiveDeliveryGap StreamResyncEventReason = "live_delivery_gap"
+	ReasonRotate       StreamEndReason = "rotate"
+	ReasonSlowConsumer StreamEndReason = "slow_consumer"
+	ReasonTerminal     StreamEndReason = "terminal"
 )
 
-// Valid indicates whether the value is a known member of the StreamResyncEventReason enum.
-func (e StreamResyncEventReason) Valid() bool {
+// Valid indicates whether the value is a known member of the StreamEndReason enum.
+func (e StreamEndReason) Valid() bool {
 	switch e {
-	case ReasonLiveDeliveryGap:
+	case ReasonRotate:
+		return true
+	case ReasonSlowConsumer:
+		return true
+	case ReasonTerminal:
 		return true
 	default:
 		return false
@@ -1903,6 +1891,21 @@ const (
 func (e StreamResyncEventType) Valid() bool {
 	switch e {
 	case EventStreamResync:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StreamResyncReason.
+const (
+	ReasonLiveDeliveryGap StreamResyncReason = "live_delivery_gap"
+)
+
+// Valid indicates whether the value is a known member of the StreamResyncReason enum.
+func (e StreamResyncReason) Valid() bool {
+	switch e {
+	case ReasonLiveDeliveryGap:
 		return true
 	default:
 		return false
@@ -2155,13 +2158,13 @@ func (e TraceSummaryStatus) Valid() bool {
 	}
 }
 
-// Defines values for TranscriptUpdateType.
+// Defines values for TranscriptUpdateEventType.
 const (
-	EventTranscriptUpdate TranscriptUpdateType = "transcript.update"
+	EventTranscriptUpdate TranscriptUpdateEventType = "transcript.update"
 )
 
-// Valid indicates whether the value is a known member of the TranscriptUpdateType enum.
-func (e TranscriptUpdateType) Valid() bool {
+// Valid indicates whether the value is a known member of the TranscriptUpdateEventType enum.
+func (e TranscriptUpdateEventType) Valid() bool {
 	switch e {
 	case EventTranscriptUpdate:
 		return true
@@ -3029,6 +3032,255 @@ type BrowserClientInterface struct {
 	ToolNames *[]string `json:"tool_names,omitempty"`
 }
 
+// BrowserCurrentIdentity defines model for BrowserCurrentIdentity.
+type BrowserCurrentIdentity struct {
+	Authentication struct {
+		// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+		AgentDefinitionID       AgentDefinitionID `json:"agent_definition_id"`
+		AgentDefinitionRevision int               `json:"agent_definition_revision"`
+		AgentKey                string            `json:"agent_key"`
+
+		// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+		AppID      AppID                                         `json:"app_id"`
+		Assurance  BrowserCurrentIdentityAuthenticationAssurance `json:"assurance"`
+		Method     BrowserCurrentIdentityAuthenticationMethod    `json:"method"`
+		Operations []Operation                                   `json:"operations"`
+		SessionID  *SessionID                                    `json:"session_id"`
+		TenantKey  string                                        `json:"tenant_key"`
+	} `json:"authentication"`
+}
+
+// BrowserCurrentIdentityAuthenticationAssurance defines model for BrowserCurrentIdentity.Authentication.Assurance.
+type BrowserCurrentIdentityAuthenticationAssurance string
+
+// BrowserCurrentIdentityAuthenticationMethod defines model for BrowserCurrentIdentity.Authentication.Method.
+type BrowserCurrentIdentityAuthenticationMethod string
+
+// BrowserInvocation Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
+type BrowserInvocation struct {
+	ActiveExecutionMs int `json:"active_execution_ms"`
+
+	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+	AgentDefinitionID       AgentDefinitionID `json:"agent_definition_id"`
+	AgentDefinitionRevision int               `json:"agent_definition_revision"`
+	Attempt                 int               `json:"attempt"`
+	CreatedAt               time.Time         `json:"created_at"`
+	DeadlineAt              *time.Time        `json:"deadline_at"`
+
+	// Deduplicated Present only on Invocation admission.
+	Deduplicated *bool                     `json:"deduplicated,omitempty"`
+	EndedAt      *time.Time                `json:"ended_at"`
+	Error        *BrowserInvocationFailure `json:"error"`
+
+	// ID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	ID InvocationID `json:"id"`
+
+	// PendingToolCalls Only eligible named host-mode tools declared by the admitted definition.
+	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID `json:"session_id"`
+
+	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+	// turn reaches one of them it never changes again.
+	//
+	// `completed` means the turn ended the way it was asked to: the model
+	// finished on its own, or you interrupted it.
+	//
+	// `incomplete` means a limit you set stopped the turn cleanly, between
+	// steps rather than mid-request. `stop_reason` names the limit that ran
+	// out. The reply so far is valid and carries into the next turn just
+	// like a completed turn's does, so this is a stopping point rather than
+	// an error.
+	//
+	// `failed` means the turn could not stop cleanly — a deadline landing in
+	// the middle of a model request, for example — or that a turn you asked
+	// for structured output from never produced a valid object. Read `error`
+	// for the reason; the reply, if any, is not carried forward.
+	//
+	// `waiting` — `requires_action` in some other APIs — means the turn has
+	// stopped for tool calls you need to run. Nothing is executing. Send the
+	// results and the turn returns to `queued` and picks up where it left
+	// off. A turn can also return to `queued` on its own if nvoken had to
+	// restart it after an interruption; `attempt` tells the two apart, and
+	// the `revision` on each stream update tells you their order.
+	//
+	// `paused` means a spending limit stopped the turn but left it
+	// resumable. Nothing is executing, and its deadlines are on hold, so a
+	// turn cannot expire while you decide. Raise the turn's limit or add
+	// credits to the blocked tenant account and it continues. It still
+	// accepts interrupt, cancel, and nudge.
+	Status           InvocationStatus        `json:"status"`
+	StopReason       *InvocationStopReason   `json:"stop_reason"`
+	StructuredOutput *map[string]interface{} `json:"structured_output"`
+
+	// ToolCalls Every tool call this turn has made, with its current status.
+	// Omitted when the turn has made none.
+	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
+// BrowserInvocationAcceptedEvent defines model for BrowserInvocationAcceptedEvent.
+type BrowserInvocationAcceptedEvent struct {
+	DeadlineAt   time.Time `json:"deadline_at"`
+	Deduplicated bool      `json:"deduplicated"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID `json:"invocation_id"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID `json:"session_id"`
+
+	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+	// turn reaches one of them it never changes again.
+	//
+	// `completed` means the turn ended the way it was asked to: the model
+	// finished on its own, or you interrupted it.
+	//
+	// `incomplete` means a limit you set stopped the turn cleanly, between
+	// steps rather than mid-request. `stop_reason` names the limit that ran
+	// out. The reply so far is valid and carries into the next turn just
+	// like a completed turn's does, so this is a stopping point rather than
+	// an error.
+	//
+	// `failed` means the turn could not stop cleanly — a deadline landing in
+	// the middle of a model request, for example — or that a turn you asked
+	// for structured output from never produced a valid object. Read `error`
+	// for the reason; the reply, if any, is not carried forward.
+	//
+	// `waiting` — `requires_action` in some other APIs — means the turn has
+	// stopped for tool calls you need to run. Nothing is executing. Send the
+	// results and the turn returns to `queued` and picks up where it left
+	// off. A turn can also return to `queued` on its own if nvoken had to
+	// restart it after an interruption; `attempt` tells the two apart, and
+	// the `revision` on each stream update tells you their order.
+	//
+	// `paused` means a spending limit stopped the turn but left it
+	// resumable. Nothing is executing, and its deadlines are on hold, so a
+	// turn cannot expire while you decide. Raise the turn's limit or add
+	// credits to the blocked tenant account and it continues. It still
+	// accepts interrupt, cancel, and nudge.
+	Status InvocationStatus                   `json:"status"`
+	Type   BrowserInvocationAcceptedEventType `json:"type"`
+}
+
+// BrowserInvocationAcceptedEventType defines model for BrowserInvocationAcceptedEvent.Type.
+type BrowserInvocationAcceptedEventType string
+
+// BrowserInvocationChange One lifecycle step of one turn, in the browser projection. It carries
+// the same lifecycle detail as the browser Invocation projection, and
+// nothing the browser projection withholds.
+type BrowserInvocationChange struct {
+	Error *BrowserInvocationFailure `json:"error"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID `json:"invocation_id"`
+	OccurredAt   time.Time    `json:"occurred_at"`
+
+	// PendingToolCalls Only eligible named host-mode tools declared by the admitted definition.
+	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
+	Revision         int64                  `json:"revision"`
+
+	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+	// turn reaches one of them it never changes again.
+	//
+	// `completed` means the turn ended the way it was asked to: the model
+	// finished on its own, or you interrupted it.
+	//
+	// `incomplete` means a limit you set stopped the turn cleanly, between
+	// steps rather than mid-request. `stop_reason` names the limit that ran
+	// out. The reply so far is valid and carries into the next turn just
+	// like a completed turn's does, so this is a stopping point rather than
+	// an error.
+	//
+	// `failed` means the turn could not stop cleanly — a deadline landing in
+	// the middle of a model request, for example — or that a turn you asked
+	// for structured output from never produced a valid object. Read `error`
+	// for the reason; the reply, if any, is not carried forward.
+	//
+	// `waiting` — `requires_action` in some other APIs — means the turn has
+	// stopped for tool calls you need to run. Nothing is executing. Send the
+	// results and the turn returns to `queued` and picks up where it left
+	// off. A turn can also return to `queued` on its own if nvoken had to
+	// restart it after an interruption; `attempt` tells the two apart, and
+	// the `revision` on each stream update tells you their order.
+	//
+	// `paused` means a spending limit stopped the turn but left it
+	// resumable. Nothing is executing, and its deadlines are on hold, so a
+	// turn cannot expire while you decide. Raise the turn's limit or add
+	// credits to the blocked tenant account and it continues. It still
+	// accepts interrupt, cancel, and nudge.
+	Status InvocationStatus `json:"status"`
+
+	// StopReason Why the turn stopped. Present once it has stopped.
+	StopReason             *InvocationStopReason   `json:"stop_reason,omitempty"`
+	StructuredOutput       *map[string]interface{} `json:"structured_output"`
+	ThroughMessageSequence *int64                  `json:"through_message_sequence"`
+
+	// ToolCalls Every tool call this turn has made, with its current status.
+	// Omitted when the turn has made none.
+	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
+}
+
+// BrowserInvocationFailure defines model for BrowserInvocationFailure.
+type BrowserInvocationFailure struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// BrowserInvocationList defines model for BrowserInvocationList.
+type BrowserInvocationList struct {
+	HasMore    bool                `json:"has_more"`
+	Items      []BrowserInvocation `json:"items"`
+	NextCursor *string             `json:"next_cursor"`
+}
+
+// BrowserInvocationResult defines model for BrowserInvocationResult.
+type BrowserInvocationResult struct {
+	// Invocation Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
+	Invocation BrowserInvocation       `json:"invocation"`
+	Messages   []BrowserSessionMessage `json:"messages"`
+	OutputText *string                 `json:"output_text"`
+}
+
+// BrowserInvocationResultEvent defines model for BrowserInvocationResultEvent.
+type BrowserInvocationResultEvent struct {
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID            `json:"invocation_id"`
+	Result       BrowserInvocationResult `json:"result"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID                        `json:"session_id"`
+	Type      BrowserInvocationResultEventType `json:"type"`
+}
+
+// BrowserInvocationResultEventType defines model for BrowserInvocationResultEvent.Type.
+type BrowserInvocationResultEventType string
+
+// BrowserInvocationStreamEvent Browser Invocation stream event. Switch on `type`. Host-only fields are
+// never emitted. New frame types may appear here over time, and existing
+// ones may gain fields.
+type BrowserInvocationStreamEvent struct {
+	union json.RawMessage
+}
+
+// BrowserInvocationUpdateEvent defines model for BrowserInvocationUpdateEvent.
+type BrowserInvocationUpdateEvent struct {
+	// Invocation Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
+	Invocation BrowserInvocation `json:"invocation"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID            `json:"invocation_id"`
+	NewMessages  []BrowserSessionMessage `json:"new_messages"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID                        `json:"session_id"`
+	Type      BrowserInvocationUpdateEventType `json:"type"`
+}
+
+// BrowserInvocationUpdateEventType defines model for BrowserInvocationUpdateEvent.Type.
+type BrowserInvocationUpdateEventType string
+
 // BrowserInvocationWebhook defines model for BrowserInvocationWebhook.
 type BrowserInvocationWebhook struct {
 	// Events Must include invocation.waiting and invocation.ended. Omission
@@ -3045,6 +3297,80 @@ type BrowserRateLimits struct {
 	MaxConcurrentInvocationsPerTenant int64 `json:"max_concurrent_invocations_per_tenant"`
 	MaxConcurrentInvocationsPerUser   int64 `json:"max_concurrent_invocations_per_user"`
 }
+
+// BrowserSession Closed browser projection. Session keys, Agent/user/tenant identifiers, lineage, policies, cost settings, metadata, usage, budget, and derived host context are omitted.
+type BrowserSession struct {
+	ActiveInvocationID     *InvocationID                         `json:"active_invocation_id"`
+	ActiveInvocationStatus *BrowserSessionActiveInvocationStatus `json:"active_invocation_status"`
+	CreatedAt              time.Time                             `json:"created_at"`
+
+	// ID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	ID               SessionID              `json:"id"`
+	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
+	UpdatedAt        time.Time              `json:"updated_at"`
+}
+
+// BrowserSessionActiveInvocationStatus defines model for BrowserSession.ActiveInvocationStatus.
+type BrowserSessionActiveInvocationStatus string
+
+// BrowserSessionList defines model for BrowserSessionList.
+type BrowserSessionList struct {
+	HasMore    bool             `json:"has_more"`
+	Items      []BrowserSession `json:"items"`
+	NextCursor *string          `json:"next_cursor"`
+}
+
+// BrowserSessionMessage Public transcript content without Agent/user identity, runtime phase, copy origin, or host provenance.
+type BrowserSessionMessage struct {
+	Content   []SessionContentBlock `json:"content"`
+	CreatedAt time.Time             `json:"created_at"`
+
+	// ID Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
+	ID           SessionMessageID   `json:"id"`
+	InvocationID *InvocationID      `json:"invocation_id"`
+	Role         SessionMessageRole `json:"role"`
+	Sequence     int64              `json:"sequence"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID `json:"session_id"`
+}
+
+// BrowserSessionMessageList defines model for BrowserSessionMessageList.
+type BrowserSessionMessageList struct {
+	HasMore    bool                    `json:"has_more"`
+	Items      []BrowserSessionMessage `json:"items"`
+	NextCursor *string                 `json:"next_cursor"`
+}
+
+// BrowserTranscriptSnapshot defines model for BrowserTranscriptSnapshot.
+type BrowserTranscriptSnapshot struct {
+	HasMore           bool                      `json:"has_more"`
+	InvocationChanges []BrowserInvocationChange `json:"invocation_changes"`
+	Messages          []BrowserSessionMessage   `json:"messages"`
+	NextPageToken     *string                   `json:"next_page_token"`
+	ResumeCursor      string                    `json:"resume_cursor"`
+}
+
+// BrowserTranscriptStreamEvent Browser stream event. Switch on `type`. Host-only transcript fields are
+// never emitted. New frame types may appear here over time, and existing
+// ones may gain fields.
+type BrowserTranscriptStreamEvent struct {
+	union json.RawMessage
+}
+
+// BrowserTranscriptUpdateEvent defines model for BrowserTranscriptUpdateEvent.
+type BrowserTranscriptUpdateEvent struct {
+	InvocationChanges []BrowserInvocationChange `json:"invocation_changes"`
+	Messages          []BrowserSessionMessage   `json:"messages"`
+	ResumeCursor      string                    `json:"resume_cursor"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID                        `json:"session_id"`
+	Type      BrowserTranscriptUpdateEventType `json:"type"`
+}
+
+// BrowserTranscriptUpdateEventType defines model for BrowserTranscriptUpdateEvent.Type.
+type BrowserTranscriptUpdateEventType string
 
 // BuiltinToolDeclaration defines model for BuiltinToolDeclaration.
 type BuiltinToolDeclaration struct {
@@ -3123,237 +3449,6 @@ type Citation struct {
 	union json.RawMessage
 }
 
-// ClientCurrentIdentity defines model for ClientCurrentIdentity.
-type ClientCurrentIdentity struct {
-	Authentication struct {
-		// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-		AgentDefinitionID       AgentDefinitionID `json:"agent_definition_id"`
-		AgentDefinitionRevision int               `json:"agent_definition_revision"`
-		AgentKey                string            `json:"agent_key"`
-
-		// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
-		AppID      AppID                                        `json:"app_id"`
-		Assurance  ClientCurrentIdentityAuthenticationAssurance `json:"assurance"`
-		Method     ClientCurrentIdentityAuthenticationMethod    `json:"method"`
-		Operations []Operation                                  `json:"operations"`
-		SessionID  *SessionID                                   `json:"session_id"`
-		TenantKey  string                                       `json:"tenant_key"`
-	} `json:"authentication"`
-}
-
-// ClientCurrentIdentityAuthenticationAssurance defines model for ClientCurrentIdentity.Authentication.Assurance.
-type ClientCurrentIdentityAuthenticationAssurance string
-
-// ClientCurrentIdentityAuthenticationMethod defines model for ClientCurrentIdentity.Authentication.Method.
-type ClientCurrentIdentityAuthenticationMethod string
-
-// ClientInvocation Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
-type ClientInvocation struct {
-	ActiveExecutionMs int `json:"active_execution_ms"`
-
-	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-	AgentDefinitionID       AgentDefinitionID `json:"agent_definition_id"`
-	AgentDefinitionRevision int               `json:"agent_definition_revision"`
-	Attempt                 int               `json:"attempt"`
-	CreatedAt               time.Time         `json:"created_at"`
-	DeadlineAt              *time.Time        `json:"deadline_at"`
-
-	// Deduplicated Present only on Invocation admission.
-	Deduplicated *bool                    `json:"deduplicated,omitempty"`
-	EndedAt      *time.Time               `json:"ended_at"`
-	Error        *ClientInvocationFailure `json:"error"`
-
-	// ID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	ID InvocationID `json:"id"`
-
-	// PendingToolCalls Only eligible named host-mode tools declared by the admitted definition.
-	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
-
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
-	//
-	// `completed` means the turn ended the way it was asked to: the model
-	// finished on its own, or you interrupted it.
-	//
-	// `incomplete` means a limit you set stopped the turn cleanly, between
-	// steps rather than mid-request. `stop_reason` names the limit that ran
-	// out. The reply so far is valid and carries into the next turn just
-	// like a completed turn's does, so this is a stopping point rather than
-	// an error.
-	//
-	// `failed` means the turn could not stop cleanly — a deadline landing in
-	// the middle of a model request, for example — or that a turn you asked
-	// for structured output from never produced a valid object. Read `error`
-	// for the reason; the reply, if any, is not carried forward.
-	//
-	// `waiting` — `requires_action` in some other APIs — means the turn has
-	// stopped for tool calls you need to run. Nothing is executing. Send the
-	// results and the turn returns to `queued` and picks up where it left
-	// off. A turn can also return to `queued` on its own if nvoken had to
-	// restart it after an interruption; `attempt` tells the two apart, and
-	// the `revision` on each stream update tells you their order.
-	//
-	// `paused` means a spending limit stopped the turn but left it
-	// resumable. Nothing is executing, and its deadlines are on hold, so a
-	// turn cannot expire while you decide. Raise the turn's limit or add
-	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
-	Status           InvocationStatus        `json:"status"`
-	StopReason       *InvocationStopReason   `json:"stop_reason"`
-	StructuredOutput *map[string]interface{} `json:"structured_output"`
-	UpdatedAt        time.Time               `json:"updated_at"`
-}
-
-// ClientInvocationAcceptedEvent defines model for ClientInvocationAcceptedEvent.
-type ClientInvocationAcceptedEvent struct {
-	DeadlineAt   time.Time `json:"deadline_at"`
-	Deduplicated bool      `json:"deduplicated"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
-
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
-	//
-	// `completed` means the turn ended the way it was asked to: the model
-	// finished on its own, or you interrupted it.
-	//
-	// `incomplete` means a limit you set stopped the turn cleanly, between
-	// steps rather than mid-request. `stop_reason` names the limit that ran
-	// out. The reply so far is valid and carries into the next turn just
-	// like a completed turn's does, so this is a stopping point rather than
-	// an error.
-	//
-	// `failed` means the turn could not stop cleanly — a deadline landing in
-	// the middle of a model request, for example — or that a turn you asked
-	// for structured output from never produced a valid object. Read `error`
-	// for the reason; the reply, if any, is not carried forward.
-	//
-	// `waiting` — `requires_action` in some other APIs — means the turn has
-	// stopped for tool calls you need to run. Nothing is executing. Send the
-	// results and the turn returns to `queued` and picks up where it left
-	// off. A turn can also return to `queued` on its own if nvoken had to
-	// restart it after an interruption; `attempt` tells the two apart, and
-	// the `revision` on each stream update tells you their order.
-	//
-	// `paused` means a spending limit stopped the turn but left it
-	// resumable. Nothing is executing, and its deadlines are on hold, so a
-	// turn cannot expire while you decide. Raise the turn's limit or add
-	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
-	Status InvocationStatus                  `json:"status"`
-	Type   ClientInvocationAcceptedEventType `json:"type"`
-}
-
-// ClientInvocationAcceptedEventType defines model for ClientInvocationAcceptedEvent.Type.
-type ClientInvocationAcceptedEventType string
-
-// ClientInvocationChange defines model for ClientInvocationChange.
-type ClientInvocationChange struct {
-	Error *ClientInvocationFailure `json:"error"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-	OccurredAt   time.Time    `json:"occurred_at"`
-	Revision     int64        `json:"revision"`
-
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
-	//
-	// `completed` means the turn ended the way it was asked to: the model
-	// finished on its own, or you interrupted it.
-	//
-	// `incomplete` means a limit you set stopped the turn cleanly, between
-	// steps rather than mid-request. `stop_reason` names the limit that ran
-	// out. The reply so far is valid and carries into the next turn just
-	// like a completed turn's does, so this is a stopping point rather than
-	// an error.
-	//
-	// `failed` means the turn could not stop cleanly — a deadline landing in
-	// the middle of a model request, for example — or that a turn you asked
-	// for structured output from never produced a valid object. Read `error`
-	// for the reason; the reply, if any, is not carried forward.
-	//
-	// `waiting` — `requires_action` in some other APIs — means the turn has
-	// stopped for tool calls you need to run. Nothing is executing. Send the
-	// results and the turn returns to `queued` and picks up where it left
-	// off. A turn can also return to `queued` on its own if nvoken had to
-	// restart it after an interruption; `attempt` tells the two apart, and
-	// the `revision` on each stream update tells you their order.
-	//
-	// `paused` means a spending limit stopped the turn but left it
-	// resumable. Nothing is executing, and its deadlines are on hold, so a
-	// turn cannot expire while you decide. Raise the turn's limit or add
-	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
-	Status                 InvocationStatus        `json:"status"`
-	StructuredOutput       *map[string]interface{} `json:"structured_output"`
-	ThroughMessageSequence *int64                  `json:"through_message_sequence"`
-}
-
-// ClientInvocationFailure defines model for ClientInvocationFailure.
-type ClientInvocationFailure struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-// ClientInvocationList defines model for ClientInvocationList.
-type ClientInvocationList struct {
-	HasMore    bool               `json:"has_more"`
-	Items      []ClientInvocation `json:"items"`
-	NextCursor *string            `json:"next_cursor"`
-}
-
-// ClientInvocationResult defines model for ClientInvocationResult.
-type ClientInvocationResult struct {
-	// Invocation Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
-	Invocation ClientInvocation       `json:"invocation"`
-	Messages   []ClientSessionMessage `json:"messages"`
-	OutputText *string                `json:"output_text"`
-}
-
-// ClientInvocationResultEvent defines model for ClientInvocationResultEvent.
-type ClientInvocationResultEvent struct {
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID           `json:"invocation_id"`
-	Result       ClientInvocationResult `json:"result"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                       `json:"session_id"`
-	Type      ClientInvocationResultEventType `json:"type"`
-}
-
-// ClientInvocationResultEventType defines model for ClientInvocationResultEvent.Type.
-type ClientInvocationResultEventType string
-
-// ClientInvocationStreamEvent Browser Invocation stream event. Thinking previews and host-only fields are never emitted.
-type ClientInvocationStreamEvent struct {
-	union json.RawMessage
-}
-
-// ClientInvocationUpdateEvent defines model for ClientInvocationUpdateEvent.
-type ClientInvocationUpdateEvent struct {
-	// Invocation Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
-	Invocation ClientInvocation `json:"invocation"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID           `json:"invocation_id"`
-	NewMessages  []ClientSessionMessage `json:"new_messages"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                       `json:"session_id"`
-	Type      ClientInvocationUpdateEventType `json:"type"`
-}
-
-// ClientInvocationUpdateEventType defines model for ClientInvocationUpdateEvent.Type.
-type ClientInvocationUpdateEventType string
-
 // ClientKey Public-key metadata only; no key bytes are returned.
 type ClientKey struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -3373,78 +3468,6 @@ type ClientKeyID = string
 type ClientKeyList struct {
 	Items []ClientKey `json:"items"`
 }
-
-// ClientSession Closed browser projection. Session keys, Agent/user/tenant identifiers, lineage, policies, cost settings, metadata, usage, budget, and derived host context are omitted.
-type ClientSession struct {
-	ActiveInvocationID     *InvocationID                        `json:"active_invocation_id"`
-	ActiveInvocationStatus *ClientSessionActiveInvocationStatus `json:"active_invocation_status"`
-	CreatedAt              time.Time                            `json:"created_at"`
-
-	// ID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	ID               SessionID              `json:"id"`
-	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
-	UpdatedAt        time.Time              `json:"updated_at"`
-}
-
-// ClientSessionActiveInvocationStatus defines model for ClientSession.ActiveInvocationStatus.
-type ClientSessionActiveInvocationStatus string
-
-// ClientSessionList defines model for ClientSessionList.
-type ClientSessionList struct {
-	HasMore    bool            `json:"has_more"`
-	Items      []ClientSession `json:"items"`
-	NextCursor *string         `json:"next_cursor"`
-}
-
-// ClientSessionMessage Public transcript content without Agent/user identity, runtime phase, copy origin, or host provenance.
-type ClientSessionMessage struct {
-	Content   []SessionContentBlock `json:"content"`
-	CreatedAt time.Time             `json:"created_at"`
-
-	// ID Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
-	ID           SessionMessageID   `json:"id"`
-	InvocationID *InvocationID      `json:"invocation_id"`
-	Role         SessionMessageRole `json:"role"`
-	Sequence     int64              `json:"sequence"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
-}
-
-// ClientSessionMessageList defines model for ClientSessionMessageList.
-type ClientSessionMessageList struct {
-	HasMore    bool                   `json:"has_more"`
-	Items      []ClientSessionMessage `json:"items"`
-	NextCursor *string                `json:"next_cursor"`
-}
-
-// ClientTranscriptSnapshot defines model for ClientTranscriptSnapshot.
-type ClientTranscriptSnapshot struct {
-	HasMore           bool                     `json:"has_more"`
-	InvocationChanges []ClientInvocationChange `json:"invocation_changes"`
-	Messages          []ClientSessionMessage   `json:"messages"`
-	NextPageToken     *string                  `json:"next_page_token"`
-	ResumeCursor      string                   `json:"resume_cursor"`
-}
-
-// ClientTranscriptStreamEvent Browser stream event. Thinking previews and host-only transcript fields are never emitted.
-type ClientTranscriptStreamEvent struct {
-	union json.RawMessage
-}
-
-// ClientTranscriptUpdate defines model for ClientTranscriptUpdate.
-type ClientTranscriptUpdate struct {
-	InvocationChanges []ClientInvocationChange `json:"invocation_changes"`
-	Messages          []ClientSessionMessage   `json:"messages"`
-	ResumeCursor      string                   `json:"resume_cursor"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                  `json:"session_id"`
-	Type      ClientTranscriptUpdateType `json:"type"`
-}
-
-// ClientTranscriptUpdateType defines model for ClientTranscriptUpdate.Type.
-type ClientTranscriptUpdateType string
 
 // CompactionPolicy Durable Session context-compaction policy. Omission of model uses the
 // installing Invocation's primary model. An explicit model must be
@@ -3641,15 +3664,21 @@ type CreateInvocationRequest struct {
 
 	// SessionOptions Settings stored on the Session itself, rather than on this turn.
 	//
-	// On a new Session these are saved. On a Session that already exists they
-	// are checked rather than applied: matching values are fine, and a
-	// different value returns `session_options_conflict` telling you which
-	// paths disagreed. This keeps two callers from silently reconfiguring
-	// each other's conversation.
+	// On a new Session these are saved. On a Session that already exists,
+	// `compaction` and `retention` are checked rather than applied:
+	// matching values are fine, and a different value returns
+	// `session_options_conflict` telling you which paths disagreed. This
+	// keeps two callers from silently reconfiguring each other's
+	// conversation.
 	//
-	// Compaction is the exception — if no compaction policy is stored yet,
-	// this turn can install one, because the policy needs a model to validate
-	// against and only a turn supplies that.
+	// `metadata` merges instead, exactly as
+	// `PATCH /v1/sessions/{session_id}` does: a present key replaces and
+	// an absent key survives. It never conflicts, so a label that drifted
+	// since the last turn cannot fail this one.
+	//
+	// If no compaction policy is stored yet, this turn can install one,
+	// because the policy needs a model to validate against and only a turn
+	// supplies that.
 	SessionOptions *SessionOptions `json:"session_options,omitempty"`
 
 	// TenantKey Optional tenant partition. For Session-key resolution or a new
@@ -3767,11 +3796,16 @@ type CreateSessionRequest struct {
 	// least one.
 	//
 	// On a new Session these are saved. When you reach an existing Session,
-	// by ID or by key, they are checked rather than applied: matching values
-	// are accepted, and a different value returns `session_options_conflict`
-	// with `details.conflicting_paths` naming exactly what disagreed.
-	// Compaction needs a turn to install it, because the policy is validated
-	// against that turn's model.
+	// by ID or by key, `compaction` and `retention` are checked rather than
+	// applied: matching values are accepted, and a different value returns
+	// `session_options_conflict` with `details.conflicting_paths` naming
+	// exactly what disagreed. Compaction needs a turn to install it, because
+	// the policy is validated against that turn's model.
+	//
+	// `metadata` is merged rather than checked, on the same terms as
+	// `PATCH /v1/sessions/{session_id}`: a present key replaces, an absent key
+	// survives, and it never conflicts. Deleting a key stays a PATCH, since a
+	// null value is not accepted here.
 	SessionOptions *SessionOptions `json:"session_options,omitempty"`
 
 	// TenantKey Optional tenant partition. Precedence is credential constraint,
@@ -4295,7 +4329,11 @@ type Invocation struct {
 	// always null if you did not ask for structured output.
 	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
 	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance"`
-	UpdatedAt                  time.Time                   `json:"updated_at"`
+
+	// ToolCalls Every tool call this turn has made, with its current status.
+	// Omitted when the turn has made none.
+	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
+	UpdatedAt time.Time          `json:"updated_at"`
 
 	// Usage One normalized terminal aggregate, not a billing ledger.
 	Usage *ModelUsage `json:"usage"`
@@ -4363,15 +4401,29 @@ type InvocationAcceptedEvent struct {
 // InvocationAcceptedEventType defines model for InvocationAcceptedEvent.Type.
 type InvocationAcceptedEventType string
 
-// InvocationChange defines model for InvocationChange.
+// InvocationChange One lifecycle step of one turn, as the Session transcript stream and
+// the JSON transcript deliver it. Order changes by `revision` and fold
+// to the highest one to get current state.
+//
+// A change carries what a turn's own projection carries about where it
+// stands: `stop_reason` for a turn that ended, `pending_tool_calls` for
+// one waiting on you, `credit_block` for one paused on spend, and
+// `tool_calls` for what its tools are doing. You never need a second
+// request to find out why a turn is not moving.
 type InvocationChange struct {
-	Error *InvocationFailure `json:"error"`
+	// CreditBlock Present while the turn is paused on spending capacity.
+	CreditBlock *CreditBlock       `json:"credit_block,omitempty"`
+	Error       *InvocationFailure `json:"error"`
 
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID     `json:"invocation_id"`
-	OccurredAt   time.Time        `json:"occurred_at"`
-	Provenance   *ModelProvenance `json:"provenance"`
-	Revision     int64            `json:"revision"`
+	InvocationID InvocationID `json:"invocation_id"`
+	OccurredAt   time.Time    `json:"occurred_at"`
+
+	// PendingToolCalls What a waiting turn is waiting for. Omitted when nothing is
+	// pending.
+	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
+	Provenance       *ModelProvenance       `json:"provenance"`
+	Revision         int64                  `json:"revision"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 	// turn reaches one of them it never changes again.
@@ -4402,11 +4454,22 @@ type InvocationChange struct {
 	// turn cannot expire while you decide. Raise the turn's limit or add
 	// credits to the blocked tenant account and it continues. It still
 	// accepts interrupt, cancel, and nudge.
-	Status                     InvocationStatus            `json:"status"`
+	Status InvocationStatus `json:"status"`
+
+	// StopReason Why the turn stopped. Present once it has stopped, so an
+	// `incomplete` change names the limit that ran out.
+	StopReason                 *InvocationStopReason       `json:"stop_reason,omitempty"`
 	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
 	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance"`
 	ThroughMessageSequence     *int64                      `json:"through_message_sequence"`
-	Usage                      *ModelUsage                 `json:"usage"`
+
+	// ToolCalls Every tool call this turn has made, with its current status.
+	// Omitted when the turn has made none. A tool call changing state is
+	// itself a change, so a failed or long-running call is visible
+	// before its result message arrives, and a client that was
+	// disconnected sees it on replay.
+	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
+	Usage     *ModelUsage        `json:"usage"`
 }
 
 // InvocationContextItem defines model for InvocationContextItem.
@@ -4633,8 +4696,12 @@ type InvocationStatus string
 // Expect new values here over time.
 type InvocationStopReason string
 
-// InvocationStreamEvent Typed event from one Invocation stream. A minimal consumer prints
-// `output_text.delta` and finishes on `invocation.result`.
+// InvocationStreamEvent Typed event from one Invocation stream. Switch on `type`. A minimal
+// consumer prints `output_text.delta` and finishes on
+// `invocation.result`.
+//
+// New frame types may appear here over time, and existing ones may gain
+// fields. Handle the types you know and ignore the rest.
 type InvocationStreamEvent struct {
 	union json.RawMessage
 }
@@ -5390,7 +5457,9 @@ type OrgList struct {
 // tools.
 type OutputSchema map[string]interface{}
 
-// OutputTextDeltaEvent defines model for OutputTextDeltaEvent.
+// OutputTextDeltaEvent A live preview of assistant text. Not saved, never replayed, and never
+// a message. Accumulate it by `(invocation_id, attempt, iteration,
+// content_index)` and discard it under the rules in Streaming above.
 type OutputTextDeltaEvent struct {
 	// Attempt Execution attempt that emitted this preview. Discard provisional
 	// output from earlier attempts when this value increases.
@@ -5403,6 +5472,18 @@ type OutputTextDeltaEvent struct {
 
 	// Iteration Model iteration that owns the assistant message.
 	Iteration int `json:"iteration"`
+
+	// MessageID The identifier the saved assistant message will carry when this
+	// iteration lands, with the same `msg_` prefix every message ID has. Key
+	// your preview by it and the handoff becomes an update to a row that
+	// already has its permanent identity, rather than one row disappearing
+	// and another taking its place.
+	//
+	// Optional: a runtime that has not allocated the identifier yet leaves
+	// it out. It is stable within one attempt. A retried attempt allocates a
+	// new one, which is harmless, because a higher `attempt` already voids
+	// every earlier preview.
+	MessageID *PreviewMessageID `json:"message_id,omitempty"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID                `json:"session_id"`
@@ -5423,10 +5504,27 @@ type PendingHostToolCall struct {
 	// transcript `tool_use` block or from the pending host tool calls, and
 	// pass it back verbatim as `tool_call_id` when submitting results. The
 	// same value is the `Idempotency-Key` on a callback delivery.
-	ID    ToolCallID  `json:"id"`
-	Input interface{} `json:"input"`
-	Name  string      `json:"name"`
+	ID ToolCallID `json:"id"`
+
+	// Input The arguments the model produced for this call, as a JSON object
+	// whose shape is the `input_schema` you declared for the tool named
+	// above. nvoken does not narrow it further, because only your tool
+	// declaration knows what belongs there.
+	Input map[string]interface{} `json:"input"`
+	Name  string                 `json:"name"`
 }
+
+// PreviewMessageID The identifier the saved assistant message will carry when this
+// iteration lands, with the same `msg_` prefix every message ID has. Key
+// your preview by it and the handoff becomes an update to a row that
+// already has its permanent identity, rather than one row disappearing
+// and another taking its place.
+//
+// Optional: a runtime that has not allocated the identifier yet leaves
+// it out. It is stable within one attempt. A retried attempt allocates a
+// new one, which is harmless, because a higher `attempt` already voids
+// every earlier preview.
+type PreviewMessageID = string
 
 // ProviderKey Safe metadata only; secret material is never represented.
 type ProviderKey struct {
@@ -5974,6 +6072,15 @@ type SessionMessage struct {
 	// It is worked out when you read, from how the turn ended, and it is
 	// frozen onto forked copies so a fork keeps the phases it had. Your own
 	// input never carries a phase.
+	//
+	// Because it is worked out on read, it is authoritative on ordinary
+	// reads and on `invocation.result`, and not on the Session
+	// transcript stream: a message delivered there before its turn
+	// settled carries `commentary` forever, and no later frame corrects
+	// it. On that stream, derive the answer instead. A turn has a final
+	// answer only once it settled `completed` with stop reason
+	// `end_turn`, and that answer is the turn's last assistant message.
+	// That is the same rule nvoken applies.
 	Phase    *MessagePhase      `json:"phase,omitempty"`
 	Role     SessionMessageRole `json:"role"`
 	Sequence int64              `json:"sequence"`
@@ -6013,11 +6120,16 @@ type SessionMessageRole string
 // least one.
 //
 // On a new Session these are saved. When you reach an existing Session,
-// by ID or by key, they are checked rather than applied: matching values
-// are accepted, and a different value returns `session_options_conflict`
-// with `details.conflicting_paths` naming exactly what disagreed.
-// Compaction needs a turn to install it, because the policy is validated
-// against that turn's model.
+// by ID or by key, `compaction` and `retention` are checked rather than
+// applied: matching values are accepted, and a different value returns
+// `session_options_conflict` with `details.conflicting_paths` naming
+// exactly what disagreed. Compaction needs a turn to install it, because
+// the policy is validated against that turn's model.
+//
+// `metadata` is merged rather than checked, on the same terms as
+// `PATCH /v1/sessions/{session_id}`: a present key replaces, an absent key
+// survives, and it never conflicts. Deleting a key stays a PATCH, since a
+// null value is not accepted here.
 type SessionOptions struct {
 	// Compaction Durable Session context-compaction policy. Omission of model uses the
 	// installing Invocation's primary model. An explicit model must be
@@ -6063,44 +6175,80 @@ type SessionResponse struct {
 
 // StreamEndEvent defines model for StreamEndEvent.
 type StreamEndEvent struct {
+	// InvocationID The Invocation this connection was following, or null on a Session
+	// stream.
 	InvocationID *InvocationID `json:"invocation_id"`
 
-	// Reason `rotate` means the server is cycling the connection — reconnect with
-	// your last `resume_cursor`. `terminal` means there is nothing more
-	// coming: the turn finished, or for a Session stream, nothing is running
-	// any more.
-	Reason       StreamEndEventReason `json:"reason"`
-	ResumeCursor string               `json:"resume_cursor"`
+	// Reason Why this connection is closing. Only the connection is ending; the
+	// turn is unaffected.
+	//
+	// `terminal` means there is nothing more coming: the turn finished, or
+	// for a Session stream, nothing is running any more. `rotate` means the
+	// server is cycling the connection, so reconnect with your last
+	// `resume_cursor`. `slow_consumer` means this connection could not keep
+	// up with what was being written to it and was dropped; reconnect, and
+	// read faster or buffer more.
+	//
+	// Expect new values here over time. Treat a value you do not recognize
+	// as `rotate` and reconnect with your last `resume_cursor`. Reconnecting
+	// is safe even when the turn is over, because a settled turn re-yields
+	// its result.
+	Reason       StreamEndReason `json:"reason"`
+	ResumeCursor string          `json:"resume_cursor"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID          `json:"session_id"`
 	Type      StreamEndEventType `json:"type"`
 }
 
-// StreamEndEventReason `rotate` means the server is cycling the connection — reconnect with
-// your last `resume_cursor`. `terminal` means there is nothing more
-// coming: the turn finished, or for a Session stream, nothing is running
-// any more.
-type StreamEndEventReason string
-
 // StreamEndEventType defines model for StreamEndEvent.Type.
 type StreamEndEventType string
 
+// StreamEndReason Why this connection is closing. Only the connection is ending; the
+// turn is unaffected.
+//
+// `terminal` means there is nothing more coming: the turn finished, or
+// for a Session stream, nothing is running any more. `rotate` means the
+// server is cycling the connection, so reconnect with your last
+// `resume_cursor`. `slow_consumer` means this connection could not keep
+// up with what was being written to it and was dropped; reconnect, and
+// read faster or buffer more.
+//
+// Expect new values here over time. Treat a value you do not recognize
+// as `rotate` and reconnect with your last `resume_cursor`. Reconnecting
+// is safe even when the turn is over, because a settled turn re-yields
+// its result.
+type StreamEndReason string
+
 // StreamResyncEvent defines model for StreamResyncEvent.
 type StreamResyncEvent struct {
-	InvocationID *InvocationID           `json:"invocation_id"`
-	Reason       StreamResyncEventReason `json:"reason"`
+	// InvocationID The Invocation whose previews are void, or null for every
+	// Invocation in the Session.
+	InvocationID *InvocationID `json:"invocation_id"`
+
+	// Reason Why previews were invalidated. `live_delivery_gap` means the live
+	// delivery path could not prove continuity, so previews were lost;
+	// discard what you accumulated and wait for saved frames.
+	//
+	// Expect new values here over time. Treat a value you do not recognize
+	// the same way you treat `live_delivery_gap`.
+	Reason StreamResyncReason `json:"reason"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID             `json:"session_id"`
 	Type      StreamResyncEventType `json:"type"`
 }
 
-// StreamResyncEventReason defines model for StreamResyncEvent.Reason.
-type StreamResyncEventReason string
-
 // StreamResyncEventType defines model for StreamResyncEvent.Type.
 type StreamResyncEventType string
+
+// StreamResyncReason Why previews were invalidated. `live_delivery_gap` means the live
+// delivery path could not prove continuity, so previews were lost;
+// discard what you accumulated and wait for saved frames.
+//
+// Expect new values here over time. Treat a value you do not recognize
+// the same way you treat `live_delivery_gap`.
+type StreamResyncReason string
 
 // StructuredOutputProvenance Shows where `structured_output` came from and what it was checked
 // against, so you can verify the object rather than trust it. It records
@@ -6241,7 +6389,14 @@ type TextInputBlock struct {
 // TextInputBlockType defines model for TextInputBlock.Type.
 type TextInputBlockType string
 
-// ThinkingDeltaEvent defines model for ThinkingDeltaEvent.
+// ThinkingDeltaEvent A live preview of the model's reasoning, carried on machine and
+// browser streams alike. What an end user sees is your application's
+// decision, made in your application.
+//
+// Reasoning is watchable and not stored: no content block carries it,
+// and no read returns it. Watch the stream if you want to see the model
+// think. A turn that runs under explicit `reasoning` controls emits no
+// reasoning previews at all, to either audience.
 type ThinkingDeltaEvent struct {
 	// Attempt Execution attempt that emitted this preview. Discard provisional
 	// output from earlier attempts when this value increases.
@@ -6254,6 +6409,18 @@ type ThinkingDeltaEvent struct {
 
 	// Iteration Model iteration that owns the assistant message.
 	Iteration int `json:"iteration"`
+
+	// MessageID The identifier the saved assistant message will carry when this
+	// iteration lands, with the same `msg_` prefix every message ID has. Key
+	// your preview by it and the handoff becomes an update to a row that
+	// already has its permanent identity, rather than one row disappearing
+	// and another taking its place.
+	//
+	// Optional: a runtime that has not allocated the identifier yet leaves
+	// it out. It is stable within one attempt. A retried attempt allocates a
+	// new one, which is harmless, because a higher `attempt` already voids
+	// every earlier preview.
+	MessageID *PreviewMessageID `json:"message_id,omitempty"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID              `json:"session_id"`
@@ -6285,7 +6452,11 @@ type ToolCall struct {
 
 	// ResultOrigin Null until a ToolCall has a committed result.
 	ResultOrigin *ToolCallResultOrigin `json:"result_origin"`
-	Status       ToolCallStatus        `json:"status"`
+
+	// Status Where one tool call stands. `pending` means the model asked for it and
+	// nothing has started it yet; `running` means it is executing or, for a
+	// host tool, waiting on you. The last three are final.
+	Status ToolCallStatus `json:"status"`
 }
 
 // ToolCallDelivery defines model for ToolCallDelivery.
@@ -6323,8 +6494,33 @@ type ToolCallMode string
 // callback response; `host` includes settlement through `tool-results`.
 type ToolCallResultOrigin string
 
-// ToolCallStatus defines model for ToolCallStatus.
+// ToolCallStatus Where one tool call stands. `pending` means the model asked for it and
+// nothing has started it yet; `running` means it is executing or, for a
+// host tool, waiting on you. The last three are final.
 type ToolCallStatus string
+
+// ToolCallSummary One tool call as a stream sees it: which call, what state it is in,
+// and when it reached that state. The `id` is the `id` of the `tool_use`
+// block that opened it, so a client can show a call as failed or still
+// running without waiting for the message that carries its result.
+//
+// Names, modes, attempts, and delivery detail live on the ToolCall
+// resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
+type ToolCallSummary struct {
+	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
+	// transcript `tool_use` block or from the pending host tool calls, and
+	// pass it back verbatim as `tool_call_id` when submitting results. The
+	// same value is the `Idempotency-Key` on a callback delivery.
+	ID ToolCallID `json:"id"`
+
+	// Status Where one tool call stands. `pending` means the model asked for it and
+	// nothing has started it yet; `running` means it is executing or, for a
+	// host tool, waiting on you. The last three are final.
+	Status ToolCallStatus `json:"status"`
+
+	// UpdatedAt When this call last changed state.
+	UpdatedAt time.Time `json:"updated_at"`
+}
 
 // ToolCallbackContext defines model for ToolCallbackContext.
 type ToolCallbackContext struct {
@@ -6555,9 +6751,13 @@ type TranscriptSnapshotResponse struct {
 	union json.RawMessage
 }
 
-// TranscriptStreamEvent The JSON value carried by one Session-stream SSE `data:` field.
-// Durable `transcript.update` frames carry the resume cursor as both
-// payload data and SSE `id`; preview and control frames never carry IDs.
+// TranscriptStreamEvent The JSON value carried by one Session-stream SSE `data:` field. Switch
+// on `type`. Saved `transcript.update` frames carry the resume cursor as
+// both payload data and SSE `id`; preview and control frames never carry
+// IDs.
+//
+// New frame types may appear here over time, and existing ones may gain
+// fields. Handle the types you know and ignore the rest.
 type TranscriptStreamEvent struct {
 	union json.RawMessage
 }
@@ -6567,8 +6767,8 @@ type TranscriptStreamResponse struct {
 	union json.RawMessage
 }
 
-// TranscriptUpdate defines model for TranscriptUpdate.
-type TranscriptUpdate struct {
+// TranscriptUpdateEvent defines model for TranscriptUpdateEvent.
+type TranscriptUpdateEvent struct {
 	InvocationChanges []InvocationChange `json:"invocation_changes"`
 	Messages          []SessionMessage   `json:"messages"`
 
@@ -6576,12 +6776,12 @@ type TranscriptUpdate struct {
 	ResumeCursor string `json:"resume_cursor"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID            `json:"session_id"`
-	Type      TranscriptUpdateType `json:"type"`
+	SessionID SessionID                 `json:"session_id"`
+	Type      TranscriptUpdateEventType `json:"type"`
 }
 
-// TranscriptUpdateType defines model for TranscriptUpdate.Type.
-type TranscriptUpdateType string
+// TranscriptUpdateEventType defines model for TranscriptUpdateEvent.Type.
+type TranscriptUpdateEventType string
 
 // URLCitation A URL citation positioned within the generated text.
 type URLCitation struct {
@@ -7104,7 +7304,7 @@ type StreamInvocationParams struct {
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Deltas Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
+	// Deltas Include id-less output and thinking preview frames. Defaults to true.
 	Deltas *bool `form:"deltas,omitempty" json:"deltas,omitempty"`
 
 	// LastEventID Opaque cursor from the last durable frame; ignored when `cursor` is supplied.
@@ -7248,7 +7448,7 @@ type StreamSessionTranscriptParams struct {
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Deltas Include id-less output and thinking preview frames. Client tokens receive output previews only. Defaults to true.
+	// Deltas Include id-less output and thinking preview frames. Defaults to true.
 	Deltas *bool `form:"deltas,omitempty" json:"deltas,omitempty"`
 
 	// LastEventID Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.
@@ -7469,6 +7669,496 @@ type ForkSessionJSONRequestBody = ForkSessionRequest
 // ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody defines body for ReceiveToolCallback for application/vnd.nvoken.tool-callback+json; version=1 ContentType.
 type ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody = ToolCallbackRequest
 
+// AsBrowserInvocationAcceptedEvent returns the union data inside the BrowserInvocationStreamEvent as a BrowserInvocationAcceptedEvent
+func (t BrowserInvocationStreamEvent) AsBrowserInvocationAcceptedEvent() (BrowserInvocationAcceptedEvent, error) {
+	var body BrowserInvocationAcceptedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBrowserInvocationAcceptedEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided BrowserInvocationAcceptedEvent
+func (t *BrowserInvocationStreamEvent) FromBrowserInvocationAcceptedEvent(v BrowserInvocationAcceptedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.accepted"}`))
+	t.union = b
+	return err
+}
+
+// MergeBrowserInvocationAcceptedEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided BrowserInvocationAcceptedEvent
+func (t *BrowserInvocationStreamEvent) MergeBrowserInvocationAcceptedEvent(v BrowserInvocationAcceptedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.accepted"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsOutputTextDeltaEvent returns the union data inside the BrowserInvocationStreamEvent as a OutputTextDeltaEvent
+func (t BrowserInvocationStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
+	var body OutputTextDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromOutputTextDeltaEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided OutputTextDeltaEvent
+func (t *BrowserInvocationStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
+	t.union = b
+	return err
+}
+
+// MergeOutputTextDeltaEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided OutputTextDeltaEvent
+func (t *BrowserInvocationStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsThinkingDeltaEvent returns the union data inside the BrowserInvocationStreamEvent as a ThinkingDeltaEvent
+func (t BrowserInvocationStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error) {
+	var body ThinkingDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromThinkingDeltaEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided ThinkingDeltaEvent
+func (t *BrowserInvocationStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
+	t.union = b
+	return err
+}
+
+// MergeThinkingDeltaEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided ThinkingDeltaEvent
+func (t *BrowserInvocationStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBrowserInvocationUpdateEvent returns the union data inside the BrowserInvocationStreamEvent as a BrowserInvocationUpdateEvent
+func (t BrowserInvocationStreamEvent) AsBrowserInvocationUpdateEvent() (BrowserInvocationUpdateEvent, error) {
+	var body BrowserInvocationUpdateEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBrowserInvocationUpdateEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided BrowserInvocationUpdateEvent
+func (t *BrowserInvocationStreamEvent) FromBrowserInvocationUpdateEvent(v BrowserInvocationUpdateEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.update"}`))
+	t.union = b
+	return err
+}
+
+// MergeBrowserInvocationUpdateEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided BrowserInvocationUpdateEvent
+func (t *BrowserInvocationStreamEvent) MergeBrowserInvocationUpdateEvent(v BrowserInvocationUpdateEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.update"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBrowserInvocationResultEvent returns the union data inside the BrowserInvocationStreamEvent as a BrowserInvocationResultEvent
+func (t BrowserInvocationStreamEvent) AsBrowserInvocationResultEvent() (BrowserInvocationResultEvent, error) {
+	var body BrowserInvocationResultEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBrowserInvocationResultEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided BrowserInvocationResultEvent
+func (t *BrowserInvocationStreamEvent) FromBrowserInvocationResultEvent(v BrowserInvocationResultEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.result"}`))
+	t.union = b
+	return err
+}
+
+// MergeBrowserInvocationResultEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided BrowserInvocationResultEvent
+func (t *BrowserInvocationStreamEvent) MergeBrowserInvocationResultEvent(v BrowserInvocationResultEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.result"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStreamResyncEvent returns the union data inside the BrowserInvocationStreamEvent as a StreamResyncEvent
+func (t BrowserInvocationStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
+	var body StreamResyncEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStreamResyncEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided StreamResyncEvent
+func (t *BrowserInvocationStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
+	t.union = b
+	return err
+}
+
+// MergeStreamResyncEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided StreamResyncEvent
+func (t *BrowserInvocationStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStreamEndEvent returns the union data inside the BrowserInvocationStreamEvent as a StreamEndEvent
+func (t BrowserInvocationStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
+	var body StreamEndEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStreamEndEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided StreamEndEvent
+func (t *BrowserInvocationStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	t.union = b
+	return err
+}
+
+// MergeStreamEndEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided StreamEndEvent
+func (t *BrowserInvocationStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t BrowserInvocationStreamEvent) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t BrowserInvocationStreamEvent) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "invocation.accepted":
+		return t.AsBrowserInvocationAcceptedEvent()
+	case "invocation.result":
+		return t.AsBrowserInvocationResultEvent()
+	case "invocation.update":
+		return t.AsBrowserInvocationUpdateEvent()
+	case "output_text.delta":
+		return t.AsOutputTextDeltaEvent()
+	case "stream.end":
+		return t.AsStreamEndEvent()
+	case "stream.resync":
+		return t.AsStreamResyncEvent()
+	case "thinking.delta":
+		return t.AsThinkingDeltaEvent()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t BrowserInvocationStreamEvent) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *BrowserInvocationStreamEvent) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsBrowserTranscriptUpdateEvent returns the union data inside the BrowserTranscriptStreamEvent as a BrowserTranscriptUpdateEvent
+func (t BrowserTranscriptStreamEvent) AsBrowserTranscriptUpdateEvent() (BrowserTranscriptUpdateEvent, error) {
+	var body BrowserTranscriptUpdateEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBrowserTranscriptUpdateEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided BrowserTranscriptUpdateEvent
+func (t *BrowserTranscriptStreamEvent) FromBrowserTranscriptUpdateEvent(v BrowserTranscriptUpdateEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
+	t.union = b
+	return err
+}
+
+// MergeBrowserTranscriptUpdateEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided BrowserTranscriptUpdateEvent
+func (t *BrowserTranscriptStreamEvent) MergeBrowserTranscriptUpdateEvent(v BrowserTranscriptUpdateEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsOutputTextDeltaEvent returns the union data inside the BrowserTranscriptStreamEvent as a OutputTextDeltaEvent
+func (t BrowserTranscriptStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
+	var body OutputTextDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromOutputTextDeltaEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided OutputTextDeltaEvent
+func (t *BrowserTranscriptStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
+	t.union = b
+	return err
+}
+
+// MergeOutputTextDeltaEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided OutputTextDeltaEvent
+func (t *BrowserTranscriptStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsThinkingDeltaEvent returns the union data inside the BrowserTranscriptStreamEvent as a ThinkingDeltaEvent
+func (t BrowserTranscriptStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error) {
+	var body ThinkingDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromThinkingDeltaEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided ThinkingDeltaEvent
+func (t *BrowserTranscriptStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
+	t.union = b
+	return err
+}
+
+// MergeThinkingDeltaEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided ThinkingDeltaEvent
+func (t *BrowserTranscriptStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStreamResyncEvent returns the union data inside the BrowserTranscriptStreamEvent as a StreamResyncEvent
+func (t BrowserTranscriptStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
+	var body StreamResyncEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStreamResyncEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided StreamResyncEvent
+func (t *BrowserTranscriptStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
+	t.union = b
+	return err
+}
+
+// MergeStreamResyncEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided StreamResyncEvent
+func (t *BrowserTranscriptStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStreamEndEvent returns the union data inside the BrowserTranscriptStreamEvent as a StreamEndEvent
+func (t BrowserTranscriptStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
+	var body StreamEndEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStreamEndEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided StreamEndEvent
+func (t *BrowserTranscriptStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	t.union = b
+	return err
+}
+
+// MergeStreamEndEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided StreamEndEvent
+func (t *BrowserTranscriptStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t BrowserTranscriptStreamEvent) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t BrowserTranscriptStreamEvent) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "output_text.delta":
+		return t.AsOutputTextDeltaEvent()
+	case "stream.end":
+		return t.AsStreamEndEvent()
+	case "stream.resync":
+		return t.AsStreamResyncEvent()
+	case "thinking.delta":
+		return t.AsThinkingDeltaEvent()
+	case "transcript.update":
+		return t.AsBrowserTranscriptUpdateEvent()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t BrowserTranscriptStreamEvent) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *BrowserTranscriptStreamEvent) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsCharLocationCitation returns the union data inside the Citation as a CharLocationCitation
 func (t Citation) AsCharLocationCitation() (CharLocationCitation, error) {
 	var body CharLocationCitation
@@ -7606,286 +8296,6 @@ func (t *Citation) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// AsClientInvocationAcceptedEvent returns the union data inside the ClientInvocationStreamEvent as a ClientInvocationAcceptedEvent
-func (t ClientInvocationStreamEvent) AsClientInvocationAcceptedEvent() (ClientInvocationAcceptedEvent, error) {
-	var body ClientInvocationAcceptedEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromClientInvocationAcceptedEvent overwrites any union data inside the ClientInvocationStreamEvent as the provided ClientInvocationAcceptedEvent
-func (t *ClientInvocationStreamEvent) FromClientInvocationAcceptedEvent(v ClientInvocationAcceptedEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeClientInvocationAcceptedEvent performs a merge with any union data inside the ClientInvocationStreamEvent, using the provided ClientInvocationAcceptedEvent
-func (t *ClientInvocationStreamEvent) MergeClientInvocationAcceptedEvent(v ClientInvocationAcceptedEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsOutputTextDeltaEvent returns the union data inside the ClientInvocationStreamEvent as a OutputTextDeltaEvent
-func (t ClientInvocationStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
-	var body OutputTextDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromOutputTextDeltaEvent overwrites any union data inside the ClientInvocationStreamEvent as the provided OutputTextDeltaEvent
-func (t *ClientInvocationStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeOutputTextDeltaEvent performs a merge with any union data inside the ClientInvocationStreamEvent, using the provided OutputTextDeltaEvent
-func (t *ClientInvocationStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsClientInvocationUpdateEvent returns the union data inside the ClientInvocationStreamEvent as a ClientInvocationUpdateEvent
-func (t ClientInvocationStreamEvent) AsClientInvocationUpdateEvent() (ClientInvocationUpdateEvent, error) {
-	var body ClientInvocationUpdateEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromClientInvocationUpdateEvent overwrites any union data inside the ClientInvocationStreamEvent as the provided ClientInvocationUpdateEvent
-func (t *ClientInvocationStreamEvent) FromClientInvocationUpdateEvent(v ClientInvocationUpdateEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeClientInvocationUpdateEvent performs a merge with any union data inside the ClientInvocationStreamEvent, using the provided ClientInvocationUpdateEvent
-func (t *ClientInvocationStreamEvent) MergeClientInvocationUpdateEvent(v ClientInvocationUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsClientInvocationResultEvent returns the union data inside the ClientInvocationStreamEvent as a ClientInvocationResultEvent
-func (t ClientInvocationStreamEvent) AsClientInvocationResultEvent() (ClientInvocationResultEvent, error) {
-	var body ClientInvocationResultEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromClientInvocationResultEvent overwrites any union data inside the ClientInvocationStreamEvent as the provided ClientInvocationResultEvent
-func (t *ClientInvocationStreamEvent) FromClientInvocationResultEvent(v ClientInvocationResultEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeClientInvocationResultEvent performs a merge with any union data inside the ClientInvocationStreamEvent, using the provided ClientInvocationResultEvent
-func (t *ClientInvocationStreamEvent) MergeClientInvocationResultEvent(v ClientInvocationResultEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamResyncEvent returns the union data inside the ClientInvocationStreamEvent as a StreamResyncEvent
-func (t ClientInvocationStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
-	var body StreamResyncEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamResyncEvent overwrites any union data inside the ClientInvocationStreamEvent as the provided StreamResyncEvent
-func (t *ClientInvocationStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeStreamResyncEvent performs a merge with any union data inside the ClientInvocationStreamEvent, using the provided StreamResyncEvent
-func (t *ClientInvocationStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamEndEvent returns the union data inside the ClientInvocationStreamEvent as a StreamEndEvent
-func (t ClientInvocationStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
-	var body StreamEndEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamEndEvent overwrites any union data inside the ClientInvocationStreamEvent as the provided StreamEndEvent
-func (t *ClientInvocationStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeStreamEndEvent performs a merge with any union data inside the ClientInvocationStreamEvent, using the provided StreamEndEvent
-func (t *ClientInvocationStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ClientInvocationStreamEvent) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ClientInvocationStreamEvent) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsClientTranscriptUpdate returns the union data inside the ClientTranscriptStreamEvent as a ClientTranscriptUpdate
-func (t ClientTranscriptStreamEvent) AsClientTranscriptUpdate() (ClientTranscriptUpdate, error) {
-	var body ClientTranscriptUpdate
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromClientTranscriptUpdate overwrites any union data inside the ClientTranscriptStreamEvent as the provided ClientTranscriptUpdate
-func (t *ClientTranscriptStreamEvent) FromClientTranscriptUpdate(v ClientTranscriptUpdate) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeClientTranscriptUpdate performs a merge with any union data inside the ClientTranscriptStreamEvent, using the provided ClientTranscriptUpdate
-func (t *ClientTranscriptStreamEvent) MergeClientTranscriptUpdate(v ClientTranscriptUpdate) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsOutputTextDeltaEvent returns the union data inside the ClientTranscriptStreamEvent as a OutputTextDeltaEvent
-func (t ClientTranscriptStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
-	var body OutputTextDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromOutputTextDeltaEvent overwrites any union data inside the ClientTranscriptStreamEvent as the provided OutputTextDeltaEvent
-func (t *ClientTranscriptStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeOutputTextDeltaEvent performs a merge with any union data inside the ClientTranscriptStreamEvent, using the provided OutputTextDeltaEvent
-func (t *ClientTranscriptStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamResyncEvent returns the union data inside the ClientTranscriptStreamEvent as a StreamResyncEvent
-func (t ClientTranscriptStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
-	var body StreamResyncEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamResyncEvent overwrites any union data inside the ClientTranscriptStreamEvent as the provided StreamResyncEvent
-func (t *ClientTranscriptStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeStreamResyncEvent performs a merge with any union data inside the ClientTranscriptStreamEvent, using the provided StreamResyncEvent
-func (t *ClientTranscriptStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamEndEvent returns the union data inside the ClientTranscriptStreamEvent as a StreamEndEvent
-func (t ClientTranscriptStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
-	var body StreamEndEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamEndEvent overwrites any union data inside the ClientTranscriptStreamEvent as the provided StreamEndEvent
-func (t *ClientTranscriptStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeStreamEndEvent performs a merge with any union data inside the ClientTranscriptStreamEvent, using the provided StreamEndEvent
-func (t *ClientTranscriptStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ClientTranscriptStreamEvent) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ClientTranscriptStreamEvent) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
 // AsCompactionPolicyTriggerTokens0 returns the union data inside the CompactionPolicy_TriggerTokens as a CompactionPolicyTriggerTokens0
 func (t CompactionPolicy_TriggerTokens) AsCompactionPolicyTriggerTokens0() (CompactionPolicyTriggerTokens0, error) {
 	var body CompactionPolicyTriggerTokens0
@@ -7974,22 +8384,22 @@ func (t *CurrentIdentityResponse) MergeCurrentIdentity(v CurrentIdentity) error 
 	return err
 }
 
-// AsClientCurrentIdentity returns the union data inside the CurrentIdentityResponse as a ClientCurrentIdentity
-func (t CurrentIdentityResponse) AsClientCurrentIdentity() (ClientCurrentIdentity, error) {
-	var body ClientCurrentIdentity
+// AsBrowserCurrentIdentity returns the union data inside the CurrentIdentityResponse as a BrowserCurrentIdentity
+func (t CurrentIdentityResponse) AsBrowserCurrentIdentity() (BrowserCurrentIdentity, error) {
+	var body BrowserCurrentIdentity
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientCurrentIdentity overwrites any union data inside the CurrentIdentityResponse as the provided ClientCurrentIdentity
-func (t *CurrentIdentityResponse) FromClientCurrentIdentity(v ClientCurrentIdentity) error {
+// FromBrowserCurrentIdentity overwrites any union data inside the CurrentIdentityResponse as the provided BrowserCurrentIdentity
+func (t *CurrentIdentityResponse) FromBrowserCurrentIdentity(v BrowserCurrentIdentity) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientCurrentIdentity performs a merge with any union data inside the CurrentIdentityResponse, using the provided ClientCurrentIdentity
-func (t *CurrentIdentityResponse) MergeClientCurrentIdentity(v ClientCurrentIdentity) error {
+// MergeBrowserCurrentIdentity performs a merge with any union data inside the CurrentIdentityResponse, using the provided BrowserCurrentIdentity
+func (t *CurrentIdentityResponse) MergeBrowserCurrentIdentity(v BrowserCurrentIdentity) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -8248,22 +8658,22 @@ func (t *InvocationListResponse) MergeInvocationList(v InvocationList) error {
 	return err
 }
 
-// AsClientInvocationList returns the union data inside the InvocationListResponse as a ClientInvocationList
-func (t InvocationListResponse) AsClientInvocationList() (ClientInvocationList, error) {
-	var body ClientInvocationList
+// AsBrowserInvocationList returns the union data inside the InvocationListResponse as a BrowserInvocationList
+func (t InvocationListResponse) AsBrowserInvocationList() (BrowserInvocationList, error) {
+	var body BrowserInvocationList
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientInvocationList overwrites any union data inside the InvocationListResponse as the provided ClientInvocationList
-func (t *InvocationListResponse) FromClientInvocationList(v ClientInvocationList) error {
+// FromBrowserInvocationList overwrites any union data inside the InvocationListResponse as the provided BrowserInvocationList
+func (t *InvocationListResponse) FromBrowserInvocationList(v BrowserInvocationList) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientInvocationList performs a merge with any union data inside the InvocationListResponse, using the provided ClientInvocationList
-func (t *InvocationListResponse) MergeClientInvocationList(v ClientInvocationList) error {
+// MergeBrowserInvocationList performs a merge with any union data inside the InvocationListResponse, using the provided BrowserInvocationList
+func (t *InvocationListResponse) MergeBrowserInvocationList(v BrowserInvocationList) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -8310,22 +8720,22 @@ func (t *InvocationResponse) MergeInvocation(v Invocation) error {
 	return err
 }
 
-// AsClientInvocation returns the union data inside the InvocationResponse as a ClientInvocation
-func (t InvocationResponse) AsClientInvocation() (ClientInvocation, error) {
-	var body ClientInvocation
+// AsBrowserInvocation returns the union data inside the InvocationResponse as a BrowserInvocation
+func (t InvocationResponse) AsBrowserInvocation() (BrowserInvocation, error) {
+	var body BrowserInvocation
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientInvocation overwrites any union data inside the InvocationResponse as the provided ClientInvocation
-func (t *InvocationResponse) FromClientInvocation(v ClientInvocation) error {
+// FromBrowserInvocation overwrites any union data inside the InvocationResponse as the provided BrowserInvocation
+func (t *InvocationResponse) FromBrowserInvocation(v BrowserInvocation) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientInvocation performs a merge with any union data inside the InvocationResponse, using the provided ClientInvocation
-func (t *InvocationResponse) MergeClientInvocation(v ClientInvocation) error {
+// MergeBrowserInvocation performs a merge with any union data inside the InvocationResponse, using the provided BrowserInvocation
+func (t *InvocationResponse) MergeBrowserInvocation(v BrowserInvocation) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -8372,22 +8782,22 @@ func (t *InvocationResultResponse) MergeInvocationResult(v InvocationResult) err
 	return err
 }
 
-// AsClientInvocationResult returns the union data inside the InvocationResultResponse as a ClientInvocationResult
-func (t InvocationResultResponse) AsClientInvocationResult() (ClientInvocationResult, error) {
-	var body ClientInvocationResult
+// AsBrowserInvocationResult returns the union data inside the InvocationResultResponse as a BrowserInvocationResult
+func (t InvocationResultResponse) AsBrowserInvocationResult() (BrowserInvocationResult, error) {
+	var body BrowserInvocationResult
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientInvocationResult overwrites any union data inside the InvocationResultResponse as the provided ClientInvocationResult
-func (t *InvocationResultResponse) FromClientInvocationResult(v ClientInvocationResult) error {
+// FromBrowserInvocationResult overwrites any union data inside the InvocationResultResponse as the provided BrowserInvocationResult
+func (t *InvocationResultResponse) FromBrowserInvocationResult(v BrowserInvocationResult) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientInvocationResult performs a merge with any union data inside the InvocationResultResponse, using the provided ClientInvocationResult
-func (t *InvocationResultResponse) MergeClientInvocationResult(v ClientInvocationResult) error {
+// MergeBrowserInvocationResult performs a merge with any union data inside the InvocationResultResponse, using the provided BrowserInvocationResult
+func (t *InvocationResultResponse) MergeBrowserInvocationResult(v BrowserInvocationResult) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -8418,6 +8828,10 @@ func (t InvocationStreamEvent) AsInvocationAcceptedEvent() (InvocationAcceptedEv
 // FromInvocationAcceptedEvent overwrites any union data inside the InvocationStreamEvent as the provided InvocationAcceptedEvent
 func (t *InvocationStreamEvent) FromInvocationAcceptedEvent(v InvocationAcceptedEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.accepted"}`))
 	t.union = b
 	return err
 }
@@ -8425,6 +8839,10 @@ func (t *InvocationStreamEvent) FromInvocationAcceptedEvent(v InvocationAccepted
 // MergeInvocationAcceptedEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided InvocationAcceptedEvent
 func (t *InvocationStreamEvent) MergeInvocationAcceptedEvent(v InvocationAcceptedEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.accepted"}`))
 	if err != nil {
 		return err
 	}
@@ -8444,6 +8862,10 @@ func (t InvocationStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, e
 // FromOutputTextDeltaEvent overwrites any union data inside the InvocationStreamEvent as the provided OutputTextDeltaEvent
 func (t *InvocationStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
 	t.union = b
 	return err
 }
@@ -8451,6 +8873,10 @@ func (t *InvocationStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent)
 // MergeOutputTextDeltaEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided OutputTextDeltaEvent
 func (t *InvocationStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
 	if err != nil {
 		return err
 	}
@@ -8470,6 +8896,10 @@ func (t InvocationStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error
 // FromThinkingDeltaEvent overwrites any union data inside the InvocationStreamEvent as the provided ThinkingDeltaEvent
 func (t *InvocationStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
 	t.union = b
 	return err
 }
@@ -8477,6 +8907,10 @@ func (t *InvocationStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) err
 // MergeThinkingDeltaEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided ThinkingDeltaEvent
 func (t *InvocationStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
 	if err != nil {
 		return err
 	}
@@ -8496,6 +8930,10 @@ func (t InvocationStreamEvent) AsInvocationUpdateEvent() (InvocationUpdateEvent,
 // FromInvocationUpdateEvent overwrites any union data inside the InvocationStreamEvent as the provided InvocationUpdateEvent
 func (t *InvocationStreamEvent) FromInvocationUpdateEvent(v InvocationUpdateEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.update"}`))
 	t.union = b
 	return err
 }
@@ -8503,6 +8941,10 @@ func (t *InvocationStreamEvent) FromInvocationUpdateEvent(v InvocationUpdateEven
 // MergeInvocationUpdateEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided InvocationUpdateEvent
 func (t *InvocationStreamEvent) MergeInvocationUpdateEvent(v InvocationUpdateEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.update"}`))
 	if err != nil {
 		return err
 	}
@@ -8522,6 +8964,10 @@ func (t InvocationStreamEvent) AsInvocationResultEvent() (InvocationResultEvent,
 // FromInvocationResultEvent overwrites any union data inside the InvocationStreamEvent as the provided InvocationResultEvent
 func (t *InvocationStreamEvent) FromInvocationResultEvent(v InvocationResultEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.result"}`))
 	t.union = b
 	return err
 }
@@ -8529,6 +8975,10 @@ func (t *InvocationStreamEvent) FromInvocationResultEvent(v InvocationResultEven
 // MergeInvocationResultEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided InvocationResultEvent
 func (t *InvocationStreamEvent) MergeInvocationResultEvent(v InvocationResultEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.result"}`))
 	if err != nil {
 		return err
 	}
@@ -8548,6 +8998,10 @@ func (t InvocationStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) 
 // FromStreamResyncEvent overwrites any union data inside the InvocationStreamEvent as the provided StreamResyncEvent
 func (t *InvocationStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
 	t.union = b
 	return err
 }
@@ -8555,6 +9009,10 @@ func (t *InvocationStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error
 // MergeStreamResyncEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided StreamResyncEvent
 func (t *InvocationStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
 	if err != nil {
 		return err
 	}
@@ -8574,6 +9032,10 @@ func (t InvocationStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
 // FromStreamEndEvent overwrites any union data inside the InvocationStreamEvent as the provided StreamEndEvent
 func (t *InvocationStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
 	t.union = b
 	return err
 }
@@ -8584,10 +9046,47 @@ func (t *InvocationStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
 	if err != nil {
 		return err
 	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	if err != nil {
+		return err
+	}
 
 	merged, err := runtime.JSONMerge(t.union, b)
 	t.union = merged
 	return err
+}
+
+func (t InvocationStreamEvent) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t InvocationStreamEvent) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "invocation.accepted":
+		return t.AsInvocationAcceptedEvent()
+	case "invocation.result":
+		return t.AsInvocationResultEvent()
+	case "invocation.update":
+		return t.AsInvocationUpdateEvent()
+	case "output_text.delta":
+		return t.AsOutputTextDeltaEvent()
+	case "stream.end":
+		return t.AsStreamEndEvent()
+	case "stream.resync":
+		return t.AsStreamResyncEvent()
+	case "thinking.delta":
+		return t.AsThinkingDeltaEvent()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
 }
 
 func (t InvocationStreamEvent) MarshalJSON() ([]byte, error) {
@@ -8626,22 +9125,22 @@ func (t *InvocationStreamResponse) MergeInvocationStreamEvent(v InvocationStream
 	return err
 }
 
-// AsClientInvocationStreamEvent returns the union data inside the InvocationStreamResponse as a ClientInvocationStreamEvent
-func (t InvocationStreamResponse) AsClientInvocationStreamEvent() (ClientInvocationStreamEvent, error) {
-	var body ClientInvocationStreamEvent
+// AsBrowserInvocationStreamEvent returns the union data inside the InvocationStreamResponse as a BrowserInvocationStreamEvent
+func (t InvocationStreamResponse) AsBrowserInvocationStreamEvent() (BrowserInvocationStreamEvent, error) {
+	var body BrowserInvocationStreamEvent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientInvocationStreamEvent overwrites any union data inside the InvocationStreamResponse as the provided ClientInvocationStreamEvent
-func (t *InvocationStreamResponse) FromClientInvocationStreamEvent(v ClientInvocationStreamEvent) error {
+// FromBrowserInvocationStreamEvent overwrites any union data inside the InvocationStreamResponse as the provided BrowserInvocationStreamEvent
+func (t *InvocationStreamResponse) FromBrowserInvocationStreamEvent(v BrowserInvocationStreamEvent) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientInvocationStreamEvent performs a merge with any union data inside the InvocationStreamResponse, using the provided ClientInvocationStreamEvent
-func (t *InvocationStreamResponse) MergeClientInvocationStreamEvent(v ClientInvocationStreamEvent) error {
+// MergeBrowserInvocationStreamEvent performs a merge with any union data inside the InvocationStreamResponse, using the provided BrowserInvocationStreamEvent
+func (t *InvocationStreamResponse) MergeBrowserInvocationStreamEvent(v BrowserInvocationStreamEvent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -9191,22 +9690,22 @@ func (t *SessionListResponse) MergeSessionList(v SessionList) error {
 	return err
 }
 
-// AsClientSessionList returns the union data inside the SessionListResponse as a ClientSessionList
-func (t SessionListResponse) AsClientSessionList() (ClientSessionList, error) {
-	var body ClientSessionList
+// AsBrowserSessionList returns the union data inside the SessionListResponse as a BrowserSessionList
+func (t SessionListResponse) AsBrowserSessionList() (BrowserSessionList, error) {
+	var body BrowserSessionList
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientSessionList overwrites any union data inside the SessionListResponse as the provided ClientSessionList
-func (t *SessionListResponse) FromClientSessionList(v ClientSessionList) error {
+// FromBrowserSessionList overwrites any union data inside the SessionListResponse as the provided BrowserSessionList
+func (t *SessionListResponse) FromBrowserSessionList(v BrowserSessionList) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientSessionList performs a merge with any union data inside the SessionListResponse, using the provided ClientSessionList
-func (t *SessionListResponse) MergeClientSessionList(v ClientSessionList) error {
+// MergeBrowserSessionList performs a merge with any union data inside the SessionListResponse, using the provided BrowserSessionList
+func (t *SessionListResponse) MergeBrowserSessionList(v BrowserSessionList) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -9253,22 +9752,22 @@ func (t *SessionMessageListResponse) MergeSessionMessageList(v SessionMessageLis
 	return err
 }
 
-// AsClientSessionMessageList returns the union data inside the SessionMessageListResponse as a ClientSessionMessageList
-func (t SessionMessageListResponse) AsClientSessionMessageList() (ClientSessionMessageList, error) {
-	var body ClientSessionMessageList
+// AsBrowserSessionMessageList returns the union data inside the SessionMessageListResponse as a BrowserSessionMessageList
+func (t SessionMessageListResponse) AsBrowserSessionMessageList() (BrowserSessionMessageList, error) {
+	var body BrowserSessionMessageList
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientSessionMessageList overwrites any union data inside the SessionMessageListResponse as the provided ClientSessionMessageList
-func (t *SessionMessageListResponse) FromClientSessionMessageList(v ClientSessionMessageList) error {
+// FromBrowserSessionMessageList overwrites any union data inside the SessionMessageListResponse as the provided BrowserSessionMessageList
+func (t *SessionMessageListResponse) FromBrowserSessionMessageList(v BrowserSessionMessageList) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientSessionMessageList performs a merge with any union data inside the SessionMessageListResponse, using the provided ClientSessionMessageList
-func (t *SessionMessageListResponse) MergeClientSessionMessageList(v ClientSessionMessageList) error {
+// MergeBrowserSessionMessageList performs a merge with any union data inside the SessionMessageListResponse, using the provided BrowserSessionMessageList
+func (t *SessionMessageListResponse) MergeBrowserSessionMessageList(v BrowserSessionMessageList) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -9315,22 +9814,22 @@ func (t *SessionResponse) MergeSession(v Session) error {
 	return err
 }
 
-// AsClientSession returns the union data inside the SessionResponse as a ClientSession
-func (t SessionResponse) AsClientSession() (ClientSession, error) {
-	var body ClientSession
+// AsBrowserSession returns the union data inside the SessionResponse as a BrowserSession
+func (t SessionResponse) AsBrowserSession() (BrowserSession, error) {
+	var body BrowserSession
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientSession overwrites any union data inside the SessionResponse as the provided ClientSession
-func (t *SessionResponse) FromClientSession(v ClientSession) error {
+// FromBrowserSession overwrites any union data inside the SessionResponse as the provided BrowserSession
+func (t *SessionResponse) FromBrowserSession(v BrowserSession) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientSession performs a merge with any union data inside the SessionResponse, using the provided ClientSession
-func (t *SessionResponse) MergeClientSession(v ClientSession) error {
+// MergeBrowserSession performs a merge with any union data inside the SessionResponse, using the provided BrowserSession
+func (t *SessionResponse) MergeBrowserSession(v BrowserSession) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -9514,22 +10013,22 @@ func (t *TranscriptSnapshotResponse) MergeTranscriptSnapshot(v TranscriptSnapsho
 	return err
 }
 
-// AsClientTranscriptSnapshot returns the union data inside the TranscriptSnapshotResponse as a ClientTranscriptSnapshot
-func (t TranscriptSnapshotResponse) AsClientTranscriptSnapshot() (ClientTranscriptSnapshot, error) {
-	var body ClientTranscriptSnapshot
+// AsBrowserTranscriptSnapshot returns the union data inside the TranscriptSnapshotResponse as a BrowserTranscriptSnapshot
+func (t TranscriptSnapshotResponse) AsBrowserTranscriptSnapshot() (BrowserTranscriptSnapshot, error) {
+	var body BrowserTranscriptSnapshot
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientTranscriptSnapshot overwrites any union data inside the TranscriptSnapshotResponse as the provided ClientTranscriptSnapshot
-func (t *TranscriptSnapshotResponse) FromClientTranscriptSnapshot(v ClientTranscriptSnapshot) error {
+// FromBrowserTranscriptSnapshot overwrites any union data inside the TranscriptSnapshotResponse as the provided BrowserTranscriptSnapshot
+func (t *TranscriptSnapshotResponse) FromBrowserTranscriptSnapshot(v BrowserTranscriptSnapshot) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientTranscriptSnapshot performs a merge with any union data inside the TranscriptSnapshotResponse, using the provided ClientTranscriptSnapshot
-func (t *TranscriptSnapshotResponse) MergeClientTranscriptSnapshot(v ClientTranscriptSnapshot) error {
+// MergeBrowserTranscriptSnapshot performs a merge with any union data inside the TranscriptSnapshotResponse, using the provided BrowserTranscriptSnapshot
+func (t *TranscriptSnapshotResponse) MergeBrowserTranscriptSnapshot(v BrowserTranscriptSnapshot) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -9550,23 +10049,31 @@ func (t *TranscriptSnapshotResponse) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// AsTranscriptUpdate returns the union data inside the TranscriptStreamEvent as a TranscriptUpdate
-func (t TranscriptStreamEvent) AsTranscriptUpdate() (TranscriptUpdate, error) {
-	var body TranscriptUpdate
+// AsTranscriptUpdateEvent returns the union data inside the TranscriptStreamEvent as a TranscriptUpdateEvent
+func (t TranscriptStreamEvent) AsTranscriptUpdateEvent() (TranscriptUpdateEvent, error) {
+	var body TranscriptUpdateEvent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromTranscriptUpdate overwrites any union data inside the TranscriptStreamEvent as the provided TranscriptUpdate
-func (t *TranscriptStreamEvent) FromTranscriptUpdate(v TranscriptUpdate) error {
+// FromTranscriptUpdateEvent overwrites any union data inside the TranscriptStreamEvent as the provided TranscriptUpdateEvent
+func (t *TranscriptStreamEvent) FromTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
 	t.union = b
 	return err
 }
 
-// MergeTranscriptUpdate performs a merge with any union data inside the TranscriptStreamEvent, using the provided TranscriptUpdate
-func (t *TranscriptStreamEvent) MergeTranscriptUpdate(v TranscriptUpdate) error {
+// MergeTranscriptUpdateEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided TranscriptUpdateEvent
+func (t *TranscriptStreamEvent) MergeTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
 	if err != nil {
 		return err
 	}
@@ -9586,6 +10093,10 @@ func (t TranscriptStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, e
 // FromOutputTextDeltaEvent overwrites any union data inside the TranscriptStreamEvent as the provided OutputTextDeltaEvent
 func (t *TranscriptStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
 	t.union = b
 	return err
 }
@@ -9593,6 +10104,10 @@ func (t *TranscriptStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent)
 // MergeOutputTextDeltaEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided OutputTextDeltaEvent
 func (t *TranscriptStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
 	if err != nil {
 		return err
 	}
@@ -9612,6 +10127,10 @@ func (t TranscriptStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error
 // FromThinkingDeltaEvent overwrites any union data inside the TranscriptStreamEvent as the provided ThinkingDeltaEvent
 func (t *TranscriptStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
 	t.union = b
 	return err
 }
@@ -9619,6 +10138,10 @@ func (t *TranscriptStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) err
 // MergeThinkingDeltaEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided ThinkingDeltaEvent
 func (t *TranscriptStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
 	if err != nil {
 		return err
 	}
@@ -9638,6 +10161,10 @@ func (t TranscriptStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) 
 // FromStreamResyncEvent overwrites any union data inside the TranscriptStreamEvent as the provided StreamResyncEvent
 func (t *TranscriptStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
 	t.union = b
 	return err
 }
@@ -9645,6 +10172,10 @@ func (t *TranscriptStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error
 // MergeStreamResyncEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided StreamResyncEvent
 func (t *TranscriptStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
 	if err != nil {
 		return err
 	}
@@ -9664,6 +10195,10 @@ func (t TranscriptStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
 // FromStreamEndEvent overwrites any union data inside the TranscriptStreamEvent as the provided StreamEndEvent
 func (t *TranscriptStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
 	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
 	t.union = b
 	return err
 }
@@ -9674,10 +10209,43 @@ func (t *TranscriptStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
 	if err != nil {
 		return err
 	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	if err != nil {
+		return err
+	}
 
 	merged, err := runtime.JSONMerge(t.union, b)
 	t.union = merged
 	return err
+}
+
+func (t TranscriptStreamEvent) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t TranscriptStreamEvent) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "output_text.delta":
+		return t.AsOutputTextDeltaEvent()
+	case "stream.end":
+		return t.AsStreamEndEvent()
+	case "stream.resync":
+		return t.AsStreamResyncEvent()
+	case "thinking.delta":
+		return t.AsThinkingDeltaEvent()
+	case "transcript.update":
+		return t.AsTranscriptUpdateEvent()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
 }
 
 func (t TranscriptStreamEvent) MarshalJSON() ([]byte, error) {
@@ -9716,22 +10284,22 @@ func (t *TranscriptStreamResponse) MergeTranscriptStreamEvent(v TranscriptStream
 	return err
 }
 
-// AsClientTranscriptStreamEvent returns the union data inside the TranscriptStreamResponse as a ClientTranscriptStreamEvent
-func (t TranscriptStreamResponse) AsClientTranscriptStreamEvent() (ClientTranscriptStreamEvent, error) {
-	var body ClientTranscriptStreamEvent
+// AsBrowserTranscriptStreamEvent returns the union data inside the TranscriptStreamResponse as a BrowserTranscriptStreamEvent
+func (t TranscriptStreamResponse) AsBrowserTranscriptStreamEvent() (BrowserTranscriptStreamEvent, error) {
+	var body BrowserTranscriptStreamEvent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromClientTranscriptStreamEvent overwrites any union data inside the TranscriptStreamResponse as the provided ClientTranscriptStreamEvent
-func (t *TranscriptStreamResponse) FromClientTranscriptStreamEvent(v ClientTranscriptStreamEvent) error {
+// FromBrowserTranscriptStreamEvent overwrites any union data inside the TranscriptStreamResponse as the provided BrowserTranscriptStreamEvent
+func (t *TranscriptStreamResponse) FromBrowserTranscriptStreamEvent(v BrowserTranscriptStreamEvent) error {
 	b, err := json.Marshal(v)
 	t.union = b
 	return err
 }
 
-// MergeClientTranscriptStreamEvent performs a merge with any union data inside the TranscriptStreamResponse, using the provided ClientTranscriptStreamEvent
-func (t *TranscriptStreamResponse) MergeClientTranscriptStreamEvent(v ClientTranscriptStreamEvent) error {
+// MergeBrowserTranscriptStreamEvent performs a merge with any union data inside the TranscriptStreamResponse, using the provided BrowserTranscriptStreamEvent
+func (t *TranscriptStreamResponse) MergeBrowserTranscriptStreamEvent(v BrowserTranscriptStreamEvent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -10752,8 +11320,17 @@ type ClientInterface interface {
 	// Disconnecting never cancels the turn. It keeps running, and you can
 	// reconnect or read it later.
 	//
-	// Client-token streams omit `thinking.delta` previews even when
-	// `deltas=true`.
+	// This stream's saved frames are `invocation.accepted` (inline `POST`
+	// only), `invocation.update`, and `invocation.result`. An
+	// `invocation.update` never carries a terminal status, and the
+	// Invocation it carries is re-read when the frame is written.
+	// Reconnecting to a turn that already settled always yields
+	// `invocation.result` and then `stream.end` with reason `terminal`, at
+	// any cursor, so either frame is a valid signal to stop reading.
+	//
+	// Browser and machine callers receive the same frame types, including
+	// `thinking.delta`. Browser payloads carry fewer fields; see the
+	// `Browser*` schemas.
 	//
 	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
 	StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -11344,8 +11921,19 @@ type ClientInterface interface {
 	// built-in `EventSource` cannot. The server suggests a 1000 ms
 	// reconnect delay.
 	//
-	// Client-token streams omit `thinking.delta` previews even when
-	// `deltas=true`.
+	// Cursors are Session-scoped, so a position taken from an Invocation
+	// stream resumes this one and the other way round.
+	//
+	// This stream is strictly forward: a message past your cursor is never
+	// sent again. A message's `phase` is worked out when it is read, so this
+	// stream is not the place to learn which message was the answer. Derive
+	// that instead from facts you already hold: a turn has a final answer
+	// only once it settled `completed` with stop reason `end_turn`, and that
+	// answer is the turn's last assistant message.
+	//
+	// Browser and machine callers receive the same frame types, including
+	// `thinking.delta`. Browser payloads carry fewer fields; see the
+	// `Browser*` schemas.
 	//
 	// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
 	StreamSessionTranscript(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -12877,8 +13465,17 @@ func (c *Client) ResumeInvocation(ctx context.Context, invocationID InvocationID
 // Disconnecting never cancels the turn. It keeps running, and you can
 // reconnect or read it later.
 //
-// Client-token streams omit `thinking.delta` previews even when
-// `deltas=true`.
+// This stream's saved frames are `invocation.accepted` (inline `POST`
+// only), `invocation.update`, and `invocation.result`. An
+// `invocation.update` never carries a terminal status, and the
+// Invocation it carries is re-read when the frame is written.
+// Reconnecting to a turn that already settled always yields
+// `invocation.result` and then `stream.end` with reason `terminal`, at
+// any cursor, so either frame is a valid signal to stop reading.
+//
+// Browser and machine callers receive the same frame types, including
+// `thinking.delta`. Browser payloads carry fewer fields; see the
+// `Browser*` schemas.
 //
 // Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
 func (c *Client) StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -13879,8 +14476,19 @@ func (c *Client) GetSessionTranscript(ctx context.Context, sessionID SessionID, 
 // built-in `EventSource` cannot. The server suggests a 1000 ms
 // reconnect delay.
 //
-// Client-token streams omit `thinking.delta` previews even when
-// `deltas=true`.
+// Cursors are Session-scoped, so a position taken from an Invocation
+// stream resumes this one and the other way round.
+//
+// This stream is strictly forward: a message past your cursor is never
+// sent again. A message's `phase` is worked out when it is read, so this
+// stream is not the place to learn which message was the answer. Derive
+// that instead from facts you already hold: a turn has a final answer
+// only once it settled `completed` with stop reason `end_turn`, and that
+// answer is the turn's last assistant message.
+//
+// Browser and machine callers receive the same frame types, including
+// `thinking.delta`. Browser payloads carry fewer fields; see the
+// `Browser*` schemas.
 //
 // Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
 func (c *Client) StreamSessionTranscript(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -20115,8 +20723,17 @@ type ClientWithResponsesInterface interface {
 	// Disconnecting never cancels the turn. It keeps running, and you can
 	// reconnect or read it later.
 	//
-	// Client-token streams omit `thinking.delta` previews even when
-	// `deltas=true`.
+	// This stream's saved frames are `invocation.accepted` (inline `POST`
+	// only), `invocation.update`, and `invocation.result`. An
+	// `invocation.update` never carries a terminal status, and the
+	// Invocation it carries is re-read when the frame is written.
+	// Reconnecting to a turn that already settled always yields
+	// `invocation.result` and then `stream.end` with reason `terminal`, at
+	// any cursor, so either frame is a valid signal to stop reading.
+	//
+	// Browser and machine callers receive the same frame types, including
+	// `thinking.delta`. Browser payloads carry fewer fields; see the
+	// `Browser*` schemas.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -20753,8 +21370,19 @@ type ClientWithResponsesInterface interface {
 	// built-in `EventSource` cannot. The server suggests a 1000 ms
 	// reconnect delay.
 	//
-	// Client-token streams omit `thinking.delta` previews even when
-	// `deltas=true`.
+	// Cursors are Session-scoped, so a position taken from an Invocation
+	// stream resumes this one and the other way round.
+	//
+	// This stream is strictly forward: a message past your cursor is never
+	// sent again. A message's `phase` is worked out when it is read, so this
+	// stream is not the place to learn which message was the answer. Derive
+	// that instead from facts you already hold: a turn has a final answer
+	// only once it settled `completed` with stop reason `end_turn`, and that
+	// answer is the turn's last assistant message.
+	//
+	// Browser and machine callers receive the same frame types, including
+	// `thinking.delta`. Browser payloads carry fewer fields; see the
+	// `Browser*` schemas.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -28887,8 +29515,17 @@ func (c *ClientWithResponses) ResumeInvocationWithResponse(ctx context.Context, 
 // Disconnecting never cancels the turn. It keeps running, and you can
 // reconnect or read it later.
 //
-// Client-token streams omit `thinking.delta` previews even when
-// `deltas=true`.
+// This stream's saved frames are `invocation.accepted` (inline `POST`
+// only), `invocation.update`, and `invocation.result`. An
+// `invocation.update` never carries a terminal status, and the
+// Invocation it carries is re-read when the frame is written.
+// Reconnecting to a turn that already settled always yields
+// `invocation.result` and then `stream.end` with reason `terminal`, at
+// any cursor, so either frame is a valid signal to stop reading.
+//
+// Browser and machine callers receive the same frame types, including
+// `thinking.delta`. Browser payloads carry fewer fields; see the
+// `Browser*` schemas.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29771,8 +30408,19 @@ func (c *ClientWithResponses) GetSessionTranscriptWithResponse(ctx context.Conte
 // built-in `EventSource` cannot. The server suggests a 1000 ms
 // reconnect delay.
 //
-// Client-token streams omit `thinking.delta` previews even when
-// `deltas=true`.
+// Cursors are Session-scoped, so a position taken from an Invocation
+// stream resumes this one and the other way round.
+//
+// This stream is strictly forward: a message past your cursor is never
+// sent again. A message's `phase` is worked out when it is read, so this
+// stream is not the place to learn which message was the answer. Derive
+// that instead from facts you already hold: a turn has a final answer
+// only once it settled `completed` with stop reason `end_turn`, and that
+// answer is the turn's last assistant message.
+//
+// Browser and machine callers receive the same frame types, including
+// `thinking.delta`. Browser payloads carry fewer fields; see the
+// `Browser*` schemas.
 //
 // Returns a wrapper object for the known response body format(s).
 //

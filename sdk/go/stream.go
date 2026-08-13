@@ -37,8 +37,13 @@ type StreamPreview struct {
 	Attempt      int64  `json:"attempt"`
 	Iteration    int    `json:"iteration"`
 	ContentIndex int    `json:"content_index"`
-	OutputText   string `json:"output_text"`
-	Thinking     string `json:"thinking"`
+	// MessageID names the saved assistant message this preview is building,
+	// when the server published it. Key a rendered preview by it and the
+	// handoff to the saved message updates a row that already has its
+	// permanent identity. Empty when the server did not publish one.
+	MessageID  string `json:"message_id"`
+	OutputText string `json:"output_text"`
+	Thinking   string `json:"thinking"`
 }
 
 type streamPreviewKey struct {
@@ -79,6 +84,7 @@ func (r *Reducer) Apply(event StreamEvent) error {
 			delta.Attempt,
 			delta.Iteration,
 			delta.ContentIndex,
+			previewMessageID(delta.MessageID),
 			delta.Text,
 			"",
 		)
@@ -93,6 +99,7 @@ func (r *Reducer) Apply(event StreamEvent) error {
 			delta.Attempt,
 			delta.Iteration,
 			delta.ContentIndex,
+			previewMessageID(delta.MessageID),
 			"",
 			delta.Thinking,
 		)
@@ -113,7 +120,7 @@ func (r *Reducer) Apply(event StreamEvent) error {
 	if event.Type != "transcript.update" {
 		return nil
 	}
-	var update generated.TranscriptUpdate
+	var update generated.TranscriptUpdateEvent
 	if err := json.Unmarshal(event.Data, &update); err != nil {
 		return fmt.Errorf("decode transcript update: %w", err)
 	}
@@ -187,6 +194,7 @@ func (r *Reducer) appendPreview(
 	attempt int64,
 	iteration int,
 	contentIndex int,
+	messageID string,
 	outputText string,
 	thinking string,
 ) {
@@ -213,9 +221,21 @@ func (r *Reducer) appendPreview(
 	preview.Attempt = attempt
 	preview.Iteration = iteration
 	preview.ContentIndex = contentIndex
+	if messageID != "" {
+		preview.MessageID = messageID
+	}
 	preview.OutputText += outputText
 	preview.Thinking += thinking
 	r.previews[key] = preview
+}
+
+// previewMessageID unwraps the optional preview identity. An older server, or
+// a runtime that had not allocated the identifier yet, simply omits it.
+func previewMessageID(value *generated.PreviewMessageID) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
 }
 
 func (r *Reducer) discardPreviews(invocationID string) {
@@ -341,7 +361,7 @@ func (c *Client) StreamSessionWithOptions(
 			}
 			if event.Type == "stream.end" {
 				var end generated.StreamEndEvent
-				if json.Unmarshal(event.Data, &end) == nil && end.Reason == generated.Terminal {
+				if json.Unmarshal(event.Data, &end) == nil && end.Reason == generated.ReasonTerminal {
 					terminalEnd = true
 				}
 			}

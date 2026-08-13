@@ -8,6 +8,19 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Sync the streaming protocol contract.** Stream event unions are
+  discriminated on `type`, frame schemas accept unknown fields, and
+  `stream.resync` and `stream.end` reasons are named enums with
+  forward-compatibility guidance. `stream.end` gained `slow_consumer`.
+  Lifecycle changes carry `stop_reason`, `credit_block`, `pending_tool_calls`,
+  and `tool_calls`. Breaking: the generated browser projections are renamed
+  from `Client*` to `Browser*`, `TranscriptUpdate` is now
+  `TranscriptUpdateEvent`, and `PendingHostToolCall.input` is typed as a JSON
+  object rather than as anything.
+- **Carry preview identity through the reducers.** `StreamPreview` in all four
+  SDKs exposes the `message_id` a delta frame publishes, so a rendered preview
+  can be keyed by the identity its saved message will land under.
+
 ## 0.15.0 - 2026-08-12
 
 - **Add durable Agent memory across every SDK.** Agent Definitions can select

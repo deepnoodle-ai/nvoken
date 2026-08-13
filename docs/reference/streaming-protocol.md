@@ -4,10 +4,10 @@
 specification we have committed to freezing. Rough edges are listed at the end
 and we expect to resolve some of them, which will change parts of this
 document.
-**Verified against:** `nvoken-cloud@50d8a5e`
+**Verified against:** `nvoken-cloud@d8090df`
 (`internal/adapters/httpapi/stream.go`), the contract snapshot pinned in
-[`openapi/SOURCE.json`](../../openapi/SOURCE.json) at `08d20b9`, and the four
-SDK implementations in this repository.
+[`openapi/SOURCE.json`](../../openapi/SOURCE.json), and the four SDK
+implementations in this repository.
 **Date:** 2026-08-13
 **Authority:** The runtime is the authority. Where this document and
 `nvoken-cloud` disagree, the runtime is right and this document is stale.
@@ -242,6 +242,11 @@ All four fields matter. `content_index` separates concurrent content blocks
 within one model iteration, and ignoring it interleaves two blocks into
 nonsense. `attempt` is the retry discriminator described below.
 
+Both frames also carry `message_id` when the runtime has already reserved it:
+the identifier the saved assistant message will land under. Key a rendered
+preview by it and the handoff below becomes an update to a row that already has
+its permanent identity. It is optional, and stable only within one attempt.
+
 The server validates every delta before forwarding and silently drops
 malformed ones (`validGenerationDeltaEvent`, `stream.go:799`): `attempt` at
 least 1, `iteration` at least 1, `content_index` at least 0, a non-zero
@@ -254,7 +259,8 @@ is why the Session reducer keys previews by `invocation_id`.
 ### `stream.resync`
 
 The live delivery path could not prove continuity, so previews were lost. The
-only reason value today is `live_delivery_gap`.
+only reason value today is `live_delivery_gap`. Treat one you do not recognize
+the same way.
 
 Discard accumulated preview text and wait for durable frames. The server drains
 the transcript immediately after sending a resync, so the replacement is
@@ -269,13 +275,20 @@ that subscription.
 
 ### `stream.end`
 
-Two reasons:
+Three reasons:
 
 - **`rotate`** means the server is cycling the connection. Reconnect with your
   last durable cursor. It fires on server shutdown or when a connection reaches
   its 55 minute lifetime.
 - **`terminal`** means nothing more is coming. On the Invocation stream the
   turn has settled. On the Session stream no turn is running.
+- **`slow_consumer`** means this connection could not keep up with what was
+  being written to it and was dropped. Reconnect, and read faster or buffer
+  more. The frame is best effort: a consumer too slow to accept the frame
+  before it may be too slow to accept this one.
+
+Treat a reason you do not recognize as `rotate`. Reconnecting is safe even when
+the turn is over, because a settled turn re-yields its result.
 
 `resume_cursor` in the payload is the position to reconnect from. As with
 resync, `invocation_id` is set on the Invocation stream and null on the Session
@@ -322,9 +335,10 @@ cursor. This repository implements it four times:
 Behavior is pinned by
 [`sdk/conformance/fixtures/reducer.json`](../../sdk/conformance/fixtures/reducer.json),
 which all four test suites read. It covers preview accumulation, discard on
-attempt increase, discard on resync, and replacement by the canonical assistant
-message, plus one snapshot case asserting that an ephemeral frame's `id` is
-never adopted as a resume cursor.
+attempt increase, discard on resync, replacement by the canonical assistant
+message, and the `message_id` a preview carries and holds once published, plus
+one snapshot case asserting that an ephemeral frame's `id` is never adopted as
+a resume cursor.
 
 A behavior represented in more than one SDK belongs in that fixture rather than
 in four unrelated tests. See
@@ -347,32 +361,30 @@ the Session stream, and every claim in this section is visible there.
 | Message | `sequence` | `transcript.update.messages`, `invocation.update.new_messages` | Append. The Session stream never re-sends one. |
 | Lifecycle change | `(invocation_id, revision)` | `invocation_changes` on the same frames | Append to a log, then fold to the highest revision to get current state. |
 | Preview | `(invocation_id, attempt, iteration, content_index)` | `output_text.delta`, `thinking.delta` | Concatenate, then discard wholesale on any of the five triggers above. |
-| Tool call | `tool_use.id` | opened by one message, closed by a later one | Retroactively update a message you already rendered. |
+| Tool call | `tool_use.id` | opened by one message, closed by a later one; status on `invocation_changes.tool_calls` | Retroactively update a message you already rendered. |
 | Compaction | not streamed at all | `GET /v1/sessions/{id}/compactions` | Fetch separately, interleave by `covers_through`. |
 
 Only the first is a plain append. That is the whole problem.
 
-### The preview handoff is a replace, not a merge
+### The preview handoff can be a merge
 
-A preview and the message it becomes share no identifier. Previews are keyed by
-`(invocation_id, attempt, iteration, content_index)`; the message is keyed by
-`id` and ordered by `sequence`. Nothing on either side points at the other.
+Previews are keyed by `(invocation_id, attempt, iteration, content_index)`; the
+message is keyed by `id` and ordered by `sequence`. Delta frames carry
+`message_id`, the identifier that message will land under, which is the link
+between the two. Key your preview row by it and the handoff is an update to a
+row that already has its permanent identity rather than one row disappearing
+and another taking its place.
 
-So the handoff cannot be a merge. The preview disappears when the durable
-message lands, and a separate row appears in its place. In the console these
-are two different components with two different React keys, so the DOM node is
-destroyed and rebuilt at the moment the answer completes.
+The field is optional, so a client still needs the fallback: when it is absent,
+the preview disappears when the durable message lands and a separate row
+appears in its place.
 
-The best a client can do is make the swap inconspicuous. The console groups
-previews by `(invocation_id, attempt, iteration)`, deliberately dropping
-`content_index` from the key, because one iteration is one persisted assistant
-message and grouping that way makes the preview row the same shape as the
-message that replaces it. Without that, a turn that thinks before it answers
+Either way, group previews by `(invocation_id, attempt, iteration)`,
+deliberately dropping `content_index` from the key, because one iteration is
+one persisted assistant message and grouping that way makes the preview row the
+same shape as the message. Without that, a turn that thinks before it answers
 renders two rows that collapse into one, with two avatars and two name labels
-disappearing at the swap.
-
-That "one iteration is one assistant message" invariant is what makes the whole
-thing work, and it is stated nowhere in the contract.
+disappearing at the swap. The contract states that invariant now.
 
 ### Tool results reach backwards
 
@@ -381,44 +393,38 @@ in a different, later message. So a client cannot render messages
 independently: it needs a transcript-wide index from tool-use id to call, and
 when a result lands it mutates a row it drew earlier.
 
-Two consequences fall out of that. A message whose blocks all fold into earlier
+One consequence falls out of that: a message whose blocks all fold into earlier
 calls has nothing left to draw and must be dropped rather than rendered empty.
-And between the call and its result there is no progress signal at all:
-`ToolCallStatus` exists on the ToolCall resource and never appears in the
-transcript, so a spinner can only end when a result block shows up. A tool that
-failed, a tool that is slow, and a tool that is waiting on a host all look
-identical from the stream.
 
-### The lifecycle lags the transcript
+Progress between the call and its result does reach the stream. Lifecycle
+changes carry `tool_calls`, a status and timestamp per call in the turn, and a
+settling call reserves a revision of its own so the change is delivered and
+replayed rather than inferred from a result block appearing. A tool that
+failed, one that is slow, and one waiting on a host are distinguishable.
 
-The assistant message that ends a turn is published one frame before the
-Invocation's terminal status. A client testing "is this Invocation still
-active" therefore says yes for a beat after the answer is completely on screen,
-which puts a working indicator under a finished message.
+### Messages and the changes that settle them arrive together
 
-The console works around this by reading content instead of status: an
-assistant message carrying no `tool_use` block is the model's last word,
-because the loop has nothing left to run. That is a client re-deriving turn
-completion from block inspection because the authoritative signal arrives late.
+One transcript page carries messages first and then the lifecycle changes that
+settled them, under one shared budget, so the assistant message that ends a
+turn and the terminal status usually reach you in the same frame. Apply
+messages before lifecycle changes within a frame.
 
-Note that this is separate from ordering within a frame. Inside one frame,
-apply messages before lifecycle changes. Across frames, expect the lifecycle to
-trail.
+They can still split across frames when a page fills on messages alone: a turn
+that produced more messages than your `limit` spends the whole budget on them
+and the changes follow. So a client testing "is this Invocation still active"
+can still say yes for a beat after the answer is on screen, and the fix is to
+wait for the change rather than to re-derive completion from block inspection.
 
 ### What the Session stream will not tell you
 
-`InvocationChange` is a strictly weaker projection than the `Invocation` that
-`invocation.update` carries. It has no `stop_reason`, no `pending_tool_calls`,
-and no `credit_block`. A Session-stream client therefore sees:
+`InvocationChange` carries the facts a status alone leaves open: `stop_reason`
+for a turn that stopped short, `pending_tool_calls` for one parked on work you
+own, `credit_block` for one waiting on an account, and `tool_calls` for where
+each call in the turn got to. A Session-stream client can recover from the
+change stream alone. Browser callers get the same set minus `credit_block`,
+which is host-only.
 
-- `incomplete` without learning which limit ran out. The console's notice says
-  the turn "reached a limit before finishing" because that is all it can know.
-- `waiting` without learning what the turn is waiting for. The console polls
-  `getSession` every 15 seconds while parked, purely to recover
-  `pending_tool_calls`.
-- `paused` without learning which credit account is blocked.
-
-Compactions never stream either. They change what the model is shown from a
+Compactions never stream, though. They change what the model is shown from a
 point backwards, and are only readable after the turn that produced them, so
 the console fetches them at connect and again at every settlement.
 
@@ -451,7 +457,7 @@ protocol offers nothing to help with it.
 **Tool calls have no frames of their own.** There is no `tool_call.started` or
 `tool_call.completed`. This surprises people, so it is worth stating plainly.
 
-A tool call reaches you three ways at once:
+A tool call reaches you four ways at once:
 
 1. **As transcript content.** The assistant message carries a `tool_use` block;
    the answering message carries a `tool_result` block naming it by
@@ -459,8 +465,13 @@ A tool call reaches you three ways at once:
    `transcript.update` messages or `invocation.update` `new_messages`.
 2. **As a status.** The Invocation moves to `waiting`, which other APIs call
    `requires_action`. Nothing is executing. The turn is parked.
-3. **As pending work.** The `Invocation` projection carries
-   `pending_tool_calls`, each with `id`, `name`, `input`, and `deadline_at`.
+3. **As pending work.** The `Invocation` projection and any lifecycle change
+   that parked the turn carry `pending_tool_calls`, each with `id`, `name`,
+   `input`, and `deadline_at`.
+4. **As progress.** Both projections carry `tool_calls`, one `id`, `status`,
+   and `updated_at` per call in the turn. A call reaching a terminal state
+   reserves a lifecycle revision, so the change is delivered and replayed like
+   any other.
 
 To advance the turn, `POST /v1/invocations/{id}/tool-results` with each
 `tool_call_id` returned verbatim. The turn returns to `queued` and picks up
@@ -474,15 +485,13 @@ Builtin, MCP, and callback tools resolve without host involvement and never
 park the turn this way. Only host tools and undelivered callbacks do. See
 [Tools](https://nvoken.com/docs/guides/tools) for the mode taxonomy.
 
-## Client-token streams
+## Browser streams
 
-Browser clients authenticate with a client token and receive reduced frames:
-
-- **No `thinking.delta`, ever**, even with `deltas=true`. The server drops it
-  before forwarding (`stream.go:263`).
-- **`Client*` payload shapes** on `invocation.accepted`, `invocation.update`,
-  `invocation.result`, and `transcript.update`. These omit Agent and user
-  identity, message phase, copy origin, and host provenance.
+Browser clients authenticate with a client token and receive the same frame
+types as machine callers, including `thinking.delta`. What differs is the
+payload: `Browser*` shapes on `invocation.accepted`, `invocation.update`,
+`invocation.result`, and `transcript.update` omit Agent and user identity,
+message phase, copy origin, host provenance, and the credit block.
 
 Preview, resync, and end frames are identical for both audiences.
 
@@ -536,6 +545,12 @@ Grouped by where a fix would land. Nothing here is on fire. The list exists so
 nobody rediscovers any of it, and so we can choose deliberately instead of
 patching whichever one surfaces first.
 
+[Design 003](../design/003-streaming-protocol-target.md) closed twenty-five of
+these. Resolved items are deleted rather than struck through, so the numbering
+has gaps; the design document is the record of what changed and why. Reasoning
+blocks (N5) were corrected rather than removed, because the answer turned out
+to be that the contract was right and the note was wrong.
+
 Items marked **(wire)** change what the server sends or what the contract
 promises, so they land in `nvoken-cloud` and reach this repository through a
 contract sync. Items marked **(names only)** change generated symbol names
@@ -544,99 +559,24 @@ local to this repository.
 
 ### Protocol semantics
 
-**P1. Result re-emission is load-bearing but unwritten.** (wire) All four SDKs
-exit only on `invocation.result` and would reconnect forever without it. The
-runtime does re-emit it on every reconnect to a settled turn. The contract
-never says so. Either state the guarantee or teach the SDKs to also stop on
-`stream.end` terminal. Stating it is smaller and more honest, since the SDKs
-are relying on it either way.
-
-**P2. The Invocation stream has two termination signals and clients use one.**
-The server sends `invocation.result` and then `stream.end` reason `terminal`.
-Every SDK returns on the first and never reads the second. The Session stream
-has exactly one terminal signal. So the same reason value means "you are done"
-on one stream and is dead weight on the other.
-
-**P3. `phase` is derived at read time but delivered once.** `MessagePhase` is
-computed from whether a message settled its turn
-(`messagePhaseFromColumns`, `internal/adapters/postgres/repositories.go:2340`),
-so the value depends on when you read. The Session stream is strictly forward:
-a message past the cursor is never re-sent. If the drain observes an assistant
-message before its turn settles, that client holds `commentary` for what later
-becomes `final_answer`, permanently, and no later frame corrects it. Whether
-you get the right phase is a race against the 1 second poll. Invocation-stream
-clients are fine because `invocation.result` carries the composed messages.
-This is the sharpest item on the list.
-
-**P4. `invocation.accepted` is an SDK fiction, not a protocol guarantee.** Only
-the inline `POST` emits it. The `GET` stream never does. The SDKs synthesize an
-equivalent so callers "see the same first event either way," but that sameness
-exists in four client libraries rather than in the protocol. Anyone writing a
-client from the contract will not reproduce it.
-
 **P5. The same durable data ships in two envelopes.** A message arrives as
 `transcript.update.messages` on one stream and `invocation.update.new_messages`
 on the other, with different surrounding fields. A client watching both streams
 for one Session receives every message twice in two shapes and has to
 deduplicate by sequence.
 
-**P6. Resume cursors are Session-scoped on both streams.** The Invocation
-stream's cursor is a Session transcript position, not an Invocation-local one.
-So cursors are interchangeable between the two streams. That is either a useful
-property worth documenting or an accident worth fencing off, and right now it
-is neither.
-
 **P7. Preview loss is only detectable when the server volunteers it.**
 Ephemeral frames carry no sequence numbers, so a client cannot notice a gap on
 its own. It is entirely dependent on `stream.resync` arriving. That is fine
 while the gap detection is correct, and undetectable if it ever is not.
 
-**P8. A dropped slow consumer is told nothing.** Exceed the 10 second write
-timeout and the server logs a reason and closes the connection. The client sees
-an ordinary disconnect. A `stream.end` reason for backpressure would let a
-client distinguish "I was too slow" from "the network blipped" and adapt.
-
 ### Message schemas
-
-**S1. The stream event unions have no discriminator.** (wire)
-`InvocationStreamEvent` and `TranscriptStreamEvent` are bare `oneOf`s, even
-though every branch carries a `type` const. The contract does declare
-discriminators elsewhere: `SessionContentBlock`, tool declarations, and
-citations all have one. Generators therefore cannot emit a tagged union for
-stream events. This is the root cause of C5, not an independent problem.
-
-**S2. Every event schema is closed to extension.** (wire) All eight carry
-`additionalProperties: false`. For a resource read that is a good default. For
-an event protocol it means adding one field to any frame is a breaking change
-for strict generated clients. Most streaming protocols do the opposite and tell
-clients to ignore unknown fields.
-
-**S3. Two reason enums have no forward-compatibility note.** (wire)
-`StreamResyncEvent.reason` has one value and `StreamEndEvent.reason` has two,
-both closed, neither carrying the "expect new values here over time" guidance
-that `InvocationStopReason` gives. Adding `slow_consumer` for P8 would break
-strict clients today.
 
 **S4. `InvocationStreamResponse` is a union nothing can decide.** It is a
 `oneOf` of two `oneOf`s whose branches overlap structurally, since the `Client*`
 shapes are field subsets of the host shapes. No validator can pick a branch
 from the payload. Which family you receive is decided by credential type at the
 connection, which is not expressible where it currently sits.
-
-**S5. The Invocation stream's durable frames are never enumerated.** The
-Session stream description lists exactly which frames carry an `id`. The
-Invocation stream says "saved updates carry an SSE `id`" and leaves the set to
-inference.
-
-**S6. Two `invocation.update` behaviors are unstated.** Terminal statuses are
-suppressed, and the Invocation projection is a live re-read rather than a
-snapshot at the drained cursor. Both are described in the frame reference
-above. Neither appears in the contract.
-
-**S7. `PendingHostToolCall.input` is an empty schema.** `input: {}` means any
-JSON. Each generator renders that differently, so the same field is
-`interface{}`, `unknown`, `Any`, and `serde_json::Value` across the four SDKs
-with no shared meaning.
 
 ### Naming and vocabulary
 
@@ -645,19 +585,6 @@ consistent with its siblings, and can somebody arriving with no context work
 out what it means. Most field renames are breaking, so a good part of this is a
 list of what we would choose differently rather than what we will change.
 Schema type names are the exception and cost almost nothing.
-
-**N1. The protocol has two words for its central noun.** Twelve endpoint
-summaries say "turn". Every schema says `Invocation`, and no schema, field, or
-enum value contains "turn" anywhere. A newcomer reads "Follow one turn over
-Server-Sent Events", opens `InvocationStreamEvent`, and has to infer the two
-are the same thing. Either gloss it once in the contract or pick one register
-and hold it.
-
-**N2. The resume position has four names.** SSE `id`, payload `resume_cursor`,
-query parameter `cursor`, header `Last-Event-ID`. The header is fixed by the
-SSE spec. The other three are ours, and `cursor` in the query against
-`resume_cursor` in the body is one value under two names inside a single
-request and response pair.
 
 **N3. `input` means two unrelated things.** (wire)
 `CreateInvocationRequest.input` is the user's message.
@@ -673,36 +600,22 @@ can write a single accumulator: all four SDK reducers take `output_text` and
 `thinking` as separate parameters and carry both on `StreamPreview`, where one
 is always empty. A shared field name discriminated by `type` collapses that.
 
-**N5. The content block union is missing members the runtime emits.** (wire)
-`SessionContentBlock`'s discriminator maps `text`, `image`, `document`,
-`tool_use`, `server_tool_use`, `tool_result`, `reminder`, and `redacted`, and
-the contract declares no `ThinkingBlock` at all. The runtime stores assistant
-reasoning as a `thinking` block, and the console renders both `thinking` and
-`redacted_thinking`. So `thinking.delta` does resolve into a durable block, and
-a reader of the contract has no way to know that. A union declared closed while
-the wire is open is worse than an open one, because it invites clients to trust
-the generated type. See I11 for what it costs them.
-
-**N6. Counters mix bases without saying so.** `attempt`, `iteration`,
-`revision`, and `sequence` are 1-based. `content_index` is 0-based. The
-`_index` suffix is the only signal and it is never explained, so anyone
-assembling the preview key `(invocation_id, attempt, iteration,
-content_index)` is mixing bases inside one tuple on their first attempt.
+**N5. Reasoning is watchable and unstored, and only the contract says so.**
+`SessionContentBlock` maps `text`, `image`, `document`, `tool_use`,
+`server_tool_use`, `tool_result`, `reminder`, and `redacted`, and declares no
+thinking block. That is deliberate: reasoning is a live preview and never a
+stored block, so no read returns it and none should. The contract now states
+the rule on `ThinkingDeltaEvent`. What remains is that the runtime does keep
+provider reasoning artifacts for its own later calls, and the console renders
+`thinking` and `redacted_thinking` blocks it receives from elsewhere, so a
+reader who sees one in a payload has to know it is private evidence rather than
+transcript content. See I11 for what that costs a client.
 
 **N7. Four words for when something happened.** A single `transcript.update`
 carries `created_at` on messages and `occurred_at` on changes. A delta carries
 `emitted_at`. Admission records carry `attempted_at`. Each is defensible in
 isolation. Together they are four words for one idea, and three of them appear
 within one stream.
-
-**N8. `reason` carries two unrelated enums and only one is named.** (names
-only) `StreamResyncEvent.reason` is `live_delivery_gap`;
-`StreamEndEvent.reason` is `terminal | rotate`. Neither is a named schema,
-unlike `InvocationStopReason`, `ToolCallStatus`, and
-`CallbackDeliveryOutcome`. The resync enum carries `x-enum-varnames` and the
-end enum does not, so generators emit a named constant for one and a bare
-string for the other. That asymmetry is invisible in the YAML and obvious the
-moment you use both.
 
 **N9. `pending` and `queued` are the same state in sibling enums.**
 `ToolCallStatus.pending` and `InvocationStatus.queued` both mean not started.
@@ -718,17 +631,6 @@ messages, so `new_` does no work on `invocation.update`, and its absence on
 prefix. `has_more` takes a different one. `deduplicated`, `cataloged`,
 `replayed`, `pinned`, `deprecated`, `funded`, `supported`, `recommended`, and
 `complete` take none.
-
-**N12. `Client` is the least specific word available.** (names only) Every
-consumer of this API is a client. The schemas say `ClientInvocationUpdateEvent`,
-the prose says "client-token streams" and "browser clients", and the runtime
-says `IsBrowserClient()`. Three vocabularies for one audience. `Browser*`
-matches the runtime and cannot be misread.
-
-**N13. `TranscriptUpdate` is the only frame schema without the `Event`
-suffix.** (names only) Its wire type `transcript.update` is exactly parallel to
-`invocation.update`, whose schema is `InvocationUpdateEvent`. The same gap
-repeats on `ClientTranscriptUpdate` against `ClientInvocationUpdateEvent`.
 
 **N14. The Invocation ID is reachable by one path or two, depending on the
 frame.** `invocation.update` carries both `invocation_id` and `invocation.id`.
@@ -758,50 +660,17 @@ Everything a client hits building a live transcript out of an append-only
 stream. Each item names where the nvoken console
 (`nvoken-website/app/components/console/chat/`) absorbs the cost today.
 
-**I1. A preview and the message it becomes share no identifier.** (wire) The
-handoff is a blind swap: the preview vanishes, a separately keyed row appears.
-No field on either side links them, so no client can transition in place.
-Carrying the eventual message id, or a stable content id, on the delta frames
-would turn a replace into a merge.
-
-**I2. "One iteration is one assistant message" is load-bearing and
-undocumented.** The console groups previews by
-`(invocation_id, attempt, iteration)`, dropping `content_index`, precisely
-because that grouping matches the message the runtime will persist. If the
-invariant does not hold, preview rows and message rows disagree about how many
-turns happened. Nothing in the contract states it.
-
 **I3. `invocation_changes` advertises state and delivers history.** The reducer
 keys by `(invocation_id, revision)` and returns every revision it has seen, so
 every consumer folds it again to get current state (`activity.ts`,
 `latestChanges`). Either the snapshot should expose the fold, or the field
 should be named for the log it is.
 
-**I4. The terminal status trails the message that ended the turn by a frame.**
-A plain "is the Invocation active" test stays true after the answer is fully
-rendered. The console instead treats an assistant message with no `tool_use`
-block as the model's last word (`activity.ts`, `awaitingOutput`), re-deriving
-completion from content because the lifecycle signal arrives late.
-
-**I5. `InvocationChange` is a strictly weaker projection than `Invocation`.**
-(wire) No `stop_reason`, no `pending_tool_calls`, no `credit_block`. So a
-Session-stream client sees `incomplete` without knowing which limit, `waiting`
-without knowing what for, and `paused` without knowing which account. The
-console shows "reached a limit before finishing" because that is all it has,
-and polls `getSession` every 15 seconds while parked to recover the pending
-calls. The two streams disagree about how much lifecycle detail a client
-deserves, for no reason a caller can see.
-
 **I6. Tool results reach backwards into an already-rendered message.** A
 `tool_result` arrives in a later message than its `tool_use`, so a client needs
 a transcript-wide index from tool-use id to call and must mutate an earlier row
 when the result lands (`transcript-model.ts`, `foldMessages`). Delivery is
 append-only; rendering is not.
-
-**I7. Tool call progress is invisible between call and result.**
-`ToolCallStatus` exists on the ToolCall resource and never reaches the
-transcript, so a spinner can only end when a result block appears. Failed,
-slow, and parked-on-a-host all look the same from the stream.
 
 **I8. Folding leaves messages with nothing to draw.** Once results fold into
 their calls, a tool message can be empty and the client has to drop the row
@@ -825,9 +694,9 @@ unusable.** The TypeScript SDK rewrites the blocks the contract models
 (`tool_use_id` becomes `toolUseId`) and passes the rest through in the
 runtime's snake_case, `thinking` among them. The console therefore types blocks
 as `{ type?: string; [key: string]: unknown }` and reads every field through a
-dual-name accessor (`transcript-model.ts`, `blockField`). This is N5 meeting a
-camelCase facade: a union declared closed, an open wire, and a client that has
-to distrust both.
+dual-name accessor (`transcript-model.ts`, `blockField`). The union is accurate
+now (N5), so what is left is the casing: a camelCase facade over a snake_case
+passthrough, which is enough to make the generated type unusable on its own.
 
 **I12. A local claim has no place in the model.** Between `createInvocation`
 returning and the reopened stream's first frame, nothing in the protocol says a
@@ -853,18 +722,13 @@ Invocation query per second per connected client.
 again to close a commit race (`stream.go:682`). Correct, and it happens every
 poll interval for every connected client.
 
-**R3. Invalid deltas are dropped without a trace.** `validGenerationDeltaEvent`
-rejects malformed previews and `forwardDelta` returns nil
-(`stream.go:266`). Resyncs get a warning log; silently discarded deltas get
-nothing, so a provider adapter emitting subtly wrong frames would present as
-"previews sometimes missing" with no signal anywhere.
-
 ### SDK implementations
 
 **C1. Go's reducer omits `incomplete` from its terminal set**
 ([`sdk/go/stream.go:129`](../../sdk/go/stream.go)). The other three include it.
 A turn stopped by `max_iterations` keeps accepting preview text on a Go client
-after it ended. T1 explains why this survived.
+after it ended. T1 explains why this survived: no fixture has ever shown a Go
+reducer an `incomplete` turn.
 
 **C2. Python's Session stream never terminates**
 ([`sdk/python/src/nvoken/stream.py:151`](../../sdk/python/src/nvoken/stream.py)).
@@ -887,8 +751,9 @@ handed.
 **C5. Payloads are typed in TypeScript only.** Go returns `json.RawMessage`,
 Python a raw dict, Rust a `serde_json::Value`. Three of four SDKs make callers
 switch on a string and unmarshal by hand, including our own CLI at
-[`cmd/nvoken/runtime.go:1972`](../../cmd/nvoken/runtime.go). Fixing S1 makes
-this mostly generated rather than hand-written.
+[`cmd/nvoken/runtime.go:1972`](../../cmd/nvoken/runtime.go). The unions carry
+discriminators now, so this could be mostly generated rather than
+hand-written.
 
 **C6. TypeScript's Session stream does not reconnect on transport errors.**
 `streamInvocationLoop` wraps its connect in try/catch and retries
@@ -928,9 +793,8 @@ today, by accident rather than design.
 [`reducer.json`](../../sdk/conformance/fixtures/reducer.json) exercises
 `transcript.update`, both delta types, and `stream.resync`. It never sends
 `stream.end`, `invocation.update`, or `invocation.result`, and the only
-Invocation statuses it contains are `running` and `completed`. That is exactly
-why C1 went unnoticed: no fixture has ever shown a Go reducer an `incomplete`
-turn.
+Invocation statuses it contains are `running` and `completed`. That is why C1
+went unnoticed.
 
 **T2. No fixture pins Invocation-stream loop behavior.** Termination,
 reconnect with a cursor, and the result re-emission of P1 are all verified per
