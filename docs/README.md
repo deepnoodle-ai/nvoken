@@ -1,6 +1,7 @@
 # Repository documentation
 
 - [Public SDK repository design](design/001-public-sdk-repository.md)
+- [Session options conflict scope](design/002-session-options-conflict-scope.md)
 - [SDK and contract development](guides/sdk-development.md)
 - [CLI development and release](guides/cli.md)
 
