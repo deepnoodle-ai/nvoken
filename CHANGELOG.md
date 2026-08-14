@@ -8,67 +8,86 @@ without republishing every artifact.
 
 ## Unreleased
 
-- **Collapse the three stream entry points into one, and the eight frames into
-  four.** There is one streaming route,
-  `GET /v1/sessions/{session_id}/stream`, and `invocation_id` narrows it to one
-  turn. `handle.stream()` follows one turn on it and returns once a change for
-  that turn carries a terminal status: **that change is the terminal signal,
-  and there is no other.** It replays on reconnect at any cursor, so a turn
-  that settled while you were away is still settled when you return, and the
-  composed result is `GET /v1/invocations/{id}` rather than a frame.
-  `invocation.accepted`, `invocation.update`, and `invocation.result` are gone,
-  along with the inline `POST` streaming form; admission is a plain JSON POST
-  whose response is the acknowledgment.
+## 0.16.0 - 2026-08-14
 
-  `output_text.delta` and `thinking.delta` become one `message.delta` frame
-  with a `kind` (`text`, `thinking`, `tool_arguments`) and one `delta` payload
-  field, so every SDK reducer now has one accumulator instead of parallel
-  fields where one is always empty. `StreamPreview` follows: `kind` and `delta`
-  replace `output_text` and `thinking`, `message_id` is required and is the
-  key, `iteration` is gone, and `tool_call_id` and `name` appear on tool
-  argument previews. Accumulate by `(message_id, content_index)`.
+This release collapses the protocol onto its end state, as
+[design 004](docs/design/004-protocol-end-state.md) specifies. There is one
+stream, one frame vocabulary, one schema family, one tool-call collection, and
+one cursor name. All of it is breaking and none of it gets a deprecation
+window, because `/v1` has no external users and this is the cheapest the change
+will ever be.
 
-  The Session stream is now a subscription. It stays open while the Session is
-  idle and a turn started later appears on it, so it no longer returns on its
-  own: leave it by breaking out of the iterator (TypeScript, Rust), returning
-  `ErrStopStream` (Go), or cancelling the task (Python). `stream.end` speaks
-  only about the connection now — reason `terminal` is gone, `idle` is new, and
-  the frame carries no cursor, because you already track your own.
-  `nvoken session stream` tails until the server reports the Session idle;
-  `nvoken invocation stream` ends on the turn's terminal change.
+- **One streaming route.** `GET /v1/sessions/{session_id}/stream` is the only
+  stream, and `invocation_id` narrows it to one turn. Cursors were always
+  Session-scoped, so the Invocation stream was a filtered view of this one that
+  we shipped as a separate endpoint; it is gone, and so is the inline
+  `POST /v1/invocations` streaming form. Admission is a plain JSON POST whose
+  response is the acknowledgment, so you hold the turn's ID before you open
+  anything.
 
-  Breaking, with no deprecation window: see
-  [design 004](docs/design/004-protocol-end-state.md), step C.
+- **One terminal signal.** A turn is over when a change for it carries a
+  terminal status. That is the signal, and there is no other. The change is
+  saved, so it replays at any cursor: a turn that settled while you were away
+  is still settled when you return. Read `GET /v1/invocations/{invocation_id}`
+  for the composed result. `invocation.accepted`, `invocation.update`, and
+  `invocation.result` are removed, and `stream.end` loses reason `terminal`.
+  `stream.end` speaks only about the connection now, carries no cursor because
+  you already track your own, and gained `idle` and `slow_consumer`.
 
-- **Collapse the two schema families into one.** The seventeen `Browser*`
-  projections and the ten response wrapper unions are gone. There is one
-  generated type per resource, and a browser grant receives the same shape with
-  the fields it may not see omitted. Generation now runs with no
-  post-processing: the `sdk/scripts/generate.sh` patch block that hard-selected
-  the machine arm in TypeScript and reordered the Python decoder is deleted,
-  because the union it worked around no longer exists. Breaking: the eight
-  `*Response` wrapper types are removed, and audience-restricted fields
-  (`agent_id`, `user_key`, `usage`, `provenance`, `metadata`, `context`,
-  `limits`, `credit_block`, and the Session policy fields) are now optional on
-  the generated types. `nvoken auth whoami` prints the authentication method
-  first and only the fields that caller actually has.
+- **One preview frame.** `output_text.delta` and `thinking.delta` become
+  `message.delta`, carrying a `kind` (`text`, `thinking`, `tool_arguments`) and
+  one `delta` field for every kind. Each reducer has one accumulator instead of
+  parallel fields where one is always empty. `StreamPreview` follows: `kind`
+  and `delta` replace `output_text` and `thinking`, `message_id` is required
+  and is the key, `iteration` is gone, and tool argument previews carry
+  `tool_call_id` and `name` on every fragment. Accumulate by
+  `(message_id, content_index)`.
 
-- **Sync the streaming protocol contract.** Stream event unions are
-  discriminated on `type`, frame schemas accept unknown fields, and
-  `stream.resync` and `stream.end` reasons are named enums with
-  forward-compatibility guidance. `stream.end` gained `slow_consumer`.
-  Lifecycle changes carry `stop_reason`, `credit_block`, `pending_tool_calls`,
-  and `tool_calls`. Breaking, in generated type names only: the browser
-  projections are renamed from `Client*` to `Browser*`, `TranscriptUpdate` is
-  now `TranscriptUpdateEvent`, the resync and end reasons are their own
-  `StreamResyncReason` and `StreamEndReason` types rather than inline enums on
-  each event (in Go, `generated.Terminal` is now `generated.ReasonTerminal`),
-  and `PendingHostToolCall.input` is typed as a JSON object rather than as
-  anything. No route, operation, or JSON field name changed, so an older SDK
-  keeps working against the updated service.
-- **Carry preview identity through the reducers.** `StreamPreview` in all four
-  SDKs exposes the `message_id` a delta frame publishes, so a rendered preview
-  can be keyed by the identity its saved message will land under.
+- **The Session stream is a subscription.** It stays open while the Session is
+  idle, and a turn started later by anyone appears on it, so it no longer
+  returns on its own. Leave it by breaking out of the iterator (TypeScript,
+  Rust), returning `ErrStopStream` (Go), or cancelling the task (Python). A
+  filtered stream still closes once it has delivered its turn's terminal
+  change. `nvoken session stream` tails until the server reports the Session
+  idle; `nvoken invocation stream` ends on the turn's terminal change.
+
+- **One schema family.** The `Client*` browser projections and the ten
+  `*Response` wrapper unions are removed. There is one generated type per
+  resource, and a browser grant receives that same shape with the fields it may
+  not see omitted, which is why those fields are now optional: `agent_id`,
+  `user_key`, `usage`, `provenance`, `metadata`, `context`, `limits`,
+  `credit_block`, and the Session policy fields. A stranger holding only the
+  contract can now decode any payload without knowing which credential fetched
+  it. Generation runs with no post-processing: the `sdk/scripts/generate.sh`
+  patch block that hard-selected the machine arm in TypeScript and reordered
+  the Python decoder is deleted, because the union it worked around no longer
+  exists. `nvoken auth whoami` prints the authentication method first and only
+  the fields that caller actually has.
+
+- **One tool-call collection.** `pending_tool_calls` and `PendingHostToolCall`
+  are removed. `tool_calls` is the only collection, and its entries gained
+  `name`, `arguments`, and `deadline_at`, so a call you have to answer is the
+  one carrying the arguments to answer it with. Each SDK exports the filter
+  rather than making every caller rediscover it: `AnswerableToolCalls` in Go,
+  `answerableToolCalls` in TypeScript and Rust, `answerable_tool_calls` in
+  Python.
+
+- **One cursor name.** `resume_cursor` in the frame body becomes `cursor`, the
+  same name as the query parameter that resumes a stream. Server-Sent Events
+  still mirrors the value onto the `id:` line and accepts `Last-Event-ID` in
+  the parameter's place, because a faithful SSE binding must, but those are the
+  binding's mechanics rather than two more names for one value.
+
+- **Smaller contract corrections.** Stream event unions are discriminated on
+  `type`, and frame schemas accept unknown fields, so an SDK that meets a frame
+  type or enum value it does not recognize skips it instead of failing the
+  stream. The resync and end reasons are their own `StreamResyncReason` and
+  `StreamEndReason` types rather than inline enums on each event.
+  `TranscriptUpdate` is now `TranscriptUpdateEvent`. Lifecycle changes carry
+  `stop_reason`, `credit_block`, and `tool_calls`.
+
+The reference documentation is rewritten against the protocol that now exists:
+see [the streaming protocol](docs/reference/streaming-protocol.md).
 
 ## 0.15.0 - 2026-08-12
 
