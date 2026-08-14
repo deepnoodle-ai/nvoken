@@ -42,7 +42,7 @@ import type {
   NudgeAcknowledgement,
   NudgeList,
   NudgeStatus,
-  PendingHostToolCall,
+  ToolCallSummary,
   ProviderKey,
   ProviderKeyList,
   ProviderKeyScope,
@@ -260,7 +260,7 @@ export class InvocationError<TOutput extends object = JsonObject> extends Nvoken
 export class MissingToolHandlerError<TOutput extends object = JsonObject> extends NvokenError {
   constructor(
     public readonly handle: InvocationHandle<TOutput>,
-    public readonly toolCall: PendingHostToolCall,
+    public readonly toolCall: ToolCallSummary,
     public readonly invocationCancelled: boolean,
     options?: ErrorOptions,
   ) {
@@ -551,12 +551,12 @@ export function defineHostTool<TInput extends object>(
   return { ...tool, mode: "host" };
 }
 
-export type TypedPendingHostToolCall<TInput extends object> =
-  Omit<PendingHostToolCall, "input"> & { input: TInput };
+export type TypedToolCallSummary<TInput extends object> =
+  Omit<ToolCallSummary, "arguments"> & { arguments: TInput };
 
 export function toolInput<TInput extends object>(
   tool: HostTool<TInput>,
-  call: PendingHostToolCall,
+  call: ToolCallSummary,
 ): TInput {
   if (call.name !== tool.name) {
     throw new NvokenError(
@@ -564,13 +564,27 @@ export function toolInput<TInput extends object>(
       `ToolCall ${call.id} is for ${call.name}, not ${tool.name}`,
     );
   }
-  if (!call.input || typeof call.input !== "object" || Array.isArray(call.input)) {
+  if (!call.arguments || typeof call.arguments !== "object" || Array.isArray(call.arguments)) {
     throw new NvokenError(
       "unexpected_response",
-      `ToolCall ${call.id} did not contain an object input`,
+      `ToolCall ${call.id} did not contain object arguments`,
     );
   }
-  return call.input as TInput;
+  return call.arguments as TInput;
+}
+
+/**
+ * The tool calls this caller is expected to run.
+ *
+ * There is one tool-call collection. A call you have to answer is the one
+ * carrying the arguments to answer it with; builtin and MCP calls nvoken runs
+ * itself, and calls that have already settled, carry none. Filtering on that
+ * is what replaced the separate pending list.
+ */
+export function answerableToolCalls(invocation: {
+  toolCalls?: ToolCallSummary[];
+}): ToolCallSummary[] {
+  return (invocation.toolCalls ?? []).filter((call) => call.arguments != null);
 }
 
 export type TypedInvocation<TOutput extends object = JsonObject> =
@@ -1097,7 +1111,7 @@ export interface TranscriptDrainOptions {
 export interface TranscriptDrain {
   messages: SessionMessage[];
   invocationChanges: InvocationChange[];
-  resumeCursor: string;
+  cursor: string;
 }
 
 export interface WaitOptions {
@@ -2083,7 +2097,7 @@ export class Client {
     const messages: SessionMessage[] = [];
     const invocationChanges: InvocationChange[] = [];
     let pageToken: string | undefined;
-    let resumeCursor = options.cursor;
+    let cursor = options.cursor;
     for (;;) {
       const page = await this.getTranscriptPage(sessionId, {
         cursor: pageToken ? undefined : options.cursor,
@@ -2092,7 +2106,7 @@ export class Client {
       }, signal);
       messages.push(...page.messages);
       invocationChanges.push(...page.invocationChanges);
-      resumeCursor = page.resumeCursor;
+      cursor = page.cursor;
       if (!page.hasMore) break;
       if (!page.nextPageToken) {
         throw new NvokenError(
@@ -2102,13 +2116,13 @@ export class Client {
       }
       pageToken = page.nextPageToken;
     }
-    if (!resumeCursor) {
+    if (!cursor) {
       throw new NvokenError(
         "unexpected_response",
-        "nvoken transcript drain returned no resumeCursor",
+        "nvoken transcript drain returned no cursor",
       );
     }
-    return { messages, invocationChanges, resumeCursor };
+    return { messages, invocationChanges, cursor };
   }
 
   private async replaySafe<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
@@ -2142,7 +2156,7 @@ export interface AnswerPendingToolCallsOptions {
    * take an execution lease keyed by the call id, so a reader and a webhook
    * worker cannot both start the same non-idempotent tool.
    */
-  claim?: (call: PendingHostToolCall) => boolean | Promise<boolean>;
+  claim?: (call: ToolCallSummary) => boolean | Promise<boolean>;
   /**
    * Throw rather than skipping a call this Agent has no handler for. The
    * default skips, because an unattended worker is often one of several
@@ -2441,7 +2455,7 @@ export class Agent<TOutput extends object = JsonObject> {
     const invocation = await this.client.getInvocation<TOutput>(invocationId, options.signal);
     if (invocation.status !== "waiting") return 0;
     const results: ToolResult[] = [];
-    for (const call of invocation.pendingToolCalls ?? []) {
+    for (const call of answerableToolCalls(invocation)) {
       const tool = this.hostTools.get(call.name);
       if (!tool?.handler) {
         if (options.leaveWaitingOnMissingHandler) {
@@ -2481,7 +2495,7 @@ export class Agent<TOutput extends object = JsonObject> {
     signal?: AbortSignal,
     dispatched?: Set<string>,
   ): Promise<void> {
-    const calls = invocation.pendingToolCalls ?? [];
+    const calls = answerableToolCalls(invocation);
     const results: ToolResult[] = [];
     for (const call of calls) {
       if (dispatched?.has(call.id)) continue;

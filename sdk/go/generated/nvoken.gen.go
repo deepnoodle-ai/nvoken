@@ -3075,9 +3075,6 @@ type BrowserInvocation struct {
 	// ID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	ID InvocationID `json:"id"`
 
-	// PendingToolCalls Only eligible named host-mode tools declared by the admitted definition.
-	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
-
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
 
@@ -3176,10 +3173,7 @@ type BrowserInvocationChange struct {
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID `json:"invocation_id"`
 	OccurredAt   time.Time    `json:"occurred_at"`
-
-	// PendingToolCalls Only eligible named host-mode tools declared by the admitted definition.
-	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
-	Revision         int64                  `json:"revision"`
+	Revision     int64        `json:"revision"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 	// turn reaches one of them it never changes again.
@@ -3305,9 +3299,14 @@ type BrowserSession struct {
 	CreatedAt              time.Time                             `json:"created_at"`
 
 	// ID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	ID               SessionID              `json:"id"`
-	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
-	UpdatedAt        time.Time              `json:"updated_at"`
+	ID SessionID `json:"id"`
+
+	// ToolCalls Tool calls of the active Invocation, with their current status.
+	// `arguments` and `deadline_at` appear only on eligible named
+	// host-mode calls declared by the admitted definition, which are the
+	// only ones a browser may answer.
+	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
+	UpdatedAt time.Time          `json:"updated_at"`
 }
 
 // BrowserSessionActiveInvocationStatus defines model for BrowserSession.ActiveInvocationStatus.
@@ -3344,11 +3343,11 @@ type BrowserSessionMessageList struct {
 
 // BrowserTranscriptSnapshot defines model for BrowserTranscriptSnapshot.
 type BrowserTranscriptSnapshot struct {
+	Cursor            string                    `json:"cursor"`
 	HasMore           bool                      `json:"has_more"`
 	InvocationChanges []BrowserInvocationChange `json:"invocation_changes"`
 	Messages          []BrowserSessionMessage   `json:"messages"`
 	NextPageToken     *string                   `json:"next_page_token"`
-	ResumeCursor      string                    `json:"resume_cursor"`
 }
 
 // BrowserTranscriptStreamEvent Browser stream event. Switch on `type`. Host-only transcript fields are
@@ -3360,9 +3359,9 @@ type BrowserTranscriptStreamEvent struct {
 
 // BrowserTranscriptUpdateEvent defines model for BrowserTranscriptUpdateEvent.
 type BrowserTranscriptUpdateEvent struct {
+	Cursor            string                    `json:"cursor"`
 	InvocationChanges []BrowserInvocationChange `json:"invocation_changes"`
 	Messages          []BrowserSessionMessage   `json:"messages"`
-	ResumeCursor      string                    `json:"resume_cursor"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID                        `json:"session_id"`
@@ -4278,11 +4277,8 @@ type Invocation struct {
 
 	// Metadata Your own data, stored when the turn was created and returned exactly as
 	// you sent it.
-	Metadata *Metadata `json:"metadata"`
-
-	// PendingToolCalls Present for a waiting Invocation with unresolved host or callback calls.
-	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
-	Provenance       *ModelProvenance       `json:"provenance"`
+	Metadata   *Metadata        `json:"metadata"`
+	Provenance *ModelProvenance `json:"provenance"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
@@ -4406,24 +4402,20 @@ type InvocationAcceptedEventType string
 // to the highest one to get current state.
 //
 // A change carries what a turn's own projection carries about where it
-// stands: `stop_reason` for a turn that ended, `pending_tool_calls` for
-// one waiting on you, `credit_block` for one paused on spend, and
-// `tool_calls` for what its tools are doing. You never need a second
-// request to find out why a turn is not moving.
+// stands: `stop_reason` for a turn that ended, `credit_block` for one
+// paused on spend, and `tool_calls` for what its tools are doing, with
+// `arguments` on the ones waiting for you to run them. You never need a
+// second request to find out why a turn is not moving.
 type InvocationChange struct {
 	// CreditBlock Present while the turn is paused on spending capacity.
 	CreditBlock *CreditBlock       `json:"credit_block,omitempty"`
 	Error       *InvocationFailure `json:"error"`
 
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-	OccurredAt   time.Time    `json:"occurred_at"`
-
-	// PendingToolCalls What a waiting turn is waiting for. Omitted when nothing is
-	// pending.
-	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
-	Provenance       *ModelProvenance       `json:"provenance"`
-	Revision         int64                  `json:"revision"`
+	InvocationID InvocationID     `json:"invocation_id"`
+	OccurredAt   time.Time        `json:"occurred_at"`
+	Provenance   *ModelProvenance `json:"provenance"`
+	Revision     int64            `json:"revision"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 	// turn reaches one of them it never changes again.
@@ -5494,26 +5486,6 @@ type OutputTextDeltaEvent struct {
 // OutputTextDeltaEventType defines model for OutputTextDeltaEvent.Type.
 type OutputTextDeltaEventType string
 
-// PendingHostToolCall defines model for PendingHostToolCall.
-type PendingHostToolCall struct {
-	// DeadlineAt The Invocation's explicit waiting deadline, or null when external
-	// waiting is unbounded.
-	DeadlineAt *time.Time `json:"deadline_at"`
-
-	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
-	// transcript `tool_use` block or from the pending host tool calls, and
-	// pass it back verbatim as `tool_call_id` when submitting results. The
-	// same value is the `Idempotency-Key` on a callback delivery.
-	ID ToolCallID `json:"id"`
-
-	// Input The arguments the model produced for this call, as a JSON object
-	// whose shape is the `input_schema` you declared for the tool named
-	// above. nvoken does not narrow it further, because only your tool
-	// declaration knows what belongs there.
-	Input map[string]interface{} `json:"input"`
-	Name  string                 `json:"name"`
-}
-
 // PreviewMessageID The identifier the saved assistant message will carry when this
 // iteration lands, with the same `msg_` prefix every message ID has. Key
 // your preview by it and the handoff becomes an update to a row that
@@ -5910,9 +5882,6 @@ type Session struct {
 	// `PATCH /v1/sessions/{session_id}`.
 	Metadata *Metadata `json:"metadata"`
 
-	// PendingToolCalls Pending host and callback calls for the active waiting Invocation.
-	PendingToolCalls *[]PendingHostToolCall `json:"pending_tool_calls,omitempty"`
-
 	// Retention The idle retention window this Session was created with, or null
 	// when it is retained until deleted explicitly. A window outside the
 	// supported range is refused at creation rather than clamped, so
@@ -5921,8 +5890,13 @@ type Session struct {
 	SessionKey *string          `json:"session_key"`
 
 	// TenantKey Immutable effective tenant partition reference.
-	TenantKey *string   `json:"tenant_key"`
-	UpdatedAt time.Time `json:"updated_at"`
+	TenantKey *string `json:"tenant_key"`
+
+	// ToolCalls Tool calls of the active Invocation, with their current status.
+	// The ones still yours to run carry `arguments` and `deadline_at`.
+	// Omitted when no Invocation is active.
+	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
+	UpdatedAt time.Time          `json:"updated_at"`
 
 	// Usage Read-time sum of this Session's non-null Invocation usage and
 	// committed private compaction usage. Null until either exists. This
@@ -6175,6 +6149,8 @@ type SessionResponse struct {
 
 // StreamEndEvent defines model for StreamEndEvent.
 type StreamEndEvent struct {
+	Cursor string `json:"cursor"`
+
 	// InvocationID The Invocation this connection was following, or null on a Session
 	// stream.
 	InvocationID *InvocationID `json:"invocation_id"`
@@ -6185,16 +6161,15 @@ type StreamEndEvent struct {
 	// `terminal` means there is nothing more coming: the turn finished, or
 	// for a Session stream, nothing is running any more. `rotate` means the
 	// server is cycling the connection, so reconnect with your last
-	// `resume_cursor`. `slow_consumer` means this connection could not keep
+	// `cursor`. `slow_consumer` means this connection could not keep
 	// up with what was being written to it and was dropped; reconnect, and
 	// read faster or buffer more.
 	//
 	// Expect new values here over time. Treat a value you do not recognize
-	// as `rotate` and reconnect with your last `resume_cursor`. Reconnecting
+	// as `rotate` and reconnect with your last `cursor`. Reconnecting
 	// is safe even when the turn is over, because a settled turn re-yields
 	// its result.
-	Reason       StreamEndReason `json:"reason"`
-	ResumeCursor string          `json:"resume_cursor"`
+	Reason StreamEndReason `json:"reason"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID          `json:"session_id"`
@@ -6210,12 +6185,12 @@ type StreamEndEventType string
 // `terminal` means there is nothing more coming: the turn finished, or
 // for a Session stream, nothing is running any more. `rotate` means the
 // server is cycling the connection, so reconnect with your last
-// `resume_cursor`. `slow_consumer` means this connection could not keep
+// `cursor`. `slow_consumer` means this connection could not keep
 // up with what was being written to it and was dropped; reconnect, and
 // read faster or buffer more.
 //
 // Expect new values here over time. Treat a value you do not recognize
-// as `rotate` and reconnect with your last `resume_cursor`. Reconnecting
+// as `rotate` and reconnect with your last `cursor`. Reconnecting
 // is safe even when the turn is over, because a settled turn re-yields
 // its result.
 type StreamEndReason string
@@ -6289,11 +6264,8 @@ type SubmitHostToolResultsRequest struct {
 // SubmitHostToolResultsResponse defines model for SubmitHostToolResultsResponse.
 type SubmitHostToolResultsResponse struct {
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-
-	// PendingToolCalls Remaining open host- and callback-mode ToolCalls.
-	PendingToolCalls []PendingHostToolCall      `json:"pending_tool_calls"`
-	Results          []HostToolResultAcceptance `json:"results"`
+	InvocationID InvocationID               `json:"invocation_id"`
+	Results      []HostToolResultAcceptance `json:"results"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
@@ -6328,6 +6300,10 @@ type SubmitHostToolResultsResponse struct {
 	// credits to the blocked tenant account and it continues. It still
 	// accepts interrupt, cancel, and nudge.
 	Status InvocationStatus `json:"status"`
+
+	// ToolCalls Every tool call this turn has made, with its current status. The
+	// ones still yours to run carry `arguments` and `deadline_at`.
+	ToolCalls []ToolCallSummary `json:"tool_calls"`
 }
 
 // Tenant defines model for Tenant.
@@ -6499,19 +6475,42 @@ type ToolCallResultOrigin string
 // host tool, waiting on you. The last three are final.
 type ToolCallStatus string
 
-// ToolCallSummary One tool call as a stream sees it: which call, what state it is in,
-// and when it reached that state. The `id` is the `id` of the `tool_use`
-// block that opened it, so a client can show a call as failed or still
-// running without waiting for the message that carries its result.
+// ToolCallSummary One tool call as a stream sees it: which call, what tool, what state
+// it is in, and when it reached that state. The `id` is the `id` of the
+// `tool_use` block that opened it, so a client can show a call as failed
+// or still running without waiting for the message that carries its
+// result.
 //
-// Names, modes, attempts, and delivery detail live on the ToolCall
-// resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
+// This is the only tool-call collection. A call you have to run carries
+// `arguments` and `deadline_at`; filter on `status` and their presence
+// rather than reading a second list. Modes, attempts, and delivery
+// detail live on the ToolCall resource at
+// `GET /v1/invocations/{invocation_id}/tool-calls`.
 type ToolCallSummary struct {
+	// Arguments The arguments the model produced, as a JSON object whose shape is
+	// the `input_schema` you declared for this tool. nvoken does not
+	// narrow it further, because only your tool declaration knows what
+	// belongs there.
+	//
+	// Present exactly while this call is yours to run: a host- or
+	// callback-mode call that has not settled. Omitted otherwise,
+	// including for builtin and MCP calls nvoken runs itself, and for
+	// any call that has already settled. The durable record of what
+	// every call was given is the `tool_use` block in the transcript.
+	Arguments *map[string]interface{} `json:"arguments,omitempty"`
+
+	// DeadlineAt The Invocation's explicit waiting deadline, or null when external
+	// waiting is unbounded. Present under the same rule as `arguments`.
+	DeadlineAt *time.Time `json:"deadline_at,omitempty"`
+
 	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
 	// transcript `tool_use` block or from the pending host tool calls, and
 	// pass it back verbatim as `tool_call_id` when submitting results. The
 	// same value is the `Idempotency-Key` on a callback delivery.
 	ID ToolCallID `json:"id"`
+
+	// Name The tool this call names.
+	Name string `json:"name"`
 
 	// Status Where one tool call stands. `pending` means the model asked for it and
 	// nothing has started it yet; `running` means it is executing or, for a
@@ -6737,13 +6736,12 @@ type TraceSummaryStatus string
 
 // TranscriptSnapshot defines model for TranscriptSnapshot.
 type TranscriptSnapshot struct {
+	// Cursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
+	Cursor            string             `json:"cursor"`
 	HasMore           bool               `json:"has_more"`
 	InvocationChanges []InvocationChange `json:"invocation_changes"`
 	Messages          []SessionMessage   `json:"messages"`
 	NextPageToken     *string            `json:"next_page_token"`
-
-	// ResumeCursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
-	ResumeCursor string `json:"resume_cursor"`
 }
 
 // TranscriptSnapshotResponse defines model for TranscriptSnapshotResponse.
@@ -6769,11 +6767,10 @@ type TranscriptStreamResponse struct {
 
 // TranscriptUpdateEvent defines model for TranscriptUpdateEvent.
 type TranscriptUpdateEvent struct {
+	// Cursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
+	Cursor            string             `json:"cursor"`
 	InvocationChanges []InvocationChange `json:"invocation_changes"`
 	Messages          []SessionMessage   `json:"messages"`
-
-	// ResumeCursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
-	ResumeCursor string `json:"resume_cursor"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID                 `json:"session_id"`
@@ -7451,7 +7448,7 @@ type StreamSessionTranscriptParams struct {
 	// Deltas Include id-less output and thinking preview frames. Defaults to true.
 	Deltas *bool `form:"deltas,omitempty" json:"deltas,omitempty"`
 
-	// LastEventID Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.
+	// LastEventID Opaque `cursor` from the last durable update frame; ignored when the `cursor` parameter is supplied.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
@@ -11882,7 +11879,7 @@ type ClientInterface interface {
 	// Returns the Session's stored messages plus a running log of turn state
 	// changes.
 	//
-	// To catch up rather than re-read everything, pass a `resume_cursor` you
+	// To catch up rather than re-read everything, pass a `cursor` you
 	// received earlier as `cursor` and you get only what is new since then.
 	// Within one read, keep passing `page_token` until `has_more` is false —
 	// all pages come from the same consistent snapshot, so the transcript
@@ -11898,7 +11895,7 @@ type ClientInterface interface {
 	// endpoint.
 	//
 	// Every non-empty `transcript.update` frame carries
-	// `id: <resume_cursor>`. That opaque ID is your resume position and the
+	// `id: <cursor>`. That opaque ID is your resume position and the
 	// only value you need to store — reconnect with it and you continue
 	// exactly where you left off. `output_text.delta`, `thinking.delta`,
 	// `stream.resync`, and `stream.end` never carry an `id`, because they
@@ -11911,9 +11908,9 @@ type ClientInterface interface {
 	//
 	// `stream.end` with reason `terminal` means no turn is still running.
 	// Reason `rotate` means the server is cycling the connection —
-	// reconnect with your last `id`. A connection that just drops carries no
-	// meaning: reconnect and resume. Disconnecting never cancels a running
-	// turn.
+	// reconnect with your last `cursor`. A connection that just drops
+	// carries no meaning: reconnect and resume. Disconnecting never cancels
+	// a running turn.
 	//
 	// The `cursor` query parameter wins over the `Last-Event-ID` header.
 	// Because this endpoint uses bearer authentication, you need an SSE
@@ -14427,7 +14424,7 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID SessionID, p
 // Returns the Session's stored messages plus a running log of turn state
 // changes.
 //
-// To catch up rather than re-read everything, pass a `resume_cursor` you
+// To catch up rather than re-read everything, pass a `cursor` you
 // received earlier as `cursor` and you get only what is new since then.
 // Within one read, keep passing `page_token` until `has_more` is false —
 // all pages come from the same consistent snapshot, so the transcript
@@ -14453,7 +14450,7 @@ func (c *Client) GetSessionTranscript(ctx context.Context, sessionID SessionID, 
 // endpoint.
 //
 // Every non-empty `transcript.update` frame carries
-// `id: <resume_cursor>`. That opaque ID is your resume position and the
+// `id: <cursor>`. That opaque ID is your resume position and the
 // only value you need to store — reconnect with it and you continue
 // exactly where you left off. `output_text.delta`, `thinking.delta`,
 // `stream.resync`, and `stream.end` never carry an `id`, because they
@@ -14466,9 +14463,9 @@ func (c *Client) GetSessionTranscript(ctx context.Context, sessionID SessionID, 
 //
 // `stream.end` with reason `terminal` means no turn is still running.
 // Reason `rotate` means the server is cycling the connection —
-// reconnect with your last `id`. A connection that just drops carries no
-// meaning: reconnect and resume. Disconnecting never cancels a running
-// turn.
+// reconnect with your last `cursor`. A connection that just drops
+// carries no meaning: reconnect and resume. Disconnecting never cancels
+// a running turn.
 //
 // The `cursor` query parameter wins over the `Last-Event-ID` header.
 // Because this endpoint uses bearer authentication, you need an SSE
@@ -21329,7 +21326,7 @@ type ClientWithResponsesInterface interface {
 	// Returns the Session's stored messages plus a running log of turn state
 	// changes.
 	//
-	// To catch up rather than re-read everything, pass a `resume_cursor` you
+	// To catch up rather than re-read everything, pass a `cursor` you
 	// received earlier as `cursor` and you get only what is new since then.
 	// Within one read, keep passing `page_token` until `has_more` is false —
 	// all pages come from the same consistent snapshot, so the transcript
@@ -21347,7 +21344,7 @@ type ClientWithResponsesInterface interface {
 	// endpoint.
 	//
 	// Every non-empty `transcript.update` frame carries
-	// `id: <resume_cursor>`. That opaque ID is your resume position and the
+	// `id: <cursor>`. That opaque ID is your resume position and the
 	// only value you need to store — reconnect with it and you continue
 	// exactly where you left off. `output_text.delta`, `thinking.delta`,
 	// `stream.resync`, and `stream.end` never carry an `id`, because they
@@ -21360,9 +21357,9 @@ type ClientWithResponsesInterface interface {
 	//
 	// `stream.end` with reason `terminal` means no turn is still running.
 	// Reason `rotate` means the server is cycling the connection —
-	// reconnect with your last `id`. A connection that just drops carries no
-	// meaning: reconnect and resume. Disconnecting never cancels a running
-	// turn.
+	// reconnect with your last `cursor`. A connection that just drops
+	// carries no meaning: reconnect and resume. Disconnecting never cancels
+	// a running turn.
 	//
 	// The `cursor` query parameter wins over the `Last-Event-ID` header.
 	// Because this endpoint uses bearer authentication, you need an SSE
@@ -30361,7 +30358,7 @@ func (c *ClientWithResponses) ListSessionMessagesWithResponse(ctx context.Contex
 // Returns the Session's stored messages plus a running log of turn state
 // changes.
 //
-// To catch up rather than re-read everything, pass a `resume_cursor` you
+// To catch up rather than re-read everything, pass a `cursor` you
 // received earlier as `cursor` and you get only what is new since then.
 // Within one read, keep passing `page_token` until `has_more` is false —
 // all pages come from the same consistent snapshot, so the transcript
@@ -30385,7 +30382,7 @@ func (c *ClientWithResponses) GetSessionTranscriptWithResponse(ctx context.Conte
 // endpoint.
 //
 // Every non-empty `transcript.update` frame carries
-// `id: <resume_cursor>`. That opaque ID is your resume position and the
+// `id: <cursor>`. That opaque ID is your resume position and the
 // only value you need to store — reconnect with it and you continue
 // exactly where you left off. `output_text.delta`, `thinking.delta`,
 // `stream.resync`, and `stream.end` never carry an `id`, because they
@@ -30398,9 +30395,9 @@ func (c *ClientWithResponses) GetSessionTranscriptWithResponse(ctx context.Conte
 //
 // `stream.end` with reason `terminal` means no turn is still running.
 // Reason `rotate` means the server is cycling the connection —
-// reconnect with your last `id`. A connection that just drops carries no
-// meaning: reconnect and resume. Disconnecting never cancels a running
-// turn.
+// reconnect with your last `cursor`. A connection that just drops
+// carries no meaning: reconnect and resume. Disconnecting never cancels
+// a running turn.
 //
 // The `cursor` query parameter wins over the `Last-Event-ID` header.
 // Because this endpoint uses bearer authentication, you need an SSE

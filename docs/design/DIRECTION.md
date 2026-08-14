@@ -99,7 +99,10 @@ That document now exists:
 [design 004, the end-state protocol](004-protocol-end-state.md). Its Part 1
 is the measuring stick this section asked for; its Part 2 is the path.
 
-Nothing can be removed from `/v1` today in any case. The contract carries no
-`deprecated` markers and there is no deprecation policy in any guide, so a
-removal would be a hard break with no signal period. That machinery is part of
-the path, not part of the target.
+**There are no external users.** Curtis is the only consumer of `/v1`,
+confirmed on 2026-08-13. So nothing needs a deprecation window and none of
+that machinery gets built: no `deprecated` markers, no `Deprecation` or
+`Sunset` headers, no SDK warnings. There is nobody to signal. Every collapse
+removes the old way in the same change that adds the new one, and we are
+switching now rather than staging it, because this is the cheapest it will
+ever be.

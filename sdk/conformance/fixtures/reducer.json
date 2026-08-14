@@ -38,7 +38,7 @@
             "occurred_at": "2026-07-21T12:00:01Z"
           }
         ],
-        "resume_cursor": "cursor-1"
+        "cursor": "cursor-1"
       }
     },
     {
@@ -109,13 +109,14 @@
             "tool_calls": [
               {
                 "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+                "name": "lookup_order",
                 "status": "completed",
                 "updated_at": "2026-07-21T12:00:02Z"
               }
             ]
           }
         ],
-        "resume_cursor": "cursor-2"
+        "cursor": "cursor-2"
       }
     },
     {
@@ -126,7 +127,7 @@
         "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [],
         "invocation_changes": [],
-        "resume_cursor": "cursor-2"
+        "cursor": "cursor-2"
       }
     },
     {
@@ -335,7 +336,7 @@
               }
             ],
             "invocation_changes": [],
-            "resume_cursor": "cursor-2"
+            "cursor": "cursor-2"
           }
         }
       ],
@@ -410,7 +411,7 @@
       1,
       2
     ],
-    "resume_cursor": "cursor-2",
+    "cursor": "cursor-2",
     "previews": []
   }
 }

@@ -111,12 +111,14 @@ info:
 
     ### Resuming and finishing
 
-    The resume position has four spellings and one value: the SSE `id` line,
-    `resume_cursor` inside a frame payload, the `cursor` query parameter, and
-    the `Last-Event-ID` header. Send it back as `cursor` or as
-    `Last-Event-ID`; `cursor` wins when a request carries both. Cursors are
-    Session-scoped on both streams, so a position taken from one stream
-    resumes the other.
+    The resume position has one name: `cursor`. It is the field on a durable
+    frame and the query parameter that resumes a stream. Server-Sent Events
+    mirrors it onto the `id:` line and accepts the `Last-Event-ID` header in
+    the parameter's place, because a faithful SSE binding must; those are the
+    binding's mechanics, not two more names for the value, and another
+    binding would carry the same one name. `cursor` wins when a request
+    supplies both. Cursors are Session-scoped on both streams, so a position
+    taken from one stream resumes the other.
 
     Reconnecting to a turn that has already settled always yields
     `invocation.result` followed by `stream.end` with reason `terminal`, at
@@ -3560,7 +3562,7 @@ paths:
         Returns the Session's stored messages plus a running log of turn state
         changes.
 
-        To catch up rather than re-read everything, pass a `resume_cursor` you
+        To catch up rather than re-read everything, pass a `cursor` you
         received earlier as `cursor` and you get only what is new since then.
         Within one read, keep passing `page_token` until `has_more` is false —
         all pages come from the same consistent snapshot, so the transcript
@@ -3608,7 +3610,7 @@ paths:
         endpoint.
 
         Every non-empty `transcript.update` frame carries
-        `id: <resume_cursor>`. That opaque ID is your resume position and the
+        `id: <cursor>`. That opaque ID is your resume position and the
         only value you need to store — reconnect with it and you continue
         exactly where you left off. `output_text.delta`, `thinking.delta`,
         `stream.resync`, and `stream.end` never carry an `id`, because they
@@ -3621,9 +3623,9 @@ paths:
 
         `stream.end` with reason `terminal` means no turn is still running.
         Reason `rotate` means the server is cycling the connection —
-        reconnect with your last `id`. A connection that just drops carries no
-        meaning: reconnect and resume. Disconnecting never cancels a running
-        turn.
+        reconnect with your last `cursor`. A connection that just drops
+        carries no meaning: reconnect and resume. Disconnecting never cancels
+        a running turn.
 
         The `cursor` query parameter wins over the `Last-Event-ID` header.
         Because this endpoint uses bearer authentication, you need an SSE
@@ -3654,7 +3656,7 @@ paths:
             default: true
         - name: Last-Event-ID
           in: header
-          description: Opaque `resume_cursor` from the last durable update frame; ignored when `cursor` is supplied.
+          description: Opaque `cursor` from the last durable update frame; ignored when the `cursor` parameter is supplied.
           schema:
             type: string
             minLength: 1
@@ -7446,11 +7448,6 @@ components:
             - type: string
               format: date-time
             - type: "null"
-        pending_tool_calls:
-          type: array
-          items:
-            $ref: "#/components/schemas/PendingHostToolCall"
-          description: Present for a waiting Invocation with unresolved host or callback calls.
         tool_calls:
           type: array
           items:
@@ -7529,10 +7526,6 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         ended_at: { type: [string, "null"], format: date-time }
-        pending_tool_calls:
-          type: array
-          items: { $ref: "#/components/schemas/PendingHostToolCall" }
-          description: Only eligible named host-mode tools declared by the admitted definition.
         tool_calls:
           type: array
           items: { $ref: "#/components/schemas/ToolCallSummary" }
@@ -7719,24 +7712,53 @@ components:
     ToolCallSummary:
       type: object
       additionalProperties: false
-      required: [id, status, updated_at]
+      required: [id, name, status, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/ToolCallID"
+        name:
+          type: string
+          description: The tool this call names.
         status:
           $ref: "#/components/schemas/ToolCallStatus"
+        arguments:
+          type: object
+          additionalProperties: true
+          description: |
+            The arguments the model produced, as a JSON object whose shape is
+            the `input_schema` you declared for this tool. nvoken does not
+            narrow it further, because only your tool declaration knows what
+            belongs there.
+
+            Present exactly while this call is yours to run: a host- or
+            callback-mode call that has not settled. Omitted otherwise,
+            including for builtin and MCP calls nvoken runs itself, and for
+            any call that has already settled. The durable record of what
+            every call was given is the `tool_use` block in the transcript.
+        deadline_at:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+          description: |
+            The Invocation's explicit waiting deadline, or null when external
+            waiting is unbounded. Present under the same rule as `arguments`.
         updated_at:
           type: string
           format: date-time
           description: When this call last changed state.
       description: |
-        One tool call as a stream sees it: which call, what state it is in,
-        and when it reached that state. The `id` is the `id` of the `tool_use`
-        block that opened it, so a client can show a call as failed or still
-        running without waiting for the message that carries its result.
+        One tool call as a stream sees it: which call, what tool, what state
+        it is in, and when it reached that state. The `id` is the `id` of the
+        `tool_use` block that opened it, so a client can show a call as failed
+        or still running without waiting for the message that carries its
+        result.
 
-        Names, modes, attempts, and delivery detail live on the ToolCall
-        resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
+        This is the only tool-call collection. A call you have to run carries
+        `arguments` and `deadline_at`; filter on `status` and their presence
+        rather than reading a second list. Modes, attempts, and delivery
+        detail live on the ToolCall resource at
+        `GET /v1/invocations/{invocation_id}/tool-calls`.
     ToolCallResultOrigin:
       type: string
       enum: [builtin, callback, host, mcp, system]
@@ -7869,31 +7891,6 @@ components:
         is_error:
           type: boolean
           default: false
-    PendingHostToolCall:
-      type: object
-      additionalProperties: false
-      required: [id, name, input, deadline_at]
-      properties:
-        id:
-          $ref: "#/components/schemas/ToolCallID"
-        name:
-          type: string
-        input:
-          type: object
-          additionalProperties: true
-          description: |
-            The arguments the model produced for this call, as a JSON object
-            whose shape is the `input_schema` you declared for the tool named
-            above. nvoken does not narrow it further, because only your tool
-            declaration knows what belongs there.
-        deadline_at:
-          oneOf:
-            - type: string
-              format: date-time
-            - type: "null"
-          description: |
-            The Invocation's explicit waiting deadline, or null when external
-            waiting is unbounded.
     SubmitHostToolResultsRequest:
       type: object
       additionalProperties: false
@@ -7928,7 +7925,7 @@ components:
     SubmitHostToolResultsResponse:
       type: object
       additionalProperties: false
-      required: [invocation_id, session_id, status, results, pending_tool_calls]
+      required: [invocation_id, session_id, status, results, tool_calls]
       properties:
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
@@ -7942,11 +7939,13 @@ components:
           maxItems: 32
           items:
             $ref: "#/components/schemas/HostToolResultAcceptance"
-        pending_tool_calls:
+        tool_calls:
           type: array
           items:
-            $ref: "#/components/schemas/PendingHostToolCall"
-          description: Remaining open host- and callback-mode ToolCalls.
+            $ref: "#/components/schemas/ToolCallSummary"
+          description: |
+            Every tool call this turn has made, with its current status. The
+            ones still yours to run carry `arguments` and `deadline_at`.
     InvocationFailure:
       type: object
       additionalProperties: false
@@ -8182,11 +8181,14 @@ components:
         updated_at:
           type: string
           format: date-time
-        pending_tool_calls:
+        tool_calls:
           type: array
           items:
-            $ref: "#/components/schemas/PendingHostToolCall"
-          description: Pending host and callback calls for the active waiting Invocation.
+            $ref: "#/components/schemas/ToolCallSummary"
+          description: |
+            Tool calls of the active Invocation, with their current status.
+            The ones still yours to run carry `arguments` and `deadline_at`.
+            Omitted when no Invocation is active.
     SessionForkLineage:
       type: object
       additionalProperties: false
@@ -8230,9 +8232,14 @@ components:
             - type: "null"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
-        pending_tool_calls:
+        tool_calls:
           type: array
-          items: { $ref: "#/components/schemas/PendingHostToolCall" }
+          items: { $ref: "#/components/schemas/ToolCallSummary" }
+          description: |
+            Tool calls of the active Invocation, with their current status.
+            `arguments` and `deadline_at` appear only on eligible named
+            host-mode calls declared by the admitted definition, which are the
+            only ones a browser may answer.
       description: Closed browser projection. Session keys, Agent/user/tenant identifiers, lineage, policies, cost settings, metadata, usage, budget, and derived host context are omitted.
     BrowserSessionList:
       type: object
@@ -8838,10 +8845,10 @@ components:
         to the highest one to get current state.
 
         A change carries what a turn's own projection carries about where it
-        stands: `stop_reason` for a turn that ended, `pending_tool_calls` for
-        one waiting on you, `credit_block` for one paused on spend, and
-        `tool_calls` for what its tools are doing. You never need a second
-        request to find out why a turn is not moving.
+        stands: `stop_reason` for a turn that ended, `credit_block` for one
+        paused on spend, and `tool_calls` for what its tools are doing, with
+        `arguments` on the ones waiting for you to run them. You never need a
+        second request to find out why a turn is not moving.
       properties:
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
@@ -8863,13 +8870,6 @@ components:
             - $ref: "#/components/schemas/CreditBlock"
             - type: "null"
           description: Present while the turn is paused on spending capacity.
-        pending_tool_calls:
-          type: array
-          items:
-            $ref: "#/components/schemas/PendingHostToolCall"
-          description: |
-            What a waiting turn is waiting for. Omitted when nothing is
-            pending.
         tool_calls:
           type: array
           items:
@@ -8913,7 +8913,7 @@ components:
     TranscriptSnapshot:
       type: object
       additionalProperties: false
-      required: [messages, invocation_changes, has_more, resume_cursor, next_page_token]
+      required: [messages, invocation_changes, has_more, cursor, next_page_token]
       properties:
         messages:
           type: array
@@ -8925,7 +8925,7 @@ components:
             $ref: "#/components/schemas/InvocationChange"
         has_more:
           type: boolean
-        resume_cursor:
+        cursor:
           type: string
           minLength: 1
           description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
@@ -8949,10 +8949,6 @@ components:
             - $ref: "#/components/schemas/InvocationStopReason"
             - type: "null"
           description: Why the turn stopped. Present once it has stopped.
-        pending_tool_calls:
-          type: array
-          items: { $ref: "#/components/schemas/PendingHostToolCall" }
-          description: Only eligible named host-mode tools declared by the admitted definition.
         tool_calls:
           type: array
           items: { $ref: "#/components/schemas/ToolCallSummary" }
@@ -8972,7 +8968,7 @@ components:
     BrowserTranscriptSnapshot:
       type: object
       additionalProperties: false
-      required: [messages, invocation_changes, has_more, resume_cursor, next_page_token]
+      required: [messages, invocation_changes, has_more, cursor, next_page_token]
       properties:
         messages:
           type: array
@@ -8981,7 +8977,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/BrowserInvocationChange" }
         has_more: { type: boolean }
-        resume_cursor: { type: string, minLength: 1 }
+        cursor: { type: string, minLength: 1 }
         next_page_token: { type: [string, "null"] }
     TranscriptSnapshotResponse:
       oneOf:
@@ -8989,7 +8985,7 @@ components:
         - $ref: "#/components/schemas/BrowserTranscriptSnapshot"
     TranscriptUpdateEvent:
       type: object
-      required: [type, session_id, messages, invocation_changes, resume_cursor]
+      required: [type, session_id, messages, invocation_changes, cursor]
       properties:
         type:
           type: string
@@ -9005,13 +9001,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InvocationChange"
-        resume_cursor:
+        cursor:
           type: string
           minLength: 1
           description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
     BrowserTranscriptUpdateEvent:
       type: object
-      required: [type, session_id, messages, invocation_changes, resume_cursor]
+      required: [type, session_id, messages, invocation_changes, cursor]
       properties:
         type: { type: string, const: transcript.update }
         session_id: { $ref: "#/components/schemas/SessionID" }
@@ -9021,7 +9017,7 @@ components:
         invocation_changes:
           type: array
           items: { $ref: "#/components/schemas/BrowserInvocationChange" }
-        resume_cursor: { type: string, minLength: 1 }
+        cursor: { type: string, minLength: 1 }
     OutputTextDeltaEvent:
       type: object
       required: [type, session_id, invocation_id, attempt, iteration, content_index, text, emitted_at]
@@ -9124,7 +9120,7 @@ components:
           $ref: "#/components/schemas/StreamResyncReason"
     StreamEndEvent:
       type: object
-      required: [type, session_id, invocation_id, reason, resume_cursor]
+      required: [type, session_id, invocation_id, reason, cursor]
       properties:
         type:
           type: string
@@ -9141,7 +9137,7 @@ components:
             stream.
         reason:
           $ref: "#/components/schemas/StreamEndReason"
-        resume_cursor:
+        cursor:
           type: string
           minLength: 1
     StreamResyncReason:
@@ -9166,12 +9162,12 @@ components:
         `terminal` means there is nothing more coming: the turn finished, or
         for a Session stream, nothing is running any more. `rotate` means the
         server is cycling the connection, so reconnect with your last
-        `resume_cursor`. `slow_consumer` means this connection could not keep
+        `cursor`. `slow_consumer` means this connection could not keep
         up with what was being written to it and was dropped; reconnect, and
         read faster or buffer more.
 
         Expect new values here over time. Treat a value you do not recognize
-        as `rotate` and reconnect with your last `resume_cursor`. Reconnecting
+        as `rotate` and reconnect with your last `cursor`. Reconnecting
         is safe even when the turn is over, because a settled turn re-yields
         its result.
     PreviewMessageID:

@@ -40,7 +40,7 @@ export interface ReducedSnapshot {
   messages: SessionMessage[];
   invocationChanges: InvocationChange[];
   previews: StreamPreview[];
-  resumeCursor?: string;
+  cursor?: string;
 }
 
 export interface StreamPreview {
@@ -153,7 +153,7 @@ export class Reducer {
         this.discardPreviews(change.invocationId);
       }
     }
-    const cursor = event.id || update.resumeCursor;
+    const cursor = event.id || update.cursor;
     if (cursor) this.cursor = cursor;
   }
 
@@ -171,7 +171,7 @@ export class Reducer {
           || left.attempt - right.attempt
           || left.iteration - right.iteration
           || left.contentIndex - right.contentIndex),
-      resumeCursor: this.cursor,
+      cursor: this.cursor,
     };
   }
 
@@ -252,7 +252,7 @@ export async function* streamSessionByID(
     const request = await client.sessions.streamSessionTranscriptRequestOpts({
       sessionId,
       deltas: options.deltas,
-      lastEventID: reducer.snapshot().resumeCursor,
+      lastEventID: reducer.snapshot().cursor,
     });
     const response = await fetchStream(client, request, signal);
     let terminalEnd = false;

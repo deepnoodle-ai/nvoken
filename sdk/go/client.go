@@ -2053,7 +2053,7 @@ func (c *Client) GetTranscript(ctx context.Context, sessionID string, options Tr
 		InvocationChanges: result.InvocationChanges,
 		Messages:          result.Messages,
 		NextPageToken:     result.NextPageToken,
-		ResumeCursor:      result.ResumeCursor,
+		Cursor:            result.Cursor,
 	}, nil
 }
 
@@ -2079,9 +2079,9 @@ func (c *Client) DrainTranscript(
 			drain.InvocationChanges,
 			page.InvocationChanges...,
 		)
-		drain.ResumeCursor = page.ResumeCursor
+		drain.Cursor = page.Cursor
 		if !page.HasMore {
-			if drain.ResumeCursor == "" {
+			if drain.Cursor == "" {
 				return nil, &Error{
 					Category: ErrorUnexpectedResponse,
 					Message:  "transcript drain returned no resume cursor",

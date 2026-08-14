@@ -847,7 +847,7 @@ def test_shared_reducer_vector() -> None:
     snapshot = reducer.snapshot()
     assert [message.sequence for message in snapshot.messages] == fixture["expected"]["message_sequences"]
     assert [change.revision for change in snapshot.invocation_changes] == fixture["expected"]["invocation_revisions"]
-    assert snapshot.resume_cursor == fixture["expected"]["resume_cursor"]
+    assert snapshot.cursor == fixture["expected"]["cursor"]
     assert snapshot.previews == fixture["expected"]["previews"]
     for preview_case in fixture["preview_cases"]:
         preview_reducer = Reducer()
@@ -917,7 +917,7 @@ async def test_session_stream_uses_public_operation_and_follows_later_turns() ->
         if terminal:
             frame += (
                 "event: stream.end\n"
-                f"data: {json.dumps({'type': 'stream.end', 'session_id': SESSION_ID, 'invocation_id': None, 'reason': 'terminal', 'resume_cursor': event['id']})}\n\n"
+                f"data: {json.dumps({'type': 'stream.end', 'session_id': SESSION_ID, 'invocation_id': None, 'reason': 'terminal', 'cursor': event['id']})}\n\n"
             )
         return frame
 
@@ -965,7 +965,7 @@ async def test_session_stream_uses_public_operation_and_follows_later_turns() ->
         (SESSION_ID, None),
         (SESSION_ID, "cursor-1"),
     ]
-    assert reducer.snapshot().resume_cursor == "cursor-2"
+    assert reducer.snapshot().cursor == "cursor-2"
     assert later_invocation_id in {
         change.invocation_id for change in reducer.snapshot().invocation_changes
     }
@@ -1070,14 +1070,14 @@ async def test_collection_transcript_and_provider_key_operations() -> None:
                     messages=["message-1"],
                     invocation_changes=[],
                     has_more=True,
-                    resume_cursor="resume-1",
+                    cursor="resume-1",
                     next_page_token="transcript-2",
                 )
             return SimpleNamespace(
                 messages=["message-2"],
                 invocation_changes=["change-1"],
                 has_more=False,
-                resume_cursor="resume-2",
+                cursor="resume-2",
                 next_page_token=None,
             )
 
@@ -1096,7 +1096,7 @@ async def test_collection_transcript_and_provider_key_operations() -> None:
         drained = await client.drain_transcript(SESSION_ID, cursor="resume-0")
         assert drained.messages == ["message-1", "message-2"]
         assert drained.invocation_changes == ["change-1"]
-        assert drained.resume_cursor == "resume-2"
+        assert drained.cursor == "resume-2"
         assert session_calls == [None, "sessions-2"]
         assert message_calls == [None, "messages-2"]
         assert transcript_calls == [

@@ -7,7 +7,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Generic, TypeVar
 
 from nvoken_generated.models.invocation import Invocation
 from nvoken_generated.models.invocation_result import InvocationResult
-from nvoken_generated.models.pending_host_tool_call import PendingHostToolCall
+from nvoken_generated.models.tool_call_summary import ToolCallSummary
 
 from .client import (
     AgentDefinition,
@@ -141,7 +141,7 @@ class AnswerPendingToolCallsOptions:
     # Runs before each tool. Returning False skips that call — use it to take an
     # execution lease keyed by the ToolCall id, so a streaming reader and this
     # worker cannot both start the same non-idempotent tool.
-    claim: Callable[[PendingHostToolCall], bool | Awaitable[bool]] | None = None
+    claim: Callable[[ToolCallSummary], bool | Awaitable[bool]] | None = None
     # Raise rather than skipping a call this Agent has no handler for. The
     # default skips, because an unattended worker is often one of several
     # answering different tools.
@@ -338,7 +338,7 @@ class Agent(Generic[StructuredT]):
             return 0
         handle = self.client.invocation(invocation_id)
         results: list[ToolResult] = []
-        for pending in invocation.pending_tool_calls or []:
+        for pending in answerable_tool_calls(invocation):
             if pending.name in self._callback_tools:
                 continue
             tool = self._host_tools.get(pending.name)
@@ -357,7 +357,7 @@ class Agent(Generic[StructuredT]):
                 if not claimed:
                     continue
             try:
-                content = tool.handler(pending.input)
+                content = tool.handler(pending.arguments or {})
                 if inspect.isawaitable(content):
                     content = await content
                 results.append(ToolResult(tool_call_id=pending.id, content=content))
@@ -467,7 +467,7 @@ class Agent(Generic[StructuredT]):
         leave_waiting: bool,
     ) -> bool:
         results: list[ToolResult] = []
-        for pending in invocation.pending_tool_calls or []:
+        for pending in answerable_tool_calls(invocation):
             if pending.id in submitted:
                 continue
             if pending.name in self._callback_tools:
@@ -484,7 +484,7 @@ class Agent(Generic[StructuredT]):
                     invocation_cancelled=cancelled,
                 )
             try:
-                content = tool.handler(pending.input)
+                content = tool.handler(pending.arguments or {})
                 if inspect.isawaitable(content):
                     content = await content
                 results.append(ToolResult(tool_call_id=pending.id, content=content))
@@ -645,3 +645,14 @@ async def _next_with_deadline(
             "timeout",
             f"Local stream for Invocation {invocation_id} timed out",
         ) from error
+
+
+def answerable_tool_calls(invocation: Any) -> list[ToolCallSummary]:
+    """The tool calls this caller is expected to run.
+
+    There is one tool-call collection. A call you have to answer is the one
+    carrying the arguments to answer it with; builtin and MCP calls nvoken runs
+    itself, and calls that have already settled, carry none. Filtering on that
+    is what replaced the separate pending list.
+    """
+    return [call for call in (invocation.tool_calls or []) if call.arguments is not None]

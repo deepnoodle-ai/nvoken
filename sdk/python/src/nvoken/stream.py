@@ -26,7 +26,7 @@ class ReducedSnapshot:
     messages: list[SessionMessage]
     invocation_changes: list[InvocationChange]
     previews: list[StreamPreview]
-    resume_cursor: str | None
+    cursor: str | None
 
 
 @dataclass(frozen=True)
@@ -91,7 +91,7 @@ class Reducer:
             if change.status.value in {"completed", "incomplete", "failed", "cancelled"}:
                 self._terminal_invocations.add(change.invocation_id)
                 self._discard_previews(change.invocation_id)
-        self._cursor = event.id or update.resume_cursor or self._cursor
+        self._cursor = event.id or update.cursor or self._cursor
 
     def snapshot(self) -> ReducedSnapshot:
         return ReducedSnapshot(
@@ -109,7 +109,7 @@ class Reducer:
                     preview.content_index,
                 ),
             ),
-            resume_cursor=self._cursor,
+            cursor=self._cursor,
         )
 
     def _append_preview(
@@ -166,7 +166,7 @@ async def stream_session(
             session_id,
             cursor=None,
             deltas=deltas,
-            last_event_id=reducer.snapshot().resume_cursor,
+            last_event_id=reducer.snapshot().cursor,
         )
         try:
             if response.is_error:

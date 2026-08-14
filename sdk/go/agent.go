@@ -424,11 +424,12 @@ func (a *Agent) dispatchWaiting(
 	submitted map[string]struct{},
 	leaveWaiting bool,
 ) (bool, error) {
-	if invocation.PendingToolCalls == nil {
+	answerable := AnswerableToolCalls(invocation)
+	if len(answerable) == 0 {
 		return false, nil
 	}
-	results := make([]ToolResult, 0, len(*invocation.PendingToolCalls))
-	for _, pending := range *invocation.PendingToolCalls {
+	results := make([]ToolResult, 0, len(answerable))
+	for _, pending := range answerable {
 		if _, alreadySubmitted := submitted[pending.ID]; alreadySubmitted {
 			continue
 		}
@@ -447,7 +448,7 @@ func (a *Agent) dispatchWaiting(
 			}
 			return false, missing
 		}
-		content, err := tool.Handler(ctx, pending.Input)
+		content, err := tool.Handler(ctx, toolCallArguments(pending))
 		result := ToolResult{
 			ToolCallID: pending.ID,
 			Content:    content,
@@ -662,7 +663,7 @@ type AnswerPendingToolCallsOptions struct {
 	// Claim runs before each tool. Returning false skips that call — use it to
 	// take an execution lease keyed by the ToolCall ID, so a streaming reader
 	// and this worker cannot both start the same non-idempotent tool.
-	Claim func(context.Context, PendingHostToolCall) (bool, error)
+	Claim func(context.Context, ToolCallSummary) (bool, error)
 	// LeaveWaitingOnMissingHandler reports an error rather than skipping a call
 	// this Agent has no handler for. The default skips, because an unattended
 	// worker is often one of several answering different tools.
@@ -700,12 +701,13 @@ func (a *Agent) AnswerPendingToolCalls(
 	if err != nil {
 		return 0, err
 	}
-	if invocation.Status != InvocationWaiting || invocation.PendingToolCalls == nil {
+	answerable := AnswerableToolCalls(invocation)
+	if invocation.Status != InvocationWaiting || len(answerable) == 0 {
 		return 0, nil
 	}
 	handle := a.client.Invocation(invocationID)
-	results := make([]ToolResult, 0, len(*invocation.PendingToolCalls))
-	for _, pending := range *invocation.PendingToolCalls {
+	results := make([]ToolResult, 0, len(answerable))
+	for _, pending := range answerable {
 		if _, isCallback := a.callbackTools[pending.Name]; isCallback {
 			continue
 		}
@@ -728,7 +730,7 @@ func (a *Agent) AnswerPendingToolCalls(
 				continue
 			}
 		}
-		content, err := tool.Handler(ctx, pending.Input)
+		content, err := tool.Handler(ctx, toolCallArguments(pending))
 		result := ToolResult{ToolCallID: pending.ID, Content: content}
 		if err != nil {
 			result.Content = map[string]any{

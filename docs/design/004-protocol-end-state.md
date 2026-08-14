@@ -299,16 +299,20 @@ be smaller, and the cost of every collapse rises monotonically from here.
 The goal is that 1.0 is the end state, not today's protocol plus a
 promise.
 
-### The one input
+### The one input, answered
 
-How much real external adoption `/v1` has today. If it is us and design
-partners, every step below is a coordinated break in a version-bumped 0.x
-release, announced in release notes, with no deprecation window. If real
-third parties are on `/v1`, the deprecation machinery DIRECTION notes we
-lack gets built first (`deprecated` markers in the contract, `Deprecation`
-and `Sunset` headers, SDK warnings), and step C runs with an overlap
-window. Nothing else in the plan changes; only the signaling around it.
-This is the one question the repository cannot answer.
+**There are no external users. Curtis is the only consumer of `/v1`.**
+Answered on 2026-08-13, closing the one question the repository could not.
+
+So every step below is a coordinated break in a version-bumped 0.x release,
+noted in the changelog, with no deprecation window and no overlap. We do not
+build `deprecated` markers, `Deprecation` and `Sunset` headers, or SDK
+warnings, because there is nobody to signal. The old way is removed in the
+same change that adds the new one, and a step that cannot do that is not
+ready to land.
+
+This is the cheapest this will ever be. It gets more expensive every week,
+and 1.0 is the deadline.
 
 ### The steps, cheapest first
 

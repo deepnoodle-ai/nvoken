@@ -186,7 +186,7 @@ func (s *onboardingState) writeAdmission(
 		"session_id":    sessionID,
 		"invocation_id": invocationID,
 		"reason":        "terminal",
-		"resume_cursor": cursor,
+		"cursor":        cursor,
 	})
 	if flusher, ok := response.(http.Flusher); ok {
 		flusher.Flush()
@@ -293,7 +293,7 @@ func (s *onboardingState) streamInvocation(response http.ResponseWriter, invocat
 		"session_id":    sessionID,
 		"invocation_id": invocationID,
 		"reason":        "terminal",
-		"resume_cursor": cursor,
+		"cursor":        cursor,
 	})
 	if flusher, ok := response.(http.Flusher); ok {
 		flusher.Flush()

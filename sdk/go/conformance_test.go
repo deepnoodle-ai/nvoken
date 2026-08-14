@@ -951,7 +951,7 @@ func TestSharedReducerVector(t *testing.T) {
 		Expected struct {
 			MessageSequences    []int64         `json:"message_sequences"`
 			InvocationRevisions []int64         `json:"invocation_revisions"`
-			ResumeCursor        string          `json:"resume_cursor"`
+			Cursor              string          `json:"cursor"`
 			Previews            []StreamPreview `json:"previews"`
 		} `json:"expected"`
 	}
@@ -980,8 +980,8 @@ func TestSharedReducerVector(t *testing.T) {
 			t.Fatalf("Invocation revision %d = %d, want %d", index, snapshot.InvocationChanges[index].Revision, revision)
 		}
 	}
-	if snapshot.ResumeCursor != fixture.Expected.ResumeCursor {
-		t.Fatalf("resume cursor = %q, want %q", snapshot.ResumeCursor, fixture.Expected.ResumeCursor)
+	if snapshot.Cursor != fixture.Expected.Cursor {
+		t.Fatalf("resume cursor = %q, want %q", snapshot.Cursor, fixture.Expected.Cursor)
 	}
 	if len(snapshot.Previews) != len(fixture.Expected.Previews) {
 		t.Fatalf("previews = %#v, want %#v", snapshot.Previews, fixture.Expected.Previews)

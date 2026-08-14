@@ -185,7 +185,7 @@ pub struct AgentInvocationOptions {
 /// skips that call and leaves it for whoever holds the claim.
 pub type ToolCallClaim = Arc<
     dyn Fn(
-            models::PendingHostToolCall,
+            models::ToolCallSummary,
         ) -> Pin<Box<dyn std::future::Future<Output = Result<bool, NvokenError>> + Send>>
         + Send
         + Sync,
@@ -207,7 +207,7 @@ pub struct AnswerPendingToolCallsOptions {
 impl AnswerPendingToolCallsOptions {
     pub fn claim<F, Fut>(mut self, claim: F) -> Self
     where
-        F: Fn(models::PendingHostToolCall) -> Fut + Send + Sync + 'static,
+        F: Fn(models::ToolCallSummary) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = Result<bool, NvokenError>> + Send + 'static,
     {
         self.claim = Some(Arc::new(move |pending| Box::pin(claim(pending))));
@@ -566,9 +566,10 @@ impl Agent {
         if invocation.status != models::InvocationStatus::Waiting {
             return Ok(0);
         }
-        let Some(pending_calls) = invocation.pending_tool_calls.as_ref() else {
+        let pending_calls = answerable_tool_calls(invocation.tool_calls.as_ref());
+        if pending_calls.is_empty() {
             return Ok(0);
-        };
+        }
         let handle = self.client.invocation(invocation_id);
         let mut results = Vec::new();
         for pending in pending_calls {
@@ -591,7 +592,7 @@ impl Agent {
                     continue;
                 }
             }
-            let input = Value::Object(pending.input.clone().into_iter().collect());
+            let input = tool_call_arguments(pending);
             results.push(match handler(input).await {
                 Ok(content) => ToolResult {
                     tool_call_id: pending.id.clone(),
@@ -623,9 +624,10 @@ impl Agent {
         submitted: &mut HashSet<String>,
         leave_waiting: bool,
     ) -> Result<bool, NvokenError> {
-        let Some(pending_calls) = invocation.pending_tool_calls.as_ref() else {
+        let pending_calls = answerable_tool_calls(invocation.tool_calls.as_ref());
+        if pending_calls.is_empty() {
             return Ok(false);
-        };
+        }
         let mut results = Vec::new();
         for pending in pending_calls {
             if submitted.contains(&pending.id) {
@@ -644,7 +646,7 @@ impl Agent {
                     .missing_tool_handler(handle, &pending.name, leave_waiting)
                     .await);
             };
-            let input = Value::Object(pending.input.clone().into_iter().collect());
+            let input = tool_call_arguments(pending);
             let result = match handler(input).await {
                 Ok(content) => ToolResult {
                     tool_call_id: pending.id.clone(),
@@ -929,5 +931,31 @@ impl AgentSession {
             }
             drop(guard);
         });
+    }
+}
+
+/// The tool calls this caller is expected to run.
+///
+/// There is one tool-call collection. A call you have to answer is the one
+/// carrying the arguments to answer it with; builtin and MCP calls nvoken runs
+/// itself, and calls that have already settled, carry none. Filtering on that
+/// is what replaced the separate pending list.
+pub fn answerable_tool_calls(
+    tool_calls: Option<&Vec<models::ToolCallSummary>>,
+) -> Vec<&models::ToolCallSummary> {
+    tool_calls
+        .map(|calls| {
+            calls
+                .iter()
+                .filter(|call| call.arguments.is_some())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn tool_call_arguments(call: &models::ToolCallSummary) -> Value {
+    match call.arguments.as_ref() {
+        Some(arguments) => Value::Object(arguments.clone().into_iter().collect()),
+        None => Value::Object(serde_json::Map::new()),
     }
 }

@@ -328,8 +328,6 @@ pub mod org_list;
 pub use self::org_list::OrgList;
 pub mod output_text_delta_event;
 pub use self::output_text_delta_event::OutputTextDeltaEvent;
-pub mod pending_host_tool_call;
-pub use self::pending_host_tool_call::PendingHostToolCall;
 pub mod provider_key;
 pub use self::provider_key::ProviderKey;
 pub mod provider_key_list;

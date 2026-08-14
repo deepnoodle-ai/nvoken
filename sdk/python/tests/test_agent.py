@@ -49,7 +49,8 @@ class FakeHandle:
                 SimpleNamespace(
                     id=TOOL_CALL_ID,
                     name=self.waiting_tool,
-                    input={"city": "Paris"},
+                    status="pending",
+                    arguments={"city": "Paris"},
                 )
             ]
         else:
@@ -58,7 +59,7 @@ class FakeHandle:
         return SimpleNamespace(
             id=self.invocation_id,
             status=self.status,
-            pending_tool_calls=pending,
+            tool_calls=pending,
             error=None,
         )
 

@@ -253,14 +253,14 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		t.Fatalf("Session resolve output=%q err=%v", output, err)
 	}
 	output, err = executeCLI(t, baseURL, true, "session", "transcript", testSessionID)
-	if err != nil || !strings.Contains(output, `"resume_cursor":"cursor-2"`) {
+	if err != nil || !strings.Contains(output, `"cursor":"cursor-2"`) {
 		t.Fatalf("JSON transcript output=%q err=%v", output, err)
 	}
 	output, err = executeCLI(t, baseURL, false, "session", "transcript", testSessionID)
 	if err != nil ||
 		!strings.Contains(output, "1\tuser\thello\n") ||
 		!strings.Contains(output, "2\tassistant\tworld\n") ||
-		!strings.Contains(output, "resume_cursor\tcursor-2\n") {
+		!strings.Contains(output, "cursor\tcursor-2\n") {
 		t.Fatalf("text transcript output=%q err=%v", output, err)
 	}
 
