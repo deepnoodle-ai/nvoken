@@ -29,7 +29,7 @@ type ReducedSnapshot struct {
 	Messages          []SessionMessage             `json:"messages"`
 	InvocationChanges []generated.InvocationChange `json:"invocation_changes"`
 	Previews          []StreamPreview              `json:"previews"`
-	ResumeCursor      string                       `json:"resume_cursor,omitempty"`
+	Cursor            string                       `json:"cursor,omitempty"`
 }
 
 type StreamPreview struct {
@@ -143,8 +143,8 @@ func (r *Reducer) Apply(event StreamEvent) error {
 	}
 	if event.ID != "" {
 		r.cursor = event.ID
-	} else if update.ResumeCursor != "" {
-		r.cursor = update.ResumeCursor
+	} else if update.Cursor != "" {
+		r.cursor = update.Cursor
 	}
 	return nil
 }
@@ -185,7 +185,7 @@ func (r *Reducer) Snapshot() ReducedSnapshot {
 		Messages:          messages,
 		InvocationChanges: changes,
 		Previews:          previews,
-		ResumeCursor:      r.cursor,
+		Cursor:            r.cursor,
 	}
 }
 
@@ -327,7 +327,7 @@ func (c *Client) StreamSessionWithOptions(
 	reducer := NewReducer()
 	retryDelay := time.Second
 	for {
-		cursor := reducer.Snapshot().ResumeCursor
+		cursor := reducer.Snapshot().Cursor
 		params := &generated.StreamSessionTranscriptParams{Deltas: options.Deltas}
 		if cursor != "" {
 			params.LastEventID = &cursor

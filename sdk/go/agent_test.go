@@ -464,7 +464,7 @@ func (r *agentTestRuntime) submit(response http.ResponseWriter, id string) {
 			"status":       "completed",
 			"deduplicated": false,
 		}},
-		"pending_tool_calls": []any{},
+		"tool_calls": []any{},
 	})
 }
 
@@ -597,11 +597,13 @@ func agentTestInvocationPayload(id, status string) map[string]any {
 		"ended_at":            endedAt,
 	}
 	if status == "waiting" {
-		value["pending_tool_calls"] = []any{map[string]any{
+		value["tool_calls"] = []any{map[string]any{
 			"id":          agentTestToolID,
 			"name":        "weather",
-			"input":       map[string]any{"city": "Paris"},
+			"status":      "pending",
+			"arguments":   map[string]any{"city": "Paris"},
 			"deadline_at": "2026-07-21T12:05:00Z",
+			"updated_at":  "2026-07-21T12:00:03Z",
 		}}
 	}
 	return value

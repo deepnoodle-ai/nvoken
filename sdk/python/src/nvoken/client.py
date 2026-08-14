@@ -542,7 +542,7 @@ class RetryPolicy:
 class TranscriptDrain:
     messages: list[SessionMessage]
     invocation_changes: list[InvocationChange]
-    resume_cursor: str
+    cursor: str
 
 
 class _StreamingPoolManager:
@@ -1416,7 +1416,10 @@ class Client:
         messages: list[SessionMessage] = []
         changes: list[InvocationChange] = []
         page_token: str | None = None
-        resume_cursor: str | None = None
+        # The caller's cursor opens the drain; the pages then report the one
+        # this drain ends at. Keeping them in separate names is what stops the
+        # first request from losing the position the caller asked to start at.
+        drained_cursor: str | None = None
         while True:
             page = await self.get_transcript_page(
                 session_id,
@@ -1426,10 +1429,10 @@ class Client:
             )
             messages.extend(page.messages)
             changes.extend(page.invocation_changes)
-            resume_cursor = page.resume_cursor
+            drained_cursor = page.cursor
             page_token = page.next_page_token
             if not page.has_more:
-                if not resume_cursor:
+                if not drained_cursor:
                     raise NvokenError(
                         "unexpected_response",
                         "Transcript drain did not return a resume cursor",
@@ -1437,7 +1440,7 @@ class Client:
                 return TranscriptDrain(
                     messages=messages,
                     invocation_changes=changes,
-                    resume_cursor=resume_cursor,
+                    cursor=drained_cursor,
                 )
             if not page_token:
                 raise NvokenError(

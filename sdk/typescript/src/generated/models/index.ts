@@ -165,7 +165,6 @@ export * from './Operation.js';
 export * from './Org.js';
 export * from './OrgList.js';
 export * from './OutputTextDeltaEvent.js';
-export * from './PendingHostToolCall.js';
 export * from './ProviderKey.js';
 export * from './ProviderKeyList.js';
 export * from './ProviderKeyScope.js';

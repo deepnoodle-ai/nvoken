@@ -24,7 +24,7 @@ pub struct ReducedSnapshot {
     pub messages: Vec<models::SessionMessage>,
     pub invocation_changes: Vec<models::InvocationChange>,
     pub previews: Vec<StreamPreview>,
-    pub resume_cursor: Option<String>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -150,7 +150,7 @@ impl Reducer {
             .as_ref()
             .filter(|value| !value.is_empty())
             .cloned()
-            .or_else(|| (!update.resume_cursor.is_empty()).then_some(update.resume_cursor));
+            .or_else(|| (!update.cursor.is_empty()).then_some(update.cursor));
         if cursor.is_some() {
             self.cursor = cursor;
         }
@@ -162,7 +162,7 @@ impl Reducer {
             messages: self.messages.values().cloned().collect(),
             invocation_changes: self.changes.values().cloned().collect(),
             previews: self.previews.values().cloned().collect(),
-            resume_cursor: self.cursor.clone(),
+            cursor: self.cursor.clone(),
         }
     }
 

@@ -37,6 +37,7 @@ import {
   mcpServer,
   preflightOutputSchema,
   toolInput,
+  answerableToolCalls,
   verifyCallback,
   type HostTool,
   type ContextItem,
@@ -50,7 +51,7 @@ import {
   type InvocationResult,
   type ModelDescriptor,
   type SessionOptions,
-  type PendingHostToolCall,
+  type ToolCallSummary,
   type ProviderKey,
   type ProviderKeyList,
   type ProviderKeyScope,
@@ -451,7 +452,7 @@ type ExportedRuntimeNouns = [
   InvocationResult,
   Session,
   SessionMessage,
-  PendingHostToolCall,
+  ToolCallSummary,
   ModelDescriptor,
   ProviderKey,
   ProviderKeyList,
@@ -781,7 +782,7 @@ function wireInvocation(
   status: "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled",
   options: {
     structuredOutput?: Record<string, unknown> | null;
-    pendingToolCalls?: Array<Record<string, unknown>>;
+    toolCalls?: Array<Record<string, unknown>>;
   } = {},
 ): Record<string, unknown> {
   return {
@@ -812,7 +813,7 @@ function wireInvocation(
     ended_at: ["completed", "failed", "cancelled"].includes(status)
       ? "2026-07-21T12:00:01Z"
       : null,
-    pending_tool_calls: options.pendingToolCalls ?? [],
+    tool_calls: options.toolCalls ?? [],
   };
 }
 
@@ -1263,7 +1264,7 @@ test("shared fault server semantics", async (context) => {
     maxPollIntervalMs: 2,
   });
   assert.equal(actionable.status, "waiting");
-  assert.equal(actionable.pendingToolCalls?.[0]?.id, toolCallId);
+  assert.equal(answerableToolCalls(actionable)[0]?.id, toolCallId);
 
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 10);
@@ -1317,7 +1318,7 @@ test("shared fault server semantics", async (context) => {
   const transcript = await client.drainTranscript(sessionId, { pageSize: 1 });
   assert.deepEqual(transcript.messages.map((message) => message.role), ["user", "assistant"]);
   assert.deepEqual(transcript.invocationChanges.map((change) => change.revision), [1, 2]);
-  assert.equal(transcript.resumeCursor, "cursor-2");
+  assert.equal(transcript.cursor, "cursor-2");
 
   assert.deepEqual(
     (await handle.listMessages()).map((message) => message.role),
@@ -1437,16 +1438,20 @@ test("schema-bound tool helpers preserve application types", () => {
   const input = toolInput(lookupOrder, {
     id: toolCallId,
     name: "lookup_order",
-    input: { orderId: "order-42" },
+    status: "pending",
+    arguments: { orderId: "order-42" },
     deadlineAt: new Date("2026-07-21T12:05:00Z"),
+    updatedAt: new Date("2026-07-21T12:00:01Z"),
   });
   assert.equal(input.orderId, "order-42");
   assert.throws(
     () => toolInput(lookupOrder, {
       id: toolCallId,
       name: "different_tool",
-      input: {},
+      status: "pending",
+      arguments: {},
       deadlineAt: new Date("2026-07-21T12:05:00Z"),
+      updatedAt: new Date("2026-07-21T12:00:01Z"),
     }),
     (error: unknown) => error instanceof NvokenError && error.category === "validation",
   );
@@ -1534,11 +1539,13 @@ test("agent run converts standard schemas, retries one admission, and dispatches
     created_at: "2026-07-21T12:00:00Z",
     updated_at: "2026-07-21T12:00:01Z",
     ended_at: status === "completed" ? "2026-07-21T12:00:01Z" : null,
-    pending_tool_calls: status === "waiting" ? [{
+    tool_calls: status === "waiting" ? [{
       id: toolCallId,
       name: "lookup_order",
-      input: { orderId: "order-42" },
+      status: "pending",
+      arguments: { orderId: "order-42" },
       deadline_at: null,
+      updated_at: "2026-07-21T12:00:01Z",
     }] : [],
   });
   // No `invocation.accepted` frame: the Invocation stream never sends one, so
@@ -1704,11 +1711,13 @@ test("missing handlers cancel by default and support explicit handoff", async ()
         session_id: sessionId,
         invocation_id: invocationId,
         invocation: wireInvocation("waiting", {
-          pendingToolCalls: [{
+          toolCalls: [{
             id: toolCallId,
             name: "lookup_order",
-            input: {},
+            status: "pending",
+            arguments: {},
             deadline_at: "2026-07-21T12:05:00Z",
+            updated_at: "2026-07-21T12:00:01Z",
           }],
         }),
         new_messages: [],
@@ -1932,7 +1941,7 @@ test("agent stream exposes the two-event consumer without a reducer", async () =
         session_id: sessionId,
         invocation_id: invocationId,
         reason: "terminal",
-        resume_cursor: "cursor-2",
+        cursor: "cursor-2",
       },
     },
   ];
@@ -2088,7 +2097,7 @@ test("shared reducer vector", async () => {
     expected: {
       message_sequences: number[];
       invocation_revisions: number[];
-      resume_cursor: string;
+      cursor: string;
       previews: unknown[];
     };
   };
@@ -2099,7 +2108,7 @@ test("shared reducer vector", async () => {
   const snapshot = reducer.snapshot();
   assert.deepEqual(snapshot.messages.map((message) => message.sequence), fixture.expected.message_sequences);
   assert.deepEqual(snapshot.invocationChanges.map((change) => change.revision), fixture.expected.invocation_revisions);
-  assert.equal(snapshot.resumeCursor, fixture.expected.resume_cursor);
+  assert.equal(snapshot.cursor, fixture.expected.cursor);
   assert.deepEqual(snapshot.previews, fixture.expected.previews);
   for (const previewCase of fixture.preview_cases) {
     const previewReducer = new Reducer();

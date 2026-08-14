@@ -35,7 +35,7 @@ export type {
   Nudge,
   NudgeList,
   NudgeStatus,
-  PendingHostToolCall,
+  ToolCallSummary,
   CallbackDeliveryOutcome,
   ProviderKey,
   ProviderKeyList,

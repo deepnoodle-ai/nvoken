@@ -184,7 +184,7 @@ func run(ctx context.Context) error {
 		"invocation":        result.Invocation,
 		"messages":          result.Messages,
 		"output_text":       result.OutputText,
-		"transcript_cursor": transcript.ResumeCursor,
+		"transcript_cursor": transcript.Cursor,
 		"transcript_count":  len(transcript.Messages),
 	}
 	encoded, err := json.MarshalIndent(evidence, "", "  ")

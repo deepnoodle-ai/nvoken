@@ -31,7 +31,7 @@ type SessionMessage = generated.SessionMessage
 type SessionCompaction = generated.SessionCompaction
 type MessagePhase = generated.MessagePhase
 type SeedMessageRole = generated.SeedMessageRole
-type PendingHostToolCall = generated.PendingHostToolCall
+type ToolCallSummary = generated.ToolCallSummary
 type ToolResultResponse = generated.SubmitHostToolResultsResponse
 type ModelProvider = generated.ModelProvider
 type ModelDescriptor = generated.ModelDescriptor
@@ -320,13 +320,13 @@ type TranscriptSnapshot struct {
 	InvocationChanges []InvocationChange `json:"invocation_changes"`
 	Messages          []SessionMessage   `json:"messages"`
 	NextPageToken     *string            `json:"next_page_token"`
-	ResumeCursor      string             `json:"resume_cursor"`
+	Cursor            string             `json:"cursor"`
 }
 
 type TranscriptDrain struct {
 	InvocationChanges []InvocationChange `json:"invocation_changes"`
 	Messages          []SessionMessage   `json:"messages"`
-	ResumeCursor      string             `json:"resume_cursor"`
+	Cursor            string             `json:"cursor"`
 }
 
 type Model struct {
@@ -1355,4 +1355,32 @@ func waitSatisfied(status InvocationStatus, until WaitCondition) bool {
 	default:
 		return false
 	}
+}
+
+// AnswerableToolCalls returns the tool calls this caller is expected to run.
+//
+// There is one tool-call collection. An entry you have to answer is the one
+// carrying the arguments to answer it with; builtin and MCP calls nvoken runs
+// itself, and calls that have already settled, carry none. Filtering on that
+// is what replaced the separate pending list.
+func AnswerableToolCalls(invocation *Invocation) []ToolCallSummary {
+	if invocation == nil || invocation.ToolCalls == nil {
+		return nil
+	}
+	answerable := make([]ToolCallSummary, 0, len(*invocation.ToolCalls))
+	for _, call := range *invocation.ToolCalls {
+		if call.Arguments != nil {
+			answerable = append(answerable, call)
+		}
+	}
+	return answerable
+}
+
+// toolCallArguments hands a handler the arguments as the plain map a tool
+// handler expects, rather than the generated pointer.
+func toolCallArguments(call ToolCallSummary) any {
+	if call.Arguments == nil {
+		return map[string]any{}
+	}
+	return map[string]any(*call.Arguments)
 }

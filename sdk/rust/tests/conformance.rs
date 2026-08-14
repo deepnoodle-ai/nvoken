@@ -1131,8 +1131,8 @@ fn shared_reducer_vector() {
         fixture.expected.invocation_revisions
     );
     assert_eq!(
-        snapshot.resume_cursor.as_deref(),
-        Some(fixture.expected.resume_cursor.as_str())
+        snapshot.cursor.as_deref(),
+        Some(fixture.expected.cursor.as_str())
     );
     assert_eq!(snapshot.previews, fixture.expected.previews);
     for preview_case in fixture.preview_cases {
@@ -1181,7 +1181,7 @@ struct ReducerEvent {
 struct ReducerExpected {
     message_sequences: Vec<u64>,
     invocation_revisions: Vec<u64>,
-    resume_cursor: String,
+    cursor: String,
     previews: Vec<StreamPreview>,
 }
 

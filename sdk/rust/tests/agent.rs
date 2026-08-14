@@ -170,11 +170,13 @@ fn invocation_payload(id: &str, status: &str) -> Value {
         "ended_at": ended_at,
     });
     if status == "waiting" {
-        value["pending_tool_calls"] = json!([{
+        value["tool_calls"] = json!([{
             "id": TOOL_CALL_ID,
             "name": "weather",
-            "input": {"city": "Paris"},
+            "status": "pending",
+            "arguments": {"city": "Paris"},
             "deadline_at": "2026-07-21T12:05:00Z",
+            "updated_at": "2026-07-21T12:00:03Z",
         }]);
     }
     value
@@ -385,7 +387,7 @@ async fn submit_tool_results(stream: &mut TcpStream, runtime: &TestRuntime, id: 
                 "status": "completed",
                 "deduplicated": false,
             }],
-            "pending_tool_calls": [],
+            "tool_calls": [],
         }),
     )
     .await;

@@ -564,7 +564,7 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 				"status":       "completed",
 				"deduplicated": attempt > 1,
 			}},
-			"pending_tool_calls": []any{},
+			"tool_calls": []any{},
 		})
 		return
 	}
@@ -749,7 +749,7 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 			"session_id":    sessionID,
 			"invocation_id": nil,
 			"reason":        "rotate",
-			"resume_cursor": "cursor-1",
+			"cursor":        "cursor-1",
 		})
 		flusher.Flush()
 		return
@@ -760,7 +760,7 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 		"session_id":    sessionID,
 		"invocation_id": nil,
 		"reason":        "terminal",
-		"resume_cursor": "cursor-2",
+		"cursor":        "cursor-2",
 	})
 	flusher.Flush()
 }
@@ -799,7 +799,7 @@ func (s *state) invocationStream(response http.ResponseWriter, request *http.Req
 			"session_id":    sessionID,
 			"invocation_id": invocationID,
 			"reason":        "rotate",
-			"resume_cursor": "cursor-1",
+			"cursor":        "cursor-1",
 		})
 		flusher.Flush()
 		return
@@ -816,7 +816,7 @@ func (s *state) invocationStream(response http.ResponseWriter, request *http.Req
 		"session_id":    sessionID,
 		"invocation_id": invocationID,
 		"reason":        "terminal",
-		"resume_cursor": "cursor-3",
+		"cursor":        "cursor-3",
 	})
 	flusher.Flush()
 }
@@ -883,11 +883,13 @@ func invocationWithID(id string, status string) map[string]any {
 		"ended_at":                     endedAt,
 	}
 	if status == "waiting" {
-		value["pending_tool_calls"] = []any{map[string]any{
+		value["tool_calls"] = []any{map[string]any{
 			"id":          toolCallID,
 			"name":        "lookup_order",
-			"input":       map[string]any{"order_id": "order-42"},
+			"status":      "pending",
+			"arguments":   map[string]any{"order_id": "order-42"},
 			"deadline_at": "2026-07-21T12:05:00Z",
+			"updated_at":  "2026-07-21T12:00:03Z",
 		}}
 	}
 	return value
@@ -1064,7 +1066,7 @@ func firstSnapshot() map[string]any {
 		"messages":           []any{firstMessage()},
 		"invocation_changes": []any{firstChange()},
 		"has_more":           false,
-		"resume_cursor":      "cursor-1",
+		"cursor":             "cursor-1",
 		"next_page_token":    nil,
 	}
 }
@@ -1075,7 +1077,7 @@ func firstTranscriptUpdate() map[string]any {
 		"session_id":         sessionID,
 		"messages":           []any{firstMessage()},
 		"invocation_changes": []any{firstChange()},
-		"resume_cursor":      "cursor-1",
+		"cursor":             "cursor-1",
 	}
 }
 
@@ -1084,7 +1086,7 @@ func secondSnapshot() map[string]any {
 		"messages":           []any{firstMessage(), secondMessage()},
 		"invocation_changes": []any{firstChange(), secondChange()},
 		"has_more":           false,
-		"resume_cursor":      "cursor-2",
+		"cursor":             "cursor-2",
 		"next_page_token":    nil,
 	}
 }
@@ -1095,7 +1097,7 @@ func secondTranscriptUpdate() map[string]any {
 		"session_id":         sessionID,
 		"messages":           []any{firstMessage(), secondMessage()},
 		"invocation_changes": []any{firstChange(), secondChange()},
-		"resume_cursor":      "cursor-2",
+		"cursor":             "cursor-2",
 	}
 }
 

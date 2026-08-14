@@ -10,6 +10,7 @@ import {
   formatNvokenError,
   isReminderContentBlock,
   toolInput,
+  answerableToolCalls,
   type InvocationHandle,
   type InvokeRequest,
 } from "@deepnoodle/nvoken";
@@ -126,7 +127,7 @@ async function main(): Promise<void> {
   console.log("PASS two-turn Session memory using sessionId without tenantKey");
 
   const secondDelta = await client.drainTranscript(first.handle.sessionId!, {
-    cursor: firstTranscript.resumeCursor,
+    cursor: firstTranscript.cursor,
     pageSize: 1,
   });
   assert.deepEqual(
@@ -316,15 +317,16 @@ async function main(): Promise<void> {
 
   const waiting = await toolHandle.wait({ until: "actionable" });
   assert.equal(waiting.status, "waiting", failure(toolHandle, waiting));
-  assert.equal(waiting.pendingToolCalls?.length, 1);
-  const toolCall = waiting.pendingToolCalls?.[0];
+  const waitingCalls = answerableToolCalls(waiting);
+  assert.equal(waitingCalls.length, 1);
+  const toolCall = waitingCalls[0];
   assert.ok(toolCall);
   assert.equal(toolInput(lookupOrder, toolCall).order_id, "order-42");
 
   const waitingSession = await client.getSession(toolHandle.sessionId!);
   assert.equal(waitingSession.activeInvocationId, toolHandle.invocationId);
   assert.equal(waitingSession.activeInvocationStatus, "waiting");
-  assert.equal(waitingSession.pendingToolCalls?.[0]?.id, toolCall.id);
+  assert.equal(answerableToolCalls(waitingSession)[0]?.id, toolCall.id);
 
   const busySession = await expectNvokenError(
     () => client.invoke({

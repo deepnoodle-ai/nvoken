@@ -1792,7 +1792,7 @@ func runSessionTranscript(command *cli.Context) error {
 			command.Stdout(),
 			drain.Messages,
 			drain.InvocationChanges,
-			drain.ResumeCursor,
+			drain.Cursor,
 		)
 	}
 	snapshot, err := client.GetTranscript(command.Context(), command.Arg(0), nvoken.TranscriptOptions{
@@ -1808,7 +1808,7 @@ func runSessionTranscript(command *cli.Context) error {
 			writer,
 			snapshot.Messages,
 			snapshot.InvocationChanges,
-			snapshot.ResumeCursor,
+			snapshot.Cursor,
 		)
 	})
 }
@@ -1837,7 +1837,7 @@ func runSessionStream(command *cli.Context) error {
 			_, err = fmt.Fprint(command.Stdout(), text)
 			return err
 		}
-		_, err := fmt.Fprintf(command.Stdout(), "%s\t%s\n", event.Type, snapshot.ResumeCursor)
+		_, err := fmt.Fprintf(command.Stdout(), "%s\t%s\n", event.Type, snapshot.Cursor)
 		return err
 	})
 }
@@ -2027,7 +2027,7 @@ func writeTranscriptText(
 	writer io.Writer,
 	messages []nvoken.SessionMessage,
 	changes []nvoken.InvocationChange,
-	resumeCursor string,
+	cursor string,
 ) error {
 	for _, message := range messages {
 		if err := writeMessageText(writer, message); err != nil {
@@ -2044,7 +2044,7 @@ func writeTranscriptText(
 			return err
 		}
 	}
-	_, err := fmt.Fprintf(writer, "resume_cursor\t%s\n", resumeCursor)
+	_, err := fmt.Fprintf(writer, "cursor\t%s\n", cursor)
 	return err
 }
 
