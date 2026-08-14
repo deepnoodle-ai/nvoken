@@ -43,11 +43,19 @@ info:
     authentication presentation only and does not create a user identity model
     in nvoken.
 
-    Browser-direct callers use narrow JWTs, exact-origin CORS, client-safe
-    projections, and App/tenant/user admission limits. A host may mint client
-    tokens from its own Ed25519 key. An App that explicitly enables anonymous
-    access may instead let nvoken mint a short-lived access token and renewable
-    visitor token from one allowed public origin.
+    Browser-direct callers use narrow JWTs, exact-origin CORS, and
+    App/tenant/user admission limits. A host may mint client tokens from its
+    own Ed25519 key. An App that explicitly enables anonymous access may
+    instead let nvoken mint a short-lived access token and renewable visitor
+    token from one allowed public origin.
+
+    A browser grant sees less, and it sees it in the same shape. There is one
+    schema per resource, and the fields a browser may not see are simply
+    omitted from its responses, which is why those fields are not required.
+    There are no parallel browser schemas and no response unions, so every
+    payload decodes against one type and nothing about the shape has to be
+    inferred from the credential that fetched it. `GET /v1/identity` reports
+    which kind of caller you are, under `authentication.method`.
 
     - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity.
     - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity.
@@ -1125,7 +1133,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvocationListResponse"
+                $ref: "#/components/schemas/InvocationList"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1341,7 +1349,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvocationResponse"
+                $ref: "#/components/schemas/Invocation"
               examples:
                 queued:
                   summary: New queued Invocation
@@ -1443,7 +1451,7 @@ paths:
                     ended_at: "2026-07-20T14:16:07Z"
             text/event-stream:
               schema:
-                $ref: "#/components/schemas/InvocationStreamResponse"
+                $ref: "#/components/schemas/InvocationStreamEvent"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1572,7 +1580,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvocationResponse"
+                $ref: "#/components/schemas/Invocation"
               examples:
                 queuedAfterEngineLoss:
                   value:
@@ -1646,7 +1654,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvocationResultResponse"
+                $ref: "#/components/schemas/InvocationResult"
               examples:
                 completedTextTurn:
                   value:
@@ -1949,7 +1957,7 @@ paths:
           content:
             text/event-stream:
               schema:
-                $ref: "#/components/schemas/InvocationStreamResponse"
+                $ref: "#/components/schemas/InvocationStreamEvent"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -1989,7 +1997,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvocationResponse"
+                $ref: "#/components/schemas/Invocation"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -2040,7 +2048,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvocationResponse"
+                $ref: "#/components/schemas/Invocation"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -2082,7 +2090,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvocationResponse"
+                $ref: "#/components/schemas/Invocation"
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -3181,7 +3189,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SessionResponse"
+                $ref: "#/components/schemas/Session"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -3235,7 +3243,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SessionListResponse"
+                $ref: "#/components/schemas/SessionList"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -3268,7 +3276,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SessionResponse"
+                $ref: "#/components/schemas/Session"
               examples:
                 keyedTenantSession:
                   value:
@@ -3353,7 +3361,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SessionResponse"
+                $ref: "#/components/schemas/Session"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -3458,7 +3466,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SessionResponse"
+                $ref: "#/components/schemas/Session"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -3496,7 +3504,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SessionMessageListResponse"
+                $ref: "#/components/schemas/SessionMessageList"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -3582,7 +3590,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TranscriptSnapshotResponse"
+                $ref: "#/components/schemas/TranscriptSnapshot"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -3669,7 +3677,7 @@ paths:
           content:
             text/event-stream:
               schema:
-                $ref: "#/components/schemas/TranscriptStreamResponse"
+                $ref: "#/components/schemas/TranscriptStreamEvent"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "401":
@@ -3695,7 +3703,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CurrentIdentityResponse"
+                $ref: "#/components/schemas/CurrentIdentity"
         "401":
           $ref: "#/components/responses/Unauthenticated"
   /v1/identity/credentials:
@@ -7304,10 +7312,19 @@ components:
     Invocation:
       type: object
       additionalProperties: false
-      required: [id, agent_id, session_id, user_key, agent_definition_id, agent_definition_revision, agent_definition, context, status, stop_reason, credit_block,
-                 attempt, error, usage,
-                 provenance, structured_output, structured_output_provenance,
-                 metadata, limits, active_execution_ms, deadline_at,
+      description: |
+        One turn.
+
+        Some fields are audience-restricted: they are present for a machine
+        credential and omitted for a browser grant, which is why they are not
+        required. Omission is the whole mechanism, so one schema decodes every
+        response and nothing has to be guessed from the payload. The omitted
+        set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
+        `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
+        `limits`.
+      required: [id, session_id, agent_definition_id, agent_definition_revision,
+                 status, stop_reason, attempt, error, structured_output,
+                 active_execution_ms, deadline_at,
                  created_at, updated_at, ended_at]
       properties:
         id:
@@ -7497,82 +7514,6 @@ components:
             Non-null only when the turn completed and produced at least one piece
             of text. Failed and cancelled turns leave it null even if some text was
             produced, so read the messages directly if you need those.
-    BrowserInvocation:
-      type: object
-      additionalProperties: false
-      required: [id, session_id, agent_definition_id, agent_definition_revision, status, stop_reason, attempt, error, structured_output, active_execution_ms, deadline_at, created_at, updated_at, ended_at]
-      properties:
-        id: { $ref: "#/components/schemas/InvocationID" }
-        session_id: { $ref: "#/components/schemas/SessionID" }
-        agent_definition_id: { $ref: "#/components/schemas/AgentDefinitionID" }
-        agent_definition_revision: { type: integer, minimum: 1 }
-        deduplicated: { type: boolean, description: Present only on Invocation admission. }
-        status: { $ref: "#/components/schemas/InvocationStatus" }
-        stop_reason:
-          oneOf:
-            - $ref: "#/components/schemas/InvocationStopReason"
-            - type: "null"
-        attempt: { type: integer, minimum: 0 }
-        error:
-          oneOf:
-            - $ref: "#/components/schemas/BrowserInvocationFailure"
-            - type: "null"
-        structured_output:
-          oneOf:
-            - { type: object, additionalProperties: true }
-            - type: "null"
-        active_execution_ms: { type: integer, minimum: 0 }
-        deadline_at: { type: [string, "null"], format: date-time }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-        ended_at: { type: [string, "null"], format: date-time }
-        tool_calls:
-          type: array
-          items: { $ref: "#/components/schemas/ToolCallSummary" }
-          description: |
-            Every tool call this turn has made, with its current status.
-            Omitted when the turn has made none.
-      description: Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
-    BrowserInvocationFailure:
-      type: object
-      additionalProperties: false
-      required: [code, message]
-      properties:
-        code: { type: string }
-        message: { type: string }
-    BrowserInvocationList:
-      type: object
-      additionalProperties: false
-      required: [items, has_more, next_cursor]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/BrowserInvocation" }
-        has_more: { type: boolean }
-        next_cursor: { type: [string, "null"] }
-    BrowserInvocationResult:
-      type: object
-      additionalProperties: false
-      required: [invocation, messages, output_text]
-      properties:
-        invocation: { $ref: "#/components/schemas/BrowserInvocation" }
-        messages:
-          type: array
-          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
-        output_text: { type: [string, "null"] }
-    InvocationResponse:
-      description: Trusted machine projection or the smaller projection selected by client-token authentication.
-      oneOf:
-        - $ref: "#/components/schemas/Invocation"
-        - $ref: "#/components/schemas/BrowserInvocation"
-    InvocationListResponse:
-      oneOf:
-        - $ref: "#/components/schemas/InvocationList"
-        - $ref: "#/components/schemas/BrowserInvocationList"
-    InvocationResultResponse:
-      oneOf:
-        - $ref: "#/components/schemas/InvocationResult"
-        - $ref: "#/components/schemas/BrowserInvocationResult"
     ModelUsage:
       type: object
       additionalProperties: false
@@ -8072,7 +8013,17 @@ components:
     Session:
       type: object
       additionalProperties: false
-      required: [id, agent_id, tenant_key, session_key, user_key, forked_from, compaction, retention, expires_at, metadata, active_invocation_id, active_invocation_status, credit_block, context, usage, created_at, updated_at]
+      description: |
+        One conversation.
+
+        Some fields are audience-restricted: they are present for a machine
+        credential and omitted for a browser grant, which is why they are not
+        required. Omission is the whole mechanism, so one schema decodes every
+        response and nothing has to be guessed from the payload. The omitted
+        set here is `agent_id`, `tenant_key`, `session_key`, `user_key`, `forked_from`,
+        `compaction`, `retention`, `expires_at`, `metadata`, `credit_block`,
+        `context`, and `usage`.
+      required: [id, active_invocation_id, active_invocation_status, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/SessionID"
@@ -8216,49 +8167,6 @@ components:
           oneOf:
             - type: string
             - type: "null"
-    BrowserSession:
-      type: object
-      additionalProperties: false
-      required: [id, active_invocation_id, active_invocation_status, created_at, updated_at]
-      properties:
-        id: { $ref: "#/components/schemas/SessionID" }
-        active_invocation_id:
-          oneOf:
-            - $ref: "#/components/schemas/InvocationID"
-            - type: "null"
-        active_invocation_status:
-          oneOf:
-            - { type: string, enum: [queued, running, waiting, paused] }
-            - type: "null"
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-        tool_calls:
-          type: array
-          items: { $ref: "#/components/schemas/ToolCallSummary" }
-          description: |
-            Tool calls of the active Invocation, with their current status.
-            `arguments` and `deadline_at` appear only on eligible named
-            host-mode calls declared by the admitted definition, which are the
-            only ones a browser may answer.
-      description: Closed browser projection. Session keys, Agent/user/tenant identifiers, lineage, policies, cost settings, metadata, usage, budget, and derived host context are omitted.
-    BrowserSessionList:
-      type: object
-      additionalProperties: false
-      required: [items, has_more, next_cursor]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/BrowserSession" }
-        has_more: { type: boolean }
-        next_cursor: { type: [string, "null"] }
-    SessionResponse:
-      oneOf:
-        - $ref: "#/components/schemas/Session"
-        - $ref: "#/components/schemas/BrowserSession"
-    SessionListResponse:
-      oneOf:
-        - $ref: "#/components/schemas/SessionList"
-        - $ref: "#/components/schemas/BrowserSessionList"
     SessionMessageRole:
       type: string
       enum: [system, user, assistant, tool]
@@ -8545,7 +8453,7 @@ components:
     SessionMessage:
       type: object
       additionalProperties: false
-      required: [id, session_id, agent_id, invocation_id, user_key, sequence, role, content, created_at]
+      required: [id, session_id, invocation_id, sequence, role, content, created_at]
       properties:
         id:
           $ref: "#/components/schemas/SessionMessageID"
@@ -8610,39 +8518,6 @@ components:
         created_at:
           type: string
           format: date-time
-    BrowserSessionMessage:
-      type: object
-      additionalProperties: false
-      required: [id, session_id, invocation_id, sequence, role, content, created_at]
-      properties:
-        id: { $ref: "#/components/schemas/SessionMessageID" }
-        session_id: { $ref: "#/components/schemas/SessionID" }
-        invocation_id:
-          oneOf:
-            - $ref: "#/components/schemas/InvocationID"
-            - type: "null"
-        sequence: { type: integer, format: int64, minimum: 1 }
-        role: { $ref: "#/components/schemas/SessionMessageRole" }
-        content:
-          type: array
-          minItems: 1
-          items: { $ref: "#/components/schemas/SessionContentBlock" }
-        created_at: { type: string, format: date-time }
-      description: Public transcript content without Agent/user identity, runtime phase, copy origin, or host provenance.
-    BrowserSessionMessageList:
-      type: object
-      additionalProperties: false
-      required: [items, has_more, next_cursor]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
-        has_more: { type: boolean }
-        next_cursor: { type: [string, "null"] }
-    SessionMessageListResponse:
-      oneOf:
-        - $ref: "#/components/schemas/SessionMessageList"
-        - $ref: "#/components/schemas/BrowserSessionMessageList"
     MessagePhase:
       type: string
       enum: [commentary, final_answer]
@@ -8838,7 +8713,7 @@ components:
             - type: "null"
     InvocationChange:
       type: object
-      required: [invocation_id, revision, status, through_message_sequence, error, usage, provenance, structured_output, structured_output_provenance, occurred_at]
+      required: [invocation_id, revision, status, through_message_sequence, error, structured_output, occurred_at]
       description: |
         One lifecycle step of one turn, as the Session transcript stream and
         the JSON transcript deliver it. Order changes by `revision` and fold
@@ -8933,56 +8808,6 @@ components:
           oneOf:
             - type: string
             - type: "null"
-    BrowserInvocationChange:
-      type: object
-      required: [invocation_id, revision, status, through_message_sequence, error, structured_output, occurred_at]
-      description: |
-        One lifecycle step of one turn, in the browser projection. It carries
-        the same lifecycle detail as the browser Invocation projection, and
-        nothing the browser projection withholds.
-      properties:
-        invocation_id: { $ref: "#/components/schemas/InvocationID" }
-        revision: { type: integer, format: int64, minimum: 1 }
-        status: { $ref: "#/components/schemas/InvocationStatus" }
-        stop_reason:
-          oneOf:
-            - $ref: "#/components/schemas/InvocationStopReason"
-            - type: "null"
-          description: Why the turn stopped. Present once it has stopped.
-        tool_calls:
-          type: array
-          items: { $ref: "#/components/schemas/ToolCallSummary" }
-          description: |
-            Every tool call this turn has made, with its current status.
-            Omitted when the turn has made none.
-        through_message_sequence: { type: [integer, "null"], format: int64, minimum: 1 }
-        error:
-          oneOf:
-            - $ref: "#/components/schemas/BrowserInvocationFailure"
-            - type: "null"
-        structured_output:
-          oneOf:
-            - { type: object, additionalProperties: true }
-            - type: "null"
-        occurred_at: { type: string, format: date-time }
-    BrowserTranscriptSnapshot:
-      type: object
-      additionalProperties: false
-      required: [messages, invocation_changes, has_more, cursor, next_page_token]
-      properties:
-        messages:
-          type: array
-          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
-        invocation_changes:
-          type: array
-          items: { $ref: "#/components/schemas/BrowserInvocationChange" }
-        has_more: { type: boolean }
-        cursor: { type: string, minLength: 1 }
-        next_page_token: { type: [string, "null"] }
-    TranscriptSnapshotResponse:
-      oneOf:
-        - $ref: "#/components/schemas/TranscriptSnapshot"
-        - $ref: "#/components/schemas/BrowserTranscriptSnapshot"
     TranscriptUpdateEvent:
       type: object
       required: [type, session_id, messages, invocation_changes, cursor]
@@ -9005,19 +8830,6 @@ components:
           type: string
           minLength: 1
           description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
-    BrowserTranscriptUpdateEvent:
-      type: object
-      required: [type, session_id, messages, invocation_changes, cursor]
-      properties:
-        type: { type: string, const: transcript.update }
-        session_id: { $ref: "#/components/schemas/SessionID" }
-        messages:
-          type: array
-          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
-        invocation_changes:
-          type: array
-          items: { $ref: "#/components/schemas/BrowserInvocationChange" }
-        cursor: { type: string, minLength: 1 }
     OutputTextDeltaEvent:
       type: object
       required: [type, session_id, invocation_id, attempt, iteration, content_index, text, emitted_at]
@@ -9207,32 +9019,9 @@ components:
           thinking.delta: "#/components/schemas/ThinkingDeltaEvent"
           stream.resync: "#/components/schemas/StreamResyncEvent"
           stream.end: "#/components/schemas/StreamEndEvent"
-    BrowserTranscriptStreamEvent:
-      description: |
-        Browser stream event. Switch on `type`. Host-only transcript fields are
-        never emitted. New frame types may appear here over time, and existing
-        ones may gain fields.
-      oneOf:
-        - $ref: "#/components/schemas/BrowserTranscriptUpdateEvent"
-        - $ref: "#/components/schemas/OutputTextDeltaEvent"
-        - $ref: "#/components/schemas/ThinkingDeltaEvent"
-        - $ref: "#/components/schemas/StreamResyncEvent"
-        - $ref: "#/components/schemas/StreamEndEvent"
-      discriminator:
-        propertyName: type
-        mapping:
-          transcript.update: "#/components/schemas/BrowserTranscriptUpdateEvent"
-          output_text.delta: "#/components/schemas/OutputTextDeltaEvent"
-          thinking.delta: "#/components/schemas/ThinkingDeltaEvent"
-          stream.resync: "#/components/schemas/StreamResyncEvent"
-          stream.end: "#/components/schemas/StreamEndEvent"
-    TranscriptStreamResponse:
-      oneOf:
-        - $ref: "#/components/schemas/TranscriptStreamEvent"
-        - $ref: "#/components/schemas/BrowserTranscriptStreamEvent"
     InvocationAcceptedEvent:
       type: object
-      required: [type, agent_id, session_id, invocation_id, status, deduplicated, deadline_at, limits]
+      required: [type, session_id, invocation_id, status, deduplicated, deadline_at]
       properties:
         type:
           type: string
@@ -9260,16 +9049,6 @@ components:
             can see what you got without a second request — worth checking when you
             left `max_iterations` out, since the default may be lower than you
             expect.
-    BrowserInvocationAcceptedEvent:
-      type: object
-      required: [type, session_id, invocation_id, status, deduplicated, deadline_at]
-      properties:
-        type: { type: string, const: invocation.accepted }
-        session_id: { $ref: "#/components/schemas/SessionID" }
-        invocation_id: { $ref: "#/components/schemas/InvocationID" }
-        status: { $ref: "#/components/schemas/InvocationStatus" }
-        deduplicated: { type: boolean }
-        deadline_at: { type: string, format: date-time }
     InvocationUpdateEvent:
       type: object
       required: [type, session_id, invocation_id, invocation, new_messages]
@@ -9288,17 +9067,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SessionMessage"
-    BrowserInvocationUpdateEvent:
-      type: object
-      required: [type, session_id, invocation_id, invocation, new_messages]
-      properties:
-        type: { type: string, const: invocation.update }
-        session_id: { $ref: "#/components/schemas/SessionID" }
-        invocation_id: { $ref: "#/components/schemas/InvocationID" }
-        invocation: { $ref: "#/components/schemas/BrowserInvocation" }
-        new_messages:
-          type: array
-          items: { $ref: "#/components/schemas/BrowserSessionMessage" }
     InvocationResultEvent:
       type: object
       required: [type, session_id, invocation_id, result]
@@ -9313,14 +9081,6 @@ components:
           $ref: "#/components/schemas/InvocationID"
         result:
           $ref: "#/components/schemas/InvocationResult"
-    BrowserInvocationResultEvent:
-      type: object
-      required: [type, session_id, invocation_id, result]
-      properties:
-        type: { type: string, const: invocation.result }
-        session_id: { $ref: "#/components/schemas/SessionID" }
-        invocation_id: { $ref: "#/components/schemas/InvocationID" }
-        result: { $ref: "#/components/schemas/BrowserInvocationResult" }
     InvocationStreamEvent:
       description: |
         Typed event from one Invocation stream. Switch on `type`. A minimal
@@ -9347,33 +9107,6 @@ components:
           invocation.result: "#/components/schemas/InvocationResultEvent"
           stream.resync: "#/components/schemas/StreamResyncEvent"
           stream.end: "#/components/schemas/StreamEndEvent"
-    BrowserInvocationStreamEvent:
-      description: |
-        Browser Invocation stream event. Switch on `type`. Host-only fields are
-        never emitted. New frame types may appear here over time, and existing
-        ones may gain fields.
-      oneOf:
-        - $ref: "#/components/schemas/BrowserInvocationAcceptedEvent"
-        - $ref: "#/components/schemas/OutputTextDeltaEvent"
-        - $ref: "#/components/schemas/ThinkingDeltaEvent"
-        - $ref: "#/components/schemas/BrowserInvocationUpdateEvent"
-        - $ref: "#/components/schemas/BrowserInvocationResultEvent"
-        - $ref: "#/components/schemas/StreamResyncEvent"
-        - $ref: "#/components/schemas/StreamEndEvent"
-      discriminator:
-        propertyName: type
-        mapping:
-          invocation.accepted: "#/components/schemas/BrowserInvocationAcceptedEvent"
-          output_text.delta: "#/components/schemas/OutputTextDeltaEvent"
-          thinking.delta: "#/components/schemas/ThinkingDeltaEvent"
-          invocation.update: "#/components/schemas/BrowserInvocationUpdateEvent"
-          invocation.result: "#/components/schemas/BrowserInvocationResultEvent"
-          stream.resync: "#/components/schemas/StreamResyncEvent"
-          stream.end: "#/components/schemas/StreamEndEvent"
-    InvocationStreamResponse:
-      oneOf:
-        - $ref: "#/components/schemas/InvocationStreamEvent"
-        - $ref: "#/components/schemas/BrowserInvocationStreamEvent"
     AdmissionOutcome:
       type: string
       enum: [admitted, refused]
@@ -9745,27 +9478,54 @@ components:
         replayed:
           type: boolean
     CurrentIdentity:
+      description: |
+        Who nvoken thinks you are. `method` says how you authenticated, and it
+        is the only thing you need to read to know which of the optional fields
+        below are present: a machine credential carries `credential_id`,
+        `org_id`, and `effective_profile`; a browser grant carries `agent_key`,
+        `agent_definition_id`, and `agent_definition_revision`, and pins
+        `app_id` and `tenant_key` to real values.
       type: object
       required: [authentication]
       properties:
         authentication:
           type: object
-          required: [credential_id, app_id, org_id, effective_profile, operations, method, assurance]
+          required: [app_id, operations, method, assurance]
           properties:
             credential_id:
               $ref: "#/components/schemas/CredentialID"
+              description: Machine credentials only.
             app_id:
               oneOf:
                 - $ref: "#/components/schemas/AppID"
                 - type: "null"
+              description: |
+                Null only for an Org-scoped machine credential. A browser grant
+                is always App-scoped, so this is never null for one.
             org_id:
               oneOf:
                 - $ref: "#/components/schemas/OrgID"
                 - type: "null"
+              description: Machine credentials only.
             effective_profile:
               $ref: "#/components/schemas/CredentialProfile"
+              description: Machine credentials only.
+            agent_key:
+              type: string
+              description: Browser grants only. The Agent this grant is pinned to.
+            agent_definition_id:
+              $ref: "#/components/schemas/AgentDefinitionID"
+              description: Browser grants only.
+            agent_definition_revision:
+              type: integer
+              minimum: 1
+              description: Browser grants only.
             tenant_key:
               type: [string, "null"]
+              description: |
+                Null only when a machine credential resolves no tenant. A
+                browser grant is always tenant-pinned, so this is never null
+                for one.
             session_id:
               oneOf:
                 - $ref: "#/components/schemas/SessionID"
@@ -9776,38 +9536,15 @@ components:
                 $ref: "#/components/schemas/Operation"
             method:
               type: string
-              enum: [api_key, issuer_token]
+              enum: [api_key, issuer_token, client_token, anonymous_token]
+              x-enum-varnames: [ApiKey, IssuerToken, ClientToken, AnonymousToken]
+              description: |
+                How this caller authenticated. New values may be added; handle
+                a value you do not recognize as an unknown caller rather than
+                refusing the response.
             assurance:
               type: string
               const: bearer
-    BrowserCurrentIdentity:
-      type: object
-      additionalProperties: false
-      required: [authentication]
-      properties:
-        authentication:
-          type: object
-          additionalProperties: false
-          required: [app_id, tenant_key, agent_key, agent_definition_id, agent_definition_revision, session_id, operations, method, assurance]
-          properties:
-            app_id: { $ref: "#/components/schemas/AppID" }
-            tenant_key: { type: string }
-            agent_key: { type: string }
-            agent_definition_id: { $ref: "#/components/schemas/AgentDefinitionID" }
-            agent_definition_revision: { type: integer, minimum: 1 }
-            session_id:
-              oneOf:
-                - $ref: "#/components/schemas/SessionID"
-                - type: "null"
-            operations:
-              type: array
-              items: { $ref: "#/components/schemas/Operation" }
-            method: { type: string, enum: [client_token, anonymous_token] }
-            assurance: { type: string, const: bearer }
-    CurrentIdentityResponse:
-      oneOf:
-        - $ref: "#/components/schemas/CurrentIdentity"
-        - $ref: "#/components/schemas/BrowserCurrentIdentity"
   responses:
     InvalidRequest:
       description: The request is invalid or contains a deferred field.

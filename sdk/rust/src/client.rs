@@ -1104,70 +1104,6 @@ pub struct Client {
     session_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
-fn machine_invocation(
-    response: models::InvocationResponse,
-) -> Result<models::Invocation, NvokenError> {
-    match response {
-        models::InvocationResponse::Invocation(value) => Ok(*value),
-        models::InvocationResponse::BrowserInvocation(_) => Err(NvokenError::unexpected(
-            "machine credentials received a browser Invocation projection",
-        )),
-    }
-}
-
-fn machine_invocation_result(
-    response: models::InvocationResultResponse,
-) -> Result<models::InvocationResult, NvokenError> {
-    match response {
-        models::InvocationResultResponse::InvocationResult(value) => Ok(*value),
-        models::InvocationResultResponse::BrowserInvocationResult(_) => Err(
-            NvokenError::unexpected("machine credentials received a browser result projection"),
-        ),
-    }
-}
-
-fn machine_invocation_list(
-    response: models::InvocationListResponse,
-) -> Result<models::InvocationList, NvokenError> {
-    match response {
-        models::InvocationListResponse::InvocationList(value) => Ok(*value),
-        models::InvocationListResponse::BrowserInvocationList(_) => Err(NvokenError::unexpected(
-            "machine credentials received a browser Invocation list",
-        )),
-    }
-}
-
-fn machine_session(response: models::SessionResponse) -> Result<models::Session, NvokenError> {
-    match response {
-        models::SessionResponse::Session(value) => Ok(*value),
-        models::SessionResponse::BrowserSession(_) => Err(NvokenError::unexpected(
-            "machine credentials received a browser Session projection",
-        )),
-    }
-}
-
-fn machine_session_list(
-    response: models::SessionListResponse,
-) -> Result<models::SessionList, NvokenError> {
-    match response {
-        models::SessionListResponse::SessionList(value) => Ok(*value),
-        models::SessionListResponse::BrowserSessionList(_) => Err(NvokenError::unexpected(
-            "machine credentials received a browser Session list",
-        )),
-    }
-}
-
-fn machine_session_message_list(
-    response: models::SessionMessageListResponse,
-) -> Result<models::SessionMessageList, NvokenError> {
-    match response {
-        models::SessionMessageListResponse::SessionMessageList(value) => Ok(*value),
-        models::SessionMessageListResponse::BrowserSessionMessageList(_) => Err(
-            NvokenError::unexpected("machine credentials received a browser message list"),
-        ),
-    }
-}
-
 impl Client {
     pub fn new(
         base_url: impl Into<String>,
@@ -1302,14 +1238,13 @@ impl Client {
             None,
         )
         .await
-        .map_err(|error| self.normalize_generated_error(error))
-        .and_then(machine_invocation)?;
+        .map_err(|error| self.normalize_generated_error(error))?;
         Ok(InvocationHandle {
             client: self.clone(),
             invocation_id: invocation.id,
             idempotency_key: Some(idempotency_key),
             session_id: Some(invocation.session_id),
-            agent_id: Some(invocation.agent_id),
+            agent_id: invocation.agent_id,
             status: Some(invocation.status),
             deduplicated: Some(invocation.deduplicated.unwrap_or(false)),
             deadline_at: invocation.deadline_at,
@@ -1846,7 +1781,6 @@ impl Client {
         apis::invocations_api::get_invocation(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
-            .and_then(machine_invocation)
     }
 
     pub async fn get_agent_identity(&self, agent_id: &str) -> Result<models::Agent, NvokenError> {
@@ -1876,7 +1810,6 @@ impl Client {
         apis::invocations_api::get_invocation_result(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
-            .and_then(machine_invocation_result)
     }
 
     pub async fn cancel_invocation(
@@ -1886,7 +1819,6 @@ impl Client {
         apis::invocations_api::cancel_invocation(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
-            .and_then(machine_invocation)
     }
 
     /// Stops an Invocation gracefully and keeps its work. The turn settles
@@ -1900,7 +1832,6 @@ impl Client {
         apis::invocations_api::interrupt_invocation(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
-            .and_then(machine_invocation)
     }
 
     /// Appends steering to a running Invocation without ending it. The turn
@@ -2023,14 +1954,12 @@ impl Client {
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
-        .and_then(machine_invocation_list)
     }
 
     pub async fn get_session(&self, session_id: &str) -> Result<models::Session, NvokenError> {
         apis::sessions_api::get_session(&self.configuration, session_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
-            .and_then(machine_session)
     }
 
     /// Erases a Session and everything under it: its Invocations, transcript,
@@ -2114,7 +2043,6 @@ impl Client {
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
-        .and_then(machine_session_list)
     }
 
     pub async fn list_session_messages(
@@ -2130,7 +2058,6 @@ impl Client {
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
-        .and_then(machine_session_message_list)
     }
 
     /// Returns newest-first immutable records for applied and fell-through
@@ -2242,7 +2169,7 @@ impl InvocationHandle {
 
     fn apply(&mut self, invocation: &models::Invocation) {
         self.session_id = Some(invocation.session_id.clone());
-        self.agent_id = Some(invocation.agent_id.clone());
+        self.agent_id = invocation.agent_id.clone();
         self.status = Some(invocation.status);
         self.deadline_at = invocation.deadline_at;
     }

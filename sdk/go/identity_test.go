@@ -61,7 +61,10 @@ func TestIdentityLifecycleMethods(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	identity, err := client.GetCurrentIdentity(context.Background())
-	if err != nil || identity.Authentication.CredentialID != credentialID {
+	// One identity schema serves every caller kind, so the machine-only fields
+	// are optional. A machine credential must still receive this one.
+	if err != nil || identity.Authentication.CredentialID == nil ||
+		string(*identity.Authentication.CredentialID) != credentialID {
 		t.Fatalf("GetCurrentIdentity = %#v, %v", identity, err)
 	}
 	status := CredentialStatusActive

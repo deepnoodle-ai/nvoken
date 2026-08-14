@@ -11,6 +11,7 @@ import (
 	"github.com/deepnoodle-ai/wonton/cli"
 
 	"github.com/deepnoodle-ai/nvoken/internal/authstore"
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
 func registerAuthCommands(app *cli.App) {
@@ -42,14 +43,11 @@ func runAuthLogin(ctx *cli.Context) error {
 	if verified.JSON200 == nil {
 		return responseError(verified.StatusCode(), verified.Body)
 	}
-	identity, err := verified.JSON200.AsCurrentIdentity()
-	if err != nil {
-		return fmt.Errorf("decode identity: %w", err)
-	}
+	identity := *verified.JSON200
 	profile := authstore.Profile{
 		Endpoint:     auth.BaseURL,
 		Token:        auth.APIKey,
-		CredentialID: identity.Authentication.CredentialID,
+		CredentialID: credentialIDOrEmpty(identity.Authentication.CredentialID),
 		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
 	}
 	name := profileName(ctx)
@@ -77,12 +75,16 @@ func runAuthStatus(ctx *cli.Context) error {
 	if jsonOutput(ctx) {
 		return renderJSON(ctx, response.JSON200)
 	}
-	identity, err := response.JSON200.AsCurrentIdentity()
-	if err != nil {
-		return fmt.Errorf("decode identity: %w", err)
+	identity := *response.JSON200
+	// One identity schema serves every caller kind, so `method` is what says
+	// which fields to expect. Print it, then only the ones this caller has.
+	ctx.Printf("Method: %s\n", identity.Authentication.Method)
+	if id := credentialIDOrEmpty(identity.Authentication.CredentialID); id != "" {
+		ctx.Printf("Credential: %s\n", id)
 	}
-	ctx.Printf("Credential: %s\n", identity.Authentication.CredentialID)
-	ctx.Printf("Effective profile: %s\n", identity.Authentication.EffectiveProfile)
+	if profile := identity.Authentication.EffectiveProfile; profile != nil {
+		ctx.Printf("Effective profile: %s\n", *profile)
+	}
 	ctx.Printf("Endpoint: %s\n", auth.BaseURL)
 	if auth.Profile != nil {
 		ctx.Printf("Local profile: %s\n", auth.Profile.Name)
@@ -170,4 +172,15 @@ func newIdempotencyKey() (string, error) {
 		return "", err
 	}
 	return "nvoken-cli-" + base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+// credentialIDOrEmpty reads the credential this caller authenticated with. It
+// is audience-restricted on the one identity schema: a machine credential
+// carries it and a browser grant does not. The CLI is always a machine client,
+// so absence means an endpoint that does not identify us, not a normal case.
+func credentialIDOrEmpty(value *generated.CredentialID) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
 }

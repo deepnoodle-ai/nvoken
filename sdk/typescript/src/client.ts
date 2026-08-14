@@ -2412,7 +2412,7 @@ export class Agent<TOutput extends object = JsonObject> {
       text: result.outputText,
       structuredOutput: invocation.structuredOutput,
       idempotencyKey: endedHandle.idempotencyKey,
-      agentId: invocation.agentId,
+      agentId: invocation.agentId ?? endedHandle.agentId,
       sessionId: invocation.sessionId,
       deduplicated: endedHandle.deduplicated,
     };

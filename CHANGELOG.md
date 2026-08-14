@@ -8,6 +8,19 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Collapse the two schema families into one.** The seventeen `Browser*`
+  projections and the ten response wrapper unions are gone. There is one
+  generated type per resource, and a browser grant receives the same shape with
+  the fields it may not see omitted. Generation now runs with no
+  post-processing: the `sdk/scripts/generate.sh` patch block that hard-selected
+  the machine arm in TypeScript and reordered the Python decoder is deleted,
+  because the union it worked around no longer exists. Breaking: the eight
+  `*Response` wrapper types are removed, and audience-restricted fields
+  (`agent_id`, `user_key`, `usage`, `provenance`, `metadata`, `context`,
+  `limits`, `credit_block`, and the Session policy fields) are now optional on
+  the generated types. `nvoken auth whoami` prints the authentication method
+  first and only the fields that caller actually has.
+
 - **Sync the streaming protocol contract.** Stream event unions are
   discriminated on `type`, frame schemas accept unknown fields, and
   `stream.resync` and `stream.end` reasons are named enums with
