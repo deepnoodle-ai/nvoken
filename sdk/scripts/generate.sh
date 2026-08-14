@@ -103,42 +103,6 @@ perl -0pi -e '
   s/(\s*)if \(value\.every\(item => instanceOfInputBlock\(item\)\)\) \{\n\s*(return value\.map\(value => InputBlockToJSON\(value as InputBlock\)\);)\n\s*\}\n/$1$2\n/;
 ' sdk/typescript/src/generated/models/InvocationInput.ts
 
-# Wrapper unions between the machine and browser projections have no single
-# discriminator guard: which arm arrives is decided by the caller's credential,
-# not by anything in the payload. The handwritten SDK currently authenticates
-# only as a machine client, so select that projection and remove imports the
-# generator emits for guards that a discriminated union never exports.
-for projection in \
-  "CurrentIdentityResponse BrowserCurrentIdentity CurrentIdentity" \
-  "InvocationListResponse BrowserInvocationList InvocationList" \
-  "InvocationResponse BrowserInvocation Invocation" \
-  "InvocationResultResponse BrowserInvocationResult InvocationResult" \
-  "SessionListResponse BrowserSessionList SessionList" \
-  "SessionMessageListResponse BrowserSessionMessageList SessionMessageList" \
-  "SessionResponse BrowserSession Session" \
-  "TranscriptSnapshotResponse BrowserTranscriptSnapshot TranscriptSnapshot"
-do
-  read -r wrapper browser_projection machine_projection <<<"$projection"
-  perl -0pi -e "
-    s/^\\s*instanceOf${browser_projection},\\n//m;
-    s/^\\s*instanceOf${machine_projection},\\n//m;
-    s/instanceOf${browser_projection}\\([^)]*\\)/false/g;
-    s/instanceOf${machine_projection}\\([^)]*\\)/true/g;
-  " "sdk/typescript/src/generated/models/${wrapper}.ts"
-done
-perl -0pi -e '
-  s/^\s*instanceOfBrowserInvocationStreamEvent,\n//m;
-  s/^\s*instanceOfInvocationStreamEvent,\n//m;
-  s/instanceOfBrowserInvocationStreamEvent\([^)]*\)/false/g;
-  s/instanceOfInvocationStreamEvent\([^)]*\)/true/g;
-' sdk/typescript/src/generated/models/InvocationStreamResponse.ts
-perl -0pi -e '
-  s/^\s*instanceOfBrowserTranscriptStreamEvent,\n//m;
-  s/^\s*instanceOfTranscriptStreamEvent,\n//m;
-  s/instanceOfBrowserTranscriptStreamEvent\([^)]*\)/false/g;
-  s/instanceOfTranscriptStreamEvent\([^)]*\)/true/g;
-' sdk/typescript/src/generated/models/TranscriptStreamResponse.ts
-
 rm -rf sdk/python/src/nvoken_generated
 mkdir -p sdk/python/src
 cp -R "$WORK/python/nvoken_generated" sdk/python/src/nvoken_generated
@@ -147,27 +111,6 @@ rm -f sdk/python/src/nvoken_generated/api/default_api.py
 # replaced wholesale on every run, so the marker is written here rather than
 # committed by hand where the next generation would delete it.
 touch sdk/python/src/nvoken_generated/py.typed
-
-# Python's oneOf decoder treats the smaller browser projection as a second
-# match for a machine response because Pydantic ignores extra fields. The
-# contract orders the richer machine projection first, so return on that first
-# successful parse and fall through to the browser projection only when it
-# does not validate.
-for wrapper in \
-  current_identity_response \
-  invocation_list_response \
-  invocation_response \
-  invocation_result_response \
-  session_list_response \
-  session_message_list_response \
-  session_response \
-  transcript_snapshot_response
-do
-  perl -0pi -e '
-    my $seen = 0;
-    s/match \+= 1/(++$seen == 3) ? "return instance" : $&/ge;
-  ' "sdk/python/src/nvoken_generated/models/${wrapper}.py"
-done
 
 rm -rf sdk/rust/src/apis sdk/rust/src/models
 mkdir -p sdk/rust/src

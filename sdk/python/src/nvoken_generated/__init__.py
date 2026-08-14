@@ -5,7 +5,7 @@
 """
     nvoken API
 
-    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Browser-direct callers use narrow JWTs, exact-origin CORS, client-safe projections, and App/tenant/user admission limits. A host may mint client tokens from its own Ed25519 key. An App that explicitly enables anonymous access may instead let nvoken mint a short-lived access token and renewable visitor token from one allowed public origin.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.  ## Streaming  A turn and an Invocation are the same thing. The endpoint summaries say turn; the schemas say Invocation.  Two streams carry the same frames. `GET /v1/invocations/{invocation_id}/stream` follows one turn and ends when that turn settles. `GET /v1/sessions/{session_id}/transcript/stream` follows every turn in a Session, and is the surface to use for a conversation. `POST /v1/invocations` with `Accept: text/event-stream` admits and streams one turn inline.  ### Saved frames and live frames  Every frame is one or the other, and the difference decides what you may store. A saved frame carries an SSE `id`. That ID is your resume position and the only value you need to keep. A live frame carries no `id`: it is a preview or a control signal, it is never stored, and it is never replayed.  The Invocation stream's saved frames are `invocation.accepted`, `invocation.update`, and `invocation.result`. The Session stream's only saved frame is `transcript.update`. Every other frame on either stream is live.  ### Resuming and finishing  The resume position has one name: `cursor`. It is the field on a durable frame and the query parameter that resumes a stream. Server-Sent Events mirrors it onto the `id:` line and accepts the `Last-Event-ID` header in the parameter's place, because a faithful SSE binding must; those are the binding's mechanics, not two more names for the value, and another binding would carry the same one name. `cursor` wins when a request supplies both. Cursors are Session-scoped on both streams, so a position taken from one stream resumes the other.  Reconnecting to a turn that has already settled always yields `invocation.result` followed by `stream.end` with reason `terminal`, at any cursor. Both are valid signals that a turn is over, and a client may exit on either.  `invocation.accepted` is emitted only by the inline `POST` path. The `GET` stream never sends it, so a client that admits separately never sees it. The nvoken SDKs synthesize an equivalent locally so their callers see the same first event either way.  An `invocation.update` never carries a terminal status. Terminal state arrives as `invocation.result` and nowhere else on that stream. The `invocation` it carries is re-read when the frame is written, so it is current state with a resume position attached rather than a snapshot taken at the cursor.  ### Previews  `output_text.delta` and `thinking.delta` preview one model iteration. Their identity is `(invocation_id, attempt, iteration, content_index)`. Accumulate by that tuple, and discard everything provisional when `attempt` increases, when `stream.resync` arrives, when the saved message lands, and when the turn reaches a terminal status. One model iteration produces exactly one saved assistant message, so previews sharing an `(invocation_id, attempt, iteration)` build one message. Never store preview text as a message, and never use it to decide whether a turn succeeded.  `attempt`, `iteration`, `revision`, and `sequence` count from 1. `content_index` counts from 0.  ### Compatibility  Stream events may gain fields over time. Ignore fields you do not recognize rather than refusing the frame. New enum values may appear too. Treat an unknown `stream.resync` reason as `live_delivery_gap` and discard your previews. Treat an unknown `stream.end` reason as `rotate` and reconnect with your last saved `id`. Reconnecting is always safe: a turn that has settled re-yields its result.  ### Transport  The protocol is the frames and their durability rules. Server-Sent Events is how they travel today and the only binding. Three mechanics belong to SSE itself: the `id:` line, the `retry:` opener, and comment keepalives. Everything else, resumption included, lives in the frames.  ### What the stream carries  Frames carry structure and text. Images and documents travel as descriptors, with media type, size in bytes, and a `sha256:` digest, never as inline bytes. Frame sizes stay bounded by text no matter what a turn produced.
+    nvoken runs agent turns for you. You describe a turn — an Agent Definition and some input — and nvoken queues it, runs it in the background, keeps running it across restarts and failures, and lets you either watch it live or come back for the result later.  Your application stays in charge of what your agents are and when they run. nvoken owns the conversation: it stores the messages, tracks the state of every turn, and handles talking to the model providers.  ## Getting started  `POST /v1/invocations` starts a turn and returns a `202` right away. From there:  - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or   read `GET /v1/invocations/{invocation_id}/result` whenever you want the   finished answer. Disconnecting never cancels anything. - If your agent uses tools you run yourself, the turn stops with status   `waiting` and lists what it needs. Run them, post the results to   `/tool-results`, and the turn continues where it left off. - Sessions carry conversation history from one turn to the next. They   last until you delete them, or until a retention window you set runs   out.  Also here: tools nvoken calls back to over HTTPS, remote MCP servers, structured output validated against your JSON Schema, reusable Agent Definitions, image and document input, your own model provider keys, and spending limits.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. A configured trusted console may also present a short-lived Ed25519 issuer token; this is an authentication presentation only and does not create a user identity model in nvoken.  Browser-direct callers use narrow JWTs, exact-origin CORS, and App/tenant/user admission limits. A host may mint client tokens from its own Ed25519 key. An App that explicitly enables anonymous access may instead let nvoken mint a short-lived access token and renewable visitor token from one allowed public origin.  A browser grant sees less, and it sees it in the same shape. There is one schema per resource, and the fields a browser may not see are simply omitted from its responses, which is why those fields are not required. There are no parallel browser schemas and no response unions, so every payload decodes against one type and nothing about the shape has to be inferred from the credential that fetched it. `GET /v1/identity` reports which kind of caller you are, under `authentication.method`.  - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity. - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity. - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations. - Org-scoped Viewer and Operator credentials are management and reporting   identities only. They resolve no tenant and cannot perform Runtime   operations; Operators can register and manage Apps and their App   credentials, while Viewers have read-only access.  Tenant, Session, operation, and expiry constraints only narrow these grants.  ## Familiar names  Where a name already means something in other agent APIs, nvoken uses it the same way rather than inventing its own. `metadata` follows OpenAI's limits of 16 keys, 64-character names, and 512-byte values. `output_text` is the assistant's text joined into one string. `reasoning.effort` takes `low`, `medium`, `high`, `xhigh`, and `max`. `stop_reason: end_turn`, status `running`, and the `commentary` and `final_answer` message phases are the same idea you have seen elsewhere. If you have integrated another agent API, these should need no translation.  ## You can always read back what applied  Anything nvoken decides on your behalf is readable on the resource that used it. You never have to work out what happened by combining the request you sent with your own assumptions about nvoken's defaults — just read the resource.  A turn reports the `limits` it is really running under, after defaults and minimums; the `agent_definition` it ran with, exactly as stored; and `provenance`, which records what actually served the request. A Session reports its compaction (summarization) policy with `auto` already resolved to a real number and a real model, and its retention window as accepted. New settings will work the same way: a default you cannot read back is a setting only the server knows about.  ## Streaming  A turn and an Invocation are the same thing. The endpoint summaries say turn; the schemas say Invocation.  Two streams carry the same frames. `GET /v1/invocations/{invocation_id}/stream` follows one turn and ends when that turn settles. `GET /v1/sessions/{session_id}/transcript/stream` follows every turn in a Session, and is the surface to use for a conversation. `POST /v1/invocations` with `Accept: text/event-stream` admits and streams one turn inline.  ### Saved frames and live frames  Every frame is one or the other, and the difference decides what you may store. A saved frame carries an SSE `id`. That ID is your resume position and the only value you need to keep. A live frame carries no `id`: it is a preview or a control signal, it is never stored, and it is never replayed.  The Invocation stream's saved frames are `invocation.accepted`, `invocation.update`, and `invocation.result`. The Session stream's only saved frame is `transcript.update`. Every other frame on either stream is live.  ### Resuming and finishing  The resume position has one name: `cursor`. It is the field on a durable frame and the query parameter that resumes a stream. Server-Sent Events mirrors it onto the `id:` line and accepts the `Last-Event-ID` header in the parameter's place, because a faithful SSE binding must; those are the binding's mechanics, not two more names for the value, and another binding would carry the same one name. `cursor` wins when a request supplies both. Cursors are Session-scoped on both streams, so a position taken from one stream resumes the other.  Reconnecting to a turn that has already settled always yields `invocation.result` followed by `stream.end` with reason `terminal`, at any cursor. Both are valid signals that a turn is over, and a client may exit on either.  `invocation.accepted` is emitted only by the inline `POST` path. The `GET` stream never sends it, so a client that admits separately never sees it. The nvoken SDKs synthesize an equivalent locally so their callers see the same first event either way.  An `invocation.update` never carries a terminal status. Terminal state arrives as `invocation.result` and nowhere else on that stream. The `invocation` it carries is re-read when the frame is written, so it is current state with a resume position attached rather than a snapshot taken at the cursor.  ### Previews  `output_text.delta` and `thinking.delta` preview one model iteration. Their identity is `(invocation_id, attempt, iteration, content_index)`. Accumulate by that tuple, and discard everything provisional when `attempt` increases, when `stream.resync` arrives, when the saved message lands, and when the turn reaches a terminal status. One model iteration produces exactly one saved assistant message, so previews sharing an `(invocation_id, attempt, iteration)` build one message. Never store preview text as a message, and never use it to decide whether a turn succeeded.  `attempt`, `iteration`, `revision`, and `sequence` count from 1. `content_index` counts from 0.  ### Compatibility  Stream events may gain fields over time. Ignore fields you do not recognize rather than refusing the frame. New enum values may appear too. Treat an unknown `stream.resync` reason as `live_delivery_gap` and discard your previews. Treat an unknown `stream.end` reason as `rotate` and reconnect with your last saved `id`. Reconnecting is always safe: a turn that has settled re-yields its result.  ### Transport  The protocol is the frames and their durability rules. Server-Sent Events is how they travel today and the only binding. Three mechanics belong to SSE itself: the `id:` line, the `retry:` opener, and comment keepalives. Everything else, resumption included, lives in the frames.  ### What the stream carries  Frames carry structure and text. Images and documents travel as descriptors, with media type, size in bytes, and a `sha256:` digest, never as inline bytes. Frame sizes stay bounded by text no matter what a turn produced.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -69,26 +69,8 @@ __all__ = [
     "AuthenticationMethod",
     "BrowserAccess",
     "BrowserClientInterface",
-    "BrowserCurrentIdentity",
-    "BrowserCurrentIdentityAuthentication",
-    "BrowserInvocation",
-    "BrowserInvocationAcceptedEvent",
-    "BrowserInvocationChange",
-    "BrowserInvocationFailure",
-    "BrowserInvocationList",
-    "BrowserInvocationResult",
-    "BrowserInvocationResultEvent",
-    "BrowserInvocationStreamEvent",
-    "BrowserInvocationUpdateEvent",
     "BrowserInvocationWebhook",
     "BrowserRateLimits",
-    "BrowserSession",
-    "BrowserSessionList",
-    "BrowserSessionMessage",
-    "BrowserSessionMessageList",
-    "BrowserTranscriptSnapshot",
-    "BrowserTranscriptStreamEvent",
-    "BrowserTranscriptUpdateEvent",
     "BuiltinToolDeclaration",
     "CallbackDeliveryOutcome",
     "CallbackTarget",
@@ -119,7 +101,6 @@ __all__ = [
     "CreditPolicy",
     "CurrentIdentity",
     "CurrentIdentityAuthentication",
-    "CurrentIdentityResponse",
     "DocumentInputBlock",
     "DocumentInputSource",
     "DocumentReferenceBlock",
@@ -141,17 +122,13 @@ __all__ = [
     "InvocationFailure",
     "InvocationInput",
     "InvocationList",
-    "InvocationListResponse",
     "InvocationLog",
     "InvocationLogList",
-    "InvocationResponse",
     "InvocationResult",
     "InvocationResultEvent",
-    "InvocationResultResponse",
     "InvocationStatus",
     "InvocationStopReason",
     "InvocationStreamEvent",
-    "InvocationStreamResponse",
     "InvocationTimeline",
     "InvocationTimelineStep",
     "InvocationUpdateEvent",
@@ -240,13 +217,10 @@ __all__ = [
     "SessionContext",
     "SessionForkLineage",
     "SessionList",
-    "SessionListResponse",
     "SessionMessage",
     "SessionMessageList",
-    "SessionMessageListResponse",
     "SessionMessageRole",
     "SessionOptions",
-    "SessionResponse",
     "StreamEndEvent",
     "StreamEndReason",
     "StreamResyncEvent",
@@ -281,9 +255,7 @@ __all__ = [
     "TraceSpan",
     "TraceSummary",
     "TranscriptSnapshot",
-    "TranscriptSnapshotResponse",
     "TranscriptStreamEvent",
-    "TranscriptStreamResponse",
     "TranscriptUpdateEvent",
     "URLCitation",
     "UpdateAppRequest",
@@ -360,26 +332,8 @@ from nvoken_generated.models.app_signing_key_secret import AppSigningKeySecret a
 from nvoken_generated.models.authentication_method import AuthenticationMethod as AuthenticationMethod
 from nvoken_generated.models.browser_access import BrowserAccess as BrowserAccess
 from nvoken_generated.models.browser_client_interface import BrowserClientInterface as BrowserClientInterface
-from nvoken_generated.models.browser_current_identity import BrowserCurrentIdentity as BrowserCurrentIdentity
-from nvoken_generated.models.browser_current_identity_authentication import BrowserCurrentIdentityAuthentication as BrowserCurrentIdentityAuthentication
-from nvoken_generated.models.browser_invocation import BrowserInvocation as BrowserInvocation
-from nvoken_generated.models.browser_invocation_accepted_event import BrowserInvocationAcceptedEvent as BrowserInvocationAcceptedEvent
-from nvoken_generated.models.browser_invocation_change import BrowserInvocationChange as BrowserInvocationChange
-from nvoken_generated.models.browser_invocation_failure import BrowserInvocationFailure as BrowserInvocationFailure
-from nvoken_generated.models.browser_invocation_list import BrowserInvocationList as BrowserInvocationList
-from nvoken_generated.models.browser_invocation_result import BrowserInvocationResult as BrowserInvocationResult
-from nvoken_generated.models.browser_invocation_result_event import BrowserInvocationResultEvent as BrowserInvocationResultEvent
-from nvoken_generated.models.browser_invocation_stream_event import BrowserInvocationStreamEvent as BrowserInvocationStreamEvent
-from nvoken_generated.models.browser_invocation_update_event import BrowserInvocationUpdateEvent as BrowserInvocationUpdateEvent
 from nvoken_generated.models.browser_invocation_webhook import BrowserInvocationWebhook as BrowserInvocationWebhook
 from nvoken_generated.models.browser_rate_limits import BrowserRateLimits as BrowserRateLimits
-from nvoken_generated.models.browser_session import BrowserSession as BrowserSession
-from nvoken_generated.models.browser_session_list import BrowserSessionList as BrowserSessionList
-from nvoken_generated.models.browser_session_message import BrowserSessionMessage as BrowserSessionMessage
-from nvoken_generated.models.browser_session_message_list import BrowserSessionMessageList as BrowserSessionMessageList
-from nvoken_generated.models.browser_transcript_snapshot import BrowserTranscriptSnapshot as BrowserTranscriptSnapshot
-from nvoken_generated.models.browser_transcript_stream_event import BrowserTranscriptStreamEvent as BrowserTranscriptStreamEvent
-from nvoken_generated.models.browser_transcript_update_event import BrowserTranscriptUpdateEvent as BrowserTranscriptUpdateEvent
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration as BuiltinToolDeclaration
 from nvoken_generated.models.callback_delivery_outcome import CallbackDeliveryOutcome as CallbackDeliveryOutcome
 from nvoken_generated.models.callback_target import CallbackTarget as CallbackTarget
@@ -410,7 +364,6 @@ from nvoken_generated.models.credit_block import CreditBlock as CreditBlock
 from nvoken_generated.models.credit_policy import CreditPolicy as CreditPolicy
 from nvoken_generated.models.current_identity import CurrentIdentity as CurrentIdentity
 from nvoken_generated.models.current_identity_authentication import CurrentIdentityAuthentication as CurrentIdentityAuthentication
-from nvoken_generated.models.current_identity_response import CurrentIdentityResponse as CurrentIdentityResponse
 from nvoken_generated.models.document_input_block import DocumentInputBlock as DocumentInputBlock
 from nvoken_generated.models.document_input_source import DocumentInputSource as DocumentInputSource
 from nvoken_generated.models.document_reference_block import DocumentReferenceBlock as DocumentReferenceBlock
@@ -432,17 +385,13 @@ from nvoken_generated.models.invocation_context_item import InvocationContextIte
 from nvoken_generated.models.invocation_failure import InvocationFailure as InvocationFailure
 from nvoken_generated.models.invocation_input import InvocationInput as InvocationInput
 from nvoken_generated.models.invocation_list import InvocationList as InvocationList
-from nvoken_generated.models.invocation_list_response import InvocationListResponse as InvocationListResponse
 from nvoken_generated.models.invocation_log import InvocationLog as InvocationLog
 from nvoken_generated.models.invocation_log_list import InvocationLogList as InvocationLogList
-from nvoken_generated.models.invocation_response import InvocationResponse as InvocationResponse
 from nvoken_generated.models.invocation_result import InvocationResult as InvocationResult
 from nvoken_generated.models.invocation_result_event import InvocationResultEvent as InvocationResultEvent
-from nvoken_generated.models.invocation_result_response import InvocationResultResponse as InvocationResultResponse
 from nvoken_generated.models.invocation_status import InvocationStatus as InvocationStatus
 from nvoken_generated.models.invocation_stop_reason import InvocationStopReason as InvocationStopReason
 from nvoken_generated.models.invocation_stream_event import InvocationStreamEvent as InvocationStreamEvent
-from nvoken_generated.models.invocation_stream_response import InvocationStreamResponse as InvocationStreamResponse
 from nvoken_generated.models.invocation_timeline import InvocationTimeline as InvocationTimeline
 from nvoken_generated.models.invocation_timeline_step import InvocationTimelineStep as InvocationTimelineStep
 from nvoken_generated.models.invocation_update_event import InvocationUpdateEvent as InvocationUpdateEvent
@@ -531,13 +480,10 @@ from nvoken_generated.models.session_content_block import SessionContentBlock as
 from nvoken_generated.models.session_context import SessionContext as SessionContext
 from nvoken_generated.models.session_fork_lineage import SessionForkLineage as SessionForkLineage
 from nvoken_generated.models.session_list import SessionList as SessionList
-from nvoken_generated.models.session_list_response import SessionListResponse as SessionListResponse
 from nvoken_generated.models.session_message import SessionMessage as SessionMessage
 from nvoken_generated.models.session_message_list import SessionMessageList as SessionMessageList
-from nvoken_generated.models.session_message_list_response import SessionMessageListResponse as SessionMessageListResponse
 from nvoken_generated.models.session_message_role import SessionMessageRole as SessionMessageRole
 from nvoken_generated.models.session_options import SessionOptions as SessionOptions
-from nvoken_generated.models.session_response import SessionResponse as SessionResponse
 from nvoken_generated.models.stream_end_event import StreamEndEvent as StreamEndEvent
 from nvoken_generated.models.stream_end_reason import StreamEndReason as StreamEndReason
 from nvoken_generated.models.stream_resync_event import StreamResyncEvent as StreamResyncEvent
@@ -572,9 +518,7 @@ from nvoken_generated.models.trace_list import TraceList as TraceList
 from nvoken_generated.models.trace_span import TraceSpan as TraceSpan
 from nvoken_generated.models.trace_summary import TraceSummary as TraceSummary
 from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot as TranscriptSnapshot
-from nvoken_generated.models.transcript_snapshot_response import TranscriptSnapshotResponse as TranscriptSnapshotResponse
 from nvoken_generated.models.transcript_stream_event import TranscriptStreamEvent as TranscriptStreamEvent
-from nvoken_generated.models.transcript_stream_response import TranscriptStreamResponse as TranscriptStreamResponse
 from nvoken_generated.models.transcript_update_event import TranscriptUpdateEvent as TranscriptUpdateEvent
 from nvoken_generated.models.url_citation import URLCitation as URLCitation
 from nvoken_generated.models.update_app_request import UpdateAppRequest as UpdateAppRequest

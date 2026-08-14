@@ -898,9 +898,25 @@ async fn shared_fault_server_semantics() {
         })
         .await
         .unwrap();
-    assert_eq!(sessions.items[0].usage.as_ref().unwrap().input_tokens, 9);
-    assert_eq!(sessions.items[0].agent_id.as_deref(), Some(AGENT_ID));
-    let context = sessions.items[0].context.as_ref().unwrap();
+    // These fields are audience-restricted on the one Session schema, so they
+    // are optional and nullable: absent for a browser grant, present for this
+    // machine credential. Unwrapping both layers is the assertion that a
+    // machine caller still receives them.
+    let usage = sessions.items[0]
+        .usage
+        .clone()
+        .flatten()
+        .expect("machine usage");
+    assert_eq!(usage.input_tokens, 9);
+    assert_eq!(
+        sessions.items[0].agent_id.clone().flatten().as_deref(),
+        Some(AGENT_ID)
+    );
+    let context = sessions.items[0]
+        .context
+        .clone()
+        .flatten()
+        .expect("machine context");
     assert_eq!(context.estimated_tokens, 12);
     assert_eq!(context.context_window_tokens, Some(128000));
     assert_eq!(context.model.provider, "openai");

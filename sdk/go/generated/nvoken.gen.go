@@ -109,123 +109,6 @@ func (e AuthenticationMethod) Valid() bool {
 	}
 }
 
-// Defines values for BrowserCurrentIdentityAuthenticationAssurance.
-const (
-	BrowserCurrentIdentityAuthenticationAssuranceBearer BrowserCurrentIdentityAuthenticationAssurance = "bearer"
-)
-
-// Valid indicates whether the value is a known member of the BrowserCurrentIdentityAuthenticationAssurance enum.
-func (e BrowserCurrentIdentityAuthenticationAssurance) Valid() bool {
-	switch e {
-	case BrowserCurrentIdentityAuthenticationAssuranceBearer:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BrowserCurrentIdentityAuthenticationMethod.
-const (
-	BrowserCurrentIdentityAuthenticationMethodAnonymousToken BrowserCurrentIdentityAuthenticationMethod = "anonymous_token"
-	BrowserCurrentIdentityAuthenticationMethodClientToken    BrowserCurrentIdentityAuthenticationMethod = "client_token"
-)
-
-// Valid indicates whether the value is a known member of the BrowserCurrentIdentityAuthenticationMethod enum.
-func (e BrowserCurrentIdentityAuthenticationMethod) Valid() bool {
-	switch e {
-	case BrowserCurrentIdentityAuthenticationMethodAnonymousToken:
-		return true
-	case BrowserCurrentIdentityAuthenticationMethodClientToken:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BrowserInvocationAcceptedEventType.
-const (
-	InvocationAccepted BrowserInvocationAcceptedEventType = "invocation.accepted"
-)
-
-// Valid indicates whether the value is a known member of the BrowserInvocationAcceptedEventType enum.
-func (e BrowserInvocationAcceptedEventType) Valid() bool {
-	switch e {
-	case InvocationAccepted:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BrowserInvocationResultEventType.
-const (
-	BrowserInvocationResultEventTypeInvocationResult BrowserInvocationResultEventType = "invocation.result"
-)
-
-// Valid indicates whether the value is a known member of the BrowserInvocationResultEventType enum.
-func (e BrowserInvocationResultEventType) Valid() bool {
-	switch e {
-	case BrowserInvocationResultEventTypeInvocationResult:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BrowserInvocationUpdateEventType.
-const (
-	InvocationUpdate BrowserInvocationUpdateEventType = "invocation.update"
-)
-
-// Valid indicates whether the value is a known member of the BrowserInvocationUpdateEventType enum.
-func (e BrowserInvocationUpdateEventType) Valid() bool {
-	switch e {
-	case InvocationUpdate:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BrowserSessionActiveInvocationStatus.
-const (
-	BrowserSessionActiveInvocationStatusPaused  BrowserSessionActiveInvocationStatus = "paused"
-	BrowserSessionActiveInvocationStatusQueued  BrowserSessionActiveInvocationStatus = "queued"
-	BrowserSessionActiveInvocationStatusRunning BrowserSessionActiveInvocationStatus = "running"
-	BrowserSessionActiveInvocationStatusWaiting BrowserSessionActiveInvocationStatus = "waiting"
-)
-
-// Valid indicates whether the value is a known member of the BrowserSessionActiveInvocationStatus enum.
-func (e BrowserSessionActiveInvocationStatus) Valid() bool {
-	switch e {
-	case BrowserSessionActiveInvocationStatusPaused:
-		return true
-	case BrowserSessionActiveInvocationStatusQueued:
-		return true
-	case BrowserSessionActiveInvocationStatusRunning:
-		return true
-	case BrowserSessionActiveInvocationStatusWaiting:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BrowserTranscriptUpdateEventType.
-const (
-	TranscriptUpdate BrowserTranscriptUpdateEventType = "transcript.update"
-)
-
-// Valid indicates whether the value is a known member of the BrowserTranscriptUpdateEventType enum.
-func (e BrowserTranscriptUpdateEventType) Valid() bool {
-	switch e {
-	case TranscriptUpdate:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for BuiltinToolDeclarationMode.
 const (
 	ModeBuiltin BuiltinToolDeclarationMode = "builtin"
@@ -450,13 +333,13 @@ func (e CreditPolicy) Valid() bool {
 
 // Defines values for CurrentIdentityAuthenticationAssurance.
 const (
-	CurrentIdentityAuthenticationAssuranceBearer CurrentIdentityAuthenticationAssurance = "bearer"
+	Bearer CurrentIdentityAuthenticationAssurance = "bearer"
 )
 
 // Valid indicates whether the value is a known member of the CurrentIdentityAuthenticationAssurance enum.
 func (e CurrentIdentityAuthenticationAssurance) Valid() bool {
 	switch e {
-	case CurrentIdentityAuthenticationAssuranceBearer:
+	case Bearer:
 		return true
 	default:
 		return false
@@ -465,14 +348,20 @@ func (e CurrentIdentityAuthenticationAssurance) Valid() bool {
 
 // Defines values for CurrentIdentityAuthenticationMethod.
 const (
-	CurrentIdentityAuthenticationMethodAPIKey      CurrentIdentityAuthenticationMethod = "api_key"
-	CurrentIdentityAuthenticationMethodIssuerToken CurrentIdentityAuthenticationMethod = "issuer_token"
+	CurrentIdentityAuthenticationMethodAPIKey         CurrentIdentityAuthenticationMethod = "api_key"
+	CurrentIdentityAuthenticationMethodAnonymousToken CurrentIdentityAuthenticationMethod = "anonymous_token"
+	CurrentIdentityAuthenticationMethodClientToken    CurrentIdentityAuthenticationMethod = "client_token"
+	CurrentIdentityAuthenticationMethodIssuerToken    CurrentIdentityAuthenticationMethod = "issuer_token"
 )
 
 // Valid indicates whether the value is a known member of the CurrentIdentityAuthenticationMethod enum.
 func (e CurrentIdentityAuthenticationMethod) Valid() bool {
 	switch e {
 	case CurrentIdentityAuthenticationMethodAPIKey:
+		return true
+	case CurrentIdentityAuthenticationMethodAnonymousToken:
+		return true
+	case CurrentIdentityAuthenticationMethodClientToken:
 		return true
 	case CurrentIdentityAuthenticationMethodIssuerToken:
 		return true
@@ -3032,249 +2921,6 @@ type BrowserClientInterface struct {
 	ToolNames *[]string `json:"tool_names,omitempty"`
 }
 
-// BrowserCurrentIdentity defines model for BrowserCurrentIdentity.
-type BrowserCurrentIdentity struct {
-	Authentication struct {
-		// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-		AgentDefinitionID       AgentDefinitionID `json:"agent_definition_id"`
-		AgentDefinitionRevision int               `json:"agent_definition_revision"`
-		AgentKey                string            `json:"agent_key"`
-
-		// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
-		AppID      AppID                                         `json:"app_id"`
-		Assurance  BrowserCurrentIdentityAuthenticationAssurance `json:"assurance"`
-		Method     BrowserCurrentIdentityAuthenticationMethod    `json:"method"`
-		Operations []Operation                                   `json:"operations"`
-		SessionID  *SessionID                                    `json:"session_id"`
-		TenantKey  string                                        `json:"tenant_key"`
-	} `json:"authentication"`
-}
-
-// BrowserCurrentIdentityAuthenticationAssurance defines model for BrowserCurrentIdentity.Authentication.Assurance.
-type BrowserCurrentIdentityAuthenticationAssurance string
-
-// BrowserCurrentIdentityAuthenticationMethod defines model for BrowserCurrentIdentity.Authentication.Method.
-type BrowserCurrentIdentityAuthenticationMethod string
-
-// BrowserInvocation Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
-type BrowserInvocation struct {
-	ActiveExecutionMs int `json:"active_execution_ms"`
-
-	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-	AgentDefinitionID       AgentDefinitionID `json:"agent_definition_id"`
-	AgentDefinitionRevision int               `json:"agent_definition_revision"`
-	Attempt                 int               `json:"attempt"`
-	CreatedAt               time.Time         `json:"created_at"`
-	DeadlineAt              *time.Time        `json:"deadline_at"`
-
-	// Deduplicated Present only on Invocation admission.
-	Deduplicated *bool                     `json:"deduplicated,omitempty"`
-	EndedAt      *time.Time                `json:"ended_at"`
-	Error        *BrowserInvocationFailure `json:"error"`
-
-	// ID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	ID InvocationID `json:"id"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
-
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
-	//
-	// `completed` means the turn ended the way it was asked to: the model
-	// finished on its own, or you interrupted it.
-	//
-	// `incomplete` means a limit you set stopped the turn cleanly, between
-	// steps rather than mid-request. `stop_reason` names the limit that ran
-	// out. The reply so far is valid and carries into the next turn just
-	// like a completed turn's does, so this is a stopping point rather than
-	// an error.
-	//
-	// `failed` means the turn could not stop cleanly — a deadline landing in
-	// the middle of a model request, for example — or that a turn you asked
-	// for structured output from never produced a valid object. Read `error`
-	// for the reason; the reply, if any, is not carried forward.
-	//
-	// `waiting` — `requires_action` in some other APIs — means the turn has
-	// stopped for tool calls you need to run. Nothing is executing. Send the
-	// results and the turn returns to `queued` and picks up where it left
-	// off. A turn can also return to `queued` on its own if nvoken had to
-	// restart it after an interruption; `attempt` tells the two apart, and
-	// the `revision` on each stream update tells you their order.
-	//
-	// `paused` means a spending limit stopped the turn but left it
-	// resumable. Nothing is executing, and its deadlines are on hold, so a
-	// turn cannot expire while you decide. Raise the turn's limit or add
-	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
-	Status           InvocationStatus        `json:"status"`
-	StopReason       *InvocationStopReason   `json:"stop_reason"`
-	StructuredOutput *map[string]interface{} `json:"structured_output"`
-
-	// ToolCalls Every tool call this turn has made, with its current status.
-	// Omitted when the turn has made none.
-	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
-	UpdatedAt time.Time          `json:"updated_at"`
-}
-
-// BrowserInvocationAcceptedEvent defines model for BrowserInvocationAcceptedEvent.
-type BrowserInvocationAcceptedEvent struct {
-	DeadlineAt   time.Time `json:"deadline_at"`
-	Deduplicated bool      `json:"deduplicated"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
-
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
-	//
-	// `completed` means the turn ended the way it was asked to: the model
-	// finished on its own, or you interrupted it.
-	//
-	// `incomplete` means a limit you set stopped the turn cleanly, between
-	// steps rather than mid-request. `stop_reason` names the limit that ran
-	// out. The reply so far is valid and carries into the next turn just
-	// like a completed turn's does, so this is a stopping point rather than
-	// an error.
-	//
-	// `failed` means the turn could not stop cleanly — a deadline landing in
-	// the middle of a model request, for example — or that a turn you asked
-	// for structured output from never produced a valid object. Read `error`
-	// for the reason; the reply, if any, is not carried forward.
-	//
-	// `waiting` — `requires_action` in some other APIs — means the turn has
-	// stopped for tool calls you need to run. Nothing is executing. Send the
-	// results and the turn returns to `queued` and picks up where it left
-	// off. A turn can also return to `queued` on its own if nvoken had to
-	// restart it after an interruption; `attempt` tells the two apart, and
-	// the `revision` on each stream update tells you their order.
-	//
-	// `paused` means a spending limit stopped the turn but left it
-	// resumable. Nothing is executing, and its deadlines are on hold, so a
-	// turn cannot expire while you decide. Raise the turn's limit or add
-	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
-	Status InvocationStatus                   `json:"status"`
-	Type   BrowserInvocationAcceptedEventType `json:"type"`
-}
-
-// BrowserInvocationAcceptedEventType defines model for BrowserInvocationAcceptedEvent.Type.
-type BrowserInvocationAcceptedEventType string
-
-// BrowserInvocationChange One lifecycle step of one turn, in the browser projection. It carries
-// the same lifecycle detail as the browser Invocation projection, and
-// nothing the browser projection withholds.
-type BrowserInvocationChange struct {
-	Error *BrowserInvocationFailure `json:"error"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-	OccurredAt   time.Time    `json:"occurred_at"`
-	Revision     int64        `json:"revision"`
-
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
-	//
-	// `completed` means the turn ended the way it was asked to: the model
-	// finished on its own, or you interrupted it.
-	//
-	// `incomplete` means a limit you set stopped the turn cleanly, between
-	// steps rather than mid-request. `stop_reason` names the limit that ran
-	// out. The reply so far is valid and carries into the next turn just
-	// like a completed turn's does, so this is a stopping point rather than
-	// an error.
-	//
-	// `failed` means the turn could not stop cleanly — a deadline landing in
-	// the middle of a model request, for example — or that a turn you asked
-	// for structured output from never produced a valid object. Read `error`
-	// for the reason; the reply, if any, is not carried forward.
-	//
-	// `waiting` — `requires_action` in some other APIs — means the turn has
-	// stopped for tool calls you need to run. Nothing is executing. Send the
-	// results and the turn returns to `queued` and picks up where it left
-	// off. A turn can also return to `queued` on its own if nvoken had to
-	// restart it after an interruption; `attempt` tells the two apart, and
-	// the `revision` on each stream update tells you their order.
-	//
-	// `paused` means a spending limit stopped the turn but left it
-	// resumable. Nothing is executing, and its deadlines are on hold, so a
-	// turn cannot expire while you decide. Raise the turn's limit or add
-	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
-	Status InvocationStatus `json:"status"`
-
-	// StopReason Why the turn stopped. Present once it has stopped.
-	StopReason             *InvocationStopReason   `json:"stop_reason,omitempty"`
-	StructuredOutput       *map[string]interface{} `json:"structured_output"`
-	ThroughMessageSequence *int64                  `json:"through_message_sequence"`
-
-	// ToolCalls Every tool call this turn has made, with its current status.
-	// Omitted when the turn has made none.
-	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
-}
-
-// BrowserInvocationFailure defines model for BrowserInvocationFailure.
-type BrowserInvocationFailure struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-// BrowserInvocationList defines model for BrowserInvocationList.
-type BrowserInvocationList struct {
-	HasMore    bool                `json:"has_more"`
-	Items      []BrowserInvocation `json:"items"`
-	NextCursor *string             `json:"next_cursor"`
-}
-
-// BrowserInvocationResult defines model for BrowserInvocationResult.
-type BrowserInvocationResult struct {
-	// Invocation Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
-	Invocation BrowserInvocation       `json:"invocation"`
-	Messages   []BrowserSessionMessage `json:"messages"`
-	OutputText *string                 `json:"output_text"`
-}
-
-// BrowserInvocationResultEvent defines model for BrowserInvocationResultEvent.
-type BrowserInvocationResultEvent struct {
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID            `json:"invocation_id"`
-	Result       BrowserInvocationResult `json:"result"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                        `json:"session_id"`
-	Type      BrowserInvocationResultEventType `json:"type"`
-}
-
-// BrowserInvocationResultEventType defines model for BrowserInvocationResultEvent.Type.
-type BrowserInvocationResultEventType string
-
-// BrowserInvocationStreamEvent Browser Invocation stream event. Switch on `type`. Host-only fields are
-// never emitted. New frame types may appear here over time, and existing
-// ones may gain fields.
-type BrowserInvocationStreamEvent struct {
-	union json.RawMessage
-}
-
-// BrowserInvocationUpdateEvent defines model for BrowserInvocationUpdateEvent.
-type BrowserInvocationUpdateEvent struct {
-	// Invocation Closed browser projection. It never includes Agent or user identity, definition content, provider configuration, usage, budget, metadata, provenance, or resolved limits.
-	Invocation BrowserInvocation `json:"invocation"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID            `json:"invocation_id"`
-	NewMessages  []BrowserSessionMessage `json:"new_messages"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                        `json:"session_id"`
-	Type      BrowserInvocationUpdateEventType `json:"type"`
-}
-
-// BrowserInvocationUpdateEventType defines model for BrowserInvocationUpdateEvent.Type.
-type BrowserInvocationUpdateEventType string
-
 // BrowserInvocationWebhook defines model for BrowserInvocationWebhook.
 type BrowserInvocationWebhook struct {
 	// Events Must include invocation.waiting and invocation.ended. Omission
@@ -3291,85 +2937,6 @@ type BrowserRateLimits struct {
 	MaxConcurrentInvocationsPerTenant int64 `json:"max_concurrent_invocations_per_tenant"`
 	MaxConcurrentInvocationsPerUser   int64 `json:"max_concurrent_invocations_per_user"`
 }
-
-// BrowserSession Closed browser projection. Session keys, Agent/user/tenant identifiers, lineage, policies, cost settings, metadata, usage, budget, and derived host context are omitted.
-type BrowserSession struct {
-	ActiveInvocationID     *InvocationID                         `json:"active_invocation_id"`
-	ActiveInvocationStatus *BrowserSessionActiveInvocationStatus `json:"active_invocation_status"`
-	CreatedAt              time.Time                             `json:"created_at"`
-
-	// ID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	ID SessionID `json:"id"`
-
-	// ToolCalls Tool calls of the active Invocation, with their current status.
-	// `arguments` and `deadline_at` appear only on eligible named
-	// host-mode calls declared by the admitted definition, which are the
-	// only ones a browser may answer.
-	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
-	UpdatedAt time.Time          `json:"updated_at"`
-}
-
-// BrowserSessionActiveInvocationStatus defines model for BrowserSession.ActiveInvocationStatus.
-type BrowserSessionActiveInvocationStatus string
-
-// BrowserSessionList defines model for BrowserSessionList.
-type BrowserSessionList struct {
-	HasMore    bool             `json:"has_more"`
-	Items      []BrowserSession `json:"items"`
-	NextCursor *string          `json:"next_cursor"`
-}
-
-// BrowserSessionMessage Public transcript content without Agent/user identity, runtime phase, copy origin, or host provenance.
-type BrowserSessionMessage struct {
-	Content   []SessionContentBlock `json:"content"`
-	CreatedAt time.Time             `json:"created_at"`
-
-	// ID Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
-	ID           SessionMessageID   `json:"id"`
-	InvocationID *InvocationID      `json:"invocation_id"`
-	Role         SessionMessageRole `json:"role"`
-	Sequence     int64              `json:"sequence"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
-}
-
-// BrowserSessionMessageList defines model for BrowserSessionMessageList.
-type BrowserSessionMessageList struct {
-	HasMore    bool                    `json:"has_more"`
-	Items      []BrowserSessionMessage `json:"items"`
-	NextCursor *string                 `json:"next_cursor"`
-}
-
-// BrowserTranscriptSnapshot defines model for BrowserTranscriptSnapshot.
-type BrowserTranscriptSnapshot struct {
-	Cursor            string                    `json:"cursor"`
-	HasMore           bool                      `json:"has_more"`
-	InvocationChanges []BrowserInvocationChange `json:"invocation_changes"`
-	Messages          []BrowserSessionMessage   `json:"messages"`
-	NextPageToken     *string                   `json:"next_page_token"`
-}
-
-// BrowserTranscriptStreamEvent Browser stream event. Switch on `type`. Host-only transcript fields are
-// never emitted. New frame types may appear here over time, and existing
-// ones may gain fields.
-type BrowserTranscriptStreamEvent struct {
-	union json.RawMessage
-}
-
-// BrowserTranscriptUpdateEvent defines model for BrowserTranscriptUpdateEvent.
-type BrowserTranscriptUpdateEvent struct {
-	Cursor            string                    `json:"cursor"`
-	InvocationChanges []BrowserInvocationChange `json:"invocation_changes"`
-	Messages          []BrowserSessionMessage   `json:"messages"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                        `json:"session_id"`
-	Type      BrowserTranscriptUpdateEventType `json:"type"`
-}
-
-// BrowserTranscriptUpdateEventType defines model for BrowserTranscriptUpdateEvent.Type.
-type BrowserTranscriptUpdateEventType string
 
 // BuiltinToolDeclaration defines model for BuiltinToolDeclaration.
 type BuiltinToolDeclaration struct {
@@ -3941,36 +3508,58 @@ type CreditBlock struct {
 // nvoken's own provider key, credits are always required.
 type CreditPolicy string
 
-// CurrentIdentity defines model for CurrentIdentity.
+// CurrentIdentity Who nvoken thinks you are. `method` says how you authenticated, and it
+// is the only thing you need to read to know which of the optional fields
+// below are present: a machine credential carries `credential_id`,
+// `org_id`, and `effective_profile`; a browser grant carries `agent_key`,
+// `agent_definition_id`, and `agent_definition_revision`, and pins
+// `app_id` and `tenant_key` to real values.
 type CurrentIdentity struct {
 	Authentication struct {
+		// AgentDefinitionID Browser grants only.
+		AgentDefinitionID *AgentDefinitionID `json:"agent_definition_id,omitempty"`
+
+		// AgentDefinitionRevision Browser grants only.
+		AgentDefinitionRevision *int `json:"agent_definition_revision,omitempty"`
+
+		// AgentKey Browser grants only. The Agent this grant is pinned to.
+		AgentKey *string `json:"agent_key,omitempty"`
+
+		// AppID Null only for an Org-scoped machine credential. A browser grant
+		// is always App-scoped, so this is never null for one.
 		AppID     *AppID                                 `json:"app_id"`
 		Assurance CurrentIdentityAuthenticationAssurance `json:"assurance"`
 
-		// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
-		CredentialID CredentialID `json:"credential_id"`
+		// CredentialID Machine credentials only.
+		CredentialID *CredentialID `json:"credential_id,omitempty"`
 
-		// EffectiveProfile Fixed authorization profile. Runtime is meaningful for App-bound
-		// execution and cannot be selected for an Org credential.
-		EffectiveProfile CredentialProfile                   `json:"effective_profile"`
-		Method           CurrentIdentityAuthenticationMethod `json:"method"`
-		Operations       []Operation                         `json:"operations"`
-		OrgID            *OrgID                              `json:"org_id"`
-		SessionID        *SessionID                          `json:"session_id,omitempty"`
-		TenantKey        *string                             `json:"tenant_key,omitempty"`
+		// EffectiveProfile Machine credentials only.
+		EffectiveProfile *CredentialProfile `json:"effective_profile,omitempty"`
+
+		// Method How this caller authenticated. New values may be added; handle
+		// a value you do not recognize as an unknown caller rather than
+		// refusing the response.
+		Method     CurrentIdentityAuthenticationMethod `json:"method"`
+		Operations []Operation                         `json:"operations"`
+
+		// OrgID Machine credentials only.
+		OrgID     *OrgID     `json:"org_id,omitempty"`
+		SessionID *SessionID `json:"session_id,omitempty"`
+
+		// TenantKey Null only when a machine credential resolves no tenant. A
+		// browser grant is always tenant-pinned, so this is never null
+		// for one.
+		TenantKey *string `json:"tenant_key,omitempty"`
 	} `json:"authentication"`
 }
 
 // CurrentIdentityAuthenticationAssurance defines model for CurrentIdentity.Authentication.Assurance.
 type CurrentIdentityAuthenticationAssurance string
 
-// CurrentIdentityAuthenticationMethod defines model for CurrentIdentity.Authentication.Method.
+// CurrentIdentityAuthenticationMethod How this caller authenticated. New values may be added; handle
+// a value you do not recognize as an unknown caller rather than
+// refusing the response.
 type CurrentIdentityAuthenticationMethod string
-
-// CurrentIdentityResponse defines model for CurrentIdentityResponse.
-type CurrentIdentityResponse struct {
-	union json.RawMessage
-}
 
 // DeliveryID Identifies one delivery nvoken sent you, callback or webhook alike —
 // both are the same durable record and carry the same `dlvr_` prefix.
@@ -4217,7 +3806,15 @@ type InputBlock struct {
 	union json.RawMessage
 }
 
-// Invocation defines model for Invocation.
+// Invocation One turn.
+//
+// Some fields are audience-restricted: they are present for a machine
+// credential and omitted for a browser grant, which is why they are not
+// required. Omission is the whole mechanism, so one schema decodes every
+// response and nothing has to be guessed from the payload. The omitted
+// set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
+// `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
+// `limits`.
 type Invocation struct {
 	ActiveExecutionMs int `json:"active_execution_ms"`
 
@@ -4228,7 +3825,7 @@ type Invocation struct {
 	// Present on `GET /v1/invocations/{id}` and on the result. Null in list
 	// items, where `agent_definition_id` and `agent_definition_revision`
 	// identify it instead.
-	AgentDefinition *AgentDefinition `json:"agent_definition"`
+	AgentDefinition *AgentDefinition `json:"agent_definition,omitempty"`
 
 	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
 	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
@@ -4237,7 +3834,7 @@ type Invocation struct {
 	AgentDefinitionRevision int64 `json:"agent_definition_revision"`
 
 	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-	AgentID AgentID `json:"agent_id"`
+	AgentID *AgentID `json:"agent_id,omitempty"`
 
 	// Attempt Execution attempts this Invocation has been claimed for. It
 	// increases on every claim, so an attempt increase across a
@@ -4252,11 +3849,11 @@ type Invocation struct {
 	// items. Present on admission, point reads, results, and stream
 	// Invocation projections. Context is immutable and order-sensitive
 	// for idempotency.
-	Context   *[]InvocationContextItem `json:"context"`
+	Context   *[]InvocationContextItem `json:"context,omitempty"`
 	CreatedAt time.Time                `json:"created_at"`
 
 	// CreditBlock Tenant credit account for an insufficient-credits stop, otherwise null.
-	CreditBlock *CreditBlock `json:"credit_block"`
+	CreditBlock *CreditBlock `json:"credit_block,omitempty"`
 
 	// DeadlineAt The deadline currently enforced by the runtime. Null while the
 	// Invocation is waiting without an explicit waiting timeout; the
@@ -4272,13 +3869,13 @@ type Invocation struct {
 	Error        *InvocationFailure `json:"error"`
 
 	// ID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	ID     InvocationID   `json:"id"`
-	Limits ResolvedLimits `json:"limits"`
+	ID     InvocationID    `json:"id"`
+	Limits *ResolvedLimits `json:"limits,omitempty"`
 
 	// Metadata Your own data, stored when the turn was created and returned exactly as
 	// you sent it.
-	Metadata   *Metadata        `json:"metadata"`
-	Provenance *ModelProvenance `json:"provenance"`
+	Metadata   *Metadata        `json:"metadata,omitempty"`
+	Provenance *ModelProvenance `json:"provenance,omitempty"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
@@ -4324,7 +3921,7 @@ type Invocation struct {
 	// you asked for. Null until the turn finishes successfully, and
 	// always null if you did not ask for structured output.
 	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
-	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance"`
+	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance,omitempty"`
 
 	// ToolCalls Every tool call this turn has made, with its current status.
 	// Omitted when the turn has made none.
@@ -4332,19 +3929,19 @@ type Invocation struct {
 	UpdatedAt time.Time          `json:"updated_at"`
 
 	// Usage One normalized terminal aggregate, not a billing ledger.
-	Usage *ModelUsage `json:"usage"`
+	Usage *ModelUsage `json:"usage,omitempty"`
 
 	// UserKey Your own label for the end user this turn belongs to. Useful for
 	// filtering lists. It is not a security boundary — no request is
 	// ever refused because of it, so do not rely on it to keep one
 	// user's data away from another.
-	UserKey *string `json:"user_key"`
+	UserKey *string `json:"user_key,omitempty"`
 }
 
 // InvocationAcceptedEvent defines model for InvocationAcceptedEvent.
 type InvocationAcceptedEvent struct {
 	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-	AgentID      AgentID   `json:"agent_id"`
+	AgentID      *AgentID  `json:"agent_id,omitempty"`
 	DeadlineAt   time.Time `json:"deadline_at"`
 	Deduplicated bool      `json:"deduplicated"`
 
@@ -4356,7 +3953,7 @@ type InvocationAcceptedEvent struct {
 	// can see what you got without a second request — worth checking when you
 	// left `max_iterations` out, since the default may be lower than you
 	// expect.
-	Limits ResolvedLimits `json:"limits"`
+	Limits *ResolvedLimits `json:"limits,omitempty"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	SessionID SessionID `json:"session_id"`
@@ -4414,7 +4011,7 @@ type InvocationChange struct {
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID     `json:"invocation_id"`
 	OccurredAt   time.Time        `json:"occurred_at"`
-	Provenance   *ModelProvenance `json:"provenance"`
+	Provenance   *ModelProvenance `json:"provenance,omitempty"`
 	Revision     int64            `json:"revision"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
@@ -4452,7 +4049,7 @@ type InvocationChange struct {
 	// `incomplete` change names the limit that ran out.
 	StopReason                 *InvocationStopReason       `json:"stop_reason,omitempty"`
 	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
-	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance"`
+	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance,omitempty"`
 	ThroughMessageSequence     *int64                      `json:"through_message_sequence"`
 
 	// ToolCalls Every tool call this turn has made, with its current status.
@@ -4461,7 +4058,7 @@ type InvocationChange struct {
 	// before its result message arrives, and a client that was
 	// disconnected sees it on replay.
 	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
-	Usage     *ModelUsage        `json:"usage"`
+	Usage     *ModelUsage        `json:"usage,omitempty"`
 }
 
 // InvocationContextItem defines model for InvocationContextItem.
@@ -4556,11 +4153,6 @@ type InvocationList struct {
 	NextCursor *string      `json:"next_cursor"`
 }
 
-// InvocationListResponse defines model for InvocationListResponse.
-type InvocationListResponse struct {
-	union json.RawMessage
-}
-
 // InvocationLog defines model for InvocationLog.
 type InvocationLog struct {
 	Attempt        *int      `json:"attempt,omitempty"`
@@ -4596,13 +4188,17 @@ type InvocationLogList struct {
 	Status ObservationStatus `json:"status"`
 }
 
-// InvocationResponse Trusted machine projection or the smaller projection selected by client-token authentication.
-type InvocationResponse struct {
-	union json.RawMessage
-}
-
 // InvocationResult defines model for InvocationResult.
 type InvocationResult struct {
+	// Invocation One turn.
+	//
+	// Some fields are audience-restricted: they are present for a machine
+	// credential and omitted for a browser grant, which is why they are not
+	// required. Omission is the whole mechanism, so one schema decodes every
+	// response and nothing has to be guessed from the payload. The omitted
+	// set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
+	// `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
+	// `limits`.
 	Invocation Invocation `json:"invocation"`
 
 	// Messages Every canonical SessionMessage owned by this Invocation, all
@@ -4633,11 +4229,6 @@ type InvocationResultEvent struct {
 
 // InvocationResultEventType defines model for InvocationResultEvent.Type.
 type InvocationResultEventType string
-
-// InvocationResultResponse defines model for InvocationResultResponse.
-type InvocationResultResponse struct {
-	union json.RawMessage
-}
 
 // InvocationStatus `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 // turn reaches one of them it never changes again.
@@ -4698,11 +4289,6 @@ type InvocationStreamEvent struct {
 	union json.RawMessage
 }
 
-// InvocationStreamResponse defines model for InvocationStreamResponse.
-type InvocationStreamResponse struct {
-	union json.RawMessage
-}
-
 // InvocationTimeline defines model for InvocationTimeline.
 type InvocationTimeline struct {
 	AcceptedAt        time.Time `json:"accepted_at"`
@@ -4760,6 +4346,15 @@ type InvocationTimelineStepKind string
 
 // InvocationUpdateEvent defines model for InvocationUpdateEvent.
 type InvocationUpdateEvent struct {
+	// Invocation One turn.
+	//
+	// Some fields are audience-restricted: they are present for a machine
+	// credential and omitted for a browser grant, which is why they are not
+	// required. Omission is the whole mechanism, so one schema decodes every
+	// response and nothing has to be guessed from the payload. The omitted
+	// set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
+	// `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
+	// `limits`.
 	Invocation Invocation `json:"invocation"`
 
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
@@ -5835,7 +5430,15 @@ type ServerToolUseBlock struct {
 // ServerToolUseBlockType defines model for ServerToolUseBlock.Type.
 type ServerToolUseBlockType string
 
-// Session defines model for Session.
+// Session One conversation.
+//
+// Some fields are audience-restricted: they are present for a machine
+// credential and omitted for a browser grant, which is why they are not
+// required. Omission is the whole mechanism, so one schema decodes every
+// response and nothing has to be guessed from the payload. The omitted
+// set here is `agent_id`, `tenant_key`, `session_key`, `user_key`, `forked_from`,
+// `compaction`, `retention`, `expires_at`, `metadata`, `credit_block`,
+// `context`, and `usage`.
 type Session struct {
 	// ActiveInvocationID The queued, running, waiting, or paused Invocation, if one exists.
 	ActiveInvocationID *InvocationID `json:"active_invocation_id"`
@@ -5845,7 +5448,7 @@ type Session struct {
 
 	// AgentID Null only while a Session created ahead of time has not run a turn yet.
 	// The first turn binds the Agent, and after that it never changes.
-	AgentID *AgentID `json:"agent_id"`
+	AgentID *AgentID `json:"agent_id,omitempty"`
 
 	// Compaction The automatic compaction policy this Session actually applies, or
 	// null when it compacts nothing. It is echoed resolved: a request
@@ -5853,26 +5456,26 @@ type Session struct {
 	// resolved to, and a request that named no model reads back the
 	// model the policy bound. Nothing here is ever the unresolved
 	// request.
-	Compaction *CompactionPolicy `json:"compaction"`
+	Compaction *CompactionPolicy `json:"compaction,omitempty"`
 
 	// Context Read-time retained-context estimate and the model window it is
 	// measured against. Null until the Session has either a compaction
 	// model or an Invocation primary model. The object remains present
 	// for an uncataloged model, with `context_window_tokens: null`.
-	Context   *SessionContext `json:"context"`
+	Context   *SessionContext `json:"context,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`
 
 	// CreditBlock Tenant credit account blocking the active paused Invocation, otherwise null.
-	CreditBlock *CreditBlock `json:"credit_block"`
+	CreditBlock *CreditBlock `json:"credit_block,omitempty"`
 
 	// ExpiresAt When nvoken may automatically delete this Session, or null if it
 	// has no retention window. The date moves forward every time a turn
 	// starts and every time one finishes, so a Session in active use
 	// never reaches it.
-	ExpiresAt *time.Time `json:"expires_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// ForkedFrom Durable source prefix lineage, or null for an original Session.
-	ForkedFrom *SessionForkLineage `json:"forked_from"`
+	ForkedFrom *SessionForkLineage `json:"forked_from,omitempty"`
 
 	// ID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	ID SessionID `json:"id"`
@@ -5880,17 +5483,17 @@ type Session struct {
 	// Metadata Host correlation data, returned verbatim. Set at creation through
 	// `session_options.metadata` and changed with
 	// `PATCH /v1/sessions/{session_id}`.
-	Metadata *Metadata `json:"metadata"`
+	Metadata *Metadata `json:"metadata,omitempty"`
 
 	// Retention The idle retention window this Session was created with, or null
 	// when it is retained until deleted explicitly. A window outside the
 	// supported range is refused at creation rather than clamped, so
 	// what is read back is always exactly what applies.
-	Retention  *RetentionPolicy `json:"retention"`
-	SessionKey *string          `json:"session_key"`
+	Retention  *RetentionPolicy `json:"retention,omitempty"`
+	SessionKey *string          `json:"session_key,omitempty"`
 
 	// TenantKey Immutable effective tenant partition reference.
-	TenantKey *string `json:"tenant_key"`
+	TenantKey *string `json:"tenant_key,omitempty"`
 
 	// ToolCalls Tool calls of the active Invocation, with their current status.
 	// The ones still yours to run carry `arguments` and `deadline_at`.
@@ -5901,11 +5504,11 @@ type Session struct {
 	// Usage Read-time sum of this Session's non-null Invocation usage and
 	// committed private compaction usage. Null until either exists. This
 	// normalized estimate is not a billing ledger.
-	Usage *ModelUsage `json:"usage"`
+	Usage *ModelUsage `json:"usage,omitempty"`
 
 	// UserKey Host-owned end-user label recorded when this Session was opened.
 	// Filtering only; not an isolation boundary.
-	UserKey *string `json:"user_key"`
+	UserKey *string `json:"user_key,omitempty"`
 }
 
 // SessionActiveInvocationStatus defines model for Session.ActiveInvocationStatus.
@@ -6013,15 +5616,10 @@ type SessionList struct {
 	NextCursor *string   `json:"next_cursor"`
 }
 
-// SessionListResponse defines model for SessionListResponse.
-type SessionListResponse struct {
-	union json.RawMessage
-}
-
 // SessionMessage defines model for SessionMessage.
 type SessionMessage struct {
 	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-	AgentID AgentID               `json:"agent_id"`
+	AgentID *AgentID              `json:"agent_id,omitempty"`
 	Content []SessionContentBlock `json:"content"`
 
 	// CopiedFromMessageID Present only on a fork copy; names its source message.
@@ -6064,7 +5662,7 @@ type SessionMessage struct {
 
 	// UserKey Per-turn host end-user attribution. Copied rows preserve it;
 	// seeded history may omit it.
-	UserKey *string `json:"user_key"`
+	UserKey *string `json:"user_key,omitempty"`
 }
 
 // SessionMessageOrigin Present only when the message content was asserted by the host at
@@ -6080,11 +5678,6 @@ type SessionMessageList struct {
 	HasMore    bool             `json:"has_more"`
 	Items      []SessionMessage `json:"items"`
 	NextCursor *string          `json:"next_cursor"`
-}
-
-// SessionMessageListResponse defines model for SessionMessageListResponse.
-type SessionMessageListResponse struct {
-	union json.RawMessage
 }
 
 // SessionMessageRole defines model for SessionMessageRole.
@@ -6140,11 +5733,6 @@ type SessionOptions struct {
 	// Omitting retention retains the Session until it is deleted explicitly,
 	// which stays the default.
 	Retention *RetentionPolicy `json:"retention,omitempty"`
-}
-
-// SessionResponse defines model for SessionResponse.
-type SessionResponse struct {
-	union json.RawMessage
 }
 
 // StreamEndEvent defines model for StreamEndEvent.
@@ -6744,11 +6332,6 @@ type TranscriptSnapshot struct {
 	NextPageToken     *string            `json:"next_page_token"`
 }
 
-// TranscriptSnapshotResponse defines model for TranscriptSnapshotResponse.
-type TranscriptSnapshotResponse struct {
-	union json.RawMessage
-}
-
 // TranscriptStreamEvent The JSON value carried by one Session-stream SSE `data:` field. Switch
 // on `type`. Saved `transcript.update` frames carry the resume cursor as
 // both payload data and SSE `id`; preview and control frames never carry
@@ -6757,11 +6340,6 @@ type TranscriptSnapshotResponse struct {
 // New frame types may appear here over time, and existing ones may gain
 // fields. Handle the types you know and ignore the rest.
 type TranscriptStreamEvent struct {
-	union json.RawMessage
-}
-
-// TranscriptStreamResponse defines model for TranscriptStreamResponse.
-type TranscriptStreamResponse struct {
 	union json.RawMessage
 }
 
@@ -7666,496 +7244,6 @@ type ForkSessionJSONRequestBody = ForkSessionRequest
 // ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody defines body for ReceiveToolCallback for application/vnd.nvoken.tool-callback+json; version=1 ContentType.
 type ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody = ToolCallbackRequest
 
-// AsBrowserInvocationAcceptedEvent returns the union data inside the BrowserInvocationStreamEvent as a BrowserInvocationAcceptedEvent
-func (t BrowserInvocationStreamEvent) AsBrowserInvocationAcceptedEvent() (BrowserInvocationAcceptedEvent, error) {
-	var body BrowserInvocationAcceptedEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserInvocationAcceptedEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided BrowserInvocationAcceptedEvent
-func (t *BrowserInvocationStreamEvent) FromBrowserInvocationAcceptedEvent(v BrowserInvocationAcceptedEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.accepted"}`))
-	t.union = b
-	return err
-}
-
-// MergeBrowserInvocationAcceptedEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided BrowserInvocationAcceptedEvent
-func (t *BrowserInvocationStreamEvent) MergeBrowserInvocationAcceptedEvent(v BrowserInvocationAcceptedEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.accepted"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsOutputTextDeltaEvent returns the union data inside the BrowserInvocationStreamEvent as a OutputTextDeltaEvent
-func (t BrowserInvocationStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
-	var body OutputTextDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromOutputTextDeltaEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided OutputTextDeltaEvent
-func (t *BrowserInvocationStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
-	t.union = b
-	return err
-}
-
-// MergeOutputTextDeltaEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided OutputTextDeltaEvent
-func (t *BrowserInvocationStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsThinkingDeltaEvent returns the union data inside the BrowserInvocationStreamEvent as a ThinkingDeltaEvent
-func (t BrowserInvocationStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error) {
-	var body ThinkingDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromThinkingDeltaEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided ThinkingDeltaEvent
-func (t *BrowserInvocationStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
-	t.union = b
-	return err
-}
-
-// MergeThinkingDeltaEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided ThinkingDeltaEvent
-func (t *BrowserInvocationStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserInvocationUpdateEvent returns the union data inside the BrowserInvocationStreamEvent as a BrowserInvocationUpdateEvent
-func (t BrowserInvocationStreamEvent) AsBrowserInvocationUpdateEvent() (BrowserInvocationUpdateEvent, error) {
-	var body BrowserInvocationUpdateEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserInvocationUpdateEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided BrowserInvocationUpdateEvent
-func (t *BrowserInvocationStreamEvent) FromBrowserInvocationUpdateEvent(v BrowserInvocationUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.update"}`))
-	t.union = b
-	return err
-}
-
-// MergeBrowserInvocationUpdateEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided BrowserInvocationUpdateEvent
-func (t *BrowserInvocationStreamEvent) MergeBrowserInvocationUpdateEvent(v BrowserInvocationUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.update"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserInvocationResultEvent returns the union data inside the BrowserInvocationStreamEvent as a BrowserInvocationResultEvent
-func (t BrowserInvocationStreamEvent) AsBrowserInvocationResultEvent() (BrowserInvocationResultEvent, error) {
-	var body BrowserInvocationResultEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserInvocationResultEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided BrowserInvocationResultEvent
-func (t *BrowserInvocationStreamEvent) FromBrowserInvocationResultEvent(v BrowserInvocationResultEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.result"}`))
-	t.union = b
-	return err
-}
-
-// MergeBrowserInvocationResultEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided BrowserInvocationResultEvent
-func (t *BrowserInvocationStreamEvent) MergeBrowserInvocationResultEvent(v BrowserInvocationResultEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.result"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamResyncEvent returns the union data inside the BrowserInvocationStreamEvent as a StreamResyncEvent
-func (t BrowserInvocationStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
-	var body StreamResyncEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamResyncEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided StreamResyncEvent
-func (t *BrowserInvocationStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamResyncEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided StreamResyncEvent
-func (t *BrowserInvocationStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamEndEvent returns the union data inside the BrowserInvocationStreamEvent as a StreamEndEvent
-func (t BrowserInvocationStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
-	var body StreamEndEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamEndEvent overwrites any union data inside the BrowserInvocationStreamEvent as the provided StreamEndEvent
-func (t *BrowserInvocationStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamEndEvent performs a merge with any union data inside the BrowserInvocationStreamEvent, using the provided StreamEndEvent
-func (t *BrowserInvocationStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t BrowserInvocationStreamEvent) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t BrowserInvocationStreamEvent) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "invocation.accepted":
-		return t.AsBrowserInvocationAcceptedEvent()
-	case "invocation.result":
-		return t.AsBrowserInvocationResultEvent()
-	case "invocation.update":
-		return t.AsBrowserInvocationUpdateEvent()
-	case "output_text.delta":
-		return t.AsOutputTextDeltaEvent()
-	case "stream.end":
-		return t.AsStreamEndEvent()
-	case "stream.resync":
-		return t.AsStreamResyncEvent()
-	case "thinking.delta":
-		return t.AsThinkingDeltaEvent()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t BrowserInvocationStreamEvent) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *BrowserInvocationStreamEvent) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsBrowserTranscriptUpdateEvent returns the union data inside the BrowserTranscriptStreamEvent as a BrowserTranscriptUpdateEvent
-func (t BrowserTranscriptStreamEvent) AsBrowserTranscriptUpdateEvent() (BrowserTranscriptUpdateEvent, error) {
-	var body BrowserTranscriptUpdateEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserTranscriptUpdateEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided BrowserTranscriptUpdateEvent
-func (t *BrowserTranscriptStreamEvent) FromBrowserTranscriptUpdateEvent(v BrowserTranscriptUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
-	t.union = b
-	return err
-}
-
-// MergeBrowserTranscriptUpdateEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided BrowserTranscriptUpdateEvent
-func (t *BrowserTranscriptStreamEvent) MergeBrowserTranscriptUpdateEvent(v BrowserTranscriptUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsOutputTextDeltaEvent returns the union data inside the BrowserTranscriptStreamEvent as a OutputTextDeltaEvent
-func (t BrowserTranscriptStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
-	var body OutputTextDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromOutputTextDeltaEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided OutputTextDeltaEvent
-func (t *BrowserTranscriptStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
-	t.union = b
-	return err
-}
-
-// MergeOutputTextDeltaEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided OutputTextDeltaEvent
-func (t *BrowserTranscriptStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsThinkingDeltaEvent returns the union data inside the BrowserTranscriptStreamEvent as a ThinkingDeltaEvent
-func (t BrowserTranscriptStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error) {
-	var body ThinkingDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromThinkingDeltaEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided ThinkingDeltaEvent
-func (t *BrowserTranscriptStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
-	t.union = b
-	return err
-}
-
-// MergeThinkingDeltaEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided ThinkingDeltaEvent
-func (t *BrowserTranscriptStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamResyncEvent returns the union data inside the BrowserTranscriptStreamEvent as a StreamResyncEvent
-func (t BrowserTranscriptStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
-	var body StreamResyncEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamResyncEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided StreamResyncEvent
-func (t *BrowserTranscriptStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamResyncEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided StreamResyncEvent
-func (t *BrowserTranscriptStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamEndEvent returns the union data inside the BrowserTranscriptStreamEvent as a StreamEndEvent
-func (t BrowserTranscriptStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
-	var body StreamEndEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamEndEvent overwrites any union data inside the BrowserTranscriptStreamEvent as the provided StreamEndEvent
-func (t *BrowserTranscriptStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamEndEvent performs a merge with any union data inside the BrowserTranscriptStreamEvent, using the provided StreamEndEvent
-func (t *BrowserTranscriptStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t BrowserTranscriptStreamEvent) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t BrowserTranscriptStreamEvent) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "output_text.delta":
-		return t.AsOutputTextDeltaEvent()
-	case "stream.end":
-		return t.AsStreamEndEvent()
-	case "stream.resync":
-		return t.AsStreamResyncEvent()
-	case "thinking.delta":
-		return t.AsThinkingDeltaEvent()
-	case "transcript.update":
-		return t.AsBrowserTranscriptUpdateEvent()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t BrowserTranscriptStreamEvent) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *BrowserTranscriptStreamEvent) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
 // AsCharLocationCitation returns the union data inside the Citation as a CharLocationCitation
 func (t Citation) AsCharLocationCitation() (CharLocationCitation, error) {
 	var body CharLocationCitation
@@ -8351,68 +7439,6 @@ func (t CompactionPolicy_TriggerTokens) MarshalJSON() ([]byte, error) {
 }
 
 func (t *CompactionPolicy_TriggerTokens) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsCurrentIdentity returns the union data inside the CurrentIdentityResponse as a CurrentIdentity
-func (t CurrentIdentityResponse) AsCurrentIdentity() (CurrentIdentity, error) {
-	var body CurrentIdentity
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromCurrentIdentity overwrites any union data inside the CurrentIdentityResponse as the provided CurrentIdentity
-func (t *CurrentIdentityResponse) FromCurrentIdentity(v CurrentIdentity) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeCurrentIdentity performs a merge with any union data inside the CurrentIdentityResponse, using the provided CurrentIdentity
-func (t *CurrentIdentityResponse) MergeCurrentIdentity(v CurrentIdentity) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserCurrentIdentity returns the union data inside the CurrentIdentityResponse as a BrowserCurrentIdentity
-func (t CurrentIdentityResponse) AsBrowserCurrentIdentity() (BrowserCurrentIdentity, error) {
-	var body BrowserCurrentIdentity
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserCurrentIdentity overwrites any union data inside the CurrentIdentityResponse as the provided BrowserCurrentIdentity
-func (t *CurrentIdentityResponse) FromBrowserCurrentIdentity(v BrowserCurrentIdentity) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserCurrentIdentity performs a merge with any union data inside the CurrentIdentityResponse, using the provided BrowserCurrentIdentity
-func (t *CurrentIdentityResponse) MergeBrowserCurrentIdentity(v BrowserCurrentIdentity) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t CurrentIdentityResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *CurrentIdentityResponse) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -8625,192 +7651,6 @@ func (t InvocationInput) MarshalJSON() ([]byte, error) {
 }
 
 func (t *InvocationInput) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsInvocationList returns the union data inside the InvocationListResponse as a InvocationList
-func (t InvocationListResponse) AsInvocationList() (InvocationList, error) {
-	var body InvocationList
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromInvocationList overwrites any union data inside the InvocationListResponse as the provided InvocationList
-func (t *InvocationListResponse) FromInvocationList(v InvocationList) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeInvocationList performs a merge with any union data inside the InvocationListResponse, using the provided InvocationList
-func (t *InvocationListResponse) MergeInvocationList(v InvocationList) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserInvocationList returns the union data inside the InvocationListResponse as a BrowserInvocationList
-func (t InvocationListResponse) AsBrowserInvocationList() (BrowserInvocationList, error) {
-	var body BrowserInvocationList
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserInvocationList overwrites any union data inside the InvocationListResponse as the provided BrowserInvocationList
-func (t *InvocationListResponse) FromBrowserInvocationList(v BrowserInvocationList) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserInvocationList performs a merge with any union data inside the InvocationListResponse, using the provided BrowserInvocationList
-func (t *InvocationListResponse) MergeBrowserInvocationList(v BrowserInvocationList) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t InvocationListResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *InvocationListResponse) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsInvocation returns the union data inside the InvocationResponse as a Invocation
-func (t InvocationResponse) AsInvocation() (Invocation, error) {
-	var body Invocation
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromInvocation overwrites any union data inside the InvocationResponse as the provided Invocation
-func (t *InvocationResponse) FromInvocation(v Invocation) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeInvocation performs a merge with any union data inside the InvocationResponse, using the provided Invocation
-func (t *InvocationResponse) MergeInvocation(v Invocation) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserInvocation returns the union data inside the InvocationResponse as a BrowserInvocation
-func (t InvocationResponse) AsBrowserInvocation() (BrowserInvocation, error) {
-	var body BrowserInvocation
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserInvocation overwrites any union data inside the InvocationResponse as the provided BrowserInvocation
-func (t *InvocationResponse) FromBrowserInvocation(v BrowserInvocation) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserInvocation performs a merge with any union data inside the InvocationResponse, using the provided BrowserInvocation
-func (t *InvocationResponse) MergeBrowserInvocation(v BrowserInvocation) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t InvocationResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *InvocationResponse) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsInvocationResult returns the union data inside the InvocationResultResponse as a InvocationResult
-func (t InvocationResultResponse) AsInvocationResult() (InvocationResult, error) {
-	var body InvocationResult
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromInvocationResult overwrites any union data inside the InvocationResultResponse as the provided InvocationResult
-func (t *InvocationResultResponse) FromInvocationResult(v InvocationResult) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeInvocationResult performs a merge with any union data inside the InvocationResultResponse, using the provided InvocationResult
-func (t *InvocationResultResponse) MergeInvocationResult(v InvocationResult) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserInvocationResult returns the union data inside the InvocationResultResponse as a BrowserInvocationResult
-func (t InvocationResultResponse) AsBrowserInvocationResult() (BrowserInvocationResult, error) {
-	var body BrowserInvocationResult
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserInvocationResult overwrites any union data inside the InvocationResultResponse as the provided BrowserInvocationResult
-func (t *InvocationResultResponse) FromBrowserInvocationResult(v BrowserInvocationResult) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserInvocationResult performs a merge with any union data inside the InvocationResultResponse, using the provided BrowserInvocationResult
-func (t *InvocationResultResponse) MergeBrowserInvocationResult(v BrowserInvocationResult) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t InvocationResultResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *InvocationResultResponse) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -9092,68 +7932,6 @@ func (t InvocationStreamEvent) MarshalJSON() ([]byte, error) {
 }
 
 func (t *InvocationStreamEvent) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsInvocationStreamEvent returns the union data inside the InvocationStreamResponse as a InvocationStreamEvent
-func (t InvocationStreamResponse) AsInvocationStreamEvent() (InvocationStreamEvent, error) {
-	var body InvocationStreamEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromInvocationStreamEvent overwrites any union data inside the InvocationStreamResponse as the provided InvocationStreamEvent
-func (t *InvocationStreamResponse) FromInvocationStreamEvent(v InvocationStreamEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeInvocationStreamEvent performs a merge with any union data inside the InvocationStreamResponse, using the provided InvocationStreamEvent
-func (t *InvocationStreamResponse) MergeInvocationStreamEvent(v InvocationStreamEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserInvocationStreamEvent returns the union data inside the InvocationStreamResponse as a BrowserInvocationStreamEvent
-func (t InvocationStreamResponse) AsBrowserInvocationStreamEvent() (BrowserInvocationStreamEvent, error) {
-	var body BrowserInvocationStreamEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserInvocationStreamEvent overwrites any union data inside the InvocationStreamResponse as the provided BrowserInvocationStreamEvent
-func (t *InvocationStreamResponse) FromBrowserInvocationStreamEvent(v BrowserInvocationStreamEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserInvocationStreamEvent performs a merge with any union data inside the InvocationStreamResponse, using the provided BrowserInvocationStreamEvent
-func (t *InvocationStreamResponse) MergeBrowserInvocationStreamEvent(v BrowserInvocationStreamEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t InvocationStreamResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *InvocationStreamResponse) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -9661,192 +8439,6 @@ func (t *SessionContentBlock) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// AsSessionList returns the union data inside the SessionListResponse as a SessionList
-func (t SessionListResponse) AsSessionList() (SessionList, error) {
-	var body SessionList
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromSessionList overwrites any union data inside the SessionListResponse as the provided SessionList
-func (t *SessionListResponse) FromSessionList(v SessionList) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeSessionList performs a merge with any union data inside the SessionListResponse, using the provided SessionList
-func (t *SessionListResponse) MergeSessionList(v SessionList) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserSessionList returns the union data inside the SessionListResponse as a BrowserSessionList
-func (t SessionListResponse) AsBrowserSessionList() (BrowserSessionList, error) {
-	var body BrowserSessionList
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserSessionList overwrites any union data inside the SessionListResponse as the provided BrowserSessionList
-func (t *SessionListResponse) FromBrowserSessionList(v BrowserSessionList) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserSessionList performs a merge with any union data inside the SessionListResponse, using the provided BrowserSessionList
-func (t *SessionListResponse) MergeBrowserSessionList(v BrowserSessionList) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t SessionListResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *SessionListResponse) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsSessionMessageList returns the union data inside the SessionMessageListResponse as a SessionMessageList
-func (t SessionMessageListResponse) AsSessionMessageList() (SessionMessageList, error) {
-	var body SessionMessageList
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromSessionMessageList overwrites any union data inside the SessionMessageListResponse as the provided SessionMessageList
-func (t *SessionMessageListResponse) FromSessionMessageList(v SessionMessageList) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeSessionMessageList performs a merge with any union data inside the SessionMessageListResponse, using the provided SessionMessageList
-func (t *SessionMessageListResponse) MergeSessionMessageList(v SessionMessageList) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserSessionMessageList returns the union data inside the SessionMessageListResponse as a BrowserSessionMessageList
-func (t SessionMessageListResponse) AsBrowserSessionMessageList() (BrowserSessionMessageList, error) {
-	var body BrowserSessionMessageList
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserSessionMessageList overwrites any union data inside the SessionMessageListResponse as the provided BrowserSessionMessageList
-func (t *SessionMessageListResponse) FromBrowserSessionMessageList(v BrowserSessionMessageList) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserSessionMessageList performs a merge with any union data inside the SessionMessageListResponse, using the provided BrowserSessionMessageList
-func (t *SessionMessageListResponse) MergeBrowserSessionMessageList(v BrowserSessionMessageList) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t SessionMessageListResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *SessionMessageListResponse) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsSession returns the union data inside the SessionResponse as a Session
-func (t SessionResponse) AsSession() (Session, error) {
-	var body Session
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromSession overwrites any union data inside the SessionResponse as the provided Session
-func (t *SessionResponse) FromSession(v Session) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeSession performs a merge with any union data inside the SessionResponse, using the provided Session
-func (t *SessionResponse) MergeSession(v Session) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserSession returns the union data inside the SessionResponse as a BrowserSession
-func (t SessionResponse) AsBrowserSession() (BrowserSession, error) {
-	var body BrowserSession
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserSession overwrites any union data inside the SessionResponse as the provided BrowserSession
-func (t *SessionResponse) FromBrowserSession(v BrowserSession) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserSession performs a merge with any union data inside the SessionResponse, using the provided BrowserSession
-func (t *SessionResponse) MergeBrowserSession(v BrowserSession) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t SessionResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *SessionResponse) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
 // AsBuiltinToolDeclaration returns the union data inside the ToolDeclaration as a BuiltinToolDeclaration
 func (t ToolDeclaration) AsBuiltinToolDeclaration() (BuiltinToolDeclaration, error) {
 	var body BuiltinToolDeclaration
@@ -9980,68 +8572,6 @@ func (t ToolDeclaration) MarshalJSON() ([]byte, error) {
 }
 
 func (t *ToolDeclaration) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsTranscriptSnapshot returns the union data inside the TranscriptSnapshotResponse as a TranscriptSnapshot
-func (t TranscriptSnapshotResponse) AsTranscriptSnapshot() (TranscriptSnapshot, error) {
-	var body TranscriptSnapshot
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromTranscriptSnapshot overwrites any union data inside the TranscriptSnapshotResponse as the provided TranscriptSnapshot
-func (t *TranscriptSnapshotResponse) FromTranscriptSnapshot(v TranscriptSnapshot) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeTranscriptSnapshot performs a merge with any union data inside the TranscriptSnapshotResponse, using the provided TranscriptSnapshot
-func (t *TranscriptSnapshotResponse) MergeTranscriptSnapshot(v TranscriptSnapshot) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserTranscriptSnapshot returns the union data inside the TranscriptSnapshotResponse as a BrowserTranscriptSnapshot
-func (t TranscriptSnapshotResponse) AsBrowserTranscriptSnapshot() (BrowserTranscriptSnapshot, error) {
-	var body BrowserTranscriptSnapshot
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserTranscriptSnapshot overwrites any union data inside the TranscriptSnapshotResponse as the provided BrowserTranscriptSnapshot
-func (t *TranscriptSnapshotResponse) FromBrowserTranscriptSnapshot(v BrowserTranscriptSnapshot) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserTranscriptSnapshot performs a merge with any union data inside the TranscriptSnapshotResponse, using the provided BrowserTranscriptSnapshot
-func (t *TranscriptSnapshotResponse) MergeBrowserTranscriptSnapshot(v BrowserTranscriptSnapshot) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t TranscriptSnapshotResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *TranscriptSnapshotResponse) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -10251,68 +8781,6 @@ func (t TranscriptStreamEvent) MarshalJSON() ([]byte, error) {
 }
 
 func (t *TranscriptStreamEvent) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsTranscriptStreamEvent returns the union data inside the TranscriptStreamResponse as a TranscriptStreamEvent
-func (t TranscriptStreamResponse) AsTranscriptStreamEvent() (TranscriptStreamEvent, error) {
-	var body TranscriptStreamEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromTranscriptStreamEvent overwrites any union data inside the TranscriptStreamResponse as the provided TranscriptStreamEvent
-func (t *TranscriptStreamResponse) FromTranscriptStreamEvent(v TranscriptStreamEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeTranscriptStreamEvent performs a merge with any union data inside the TranscriptStreamResponse, using the provided TranscriptStreamEvent
-func (t *TranscriptStreamResponse) MergeTranscriptStreamEvent(v TranscriptStreamEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBrowserTranscriptStreamEvent returns the union data inside the TranscriptStreamResponse as a BrowserTranscriptStreamEvent
-func (t TranscriptStreamResponse) AsBrowserTranscriptStreamEvent() (BrowserTranscriptStreamEvent, error) {
-	var body BrowserTranscriptStreamEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBrowserTranscriptStreamEvent overwrites any union data inside the TranscriptStreamResponse as the provided BrowserTranscriptStreamEvent
-func (t *TranscriptStreamResponse) FromBrowserTranscriptStreamEvent(v BrowserTranscriptStreamEvent) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeBrowserTranscriptStreamEvent performs a merge with any union data inside the TranscriptStreamResponse, using the provided BrowserTranscriptStreamEvent
-func (t *TranscriptStreamResponse) MergeBrowserTranscriptStreamEvent(v BrowserTranscriptStreamEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t TranscriptStreamResponse) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *TranscriptStreamResponse) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -23469,13 +21937,13 @@ type GetCurrentIdentityHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *CurrentIdentityResponse
+	JSON200 *CurrentIdentity
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *Unauthenticated
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetCurrentIdentityHTTPResponse) GetJSON200() *CurrentIdentityResponse {
+func (r GetCurrentIdentityHTTPResponse) GetJSON200() *CurrentIdentity {
 	return r.JSON200
 }
 
@@ -23860,7 +22328,7 @@ type ListInvocationsHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *InvocationListResponse
+	JSON200 *InvocationList
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -23878,7 +22346,7 @@ type ListInvocationsHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListInvocationsHTTPResponse) GetJSON200() *InvocationListResponse {
+func (r ListInvocationsHTTPResponse) GetJSON200() *InvocationList {
 	return r.JSON200
 }
 
@@ -23950,7 +22418,7 @@ type CreateInvocationHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON202 the response for an HTTP 202 `application/json` response
-	JSON202 *InvocationResponse
+	JSON202 *Invocation
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -23974,7 +22442,7 @@ type CreateInvocationHTTPResponse struct {
 }
 
 // GetJSON202 returns the response for an HTTP 202 `application/json` response
-func (r CreateInvocationHTTPResponse) GetJSON202() *InvocationResponse {
+func (r CreateInvocationHTTPResponse) GetJSON202() *Invocation {
 	return r.JSON202
 }
 
@@ -24061,7 +22529,7 @@ type GetInvocationHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *InvocationResponse
+	JSON200 *Invocation
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -24081,7 +22549,7 @@ type GetInvocationHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetInvocationHTTPResponse) GetJSON200() *InvocationResponse {
+func (r GetInvocationHTTPResponse) GetJSON200() *Invocation {
 	return r.JSON200
 }
 
@@ -24153,7 +22621,7 @@ type CancelInvocationHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *InvocationResponse
+	JSON200 *Invocation
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -24169,7 +22637,7 @@ type CancelInvocationHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r CancelInvocationHTTPResponse) GetJSON200() *InvocationResponse {
+func (r CancelInvocationHTTPResponse) GetJSON200() *Invocation {
 	return r.JSON200
 }
 
@@ -24236,7 +22704,7 @@ type InterruptInvocationHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *InvocationResponse
+	JSON200 *Invocation
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -24252,7 +22720,7 @@ type InterruptInvocationHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r InterruptInvocationHTTPResponse) GetJSON200() *InvocationResponse {
+func (r InterruptInvocationHTTPResponse) GetJSON200() *Invocation {
 	return r.JSON200
 }
 
@@ -24670,7 +23138,7 @@ type GetInvocationResultHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *InvocationResultResponse
+	JSON200 *InvocationResult
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -24690,7 +23158,7 @@ type GetInvocationResultHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetInvocationResultHTTPResponse) GetJSON200() *InvocationResultResponse {
+func (r GetInvocationResultHTTPResponse) GetJSON200() *InvocationResult {
 	return r.JSON200
 }
 
@@ -24767,7 +23235,7 @@ type ResumeInvocationHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON202 the response for an HTTP 202 `application/json` response
-	JSON202 *InvocationResponse
+	JSON202 *Invocation
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -24789,7 +23257,7 @@ type ResumeInvocationHTTPResponse struct {
 }
 
 // GetJSON202 returns the response for an HTTP 202 `application/json` response
-func (r ResumeInvocationHTTPResponse) GetJSON202() *InvocationResponse {
+func (r ResumeInvocationHTTPResponse) GetJSON202() *Invocation {
 	return r.JSON202
 }
 
@@ -26801,7 +25269,7 @@ type ListSessionsHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *SessionListResponse
+	JSON200 *SessionList
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -26819,7 +25287,7 @@ type ListSessionsHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListSessionsHTTPResponse) GetJSON200() *SessionListResponse {
+func (r ListSessionsHTTPResponse) GetJSON200() *SessionList {
 	return r.JSON200
 }
 
@@ -26891,7 +25359,7 @@ type CreateSessionHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *SessionResponse
+	JSON201 *Session
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -26911,7 +25379,7 @@ type CreateSessionHTTPResponse struct {
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateSessionHTTPResponse) GetJSON201() *SessionResponse {
+func (r CreateSessionHTTPResponse) GetJSON201() *Session {
 	return r.JSON201
 }
 
@@ -27078,7 +25546,7 @@ type GetSessionHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *SessionResponse
+	JSON200 *Session
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -27098,7 +25566,7 @@ type GetSessionHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetSessionHTTPResponse) GetJSON200() *SessionResponse {
+func (r GetSessionHTTPResponse) GetJSON200() *Session {
 	return r.JSON200
 }
 
@@ -27175,7 +25643,7 @@ type UpdateSessionHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *SessionResponse
+	JSON200 *Session
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -27195,7 +25663,7 @@ type UpdateSessionHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r UpdateSessionHTTPResponse) GetJSON200() *SessionResponse {
+func (r UpdateSessionHTTPResponse) GetJSON200() *Session {
 	return r.JSON200
 }
 
@@ -27369,7 +25837,7 @@ type ForkSessionHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *SessionResponse
+	JSON201 *Session
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -27391,7 +25859,7 @@ type ForkSessionHTTPResponse struct {
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r ForkSessionHTTPResponse) GetJSON201() *SessionResponse {
+func (r ForkSessionHTTPResponse) GetJSON201() *Session {
 	return r.JSON201
 }
 
@@ -27473,7 +25941,7 @@ type ListSessionMessagesHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *SessionMessageListResponse
+	JSON200 *SessionMessageList
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -27493,7 +25961,7 @@ type ListSessionMessagesHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListSessionMessagesHTTPResponse) GetJSON200() *SessionMessageListResponse {
+func (r ListSessionMessagesHTTPResponse) GetJSON200() *SessionMessageList {
 	return r.JSON200
 }
 
@@ -27570,7 +26038,7 @@ type GetSessionTranscriptHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *TranscriptSnapshotResponse
+	JSON200 *TranscriptSnapshot
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -27590,7 +26058,7 @@ type GetSessionTranscriptHTTPResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetSessionTranscriptHTTPResponse) GetJSON200() *TranscriptSnapshotResponse {
+func (r GetSessionTranscriptHTTPResponse) GetJSON200() *TranscriptSnapshot {
 	return r.JSON200
 }
 
@@ -32328,7 +30796,7 @@ func ParseGetCurrentIdentityHTTPResponse(rsp *http.Response) (*GetCurrentIdentit
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest CurrentIdentityResponse
+		var dest CurrentIdentity
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -32630,7 +31098,7 @@ func ParseListInvocationsHTTPResponse(rsp *http.Response) (*ListInvocationsHTTPR
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest InvocationListResponse
+		var dest InvocationList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -32711,7 +31179,7 @@ func ParseCreateInvocationHTTPResponse(rsp *http.Response) (*CreateInvocationHTT
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
-		var dest InvocationResponse
+		var dest Invocation
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -32816,7 +31284,7 @@ func ParseGetInvocationHTTPResponse(rsp *http.Response) (*GetInvocationHTTPRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest InvocationResponse
+		var dest Invocation
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -32904,7 +31372,7 @@ func ParseCancelInvocationHTTPResponse(rsp *http.Response) (*CancelInvocationHTT
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest InvocationResponse
+		var dest Invocation
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -32972,7 +31440,7 @@ func ParseInterruptInvocationHTTPResponse(rsp *http.Response) (*InterruptInvocat
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest InvocationResponse
+		var dest Invocation
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -33326,7 +31794,7 @@ func ParseGetInvocationResultHTTPResponse(rsp *http.Response) (*GetInvocationRes
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest InvocationResultResponse
+		var dest InvocationResult
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -33414,7 +31882,7 @@ func ParseResumeInvocationHTTPResponse(rsp *http.Response) (*ResumeInvocationHTT
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
-		var dest InvocationResponse
+		var dest Invocation
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -35187,7 +33655,7 @@ func ParseListSessionsHTTPResponse(rsp *http.Response) (*ListSessionsHTTPRespons
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SessionListResponse
+		var dest SessionList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -35268,7 +33736,7 @@ func ParseCreateSessionHTTPResponse(rsp *http.Response) (*CreateSessionHTTPRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest SessionResponse
+		var dest Session
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -35440,7 +33908,7 @@ func ParseGetSessionHTTPResponse(rsp *http.Response) (*GetSessionHTTPResponse, e
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SessionResponse
+		var dest Session
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -35528,7 +33996,7 @@ func ParseUpdateSessionHTTPResponse(rsp *http.Response) (*UpdateSessionHTTPRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SessionResponse
+		var dest Session
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -35704,7 +34172,7 @@ func ParseForkSessionHTTPResponse(rsp *http.Response) (*ForkSessionHTTPResponse,
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest SessionResponse
+		var dest Session
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -35799,7 +34267,7 @@ func ParseListSessionMessagesHTTPResponse(rsp *http.Response) (*ListSessionMessa
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SessionMessageListResponse
+		var dest SessionMessageList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -35887,7 +34355,7 @@ func ParseGetSessionTranscriptHTTPResponse(rsp *http.Response) (*GetSessionTrans
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest TranscriptSnapshotResponse
+		var dest TranscriptSnapshot
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

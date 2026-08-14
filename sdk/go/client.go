@@ -176,70 +176,6 @@ func responseHeader(response *http.Response) http.Header {
 	return response.Header
 }
 
-func machineInvocation(response *generated.InvocationResponse) (*generated.Invocation, error) {
-	if response == nil {
-		return nil, nil
-	}
-	value, err := response.AsInvocation()
-	return &value, err
-}
-
-func machineInvocationResult(response *generated.InvocationResultResponse) (*generated.InvocationResult, error) {
-	if response == nil {
-		return nil, nil
-	}
-	value, err := response.AsInvocationResult()
-	return &value, err
-}
-
-func machineCurrentIdentity(response *generated.CurrentIdentityResponse) (*generated.CurrentIdentity, error) {
-	if response == nil {
-		return nil, nil
-	}
-	value, err := response.AsCurrentIdentity()
-	return &value, err
-}
-
-func machineInvocationList(response *generated.InvocationListResponse) (*generated.InvocationList, error) {
-	if response == nil {
-		return nil, nil
-	}
-	value, err := response.AsInvocationList()
-	return &value, err
-}
-
-func machineSessionList(response *generated.SessionListResponse) (*generated.SessionList, error) {
-	if response == nil {
-		return nil, nil
-	}
-	value, err := response.AsSessionList()
-	return &value, err
-}
-
-func machineSession(response *generated.SessionResponse) (*generated.Session, error) {
-	if response == nil {
-		return nil, nil
-	}
-	value, err := response.AsSession()
-	return &value, err
-}
-
-func machineSessionMessageList(response *generated.SessionMessageListResponse) (*generated.SessionMessageList, error) {
-	if response == nil {
-		return nil, nil
-	}
-	value, err := response.AsSessionMessageList()
-	return &value, err
-}
-
-func machineTranscriptSnapshot(response *generated.TranscriptSnapshotResponse) (*generated.TranscriptSnapshot, error) {
-	if response == nil {
-		return nil, nil
-	}
-	value, err := response.AsTranscriptSnapshot()
-	return &value, err
-}
-
 func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*InvocationHandle, error) {
 	if request.IdempotencyKey == "" {
 		request.IdempotencyKey = generatedIdempotencyKey()
@@ -261,13 +197,8 @@ func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*Invocation
 		if callErr != nil {
 			return callResult[generated.Invocation]{}, callErr
 		}
-		var value *generated.Invocation
-		if response.JSON202 != nil {
-			invocation, decodeErr := response.JSON202.AsInvocation()
-			if decodeErr != nil {
-				return callResult[generated.Invocation]{}, decodeErr
-			}
-			value = &invocation
+		value := response.JSON202
+		if true {
 		}
 		return callResult[generated.Invocation]{
 			Value:  value,
@@ -284,7 +215,7 @@ func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*Invocation
 		InvocationID:   invocation.ID,
 		IdempotencyKey: request.IdempotencyKey,
 		SessionID:      invocation.SessionID,
-		AgentID:        invocation.AgentID,
+		AgentID:        agentIDOrEmpty(invocation.AgentID),
 		Status:         invocation.Status,
 		Deduplicated:   invocation.Deduplicated,
 		DeadlineAt:     invocation.DeadlineAt,
@@ -465,8 +396,7 @@ func (c *Client) GetInvocation(ctx context.Context, invocationID string) (*Invoc
 		if err != nil {
 			return callResult[generated.Invocation]{}, err
 		}
-		value, err := machineInvocation(response.JSON200)
-		return callResult[generated.Invocation]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -476,8 +406,7 @@ func (c *Client) GetInvocationResult(ctx context.Context, invocationID string) (
 		if err != nil {
 			return callResult[generated.InvocationResult]{}, err
 		}
-		value, err := machineInvocationResult(response.JSON200)
-		return callResult[generated.InvocationResult]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.InvocationResult]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -643,8 +572,7 @@ func (c *Client) CancelInvocation(ctx context.Context, invocationID string) (*In
 		if err != nil {
 			return callResult[generated.Invocation]{}, err
 		}
-		value, err := machineInvocation(response.JSON200)
-		return callResult[generated.Invocation]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -658,8 +586,7 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID string) (
 		if err != nil {
 			return callResult[generated.Invocation]{}, err
 		}
-		value, err := machineInvocation(response.JSON200)
-		return callResult[generated.Invocation]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -687,13 +614,12 @@ func (c *Client) ResumeInvocation(
 		if err != nil {
 			return callResult[generated.Invocation]{}, err
 		}
-		value, err := machineInvocation(response.JSON202)
 		return callResult[generated.Invocation]{
-			Value:  value,
+			Value:  response.JSON202,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
-		}, err
+		}, nil
 	})
 }
 
@@ -952,13 +878,12 @@ func (c *Client) GetCurrentIdentity(ctx context.Context) (*CurrentIdentity, erro
 		if err != nil {
 			return callResult[generated.CurrentIdentity]{}, err
 		}
-		value, err := machineCurrentIdentity(response.JSON200)
 		return callResult[generated.CurrentIdentity]{
-			Value:  value,
+			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
-		}, err
+		}, nil
 	})
 }
 
@@ -1777,8 +1702,7 @@ func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOpt
 		if err != nil {
 			return callResult[generated.InvocationList]{}, err
 		}
-		value, err := machineInvocationList(response.JSON200)
-		return callResult[generated.InvocationList]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.InvocationList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 	if err != nil {
 		return nil, err
@@ -1806,8 +1730,7 @@ func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) 
 		if err != nil {
 			return callResult[generated.SessionList]{}, err
 		}
-		value, err := machineSessionList(response.JSON200)
-		return callResult[generated.SessionList]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.SessionList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 	if err != nil {
 		return nil, err
@@ -1856,8 +1779,7 @@ func (c *Client) CreateSession(ctx context.Context, options CreateSessionOptions
 		if err != nil {
 			return callResult[generated.Session]{}, err
 		}
-		value, err := machineSession(response.JSON201)
-		return callResult[generated.Session]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.Session]{Value: response.JSON201, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -1897,13 +1819,12 @@ func (c *Client) ForkSession(
 		if err != nil {
 			return callResult[generated.Session]{}, err
 		}
-		value, err := machineSession(response.JSON201)
 		return callResult[generated.Session]{
-			Value:  value,
+			Value:  response.JSON201,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
-		}, err
+		}, nil
 	})
 }
 
@@ -1957,8 +1878,7 @@ func (c *Client) UpdateSession(
 		if err != nil {
 			return callResult[generated.Session]{}, err
 		}
-		value, err := machineSession(response.JSON200)
-		return callResult[generated.Session]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.Session]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -1968,8 +1888,7 @@ func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, er
 		if err != nil {
 			return callResult[generated.Session]{}, err
 		}
-		value, err := machineSession(response.JSON200)
-		return callResult[generated.Session]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.Session]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 }
 
@@ -1980,8 +1899,7 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID string, opti
 		if err != nil {
 			return callResult[generated.SessionMessageList]{}, err
 		}
-		value, err := machineSessionMessageList(response.JSON200)
-		return callResult[generated.SessionMessageList]{Value: value, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
+		return callResult[generated.SessionMessageList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
 	})
 	if err != nil {
 		return nil, err
@@ -2037,13 +1955,12 @@ func (c *Client) GetTranscript(ctx context.Context, sessionID string, options Tr
 		if err != nil {
 			return callResult[generated.TranscriptSnapshot]{}, err
 		}
-		value, err := machineTranscriptSnapshot(response.JSON200)
 		return callResult[generated.TranscriptSnapshot]{
-			Value:  value,
+			Value:  response.JSON200,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
-		}, err
+		}, nil
 	})
 	if err != nil {
 		return nil, err
@@ -2260,7 +2177,7 @@ func (h *InvocationHandle) Refresh(ctx context.Context) (*Invocation, error) {
 	invocation, err := h.client.GetInvocation(ctx, h.InvocationID)
 	if err == nil {
 		h.SessionID = invocation.SessionID
-		h.AgentID = invocation.AgentID
+		h.AgentID = agentIDOrEmpty(invocation.AgentID)
 		h.Status = invocation.Status
 		h.DeadlineAt = invocation.DeadlineAt
 	}
@@ -2316,7 +2233,7 @@ func (h *InvocationHandle) Result(ctx context.Context) (*InvocationResult, error
 	result, err := h.client.GetInvocationResult(ctx, h.InvocationID)
 	if err == nil {
 		h.SessionID = result.Invocation.SessionID
-		h.AgentID = result.Invocation.AgentID
+		h.AgentID = agentIDOrEmpty(result.Invocation.AgentID)
 		h.Status = result.Invocation.Status
 	}
 	return result, err
@@ -2363,7 +2280,7 @@ func (h *InvocationHandle) Cancel(ctx context.Context) (*Invocation, error) {
 	invocation, err := h.client.CancelInvocation(ctx, h.InvocationID)
 	if err == nil {
 		h.SessionID = invocation.SessionID
-		h.AgentID = invocation.AgentID
+		h.AgentID = agentIDOrEmpty(invocation.AgentID)
 		h.Status = invocation.Status
 	}
 	return invocation, err
@@ -2373,7 +2290,7 @@ func (h *InvocationHandle) Interrupt(ctx context.Context) (*Invocation, error) {
 	invocation, err := h.client.InterruptInvocation(ctx, h.InvocationID)
 	if err == nil {
 		h.SessionID = invocation.SessionID
-		h.AgentID = invocation.AgentID
+		h.AgentID = agentIDOrEmpty(invocation.AgentID)
 		h.Status = invocation.Status
 	}
 	return invocation, err
@@ -2429,4 +2346,16 @@ func generatedIdempotencyKey() string {
 		return fmt.Sprintf("nvoken-%d", time.Now().UnixNano())
 	}
 	return "nvoken-" + hex.EncodeToString(value[:])
+}
+
+// agentIDOrEmpty reads an Invocation's Agent, which is audience-restricted: a
+// machine credential receives it and a browser grant does not, so the field is
+// optional on the one Invocation schema. This SDK authenticates as a machine
+// client and expects it, and reports absence as the empty string rather than
+// panicking if it ever talks to an endpoint that withholds it.
+func agentIDOrEmpty(value *generated.AgentID) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
 }
