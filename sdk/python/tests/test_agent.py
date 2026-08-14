@@ -90,10 +90,27 @@ class FakeHandle:
         return SimpleNamespace(status="cancelled")
 
     def events(self) -> AsyncIterator[StreamEvent]:
+        # Changes are the whole vocabulary a driver needs: one parks the turn on
+        # a host tool, one settles it, and the stream ends behind the second.
+        def change(revision: int, status: str) -> StreamEvent:
+            return StreamEvent(
+                type="transcript.update",
+                id=f"cursor-{revision}",
+                data={
+                    "messages": [],
+                    "invocation_changes": [{
+                        "invocation_id": self.invocation_id,
+                        "revision": revision,
+                        "status": status,
+                    }],
+                    "cursor": f"cursor-{revision}",
+                },
+            )
+
         async def generate() -> AsyncIterator[StreamEvent]:
             if self.waiting_tool:
-                yield StreamEvent(type="invocation.update", data={"status": "waiting"})
-            yield StreamEvent(type="invocation.result", data={})
+                yield change(1, "waiting")
+            yield change(2, "completed")
 
         return generate()
 
@@ -170,7 +187,7 @@ async def test_agent_five_verbs_dispatch_and_typed_structured_output() -> None:
         item.event.type
         async for item in agent.stream("stream")
     ]
-    assert streamed == ["invocation.update", "invocation.result"]
+    assert streamed == ["transcript.update", "transcript.update"]
 
     result = await agent.run("run")
     assert result.text == "hello"

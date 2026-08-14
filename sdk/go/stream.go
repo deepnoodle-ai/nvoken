@@ -23,7 +23,10 @@ type StreamEvent struct {
 	Retry time.Duration   `json:"retry,omitempty"`
 }
 
-var errInvocationStreamSettled = errors.New("Invocation stream settled")
+// ErrStopStream ends a Session subscription from inside its consumer. The
+// unfiltered stream never ends on its own, so leaving it is the caller's
+// decision to make.
+var ErrStopStream = errors.New("stop reading the stream")
 
 type ReducedSnapshot struct {
 	Messages          []SessionMessage             `json:"messages"`
@@ -32,24 +35,28 @@ type ReducedSnapshot struct {
 	Cursor            string                       `json:"cursor,omitempty"`
 }
 
+// StreamPreview is one message the model is writing, accumulated from the
+// fragments of one content block. One field carries every kind of fragment,
+// because one accumulator handles all of them.
 type StreamPreview struct {
 	InvocationID string `json:"invocation_id"`
 	Attempt      int64  `json:"attempt"`
-	Iteration    int    `json:"iteration"`
+	// MessageID names the saved message this preview is building. It is the
+	// key: the handoff to the saved message updates a row that already has its
+	// permanent identity, rather than one row disappearing and another taking
+	// its place.
+	MessageID    string `json:"message_id"`
 	ContentIndex int    `json:"content_index"`
-	// MessageID names the saved assistant message this preview is building,
-	// when the server published it. Key a rendered preview by it and the
-	// handoff to the saved message updates a row that already has its
-	// permanent identity. Empty when the server did not publish one.
-	MessageID  string `json:"message_id"`
-	OutputText string `json:"output_text"`
-	Thinking   string `json:"thinking"`
+	Kind         string `json:"kind"`
+	Delta        string `json:"delta"`
+	// ToolCallID and Name are present on tool_arguments previews and name the
+	// call the fragments belong to.
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	Name       string `json:"name,omitempty"`
 }
 
 type streamPreviewKey struct {
-	invocationID string
-	attempt      int64
-	iteration    int
+	messageID    string
 	contentIndex int
 }
 
@@ -74,46 +81,24 @@ func NewReducer() *Reducer {
 
 func (r *Reducer) Apply(event StreamEvent) error {
 	switch event.Type {
-	case "output_text.delta":
-		var delta generated.OutputTextDeltaEvent
+	case "message.delta":
+		var delta generated.MessageDeltaEvent
 		if err := json.Unmarshal(event.Data, &delta); err != nil {
-			return fmt.Errorf("decode output text delta: %w", err)
+			return fmt.Errorf("decode message delta: %w", err)
 		}
-		r.appendPreview(
-			delta.InvocationID,
-			delta.Attempt,
-			delta.Iteration,
-			delta.ContentIndex,
-			previewMessageID(delta.MessageID),
-			delta.Text,
-			"",
-		)
-		return nil
-	case "thinking.delta":
-		var delta generated.ThinkingDeltaEvent
-		if err := json.Unmarshal(event.Data, &delta); err != nil {
-			return fmt.Errorf("decode thinking delta: %w", err)
-		}
-		r.appendPreview(
-			delta.InvocationID,
-			delta.Attempt,
-			delta.Iteration,
-			delta.ContentIndex,
-			previewMessageID(delta.MessageID),
-			"",
-			delta.Thinking,
-		)
+		r.appendPreview(delta)
 		return nil
 	case "stream.resync":
 		var resync generated.StreamResyncEvent
 		if err := json.Unmarshal(event.Data, &resync); err != nil {
 			return fmt.Errorf("decode stream resync: %w", err)
 		}
+		// An absent Invocation is scope: discard previews for the whole Session.
 		if resync.InvocationID == nil {
 			clear(r.previews)
 			clear(r.latestAttempts)
 		} else {
-			r.discardPreviews(*resync.InvocationID)
+			r.discardPreviews(string(*resync.InvocationID))
 		}
 		return nil
 	}
@@ -124,6 +109,8 @@ func (r *Reducer) Apply(event StreamEvent) error {
 	if err := json.Unmarshal(event.Data, &update); err != nil {
 		return fmt.Errorf("decode transcript update: %w", err)
 	}
+	// Messages before changes, so a turn is never marked settled before its
+	// final message exists.
 	for _, message := range update.Messages {
 		r.messages[message.Sequence] = message
 		if message.Role == generated.SessionMessageRoleAssistant && message.InvocationID != nil {
@@ -135,6 +122,7 @@ func (r *Reducer) Apply(event StreamEvent) error {
 		r.changes[key] = change
 		switch change.Status {
 		case generated.InvocationStatusCompleted,
+			generated.InvocationStatusIncomplete,
 			generated.InvocationStatusFailed,
 			generated.InvocationStatusCancelled:
 			r.terminalInvocations[change.InvocationID] = struct{}{}
@@ -147,6 +135,13 @@ func (r *Reducer) Apply(event StreamEvent) error {
 		r.cursor = update.Cursor
 	}
 	return nil
+}
+
+// Settled reports whether a change carrying a terminal status has arrived for
+// this turn. That is the terminal signal, and there is no other.
+func (r *Reducer) Settled(invocationID string) bool {
+	_, settled := r.terminalInvocations[invocationID]
+	return settled
 }
 
 func (r *Reducer) Snapshot() ReducedSnapshot {
@@ -170,14 +165,8 @@ func (r *Reducer) Snapshot() ReducedSnapshot {
 		previews = append(previews, preview)
 	}
 	sort.Slice(previews, func(i, j int) bool {
-		if previews[i].InvocationID != previews[j].InvocationID {
-			return previews[i].InvocationID < previews[j].InvocationID
-		}
-		if previews[i].Attempt != previews[j].Attempt {
-			return previews[i].Attempt < previews[j].Attempt
-		}
-		if previews[i].Iteration != previews[j].Iteration {
-			return previews[i].Iteration < previews[j].Iteration
+		if previews[i].MessageID != previews[j].MessageID {
+			return previews[i].MessageID < previews[j].MessageID
 		}
 		return previews[i].ContentIndex < previews[j].ContentIndex
 	})
@@ -189,64 +178,51 @@ func (r *Reducer) Snapshot() ReducedSnapshot {
 	}
 }
 
-func (r *Reducer) appendPreview(
-	invocationID string,
-	attempt int64,
-	iteration int,
-	contentIndex int,
-	messageID string,
-	outputText string,
-	thinking string,
-) {
+func (r *Reducer) appendPreview(delta generated.MessageDeltaEvent) {
+	invocationID := string(delta.InvocationID)
 	if _, terminal := r.terminalInvocations[invocationID]; terminal {
 		return
 	}
 	if latest, ok := r.latestAttempts[invocationID]; ok {
-		if attempt < latest {
+		if delta.Attempt < latest {
 			return
 		}
-		if attempt > latest {
+		if delta.Attempt > latest {
 			r.discardPreviews(invocationID)
 		}
 	}
-	r.latestAttempts[invocationID] = attempt
+	r.latestAttempts[invocationID] = delta.Attempt
 	key := streamPreviewKey{
-		invocationID: invocationID,
-		attempt:      attempt,
-		iteration:    iteration,
-		contentIndex: contentIndex,
+		messageID:    string(delta.MessageID),
+		contentIndex: delta.ContentIndex,
 	}
 	preview := r.previews[key]
 	preview.InvocationID = invocationID
-	preview.Attempt = attempt
-	preview.Iteration = iteration
-	preview.ContentIndex = contentIndex
-	if messageID != "" {
-		preview.MessageID = messageID
+	preview.Attempt = delta.Attempt
+	preview.MessageID = string(delta.MessageID)
+	preview.ContentIndex = delta.ContentIndex
+	preview.Kind = string(delta.Kind)
+	preview.Delta += delta.Delta
+	if delta.ToolCallID != nil {
+		preview.ToolCallID = *delta.ToolCallID
 	}
-	preview.OutputText += outputText
-	preview.Thinking += thinking
+	if delta.Name != nil {
+		preview.Name = *delta.Name
+	}
 	r.previews[key] = preview
 }
 
-// previewMessageID unwraps the optional preview identity. An older server, or
-// a runtime that had not allocated the identifier yet, simply omits it.
-func previewMessageID(value *generated.PreviewMessageID) string {
-	if value == nil {
-		return ""
-	}
-	return string(*value)
-}
-
 func (r *Reducer) discardPreviews(invocationID string) {
-	for key := range r.previews {
-		if key.invocationID == invocationID {
+	for key, preview := range r.previews {
+		if preview.InvocationID == invocationID {
 			delete(r.previews, key)
 		}
 	}
 	delete(r.latestAttempts, invocationID)
 }
 
+// Stream follows this turn and returns once a change for it carries a terminal
+// status. It is the one stream, filtered to one Invocation.
 func (h *InvocationHandle) Stream(ctx context.Context, consume func(StreamEvent) error) error {
 	return h.StreamWithOptions(ctx, StreamOptions{}, consume)
 }
@@ -256,64 +232,29 @@ func (h *InvocationHandle) StreamWithOptions(
 	options StreamOptions,
 	consume func(StreamEvent) error,
 ) error {
-	retryDelay := time.Second
-	cursor := ""
-	for {
-		params := &generated.StreamInvocationParams{Deltas: options.Deltas}
-		if cursor != "" {
-			params.LastEventID = &cursor
-		}
-		response, err := h.client.raw.ClientInterface.StreamInvocation(ctx, h.InvocationID, params)
-		if err != nil {
-			if err := waitForReconnect(ctx, retryDelay); err != nil {
-				return err
-			}
-			continue
-		}
-		if response.StatusCode < 200 || response.StatusCode >= 300 {
-			body, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-			_ = response.Body.Close()
-			return errorFromResponse(response.StatusCode, response.Header, body)
-		}
-		settled := false
-		err = readSSE(response.Body, func(event StreamEvent) error {
-			if event.Retry > 0 {
-				retryDelay = event.Retry
-			}
-			if event.ID != "" {
-				cursor = event.ID
-			}
-			if len(event.Data) == 0 {
-				// A frame carrying only `retry:` is a control frame, not an
-				// event. The runtime opens every stream with one. Its
-				// bookkeeping is applied above; there is nothing to consume.
-				return nil
-			}
-			if err := consume(event); err != nil {
-				return err
-			}
-			if event.Type == "invocation.result" {
-				settled = true
-				return errInvocationStreamSettled
-			}
-			return nil
-		})
-		_ = response.Body.Close()
-		if errors.Is(err, errInvocationStreamSettled) {
-			return nil
-		}
-		if err != nil && err != io.EOF {
-			return err
-		}
-		if settled {
-			return nil
-		}
-		if err := waitForReconnect(ctx, retryDelay); err != nil {
+	if h.SessionID == "" {
+		if _, err := h.Refresh(ctx); err != nil {
 			return err
 		}
 	}
+	invocationID := generated.InvocationID(h.InvocationID)
+	return h.client.readStream(ctx, h.SessionID, &invocationID, options, func(event StreamEvent, reducer *Reducer) error {
+		if consume != nil {
+			if err := consume(event); err != nil {
+				return err
+			}
+		}
+		if reducer.Settled(h.InvocationID) {
+			return ErrStopStream
+		}
+		return nil
+	})
 }
 
+// StreamSession subscribes to everything in a Session. It stays open while the
+// Session is idle and a turn started later appears on it, so it returns only
+// when the consumer says to stop with ErrStopStream, when the consumer fails,
+// or when the context ends.
 func (c *Client) StreamSession(ctx context.Context, sessionID string, consume func(StreamEvent, ReducedSnapshot) error) error {
 	return c.StreamSessionWithOptions(ctx, sessionID, StreamOptions{}, consume)
 }
@@ -324,15 +265,32 @@ func (c *Client) StreamSessionWithOptions(
 	options StreamOptions,
 	consume func(StreamEvent, ReducedSnapshot) error,
 ) error {
+	return c.readStream(ctx, sessionID, nil, options, func(event StreamEvent, reducer *Reducer) error {
+		return consume(event, reducer.Snapshot())
+	})
+}
+
+// readStream is the one read loop. It reconnects from its last durable cursor
+// on any connection end, because stream.end never says a turn is over and a
+// silent drop says nothing at all.
+func (c *Client) readStream(
+	ctx context.Context,
+	sessionID string,
+	invocationID *generated.InvocationID,
+	options StreamOptions,
+	consume func(StreamEvent, *Reducer) error,
+) error {
 	reducer := NewReducer()
 	retryDelay := time.Second
 	for {
-		cursor := reducer.Snapshot().Cursor
-		params := &generated.StreamSessionTranscriptParams{Deltas: options.Deltas}
-		if cursor != "" {
+		params := &generated.StreamSessionParams{
+			Deltas:       options.Deltas,
+			InvocationID: invocationID,
+		}
+		if cursor := reducer.Snapshot().Cursor; cursor != "" {
 			params.LastEventID = &cursor
 		}
-		response, err := c.raw.ClientInterface.StreamSessionTranscript(ctx, sessionID, params)
+		response, err := c.raw.ClientInterface.StreamSession(ctx, generated.SessionID(sessionID), params)
 		if err != nil {
 			if err := waitForReconnect(ctx, retryDelay); err != nil {
 				return err
@@ -344,35 +302,27 @@ func (c *Client) StreamSessionWithOptions(
 			_ = response.Body.Close()
 			return errorFromResponse(response.StatusCode, response.Header, body)
 		}
-		terminalEnd := false
 		err = readSSE(response.Body, func(event StreamEvent) error {
 			if event.Retry > 0 {
 				retryDelay = event.Retry
 			}
 			if len(event.Data) == 0 {
-				// Control frame; see StreamInvocation above.
+				// A frame carrying only `retry:` is a control frame, not an
+				// event. The runtime opens every stream with one. Its
+				// bookkeeping is applied above; there is nothing to consume.
 				return nil
 			}
 			if err := reducer.Apply(event); err != nil {
 				return err
 			}
-			if err := consume(event, reducer.Snapshot()); err != nil {
-				return err
-			}
-			if event.Type == "stream.end" {
-				var end generated.StreamEndEvent
-				if json.Unmarshal(event.Data, &end) == nil && end.Reason == generated.ReasonTerminal {
-					terminalEnd = true
-				}
-			}
-			return nil
+			return consume(event, reducer)
 		})
 		_ = response.Body.Close()
+		if errors.Is(err, ErrStopStream) {
+			return nil
+		}
 		if err != nil && err != io.EOF {
 			return err
-		}
-		if terminalEnd {
-			return nil
 		}
 		if err := waitForReconnect(ctx, retryDelay); err != nil {
 			return err

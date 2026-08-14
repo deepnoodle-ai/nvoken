@@ -406,14 +406,11 @@ async function main(): Promise<void> {
   const stream = (async () => {
     for await (const event of structuredHandle.stream(streamController.signal)) {
       streamEvents.add(event.type);
-      if (event.type === "output_text.delta") {
-        process.stdout.write(event.text);
+      if (event.type === "message.delta" && event.kind === "text") {
+        process.stdout.write(event.delta);
       }
-      if (event.type === "invocation.update") {
-        streamedMessages += event.newMessages.length;
-      }
-      if (event.type === "invocation.result") {
-        streamedMessages = Math.max(streamedMessages, event.result.messages.length);
+      if (event.type === "transcript.update") {
+        streamedMessages += event.messages.length;
       }
     }
   })();
@@ -443,8 +440,8 @@ async function main(): Promise<void> {
   );
   assert.ok(structuredProvenance?.schemaSha256);
   assert.ok((await structuredHandle.outputText()).length > 0);
-  assert.ok(streamEvents.has("invocation.result"));
-  assert.ok(streamedMessages >= 3);
+  assert.ok(streamEvents.has("transcript.update"));
+  assert.ok(streamedMessages >= 1);
   console.log("PASS structured output, provenance, composed text, and resumable Invocation SSE");
 
   console.log("\nAll TypeScript invoke showcase checks passed.");

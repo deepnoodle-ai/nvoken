@@ -454,7 +454,10 @@ impl Agent {
             while let Some(item) = inner.next().await {
                 let event = item?;
                 yield AgentStreamEvent { handle: handle.clone(), event: event.clone() };
-                if event.event_type == "invocation.update" || event.event_type == "stream.end" {
+                // A turn that stopped for your tools says so on a change, which
+                // replays on reconnect like every other change. The stream ends
+                // on the terminal change, so there is nothing else to watch for.
+                if waiting_for(&event, &handle.invocation_id) {
                     let invocation = handle.refresh().await?;
                     if invocation.status == models::InvocationStatus::Waiting {
                         agent
@@ -958,4 +961,22 @@ fn tool_call_arguments(call: &models::ToolCallSummary) -> Value {
         Some(arguments) => Value::Object(arguments.clone().into_iter().collect()),
         None => Value::Object(serde_json::Map::new()),
     }
+}
+
+/// Whether a `transcript.update` carries a change parking this turn on your
+/// tools.
+fn waiting_for(event: &StreamEvent, invocation_id: &str) -> bool {
+    if event.event_type != "transcript.update" {
+        return false;
+    }
+    event
+        .data
+        .get("invocation_changes")
+        .and_then(|changes| changes.as_array())
+        .is_some_and(|changes| {
+            changes.iter().any(|change| {
+                change.get("invocation_id").and_then(|value| value.as_str()) == Some(invocation_id)
+                    && change.get("status").and_then(|value| value.as_str()) == Some("waiting")
+            })
+        })
 }

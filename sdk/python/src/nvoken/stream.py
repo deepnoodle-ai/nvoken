@@ -12,6 +12,8 @@ from nvoken_generated.models.transcript_update_event import TranscriptUpdateEven
 if TYPE_CHECKING:
     from .client import Client, InvocationHandle
 
+TERMINAL_CHANGE_STATUSES = frozenset({"completed", "incomplete", "failed", "cancelled"})
+
 
 @dataclass(frozen=True)
 class StreamEvent:
@@ -31,46 +33,40 @@ class ReducedSnapshot:
 
 @dataclass(frozen=True)
 class StreamPreview:
-    """One model iteration as it streams, before its message is saved.
+    """One message the model is writing, before it is saved.
 
-    ``message_id`` names the saved assistant message this preview is building,
-    when the server published it. Key a rendered preview by it and the handoff
-    to the saved message updates a row that already has its permanent identity.
-    ``None`` when the server did not publish one.
+    ``delta`` carries the fragments for every ``kind``, because one accumulator
+    handles all of them. ``message_id`` names the saved message this preview is
+    building, and it is the key: the handoff to the saved message updates a row
+    that already has its permanent identity.
     """
 
     invocation_id: str
     attempt: int
-    iteration: int
+    message_id: str
     content_index: int
-    output_text: str
-    thinking: str
-    message_id: str | None = None
+    kind: str
+    delta: str
+    tool_call_id: str | None = None
+    name: str | None = None
 
 
 class Reducer:
     def __init__(self) -> None:
         self._messages: dict[int, SessionMessage] = {}
         self._changes: dict[tuple[str, int], InvocationChange] = {}
-        self._previews: dict[tuple[str, int, int, int], StreamPreview] = {}
+        self._previews: dict[tuple[str, int], StreamPreview] = {}
         self._latest_attempts: dict[str, int] = {}
         self._terminal_invocations: set[str] = set()
         self._cursor: str | None = None
 
     def apply(self, event: StreamEvent) -> None:
-        if event.type in {"output_text.delta", "thinking.delta"}:
-            data = event.data
-            self._append_preview(
-                invocation_id=data["invocation_id"],
-                attempt=data["attempt"],
-                iteration=data["iteration"],
-                content_index=data["content_index"],
-                message_id=data.get("message_id"),
-                output_text=data.get("text", ""),
-                thinking=data.get("thinking", ""),
-            )
+        if event.type == "message.delta":
+            self._append_preview(event.data)
             return
         if event.type == "stream.resync":
+            # An absent Invocation is scope: discard previews for the whole
+            # Session.
             invocation_id = event.data.get("invocation_id")
             if invocation_id is None:
                 self._previews.clear()
@@ -82,16 +78,25 @@ class Reducer:
             return
         update = TranscriptUpdateEvent.from_dict(event.data)
         assert update is not None
+        # Messages before changes, so a turn is never marked settled before its
+        # final message exists.
         for message in update.messages:
             self._messages[message.sequence] = message
-            if message.role.value == "assistant":
+            if message.role.value == "assistant" and message.invocation_id:
                 self._discard_previews(message.invocation_id)
         for change in update.invocation_changes:
             self._changes[(change.invocation_id, change.revision)] = change
-            if change.status.value in {"completed", "incomplete", "failed", "cancelled"}:
+            if change.status.value in TERMINAL_CHANGE_STATUSES:
                 self._terminal_invocations.add(change.invocation_id)
                 self._discard_previews(change.invocation_id)
         self._cursor = event.id or update.cursor or self._cursor
+
+    def settled(self, invocation_id: str) -> bool:
+        """Whether a change carrying a terminal status has arrived for this turn.
+
+        That is the terminal signal, and there is no other.
+        """
+        return invocation_id in self._terminal_invocations
 
     def snapshot(self) -> ReducedSnapshot:
         return ReducedSnapshot(
@@ -102,27 +107,14 @@ class Reducer:
             ),
             previews=sorted(
                 self._previews.values(),
-                key=lambda preview: (
-                    preview.invocation_id,
-                    preview.attempt,
-                    preview.iteration,
-                    preview.content_index,
-                ),
+                key=lambda preview: (preview.message_id, preview.content_index),
             ),
             cursor=self._cursor,
         )
 
-    def _append_preview(
-        self,
-        *,
-        invocation_id: str,
-        attempt: int,
-        iteration: int,
-        content_index: int,
-        message_id: str | None,
-        output_text: str,
-        thinking: str,
-    ) -> None:
+    def _append_preview(self, data: dict[str, Any]) -> None:
+        invocation_id = data["invocation_id"]
+        attempt = data["attempt"]
         if invocation_id in self._terminal_invocations:
             return
         latest = self._latest_attempts.get(invocation_id)
@@ -130,17 +122,18 @@ class Reducer:
             return
         if latest is None or attempt > latest:
             self._discard_previews(invocation_id)
-            self._latest_attempts[invocation_id] = attempt
-        key = (invocation_id, attempt, iteration, content_index)
+        self._latest_attempts[invocation_id] = attempt
+        key = (data["message_id"], data["content_index"])
         current = self._previews.get(key)
         self._previews[key] = StreamPreview(
             invocation_id=invocation_id,
             attempt=attempt,
-            iteration=iteration,
-            content_index=content_index,
-            output_text=(current.output_text if current else "") + output_text,
-            thinking=(current.thinking if current else "") + thinking,
-            message_id=message_id or (current.message_id if current else None),
+            message_id=data["message_id"],
+            content_index=data["content_index"],
+            kind=data["kind"],
+            delta=(current.delta if current else "") + data["delta"],
+            tool_call_id=data.get("tool_call_id") or (current.tool_call_id if current else None),
+            name=data.get("name") or (current.name if current else None),
         )
 
     def _discard_previews(self, invocation_id: str) -> None:
@@ -160,41 +153,16 @@ async def stream_session(
     *,
     deltas: bool = True,
 ) -> None:
-    retry = 1.0
-    while True:
-        response = await client.stream_sessions.stream_session_transcript_without_preload_content(
-            session_id,
-            cursor=None,
-            deltas=deltas,
-            last_event_id=reducer.snapshot().cursor,
-        )
-        try:
-            if response.is_error:
-                from .client import normalize_httpx_response
-                raise await normalize_httpx_response(response)
-            async for event in parse_sse(response.aiter_lines()):
-                if event.retry is not None:
-                    retry = min(event.retry, 30.0)
-                if event.data is None:
-                    # A frame carrying only `retry:` is a control frame, not an
-                    # event. The runtime opens every stream with one. Its
-                    # bookkeeping is applied above; there is nothing to reduce.
-                    continue
-                reducer.apply(event)
-                consumed = consume(event, reducer.snapshot())
-                if consumed is not None:
-                    await consumed
-        except asyncio.CancelledError:
-            raise
-        except Exception as error:
-            from .client import NvokenError
-            if isinstance(error, NvokenError):
-                raise
-            await asyncio.sleep(retry)
-            continue
-        finally:
-            await response.aclose()
-        await asyncio.sleep(retry)
+    """Subscribe to a Session.
+
+    It never returns on its own: the stream stays open while the Session is
+    idle and a turn started later appears on it. Leave it by cancelling the
+    task, or by raising from ``consume``.
+    """
+    async for event in _read_stream(client, session_id, None, reducer, deltas=deltas):
+        consumed = consume(event, reducer.snapshot())
+        if consumed is not None:
+            await consumed
 
 
 async def stream_invocation(
@@ -216,14 +184,39 @@ async def iter_invocation(
     *,
     deltas: bool = True,
 ) -> AsyncIterator[StreamEvent]:
+    """Follow one turn, ending once a change for it carries a terminal status."""
+    session_id = await handle.require_session_id()
+    reducer = Reducer()
+    async for event in _read_stream(
+        client, session_id, handle.invocation_id, reducer, deltas=deltas
+    ):
+        yield event
+        if reducer.settled(handle.invocation_id):
+            return
+
+
+async def _read_stream(
+    client: Client,
+    session_id: str,
+    invocation_id: str | None,
+    reducer: Reducer,
+    *,
+    deltas: bool,
+) -> AsyncIterator[StreamEvent]:
+    """The one read loop.
+
+    It reconnects from its last durable cursor on any connection end, because
+    ``stream.end`` never says a turn is over and a silent drop says nothing at
+    all.
+    """
     retry = 1.0
-    cursor: str | None = None
     while True:
-        response = await client.stream_invocations.stream_invocation_without_preload_content(
-            handle.invocation_id,
+        response = await client.stream_sessions.stream_session_without_preload_content(
+            session_id,
+            invocation_id=invocation_id,
             cursor=None,
             deltas=deltas,
-            last_event_id=cursor,
+            last_event_id=reducer.snapshot().cursor,
         )
         try:
             if response.is_error:
@@ -232,14 +225,13 @@ async def iter_invocation(
             async for event in parse_sse(response.aiter_lines()):
                 if event.retry is not None:
                     retry = min(event.retry, 30.0)
-                if event.id:
-                    cursor = event.id
                 if event.data is None:
-                    # Control frame; see stream_session above.
+                    # A frame carrying only `retry:` is a control frame, not an
+                    # event. The runtime opens every stream with one. Its
+                    # bookkeeping is applied above; there is nothing to reduce.
                     continue
+                reducer.apply(event)
                 yield event
-                if event.type == "invocation.result":
-                    return
         except asyncio.CancelledError:
             raise
         except Exception as error:

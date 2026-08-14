@@ -73,7 +73,7 @@ func TestAgentFiveVerbsDispatchAndStructuredOutput(t *testing.T) {
 			return nil
 		},
 	)
-	if err != nil || fmt.Sprint(streamed) != "[invocation.result]" {
+	if err != nil || fmt.Sprint(streamed) != "[transcript.update]" {
 		t.Fatalf("stream: events=%v err=%v", streamed, err)
 	}
 
@@ -341,6 +341,12 @@ func (r *agentTestRuntime) ServeHTTP(
 		r.create(response, request)
 		return
 	}
+	// One stream, filtered to one turn by query parameter.
+	if request.URL.Path == "/v1/sessions/"+agentTestSessionID+"/stream" &&
+		request.Method == http.MethodGet {
+		r.stream(response, request.Context(), request.URL.Query().Get("invocation_id"))
+		return
+	}
 	const prefix = "/v1/invocations/"
 	if !strings.HasPrefix(request.URL.Path, prefix) {
 		http.NotFound(response, request)
@@ -348,12 +354,6 @@ func (r *agentTestRuntime) ServeHTTP(
 	}
 	path := strings.TrimPrefix(request.URL.Path, prefix)
 	switch {
-	case strings.HasSuffix(path, "/stream") && request.Method == http.MethodGet:
-		r.stream(
-			response,
-			request.Context(),
-			strings.TrimSuffix(path, "/stream"),
-		)
 	case strings.HasSuffix(path, "/tool-results") &&
 		request.Method == http.MethodPost:
 		r.submit(response, strings.TrimSuffix(path, "/tool-results"))
@@ -424,7 +424,11 @@ func (r *agentTestRuntime) stream(
 	response.WriteHeader(http.StatusOK)
 	flusher := response.(http.Flusher)
 	if needsTool(state.input) {
-		fmt.Fprint(response, "event: invocation.update\ndata: {}\n\n")
+		fmt.Fprintf(
+			response,
+			"id: cursor-waiting\nevent: transcript.update\ndata: %s\n\n",
+			agentTestChange(id, "waiting", "cursor-waiting"),
+		)
 		flusher.Flush()
 		deadline := time.Now().Add(time.Second)
 		for {
@@ -445,8 +449,37 @@ func (r *agentTestRuntime) stream(
 	if strings.Contains(state.input, "slow") {
 		<-r.slow
 	}
-	fmt.Fprint(response, "event: invocation.result\ndata: {}\n\n")
+	// A turn is over when a change for it carries a terminal status.
+	fmt.Fprintf(
+		response,
+		"id: cursor-settled\nevent: transcript.update\ndata: %s\n\n",
+		agentTestChange(id, "completed", "cursor-settled"),
+	)
 	flusher.Flush()
+}
+
+// agentTestChange writes the one durable frame, carrying one lifecycle change
+// for the turn being followed.
+func agentTestChange(invocationID, status, cursor string) string {
+	frame, err := json.Marshal(map[string]any{
+		"type":       "transcript.update",
+		"session_id": agentTestSessionID,
+		"messages":   []any{},
+		"invocation_changes": []any{map[string]any{
+			"invocation_id":            invocationID,
+			"revision":                 1,
+			"status":                   status,
+			"through_message_sequence": nil,
+			"error":                    nil,
+			"structured_output":        nil,
+			"occurred_at":              "2026-07-21T12:00:00Z",
+		}},
+		"cursor": cursor,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return string(frame)
 }
 
 func (r *agentTestRuntime) submit(response http.ResponseWriter, id string) {

@@ -63,7 +63,10 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		"--provider", "openai",
 		"--model", "gpt-test",
 	)
-	if err != nil || output != "The charge was duplicated.\n\nA refund is queued.\n" {
+	// Text mode prints the prose as it streams and closes the line when the
+	// turn settles. The composed answer is what it falls back to when nothing
+	// streamed, which `invocation result` covers below.
+	if err != nil || output != "streamed answer\n" {
 		t.Fatalf("text answer output=%q err=%v", output, err)
 	}
 
@@ -306,7 +309,7 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		"--deltas=false",
 	)
 	if err != nil ||
-		!strings.Contains(output, "invocation.result\tcursor-3") ||
+		!strings.Contains(output, "transcript.update\tcursor-2") ||
 		strings.Contains(output, "streamed answer") {
 		t.Fatalf("durable-only Invocation stream output=%q err=%v", output, err)
 	}
@@ -327,6 +330,10 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	)
 	if err != nil || !strings.Contains(output, "stream.end\tcursor-2") {
 		t.Fatalf("durable-only Session stream output=%q err=%v", output, err)
+	}
+	queryState = readServerState(t, baseURL)
+	if queryState.LastInvocationFilter != "" {
+		t.Fatalf("Session stream sent an Invocation filter = %q", queryState.LastInvocationFilter)
 	}
 	queryState = readServerState(t, baseURL)
 	if queryState.LastDeltas != "false" {
@@ -407,6 +414,21 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 	var admission map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
+		// The stream is Session-scoped, so a bare Invocation ID resolves the
+		// Session it belongs to before the stream opens.
+		case "/v1/invocations/" + testInvocationID:
+			response.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(response, `{
+				"id":"`+testInvocationID+`",
+				"session_id":"`+testSessionID+`",
+				"agent_definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+				"agent_definition_revision":1,
+				"status":"completed",
+				"attempt":1,
+				"active_execution_ms":0,
+				"created_at":"2026-07-21T12:00:00Z",
+				"updated_at":"2026-07-21T12:00:03Z"
+			}`)
 		case "/v1/invocations":
 			admission = nil
 			if err := json.NewDecoder(request.Body).Decode(&admission); err != nil {
@@ -439,14 +461,16 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 				"updated_at":"2026-07-21T12:00:00Z",
 				"ended_at":null
 			}`)
-		case "/v1/invocations/" + testInvocationID + "/stream":
+		case "/v1/sessions/" + testSessionID + "/stream":
 			response.Header().Set("Content-Type", "text/event-stream")
-			_, _ = io.WriteString(response, "id: cursor-1\n")
-			_, _ = io.WriteString(response, "event: output_text.delta\n")
-			_, _ = io.WriteString(response, `data: {"text":"streamed answer"}`+"\n\n")
+			_, _ = io.WriteString(response, "event: message.delta\n")
+			_, _ = io.WriteString(response, `data: {"kind":"text","delta":"streamed answer"}`+"\n\n")
 			_, _ = io.WriteString(response, "id: cursor-2\n")
-			_, _ = io.WriteString(response, "event: invocation.result\n")
-			_, _ = io.WriteString(response, "data: {}\n\n")
+			_, _ = io.WriteString(response, "event: transcript.update\n")
+			_, _ = io.WriteString(response, `data: {"messages":[],"invocation_changes":[`+
+				`{"invocation_id":"`+testInvocationID+`","revision":1,"status":"completed",`+
+				`"through_message_sequence":null,"error":null,"structured_output":null,`+
+				`"occurred_at":"2026-07-21T12:00:03Z"}],"cursor":"cursor-2"}`+"\n\n")
 		default:
 			http.NotFound(response, request)
 		}
@@ -515,7 +539,7 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 		"stream",
 		testInvocationID,
 	)
-	if err != nil || output != "streamed answer\n" {
+	if err != nil || output != "streamed answer\ntranscript.update\tcursor-2\n" {
 		t.Fatalf("delta stream output=%q err=%v", output, err)
 	}
 }
@@ -912,8 +936,9 @@ func resetServer(t *testing.T, baseURL string) {
 }
 
 type conformanceQueryState struct {
-	LastStatuses []string `json:"last_statuses"`
-	LastDeltas   string   `json:"last_deltas"`
+	LastStatuses         []string `json:"last_statuses"`
+	LastDeltas           string   `json:"last_deltas"`
+	LastInvocationFilter string   `json:"last_invocation_filter"`
 }
 
 func readServerState(t *testing.T, baseURL string) conformanceQueryState {

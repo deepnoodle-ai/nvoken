@@ -829,6 +829,9 @@ func TestConformance(t *testing.T) {
 	assertGoError(t, client, "rate-limit-always", ErrorRateLimit, http.StatusTooManyRequests)
 	assertGoError(t, client, "server-error", ErrorServer, http.StatusServiceUnavailable)
 
+	// One stream, filtered to one turn: a dropped connection, a rotation, and
+	// then the frame carrying the terminal change, which is where the read
+	// ends. Nothing announces that the turn is over except the change itself.
 	streamInvocationHandle := client.Invocation(conformanceInvocationID)
 	var eventTypes []string
 	deltas := false
@@ -838,8 +841,8 @@ func TestConformance(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("resumable stream: %v", err)
 	}
-	if fmt.Sprint(eventTypes) != "[invocation.update stream.end invocation.update invocation.result]" {
-		t.Fatalf("unexpected Invocation stream events: %#v", eventTypes)
+	if fmt.Sprint(eventTypes) != "[transcript.update transcript.update stream.end transcript.update transcript.update]" {
+		t.Fatalf("unexpected stream events: %#v", eventTypes)
 	}
 	var serverState struct {
 		AdmissionAttempts    int      `json:"admission_attempts"`
@@ -851,6 +854,7 @@ func TestConformance(t *testing.T) {
 		LastEventID          string   `json:"last_event_id"`
 		LastStatuses         []string `json:"last_statuses"`
 		LastDeltas           string   `json:"last_deltas"`
+		LastInvocationFilter string   `json:"last_invocation_filter"`
 	}
 	readJSON(t, baseURL+"/__test/state", &serverState)
 	if serverState.AdmissionAttempts != 2 || serverState.CredentialAdmissions != 2 ||
@@ -858,7 +862,8 @@ func TestConformance(t *testing.T) {
 		serverState.InterruptAttempts != 1 ||
 		serverState.StreamAttempts != 3 || serverState.LastEventID != "cursor-1" ||
 		fmt.Sprint(serverState.LastStatuses) != "[waiting queued running]" ||
-		serverState.LastDeltas != "false" {
+		serverState.LastDeltas != "false" ||
+		serverState.LastInvocationFilter != conformanceInvocationID {
 		t.Fatalf("fault server did not observe replay semantics: %#v", serverState)
 	}
 }

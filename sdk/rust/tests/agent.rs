@@ -278,17 +278,21 @@ async fn handle_connection(mut stream: TcpStream, runtime: Arc<TestRuntime>) {
         return;
     }
 
+    // One stream, filtered to one turn by query parameter.
+    if request.method == "GET" && request.path.starts_with("/v1/sessions/") {
+        let id = request
+            .path
+            .split_once("invocation_id=")
+            .map(|(_, value)| value.split('&').next().unwrap_or("").to_owned())
+            .unwrap_or_default();
+        stream_turn(&mut stream, &runtime, &id).await;
+        return;
+    }
     let Some(rest) = request.path.strip_prefix("/v1/invocations/") else {
         write_json(&mut stream, 404, &json!({"message": "not found"})).await;
         return;
     };
 
-    if let Some(id) = rest.strip_suffix("/stream") {
-        if request.method == "GET" {
-            stream_invocation(&mut stream, &runtime, id).await;
-            return;
-        }
-    }
     if let Some(id) = rest.strip_suffix("/tool-results") {
         if request.method == "POST" {
             submit_tool_results(&mut stream, &runtime, id).await;
@@ -330,7 +334,7 @@ async fn get_invocation(stream: &mut TcpStream, runtime: &TestRuntime, id: &str)
     write_json(stream, 200, &invocation_payload(id, status)).await;
 }
 
-async fn stream_invocation(stream: &mut TcpStream, runtime: &Arc<TestRuntime>, id: &str) {
+async fn stream_turn(stream: &mut TcpStream, runtime: &Arc<TestRuntime>, id: &str) {
     let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n";
     if stream.write_all(head.as_bytes()).await.is_err() {
         return;
@@ -338,7 +342,7 @@ async fn stream_invocation(stream: &mut TcpStream, runtime: &Arc<TestRuntime>, i
     let state = runtime.state_of(id);
     if needs_tool(&state.input) {
         if stream
-            .write_all(b"event: invocation.update\ndata: {}\n\n")
+            .write_all(change_frame(id, "waiting", "cursor-waiting").as_bytes())
             .await
             .is_err()
         {
@@ -361,10 +365,32 @@ async fn stream_invocation(stream: &mut TcpStream, runtime: &Arc<TestRuntime>, i
     if state.input.contains("slow") {
         runtime.wait_for_slow_release().await;
     }
+    // A turn is over when a change for it carries a terminal status.
     let _ = stream
-        .write_all(b"event: invocation.result\ndata: {}\n\n")
+        .write_all(change_frame(id, "completed", "cursor-settled").as_bytes())
         .await;
     let _ = stream.shutdown().await;
+}
+
+/// change_frame writes the one durable frame, carrying one lifecycle change for
+/// the turn being followed.
+fn change_frame(invocation_id: &str, status: &str, cursor: &str) -> String {
+    let data = json!({
+        "type": "transcript.update",
+        "session_id": SESSION_ID,
+        "messages": [],
+        "invocation_changes": [{
+            "invocation_id": invocation_id,
+            "revision": 1,
+            "status": status,
+            "through_message_sequence": null,
+            "error": null,
+            "structured_output": null,
+            "occurred_at": "2026-07-21T12:00:00Z",
+        }],
+        "cursor": cursor,
+    });
+    format!("id: {cursor}\nevent: transcript.update\ndata: {data}\n\n")
 }
 
 async fn submit_tool_results(stream: &mut TcpStream, runtime: &TestRuntime, id: &str) {
@@ -508,7 +534,7 @@ async fn agent_five_verbs_dispatch_and_structured_output() {
     while let Some(event) = events.next().await {
         seen.push(event.expect("stream event").event.event_type);
     }
-    assert_eq!(seen, vec!["invocation.result"]);
+    assert_eq!(seen, vec!["transcript.update"]);
 
     let result = agent
         .run("tool structured", AgentInvocationOptions::default())

@@ -2174,6 +2174,20 @@ impl InvocationHandle {
         self.deadline_at = invocation.deadline_at;
     }
 
+    /// The Session this turn belongs to, resolving it if the handle lacks it.
+    /// The stream is Session-scoped, so a handle built from a bare Invocation
+    /// ID resolves its Session before the stream opens.
+    pub async fn require_session_id(&self) -> Result<String, NvokenError> {
+        if let Some(session_id) = &self.session_id {
+            return Ok(session_id.clone());
+        }
+        Ok(self
+            .client
+            .get_invocation(&self.invocation_id)
+            .await?
+            .session_id)
+    }
+
     pub async fn wait(
         &mut self,
         timeout: Option<Duration>,
