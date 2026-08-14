@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HostToolResultAcceptance {
-    /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from the pending host tool calls, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
+    /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
     #[serde(rename = "tool_call_id")]
     pub tool_call_id: String,
     #[serde(rename = "status")]

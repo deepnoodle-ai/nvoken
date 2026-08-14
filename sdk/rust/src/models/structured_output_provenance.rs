@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 pub struct StructuredOutputProvenance {
     #[serde(rename = "source")]
     pub source: Source,
-    /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from the pending host tool calls, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
+    /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
     #[serde(rename = "tool_call_id", skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
     /// SHA-256 of the JSON Schema this object was checked against. Compare it with your own schema's hash to confirm the model answered the version you sent.

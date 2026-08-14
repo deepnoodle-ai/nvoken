@@ -20,7 +20,7 @@ pub struct ToolCallbackContext {
     /// Identifies one delivery nvoken sent you, callback or webhook alike — both are the same durable record and carry the same `dlvr_` prefix. Treat it as opaque; it appears in the signed payload and identifies the attempt when you report a delivery problem.
     #[serde(rename = "delivery_id")]
     pub delivery_id: String,
-    /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from the pending host tool calls, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
+    /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
     #[serde(rename = "tool_call_id")]
     pub tool_call_id: String,
     /// Opaque identifier with the public `inv_` prefix. Treat the body as opaque.

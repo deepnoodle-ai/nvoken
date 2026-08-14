@@ -27,9 +27,9 @@ export interface ToolUseBlock {
     type: ToolUseBlockTypeEnum;
     /**
      * Identifies one durable ToolCall. Treat it as opaque: read it from a
-     * transcript `tool_use` block or from the pending host tool calls, and
-     * pass it back verbatim as `tool_call_id` when submitting results. The
-     * same value is the `Idempotency-Key` on a callback delivery.
+     * transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+     * back verbatim as `tool_call_id` when submitting results. The same value
+     * is the `Idempotency-Key` on a callback delivery.
      *
      * @type {string}
      * @memberof ToolUseBlock

@@ -28,7 +28,7 @@ class HostToolResultAcceptance(BaseModel):
     """
     HostToolResultAcceptance
     """ # noqa: E501
-    tool_call_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from the pending host tool calls, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
+    tool_call_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
     status: StrictStr
     deduplicated: StrictBool
     __properties: ClassVar[List[str]] = ["tool_call_id", "status", "deduplicated"]

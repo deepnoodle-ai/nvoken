@@ -191,9 +191,9 @@ pub type ToolCallClaim = Arc<
         + Sync,
 >;
 
-/// Options for [`Agent::answer_pending_tool_calls`].
+/// Options for [`Agent::answer_tool_calls`].
 #[derive(Clone, Default)]
-pub struct AnswerPendingToolCallsOptions {
+pub struct AnswerToolCallsOptions {
     /// Runs before each tool. Returning `false` skips that call — use it to
     /// take an execution lease keyed by the ToolCall id, so a streaming reader
     /// and this worker cannot both start the same non-idempotent tool.
@@ -204,7 +204,7 @@ pub struct AnswerPendingToolCallsOptions {
     pub leave_waiting_on_missing_handler: bool,
 }
 
-impl AnswerPendingToolCallsOptions {
+impl AnswerToolCallsOptions {
     pub fn claim<F, Fut>(mut self, claim: F) -> Self
     where
         F: Fn(models::ToolCallSummary) -> Fut + Send + Sync + 'static,
@@ -560,10 +560,10 @@ impl Agent {
     /// Reports how many results were submitted. Zero means the Invocation was
     /// no longer waiting or every call was claimed elsewhere — both ordinary
     /// outcomes rather than errors.
-    pub async fn answer_pending_tool_calls(
+    pub async fn answer_tool_calls(
         &self,
         invocation_id: &str,
-        options: AnswerPendingToolCallsOptions,
+        options: AnswerToolCallsOptions,
     ) -> Result<usize, NvokenError> {
         let invocation = self.client.get_invocation(invocation_id).await?;
         if invocation.status != models::InvocationStatus::Waiting {

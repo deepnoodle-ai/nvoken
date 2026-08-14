@@ -3695,9 +3695,9 @@ type HostToolResultAcceptance struct {
 	Status       HostToolResultAcceptanceStatus `json:"status"`
 
 	// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
-	// transcript `tool_use` block or from the pending host tool calls, and
-	// pass it back verbatim as `tool_call_id` when submitting results. The
-	// same value is the `Idempotency-Key` on a callback delivery.
+	// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+	// back verbatim as `tool_call_id` when submitting results. The same value
+	// is the `Idempotency-Key` on a callback delivery.
 	ToolCallID ToolCallID `json:"tool_call_id"`
 }
 
@@ -5729,9 +5729,9 @@ type StructuredOutputProvenance struct {
 	Source       StructuredOutputProvenanceSource `json:"source"`
 
 	// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
-	// transcript `tool_use` block or from the pending host tool calls, and
-	// pass it back verbatim as `tool_call_id` when submitting results. The
-	// same value is the `Idempotency-Key` on a callback delivery.
+	// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+	// back verbatim as `tool_call_id` when submitting results. The same value
+	// is the `Idempotency-Key` on a callback delivery.
 	ToolCallID *ToolCallID `json:"tool_call_id,omitempty"`
 }
 
@@ -5745,9 +5745,9 @@ type SubmitHostToolResultsRequest struct {
 		IsError *bool       `json:"is_error,omitempty"`
 
 		// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
-		// transcript `tool_use` block or from the pending host tool calls, and
-		// pass it back verbatim as `tool_call_id` when submitting results. The
-		// same value is the `Idempotency-Key` on a callback delivery.
+		// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+		// back verbatim as `tool_call_id` when submitting results. The same value
+		// is the `Idempotency-Key` on a callback delivery.
 		ToolCallID ToolCallID `json:"tool_call_id"`
 	} `json:"results"`
 }
@@ -5867,9 +5867,9 @@ type ToolCall struct {
 	EndedAt  *time.Time        `json:"ended_at"`
 
 	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
-	// transcript `tool_use` block or from the pending host tool calls, and
-	// pass it back verbatim as `tool_call_id` when submitting results. The
-	// same value is the `Idempotency-Key` on a callback delivery.
+	// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+	// back verbatim as `tool_call_id` when submitting results. The same value
+	// is the `Idempotency-Key` on a callback delivery.
 	ID        ToolCallID   `json:"id"`
 	Iteration int          `json:"iteration"`
 	Mode      ToolCallMode `json:"mode"`
@@ -5900,9 +5900,9 @@ type ToolCallDelivery struct {
 }
 
 // ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
-// transcript `tool_use` block or from the pending host tool calls, and
-// pass it back verbatim as `tool_call_id` when submitting results. The
-// same value is the `Idempotency-Key` on a callback delivery.
+// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+// back verbatim as `tool_call_id` when submitting results. The same value
+// is the `Idempotency-Key` on a callback delivery.
 type ToolCallID = string
 
 // ToolCallList defines model for ToolCallList.
@@ -5953,9 +5953,9 @@ type ToolCallSummary struct {
 	DeadlineAt *time.Time `json:"deadline_at,omitempty"`
 
 	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
-	// transcript `tool_use` block or from the pending host tool calls, and
-	// pass it back verbatim as `tool_call_id` when submitting results. The
-	// same value is the `Idempotency-Key` on a callback delivery.
+	// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+	// back verbatim as `tool_call_id` when submitting results. The same value
+	// is the `Idempotency-Key` on a callback delivery.
 	ID ToolCallID `json:"id"`
 
 	// Name The tool this call names.
@@ -5991,9 +5991,9 @@ type ToolCallbackContext struct {
 	TenantKey *string `json:"tenant_key,omitempty"`
 
 	// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
-	// transcript `tool_use` block or from the pending host tool calls, and
-	// pass it back verbatim as `tool_call_id` when submitting results. The
-	// same value is the `Idempotency-Key` on a callback delivery.
+	// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+	// back verbatim as `tool_call_id` when submitting results. The same value
+	// is the `Idempotency-Key` on a callback delivery.
 	ToolCallID ToolCallID `json:"tool_call_id"`
 }
 
@@ -6057,9 +6057,9 @@ type ToolResultBlockType string
 // ToolUseBlock A host, builtin, MCP, or callback tool call.
 type ToolUseBlock struct {
 	// ID Identifies one durable ToolCall. Treat it as opaque: read it from a
-	// transcript `tool_use` block or from the pending host tool calls, and
-	// pass it back verbatim as `tool_call_id` when submitting results. The
-	// same value is the `Idempotency-Key` on a callback delivery.
+	// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+	// back verbatim as `tool_call_id` when submitting results. The same value
+	// is the `Idempotency-Key` on a callback delivery.
 	ID    ToolCallID       `json:"id"`
 	Input interface{}      `json:"input"`
 	Name  string           `json:"name"`

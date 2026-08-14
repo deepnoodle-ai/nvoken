@@ -2148,8 +2148,8 @@ export class Client {
   }
 }
 
-/** Options for {@link Agent.answerPendingToolCalls}. */
-export interface AnswerPendingToolCallsOptions {
+/** Options for {@link Agent.answerToolCalls}. */
+export interface AnswerToolCallsOptions {
   /**
    * Called before each tool runs. Return false to skip that call — use this to
    * take an execution lease keyed by the call id, so a reader and a webhook
@@ -2433,9 +2433,9 @@ export class Agent<TOutput extends object = JsonObject> {
    * longer waiting or every call was already claimed elsewhere, both of which
    * are ordinary outcomes rather than errors.
    */
-  async answerPendingToolCalls(
+  async answerToolCalls(
     invocationId: string,
-    options: AnswerPendingToolCallsOptions = {},
+    options: AnswerToolCallsOptions = {},
   ): Promise<number> {
     const handle = this.client.invocation<TOutput>(invocationId);
     const invocation = await this.client.getInvocation<TOutput>(invocationId, options.signal);

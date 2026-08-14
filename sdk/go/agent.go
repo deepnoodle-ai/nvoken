@@ -665,8 +665,8 @@ func webhookTarget(perCall, agentDefault *WebhookTarget) *WebhookTarget {
 	return agentDefault
 }
 
-// AnswerPendingToolCallsOptions configures one unattended answering pass.
-type AnswerPendingToolCallsOptions struct {
+// AnswerToolCallsOptions configures one unattended answering pass.
+type AnswerToolCallsOptions struct {
 	// Claim runs before each tool. Returning false skips that call — use it to
 	// take an execution lease keyed by the ToolCall ID, so a streaming reader
 	// and this worker cannot both start the same non-idempotent tool.
@@ -677,7 +677,7 @@ type AnswerPendingToolCallsOptions struct {
 	LeaveWaitingOnMissingHandler bool
 }
 
-// AnswerPendingToolCalls answers the host tool calls a parked Invocation is
+// AnswerToolCalls answers the host tool calls a parked Invocation is
 // waiting on, without streaming it.
 //
 // This is the unattended path. An Invocation's webhook target receives a signed
@@ -699,10 +699,10 @@ type AnswerPendingToolCallsOptions struct {
 //
 // Reports how many results were submitted. Zero means the Invocation was no
 // longer waiting or every call was claimed elsewhere — both ordinary outcomes.
-func (a *Agent) AnswerPendingToolCalls(
+func (a *Agent) AnswerToolCalls(
 	ctx context.Context,
 	invocationID string,
-	options AnswerPendingToolCallsOptions,
+	options AnswerToolCallsOptions,
 ) (int, error) {
 	invocation, err := a.client.GetInvocation(ctx, invocationID)
 	if err != nil {

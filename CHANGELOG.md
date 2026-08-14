@@ -72,6 +72,12 @@ will ever be.
   `answerableToolCalls` in TypeScript and Rust, `answerable_tool_calls` in
   Python.
 
+  The unattended answering method loses the same word. `AnswerPendingToolCalls`
+  is now `AnswerToolCalls` in Go, `answerToolCalls` in TypeScript, and
+  `answer_tool_calls` in Python and Rust, with the options types renamed to
+  match. It never selected on status `pending`, and the collection it was named
+  for is gone.
+
 - **One cursor name.** `resume_cursor` in the frame body becomes `cursor`, the
   same name as the query parameter that resumes a stream. Server-Sent Events
   still mirrors the value onto the `id:` line and accepts `Last-Event-ID` in
