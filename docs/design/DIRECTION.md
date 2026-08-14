@@ -80,9 +80,13 @@ end-state design, not the design itself.
    connection closing. `invocation.result` describes a turn ending. A client
    has to handle both because we conflated them.
 
-6. **Four spellings of the resume position.** The SSE `id` line,
-   `resume_cursor` in the frame body, the `cursor` query parameter, and the
-   `Last-Event-ID` header. One value.
+6. **Two protocol spellings of the resume position.** `resume_cursor` in the
+   frame body and the `cursor` query parameter: one value, two names. The SSE
+   `id` line and the `Last-Event-ID` header carry the same value again, but
+   they are the SSE binding's own mechanics and belong to any faithful SSE
+   binding, so the pollution is the two protocol names, not four spellings.
+   This entry originally counted all four; the correction is recorded in
+   [design 004](004-protocol-end-state.md).
 
 ## What comes next
 
@@ -90,6 +94,10 @@ An end-state design that specifies the protocol with no compatibility budget,
 in its own section, standing alone as the thing later changes are measured
 against. How to get there from here belongs in a separate section of the same
 document, and is the smaller problem.
+
+That document now exists:
+[design 004, the end-state protocol](004-protocol-end-state.md). Its Part 1
+is the measuring stick this section asked for; its Part 2 is the path.
 
 Nothing can be removed from `/v1` today in any case. The contract carries no
 `deprecated` markers and there is no deprecation policy in any guide, so a

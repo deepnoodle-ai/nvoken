@@ -554,8 +554,9 @@ to be that the contract was right and the note was wrong.
 This list is shaped by the protocol we have. Working through it produces a
 sanded version of that protocol, not the one we would design today, and it
 does not name the places where the protocol says one thing twice. Those are
-in [Design direction](../design/DIRECTION.md), which is where the protocol is
-actually headed.
+in [Design direction](../design/DIRECTION.md), and the protocol they collapse
+into is specified in
+[design 004](../design/004-protocol-end-state.md).
 
 Items marked **(wire)** change what the server sends or what the contract
 promises, so they land in `nvoken-cloud` and reach this repository through a
