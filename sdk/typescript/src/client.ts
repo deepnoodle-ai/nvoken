@@ -101,10 +101,9 @@ import {
   SCHEMA_PREFLIGHT_CODE,
 } from "./schema-preflight.js";
 import {
-  streamInvocation as streamInvocationEvents,
   streamInvocationByID,
   streamInvocationByIDWithOptions,
-  type InvocationStreamEvent,
+  type SessionStreamEvent,
   type StreamOptions,
 } from "./stream.js";
 import { VERSION } from "./version.js";
@@ -971,7 +970,7 @@ export type EndedInvocationHandle<TOutput extends object = JsonObject> =
   };
 
 export type AgentStreamEvent<TOutput extends object = JsonObject> =
-  InvocationStreamEvent<TOutput> & { handle: InvocationHandle<TOutput> };
+  SessionStreamEvent<TOutput> & { handle: InvocationHandle<TOutput> };
 
 export interface ListInvocationOptions {
   tenantKey?: string;
@@ -2290,7 +2289,8 @@ export class Agent<TOutput extends object = JsonObject> {
   ): AsyncGenerator<AgentStreamEvent<TOutput>> {
     const scope = localAbortScope(options.signal, options.timeoutMs);
     try {
-      yield* this.streamLoop(input, options, scope.signal);
+      const handle = await this.admit(input, options, scope.signal);
+      yield* this.streamLoop(handle, options, scope.signal);
     } catch (error) {
       if (scope.timedOut()) {
         throw new NvokenError("timeout", "local stream timed out", undefined, undefined, undefined, undefined, undefined, {
@@ -2303,52 +2303,36 @@ export class Agent<TOutput extends object = JsonObject> {
     }
   }
 
-  private async *streamLoop(
+  /**
+   * Admission is separate from streaming: this acknowledgement is the handle,
+   * and the stream follows the turn it already names. A dropped stream costs
+   * nothing, because no reconnect can create a second turn — and a caller
+   * holding the handle can fall back to authoritative reads.
+   */
+  private admit(
     input: InvokeInput,
     options: InvocationOptions,
     signal?: AbortSignal,
-  ): AsyncGenerator<AgentStreamEvent<TOutput>> {
+  ): Promise<InvocationHandle<TOutput>> {
     const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
-    const request = invocationRequestToWire(
-      this.request(input, options, idempotencyKey),
-      idempotencyKey,
-    );
+    return this.invoke(input, { ...options, idempotencyKey, signal });
+  }
+
+  private async *streamLoop(
+    handle: InvocationHandle<TOutput>,
+    options: InvocationOptions,
+    signal?: AbortSignal,
+  ): AsyncGenerator<AgentStreamEvent<TOutput>> {
     const dispatched = new Set<string>();
-    let handle: InvocationHandle<TOutput> | undefined;
-    for await (const event of streamInvocationEvents<TOutput>(
-      this.client,
-      request,
-      signal,
-    )) {
-      if (event.type === "invocation.accepted") {
-        handle = new InvocationHandle(
-          this.client,
-          event.invocationId,
-          idempotencyKey,
-          event.sessionId,
-          event.agentId,
-          event.status,
-          event.deduplicated,
-          event.deadlineAt,
-		  undefined,
-        );
-      } else if (event.type === "invocation.update") {
-        handle?.applyInvocation(event.invocation);
-      } else if (event.type === "invocation.result") {
-        handle?.applyInvocation(event.result.invocation);
-      }
-      if (!handle) {
-        throw new NvokenError(
-          "unexpected_response",
-          "Invocation stream did not begin with invocation.accepted",
-        );
-      }
+    for await (const event of handle.stream(signal)) {
       yield { ...event, handle };
-      if (
-        event.type === "invocation.update"
-        && event.invocation.status === "waiting"
-      ) {
-        await this.dispatchTools(handle, event.invocation, options, signal, dispatched);
+      // A turn that stopped for your tools says so on a change, which replays
+      // on reconnect like every other change.
+      if (event.type === "transcript.update" && waitingFor(event, handle.invocationId)) {
+        const invocation = await handle.refresh(signal);
+        if (invocation.status === "waiting") {
+          await this.dispatchTools(handle, invocation, options, signal, dispatched);
+        }
       }
     }
   }
@@ -2361,11 +2345,13 @@ export class Agent<TOutput extends object = JsonObject> {
     let handle: InvocationHandle<TOutput> | undefined;
     try {
       try {
-        for await (const event of this.streamLoop(input, options, scope.signal)) {
-          handle = event.handle;
-          if (event.type === "invocation.result") {
-            return this.agentResult(handle, event.result);
-          }
+        // The stream drives the turn, including answering host tools. It ends
+        // on the turn's terminal change; the composed result is a read. The
+        // handle exists before the stream does, so a stream this client cannot
+        // use falls back to authoritative reads instead of failing the run.
+        handle = await this.admit(input, options, scope.signal);
+        for await (const _ of this.streamLoop(handle, options, scope.signal)) {
+          // The loop's work is the dispatching it does; nothing to collect.
         }
       } catch (error) {
         if (scope.timedOut()) {
@@ -2378,7 +2364,7 @@ export class Agent<TOutput extends object = JsonObject> {
       if (!handle) {
         throw new NvokenError(
           "unexpected_response",
-          "Invocation stream ended before acknowledgement",
+          "the stream ended before the turn was acknowledged",
         );
       }
       for (;;) {
@@ -2781,16 +2767,22 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     return this.client.cancelNudge(this.invocationId, nudgeId, signal);
   }
 
-  stream(signal?: AbortSignal): AsyncGenerator<InvocationStreamEvent<TOutput>> {
-    return streamInvocationByID<TOutput>(this.client, this.invocationId, signal);
+  /**
+   * Follow this turn until a change for it carries a terminal status. The one
+   * stream, filtered to one Invocation.
+   */
+  async *stream(signal?: AbortSignal): AsyncGenerator<SessionStreamEvent<TOutput>> {
+    yield* this.streamWithOptions({}, signal);
   }
 
-  streamWithOptions(
+  async *streamWithOptions(
     options: StreamOptions,
     signal?: AbortSignal,
-  ): AsyncGenerator<InvocationStreamEvent<TOutput>> {
-    return streamInvocationByIDWithOptions<TOutput>(
+  ): AsyncGenerator<SessionStreamEvent<TOutput>> {
+    const sessionId = await this.requireSessionId(signal);
+    yield* streamInvocationByIDWithOptions<TOutput>(
       this.client,
+      sessionId,
       this.invocationId,
       options,
       signal,
@@ -2800,6 +2792,14 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
 
 // inputBlockToWire copies one facade block into the generated wire shape. The
 // member names already match, so the copy exists to avoid sharing caller state.
+// waitingFor reports whether a transcript.update carries a change parking this
+// turn on your tools.
+function waitingFor(event: { invocationChanges?: { invocationId: string; status: string }[] }, invocationId: string): boolean {
+  return (event.invocationChanges ?? []).some(
+    (change) => change.invocationId === invocationId && change.status === "waiting",
+  );
+}
+
 function inputBlockToWire(block: InputBlock): GeneratedInputBlock {
   if (block.type === "text") return { type: "text", text: block.text };
   if (block.type === "image") {

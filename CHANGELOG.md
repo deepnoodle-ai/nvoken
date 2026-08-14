@@ -8,6 +8,38 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Collapse the three stream entry points into one, and the eight frames into
+  four.** There is one streaming route,
+  `GET /v1/sessions/{session_id}/stream`, and `invocation_id` narrows it to one
+  turn. `handle.stream()` follows one turn on it and returns once a change for
+  that turn carries a terminal status: **that change is the terminal signal,
+  and there is no other.** It replays on reconnect at any cursor, so a turn
+  that settled while you were away is still settled when you return, and the
+  composed result is `GET /v1/invocations/{id}` rather than a frame.
+  `invocation.accepted`, `invocation.update`, and `invocation.result` are gone,
+  along with the inline `POST` streaming form; admission is a plain JSON POST
+  whose response is the acknowledgment.
+
+  `output_text.delta` and `thinking.delta` become one `message.delta` frame
+  with a `kind` (`text`, `thinking`, `tool_arguments`) and one `delta` payload
+  field, so every SDK reducer now has one accumulator instead of parallel
+  fields where one is always empty. `StreamPreview` follows: `kind` and `delta`
+  replace `output_text` and `thinking`, `message_id` is required and is the
+  key, `iteration` is gone, and `tool_call_id` and `name` appear on tool
+  argument previews. Accumulate by `(message_id, content_index)`.
+
+  The Session stream is now a subscription. It stays open while the Session is
+  idle and a turn started later appears on it, so it no longer returns on its
+  own: leave it by breaking out of the iterator (TypeScript, Rust), returning
+  `ErrStopStream` (Go), or cancelling the task (Python). `stream.end` speaks
+  only about the connection now — reason `terminal` is gone, `idle` is new, and
+  the frame carries no cursor, because you already track your own.
+  `nvoken session stream` tails until the server reports the Session idle;
+  `nvoken invocation stream` ends on the turn's terminal change.
+
+  Breaking, with no deprecation window: see
+  [design 004](docs/design/004-protocol-end-state.md), step C.
+
 - **Collapse the two schema families into one.** The seventeen `Browser*`
   projections and the ten response wrapper unions are gone. There is one
   generated type per resource, and a browser grant receives the same shape with

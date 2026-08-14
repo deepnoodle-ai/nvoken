@@ -1,10 +1,11 @@
 # The end-state protocol
 
-**Status:** Standing target. This is the artifact [DIRECTION](DIRECTION.md)
-calls for: the protocol we would design today with no installed base. Part 1
-is what every later change to the streaming protocol and the contract is
-measured against. It changes only by a decision recorded here, never by
-drift. Part 2 is the path from today's protocol and can be revised freely.
+**Status:** Standing target, and reached. This is the artifact
+[DIRECTION](DIRECTION.md) calls for: the protocol we would design today with no
+installed base. Part 1 is what every later change to the streaming protocol and
+the contract is measured against. It changes only by a decision recorded here,
+never by drift. Part 2 was the path, and all three of its steps landed on
+2026-08-14; it is kept as the record of how this was sequenced.
 **Author:** Claude Fable 5 with Curtis Myzie
 **Date:** 2026-08-13
 **Applies to:** `openapi/nvoken.yaml` and the runtime behind it, in
@@ -347,7 +348,10 @@ rewritten once for the new vocabulary.
 
 `tool_call.progress` is additive and unscheduled, exactly as design 003
 area 11 left it. It needs no break and can land whenever an ingestion
-path exists.
+path exists. Step C landed the model-side half of it under a different
+name: tool arguments now stream as `message.delta` frames of kind
+`tool_arguments`, carrying their call on every fragment. What remains
+unbuilt is progress from a running tool, which needs that ingestion path.
 
 ### What each step costs
 

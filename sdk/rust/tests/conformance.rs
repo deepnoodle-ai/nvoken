@@ -1023,13 +1023,17 @@ async fn shared_fault_server_semantics() {
     assert_eq!(local_error.category, ErrorCategory::Conflict);
     assert_eq!(local_error.status, None);
 
+    // One stream, filtered to one turn: a dropped connection, a rotation, and
+    // then the frame carrying the terminal change, which is where the read
+    // ends. Nothing announces that the turn is over except the change itself.
     assert_eq!(
         event_types,
         vec![
-            "invocation.update",
+            "transcript.update",
+            "transcript.update",
             "stream.end",
-            "invocation.update",
-            "invocation.result",
+            "transcript.update",
+            "transcript.update",
         ]
     );
 
@@ -1048,6 +1052,7 @@ async fn shared_fault_server_semantics() {
     assert_eq!(state.last_event_id, "cursor-1");
     assert_eq!(state.last_statuses, vec!["waiting", "queued", "running"]);
     assert_eq!(state.last_deltas, "false");
+    assert_eq!(state.last_invocation_filter, INVOCATION_ID);
 }
 
 #[test]
@@ -1222,6 +1227,7 @@ struct ServerState {
     last_event_id: String,
     last_statuses: Vec<String>,
     last_deltas: String,
+    last_invocation_filter: String,
 }
 
 #[tokio::test]

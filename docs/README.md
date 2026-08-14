@@ -10,11 +10,12 @@ Read it before proposing a change to either.
   which is a remediation list and not the target its file name claims
 - [The end-state protocol](design/004-protocol-end-state.md), the actual
   target: the protocol designed with no compatibility budget, and the path
-  to it
+  to it. All three steps have landed.
 - [SDK and contract development](guides/sdk-development.md)
 - [CLI development and release](guides/cli.md)
 - [The streaming protocol](reference/streaming-protocol.md)
-- [Streaming protocol assessment](reference/streaming-protocol-assessment.md)
+- [Streaming protocol assessment](reference/streaming-protocol-assessment.md),
+  spent, and kept as the record of the argument
 - [Research on agent protocols and standards](research/README.md)
 
 Product documentation, guides, and the HTTP API reference are published at

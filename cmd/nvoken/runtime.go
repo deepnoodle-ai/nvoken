@@ -35,85 +35,84 @@ const probeMaxOutputTokens = 2048
 var version = "devel"
 
 var operationCommands = map[string]string{
-	"cancelInvocation":        "invocation cancel",
-	"interruptInvocation":     "invocation interrupt",
-	"resumeInvocation":        "invocation resume",
-	"createNudge":             "invocation nudge",
-	"listNudges":              "invocation nudges",
-	"listToolCalls":           "invocation tool-calls",
-	"cancelNudge":             "invocation cancel-nudge",
-	"createCredential":        "credentials create",
-	"createInvocation":        "invoke",
-	"createAgentDefinition":   "agent-definition create",
-	"listAgentDefinitions":    "agent-definition list",
-	"getAgentDefinition":      "agent-definition get",
-	"updateAgentDefinition":   "agent-definition update",
-	"archiveAgentDefinition":  "agent-definition archive",
-	"restoreAgentDefinition":  "agent-definition restore",
-	"createAppClientKey":      "client-key create",
-	"listAppClientKeys":       "client-key list",
-	"revokeAppClientKey":      "client-key revoke",
-	"createSession":           "session create",
-	"deleteTenant":            "tenant delete",
-	"forkSession":             "session fork",
-	"createProviderKey":       "provider-key create",
-	"allocateCredits":         "credits allocate",
-	"listCreditAccounts":      "credits accounts",
-	"listCreditAllocations":   "credits allocations",
-	"getCredential":           "credentials get",
-	"getCurrentIdentity":      "auth status",
-	"getAgent":                "agent get",
-	"getApp":                  "app get",
-	"listApps":                "app list",
-	"registerApp":             "app register",
-	"updateApp":               "app update",
-	"archiveApp":              "app archive",
-	"restoreApp":              "app restore",
-	"getInvocation":           "invocation get",
-	"getInvocationResult":     "invocation result",
-	"getInvocationTimeline":   "invocation timeline",
-	"getMemory":               "memory get",
-	"getTrace":                "trace get",
-	"getModel":                "model get",
-	"getOrg":                  "org get",
-	"archiveOrg":              "org archive",
-	"restoreOrg":              "org restore",
-	"getProviderKey":          "provider-key get",
-	"getUsageBreakdown":       "usage breakdown",
-	"getUsageTimeseries":      "usage timeseries",
-	"getProviderKeyUsage":     "provider-key usage",
-	"getSession":              "session get",
-	"deleteSession":           "session delete",
-	"updateSession":           "session set-metadata",
-	"getSessionTranscript":    "session transcript",
-	"listAgents":              "agent list",
-	"listCredentials":         "credentials list",
-	"listInvocations":         "invocation list",
-	"listAdmissions":          "admission list",
-	"listInvocationLogs":      "invocation logs",
-	"listInvocationTraces":    "invocation traces",
-	"listMCPTools":            "mcp list-tools",
-	"listMemories":            "memory list",
-	"listModels":              "model list",
-	"listOrgs":                "org list",
-	"listProviderKeys":        "provider-key list",
-	"listSessionCompactions":  "session compactions",
-	"listSessionMessages":     "session messages",
-	"listSessions":            "session list",
-	"listTenants":             "tenant list",
-	"listUsageRecords":        "usage records",
-	"registerOrg":             "org register",
-	"revokeProviderKey":       "provider-key revoke",
-	"revokeCredential":        "credentials revoke",
-	"rotateCredential":        "credentials rotate",
-	"rotateProviderKey":       "provider-key rotate",
-	"streamInvocation":        "invocation stream",
-	"streamSessionTranscript": "session stream",
-	"submitHostToolResults":   "tool-result submit",
-	"summarizeAdmissions":     "admission summary",
-	"deleteMemory":            "memory delete",
-	"issueAnonymousToken":     "app anonymous-token",
-	"updateOrg":               "org update",
+	"cancelInvocation":       "invocation cancel",
+	"interruptInvocation":    "invocation interrupt",
+	"resumeInvocation":       "invocation resume",
+	"createNudge":            "invocation nudge",
+	"listNudges":             "invocation nudges",
+	"listToolCalls":          "invocation tool-calls",
+	"cancelNudge":            "invocation cancel-nudge",
+	"createCredential":       "credentials create",
+	"createInvocation":       "invoke",
+	"createAgentDefinition":  "agent-definition create",
+	"listAgentDefinitions":   "agent-definition list",
+	"getAgentDefinition":     "agent-definition get",
+	"updateAgentDefinition":  "agent-definition update",
+	"archiveAgentDefinition": "agent-definition archive",
+	"restoreAgentDefinition": "agent-definition restore",
+	"createAppClientKey":     "client-key create",
+	"listAppClientKeys":      "client-key list",
+	"revokeAppClientKey":     "client-key revoke",
+	"createSession":          "session create",
+	"deleteTenant":           "tenant delete",
+	"forkSession":            "session fork",
+	"createProviderKey":      "provider-key create",
+	"allocateCredits":        "credits allocate",
+	"listCreditAccounts":     "credits accounts",
+	"listCreditAllocations":  "credits allocations",
+	"getCredential":          "credentials get",
+	"getCurrentIdentity":     "auth status",
+	"getAgent":               "agent get",
+	"getApp":                 "app get",
+	"listApps":               "app list",
+	"registerApp":            "app register",
+	"updateApp":              "app update",
+	"archiveApp":             "app archive",
+	"restoreApp":             "app restore",
+	"getInvocation":          "invocation get",
+	"getInvocationResult":    "invocation result",
+	"getInvocationTimeline":  "invocation timeline",
+	"getMemory":              "memory get",
+	"getTrace":               "trace get",
+	"getModel":               "model get",
+	"getOrg":                 "org get",
+	"archiveOrg":             "org archive",
+	"restoreOrg":             "org restore",
+	"getProviderKey":         "provider-key get",
+	"getUsageBreakdown":      "usage breakdown",
+	"getUsageTimeseries":     "usage timeseries",
+	"getProviderKeyUsage":    "provider-key usage",
+	"getSession":             "session get",
+	"deleteSession":          "session delete",
+	"updateSession":          "session set-metadata",
+	"getSessionTranscript":   "session transcript",
+	"listAgents":             "agent list",
+	"listCredentials":        "credentials list",
+	"listInvocations":        "invocation list",
+	"listAdmissions":         "admission list",
+	"listInvocationLogs":     "invocation logs",
+	"listInvocationTraces":   "invocation traces",
+	"listMCPTools":           "mcp list-tools",
+	"listMemories":           "memory list",
+	"listModels":             "model list",
+	"listOrgs":               "org list",
+	"listProviderKeys":       "provider-key list",
+	"listSessionCompactions": "session compactions",
+	"listSessionMessages":    "session messages",
+	"listSessions":           "session list",
+	"listTenants":            "tenant list",
+	"listUsageRecords":       "usage records",
+	"registerOrg":            "org register",
+	"revokeProviderKey":      "provider-key revoke",
+	"revokeCredential":       "credentials revoke",
+	"rotateCredential":       "credentials rotate",
+	"rotateProviderKey":      "provider-key rotate",
+	"streamSession":          "session stream",
+	"submitHostToolResults":  "tool-result submit",
+	"summarizeAdmissions":    "admission summary",
+	"deleteMemory":           "memory delete",
+	"issueAnonymousToken":    "app anonymous-token",
+	"updateOrg":              "org update",
 }
 
 type runtimeConfig struct {
@@ -270,10 +269,10 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runInvocationWait)
 	invocations.Command("stream").
-		Description("Render provisional deltas; reconnect with the durable cursor after interruption").
+		Description("Follow one turn until its terminal change; reconnect with the durable cursor after interruption").
 		Args("invocation-id").
 		Flags(
-			cli.Bool("deltas").Default(true).Help("Include provisional output and thinking deltas"),
+			cli.Bool("deltas").Default(true).Help("Include provisional message deltas"),
 		).
 		Run(runInvocationStream)
 	invocations.Command("cancel").Args("invocation-id").Run(runInvocationCancel)
@@ -445,9 +444,10 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runSessionTranscript)
 	sessions.Command("stream").
+		Description("Subscribe to a Session; stays open while it is idle, so interrupt to stop").
 		Args("session-id").
 		Flags(
-			cli.Bool("deltas").Default(true).Help("Include provisional output and thinking deltas"),
+			cli.Bool("deltas").Default(true).Help("Include provisional message deltas"),
 		).
 		Run(runSessionStream)
 
@@ -1176,11 +1176,13 @@ func runInvocationStream(command *cli.Context) error {
 			_, err = fmt.Fprint(command.Stdout(), text)
 			return err
 		}
-		if (event.Type == "invocation.result" || event.Type == "stream.end") &&
-			renderedDelta {
+		// A turn ends on its terminal change. Close off the prose that was
+		// streaming into the terminal before printing the frame that says so.
+		if event.Type == "transcript.update" && renderedDelta {
 			renderedDelta = false
-			_, err = fmt.Fprintln(command.Stdout())
-			return err
+			if _, err := fmt.Fprintln(command.Stdout()); err != nil {
+				return err
+			}
 		}
 		_, err := fmt.Fprintf(command.Stdout(), "%s\t%s\n", event.Type, event.ID)
 		return err
@@ -1837,9 +1839,27 @@ func runSessionStream(command *cli.Context) error {
 			_, err = fmt.Fprint(command.Stdout(), text)
 			return err
 		}
-		_, err := fmt.Fprintf(command.Stdout(), "%s\t%s\n", event.Type, snapshot.Cursor)
-		return err
+		if _, err := fmt.Fprintf(command.Stdout(), "%s\t%s\n", event.Type, snapshot.Cursor); err != nil {
+			return err
+		}
+		// The stream is a subscription and never ends on its own. This command
+		// is a tail, so it leaves when the server says the Session went quiet.
+		// Run it again to pick up where this cursor left off.
+		if idleClose(event) {
+			return nvoken.ErrStopStream
+		}
+		return nil
 	})
+}
+
+func idleClose(event nvoken.StreamEvent) bool {
+	if event.Type != "stream.end" {
+		return false
+	}
+	var end struct {
+		Reason string `json:"reason"`
+	}
+	return json.Unmarshal(event.Data, &end) == nil && end.Reason == "idle"
 }
 
 func runToolResultSubmit(command *cli.Context) error {
@@ -1968,17 +1988,24 @@ func writeOutput(command *cli.Context, value any, text func(io.Writer) error) er
 	return text(command.Stdout())
 }
 
+// outputTextDelta pulls the assistant prose out of a preview frame. Reasoning
+// and tool arguments arrive on the same frame under a different kind, and this
+// command prints neither.
 func outputTextDelta(event nvoken.StreamEvent) (string, bool, error) {
-	if event.Type != "output_text.delta" {
+	if event.Type != "message.delta" {
 		return "", false, nil
 	}
 	var delta struct {
-		Text string `json:"text"`
+		Kind  string `json:"kind"`
+		Delta string `json:"delta"`
 	}
 	if err := json.Unmarshal(event.Data, &delta); err != nil {
-		return "", false, fmt.Errorf("decode output text delta: %w", err)
+		return "", false, fmt.Errorf("decode message delta: %w", err)
 	}
-	return delta.Text, true, nil
+	if delta.Kind != "text" {
+		return "", false, nil
+	}
+	return delta.Delta, true, nil
 }
 
 func writeMessageText(writer io.Writer, message nvoken.SessionMessage) error {

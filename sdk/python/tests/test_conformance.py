@@ -765,12 +765,16 @@ async def test_shared_fault_server_semantics() -> None:
         async def consume(event: StreamEvent) -> None:
             event_types.append(event.type)
 
+        # One stream, filtered to one turn: a dropped connection, a rotation,
+        # and then the frame carrying the terminal change, which is where the
+        # read ends. Nothing announces that the turn is over except the change.
         await client.invocation(INVOCATION_ID).stream(consume, deltas=False)
         assert event_types == [
-            "invocation.update",
+            "transcript.update",
+            "transcript.update",
             "stream.end",
-            "invocation.update",
-            "invocation.result",
+            "transcript.update",
+            "transcript.update",
         ]
 
     async with httpx.AsyncClient() as inspect:
@@ -785,6 +789,7 @@ async def test_shared_fault_server_semantics() -> None:
         "last_event_id": "cursor-1",
         "last_statuses": ["waiting", "queued", "running"],
         "last_deltas": "false",
+        "last_invocation_filter": INVOCATION_ID,
     }
 
 
@@ -861,11 +866,12 @@ def test_shared_reducer_vector() -> None:
             {
                 "invocation_id": preview.invocation_id,
                 "attempt": preview.attempt,
-                "iteration": preview.iteration,
+                "message_id": preview.message_id,
                 "content_index": preview.content_index,
-                **({} if preview.message_id is None else {"message_id": preview.message_id}),
-                "output_text": preview.output_text,
-                "thinking": preview.thinking,
+                "kind": preview.kind,
+                "delta": preview.delta,
+                **({} if preview.tool_call_id is None else {"tool_call_id": preview.tool_call_id}),
+                **({} if preview.name is None else {"name": preview.name}),
             }
             for preview in preview_reducer.snapshot().previews
         ] == preview_case["expected_previews"], preview_case["name"]
@@ -907,17 +913,19 @@ async def test_session_stream_uses_public_operation_and_follows_later_turns() ->
     for change in later_event["data"]["invocation_changes"]:
         change["invocation_id"] = later_invocation_id
 
-    def sse(event: dict[str, Any], *, terminal: bool = False) -> str:
+    def sse(event: dict[str, Any], *, idle: bool = False) -> str:
         frame = (
             "retry: 1\n"
             f"id: {event['id']}\n"
             f"event: {event['event']}\n"
             f"data: {json.dumps(event['data'])}\n\n"
         )
-        if terminal:
+        if idle:
+            # Nothing is running, so the server reclaims the connection. That
+            # says nothing about any turn, and the subscription reconnects.
             frame += (
                 "event: stream.end\n"
-                f"data: {json.dumps({'type': 'stream.end', 'session_id': SESSION_ID, 'invocation_id': None, 'reason': 'terminal', 'cursor': event['id']})}\n\n"
+                f"data: {json.dumps({'type': 'stream.end', 'session_id': SESSION_ID, 'reason': 'idle'})}\n\n"
             )
         return frame
 
@@ -925,20 +933,22 @@ async def test_session_stream_uses_public_operation_and_follows_later_turns() ->
         def __init__(self) -> None:
             self.calls: list[tuple[str, str | None]] = []
             self.responses = [
-                httpx.Response(200, text=sse(events[0], terminal=True)),
+                httpx.Response(200, text=sse(events[0], idle=True)),
                 httpx.Response(200, text=sse(later_event)),
             ]
 
-        async def stream_session_transcript_without_preload_content(
+        async def stream_session_without_preload_content(
             self,
             session_id: str,
             *,
+            invocation_id: str | None,
             cursor: str | None,
             deltas: bool,
             last_event_id: str | None,
         ) -> httpx.Response:
             assert cursor is None
             assert deltas is True
+            assert invocation_id is None
             self.calls.append((session_id, last_event_id))
             return self.responses.pop(0)
 

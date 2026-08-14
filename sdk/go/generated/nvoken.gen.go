@@ -646,21 +646,6 @@ func (e ImageReferenceBlockType) Valid() bool {
 	}
 }
 
-// Defines values for InvocationAcceptedEventType.
-const (
-	EventInvocationAccepted InvocationAcceptedEventType = "invocation.accepted"
-)
-
-// Valid indicates whether the value is a known member of the InvocationAcceptedEventType enum.
-func (e InvocationAcceptedEventType) Valid() bool {
-	switch e {
-	case EventInvocationAccepted:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for InvocationContextItemTier.
 const (
 	InvocationContextItemTierContextual InvocationContextItemTier = "contextual"
@@ -715,21 +700,6 @@ func (e InvocationFailureCode) Valid() bool {
 	case InvocationFailureCodeProviderKeyUnavailable:
 		return true
 	case InvocationFailureCodeStructuredOutputUnsatisfied:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for InvocationResultEventType.
-const (
-	EventInvocationResult InvocationResultEventType = "invocation.result"
-)
-
-// Valid indicates whether the value is a known member of the InvocationResultEventType enum.
-func (e InvocationResultEventType) Valid() bool {
-	switch e {
-	case EventInvocationResult:
 		return true
 	default:
 		return false
@@ -823,21 +793,6 @@ func (e InvocationTimelineStepKind) Valid() bool {
 	case InvocationTimelineStepKindNudge:
 		return true
 	case InvocationTimelineStepKindToolCall:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for InvocationUpdateEventType.
-const (
-	EventInvocationUpdate InvocationUpdateEventType = "invocation.update"
-)
-
-// Valid indicates whether the value is a known member of the InvocationUpdateEventType enum.
-func (e InvocationUpdateEventType) Valid() bool {
-	switch e {
-	case EventInvocationUpdate:
 		return true
 	default:
 		return false
@@ -967,6 +922,42 @@ func (e MemorySearchMode) Valid() bool {
 	case Keyword:
 		return true
 	case Semantic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageDeltaEventType.
+const (
+	EventMessageDelta MessageDeltaEventType = "message.delta"
+)
+
+// Valid indicates whether the value is a known member of the MessageDeltaEventType enum.
+func (e MessageDeltaEventType) Valid() bool {
+	switch e {
+	case EventMessageDelta:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageDeltaKind.
+const (
+	DeltaKindText          MessageDeltaKind = "text"
+	DeltaKindThinking      MessageDeltaKind = "thinking"
+	DeltaKindToolArguments MessageDeltaKind = "tool_arguments"
+)
+
+// Valid indicates whether the value is a known member of the MessageDeltaKind enum.
+func (e MessageDeltaKind) Valid() bool {
+	switch e {
+	case DeltaKindText:
+		return true
+	case DeltaKindThinking:
+		return true
+	case DeltaKindToolArguments:
 		return true
 	default:
 		return false
@@ -1393,21 +1384,6 @@ func (e Operation) Valid() bool {
 	}
 }
 
-// Defines values for OutputTextDeltaEventType.
-const (
-	EventOutputTextDelta OutputTextDeltaEventType = "output_text.delta"
-)
-
-// Valid indicates whether the value is a known member of the OutputTextDeltaEventType enum.
-func (e OutputTextDeltaEventType) Valid() bool {
-	switch e {
-	case EventOutputTextDelta:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ProviderKeyStatus.
 const (
 	ProviderKeyStatusActive  ProviderKeyStatus = "active"
@@ -1752,19 +1728,19 @@ func (e StreamEndEventType) Valid() bool {
 
 // Defines values for StreamEndReason.
 const (
+	ReasonIdle         StreamEndReason = "idle"
 	ReasonRotate       StreamEndReason = "rotate"
 	ReasonSlowConsumer StreamEndReason = "slow_consumer"
-	ReasonTerminal     StreamEndReason = "terminal"
 )
 
 // Valid indicates whether the value is a known member of the StreamEndReason enum.
 func (e StreamEndReason) Valid() bool {
 	switch e {
+	case ReasonIdle:
+		return true
 	case ReasonRotate:
 		return true
 	case ReasonSlowConsumer:
-		return true
-	case ReasonTerminal:
 		return true
 	default:
 		return false
@@ -1840,21 +1816,6 @@ const (
 func (e TextInputBlockType) Valid() bool {
 	switch e {
 	case InputTypeText:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ThinkingDeltaEventType.
-const (
-	EventThinkingDelta ThinkingDeltaEventType = "thinking.delta"
-)
-
-// Valid indicates whether the value is a known member of the ThinkingDeltaEventType enum.
-func (e ThinkingDeltaEventType) Valid() bool {
-	switch e {
-	case EventThinkingDelta:
 		return true
 	default:
 		return false
@@ -3938,65 +3899,14 @@ type Invocation struct {
 	UserKey *string `json:"user_key,omitempty"`
 }
 
-// InvocationAcceptedEvent defines model for InvocationAcceptedEvent.
-type InvocationAcceptedEvent struct {
-	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-	AgentID      *AgentID  `json:"agent_id,omitempty"`
-	DeadlineAt   time.Time `json:"deadline_at"`
-	Deduplicated bool      `json:"deduplicated"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-
-	// Limits The limits this turn is actually running under, after your
-	// installation's defaults and minimums were applied. Repeated here so you
-	// can see what you got without a second request — worth checking when you
-	// left `max_iterations` out, since the default may be lower than you
-	// expect.
-	Limits *ResolvedLimits `json:"limits,omitempty"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
-
-	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
-	//
-	// `completed` means the turn ended the way it was asked to: the model
-	// finished on its own, or you interrupted it.
-	//
-	// `incomplete` means a limit you set stopped the turn cleanly, between
-	// steps rather than mid-request. `stop_reason` names the limit that ran
-	// out. The reply so far is valid and carries into the next turn just
-	// like a completed turn's does, so this is a stopping point rather than
-	// an error.
-	//
-	// `failed` means the turn could not stop cleanly — a deadline landing in
-	// the middle of a model request, for example — or that a turn you asked
-	// for structured output from never produced a valid object. Read `error`
-	// for the reason; the reply, if any, is not carried forward.
-	//
-	// `waiting` — `requires_action` in some other APIs — means the turn has
-	// stopped for tool calls you need to run. Nothing is executing. Send the
-	// results and the turn returns to `queued` and picks up where it left
-	// off. A turn can also return to `queued` on its own if nvoken had to
-	// restart it after an interruption; `attempt` tells the two apart, and
-	// the `revision` on each stream update tells you their order.
-	//
-	// `paused` means a spending limit stopped the turn but left it
-	// resumable. Nothing is executing, and its deadlines are on hold, so a
-	// turn cannot expire while you decide. Raise the turn's limit or add
-	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
-	Status InvocationStatus            `json:"status"`
-	Type   InvocationAcceptedEventType `json:"type"`
-}
-
-// InvocationAcceptedEventType defines model for InvocationAcceptedEvent.Type.
-type InvocationAcceptedEventType string
-
-// InvocationChange One lifecycle step of one turn, as the Session transcript stream and
-// the JSON transcript deliver it. Order changes by `revision` and fold
-// to the highest one to get current state.
+// InvocationChange One lifecycle step of one turn, as the stream and the JSON transcript
+// deliver it. Order changes by `revision` and fold to the highest one to
+// get current state.
+//
+// **A turn is over when a change for it carries a terminal status.**
+// That is the terminal signal, and there is no other. Because it is
+// saved it replays on reconnect at any cursor, so a turn that settled
+// while you were away is still settled when you return.
 //
 // A change carries what a turn's own projection carries about where it
 // stands: `stop_reason` for a turn that ended, `credit_block` for one
@@ -4216,20 +4126,6 @@ type InvocationResult struct {
 	OutputText *string `json:"output_text"`
 }
 
-// InvocationResultEvent defines model for InvocationResultEvent.
-type InvocationResultEvent struct {
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID     `json:"invocation_id"`
-	Result       InvocationResult `json:"result"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                 `json:"session_id"`
-	Type      InvocationResultEventType `json:"type"`
-}
-
-// InvocationResultEventType defines model for InvocationResultEvent.Type.
-type InvocationResultEventType string
-
 // InvocationStatus `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 // turn reaches one of them it never changes again.
 //
@@ -4278,16 +4174,6 @@ type InvocationStatus string
 //
 // Expect new values here over time.
 type InvocationStopReason string
-
-// InvocationStreamEvent Typed event from one Invocation stream. Switch on `type`. A minimal
-// consumer prints `output_text.delta` and finishes on
-// `invocation.result`.
-//
-// New frame types may appear here over time, and existing ones may gain
-// fields. Handle the types you know and ignore the rest.
-type InvocationStreamEvent struct {
-	union json.RawMessage
-}
 
 // InvocationTimeline defines model for InvocationTimeline.
 type InvocationTimeline struct {
@@ -4343,31 +4229,6 @@ type InvocationTimelineStep struct {
 
 // InvocationTimelineStepKind defines model for InvocationTimelineStep.Kind.
 type InvocationTimelineStepKind string
-
-// InvocationUpdateEvent defines model for InvocationUpdateEvent.
-type InvocationUpdateEvent struct {
-	// Invocation One turn.
-	//
-	// Some fields are audience-restricted: they are present for a machine
-	// credential and omitted for a browser grant, which is why they are not
-	// required. Omission is the whole mechanism, so one schema decodes every
-	// response and nothing has to be guessed from the payload. The omitted
-	// set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
-	// `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
-	// `limits`.
-	Invocation Invocation `json:"invocation"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID     `json:"invocation_id"`
-	NewMessages  []SessionMessage `json:"new_messages"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                 `json:"session_id"`
-	Type      InvocationUpdateEventType `json:"type"`
-}
-
-// InvocationUpdateEventType defines model for InvocationUpdateEvent.Type.
-type InvocationUpdateEventType string
 
 // Limits Optional requested limits. Total time bounds the entire turn, active
 // time bounds model and tool execution, and waiting time bounds the
@@ -4568,6 +4429,75 @@ type MemorySearchResult struct {
 	Memory Memory  `json:"memory"`
 	Score  float64 `json:"score"`
 }
+
+// MessageDeltaEvent A live preview of a message the model is writing. Not saved, never
+// replayed, and never a message. Accumulate it by `(message_id,
+// content_index)` and discard it under the rules in Streaming above.
+//
+// Reasoning previews travel here like any other kind, on machine and
+// browser streams alike. What an end user sees is your application's
+// decision, made in your application. Reasoning is watchable and not
+// stored: no content block carries it, and no read returns it. Watch the
+// stream if you want to see the model think. A turn that runs under
+// explicit `reasoning` controls emits no reasoning previews at all, to
+// either audience.
+type MessageDeltaEvent struct {
+	// Attempt Execution attempt that emitted this preview. Discard provisional
+	// output from earlier attempts when this value increases.
+	Attempt      int64 `json:"attempt"`
+	ContentIndex int   `json:"content_index"`
+
+	// Delta The fragment, for every kind. One accumulator handles all of them.
+	Delta     string    `json:"delta"`
+	EmittedAt time.Time `json:"emitted_at"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID `json:"invocation_id"`
+
+	// Kind What this fragment is part of. `text` is assistant prose,
+	// `thinking` is reasoning, and `tool_arguments` is the JSON the model is
+	// writing for a tool call, which is only valid JSON once complete.
+	//
+	// Expect new values here over time. Treat a value you do not recognize
+	// as content you do not render, and keep reading.
+	Kind MessageDeltaKind `json:"kind"`
+
+	// MessageID The identifier the saved assistant message will carry when this
+	// iteration lands, with the same `msg_` prefix every message ID has. Key
+	// your preview by it and the handoff becomes an update to a row that
+	// already has its permanent identity, rather than one row disappearing
+	// and another taking its place.
+	//
+	// It is allocated when the model starts writing, so every preview of one
+	// message carries it. It is stable within one attempt; a retried attempt
+	// allocates a new one, which is harmless, because a higher `attempt`
+	// already voids every earlier preview.
+	MessageID PreviewMessageID `json:"message_id"`
+
+	// Name The tool being called, alongside `tool_call_id` and on the same
+	// terms.
+	Name *string `json:"name,omitempty"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID `json:"session_id"`
+
+	// ToolCallID The tool call these arguments belong to. Present on every
+	// `tool_arguments` frame, denormalized so a lost frame cannot orphan
+	// a fragment. Absent on other kinds.
+	ToolCallID *string               `json:"tool_call_id,omitempty"`
+	Type       MessageDeltaEventType `json:"type"`
+}
+
+// MessageDeltaEventType defines model for MessageDeltaEvent.Type.
+type MessageDeltaEventType string
+
+// MessageDeltaKind What this fragment is part of. `text` is assistant prose,
+// `thinking` is reasoning, and `tool_arguments` is the JSON the model is
+// writing for a tool call, which is only valid JSON once complete.
+//
+// Expect new values here over time. Treat a value you do not recognize
+// as content you do not render, and keep reading.
+type MessageDeltaKind string
 
 // MessagePhase Tells you which assistant message is the actual answer, so you can
 // render a turn without guessing.
@@ -5044,53 +4974,16 @@ type OrgList struct {
 // tools.
 type OutputSchema map[string]interface{}
 
-// OutputTextDeltaEvent A live preview of assistant text. Not saved, never replayed, and never
-// a message. Accumulate it by `(invocation_id, attempt, iteration,
-// content_index)` and discard it under the rules in Streaming above.
-type OutputTextDeltaEvent struct {
-	// Attempt Execution attempt that emitted this preview. Discard provisional
-	// output from earlier attempts when this value increases.
-	Attempt      int64     `json:"attempt"`
-	ContentIndex int       `json:"content_index"`
-	EmittedAt    time.Time `json:"emitted_at"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-
-	// Iteration Model iteration that owns the assistant message.
-	Iteration int `json:"iteration"`
-
-	// MessageID The identifier the saved assistant message will carry when this
-	// iteration lands, with the same `msg_` prefix every message ID has. Key
-	// your preview by it and the handoff becomes an update to a row that
-	// already has its permanent identity, rather than one row disappearing
-	// and another taking its place.
-	//
-	// Optional: a runtime that has not allocated the identifier yet leaves
-	// it out. It is stable within one attempt. A retried attempt allocates a
-	// new one, which is harmless, because a higher `attempt` already voids
-	// every earlier preview.
-	MessageID *PreviewMessageID `json:"message_id,omitempty"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                `json:"session_id"`
-	Text      string                   `json:"text"`
-	Type      OutputTextDeltaEventType `json:"type"`
-}
-
-// OutputTextDeltaEventType defines model for OutputTextDeltaEvent.Type.
-type OutputTextDeltaEventType string
-
 // PreviewMessageID The identifier the saved assistant message will carry when this
 // iteration lands, with the same `msg_` prefix every message ID has. Key
 // your preview by it and the handoff becomes an update to a row that
 // already has its permanent identity, rather than one row disappearing
 // and another taking its place.
 //
-// Optional: a runtime that has not allocated the identifier yet leaves
-// it out. It is stable within one attempt. A retried attempt allocates a
-// new one, which is harmless, because a higher `attempt` already voids
-// every earlier preview.
+// It is allocated when the model starts writing, so every preview of one
+// message carries it. It is stable within one attempt; a retried attempt
+// allocates a new one, which is harmless, because a higher `attempt`
+// already voids every earlier preview.
 type PreviewMessageID = string
 
 // ProviderKey Safe metadata only; secret material is never represented.
@@ -5646,11 +5539,10 @@ type SessionMessage struct {
 	// input never carries a phase.
 	//
 	// Because it is worked out on read, it is authoritative on ordinary
-	// reads and on `invocation.result`, and not on the Session
-	// transcript stream: a message delivered there before its turn
-	// settled carries `commentary` forever, and no later frame corrects
-	// it. On that stream, derive the answer instead. A turn has a final
-	// answer only once it settled `completed` with stop reason
+	// reads and not on the stream: a message delivered there before its
+	// turn settled carries `commentary` forever, and no later frame
+	// corrects it. On the stream, derive the answer instead. A turn has
+	// a final answer only once it settled `completed` with stop reason
 	// `end_turn`, and that answer is the turn's last assistant message.
 	// That is the same rule nvoken applies.
 	Phase    *MessagePhase      `json:"phase,omitempty"`
@@ -5735,28 +5627,38 @@ type SessionOptions struct {
 	Retention *RetentionPolicy `json:"retention,omitempty"`
 }
 
-// StreamEndEvent defines model for StreamEndEvent.
+// SessionStreamEvent The JSON value carried by one SSE `data:` field. Switch on `type`.
+// Saved `transcript.update` frames carry the resume cursor as both
+// payload data and SSE `id`; preview and control frames never carry IDs.
+//
+// New frame types may appear here over time, and existing ones may gain
+// fields. Handle the types you know and ignore the rest.
+type SessionStreamEvent struct {
+	union json.RawMessage
+}
+
+// StreamEndEvent This connection is closing. The stream continues, and the turn is
+// unaffected.
+//
+// There is no cursor here. You already track your last durable one,
+// because you need it to survive a connection that drops without saying
+// anything, and a field that repeats what you must hold anyway is a
+// second spelling of it.
 type StreamEndEvent struct {
-	Cursor string `json:"cursor"`
-
-	// InvocationID The Invocation this connection was following, or null on a Session
-	// stream.
-	InvocationID *InvocationID `json:"invocation_id"`
-
-	// Reason Why this connection is closing. Only the connection is ending; the
-	// turn is unaffected.
+	// Reason Why this connection is closing. No reason here speaks about a turn:
+	// terminal state is a saved change, connection close is a connection
+	// event, and the two never mean each other.
 	//
-	// `terminal` means there is nothing more coming: the turn finished, or
-	// for a Session stream, nothing is running any more. `rotate` means the
-	// server is cycling the connection, so reconnect with your last
-	// `cursor`. `slow_consumer` means this connection could not keep
-	// up with what was being written to it and was dropped; reconnect, and
-	// read faster or buffer more.
+	// `rotate` means the server is cycling the connection, so reconnect now
+	// with your last `cursor`. `idle` means no turn is running and the
+	// server is reclaiming the connection, so reconnect when you next need
+	// to read; nothing is lost while you are away. `slow_consumer` means
+	// this connection could not keep up with what was being written to it
+	// and was dropped; reconnect, and read faster or buffer more.
 	//
 	// Expect new values here over time. Treat a value you do not recognize
-	// as `rotate` and reconnect with your last `cursor`. Reconnecting
-	// is safe even when the turn is over, because a settled turn re-yields
-	// its result.
+	// as `rotate` and reconnect with your last `cursor`. Reconnecting is
+	// always safe.
 	Reason StreamEndReason `json:"reason"`
 
 	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
@@ -5767,27 +5669,28 @@ type StreamEndEvent struct {
 // StreamEndEventType defines model for StreamEndEvent.Type.
 type StreamEndEventType string
 
-// StreamEndReason Why this connection is closing. Only the connection is ending; the
-// turn is unaffected.
+// StreamEndReason Why this connection is closing. No reason here speaks about a turn:
+// terminal state is a saved change, connection close is a connection
+// event, and the two never mean each other.
 //
-// `terminal` means there is nothing more coming: the turn finished, or
-// for a Session stream, nothing is running any more. `rotate` means the
-// server is cycling the connection, so reconnect with your last
-// `cursor`. `slow_consumer` means this connection could not keep
-// up with what was being written to it and was dropped; reconnect, and
-// read faster or buffer more.
+// `rotate` means the server is cycling the connection, so reconnect now
+// with your last `cursor`. `idle` means no turn is running and the
+// server is reclaiming the connection, so reconnect when you next need
+// to read; nothing is lost while you are away. `slow_consumer` means
+// this connection could not keep up with what was being written to it
+// and was dropped; reconnect, and read faster or buffer more.
 //
 // Expect new values here over time. Treat a value you do not recognize
-// as `rotate` and reconnect with your last `cursor`. Reconnecting
-// is safe even when the turn is over, because a settled turn re-yields
-// its result.
+// as `rotate` and reconnect with your last `cursor`. Reconnecting is
+// always safe.
 type StreamEndReason string
 
 // StreamResyncEvent defines model for StreamResyncEvent.
 type StreamResyncEvent struct {
-	// InvocationID The Invocation whose previews are void, or null for every
-	// Invocation in the Session.
-	InvocationID *InvocationID `json:"invocation_id"`
+	// InvocationID The Invocation whose previews are void. Absent means every
+	// Invocation in the Session: an absent field is scope, where a null
+	// identifier would be scope wearing an identifier's name.
+	InvocationID *InvocationID `json:"invocation_id,omitempty"`
 
 	// Reason Why previews were invalidated. `live_delivery_gap` means the live
 	// delivery path could not prove continuity, so previews were lost;
@@ -5952,48 +5855,6 @@ type TextInputBlock struct {
 
 // TextInputBlockType defines model for TextInputBlock.Type.
 type TextInputBlockType string
-
-// ThinkingDeltaEvent A live preview of the model's reasoning, carried on machine and
-// browser streams alike. What an end user sees is your application's
-// decision, made in your application.
-//
-// Reasoning is watchable and not stored: no content block carries it,
-// and no read returns it. Watch the stream if you want to see the model
-// think. A turn that runs under explicit `reasoning` controls emits no
-// reasoning previews at all, to either audience.
-type ThinkingDeltaEvent struct {
-	// Attempt Execution attempt that emitted this preview. Discard provisional
-	// output from earlier attempts when this value increases.
-	Attempt      int64     `json:"attempt"`
-	ContentIndex int       `json:"content_index"`
-	EmittedAt    time.Time `json:"emitted_at"`
-
-	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-
-	// Iteration Model iteration that owns the assistant message.
-	Iteration int `json:"iteration"`
-
-	// MessageID The identifier the saved assistant message will carry when this
-	// iteration lands, with the same `msg_` prefix every message ID has. Key
-	// your preview by it and the handoff becomes an update to a row that
-	// already has its permanent identity, rather than one row disappearing
-	// and another taking its place.
-	//
-	// Optional: a runtime that has not allocated the identifier yet leaves
-	// it out. It is stable within one attempt. A retried attempt allocates a
-	// new one, which is harmless, because a higher `attempt` already voids
-	// every earlier preview.
-	MessageID *PreviewMessageID `json:"message_id,omitempty"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID              `json:"session_id"`
-	Thinking  string                 `json:"thinking"`
-	Type      ThinkingDeltaEventType `json:"type"`
-}
-
-// ThinkingDeltaEventType defines model for ThinkingDeltaEvent.Type.
-type ThinkingDeltaEventType string
 
 // ToolCall defines model for ToolCall.
 type ToolCall struct {
@@ -6332,18 +6193,11 @@ type TranscriptSnapshot struct {
 	NextPageToken     *string            `json:"next_page_token"`
 }
 
-// TranscriptStreamEvent The JSON value carried by one Session-stream SSE `data:` field. Switch
-// on `type`. Saved `transcript.update` frames carry the resume cursor as
-// both payload data and SSE `id`; preview and control frames never carry
-// IDs.
-//
-// New frame types may appear here over time, and existing ones may gain
-// fields. Handle the types you know and ignore the rest.
-type TranscriptStreamEvent struct {
-	union json.RawMessage
-}
-
-// TranscriptUpdateEvent defines model for TranscriptUpdateEvent.
+// TranscriptUpdateEvent The saved frame, and the only one. Messages append by `sequence` and
+// are never sent twice. Changes are an append log keyed by
+// `(invocation_id, revision)`; fold to the highest revision for current
+// state. Within one frame apply messages before changes, so a turn is
+// never marked settled before its final message exists.
 type TranscriptUpdateEvent struct {
 	// Cursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
 	Cursor            string             `json:"cursor"`
@@ -6874,18 +6728,6 @@ type ListNudgesParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// StreamInvocationParams defines parameters for StreamInvocation.
-type StreamInvocationParams struct {
-	// Cursor Opaque cursor returned by the same operation and filter set.
-	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// Deltas Include id-less output and thinking preview frames. Defaults to true.
-	Deltas *bool `form:"deltas,omitempty" json:"deltas,omitempty"`
-
-	// LastEventID Opaque cursor from the last durable frame; ignored when `cursor` is supplied.
-	LastEventID *string `json:"Last-Event-ID,omitempty"`
-}
-
 // ListToolCallsParams defines parameters for ListToolCalls.
 type ListToolCallsParams struct {
 	// Cursor Opaque cursor returned by the same operation and filter set.
@@ -7006,6 +6848,21 @@ type ListSessionMessagesParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// StreamSessionParams defines parameters for StreamSession.
+type StreamSessionParams struct {
+	// InvocationID Narrow every frame to one turn, and close once it settles.
+	InvocationID *InvocationID `form:"invocation_id,omitempty" json:"invocation_id,omitempty"`
+
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Deltas Include id-less preview frames. Defaults to true.
+	Deltas *bool `form:"deltas,omitempty" json:"deltas,omitempty"`
+
+	// LastEventID Opaque `cursor` from the last durable update frame; ignored when the `cursor` parameter is supplied.
+	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
 // GetSessionTranscriptParams defines parameters for GetSessionTranscript.
 type GetSessionTranscriptParams struct {
 	// Cursor Opaque cursor returned by the same operation and filter set.
@@ -7016,18 +6873,6 @@ type GetSessionTranscriptParams struct {
 
 	// Limit Maximum items in this page. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
-// StreamSessionTranscriptParams defines parameters for StreamSessionTranscript.
-type StreamSessionTranscriptParams struct {
-	// Cursor Opaque cursor returned by the same operation and filter set.
-	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// Deltas Include id-less output and thinking preview frames. Defaults to true.
-	Deltas *bool `form:"deltas,omitempty" json:"deltas,omitempty"`
-
-	// LastEventID Opaque `cursor` from the last durable update frame; ignored when the `cursor` parameter is supplied.
-	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
 // ListTenantsParams defines parameters for ListTenants.
@@ -7655,287 +7500,6 @@ func (t *InvocationInput) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// AsInvocationAcceptedEvent returns the union data inside the InvocationStreamEvent as a InvocationAcceptedEvent
-func (t InvocationStreamEvent) AsInvocationAcceptedEvent() (InvocationAcceptedEvent, error) {
-	var body InvocationAcceptedEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromInvocationAcceptedEvent overwrites any union data inside the InvocationStreamEvent as the provided InvocationAcceptedEvent
-func (t *InvocationStreamEvent) FromInvocationAcceptedEvent(v InvocationAcceptedEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.accepted"}`))
-	t.union = b
-	return err
-}
-
-// MergeInvocationAcceptedEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided InvocationAcceptedEvent
-func (t *InvocationStreamEvent) MergeInvocationAcceptedEvent(v InvocationAcceptedEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.accepted"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsOutputTextDeltaEvent returns the union data inside the InvocationStreamEvent as a OutputTextDeltaEvent
-func (t InvocationStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
-	var body OutputTextDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromOutputTextDeltaEvent overwrites any union data inside the InvocationStreamEvent as the provided OutputTextDeltaEvent
-func (t *InvocationStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
-	t.union = b
-	return err
-}
-
-// MergeOutputTextDeltaEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided OutputTextDeltaEvent
-func (t *InvocationStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsThinkingDeltaEvent returns the union data inside the InvocationStreamEvent as a ThinkingDeltaEvent
-func (t InvocationStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error) {
-	var body ThinkingDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromThinkingDeltaEvent overwrites any union data inside the InvocationStreamEvent as the provided ThinkingDeltaEvent
-func (t *InvocationStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
-	t.union = b
-	return err
-}
-
-// MergeThinkingDeltaEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided ThinkingDeltaEvent
-func (t *InvocationStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsInvocationUpdateEvent returns the union data inside the InvocationStreamEvent as a InvocationUpdateEvent
-func (t InvocationStreamEvent) AsInvocationUpdateEvent() (InvocationUpdateEvent, error) {
-	var body InvocationUpdateEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromInvocationUpdateEvent overwrites any union data inside the InvocationStreamEvent as the provided InvocationUpdateEvent
-func (t *InvocationStreamEvent) FromInvocationUpdateEvent(v InvocationUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.update"}`))
-	t.union = b
-	return err
-}
-
-// MergeInvocationUpdateEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided InvocationUpdateEvent
-func (t *InvocationStreamEvent) MergeInvocationUpdateEvent(v InvocationUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.update"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsInvocationResultEvent returns the union data inside the InvocationStreamEvent as a InvocationResultEvent
-func (t InvocationStreamEvent) AsInvocationResultEvent() (InvocationResultEvent, error) {
-	var body InvocationResultEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromInvocationResultEvent overwrites any union data inside the InvocationStreamEvent as the provided InvocationResultEvent
-func (t *InvocationStreamEvent) FromInvocationResultEvent(v InvocationResultEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.result"}`))
-	t.union = b
-	return err
-}
-
-// MergeInvocationResultEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided InvocationResultEvent
-func (t *InvocationStreamEvent) MergeInvocationResultEvent(v InvocationResultEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"invocation.result"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamResyncEvent returns the union data inside the InvocationStreamEvent as a StreamResyncEvent
-func (t InvocationStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
-	var body StreamResyncEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamResyncEvent overwrites any union data inside the InvocationStreamEvent as the provided StreamResyncEvent
-func (t *InvocationStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamResyncEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided StreamResyncEvent
-func (t *InvocationStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamEndEvent returns the union data inside the InvocationStreamEvent as a StreamEndEvent
-func (t InvocationStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
-	var body StreamEndEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamEndEvent overwrites any union data inside the InvocationStreamEvent as the provided StreamEndEvent
-func (t *InvocationStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamEndEvent performs a merge with any union data inside the InvocationStreamEvent, using the provided StreamEndEvent
-func (t *InvocationStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t InvocationStreamEvent) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t InvocationStreamEvent) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "invocation.accepted":
-		return t.AsInvocationAcceptedEvent()
-	case "invocation.result":
-		return t.AsInvocationResultEvent()
-	case "invocation.update":
-		return t.AsInvocationUpdateEvent()
-	case "output_text.delta":
-		return t.AsOutputTextDeltaEvent()
-	case "stream.end":
-		return t.AsStreamEndEvent()
-	case "stream.resync":
-		return t.AsStreamResyncEvent()
-	case "thinking.delta":
-		return t.AsThinkingDeltaEvent()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t InvocationStreamEvent) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *InvocationStreamEvent) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
 // AsModel returns the union data inside the ModelInput as a Model
 func (t ModelInput) AsModel() (Model, error) {
 	var body Model
@@ -8439,6 +8003,179 @@ func (t *SessionContentBlock) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsTranscriptUpdateEvent returns the union data inside the SessionStreamEvent as a TranscriptUpdateEvent
+func (t SessionStreamEvent) AsTranscriptUpdateEvent() (TranscriptUpdateEvent, error) {
+	var body TranscriptUpdateEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTranscriptUpdateEvent overwrites any union data inside the SessionStreamEvent as the provided TranscriptUpdateEvent
+func (t *SessionStreamEvent) FromTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
+	t.union = b
+	return err
+}
+
+// MergeTranscriptUpdateEvent performs a merge with any union data inside the SessionStreamEvent, using the provided TranscriptUpdateEvent
+func (t *SessionStreamEvent) MergeTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMessageDeltaEvent returns the union data inside the SessionStreamEvent as a MessageDeltaEvent
+func (t SessionStreamEvent) AsMessageDeltaEvent() (MessageDeltaEvent, error) {
+	var body MessageDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMessageDeltaEvent overwrites any union data inside the SessionStreamEvent as the provided MessageDeltaEvent
+func (t *SessionStreamEvent) FromMessageDeltaEvent(v MessageDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"message.delta"}`))
+	t.union = b
+	return err
+}
+
+// MergeMessageDeltaEvent performs a merge with any union data inside the SessionStreamEvent, using the provided MessageDeltaEvent
+func (t *SessionStreamEvent) MergeMessageDeltaEvent(v MessageDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"message.delta"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStreamResyncEvent returns the union data inside the SessionStreamEvent as a StreamResyncEvent
+func (t SessionStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
+	var body StreamResyncEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStreamResyncEvent overwrites any union data inside the SessionStreamEvent as the provided StreamResyncEvent
+func (t *SessionStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
+	t.union = b
+	return err
+}
+
+// MergeStreamResyncEvent performs a merge with any union data inside the SessionStreamEvent, using the provided StreamResyncEvent
+func (t *SessionStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStreamEndEvent returns the union data inside the SessionStreamEvent as a StreamEndEvent
+func (t SessionStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
+	var body StreamEndEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStreamEndEvent overwrites any union data inside the SessionStreamEvent as the provided StreamEndEvent
+func (t *SessionStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	t.union = b
+	return err
+}
+
+// MergeStreamEndEvent performs a merge with any union data inside the SessionStreamEvent, using the provided StreamEndEvent
+func (t *SessionStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SessionStreamEvent) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t SessionStreamEvent) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "message.delta":
+		return t.AsMessageDeltaEvent()
+	case "stream.end":
+		return t.AsStreamEndEvent()
+	case "stream.resync":
+		return t.AsStreamResyncEvent()
+	case "transcript.update":
+		return t.AsTranscriptUpdateEvent()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t SessionStreamEvent) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SessionStreamEvent) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsBuiltinToolDeclaration returns the union data inside the ToolDeclaration as a BuiltinToolDeclaration
 func (t ToolDeclaration) AsBuiltinToolDeclaration() (BuiltinToolDeclaration, error) {
 	var body BuiltinToolDeclaration
@@ -8572,215 +8309,6 @@ func (t ToolDeclaration) MarshalJSON() ([]byte, error) {
 }
 
 func (t *ToolDeclaration) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsTranscriptUpdateEvent returns the union data inside the TranscriptStreamEvent as a TranscriptUpdateEvent
-func (t TranscriptStreamEvent) AsTranscriptUpdateEvent() (TranscriptUpdateEvent, error) {
-	var body TranscriptUpdateEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromTranscriptUpdateEvent overwrites any union data inside the TranscriptStreamEvent as the provided TranscriptUpdateEvent
-func (t *TranscriptStreamEvent) FromTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
-	t.union = b
-	return err
-}
-
-// MergeTranscriptUpdateEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided TranscriptUpdateEvent
-func (t *TranscriptStreamEvent) MergeTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsOutputTextDeltaEvent returns the union data inside the TranscriptStreamEvent as a OutputTextDeltaEvent
-func (t TranscriptStreamEvent) AsOutputTextDeltaEvent() (OutputTextDeltaEvent, error) {
-	var body OutputTextDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromOutputTextDeltaEvent overwrites any union data inside the TranscriptStreamEvent as the provided OutputTextDeltaEvent
-func (t *TranscriptStreamEvent) FromOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
-	t.union = b
-	return err
-}
-
-// MergeOutputTextDeltaEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided OutputTextDeltaEvent
-func (t *TranscriptStreamEvent) MergeOutputTextDeltaEvent(v OutputTextDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"output_text.delta"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsThinkingDeltaEvent returns the union data inside the TranscriptStreamEvent as a ThinkingDeltaEvent
-func (t TranscriptStreamEvent) AsThinkingDeltaEvent() (ThinkingDeltaEvent, error) {
-	var body ThinkingDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromThinkingDeltaEvent overwrites any union data inside the TranscriptStreamEvent as the provided ThinkingDeltaEvent
-func (t *TranscriptStreamEvent) FromThinkingDeltaEvent(v ThinkingDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
-	t.union = b
-	return err
-}
-
-// MergeThinkingDeltaEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided ThinkingDeltaEvent
-func (t *TranscriptStreamEvent) MergeThinkingDeltaEvent(v ThinkingDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"thinking.delta"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamResyncEvent returns the union data inside the TranscriptStreamEvent as a StreamResyncEvent
-func (t TranscriptStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
-	var body StreamResyncEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamResyncEvent overwrites any union data inside the TranscriptStreamEvent as the provided StreamResyncEvent
-func (t *TranscriptStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamResyncEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided StreamResyncEvent
-func (t *TranscriptStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamEndEvent returns the union data inside the TranscriptStreamEvent as a StreamEndEvent
-func (t TranscriptStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
-	var body StreamEndEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamEndEvent overwrites any union data inside the TranscriptStreamEvent as the provided StreamEndEvent
-func (t *TranscriptStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamEndEvent performs a merge with any union data inside the TranscriptStreamEvent, using the provided StreamEndEvent
-func (t *TranscriptStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t TranscriptStreamEvent) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t TranscriptStreamEvent) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "output_text.delta":
-		return t.AsOutputTextDeltaEvent()
-	case "stream.end":
-		return t.AsStreamEndEvent()
-	case "stream.resync":
-		return t.AsStreamResyncEvent()
-	case "thinking.delta":
-		return t.AsThinkingDeltaEvent()
-	case "transcript.update":
-		return t.AsTranscriptUpdateEvent()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t TranscriptStreamEvent) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *TranscriptStreamEvent) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -9412,19 +8940,12 @@ type ClientInterface interface {
 	//
 	// ## Streaming
 	//
-	// Start the turn with a plain JSON POST, then follow it with
-	// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
-	// build on: it survives a dropped connection without starting the turn
-	// over, and it works the same everywhere.
-	//
-	// You can instead send `Accept: text/event-stream` on this request and
-	// have the response stream directly, starting with `invocation.accepted`
-	// and running through `invocation.result`. Treat that as a convenience,
-	// not something to depend on — it needs your deployment's front end to
-	// stream a non-`200` POST response without buffering. Some managed
-	// platforms, Cloud Run among them, buffer it until the turn finishes.
-	// On those, a turn that stops to wait for your tools appears to hang,
-	// because you never see the `waiting` state.
+	// This response is the acknowledgment. Once you hold the returned
+	// `id`, follow the turn with
+	// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+	// streaming are separate requests on purpose: a dropped stream costs you
+	// nothing, because the turn already exists and no reconnect can create a
+	// second one.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -9510,19 +9031,12 @@ type ClientInterface interface {
 	//
 	// ## Streaming
 	//
-	// Start the turn with a plain JSON POST, then follow it with
-	// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
-	// build on: it survives a dropped connection without starting the turn
-	// over, and it works the same everywhere.
-	//
-	// You can instead send `Accept: text/event-stream` on this request and
-	// have the response stream directly, starting with `invocation.accepted`
-	// and running through `invocation.result`. Treat that as a convenience,
-	// not something to depend on — it needs your deployment's front end to
-	// stream a non-`200` POST response without buffering. Some managed
-	// platforms, Cloud Run among them, buffer it until the turn finishes.
-	// On those, a turn that stops to wait for your tools appears to hang,
-	// because you never see the `waiting` state.
+	// This response is the acknowledgment. Once you hold the returned
+	// `id`, follow the turn with
+	// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+	// streaming are separate requests on purpose: a dropped stream costs you
+	// nothing, because the turn already exists and no reconnect can create a
+	// second one.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -9761,44 +9275,6 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocation(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// StreamInvocation Follow one turn over Server-Sent Events
-	//
-	// Follows one turn as it runs, and can be resumed after a dropped
-	// connection. Pass `cursor` to pick up after a position you already
-	// received; the stream replays everything saved since then, then
-	// continues live until the turn finishes.
-	//
-	// Saved updates carry an SSE `id` — that is your resume position, and
-	// the only value you need to store. Live text previews and control
-	// frames carry no `id` because they are not saved state. If you receive
-	// `stream.resync`, discard the preview text you have accumulated and
-	// wait for the saved messages; previews can be lost, saved updates
-	// cannot.
-	//
-	// The `cursor` query parameter wins over the `Last-Event-ID` header.
-	// `stream.end` with reason `rotate` means the server is cycling the
-	// connection — reconnect using your last saved `id`. Set `deltas=false`
-	// to skip previews; nothing about replay, resumption, or how the stream
-	// ends changes.
-	//
-	// Disconnecting never cancels the turn. It keeps running, and you can
-	// reconnect or read it later.
-	//
-	// This stream's saved frames are `invocation.accepted` (inline `POST`
-	// only), `invocation.update`, and `invocation.result`. An
-	// `invocation.update` never carries a terminal status, and the
-	// Invocation it carries is re-read when the frame is written.
-	// Reconnecting to a turn that already settled always yields
-	// `invocation.result` and then `stream.end` with reason `terminal`, at
-	// any cursor, so either frame is a valid signal to stop reading.
-	//
-	// Browser and machine callers receive the same frame types, including
-	// `thinking.delta`. Browser payloads carry fewer fields; see the
-	// `Browser*` schemas.
-	//
-	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
-	StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetInvocationTimeline Read the durable execution waterfall for one turn
 	//
@@ -10342,6 +9818,74 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/sessions/{session_id}/messages (the `ListSessionMessages` operationId).
 	ListSessionMessages(ctx context.Context, sessionID SessionID, params *ListSessionMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// StreamSession Follow a Session over Server-Sent Events
+	//
+	// The one stream. It carries the Session's messages and the lifecycle
+	// changes of every turn in it, live, and can be resumed after a dropped
+	// connection. It covers the same records as the JSON transcript
+	// endpoint.
+	//
+	// Every non-empty `transcript.update` frame carries `id: <cursor>`. That
+	// opaque ID is your resume position and the only value you need to store
+	// — reconnect with it and you continue exactly where you left off.
+	// `message.delta`, `stream.resync`, and `stream.end` never carry an
+	// `id`, because they are live previews and control frames rather than
+	// saved records.
+	//
+	// Previews can be lost. If you receive `stream.resync`, discard the
+	// preview text you have accumulated and wait for the saved messages to
+	// arrive. Set `deltas=false` to skip previews entirely; nothing about
+	// replay, resumption, or how the stream ends changes.
+	//
+	// ## Following one turn
+	//
+	// Pass `invocation_id` and every frame is narrowed to that turn:
+	// messages it produced, its lifecycle changes, its previews. The
+	// connection closes once that turn's terminal change has been delivered.
+	// Cursors are Session-scoped either way, so a position taken from a
+	// filtered read resumes an unfiltered one and the other way round.
+	//
+	// Without `invocation_id` this is a subscription. It stays open while
+	// the Session is idle and a turn started later by anyone appears on it,
+	// so there is nothing to poll.
+	//
+	// ## Knowing a turn is over
+	//
+	// A turn is over when an `invocation_changes` entry for it carries a
+	// terminal status. That is the signal, and there is no other. It is
+	// saved, so it replays at any cursor. Read
+	// `GET /v1/invocations/{invocation_id}` for the composed result.
+	//
+	// `stream.end` is about this connection and never about a turn. Reason
+	// `rotate` means the server is cycling the connection, so reconnect now
+	// with your last `cursor`. Reason `idle` means it is reclaiming an idle
+	// connection, so reconnect when you next need to read; nothing is lost
+	// while you are away. Reason `slow_consumer` means this connection could
+	// not keep up. A connection that just drops carries no meaning:
+	// reconnect and resume. Disconnecting never cancels a running turn.
+	//
+	// ## Mechanics
+	//
+	// The `cursor` query parameter wins over the `Last-Event-ID` header.
+	// Because this endpoint uses bearer authentication, you need an SSE
+	// client that can set the `Authorization` header — the browser's
+	// built-in `EventSource` cannot. The server suggests a 1000 ms
+	// reconnect delay.
+	//
+	// This stream is strictly forward: a message past your cursor is never
+	// sent again. A message's `phase` is worked out when it is read, so this
+	// stream is not the place to learn which message was the answer. Derive
+	// that instead from facts you already hold: a turn has a final answer
+	// only once it settled `completed` with stop reason `end_turn`, and that
+	// answer is the turn's last assistant message.
+	//
+	// Browser and machine callers receive the same frame types, including
+	// `thinking` previews. A browser payload carries fewer fields on the
+	// same schema.
+	//
+	// Corresponds with GET /v1/sessions/{session_id}/stream (the `StreamSession` operationId).
+	StreamSession(ctx context.Context, sessionID SessionID, params *StreamSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetSessionTranscript Drain a fixed-cut incremental transcript snapshot
 	//
 	// Returns the Session's stored messages plus a running log of turn state
@@ -10355,53 +9899,6 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/sessions/{session_id}/transcript (the `GetSessionTranscript` operationId).
 	GetSessionTranscript(ctx context.Context, sessionID SessionID, params *GetSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// StreamSessionTranscript Follow a Session transcript over Server-Sent Events
-	//
-	// Streams a Session's transcript as it grows, and can be resumed after a
-	// dropped connection. It covers the same messages as the JSON transcript
-	// endpoint.
-	//
-	// Every non-empty `transcript.update` frame carries
-	// `id: <cursor>`. That opaque ID is your resume position and the
-	// only value you need to store — reconnect with it and you continue
-	// exactly where you left off. `output_text.delta`, `thinking.delta`,
-	// `stream.resync`, and `stream.end` never carry an `id`, because they
-	// are live previews and control frames rather than saved messages.
-	//
-	// Previews can be lost. If you receive `stream.resync`, discard the
-	// preview text you have accumulated and wait for the saved messages to
-	// arrive. Set `deltas=false` to skip previews entirely; nothing about
-	// replay, resumption, or how the stream ends changes.
-	//
-	// `stream.end` with reason `terminal` means no turn is still running.
-	// Reason `rotate` means the server is cycling the connection —
-	// reconnect with your last `cursor`. A connection that just drops
-	// carries no meaning: reconnect and resume. Disconnecting never cancels
-	// a running turn.
-	//
-	// The `cursor` query parameter wins over the `Last-Event-ID` header.
-	// Because this endpoint uses bearer authentication, you need an SSE
-	// client that can set the `Authorization` header — the browser's
-	// built-in `EventSource` cannot. The server suggests a 1000 ms
-	// reconnect delay.
-	//
-	// Cursors are Session-scoped, so a position taken from an Invocation
-	// stream resumes this one and the other way round.
-	//
-	// This stream is strictly forward: a message past your cursor is never
-	// sent again. A message's `phase` is worked out when it is read, so this
-	// stream is not the place to learn which message was the answer. Derive
-	// that instead from facts you already hold: a turn has a final answer
-	// only once it settled `completed` with stop reason `end_turn`, and that
-	// answer is the turn's last assistant message.
-	//
-	// Browser and machine callers receive the same frame types, including
-	// `thinking.delta`. Browser payloads carry fewer fields; see the
-	// `Browser*` schemas.
-	//
-	// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
-	StreamSessionTranscript(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTenants List the App's interned tenants
 	//
@@ -11427,19 +10924,12 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 //
 // ## Streaming
 //
-// Start the turn with a plain JSON POST, then follow it with
-// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
-// build on: it survives a dropped connection without starting the turn
-// over, and it works the same everywhere.
-//
-// You can instead send `Accept: text/event-stream` on this request and
-// have the response stream directly, starting with `invocation.accepted`
-// and running through `invocation.result`. Treat that as a convenience,
-// not something to depend on — it needs your deployment's front end to
-// stream a non-`200` POST response without buffering. Some managed
-// platforms, Cloud Run among them, buffer it until the turn finishes.
-// On those, a turn that stops to wait for your tools appears to hang,
-// because you never see the `waiting` state.
+// This response is the acknowledgment. Once you hold the returned
+// `id`, follow the turn with
+// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+// streaming are separate requests on purpose: a dropped stream costs you
+// nothing, because the turn already exists and no reconnect can create a
+// second one.
 //
 // Takes any type of body and a specified content type.
 //
@@ -11535,19 +11025,12 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 //
 // ## Streaming
 //
-// Start the turn with a plain JSON POST, then follow it with
-// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
-// build on: it survives a dropped connection without starting the turn
-// over, and it works the same everywhere.
-//
-// You can instead send `Accept: text/event-stream` on this request and
-// have the response stream directly, starting with `invocation.accepted`
-// and running through `invocation.result`. Treat that as a convenience,
-// not something to depend on — it needs your deployment's front end to
-// stream a non-`200` POST response without buffering. Some managed
-// platforms, Cloud Run among them, buffer it until the turn finishes.
-// On those, a turn that stops to wait for your tools appears to hang,
-// because you never see the `waiting` state.
+// This response is the acknowledgment. Once you hold the returned
+// `id`, follow the turn with
+// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+// streaming are separate requests on purpose: a dropped stream costs you
+// nothing, because the turn already exists and no reconnect can create a
+// second one.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -11897,54 +11380,6 @@ func (c *Client) ResumeInvocationWithBody(ctx context.Context, invocationID Invo
 // Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 func (c *Client) ResumeInvocation(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewResumeInvocationRequest(c.Server, invocationID, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// StreamInvocation Follow one turn over Server-Sent Events
-//
-// Follows one turn as it runs, and can be resumed after a dropped
-// connection. Pass `cursor` to pick up after a position you already
-// received; the stream replays everything saved since then, then
-// continues live until the turn finishes.
-//
-// Saved updates carry an SSE `id` — that is your resume position, and
-// the only value you need to store. Live text previews and control
-// frames carry no `id` because they are not saved state. If you receive
-// `stream.resync`, discard the preview text you have accumulated and
-// wait for the saved messages; previews can be lost, saved updates
-// cannot.
-//
-// The `cursor` query parameter wins over the `Last-Event-ID` header.
-// `stream.end` with reason `rotate` means the server is cycling the
-// connection — reconnect using your last saved `id`. Set `deltas=false`
-// to skip previews; nothing about replay, resumption, or how the stream
-// ends changes.
-//
-// Disconnecting never cancels the turn. It keeps running, and you can
-// reconnect or read it later.
-//
-// This stream's saved frames are `invocation.accepted` (inline `POST`
-// only), `invocation.update`, and `invocation.result`. An
-// `invocation.update` never carries a terminal status, and the
-// Invocation it carries is re-read when the frame is written.
-// Reconnecting to a turn that already settled always yields
-// `invocation.result` and then `stream.end` with reason `terminal`, at
-// any cursor, so either frame is a valid signal to stop reading.
-//
-// Browser and machine callers receive the same frame types, including
-// `thinking.delta`. Browser payloads carry fewer fields; see the
-// `Browser*` schemas.
-//
-// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
-func (c *Client) StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStreamInvocationRequest(c.Server, invocationID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -12887,6 +12322,84 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID SessionID, p
 	return c.Client.Do(req)
 }
 
+// StreamSession Follow a Session over Server-Sent Events
+//
+// The one stream. It carries the Session's messages and the lifecycle
+// changes of every turn in it, live, and can be resumed after a dropped
+// connection. It covers the same records as the JSON transcript
+// endpoint.
+//
+// Every non-empty `transcript.update` frame carries `id: <cursor>`. That
+// opaque ID is your resume position and the only value you need to store
+// — reconnect with it and you continue exactly where you left off.
+// `message.delta`, `stream.resync`, and `stream.end` never carry an
+// `id`, because they are live previews and control frames rather than
+// saved records.
+//
+// Previews can be lost. If you receive `stream.resync`, discard the
+// preview text you have accumulated and wait for the saved messages to
+// arrive. Set `deltas=false` to skip previews entirely; nothing about
+// replay, resumption, or how the stream ends changes.
+//
+// ## Following one turn
+//
+// Pass `invocation_id` and every frame is narrowed to that turn:
+// messages it produced, its lifecycle changes, its previews. The
+// connection closes once that turn's terminal change has been delivered.
+// Cursors are Session-scoped either way, so a position taken from a
+// filtered read resumes an unfiltered one and the other way round.
+//
+// Without `invocation_id` this is a subscription. It stays open while
+// the Session is idle and a turn started later by anyone appears on it,
+// so there is nothing to poll.
+//
+// ## Knowing a turn is over
+//
+// A turn is over when an `invocation_changes` entry for it carries a
+// terminal status. That is the signal, and there is no other. It is
+// saved, so it replays at any cursor. Read
+// `GET /v1/invocations/{invocation_id}` for the composed result.
+//
+// `stream.end` is about this connection and never about a turn. Reason
+// `rotate` means the server is cycling the connection, so reconnect now
+// with your last `cursor`. Reason `idle` means it is reclaiming an idle
+// connection, so reconnect when you next need to read; nothing is lost
+// while you are away. Reason `slow_consumer` means this connection could
+// not keep up. A connection that just drops carries no meaning:
+// reconnect and resume. Disconnecting never cancels a running turn.
+//
+// ## Mechanics
+//
+// The `cursor` query parameter wins over the `Last-Event-ID` header.
+// Because this endpoint uses bearer authentication, you need an SSE
+// client that can set the `Authorization` header — the browser's
+// built-in `EventSource` cannot. The server suggests a 1000 ms
+// reconnect delay.
+//
+// This stream is strictly forward: a message past your cursor is never
+// sent again. A message's `phase` is worked out when it is read, so this
+// stream is not the place to learn which message was the answer. Derive
+// that instead from facts you already hold: a turn has a final answer
+// only once it settled `completed` with stop reason `end_turn`, and that
+// answer is the turn's last assistant message.
+//
+// Browser and machine callers receive the same frame types, including
+// `thinking` previews. A browser payload carries fewer fields on the
+// same schema.
+//
+// Corresponds with GET /v1/sessions/{session_id}/stream (the `StreamSession` operationId).
+func (c *Client) StreamSession(ctx context.Context, sessionID SessionID, params *StreamSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStreamSessionRequest(c.Server, sessionID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetSessionTranscript Drain a fixed-cut incremental transcript snapshot
 //
 // Returns the Session's stored messages plus a running log of turn state
@@ -12901,63 +12414,6 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID SessionID, p
 // Corresponds with GET /v1/sessions/{session_id}/transcript (the `GetSessionTranscript` operationId).
 func (c *Client) GetSessionTranscript(ctx context.Context, sessionID SessionID, params *GetSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetSessionTranscriptRequest(c.Server, sessionID, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// StreamSessionTranscript Follow a Session transcript over Server-Sent Events
-//
-// Streams a Session's transcript as it grows, and can be resumed after a
-// dropped connection. It covers the same messages as the JSON transcript
-// endpoint.
-//
-// Every non-empty `transcript.update` frame carries
-// `id: <cursor>`. That opaque ID is your resume position and the
-// only value you need to store — reconnect with it and you continue
-// exactly where you left off. `output_text.delta`, `thinking.delta`,
-// `stream.resync`, and `stream.end` never carry an `id`, because they
-// are live previews and control frames rather than saved messages.
-//
-// Previews can be lost. If you receive `stream.resync`, discard the
-// preview text you have accumulated and wait for the saved messages to
-// arrive. Set `deltas=false` to skip previews entirely; nothing about
-// replay, resumption, or how the stream ends changes.
-//
-// `stream.end` with reason `terminal` means no turn is still running.
-// Reason `rotate` means the server is cycling the connection —
-// reconnect with your last `cursor`. A connection that just drops
-// carries no meaning: reconnect and resume. Disconnecting never cancels
-// a running turn.
-//
-// The `cursor` query parameter wins over the `Last-Event-ID` header.
-// Because this endpoint uses bearer authentication, you need an SSE
-// client that can set the `Authorization` header — the browser's
-// built-in `EventSource` cannot. The server suggests a 1000 ms
-// reconnect delay.
-//
-// Cursors are Session-scoped, so a position taken from an Invocation
-// stream resumes this one and the other way round.
-//
-// This stream is strictly forward: a message past your cursor is never
-// sent again. A message's `phase` is worked out when it is read, so this
-// stream is not the place to learn which message was the answer. Derive
-// that instead from facts you already hold: a turn has a final answer
-// only once it settled `completed` with stop reason `end_turn`, and that
-// answer is the turn's last assistant message.
-//
-// Browser and machine callers receive the same frame types, including
-// `thinking.delta`. Browser payloads carry fewer fields; see the
-// `Browser*` schemas.
-//
-// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
-func (c *Client) StreamSessionTranscript(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStreamSessionTranscriptRequest(c.Server, sessionID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -15339,94 +14795,6 @@ func NewResumeInvocationRequestWithBody(server string, invocationID InvocationID
 	return req, nil
 }
 
-// NewStreamInvocationRequest constructs an http.Request for the StreamInvocation method
-func NewStreamInvocationRequest(server string, invocationID InvocationID, params *StreamInvocationParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/invocations/%s/stream", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Cursor != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Deltas != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "deltas", *params.Deltas, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-
-		if params.LastEventID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Last-Event-ID", *params.LastEventID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Last-Event-ID", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
 // NewGetInvocationTimelineRequest constructs an http.Request for the GetInvocationTimeline method
 func NewGetInvocationTimelineRequest(server string, invocationID InvocationID) (*http.Request, error) {
 	var err error
@@ -17065,6 +16433,106 @@ func NewListSessionMessagesRequest(server string, sessionID SessionID, params *L
 	return req, nil
 }
 
+// NewStreamSessionRequest constructs an http.Request for the StreamSession method
+func NewStreamSessionRequest(server string, sessionID SessionID, params *StreamSessionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "session_id", sessionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/sessions/%s/stream", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.InvocationID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "invocation_id", *params.InvocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Deltas != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "deltas", *params.Deltas, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.LastEventID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Last-Event-ID", *params.LastEventID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Last-Event-ID", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetSessionTranscriptRequest constructs an http.Request for the GetSessionTranscript method
 func NewGetSessionTranscriptRequest(server string, sessionID SessionID, params *GetSessionTranscriptParams) (*http.Request, error) {
 	var err error
@@ -17145,94 +16613,6 @@ func NewGetSessionTranscriptRequest(server string, sessionID SessionID, params *
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewStreamSessionTranscriptRequest constructs an http.Request for the StreamSessionTranscript method
-func NewStreamSessionTranscriptRequest(server string, sessionID SessionID, params *StreamSessionTranscriptParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "session_id", sessionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/sessions/%s/transcript/stream", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Cursor != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Deltas != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "deltas", *params.Deltas, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-
-		if params.LastEventID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Last-Event-ID", *params.LastEventID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Last-Event-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -18801,19 +18181,12 @@ type ClientWithResponsesInterface interface {
 	//
 	// ## Streaming
 	//
-	// Start the turn with a plain JSON POST, then follow it with
-	// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
-	// build on: it survives a dropped connection without starting the turn
-	// over, and it works the same everywhere.
-	//
-	// You can instead send `Accept: text/event-stream` on this request and
-	// have the response stream directly, starting with `invocation.accepted`
-	// and running through `invocation.result`. Treat that as a convenience,
-	// not something to depend on — it needs your deployment's front end to
-	// stream a non-`200` POST response without buffering. Some managed
-	// platforms, Cloud Run among them, buffer it until the turn finishes.
-	// On those, a turn that stops to wait for your tools appears to hang,
-	// because you never see the `waiting` state.
+	// This response is the acknowledgment. Once you hold the returned
+	// `id`, follow the turn with
+	// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+	// streaming are separate requests on purpose: a dropped stream costs you
+	// nothing, because the turn already exists and no reconnect can create a
+	// second one.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18899,19 +18272,12 @@ type ClientWithResponsesInterface interface {
 	//
 	// ## Streaming
 	//
-	// Start the turn with a plain JSON POST, then follow it with
-	// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
-	// build on: it survives a dropped connection without starting the turn
-	// over, and it works the same everywhere.
-	//
-	// You can instead send `Accept: text/event-stream` on this request and
-	// have the response stream directly, starting with `invocation.accepted`
-	// and running through `invocation.result`. Treat that as a convenience,
-	// not something to depend on — it needs your deployment's front end to
-	// stream a non-`200` POST response without buffering. Some managed
-	// platforms, Cloud Run among them, buffer it until the turn finishes.
-	// On those, a turn that stops to wait for your tools appears to hang,
-	// because you never see the `waiting` state.
+	// This response is the acknowledgment. Once you hold the returned
+	// `id`, follow the turn with
+	// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+	// streaming are separate requests on purpose: a dropped stream costs you
+	// nothing, because the turn already exists and no reconnect can create a
+	// second one.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19164,46 +18530,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithResponse(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*ResumeInvocationHTTPResponse, error)
-
-	// StreamInvocationWithResponse Follow one turn over Server-Sent Events
-	//
-	// Follows one turn as it runs, and can be resumed after a dropped
-	// connection. Pass `cursor` to pick up after a position you already
-	// received; the stream replays everything saved since then, then
-	// continues live until the turn finishes.
-	//
-	// Saved updates carry an SSE `id` — that is your resume position, and
-	// the only value you need to store. Live text previews and control
-	// frames carry no `id` because they are not saved state. If you receive
-	// `stream.resync`, discard the preview text you have accumulated and
-	// wait for the saved messages; previews can be lost, saved updates
-	// cannot.
-	//
-	// The `cursor` query parameter wins over the `Last-Event-ID` header.
-	// `stream.end` with reason `rotate` means the server is cycling the
-	// connection — reconnect using your last saved `id`. Set `deltas=false`
-	// to skip previews; nothing about replay, resumption, or how the stream
-	// ends changes.
-	//
-	// Disconnecting never cancels the turn. It keeps running, and you can
-	// reconnect or read it later.
-	//
-	// This stream's saved frames are `invocation.accepted` (inline `POST`
-	// only), `invocation.update`, and `invocation.result`. An
-	// `invocation.update` never carries a terminal status, and the
-	// Invocation it carries is re-read when the frame is written.
-	// Reconnecting to a turn that already settled always yields
-	// `invocation.result` and then `stream.end` with reason `terminal`, at
-	// any cursor, so either frame is a valid signal to stop reading.
-	//
-	// Browser and machine callers receive the same frame types, including
-	// `thinking.delta`. Browser payloads carry fewer fields; see the
-	// `Browser*` schemas.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
-	StreamInvocationWithResponse(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*StreamInvocationHTTPResponse, error)
 
 	// GetInvocationTimelineWithResponse Read the durable execution waterfall for one turn
 	//
@@ -19789,6 +19115,76 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/sessions/{session_id}/messages (the `ListSessionMessages` operationId).
 	ListSessionMessagesWithResponse(ctx context.Context, sessionID SessionID, params *ListSessionMessagesParams, reqEditors ...RequestEditorFn) (*ListSessionMessagesHTTPResponse, error)
 
+	// StreamSessionWithResponse Follow a Session over Server-Sent Events
+	//
+	// The one stream. It carries the Session's messages and the lifecycle
+	// changes of every turn in it, live, and can be resumed after a dropped
+	// connection. It covers the same records as the JSON transcript
+	// endpoint.
+	//
+	// Every non-empty `transcript.update` frame carries `id: <cursor>`. That
+	// opaque ID is your resume position and the only value you need to store
+	// — reconnect with it and you continue exactly where you left off.
+	// `message.delta`, `stream.resync`, and `stream.end` never carry an
+	// `id`, because they are live previews and control frames rather than
+	// saved records.
+	//
+	// Previews can be lost. If you receive `stream.resync`, discard the
+	// preview text you have accumulated and wait for the saved messages to
+	// arrive. Set `deltas=false` to skip previews entirely; nothing about
+	// replay, resumption, or how the stream ends changes.
+	//
+	// ## Following one turn
+	//
+	// Pass `invocation_id` and every frame is narrowed to that turn:
+	// messages it produced, its lifecycle changes, its previews. The
+	// connection closes once that turn's terminal change has been delivered.
+	// Cursors are Session-scoped either way, so a position taken from a
+	// filtered read resumes an unfiltered one and the other way round.
+	//
+	// Without `invocation_id` this is a subscription. It stays open while
+	// the Session is idle and a turn started later by anyone appears on it,
+	// so there is nothing to poll.
+	//
+	// ## Knowing a turn is over
+	//
+	// A turn is over when an `invocation_changes` entry for it carries a
+	// terminal status. That is the signal, and there is no other. It is
+	// saved, so it replays at any cursor. Read
+	// `GET /v1/invocations/{invocation_id}` for the composed result.
+	//
+	// `stream.end` is about this connection and never about a turn. Reason
+	// `rotate` means the server is cycling the connection, so reconnect now
+	// with your last `cursor`. Reason `idle` means it is reclaiming an idle
+	// connection, so reconnect when you next need to read; nothing is lost
+	// while you are away. Reason `slow_consumer` means this connection could
+	// not keep up. A connection that just drops carries no meaning:
+	// reconnect and resume. Disconnecting never cancels a running turn.
+	//
+	// ## Mechanics
+	//
+	// The `cursor` query parameter wins over the `Last-Event-ID` header.
+	// Because this endpoint uses bearer authentication, you need an SSE
+	// client that can set the `Authorization` header — the browser's
+	// built-in `EventSource` cannot. The server suggests a 1000 ms
+	// reconnect delay.
+	//
+	// This stream is strictly forward: a message past your cursor is never
+	// sent again. A message's `phase` is worked out when it is read, so this
+	// stream is not the place to learn which message was the answer. Derive
+	// that instead from facts you already hold: a turn has a final answer
+	// only once it settled `completed` with stop reason `end_turn`, and that
+	// answer is the turn's last assistant message.
+	//
+	// Browser and machine callers receive the same frame types, including
+	// `thinking` previews. A browser payload carries fewer fields on the
+	// same schema.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/sessions/{session_id}/stream (the `StreamSession` operationId).
+	StreamSessionWithResponse(ctx context.Context, sessionID SessionID, params *StreamSessionParams, reqEditors ...RequestEditorFn) (*StreamSessionHTTPResponse, error)
+
 	// GetSessionTranscriptWithResponse Drain a fixed-cut incremental transcript snapshot
 	//
 	// Returns the Session's stored messages plus a running log of turn state
@@ -19804,55 +19200,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/sessions/{session_id}/transcript (the `GetSessionTranscript` operationId).
 	GetSessionTranscriptWithResponse(ctx context.Context, sessionID SessionID, params *GetSessionTranscriptParams, reqEditors ...RequestEditorFn) (*GetSessionTranscriptHTTPResponse, error)
-
-	// StreamSessionTranscriptWithResponse Follow a Session transcript over Server-Sent Events
-	//
-	// Streams a Session's transcript as it grows, and can be resumed after a
-	// dropped connection. It covers the same messages as the JSON transcript
-	// endpoint.
-	//
-	// Every non-empty `transcript.update` frame carries
-	// `id: <cursor>`. That opaque ID is your resume position and the
-	// only value you need to store — reconnect with it and you continue
-	// exactly where you left off. `output_text.delta`, `thinking.delta`,
-	// `stream.resync`, and `stream.end` never carry an `id`, because they
-	// are live previews and control frames rather than saved messages.
-	//
-	// Previews can be lost. If you receive `stream.resync`, discard the
-	// preview text you have accumulated and wait for the saved messages to
-	// arrive. Set `deltas=false` to skip previews entirely; nothing about
-	// replay, resumption, or how the stream ends changes.
-	//
-	// `stream.end` with reason `terminal` means no turn is still running.
-	// Reason `rotate` means the server is cycling the connection —
-	// reconnect with your last `cursor`. A connection that just drops
-	// carries no meaning: reconnect and resume. Disconnecting never cancels
-	// a running turn.
-	//
-	// The `cursor` query parameter wins over the `Last-Event-ID` header.
-	// Because this endpoint uses bearer authentication, you need an SSE
-	// client that can set the `Authorization` header — the browser's
-	// built-in `EventSource` cannot. The server suggests a 1000 ms
-	// reconnect delay.
-	//
-	// Cursors are Session-scoped, so a position taken from an Invocation
-	// stream resumes this one and the other way round.
-	//
-	// This stream is strictly forward: a message past your cursor is never
-	// sent again. A message's `phase` is worked out when it is read, so this
-	// stream is not the place to learn which message was the answer. Derive
-	// that instead from facts you already hold: a turn has a final answer
-	// only once it settled `completed` with stop reason `end_turn`, and that
-	// answer is the turn's last assistant message.
-	//
-	// Browser and machine callers receive the same frame types, including
-	// `thinking.delta`. Browser payloads carry fewer fields; see the
-	// `Browser*` schemas.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
-	StreamSessionTranscriptWithResponse(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*StreamSessionTranscriptHTTPResponse, error)
 
 	// ListTenantsWithResponse List the App's interned tenants
 	//
@@ -23330,96 +22677,6 @@ func (r ResumeInvocationHTTPResponse) ContentType() string {
 	return ""
 }
 
-// StreamInvocationHTTPResponse429Headers the declared response headers of an HTTP 429 response for StreamInvocation
-type StreamInvocationHTTPResponse429Headers struct {
-	RetryAfter *int
-}
-
-type StreamInvocationHTTPResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *InvalidRequest
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Unauthenticated
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Forbidden
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// JSON429 the response for an HTTP 429 `application/json` response
-	JSON429 *RateLimited
-	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *Internal
-	// JSON503 the response for an HTTP 503 `application/json` response
-	JSON503 *Unavailable
-	// Headers429 the parsed response headers for an HTTP 429 response
-	Headers429 *StreamInvocationHTTPResponse429Headers
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r StreamInvocationHTTPResponse) GetJSON400() *InvalidRequest {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r StreamInvocationHTTPResponse) GetJSON401() *Unauthenticated {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r StreamInvocationHTTPResponse) GetJSON403() *Forbidden {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r StreamInvocationHTTPResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetJSON429 returns the response for an HTTP 429 `application/json` response
-func (r StreamInvocationHTTPResponse) GetJSON429() *RateLimited {
-	return r.JSON429
-}
-
-// GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r StreamInvocationHTTPResponse) GetJSON500() *Internal {
-	return r.JSON500
-}
-
-// GetJSON503 returns the response for an HTTP 503 `application/json` response
-func (r StreamInvocationHTTPResponse) GetJSON503() *Unavailable {
-	return r.JSON503
-}
-
-// GetBody returns the raw response body bytes
-func (r StreamInvocationHTTPResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r StreamInvocationHTTPResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r StreamInvocationHTTPResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r StreamInvocationHTTPResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type GetInvocationTimelineHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -26029,6 +25286,96 @@ func (r ListSessionMessagesHTTPResponse) ContentType() string {
 	return ""
 }
 
+// StreamSessionHTTPResponse429Headers the declared response headers of an HTTP 429 response for StreamSession
+type StreamSessionHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type StreamSessionHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *StreamSessionHTTPResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r StreamSessionHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r StreamSessionHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r StreamSessionHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r StreamSessionHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r StreamSessionHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r StreamSessionHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r StreamSessionHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r StreamSessionHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StreamSessionHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StreamSessionHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StreamSessionHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetSessionTranscriptHTTPResponse429Headers the declared response headers of an HTTP 429 response for GetSessionTranscript
 type GetSessionTranscriptHTTPResponse429Headers struct {
 	RetryAfter *int
@@ -26120,96 +25467,6 @@ func (r GetSessionTranscriptHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetSessionTranscriptHTTPResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-// StreamSessionTranscriptHTTPResponse429Headers the declared response headers of an HTTP 429 response for StreamSessionTranscript
-type StreamSessionTranscriptHTTPResponse429Headers struct {
-	RetryAfter *int
-}
-
-type StreamSessionTranscriptHTTPResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *InvalidRequest
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Unauthenticated
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Forbidden
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// JSON429 the response for an HTTP 429 `application/json` response
-	JSON429 *RateLimited
-	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *Internal
-	// JSON503 the response for an HTTP 503 `application/json` response
-	JSON503 *Unavailable
-	// Headers429 the parsed response headers for an HTTP 429 response
-	Headers429 *StreamSessionTranscriptHTTPResponse429Headers
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r StreamSessionTranscriptHTTPResponse) GetJSON400() *InvalidRequest {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r StreamSessionTranscriptHTTPResponse) GetJSON401() *Unauthenticated {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r StreamSessionTranscriptHTTPResponse) GetJSON403() *Forbidden {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r StreamSessionTranscriptHTTPResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetJSON429 returns the response for an HTTP 429 `application/json` response
-func (r StreamSessionTranscriptHTTPResponse) GetJSON429() *RateLimited {
-	return r.JSON429
-}
-
-// GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r StreamSessionTranscriptHTTPResponse) GetJSON500() *Internal {
-	return r.JSON500
-}
-
-// GetJSON503 returns the response for an HTTP 503 `application/json` response
-func (r StreamSessionTranscriptHTTPResponse) GetJSON503() *Unavailable {
-	return r.JSON503
-}
-
-// GetBody returns the raw response body bytes
-func (r StreamSessionTranscriptHTTPResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r StreamSessionTranscriptHTTPResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r StreamSessionTranscriptHTTPResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r StreamSessionTranscriptHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -27515,19 +26772,12 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 //
 // ## Streaming
 //
-// Start the turn with a plain JSON POST, then follow it with
-// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
-// build on: it survives a dropped connection without starting the turn
-// over, and it works the same everywhere.
-//
-// You can instead send `Accept: text/event-stream` on this request and
-// have the response stream directly, starting with `invocation.accepted`
-// and running through `invocation.result`. Treat that as a convenience,
-// not something to depend on — it needs your deployment's front end to
-// stream a non-`200` POST response without buffering. Some managed
-// platforms, Cloud Run among them, buffer it until the turn finishes.
-// On those, a turn that stops to wait for your tools appears to hang,
-// because you never see the `waiting` state.
+// This response is the acknowledgment. Once you hold the returned
+// `id`, follow the turn with
+// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+// streaming are separate requests on purpose: a dropped stream costs you
+// nothing, because the turn already exists and no reconnect can create a
+// second one.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -27619,19 +26869,12 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 //
 // ## Streaming
 //
-// Start the turn with a plain JSON POST, then follow it with
-// `GET /v1/invocations/{invocation_id}/stream`. This is the pattern to
-// build on: it survives a dropped connection without starting the turn
-// over, and it works the same everywhere.
-//
-// You can instead send `Accept: text/event-stream` on this request and
-// have the response stream directly, starting with `invocation.accepted`
-// and running through `invocation.result`. Treat that as a convenience,
-// not something to depend on — it needs your deployment's front end to
-// stream a non-`200` POST response without buffering. Some managed
-// platforms, Cloud Run among them, buffer it until the turn finishes.
-// On those, a turn that stops to wait for your tools appears to hang,
-// because you never see the `waiting` state.
+// This response is the acknowledgment. Once you hold the returned
+// `id`, follow the turn with
+// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+// streaming are separate requests on purpose: a dropped stream costs you
+// nothing, because the turn already exists and no reconnect can create a
+// second one.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -27955,52 +27198,6 @@ func (c *ClientWithResponses) ResumeInvocationWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseResumeInvocationHTTPResponse(rsp)
-}
-
-// StreamInvocationWithResponse Follow one turn over Server-Sent Events
-//
-// Follows one turn as it runs, and can be resumed after a dropped
-// connection. Pass `cursor` to pick up after a position you already
-// received; the stream replays everything saved since then, then
-// continues live until the turn finishes.
-//
-// Saved updates carry an SSE `id` — that is your resume position, and
-// the only value you need to store. Live text previews and control
-// frames carry no `id` because they are not saved state. If you receive
-// `stream.resync`, discard the preview text you have accumulated and
-// wait for the saved messages; previews can be lost, saved updates
-// cannot.
-//
-// The `cursor` query parameter wins over the `Last-Event-ID` header.
-// `stream.end` with reason `rotate` means the server is cycling the
-// connection — reconnect using your last saved `id`. Set `deltas=false`
-// to skip previews; nothing about replay, resumption, or how the stream
-// ends changes.
-//
-// Disconnecting never cancels the turn. It keeps running, and you can
-// reconnect or read it later.
-//
-// This stream's saved frames are `invocation.accepted` (inline `POST`
-// only), `invocation.update`, and `invocation.result`. An
-// `invocation.update` never carries a terminal status, and the
-// Invocation it carries is re-read when the frame is written.
-// Reconnecting to a turn that already settled always yields
-// `invocation.result` and then `stream.end` with reason `terminal`, at
-// any cursor, so either frame is a valid signal to stop reading.
-//
-// Browser and machine callers receive the same frame types, including
-// `thinking.delta`. Browser payloads carry fewer fields; see the
-// `Browser*` schemas.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
-func (c *ClientWithResponses) StreamInvocationWithResponse(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*StreamInvocationHTTPResponse, error) {
-	rsp, err := c.StreamInvocation(ctx, invocationID, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseStreamInvocationHTTPResponse(rsp)
 }
 
 // GetInvocationTimelineWithResponse Read the durable execution waterfall for one turn
@@ -28821,6 +28018,82 @@ func (c *ClientWithResponses) ListSessionMessagesWithResponse(ctx context.Contex
 	return ParseListSessionMessagesHTTPResponse(rsp)
 }
 
+// StreamSessionWithResponse Follow a Session over Server-Sent Events
+//
+// The one stream. It carries the Session's messages and the lifecycle
+// changes of every turn in it, live, and can be resumed after a dropped
+// connection. It covers the same records as the JSON transcript
+// endpoint.
+//
+// Every non-empty `transcript.update` frame carries `id: <cursor>`. That
+// opaque ID is your resume position and the only value you need to store
+// — reconnect with it and you continue exactly where you left off.
+// `message.delta`, `stream.resync`, and `stream.end` never carry an
+// `id`, because they are live previews and control frames rather than
+// saved records.
+//
+// Previews can be lost. If you receive `stream.resync`, discard the
+// preview text you have accumulated and wait for the saved messages to
+// arrive. Set `deltas=false` to skip previews entirely; nothing about
+// replay, resumption, or how the stream ends changes.
+//
+// ## Following one turn
+//
+// Pass `invocation_id` and every frame is narrowed to that turn:
+// messages it produced, its lifecycle changes, its previews. The
+// connection closes once that turn's terminal change has been delivered.
+// Cursors are Session-scoped either way, so a position taken from a
+// filtered read resumes an unfiltered one and the other way round.
+//
+// Without `invocation_id` this is a subscription. It stays open while
+// the Session is idle and a turn started later by anyone appears on it,
+// so there is nothing to poll.
+//
+// ## Knowing a turn is over
+//
+// A turn is over when an `invocation_changes` entry for it carries a
+// terminal status. That is the signal, and there is no other. It is
+// saved, so it replays at any cursor. Read
+// `GET /v1/invocations/{invocation_id}` for the composed result.
+//
+// `stream.end` is about this connection and never about a turn. Reason
+// `rotate` means the server is cycling the connection, so reconnect now
+// with your last `cursor`. Reason `idle` means it is reclaiming an idle
+// connection, so reconnect when you next need to read; nothing is lost
+// while you are away. Reason `slow_consumer` means this connection could
+// not keep up. A connection that just drops carries no meaning:
+// reconnect and resume. Disconnecting never cancels a running turn.
+//
+// ## Mechanics
+//
+// The `cursor` query parameter wins over the `Last-Event-ID` header.
+// Because this endpoint uses bearer authentication, you need an SSE
+// client that can set the `Authorization` header — the browser's
+// built-in `EventSource` cannot. The server suggests a 1000 ms
+// reconnect delay.
+//
+// This stream is strictly forward: a message past your cursor is never
+// sent again. A message's `phase` is worked out when it is read, so this
+// stream is not the place to learn which message was the answer. Derive
+// that instead from facts you already hold: a turn has a final answer
+// only once it settled `completed` with stop reason `end_turn`, and that
+// answer is the turn's last assistant message.
+//
+// Browser and machine callers receive the same frame types, including
+// `thinking` previews. A browser payload carries fewer fields on the
+// same schema.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/sessions/{session_id}/stream (the `StreamSession` operationId).
+func (c *ClientWithResponses) StreamSessionWithResponse(ctx context.Context, sessionID SessionID, params *StreamSessionParams, reqEditors ...RequestEditorFn) (*StreamSessionHTTPResponse, error) {
+	rsp, err := c.StreamSession(ctx, sessionID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStreamSessionHTTPResponse(rsp)
+}
+
 // GetSessionTranscriptWithResponse Drain a fixed-cut incremental transcript snapshot
 //
 // Returns the Session's stored messages plus a running log of turn state
@@ -28841,61 +28114,6 @@ func (c *ClientWithResponses) GetSessionTranscriptWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseGetSessionTranscriptHTTPResponse(rsp)
-}
-
-// StreamSessionTranscriptWithResponse Follow a Session transcript over Server-Sent Events
-//
-// Streams a Session's transcript as it grows, and can be resumed after a
-// dropped connection. It covers the same messages as the JSON transcript
-// endpoint.
-//
-// Every non-empty `transcript.update` frame carries
-// `id: <cursor>`. That opaque ID is your resume position and the
-// only value you need to store — reconnect with it and you continue
-// exactly where you left off. `output_text.delta`, `thinking.delta`,
-// `stream.resync`, and `stream.end` never carry an `id`, because they
-// are live previews and control frames rather than saved messages.
-//
-// Previews can be lost. If you receive `stream.resync`, discard the
-// preview text you have accumulated and wait for the saved messages to
-// arrive. Set `deltas=false` to skip previews entirely; nothing about
-// replay, resumption, or how the stream ends changes.
-//
-// `stream.end` with reason `terminal` means no turn is still running.
-// Reason `rotate` means the server is cycling the connection —
-// reconnect with your last `cursor`. A connection that just drops
-// carries no meaning: reconnect and resume. Disconnecting never cancels
-// a running turn.
-//
-// The `cursor` query parameter wins over the `Last-Event-ID` header.
-// Because this endpoint uses bearer authentication, you need an SSE
-// client that can set the `Authorization` header — the browser's
-// built-in `EventSource` cannot. The server suggests a 1000 ms
-// reconnect delay.
-//
-// Cursors are Session-scoped, so a position taken from an Invocation
-// stream resumes this one and the other way round.
-//
-// This stream is strictly forward: a message past your cursor is never
-// sent again. A message's `phase` is worked out when it is read, so this
-// stream is not the place to learn which message was the answer. Derive
-// that instead from facts you already hold: a turn has a final answer
-// only once it settled `completed` with stop reason `end_turn`, and that
-// answer is the turn's last assistant message.
-//
-// Browser and machine callers receive the same frame types, including
-// `thinking.delta`. Browser payloads carry fewer fields; see the
-// `Browser*` schemas.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/sessions/{session_id}/transcript/stream (the `StreamSessionTranscript` operationId).
-func (c *ClientWithResponses) StreamSessionTranscriptWithResponse(ctx context.Context, sessionID SessionID, params *StreamSessionTranscriptParams, reqEditors ...RequestEditorFn) (*StreamSessionTranscriptHTTPResponse, error) {
-	rsp, err := c.StreamSessionTranscript(ctx, sessionID, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseStreamSessionTranscriptHTTPResponse(rsp)
 }
 
 // ListTenantsWithResponse List the App's interned tenants
@@ -31248,9 +30466,6 @@ func ParseCreateInvocationHTTPResponse(rsp *http.Response) (*CreateInvocationHTT
 		}
 		response.JSON503 = &dest
 
-	case rsp.StatusCode == 202:
-		// Content-type (text/event-stream) unsupported
-
 	}
 
 	switch {
@@ -31949,87 +31164,6 @@ func ParseResumeInvocationHTTPResponse(rsp *http.Response) (*ResumeInvocationHTT
 	switch {
 	case rsp.StatusCode == 429:
 		var headers ResumeInvocationHTTPResponse429Headers
-		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
-			var value int
-			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.RetryAfter = &value
-		}
-		response.Headers429 = &headers
-	}
-
-	return response, nil
-}
-
-// ParseStreamInvocationHTTPResponse parses an HTTP response from a StreamInvocationWithResponse call
-func ParseStreamInvocationHTTPResponse(rsp *http.Response) (*StreamInvocationHTTPResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &StreamInvocationHTTPResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest InvalidRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthenticated
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Forbidden
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest RateLimited
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON429 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Internal
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
-		var dest Unavailable
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON503 = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 429:
-		var headers StreamInvocationHTTPResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
@@ -34340,6 +33474,87 @@ func ParseListSessionMessagesHTTPResponse(rsp *http.Response) (*ListSessionMessa
 	return response, nil
 }
 
+// ParseStreamSessionHTTPResponse parses an HTTP response from a StreamSessionWithResponse call
+func ParseStreamSessionHTTPResponse(rsp *http.Response) (*StreamSessionHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StreamSessionHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers StreamSessionHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseGetSessionTranscriptHTTPResponse parses an HTTP response from a GetSessionTranscriptWithResponse call
 func ParseGetSessionTranscriptHTTPResponse(rsp *http.Response) (*GetSessionTranscriptHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -34415,87 +33630,6 @@ func ParseGetSessionTranscriptHTTPResponse(rsp *http.Response) (*GetSessionTrans
 	switch {
 	case rsp.StatusCode == 429:
 		var headers GetSessionTranscriptHTTPResponse429Headers
-		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
-			var value int
-			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.RetryAfter = &value
-		}
-		response.Headers429 = &headers
-	}
-
-	return response, nil
-}
-
-// ParseStreamSessionTranscriptHTTPResponse parses an HTTP response from a StreamSessionTranscriptWithResponse call
-func ParseStreamSessionTranscriptHTTPResponse(rsp *http.Response) (*StreamSessionTranscriptHTTPResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &StreamSessionTranscriptHTTPResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest InvalidRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthenticated
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Forbidden
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest RateLimited
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON429 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Internal
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
-		var dest Unavailable
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON503 = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 429:
-		var headers StreamSessionTranscriptHTTPResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {

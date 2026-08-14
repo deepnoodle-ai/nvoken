@@ -290,7 +290,11 @@ class Agent(Generic[StructuredT]):
             except StopAsyncIteration:
                 return
             yield AgentStreamEvent(handle=handle, event=event)
-            if event.type in {"invocation.update", "stream.end"}:
+            # A turn that stopped for your tools says so on a change, which
+            # replays on reconnect like every other change. The stream itself
+            # ends on the terminal change, so there is nothing else to watch
+            # for here.
+            if _waiting_for(event, handle.invocation_id):
                 invocation = await handle.refresh()
                 if invocation.status == "waiting":
                     await self._dispatch_waiting(
@@ -299,8 +303,6 @@ class Agent(Generic[StructuredT]):
                         submitted,
                         leave_waiting=call.leave_waiting_on_missing_handler,
                     )
-            if event.type == "invocation.result":
-                return
 
     async def answer_pending_tool_calls(
         self,
@@ -656,3 +658,15 @@ def answerable_tool_calls(invocation: Any) -> list[ToolCallSummary]:
     is what replaced the separate pending list.
     """
     return [call for call in (invocation.tool_calls or []) if call.arguments is not None]
+
+
+def _waiting_for(event: StreamEvent, invocation_id: str) -> bool:
+    """Whether a transcript.update parks this turn on your tools."""
+    if event.type != "transcript.update" or not isinstance(event.data, dict):
+        return False
+    return any(
+        isinstance(change, dict)
+        and change.get("invocation_id") == invocation_id
+        and change.get("status") == "waiting"
+        for change in event.data.get("invocation_changes") or []
+    )

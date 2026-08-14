@@ -58,8 +58,8 @@ func (s *onboardingState) serve(response http.ResponseWriter, request *http.Requ
 		s.create(response, request)
 	case strings.HasPrefix(request.URL.Path, "/v1/invocations/") && strings.HasSuffix(request.URL.Path, "/result") && request.Method == http.MethodGet:
 		s.getInvocationResult(response, strings.TrimSuffix(strings.TrimPrefix(request.URL.Path, "/v1/invocations/"), "/result"))
-	case strings.HasPrefix(request.URL.Path, "/v1/invocations/") && strings.HasSuffix(request.URL.Path, "/stream") && request.Method == http.MethodGet:
-		s.streamInvocation(response, strings.TrimSuffix(strings.TrimPrefix(request.URL.Path, "/v1/invocations/"), "/stream"))
+	case strings.HasPrefix(request.URL.Path, "/v1/sessions/") && strings.HasSuffix(request.URL.Path, "/stream") && request.Method == http.MethodGet:
+		s.streamTurn(response, request.URL.Query().Get("invocation_id"))
 	case strings.HasPrefix(request.URL.Path, "/v1/invocations/") && request.Method == http.MethodGet:
 		s.getInvocation(response, strings.TrimPrefix(request.URL.Path, "/v1/invocations/"))
 	case strings.HasSuffix(request.URL.Path, "/messages") && request.Method == http.MethodGet:
@@ -142,55 +142,20 @@ func (s *onboardingState) create(response http.ResponseWriter, request *http.Req
 
 func (s *onboardingState) writeAdmission(
 	response http.ResponseWriter,
-	request *http.Request,
+	_ *http.Request,
 	ack map[string]any,
 ) {
-	if !strings.Contains(request.Header.Get("Accept"), "text/event-stream") {
-		writeJSON(response, http.StatusAccepted, ack)
-		return
-	}
-	invocationID, ok := ack["id"].(string)
-	if !ok {
-		writeError(response, http.StatusInternalServerError, "internal", "invalid onboarding acknowledgement")
-		return
-	}
-	result, ok := s.invocationResult(invocationID)
-	if !ok {
-		writeError(response, http.StatusInternalServerError, "internal", "missing onboarding result")
-		return
-	}
-	sessionID := ack["session_id"].(string)
-	cursor := "onboarding-" + invocationID
-	accepted := map[string]any{
-		"type":          "invocation.accepted",
-		"agent_id":      ack["agent_id"],
-		"session_id":    ack["session_id"],
-		"invocation_id": invocationID,
-		"status":        ack["status"],
-		"deduplicated":  ack["deduplicated"],
-		"deadline_at":   ack["deadline_at"],
-		"limits":        ack["limits"],
-	}
-	response.Header().Set("Content-Type", "text/event-stream")
-	response.Header().Set("X-Request-ID", "req_019b0a12-8d51-7f34-aed2-0e07c1bdb329")
-	response.WriteHeader(http.StatusAccepted)
-	writeSSE(response, "", "invocation.accepted", accepted)
-	writeSSE(response, cursor, "invocation.result", map[string]any{
-		"type":          "invocation.result",
-		"session_id":    sessionID,
-		"invocation_id": invocationID,
-		"result":        result,
-	})
-	writeSSE(response, "", "stream.end", map[string]any{
-		"type":          "stream.end",
-		"session_id":    sessionID,
-		"invocation_id": invocationID,
-		"reason":        "terminal",
-		"cursor":        cursor,
-	})
-	if flusher, ok := response.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	// Admission is a plain JSON POST and nothing else. `Accept:
+	// text/event-stream` on it used to select an inline stream; that entry
+	// point is gone, so the acknowledgement is the whole response.
+	writeJSON(response, http.StatusAccepted, ack)
+}
+
+// invocationStatus reads the settled status off a composed result, which is
+// what the change frame above reports.
+func invocationStatus(result map[string]any) any {
+	invocation, _ := result["invocation"].(map[string]any)
+	return invocation["status"]
 }
 
 func onboardingInputText(raw json.RawMessage) (string, bool) {
@@ -260,12 +225,12 @@ func (s *onboardingState) getInvocationResult(response http.ResponseWriter, invo
 	writeJSON(response, http.StatusOK, result)
 }
 
-// streamInvocation is the route an onboarding run actually consumes. The SDK
+// streamTurn is the route an onboarding run actually consumes. The SDK
 // admits with a plain POST and then reads the Invocation stream, so serving SSE
 // on the acknowledgement alone left every newcomer path reading a 404 off the
 // route it opens next. The turn is already settled by the time it is admitted
 // here, so one result frame and the terminal end is the whole stream.
-func (s *onboardingState) streamInvocation(response http.ResponseWriter, invocationID string) {
+func (s *onboardingState) streamTurn(response http.ResponseWriter, invocationID string) {
 	s.mu.Lock()
 	result, ok := s.invocationResult(invocationID)
 	var sessionID string
@@ -282,18 +247,23 @@ func (s *onboardingState) streamInvocation(response http.ResponseWriter, invocat
 	response.Header().Set("X-Request-ID", "req_019b0a12-8d51-7f34-aed2-0e07c1bdb329")
 	response.WriteHeader(http.StatusOK)
 	writeSSERetry(response)
-	writeSSE(response, cursor, "invocation.result", map[string]any{
-		"type":          "invocation.result",
-		"session_id":    sessionID,
-		"invocation_id": invocationID,
-		"result":        result,
-	})
-	writeSSE(response, "", "stream.end", map[string]any{
-		"type":          "stream.end",
-		"session_id":    sessionID,
-		"invocation_id": invocationID,
-		"reason":        "terminal",
-		"cursor":        cursor,
+	// A turn is over when a change for it carries a terminal status, and a
+	// filtered stream closes right behind it without announcing anything.
+	messages, _ := result["messages"].([]any)
+	writeSSE(response, cursor, "transcript.update", map[string]any{
+		"type":       "transcript.update",
+		"session_id": sessionID,
+		"messages":   messages,
+		"invocation_changes": []any{map[string]any{
+			"invocation_id":            invocationID,
+			"revision":                 1,
+			"status":                   invocationStatus(result),
+			"through_message_sequence": nil,
+			"error":                    nil,
+			"structured_output":        nil,
+			"occurred_at":              "2026-07-21T12:00:03Z",
+		}},
+		"cursor": cursor,
 	})
 	if flusher, ok := response.(http.Flusher); ok {
 		flusher.Flush()

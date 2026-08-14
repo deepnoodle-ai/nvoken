@@ -132,66 +132,67 @@
     },
     {
       "id": "ephemeral-cursor-must-not-persist",
-      "event": "output_text.delta",
+      "event": "message.delta",
       "data": {
-        "type": "output_text.delta",
+        "type": "message.delta",
         "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
         "attempt": 1,
-        "iteration": 1,
+        "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
         "content_index": 0,
-        "text": "ephemeral",
+        "kind": "text",
+        "delta": "ephemeral",
         "emitted_at": "2026-07-21T12:00:02Z"
       }
     }
   ],
   "preview_cases": [
     {
-      "name": "accumulates output and thinking by stream identity",
+      "name": "one accumulator serves every kind, keyed by message and content index",
       "events": [
         {
           "id": "",
-          "event": "output_text.delta",
+          "event": "message.delta",
           "data": {
-            "type": "output_text.delta",
+            "type": "message.delta",
             "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "iteration": 1,
-            "content_index": 0,
-            "text": "Hel",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "content_index": 1,
+            "kind": "text",
+            "delta": "Hel",
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
           "id": "",
-          "event": "thinking.delta",
+          "event": "message.delta",
           "data": {
-            "type": "thinking.delta",
+            "type": "message.delta",
             "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "iteration": 1,
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
-            "thinking": "plan",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
+            "kind": "thinking",
+            "delta": "plan",
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
           "id": "",
-          "event": "output_text.delta",
+          "event": "message.delta",
           "data": {
-            "type": "output_text.delta",
+            "type": "message.delta",
             "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "iteration": 1,
-            "content_index": 0,
-            "text": "lo",
-            "emitted_at": "2026-07-21T12:00:02Z",
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "content_index": 1,
+            "kind": "text",
+            "delta": "lo",
+            "emitted_at": "2026-07-21T12:00:02Z"
           }
         }
       ],
@@ -199,11 +200,69 @@
         {
           "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 1,
-          "iteration": 1,
+          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
           "content_index": 0,
-          "output_text": "Hello",
-          "thinking": "plan",
-          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
+          "kind": "thinking",
+          "delta": "plan"
+        },
+        {
+          "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "attempt": 1,
+          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+          "content_index": 1,
+          "kind": "text",
+          "delta": "Hello"
+        }
+      ]
+    },
+    {
+      "name": "tool arguments accumulate and carry their call on every fragment",
+      "events": [
+        {
+          "id": "",
+          "event": "message.delta",
+          "data": {
+            "type": "message.delta",
+            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "attempt": 1,
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "content_index": 2,
+            "kind": "tool_arguments",
+            "delta": "{\"order_id\"",
+            "tool_call_id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+            "name": "lookup_order",
+            "emitted_at": "2026-07-21T12:00:01Z"
+          }
+        },
+        {
+          "id": "",
+          "event": "message.delta",
+          "data": {
+            "type": "message.delta",
+            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "attempt": 1,
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "content_index": 2,
+            "kind": "tool_arguments",
+            "delta": ":\"A-1\"}",
+            "tool_call_id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+            "name": "lookup_order",
+            "emitted_at": "2026-07-21T12:00:02Z"
+          }
+        }
+      ],
+      "expected_previews": [
+        {
+          "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "attempt": 1,
+          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+          "content_index": 2,
+          "kind": "tool_arguments",
+          "delta": "{\"order_id\":\"A-1\"}",
+          "tool_call_id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+          "name": "lookup_order"
         }
       ]
     },
@@ -212,43 +271,46 @@
       "events": [
         {
           "id": "",
-          "event": "output_text.delta",
+          "event": "message.delta",
           "data": {
-            "type": "output_text.delta",
+            "type": "message.delta",
             "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "iteration": 1,
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
-            "text": "old",
+            "kind": "text",
+            "delta": "old",
             "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
           "id": "",
-          "event": "thinking.delta",
+          "event": "message.delta",
           "data": {
-            "type": "thinking.delta",
+            "type": "message.delta",
             "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "iteration": 1,
-            "content_index": 0,
-            "thinking": "old thought",
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "content_index": 1,
+            "kind": "thinking",
+            "delta": "old thought",
             "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
           "id": "",
-          "event": "output_text.delta",
+          "event": "message.delta",
           "data": {
-            "type": "output_text.delta",
+            "type": "message.delta",
             "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 2,
-            "iteration": 1,
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
             "content_index": 0,
-            "text": "new",
+            "kind": "text",
+            "delta": "new",
             "emitted_at": "2026-07-21T12:00:03Z"
           }
         }
@@ -257,10 +319,10 @@
         {
           "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 2,
-          "iteration": 1,
+          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
           "content_index": 0,
-          "output_text": "new",
-          "thinking": ""
+          "kind": "text",
+          "delta": "new"
         }
       ]
     },
@@ -269,15 +331,16 @@
       "events": [
         {
           "id": "",
-          "event": "output_text.delta",
+          "event": "message.delta",
           "data": {
-            "type": "output_text.delta",
+            "type": "message.delta",
             "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "iteration": 1,
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
-            "text": "provisional",
+            "kind": "text",
+            "delta": "provisional",
             "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
@@ -295,19 +358,50 @@
       "expected_previews": []
     },
     {
-      "name": "canonical assistant message replaces its preview",
+      "name": "a Session-wide resync omits its Invocation and voids every preview",
       "events": [
         {
           "id": "",
-          "event": "output_text.delta",
+          "event": "message.delta",
           "data": {
-            "type": "output_text.delta",
+            "type": "message.delta",
             "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "iteration": 1,
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
-            "text": "provisional",
+            "kind": "text",
+            "delta": "provisional",
+            "emitted_at": "2026-07-21T12:00:01Z"
+          }
+        },
+        {
+          "id": "",
+          "event": "stream.resync",
+          "data": {
+            "type": "stream.resync",
+            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "reason": "live_delivery_gap"
+          }
+        }
+      ],
+      "expected_previews": []
+    },
+    {
+      "name": "the saved message replaces the preview it was building",
+      "events": [
+        {
+          "id": "",
+          "event": "message.delta",
+          "data": {
+            "type": "message.delta",
+            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "attempt": 1,
+            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "content_index": 0,
+            "kind": "text",
+            "delta": "provisional",
             "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
@@ -341,65 +435,6 @@
         }
       ],
       "expected_previews": []
-    },
-    {
-      "name": "preview identity holds once published and is optional before",
-      "events": [
-        {
-          "id": "",
-          "event": "output_text.delta",
-          "data": {
-            "type": "output_text.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-            "attempt": 1,
-            "iteration": 1,
-            "content_index": 0,
-            "text": "Un",
-            "emitted_at": "2026-07-21T12:00:01Z"
-          }
-        },
-        {
-          "id": "",
-          "event": "output_text.delta",
-          "data": {
-            "type": "output_text.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-            "attempt": 1,
-            "iteration": 1,
-            "content_index": 0,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
-            "text": "named",
-            "emitted_at": "2026-07-21T12:00:01Z"
-          }
-        },
-        {
-          "id": "",
-          "event": "output_text.delta",
-          "data": {
-            "type": "output_text.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-            "attempt": 1,
-            "iteration": 1,
-            "content_index": 0,
-            "text": " still",
-            "emitted_at": "2026-07-21T12:00:02Z"
-          }
-        }
-      ],
-      "expected_previews": [
-        {
-          "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-          "attempt": 1,
-          "iteration": 1,
-          "content_index": 0,
-          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
-          "output_text": "Unnamed still",
-          "thinking": ""
-        }
-      ]
     }
   ],
   "expected": {

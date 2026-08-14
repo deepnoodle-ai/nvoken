@@ -601,7 +601,6 @@ class Client:
         self.stream_api_client.rest_client.pool_manager = _StreamingPoolManager(
             self.stream_client
         )
-        self.stream_invocations = InvocationsApi(self.stream_api_client)
         self.stream_sessions = SessionsApi(self.stream_api_client)
 
     async def __aenter__(self) -> Client:
@@ -1791,6 +1790,19 @@ class InvocationHandle:
         self.status = invocation.status
         self.deadline_at = invocation.deadline_at
         return invocation
+
+    async def require_session_id(self) -> str:
+        """The Session this turn belongs to, resolving it if the handle lacks it.
+
+        The stream is Session-scoped, so a handle built from a bare Invocation
+        ID resolves its Session before the stream opens.
+        """
+        if self.session_id:
+            return self.session_id
+        await self.refresh()
+        if not self.session_id:
+            raise NvokenError("unexpected_response", "the Invocation carried no Session")
+        return self.session_id
 
     async def wait(
         self,

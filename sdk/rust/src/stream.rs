@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use async_stream::try_stream;
-use futures_util::StreamExt;
+use futures_util::{pin_mut, StreamExt};
 use reqwest::header::{HeaderName, ACCEPT, AUTHORIZATION};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -27,27 +27,32 @@ pub struct ReducedSnapshot {
     pub cursor: Option<String>,
 }
 
+/// One message the model is writing, accumulated from the fragments of one
+/// content block. `delta` carries the fragments for every `kind`, because one
+/// accumulator handles all of them.
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StreamPreview {
     pub invocation_id: String,
     pub attempt: u64,
-    pub iteration: u32,
+    /// The saved message this preview is building. It is the key: the handoff
+    /// to the saved message updates a row that already has its permanent
+    /// identity, rather than one row disappearing and another taking its place.
+    pub message_id: String,
     pub content_index: u32,
-    /// The saved assistant message this preview is building, when the server
-    /// published it. Key a rendered preview by it and the handoff to the saved
-    /// message updates a row that already has its permanent identity. `None`
-    /// when the server did not publish one.
+    pub kind: String,
+    pub delta: String,
+    /// Present on `tool_arguments` previews, naming the call being written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub message_id: Option<String>,
-    pub output_text: String,
-    pub thinking: String,
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Default)]
 pub struct Reducer {
     messages: BTreeMap<u64, models::SessionMessage>,
     changes: BTreeMap<(String, u64), models::InvocationChange>,
-    previews: BTreeMap<(String, u64, u32, u32), StreamPreview>,
+    previews: BTreeMap<(String, u32), StreamPreview>,
     latest_attempts: BTreeMap<String, u64>,
     terminal_invocations: BTreeSet<String>,
     cursor: Option<String>,
@@ -56,42 +61,15 @@ pub struct Reducer {
 impl Reducer {
     pub fn apply(&mut self, event: &StreamEvent) -> Result<(), NvokenError> {
         match event.event_type.as_str() {
-            "output_text.delta" => {
-                let delta: models::OutputTextDeltaEvent =
-                    serde_json::from_value(event.data.clone()).map_err(|error| {
-                        NvokenError::unexpected(format!(
-                            "decode {} event payload: {error}",
-                            event.event_type
-                        ))
-                    })?;
-                self.append_preview(
-                    delta.invocation_id,
-                    delta.attempt,
-                    delta.iteration,
-                    delta.content_index,
-                    delta.message_id,
-                    delta.text,
-                    String::new(),
-                );
-                return Ok(());
-            }
-            "thinking.delta" => {
-                let delta: models::ThinkingDeltaEvent = serde_json::from_value(event.data.clone())
+            "message.delta" => {
+                let delta: models::MessageDeltaEvent = serde_json::from_value(event.data.clone())
                     .map_err(|error| {
-                        NvokenError::unexpected(format!(
-                            "decode {} event payload: {error}",
-                            event.event_type
-                        ))
-                    })?;
-                self.append_preview(
-                    delta.invocation_id,
-                    delta.attempt,
-                    delta.iteration,
-                    delta.content_index,
-                    delta.message_id,
-                    String::new(),
-                    delta.thinking,
-                );
+                    NvokenError::unexpected(format!(
+                        "decode {} event payload: {error}",
+                        event.event_type
+                    ))
+                })?;
+                self.append_preview(delta);
                 return Ok(());
             }
             "stream.resync" => {
@@ -102,6 +80,8 @@ impl Reducer {
                             event.event_type
                         ))
                     })?;
+                // An absent Invocation is scope: discard previews for the whole
+                // Session.
                 if let Some(invocation_id) = resync.invocation_id {
                     self.discard_previews(&invocation_id);
                 } else {
@@ -122,6 +102,8 @@ impl Reducer {
                     event.event_type
                 ))
             })?;
+        // Messages before changes, so a turn is never marked settled before its
+        // final message exists.
         for message in update.messages {
             if message.role == models::SessionMessageRole::Assistant {
                 if let Some(invocation_id) = &message.invocation_id {
@@ -157,6 +139,12 @@ impl Reducer {
         Ok(())
     }
 
+    /// Whether a change carrying a terminal status has arrived for this turn.
+    /// That is the terminal signal, and there is no other.
+    pub fn settled(&self, invocation_id: &str) -> bool {
+        self.terminal_invocations.contains(invocation_id)
+    }
+
     pub fn snapshot(&self) -> ReducedSnapshot {
         ReducedSnapshot {
             messages: self.messages.values().cloned().collect(),
@@ -166,50 +154,52 @@ impl Reducer {
         }
     }
 
-    fn append_preview(
-        &mut self,
-        invocation_id: String,
-        attempt: u64,
-        iteration: u32,
-        content_index: u32,
-        message_id: Option<String>,
-        output_text: String,
-        thinking: String,
-    ) {
-        if self.terminal_invocations.contains(&invocation_id) {
+    fn append_preview(&mut self, delta: models::MessageDeltaEvent) {
+        if self.terminal_invocations.contains(&delta.invocation_id) {
             return;
         }
-        if let Some(latest) = self.latest_attempts.get(&invocation_id).copied() {
-            if attempt < latest {
+        if let Some(latest) = self.latest_attempts.get(&delta.invocation_id).copied() {
+            if delta.attempt < latest {
                 return;
             }
-            if attempt > latest {
-                self.discard_previews(&invocation_id);
+            if delta.attempt > latest {
+                self.discard_previews(&delta.invocation_id);
             }
         }
-        self.latest_attempts.insert(invocation_id.clone(), attempt);
-        let key = (invocation_id.clone(), attempt, iteration, content_index);
+        self.latest_attempts
+            .insert(delta.invocation_id.clone(), delta.attempt);
+        let key = (delta.message_id.clone(), delta.content_index);
         let preview = self.previews.entry(key).or_insert_with(|| StreamPreview {
-            invocation_id,
-            attempt,
-            iteration,
-            content_index,
+            invocation_id: delta.invocation_id.clone(),
+            attempt: delta.attempt,
+            message_id: delta.message_id.clone(),
+            content_index: delta.content_index,
             ..StreamPreview::default()
         });
-        if message_id.is_some() {
-            preview.message_id = message_id;
+        preview.attempt = delta.attempt;
+        preview.kind = kind_name(delta.kind);
+        preview.delta.push_str(&delta.delta);
+        if delta.tool_call_id.is_some() {
+            preview.tool_call_id = delta.tool_call_id;
         }
-        preview.output_text.push_str(&output_text);
-        preview.thinking.push_str(&thinking);
+        if delta.name.is_some() {
+            preview.name = delta.name;
+        }
     }
 
     fn discard_previews(&mut self, invocation_id: &str) {
         self.previews
-            .retain(|(candidate, _, _, _), _| candidate != invocation_id);
+            .retain(|_, preview| preview.invocation_id != invocation_id);
         self.latest_attempts.remove(invocation_id);
     }
 }
 
+fn kind_name(kind: models::MessageDeltaKind) -> String {
+    kind.to_string()
+}
+
+/// Follow one turn. The stream is filtered to it, and it ends once a change for
+/// that turn carries a terminal status.
 pub fn stream_handle(
     handle: &InvocationHandle,
 ) -> impl futures_core::Stream<Item = Result<StreamEvent, NvokenError>> + '_ {
@@ -221,12 +211,43 @@ pub fn stream_handle_with_options(
     options: StreamOptions,
 ) -> impl futures_core::Stream<Item = Result<StreamEvent, NvokenError>> + '_ {
     try_stream! {
+        let session_id = handle.require_session_id().await?;
+        let mut reducer = Reducer::default();
+        let inner = read_stream(
+            handle,
+            session_id,
+            Some(handle.invocation_id.clone()),
+            options,
+        );
+        pin_mut!(inner);
+        while let Some(item) = inner.next().await {
+            let event = item?;
+            reducer.apply(&event)?;
+            yield event;
+            if reducer.settled(&handle.invocation_id) {
+                break;
+            }
+        }
+    }
+}
+
+/// The one read loop. It reconnects from its last durable cursor on any
+/// connection end, because `stream.end` never says a turn is over and a silent
+/// drop says nothing at all. Unfiltered it never ends on its own: the stream
+/// stays open while the Session is idle and a turn started later appears on it.
+pub fn read_stream(
+    handle: &InvocationHandle,
+    session_id: String,
+    invocation_id: Option<String>,
+    options: StreamOptions,
+) -> impl futures_core::Stream<Item = Result<StreamEvent, NvokenError>> + '_ {
+    try_stream! {
         let mut cursor: Option<String> = None;
         let mut retry = Duration::from_secs(1);
-        'invocation: loop {
-            let path = routes::STREAM_INVOCATION.replace(
-                "{invocation_id}",
-                &crate::apis::urlencode(&handle.invocation_id),
+        loop {
+            let path = routes::STREAM_SESSION.replace(
+                "{session_id}",
+                &crate::apis::urlencode(&session_id),
             );
             let url = format!("{}{}", handle.client.configuration.base_path, path);
             let mut request = handle
@@ -239,6 +260,9 @@ pub fn stream_handle_with_options(
             }
             if let Some(cursor) = &cursor {
                 request = request.header(HeaderName::from_static("last-event-id"), cursor);
+            }
+            if let Some(invocation_id) = &invocation_id {
+                request = request.query(&[("invocation_id", invocation_id)]);
             }
             if let Some(deltas) = options.deltas {
                 request = request.query(&[("deltas", deltas)]);
@@ -277,11 +301,7 @@ pub fn stream_handle_with_options(
                     if event.data.is_null() {
                         continue;
                     }
-                    let settled = event.event_type == "invocation.result";
                     yield event;
-                    if settled {
-                        break 'invocation;
-                    }
                 }
             }
             for event in decoder.finish()? {
@@ -291,11 +311,7 @@ pub fn stream_handle_with_options(
                 if event.data.is_null() {
                     continue;
                 }
-                let settled = event.event_type == "invocation.result";
                 yield event;
-                if settled {
-                    break 'invocation;
-                }
             }
             tokio::time::sleep(retry).await;
         }

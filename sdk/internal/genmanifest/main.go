@@ -78,23 +78,18 @@ func main() {
 	if err := os.WriteFile("sdk/operations.json", encoded, 0o644); err != nil {
 		panic(err)
 	}
-	sessionStreamPath := ""
-	invocationStreamPath := ""
+	streamPath := ""
 	for _, operation := range operations {
-		if operation.OperationID == "streamSessionTranscript" {
-			sessionStreamPath = operation.Path
-		}
-		if operation.OperationID == "streamInvocation" {
-			invocationStreamPath = operation.Path
+		if operation.OperationID == "streamSession" {
+			streamPath = operation.Path
 		}
 	}
-	if sessionStreamPath == "" || invocationStreamPath == "" {
-		panic("stream operations are missing")
+	if streamPath == "" {
+		panic("the stream operation is missing")
 	}
 	routes := fmt.Sprintf(
-		"// Code generated from openapi/nvoken.yaml; DO NOT EDIT.\n\npub const STREAM_SESSION_TRANSCRIPT: &str = %q;\npub const STREAM_INVOCATION: &str = %q;\n",
-		sessionStreamPath,
-		invocationStreamPath,
+		"// Code generated from openapi/nvoken.yaml; DO NOT EDIT.\n\npub const STREAM_SESSION: &str = %q;\n",
+		streamPath,
 	)
 	if err := os.WriteFile("sdk/rust/src/routes.rs", []byte(routes), 0o644); err != nil {
 		panic(err)

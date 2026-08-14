@@ -817,19 +817,20 @@ function wireInvocation(
   };
 }
 
-function sseResponse(frames: Array<{ event: string; data: unknown }>): Response {
+function sseResponse(frames: Array<{ event: string; id?: string; data: unknown }>): Response {
   return new Response(
     frames.map((frame) =>
-      `event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`
+      `${frame.id ? `id: ${frame.id}\n` : ""}event: ${frame.event}\n`
+      + `data: ${JSON.stringify(frame.data)}\n\n`
     ).join(""),
     { status: 200, headers: { "content-type": "text/event-stream" } },
   );
 }
 
 /**
- * The `202` a plain admission answers with. Streaming admits this way and then
- * reads the Invocation stream, so no fixture here carries an
- * `invocation.accepted` frame — the SDK synthesizes it from this body.
+ * The `202` a plain admission answers with. This response is the
+ * acknowledgement; the stream that follows carries no accepted frame, because
+ * admission and streaming are separate requests.
  */
 function admissionResponse(id: string = invocationId): Response {
   const invocation = wireInvocation("queued");
@@ -1380,21 +1381,25 @@ test("shared fault server semantics", async (context) => {
       && error.status === 503,
   );
 
+  // One stream, filtered to one turn: a dropped connection, a rotation, and
+  // then the frame carrying the terminal change, which is where the read ends.
+  // Nothing announces that the turn is over except the change itself.
   const eventTypes: string[] = [];
-  let streamedText: string | null = null;
+  let settledStatus: string | undefined;
   for await (const event of client.invocation(invocationId).streamWithOptions({ deltas: false })) {
     eventTypes.push(event.type);
-    if (event.type === "invocation.result") {
-      streamedText = event.result.outputText;
+    if (event.type === "transcript.update") {
+      for (const change of event.invocationChanges) settledStatus = change.status;
     }
   }
   assert.deepEqual(eventTypes, [
-    "invocation.update",
+    "transcript.update",
+    "transcript.update",
     "stream.end",
-    "invocation.update",
-    "invocation.result",
+    "transcript.update",
+    "transcript.update",
   ]);
-  assert.equal(streamedText, resultFixture.message_join.expected_output_text);
+  assert.equal(settledStatus, "completed");
   const state = await fetch(`${baseUrl}/__test/state`).then((response) => response.json()) as {
     admission_attempts: number;
     credential_admissions: number;
@@ -1405,6 +1410,7 @@ test("shared fault server semantics", async (context) => {
     last_event_id: string;
     last_statuses: string[];
     last_deltas: string;
+    last_invocation_filter: string;
   };
   assert.deepEqual(state, {
     admission_attempts: 2,
@@ -1416,6 +1422,7 @@ test("shared fault server semantics", async (context) => {
     last_event_id: "cursor-1",
     last_statuses: ["waiting", "queued", "running"],
     last_deltas: "false",
+    last_invocation_filter: invocationId,
   });
 });
 
@@ -1548,35 +1555,36 @@ test("agent run converts standard schemas, retries one admission, and dispatches
       updated_at: "2026-07-21T12:00:01Z",
     }] : [],
   });
-  // No `invocation.accepted` frame: the Invocation stream never sends one, so
-  // the SDK synthesizes it from the admission acknowledgement.
-  const streamBody = [
-    {
-      event: "invocation.update",
-      data: {
-        type: "invocation.update",
-        session_id: sessionId,
-        invocation_id: invocationId,
-        invocation: invocation("waiting"),
-        new_messages: [],
-      },
-    },
-    {
-      event: "invocation.result",
-      data: {
-        type: "invocation.result",
-        session_id: sessionId,
-        invocation_id: invocationId,
-        result: {
-          invocation: invocation("completed"),
-          messages: [],
-          output_text: "ready",
-        },
-      },
-    },
-  ].map((frame) =>
-    `event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`
-  ).join("");
+  // Two changes carry the whole turn: one parks it on the host tool, one
+  // settles it. There is no accepted frame and no composed result frame; the
+  // acknowledgement is the POST and the result is a read.
+  const change = (revision: number, status: string) => ({
+    invocation_id: invocationId,
+    revision,
+    status,
+    stop_reason: status === "completed" ? "end_turn" : null,
+    through_message_sequence: null,
+    error: null,
+    structured_output: null,
+    occurred_at: "2026-07-21T12:00:01Z",
+    tool_calls: status === "waiting" ? [{
+      id: toolCallId,
+      name: "lookup_order",
+      status: "pending",
+      arguments: { orderId: "order-42" },
+      updated_at: "2026-07-21T12:00:01Z",
+    }] : [],
+  });
+  const streamBody = [1, 2].map((revision) => {
+    const data = {
+      type: "transcript.update",
+      session_id: sessionId,
+      messages: [],
+      invocation_changes: [change(revision, revision === 1 ? "waiting" : "completed")],
+      cursor: `cursor-${revision}`,
+    };
+    return `id: cursor-${revision}\nevent: transcript.update\ndata: ${JSON.stringify(data)}\n\n`;
+  }).join("");
   const fetchMock: typeof fetch = async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     if (url.pathname === "/v1/invocations" && init?.method === "POST") {
@@ -1590,7 +1598,7 @@ test("agent run converts standard schemas, retries one admission, and dispatches
         deduplicated: true,
       });
     }
-    if (url.pathname === `/v1/invocations/${invocationId}/stream`) {
+    if (url.pathname === `/v1/sessions/${sessionId}/stream`) {
       return new Response(streamBody, {
         status: 200,
         headers: { "content-type": "text/event-stream" },
@@ -1665,8 +1673,13 @@ test("agent run falls back from a broken stream to authoritative reads", async (
       if (url.pathname === "/v1/invocations" && init?.method === "POST") {
         return admissionResponse();
       }
-      if (url.pathname === `/v1/invocations/${invocationId}/stream`) {
-        return sseResponse([{ event: "broken.event", data: { type: "broken.event" } }]);
+      if (url.pathname === `/v1/sessions/${sessionId}/stream`) {
+        // A stream this client cannot use at all, and one no reconnect would
+        // fix. The run falls back to authoritative reads rather than failing.
+        return Response.json(
+          { code: "invalid_request", message: "cursor is invalid.", request_id: "req_broken" },
+          { status: 400 },
+        );
       }
       if (url.pathname === `/v1/invocations/${invocationId}`) {
         invocationReads += 1;
@@ -1705,13 +1718,21 @@ test("missing handlers cancel by default and support explicit handoff", async ()
   });
   const waitingFrames = () => sseResponse([
     {
-      event: "invocation.update",
+      event: "transcript.update",
+      id: "cursor-1",
       data: {
-        type: "invocation.update",
+        type: "transcript.update",
         session_id: sessionId,
-        invocation_id: invocationId,
-        invocation: wireInvocation("waiting", {
-          toolCalls: [{
+        messages: [],
+        invocation_changes: [{
+          invocation_id: invocationId,
+          revision: 1,
+          status: "waiting",
+          through_message_sequence: null,
+          error: null,
+          structured_output: null,
+          occurred_at: "2026-07-21T12:00:01Z",
+          tool_calls: [{
             id: toolCallId,
             name: "lookup_order",
             status: "pending",
@@ -1719,8 +1740,8 @@ test("missing handlers cancel by default and support explicit handoff", async ()
             deadline_at: "2026-07-21T12:05:00Z",
             updated_at: "2026-07-21T12:00:01Z",
           }],
-        }),
-        new_messages: [],
+        }],
+        cursor: "cursor-1",
       },
     },
   ]);
@@ -1735,6 +1756,18 @@ test("missing handlers cancel by default and support explicit handoff", async ()
       );
       if (url.pathname === "/v1/invocations") return admissionResponse();
       if (url.pathname.endsWith("/stream")) return waitingFrames();
+      if (url.pathname === `/v1/invocations/${invocationId}`) {
+        return Response.json(wireInvocation("waiting", {
+          toolCalls: [{
+            id: toolCallId,
+            name: "lookup_order",
+            status: "pending",
+            arguments: {},
+            deadline_at: "2026-07-21T12:05:00Z",
+            updated_at: "2026-07-21T12:00:01Z",
+          }],
+        }));
+      }
       if (url.pathname.endsWith("/cancel")) {
         cancellations += 1;
         return Response.json(wireInvocation("cancelled"));
@@ -1762,20 +1795,25 @@ test("missing handlers cancel by default and support explicit handoff", async ()
 });
 
 test("text reports structured-only completion and stream timeout distinctly", async () => {
-  const resultFrames = () => sseResponse([
+  const settledFrames = () => sseResponse([
     {
-      event: "invocation.result",
+      event: "transcript.update",
+      id: "cursor-1",
       data: {
-        type: "invocation.result",
+        type: "transcript.update",
         session_id: sessionId,
-        invocation_id: invocationId,
-        result: {
-          invocation: wireInvocation("completed", {
-            structuredOutput: { answer: "ready" },
-          }),
-          messages: [],
-          output_text: null,
-        },
+        messages: [],
+        invocation_changes: [{
+          invocation_id: invocationId,
+          revision: 1,
+          status: "completed",
+          stop_reason: "end_turn",
+          through_message_sequence: null,
+          error: null,
+          structured_output: { answer: "ready" },
+          occurred_at: "2026-07-21T12:00:01Z",
+        }],
+        cursor: "cursor-1",
       },
     },
   ]);
@@ -1787,7 +1825,18 @@ test("text reports structured-only completion and stream timeout distinctly", as
       const url = new URL(
         typeof input === "string" ? input : input instanceof URL ? input : input.url,
       );
-      return url.pathname === "/v1/invocations" ? admissionResponse() : resultFrames();
+      if (url.pathname === "/v1/invocations") return admissionResponse();
+      if (url.pathname.endsWith("/stream")) return settledFrames();
+      if (url.pathname === `/v1/invocations/${invocationId}`) {
+        return Response.json(wireInvocation("completed", {
+          structuredOutput: { answer: "ready" },
+        }));
+      }
+      return Response.json({
+        invocation: wireInvocation("completed", { structuredOutput: { answer: "ready" } }),
+        messages: [],
+        output_text: null,
+      });
     },
     retry: { maxAttempts: 1 },
   });
@@ -1883,64 +1932,39 @@ test("session conflicts normalize to SessionBusyError with active work", async (
   );
 });
 
-test("agent stream exposes the two-event consumer without a reducer", async () => {
+test("agent stream exposes the two-frame consumer without a reducer", async () => {
   const frames = [
     {
-      event: "output_text.delta",
+      event: "message.delta",
       data: {
-        type: "output_text.delta",
+        type: "message.delta",
         session_id: sessionId,
         invocation_id: invocationId,
         attempt: 1,
-        iteration: 1,
+        message_id: "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
         content_index: 0,
-        text: "hello",
+        kind: "text",
+        delta: "hello",
         emitted_at: "2026-07-21T12:00:00Z",
       },
     },
     {
-      event: "invocation.result",
+      event: "transcript.update",
       id: "cursor-2",
       data: {
-        type: "invocation.result",
+        type: "transcript.update",
         session_id: sessionId,
-        invocation_id: invocationId,
-        result: {
-          invocation: {
-            id: invocationId,
-            agent_id: agentId,
-            session_id: sessionId,
-            status: "completed",
-            error: null,
-            usage: null,
-            provenance: null,
-            structured_output: null,
-            structured_output_provenance: null,
-            limits: {
-              total_timeout_seconds: 300,
-              active_timeout_seconds: 120,
-              waiting_timeout_seconds: 180,
-              max_iterations: 1,
-            },
-            active_execution_ms: 5,
-            deadline_at: "2026-07-21T12:05:00Z",
-            created_at: "2026-07-21T12:00:00Z",
-            updated_at: "2026-07-21T12:00:01Z",
-            ended_at: "2026-07-21T12:00:01Z",
-            pending_tool_calls: [],
-          },
-          messages: [],
-          output_text: "hello",
-        },
-      },
-    },
-    {
-      event: "stream.end",
-      data: {
-        type: "stream.end",
-        session_id: sessionId,
-        invocation_id: invocationId,
-        reason: "terminal",
+        messages: [],
+        invocation_changes: [{
+          invocation_id: invocationId,
+          revision: 2,
+          status: "completed",
+          stop_reason: "end_turn",
+          through_message_sequence: 2,
+          error: null,
+          structured_output: null,
+          occurred_at: "2026-07-21T12:00:01Z",
+        }],
         cursor: "cursor-2",
       },
     },
@@ -1971,7 +1995,7 @@ test("agent stream exposes the two-event consumer without a reducer", async () =
         }
         return admissionResponse();
       }
-      streamRequests.push(`${init?.method ?? "GET"} ${url.pathname}`);
+      streamRequests.push(`${init?.method ?? "GET"} ${url.pathname}?${url.searchParams}`);
       return new Response(sse, {
         status: 200,
         headers: { "content-type": "text/event-stream" },
@@ -1980,25 +2004,30 @@ test("agent stream exposes the two-event consumer without a reducer", async () =
     retry: { maxAttempts: 2, minDelayMs: 1, maxDelayMs: 1 },
   });
 
+  // Two frames are the whole consumer: one previews what the model is writing,
+  // and one carries the change that says the turn is over.
   let text = "";
-  let output = "";
+  let settled: string | undefined;
   const observed: string[] = [];
 	for await (const event of client.agent({ agentKey: "support", agentDefinitionId: "def_conformance" }).stream("hello")) {
     observed.push(event.type);
-    if (event.type === "output_text.delta") text += event.text;
-    if (event.type === "invocation.result") output = event.result.outputText ?? "";
+    if (event.type === "message.delta" && event.kind === "text") text += event.delta;
+    if (event.type === "transcript.update") {
+      for (const change of event.invocationChanges) settled = change.status;
+    }
   }
 
   assert.equal(text, "hello");
-  assert.equal(output, "hello");
-  // Admission is a plain POST retried with the exact same body; the events
-  // arrive over the Invocation stream, and the accepted frame the consumer
-  // sees is synthesized from the acknowledgement rather than read off the 202.
+  assert.equal(settled, "completed");
+  // Admission is a plain POST retried with the exact same body, and the stream
+  // follows the turn it already named.
   assert.equal(admissions, 2);
   assert.equal(requestBodies[0], requestBodies[1]);
   assert.equal((JSON.parse(requestBodies[0]!) as { input: string }).input, "hello");
-  assert.deepEqual(streamRequests, [`GET /v1/invocations/${invocationId}/stream`]);
-  assert.equal(observed[0], "invocation.accepted");
+  assert.deepEqual(streamRequests, [
+    `GET /v1/sessions/${sessionId}/stream?invocation_id=${invocationId}`,
+  ]);
+  assert.deepEqual(observed, ["message.delta", "transcript.update"]);
 });
 
 test("bound session serializes invoke admission until the prior turn ends", async () => {
@@ -2119,11 +2148,12 @@ test("shared reducer vector", async () => {
       previewReducer.snapshot().previews.map((preview) => ({
         invocation_id: preview.invocationId,
         attempt: preview.attempt,
-        iteration: preview.iteration,
+        message_id: preview.messageId,
         content_index: preview.contentIndex,
-        ...(preview.messageId === undefined ? {} : { message_id: preview.messageId }),
-        output_text: preview.outputText,
-        thinking: preview.thinking,
+        kind: preview.kind,
+        delta: preview.delta,
+        ...(preview.toolCallId === undefined ? {} : { tool_call_id: preview.toolCallId }),
+        ...(preview.name === undefined ? {} : { name: preview.name }),
       })),
       previewCase.expected_previews,
       previewCase.name,

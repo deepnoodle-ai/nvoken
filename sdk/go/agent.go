@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
 // AgentOptions fixes one identity and Agent Definition every turn from this
@@ -259,7 +261,12 @@ func (a *Agent) Stream(
 				return err
 			}
 		}
-		if event.Type != "invocation.update" && event.Type != "stream.end" {
+		// A turn that stopped for your tools says so on a change. Reading the
+		// composed Invocation only once one arrives is both cheaper than
+		// refreshing on every frame and durable: the change replays on
+		// reconnect, so a turn that parked while you were away still parks
+		// when you return.
+		if !waitingChange(event, handle.InvocationID) {
 			return nil
 		}
 		invocation, err := handle.Refresh(ctx)
@@ -748,4 +755,22 @@ func (a *Agent) AnswerPendingToolCalls(
 		return 0, err
 	}
 	return len(results), nil
+}
+
+// waitingChange reports whether a transcript.update carries a change parking
+// this turn on your tools.
+func waitingChange(event StreamEvent, invocationID string) bool {
+	if event.Type != "transcript.update" {
+		return false
+	}
+	var update generated.TranscriptUpdateEvent
+	if json.Unmarshal(event.Data, &update) != nil {
+		return false
+	}
+	for _, change := range update.InvocationChanges {
+		if change.InvocationID == invocationID && change.Status == generated.InvocationStatusWaiting {
+			return true
+		}
+	}
+	return false
 }

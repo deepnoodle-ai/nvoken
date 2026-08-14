@@ -32,6 +32,7 @@ type state struct {
 	credentialAdmissions int
 	rateLimitAttempts    int
 	streamAttempts       int
+	lastInvocationFilter string
 	lastEventID          string
 	lastStatuses         []string
 	lastDeltas           string
@@ -71,6 +72,7 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		s.credentialAdmissions = 0
 		s.rateLimitAttempts = 0
 		s.streamAttempts = 0
+		s.lastInvocationFilter = ""
 		s.lastEventID = ""
 		s.lastStatuses = nil
 		s.lastDeltas = ""
@@ -82,15 +84,16 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		writeJSON(response, http.StatusOK, map[string]any{
-			"admission_attempts":    s.admissionAttempts,
-			"result_attempts":       s.resultAttempts,
-			"cancel_attempts":       s.cancelAttempts,
-			"interrupt_attempts":    s.interruptAttempts,
-			"credential_admissions": s.credentialAdmissions,
-			"stream_attempts":       s.streamAttempts,
-			"last_event_id":         s.lastEventID,
-			"last_statuses":         s.lastStatuses,
-			"last_deltas":           s.lastDeltas,
+			"admission_attempts":     s.admissionAttempts,
+			"result_attempts":        s.resultAttempts,
+			"cancel_attempts":        s.cancelAttempts,
+			"interrupt_attempts":     s.interruptAttempts,
+			"credential_admissions":  s.credentialAdmissions,
+			"stream_attempts":        s.streamAttempts,
+			"last_invocation_filter": s.lastInvocationFilter,
+			"last_event_id":          s.lastEventID,
+			"last_statuses":          s.lastStatuses,
+			"last_deltas":            s.lastDeltas,
 		})
 		return
 	}
@@ -539,10 +542,6 @@ func (s *state) listInvocations(response http.ResponseWriter, request *http.Requ
 
 func (s *state) invocation(response http.ResponseWriter, request *http.Request) {
 	remainder := strings.TrimPrefix(request.URL.Path, "/v1/invocations/")
-	if strings.HasSuffix(remainder, "/stream") && request.Method == http.MethodGet {
-		s.invocationStream(response, request)
-		return
-	}
 	if strings.HasSuffix(remainder, "/tool-calls") && request.Method == http.MethodGet {
 		writeJSON(response, http.StatusOK, toolCallRecords())
 		return
@@ -686,7 +685,7 @@ func (s *state) listSessions(response http.ResponseWriter, request *http.Request
 func (s *state) session(response http.ResponseWriter, request *http.Request) {
 	path := strings.TrimPrefix(request.URL.Path, "/v1/sessions/")
 	switch {
-	case strings.HasSuffix(path, "/transcript/stream") && request.Method == http.MethodGet:
+	case strings.HasSuffix(path, "/stream") && request.Method == http.MethodGet:
 		s.stream(response, request)
 	case strings.HasSuffix(path, "/transcript") && request.Method == http.MethodGet:
 		writeJSON(response, http.StatusOK, secondSnapshot())
@@ -723,12 +722,18 @@ func (s *state) session(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+// stream is the one stream. Three attempts walk a reader through the whole
+// contract: a connection that just drops, one that rotates, and one that
+// delivers the terminal change. A filtered reader leaves on that change; an
+// unfiltered one keeps reading, because the stream is a subscription.
 func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	s.mu.Lock()
 	s.streamAttempts++
 	attempt := s.streamAttempts
 	s.lastEventID = request.Header.Get("Last-Event-ID")
 	s.lastDeltas = request.URL.Query().Get("deltas")
+	s.lastInvocationFilter = request.URL.Query().Get("invocation_id")
+	deltas := s.lastDeltas
 	s.mu.Unlock()
 	response.Header().Set("Content-Type", "text/event-stream")
 	response.WriteHeader(http.StatusOK)
@@ -745,78 +750,24 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	writeSSE(response, "cursor-1", "transcript.update", firstTranscriptUpdate())
 	if attempt == 2 {
 		writeSSE(response, "", "stream.end", map[string]any{
-			"type":          "stream.end",
-			"session_id":    sessionID,
-			"invocation_id": nil,
-			"reason":        "rotate",
-			"cursor":        "cursor-1",
+			"type":       "stream.end",
+			"session_id": sessionID,
+			"reason":     "rotate",
 		})
 		flusher.Flush()
 		return
+	}
+	if deltas != "false" {
+		writeSSE(response, "", "message.delta", messageDelta())
 	}
 	writeSSE(response, "cursor-2", "transcript.update", secondTranscriptUpdate())
+	// Nothing is running now. An unfiltered reader is told the connection is
+	// being reclaimed, which means reconnect when you next need to read; a
+	// filtered one already left on the terminal change above.
 	writeSSE(response, "", "stream.end", map[string]any{
-		"type":          "stream.end",
-		"session_id":    sessionID,
-		"invocation_id": nil,
-		"reason":        "terminal",
-		"cursor":        "cursor-2",
-	})
-	flusher.Flush()
-}
-
-func (s *state) invocationStream(response http.ResponseWriter, request *http.Request) {
-	s.mu.Lock()
-	s.streamAttempts++
-	attempt := s.streamAttempts
-	s.lastEventID = request.Header.Get("Last-Event-ID")
-	s.lastDeltas = request.URL.Query().Get("deltas")
-	s.mu.Unlock()
-	response.Header().Set("Content-Type", "text/event-stream")
-	response.WriteHeader(http.StatusOK)
-	flusher, ok := response.(http.Flusher)
-	if !ok {
-		return
-	}
-	update := func(cursor string) {
-		writeSSE(response, cursor, "invocation.update", map[string]any{
-			"type":          "invocation.update",
-			"session_id":    sessionID,
-			"invocation_id": invocationID,
-			"invocation":    invocation("completed"),
-			"new_messages":  []any{secondMessage()},
-		})
-	}
-	writeSSERetry(response)
-	if attempt == 1 {
-		update("cursor-1")
-		flusher.Flush()
-		return
-	}
-	if attempt == 2 {
-		writeSSE(response, "", "stream.end", map[string]any{
-			"type":          "stream.end",
-			"session_id":    sessionID,
-			"invocation_id": invocationID,
-			"reason":        "rotate",
-			"cursor":        "cursor-1",
-		})
-		flusher.Flush()
-		return
-	}
-	update("cursor-2")
-	writeSSE(response, "cursor-3", "invocation.result", map[string]any{
-		"type":          "invocation.result",
-		"session_id":    sessionID,
-		"invocation_id": invocationID,
-		"result":        invocationResult(),
-	})
-	writeSSE(response, "", "stream.end", map[string]any{
-		"type":          "stream.end",
-		"session_id":    sessionID,
-		"invocation_id": invocationID,
-		"reason":        "terminal",
-		"cursor":        "cursor-3",
+		"type":       "stream.end",
+		"session_id": sessionID,
+		"reason":     "idle",
 	})
 	flusher.Flush()
 }
@@ -992,9 +943,14 @@ func firstMessage() map[string]any {
 	}
 }
 
+// secondMessageID is the assistant message the preview below is building. The
+// preview carries it, so the handoff to the saved message updates a row that
+// already has its permanent identity.
+const secondMessageID = "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
+
 func secondMessage() map[string]any {
 	return map[string]any{
-		"id":            "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+		"id":            secondMessageID,
 		"session_id":    sessionID,
 		"agent_id":      agentID,
 		"invocation_id": invocationID,
@@ -1098,6 +1054,22 @@ func secondTranscriptUpdate() map[string]any {
 		"messages":           []any{firstMessage(), secondMessage()},
 		"invocation_changes": []any{firstChange(), secondChange()},
 		"cursor":             "cursor-2",
+	}
+}
+
+// messageDelta is the one preview frame. `kind` says what the fragment is and
+// `delta` carries it, for every kind.
+func messageDelta() map[string]any {
+	return map[string]any{
+		"type":          "message.delta",
+		"session_id":    sessionID,
+		"invocation_id": invocationID,
+		"attempt":       1,
+		"message_id":    secondMessageID,
+		"content_index": 0,
+		"kind":          "text",
+		"delta":         "streamed answer",
+		"emitted_at":    "2026-07-21T12:00:02Z",
 	}
 }
 

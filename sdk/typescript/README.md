@@ -571,32 +571,38 @@ escape hatch and relies on Runtime validation.
 
 ## Streaming
 
-`agent.stream()` admits with a plain POST and then follows the Invocation
-stream as a typed async iterable, synthesizing the leading
-`invocation.accepted` event from the acknowledgement. Reading SSE off the `202`
-instead is a documented convenience rather than the supported pattern: it
-depends on the deployment front end streaming a non-`200` POST response, and
-re-admits on every reconnect. The minimal consumer needs only two event types:
+`agent.stream()` admits with a plain POST and then follows the one stream,
+filtered to the turn that acknowledgement named, as a typed async iterable. Two
+frames are the whole consumer:
 
 ```ts
 for await (const event of agent.stream("Write a haiku.")) {
-  if (event.type === "output_text.delta") process.stdout.write(event.text);
-  if (event.type === "invocation.result") {
-    console.log(`\n${event.result.invocation.usage?.outputTokens ?? 0} tokens`);
+  if (event.type === "message.delta" && event.kind === "text") {
+    process.stdout.write(event.delta);
+  }
+  if (event.type === "transcript.update") {
+    for (const change of event.invocationChanges) {
+      if (change.status === "completed") {
+        console.log(`\n${change.usage?.outputTokens ?? 0} tokens`);
+      }
+    }
   }
 }
 ```
 
-`invocation.*` events carry durable state, `*.delta` events are discardable
-previews, and `stream.*` events control transport recovery. The SDK reconnects
-with the latest durable cursor; `stream.resync` means discard buffered previews
-and wait for a durable `invocation.update` or `invocation.result`. Host handlers
-configured on the Agent are dispatched whenever the Invocation parks.
-Disconnecting the caller never cancels the Invocation.
+`transcript.update` carries durable state, `message.delta` is a discardable
+preview, and `stream.*` events control transport recovery. **A turn is over
+when a change for it carries a terminal status**, and the iterable ends right
+behind that change; read the Invocation if you want the composed result. The
+SDK reconnects with the latest durable cursor; `stream.resync` means discard
+buffered previews and wait for the saved messages. Host handlers configured on
+the Agent are dispatched whenever the turn parks. Disconnecting the caller
+never cancels the turn.
 
-Use `handle.stream()` to reconnect to one already-admitted Invocation. The
-lower-level Session stream and its `Reducer` remain available for applications
-that need to follow every turn in a conversation. The
+Use `handle.stream()` to follow one already-admitted turn. The Session stream
+and its `Reducer` follow every turn in a conversation; that form is a
+subscription, so it stays open while the Session is idle and you leave it by
+breaking out of the loop. The
 [streaming and recovery guide](https://nvoken.com/docs/guides/streaming-and-recovery)
 states the preview, resync, cursor, and authoritative-ending guarantees.
 

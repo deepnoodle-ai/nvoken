@@ -1,13 +1,13 @@
 # Streaming protocol assessment
 
-**Status:** Assessment, and largely spent. This document argues for changes and
-decides nothing. The core of it has since graduated:
-[design 003](../design/003-streaming-protocol-target.md) specifies the
-accepted target, and its decisions section resolves this document's open
-questions, twice differently (the P3 mechanism and the thinking policy).
-Where the two disagree, design 003 wins. Design 003 is implemented, so the
-recommendations it absorbed are done; what remains here is the SDK work and
-the items it deferred.
+**Status:** Assessment, and spent. This document argues for changes and decides
+nothing. Everything in it has since graduated or been superseded:
+[design 003](../design/003-streaming-protocol-target.md) specified the
+remediation target, and
+[design 004](../design/004-protocol-end-state.md) replaced that with the end
+state and landed it in three steps. Where any of the three disagree, 004 wins.
+This document is kept as the record of the argument, and it names frames and
+routes that no longer exist.
 The companion [reference](streaming-protocol.md) describes the protocol as it
 is; this document says what we would change, in what order, and why. When a
 recommendation here is accepted, it graduates into `docs/design/` and then into
