@@ -1611,7 +1611,6 @@ test("agent run converts standard schemas, retries one admission, and dispatches
         session_id: sessionId,
         status: "queued",
         results: [{ tool_call_id: toolCallId, status: "completed", deduplicated: false }],
-        pending_tool_calls: [],
       });
     }
     if (url.pathname.endsWith("/result")) {
@@ -2058,7 +2057,6 @@ test("bound session serializes invoke admission until the prior turn ends", asyn
     created_at: "2026-07-21T12:00:00Z",
     updated_at: "2026-07-21T12:00:01Z",
     ended_at: "2026-07-21T12:00:01Z",
-    pending_tool_calls: [],
   });
   const client = new Client({
     baseUrl: "http://nvoken.test",

@@ -29,7 +29,7 @@ class StructuredOutputProvenance(BaseModel):
     Shows where `structured_output` came from and what it was checked against, so you can verify the object rather than trust it. It records the tool call the model produced the object in and the exact schema that object was validated against. It never changes after the turn ends.
     """ # noqa: E501
     source: StrictStr
-    tool_call_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from the pending host tool calls, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
+    tool_call_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
     schema_sha256: Annotated[str, Field(strict=True)] = Field(description="SHA-256 of the JSON Schema this object was checked against. Compare it with your own schema's hash to confirm the model answered the version you sent. ")
     __properties: ClassVar[List[str]] = ["source", "tool_call_id", "schema_sha256"]
 

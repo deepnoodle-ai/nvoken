@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// ToolCallSummary : One tool call as a stream sees it: which call, what tool, what state it is in, and when it reached that state. The `id` is the `id` of the `tool_use` block that opened it, so a client can show a call as failed or still running without waiting for the message that carries its result.  This is the only tool-call collection. A call you have to run carries `arguments` and `deadline_at`; filter on `status` and their presence rather than reading a second list. Modes, attempts, and delivery detail live on the ToolCall resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ToolCallSummary {
-    /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from the pending host tool calls, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
+    /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
     #[serde(rename = "id")]
     pub id: String,
     /// The tool this call names.

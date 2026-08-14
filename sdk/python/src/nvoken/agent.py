@@ -135,8 +135,8 @@ class InvocationOptions:
 
 
 @dataclass(frozen=True)
-class AnswerPendingToolCallsOptions:
-    """Options for :meth:`Agent.answer_pending_tool_calls`."""
+class AnswerToolCallsOptions:
+    """Options for :meth:`Agent.answer_tool_calls`."""
 
     # Runs before each tool. Returning False skips that call — use it to take an
     # execution lease keyed by the ToolCall id, so a streaming reader and this
@@ -304,11 +304,11 @@ class Agent(Generic[StructuredT]):
                         leave_waiting=call.leave_waiting_on_missing_handler,
                     )
 
-    async def answer_pending_tool_calls(
+    async def answer_tool_calls(
         self,
         invocation_id: str,
         *,
-        options: AnswerPendingToolCallsOptions | None = None,
+        options: AnswerToolCallsOptions | None = None,
     ) -> int:
         """Answer the host tool calls a parked Invocation is waiting on.
 
@@ -334,7 +334,7 @@ class Agent(Generic[StructuredT]):
         no longer waiting or every call was claimed elsewhere — both ordinary
         outcomes rather than errors.
         """
-        call_options = options or AnswerPendingToolCallsOptions()
+        call_options = options or AnswerToolCallsOptions()
         invocation = await self.client.get_invocation(invocation_id)
         if invocation.status != "waiting":
             return 0
