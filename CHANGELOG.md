@@ -6,7 +6,7 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
-## Unreleased
+## 0.18.0 - 2026-08-15
 
 - **A callback delivery names its tool inside the signed body.** `tool_name` on
   the envelope, surfaced as `VerifiedCallback.ToolName` / `.toolName` /
