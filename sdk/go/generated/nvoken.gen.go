@@ -2203,6 +2203,24 @@ func (e ListProviderKeysParamsStatus) Valid() bool {
 	}
 }
 
+// Defines values for ListSessionMessagesParamsOrder.
+const (
+	ListOrderAscending  ListSessionMessagesParamsOrder = "asc"
+	ListOrderDescending ListSessionMessagesParamsOrder = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListSessionMessagesParamsOrder enum.
+func (e ListSessionMessagesParamsOrder) Valid() bool {
+	switch e {
+	case ListOrderAscending:
+		return true
+	case ListOrderDescending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetUsageBreakdownParamsGroupBy.
 const (
 	GetUsageBreakdownParamsGroupByAgentID              GetUsageBreakdownParamsGroupBy = "agent_id"
@@ -6873,7 +6891,19 @@ type ListSessionMessagesParams struct {
 
 	// Limit Maximum items in this page. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Order Sequence order for this page. `asc` (the default) reads oldest
+	// first; `desc` reads newest first.
+	//
+	// A cursor belongs to the direction that issued it and is refused by
+	// the other, because the position it encodes means opposite things in
+	// each. Page one direction to its end rather than turning around
+	// mid-walk.
+	Order *ListSessionMessagesParamsOrder `form:"order,omitempty" json:"order,omitempty"`
 }
+
+// ListSessionMessagesParamsOrder defines parameters for ListSessionMessages.
+type ListSessionMessagesParamsOrder string
 
 // StreamSessionParams defines parameters for StreamSession.
 type StreamSessionParams struct {
@@ -9837,10 +9867,15 @@ type ClientInterface interface {
 
 	// ListSessionMessages Page through the canonical Session transcript
 	//
-	// Returns persisted SessionMessage rows in ascending sequence order.
-	// The opaque forward cursor is bound to the authenticated caller and
-	// Session. This history endpoint contains no lifecycle or live-preview
-	// copies.
+	// Returns persisted SessionMessage rows in sequence order, ascending by
+	// default. The opaque cursor is bound to the authenticated caller, the
+	// Session, and the direction it was issued for. This history endpoint
+	// contains no lifecycle or live-preview copies.
+	//
+	// Use `order=desc` to read the newest messages first. A conversation's
+	// interesting end is its recent end, and reaching it ascending costs a
+	// walk through every older message: the tail of a three thousand message
+	// Session is one page descending and fifteen round trips ascending.
 	//
 	// Corresponds with GET /v1/sessions/{session_id}/messages (the `ListSessionMessages` operationId).
 	ListSessionMessages(ctx context.Context, sessionID SessionID, params *ListSessionMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -12331,10 +12366,15 @@ func (c *Client) ForkSession(ctx context.Context, sessionID SessionID, body Fork
 
 // ListSessionMessages Page through the canonical Session transcript
 //
-// Returns persisted SessionMessage rows in ascending sequence order.
-// The opaque forward cursor is bound to the authenticated caller and
-// Session. This history endpoint contains no lifecycle or live-preview
-// copies.
+// Returns persisted SessionMessage rows in sequence order, ascending by
+// default. The opaque cursor is bound to the authenticated caller, the
+// Session, and the direction it was issued for. This history endpoint
+// contains no lifecycle or live-preview copies.
+//
+// Use `order=desc` to read the newest messages first. A conversation's
+// interesting end is its recent end, and reaching it ascending costs a
+// walk through every older message: the tail of a three thousand message
+// Session is one page descending and fifteen round trips ascending.
 //
 // Corresponds with GET /v1/sessions/{session_id}/messages (the `ListSessionMessages` operationId).
 func (c *Client) ListSessionMessages(ctx context.Context, sessionID SessionID, params *ListSessionMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -16446,6 +16486,18 @@ func NewListSessionMessagesRequest(server string, sessionID SessionID, params *L
 
 		}
 
+		if params.Order != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "order", *params.Order, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -19132,10 +19184,15 @@ type ClientWithResponsesInterface interface {
 
 	// ListSessionMessagesWithResponse Page through the canonical Session transcript
 	//
-	// Returns persisted SessionMessage rows in ascending sequence order.
-	// The opaque forward cursor is bound to the authenticated caller and
-	// Session. This history endpoint contains no lifecycle or live-preview
-	// copies.
+	// Returns persisted SessionMessage rows in sequence order, ascending by
+	// default. The opaque cursor is bound to the authenticated caller, the
+	// Session, and the direction it was issued for. This history endpoint
+	// contains no lifecycle or live-preview copies.
+	//
+	// Use `order=desc` to read the newest messages first. A conversation's
+	// interesting end is its recent end, and reaching it ascending costs a
+	// walk through every older message: the tail of a three thousand message
+	// Session is one page descending and fifteen round trips ascending.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -28029,10 +28086,15 @@ func (c *ClientWithResponses) ForkSessionWithResponse(ctx context.Context, sessi
 
 // ListSessionMessagesWithResponse Page through the canonical Session transcript
 //
-// Returns persisted SessionMessage rows in ascending sequence order.
-// The opaque forward cursor is bound to the authenticated caller and
-// Session. This history endpoint contains no lifecycle or live-preview
-// copies.
+// Returns persisted SessionMessage rows in sequence order, ascending by
+// default. The opaque cursor is bound to the authenticated caller, the
+// Session, and the direction it was issued for. This history endpoint
+// contains no lifecycle or live-preview copies.
+//
+// Use `order=desc` to read the newest messages first. A conversation's
+// interesting end is its recent end, and reaching it ascending costs a
+// walk through every older message: the tail of a three thousand message
+// Session is one page descending and fifteen round trips ascending.
 //
 // Returns a wrapper object for the known response body format(s).
 //

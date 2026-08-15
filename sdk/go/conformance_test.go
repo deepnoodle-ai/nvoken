@@ -760,6 +760,16 @@ func TestConformance(t *testing.T) {
 	if err != nil || !messagePage.HasMore || messagePage.NextCursor == nil {
 		t.Fatalf("message cursor page: %#v err=%v", messagePage, err)
 	}
+	descendingOrder := ListOrderDescending
+	newestFirst, err := client.ListSessionMessages(
+		context.Background(),
+		conformanceSessionID,
+		MessageListOptions{Order: &descendingOrder},
+	)
+	if err != nil || len(newestFirst.Items) != 1 || newestFirst.Items[0].Sequence != 2 ||
+		newestFirst.NextCursor == nil || *newestFirst.NextCursor != "messages-page-2-desc" {
+		t.Fatalf("descending message page: %#v err=%v", newestFirst, err)
+	}
 	compactions, err := client.ListSessionCompactions(
 		context.Background(),
 		conformanceSessionID,

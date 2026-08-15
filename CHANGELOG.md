@@ -8,6 +8,12 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Message pages can start at the newest message.** `order: "desc"` on
+  `listSessionMessages` / `MessageListOptions` / `list_session_messages`, which
+  reaches nvoken's new `order` query parameter. Reading the tail of a long
+  Session took a forward walk of every page; it is now one request. A cursor
+  belongs to the direction that issued it and is refused by the other.
+
 - **The TypeScript and Go readers refuse a malformed frame.** Both decoded a
   stream payload missing a field the contract requires and carried on: the
   generated TypeScript decoder left it `undefined`, and `encoding/json` left the

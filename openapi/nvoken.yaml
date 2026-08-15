@@ -3419,13 +3419,33 @@ paths:
       operationId: listSessionMessages
       summary: Page through the canonical Session transcript
       description: |
-        Returns persisted SessionMessage rows in ascending sequence order.
-        The opaque forward cursor is bound to the authenticated caller and
-        Session. This history endpoint contains no lifecycle or live-preview
-        copies.
+        Returns persisted SessionMessage rows in sequence order, ascending by
+        default. The opaque cursor is bound to the authenticated caller, the
+        Session, and the direction it was issued for. This history endpoint
+        contains no lifecycle or live-preview copies.
+
+        Use `order=desc` to read the newest messages first. A conversation's
+        interesting end is its recent end, and reaching it ascending costs a
+        walk through every older message: the tail of a three thousand message
+        Session is one page descending and fifteen round trips ascending.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
+        - name: order
+          in: query
+          description: |
+            Sequence order for this page. `asc` (the default) reads oldest
+            first; `desc` reads newest first.
+
+            A cursor belongs to the direction that issued it and is refused by
+            the other, because the position it encodes means opposite things in
+            each. Page one direction to its end rather than turning around
+            mid-walk.
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+            x-enum-varnames: [ListOrderAscending, ListOrderDescending]
       responses:
         "200":
           description: One bounded page of canonical messages.

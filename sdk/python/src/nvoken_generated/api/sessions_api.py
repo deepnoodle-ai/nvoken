@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictBool
+from pydantic import Field, StrictBool, StrictStr, field_validator
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.create_session_request import CreateSessionRequest
@@ -1873,6 +1873,7 @@ class SessionsApi:
         session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        order: Annotated[Optional[StrictStr], Field(description="Sequence order for this page. `asc` (the default) reads oldest first; `desc` reads newest first.  A cursor belongs to the direction that issued it and is refused by the other, because the position it encodes means opposite things in each. Page one direction to its end rather than turning around mid-walk. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1888,7 +1889,7 @@ class SessionsApi:
     ) -> SessionMessageList:
         """Page through the canonical Session transcript
 
-        Returns persisted SessionMessage rows in ascending sequence order. The opaque forward cursor is bound to the authenticated caller and Session. This history endpoint contains no lifecycle or live-preview copies.
+        Returns persisted SessionMessage rows in sequence order, ascending by default. The opaque cursor is bound to the authenticated caller, the Session, and the direction it was issued for. This history endpoint contains no lifecycle or live-preview copies.  Use `order=desc` to read the newest messages first. A conversation's interesting end is its recent end, and reaching it ascending costs a walk through every older message: the tail of a three thousand message Session is one page descending and fifteen round trips ascending.
 
         :param session_id: (required)
         :type session_id: str
@@ -1896,6 +1897,8 @@ class SessionsApi:
         :type cursor: str
         :param limit: Maximum items in this page. Defaults to 100.
         :type limit: int
+        :param order: Sequence order for this page. `asc` (the default) reads oldest first; `desc` reads newest first.  A cursor belongs to the direction that issued it and is refused by the other, because the position it encodes means opposite things in each. Page one direction to its end rather than turning around mid-walk.
+        :type order: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1922,6 +1925,7 @@ class SessionsApi:
             session_id=session_id,
             cursor=cursor,
             limit=limit,
+            order=order,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1955,6 +1959,7 @@ class SessionsApi:
         session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        order: Annotated[Optional[StrictStr], Field(description="Sequence order for this page. `asc` (the default) reads oldest first; `desc` reads newest first.  A cursor belongs to the direction that issued it and is refused by the other, because the position it encodes means opposite things in each. Page one direction to its end rather than turning around mid-walk. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1970,7 +1975,7 @@ class SessionsApi:
     ) -> ApiResponse[SessionMessageList]:
         """Page through the canonical Session transcript
 
-        Returns persisted SessionMessage rows in ascending sequence order. The opaque forward cursor is bound to the authenticated caller and Session. This history endpoint contains no lifecycle or live-preview copies.
+        Returns persisted SessionMessage rows in sequence order, ascending by default. The opaque cursor is bound to the authenticated caller, the Session, and the direction it was issued for. This history endpoint contains no lifecycle or live-preview copies.  Use `order=desc` to read the newest messages first. A conversation's interesting end is its recent end, and reaching it ascending costs a walk through every older message: the tail of a three thousand message Session is one page descending and fifteen round trips ascending.
 
         :param session_id: (required)
         :type session_id: str
@@ -1978,6 +1983,8 @@ class SessionsApi:
         :type cursor: str
         :param limit: Maximum items in this page. Defaults to 100.
         :type limit: int
+        :param order: Sequence order for this page. `asc` (the default) reads oldest first; `desc` reads newest first.  A cursor belongs to the direction that issued it and is refused by the other, because the position it encodes means opposite things in each. Page one direction to its end rather than turning around mid-walk.
+        :type order: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2004,6 +2011,7 @@ class SessionsApi:
             session_id=session_id,
             cursor=cursor,
             limit=limit,
+            order=order,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2037,6 +2045,7 @@ class SessionsApi:
         session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        order: Annotated[Optional[StrictStr], Field(description="Sequence order for this page. `asc` (the default) reads oldest first; `desc` reads newest first.  A cursor belongs to the direction that issued it and is refused by the other, because the position it encodes means opposite things in each. Page one direction to its end rather than turning around mid-walk. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2052,7 +2061,7 @@ class SessionsApi:
     ) -> RESTResponseType:
         """Page through the canonical Session transcript
 
-        Returns persisted SessionMessage rows in ascending sequence order. The opaque forward cursor is bound to the authenticated caller and Session. This history endpoint contains no lifecycle or live-preview copies.
+        Returns persisted SessionMessage rows in sequence order, ascending by default. The opaque cursor is bound to the authenticated caller, the Session, and the direction it was issued for. This history endpoint contains no lifecycle or live-preview copies.  Use `order=desc` to read the newest messages first. A conversation's interesting end is its recent end, and reaching it ascending costs a walk through every older message: the tail of a three thousand message Session is one page descending and fifteen round trips ascending.
 
         :param session_id: (required)
         :type session_id: str
@@ -2060,6 +2069,8 @@ class SessionsApi:
         :type cursor: str
         :param limit: Maximum items in this page. Defaults to 100.
         :type limit: int
+        :param order: Sequence order for this page. `asc` (the default) reads oldest first; `desc` reads newest first.  A cursor belongs to the direction that issued it and is refused by the other, because the position it encodes means opposite things in each. Page one direction to its end rather than turning around mid-walk.
+        :type order: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2086,6 +2097,7 @@ class SessionsApi:
             session_id=session_id,
             cursor=cursor,
             limit=limit,
+            order=order,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2114,6 +2126,7 @@ class SessionsApi:
         session_id,
         cursor,
         limit,
+        order,
         _request_auth,
         _content_type,
         _headers,
@@ -2145,6 +2158,10 @@ class SessionsApi:
         if limit is not None:
 
             _query_params.append(('limit', limit))
+
+        if order is not None:
+
+            _query_params.append(('order', order))
 
         # process the header parameters
         # process the form parameters

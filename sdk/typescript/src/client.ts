@@ -1066,9 +1066,18 @@ export interface ListSessionOptions {
   limit?: number;
 }
 
+/**
+ * Sequence order for a message page. A cursor belongs to the direction that
+ * issued it and is refused by the other, so page one direction to its end
+ * rather than turning around mid-walk.
+ */
+export type ListOrder = "asc" | "desc";
+
 export interface ListMessageOptions {
   cursor?: string;
   limit?: number;
+  /** Defaults to `"asc"`, oldest first. `"desc"` starts at the newest message. */
+  order?: ListOrder;
 }
 
 export interface ListCompactionOptions {

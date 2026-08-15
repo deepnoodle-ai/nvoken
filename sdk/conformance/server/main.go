@@ -706,14 +706,24 @@ func (s *state) session(response http.ResponseWriter, request *http.Request) {
 		})
 	case strings.HasSuffix(path, "/messages") && request.Method == http.MethodGet:
 		cursor := request.URL.Query().Get("cursor")
-		items := []any{firstMessage()}
+		// A descending walk starts at the newest message, so the same two
+		// messages arrive in the opposite order behind a cursor that names the
+		// direction that issued it. An SDK that drops the option reads the
+		// ascending page and fails its assertion.
+		leading, trailing := firstMessage(), secondMessage()
+		nextCursor := "messages-page-2"
+		if request.URL.Query().Get("order") == "desc" {
+			leading, trailing = trailing, leading
+			nextCursor = "messages-page-2-desc"
+		}
+		items := []any{leading}
 		if cursor != "" {
-			items = []any{secondMessage()}
+			items = []any{trailing}
 		}
 		writeJSON(response, http.StatusOK, map[string]any{
 			"items":       items,
 			"has_more":    cursor == "",
-			"next_cursor": nullable(cursor == "", "messages-page-2"),
+			"next_cursor": nullable(cursor == "", nextCursor),
 		})
 	case request.Method == http.MethodGet:
 		writeJSON(response, http.StatusOK, session())
