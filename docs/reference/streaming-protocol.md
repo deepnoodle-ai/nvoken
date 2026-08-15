@@ -163,11 +163,23 @@ were away is still settled when you return, with no re-emission machinery
 anywhere. Read `GET /v1/invocations/{invocation_id}` if you want the composed
 result.
 
-A change carries the facts a status alone leaves open: `stop_reason` for a turn
-that stopped short, `credit_block` for one waiting on an account, and
-`tool_calls` for where each call in the turn got to, with `arguments` on the
-ones you are expected to run. A client can recover from the change stream
-alone.
+A change carries the facts a status alone leaves open: `terminal` for whether
+this change is the ending, `stop_reason` for a turn that stopped short,
+`credit_block` for one waiting on an account, and `tool_calls` for where each
+call in the turn got to, with `arguments` on the ones you are expected to run.
+A client can recover from the change stream alone.
+
+Read `terminal` rather than testing `status` against a set of your own. There
+are eight statuses and four are terminal, so the mistake worth designing out is
+encoding the other four — `paused`, a turn stopped on spending capacity with
+its deadlines on hold, is not an ending, and a turn wrongly believed finished
+is one nobody settles or reattaches to. Each SDK also exports the predicate:
+`isTurnOver` in TypeScript, `IsTurnOver` in Go, `is_turn_over` in Python and
+Rust, over `isTerminalStatus` / `IsTerminalStatus` / `is_terminal_status`.
+
+`terminal` describes the change, not the turn. A replayed `running` change
+stays `false` after the turn has ended, which is what keeps the rule above —
+messages before changes — from marking a turn settled early.
 
 ### `message.delta`
 

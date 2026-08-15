@@ -158,6 +158,13 @@ func invocationStatus(result map[string]any) any {
 	return invocation["status"]
 }
 
+// invocationStatusName is invocationStatus narrowed to the string the fixtures
+// always store, for callers that have to classify it rather than echo it.
+func invocationStatusName(result map[string]any) string {
+	name, _ := invocationStatus(result).(string)
+	return name
+}
+
 func onboardingInputText(raw json.RawMessage) (string, bool) {
 	var text string
 	if json.Unmarshal(raw, &text) == nil && text != "" {
@@ -258,6 +265,7 @@ func (s *onboardingState) streamTurn(response http.ResponseWriter, invocationID 
 			"invocation_id":            invocationID,
 			"revision":                 1,
 			"status":                   invocationStatus(result),
+			"terminal":                 terminalStatus(invocationStatusName(result)),
 			"through_message_sequence": nil,
 			"error":                    nil,
 			"structured_output":        nil,

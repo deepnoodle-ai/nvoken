@@ -3842,7 +3842,10 @@ type Invocation struct {
 	SessionID SessionID `json:"session_id"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
+	// turn reaches one of them it never changes again. Do not encode that
+	// set: an InvocationChange carries `terminal`, an Invocation carries
+	// `ended_at`, and both say the same thing without a list of yours to
+	// keep in step as this enum grows.
 	//
 	// `completed` means the turn ended the way it was asked to: the model
 	// finished on its own, or you interrupted it.
@@ -3904,15 +3907,17 @@ type Invocation struct {
 // get current state.
 //
 // **A turn is over when a change for it carries a terminal status.**
-// That is the terminal signal, and there is no other. Because it is
+// That is the terminal signal, and there is no other, and `terminal`
+// carries it so no caller has to spell the set out. Because it is
 // saved it replays on reconnect at any cursor, so a turn that settled
 // while you were away is still settled when you return.
 //
 // A change carries what a turn's own projection carries about where it
-// stands: `stop_reason` for a turn that ended, `credit_block` for one
-// paused on spend, and `tool_calls` for what its tools are doing, with
-// `arguments` on the ones waiting for you to run them. You never need a
-// second request to find out why a turn is not moving.
+// stands: `terminal` for whether this change is the end, `stop_reason`
+// for a turn that ended, `credit_block` for one paused on spend, and
+// `tool_calls` for what its tools are doing, with `arguments` on the ones
+// waiting for you to run them. You never need a second request to find
+// out why a turn is not moving.
 type InvocationChange struct {
 	// CreditBlock Present while the turn is paused on spending capacity.
 	CreditBlock *CreditBlock       `json:"credit_block,omitempty"`
@@ -3925,7 +3930,10 @@ type InvocationChange struct {
 	Revision     int64            `json:"revision"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
+	// turn reaches one of them it never changes again. Do not encode that
+	// set: an InvocationChange carries `terminal`, an Invocation carries
+	// `ended_at`, and both say the same thing without a list of yours to
+	// keep in step as this enum grows.
 	//
 	// `completed` means the turn ended the way it was asked to: the model
 	// finished on its own, or you interrupted it.
@@ -3960,7 +3968,20 @@ type InvocationChange struct {
 	StopReason                 *InvocationStopReason       `json:"stop_reason,omitempty"`
 	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
 	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance,omitempty"`
-	ThroughMessageSequence     *int64                      `json:"through_message_sequence"`
+
+	// Terminal Whether this change is the turn's end. It is exactly
+	// `status IN (completed, incomplete, failed, cancelled)`, computed
+	// here so you never restate that set — read this rather than
+	// testing the status against a list of your own, and a status added
+	// later cannot silently change what your code believes.
+	//
+	// It describes *this change*, not the turn's current state. A
+	// replayed `running` change reports `false` even after the turn has
+	// ended, which is what keeps the ordering rule intact: fold messages
+	// before changes and a turn is never settled before its final
+	// message exists.
+	Terminal               bool   `json:"terminal"`
+	ThroughMessageSequence *int64 `json:"through_message_sequence"`
 
 	// ToolCalls Every tool call this turn has made, with its current status.
 	// Omitted when the turn has made none. A tool call changing state is
@@ -4127,7 +4148,10 @@ type InvocationResult struct {
 }
 
 // InvocationStatus `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-// turn reaches one of them it never changes again.
+// turn reaches one of them it never changes again. Do not encode that
+// set: an InvocationChange carries `terminal`, an Invocation carries
+// `ended_at`, and both say the same thing without a list of yours to
+// keep in step as this enum grows.
 //
 // `completed` means the turn ended the way it was asked to: the model
 // finished on its own, or you interrupted it.
@@ -5762,7 +5786,10 @@ type SubmitHostToolResultsResponse struct {
 	SessionID SessionID `json:"session_id"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
-	// turn reaches one of them it never changes again.
+	// turn reaches one of them it never changes again. Do not encode that
+	// set: an InvocationChange carries `terminal`, an Invocation carries
+	// `ended_at`, and both say the same thing without a list of yours to
+	// keep in step as this enum grows.
 	//
 	// `completed` means the turn ended the way it was asked to: the model
 	// finished on its own, or you interrupted it.

@@ -19,6 +19,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 
+/// `terminal` is required on a change, so a fixture has to carry it. Derived
+/// from the status rather than written per call site, so a fixture cannot claim
+/// an ending its own status disagrees with.
+const TERMINAL_STATUS_NAMES: [&str; 4] = ["completed", "incomplete", "failed", "cancelled"];
+
 const AGENT_ID: &str = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
 const SESSION_ID: &str = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const DEFINITION_ID: &str = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb330";
@@ -383,6 +388,7 @@ fn change_frame(invocation_id: &str, status: &str, cursor: &str) -> String {
             "invocation_id": invocation_id,
             "revision": 1,
             "status": status,
+            "terminal": TERMINAL_STATUS_NAMES.contains(&status),
             "through_message_sequence": null,
             "error": null,
             "structured_output": null,

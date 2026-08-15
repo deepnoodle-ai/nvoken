@@ -8,6 +8,31 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Every SDK exports the terminal predicate.** `isTerminalStatus` /
+  `isTurnOver` in TypeScript, `IsTerminalStatus` / `IsTurnOver` in Go,
+  `is_terminal_status` / `is_turn_over` in Python and Rust, alongside
+  `TERMINAL_INVOCATION_STATUSES`. The set had been spelled out privately in
+  three of the four SDKs — twice in Python — and nowhere a caller could reach
+  it, so every application kept its own copy and each one had to be corrected
+  by hand when `paused` arrived. `isTurnOver` reads the new `terminal` field on
+  an InvocationChange and falls back to classifying the status, so it is
+  correct against a server that predates the field.
+
+- **A change says whether it ends the turn.** `InvocationChange` gains a
+  required `terminal`, and every SDK reducer now folds on it rather than on a
+  status set of its own. It describes the change and not the turn, so a
+  replayed `running` change stays false and messages still fold before changes.
+
+- **`answerable_tool_calls` is importable from Python.** It was defined in
+  `nvoken.agent` and never re-exported, so `from nvoken import
+  answerable_tool_calls` failed — the one SDK where 0.16.0's promise that each
+  exports the filter was not actually true.
+
+- **The runtime `InvocationStatus` values are exported from TypeScript.** The
+  generated enum object was reachable only through `raw`, so a host that wanted
+  to enumerate the statuses had to reach past the public surface or hard-code
+  them.
+
 ## 0.16.0 - 2026-08-14
 
 This release collapses the protocol onto its end state, as

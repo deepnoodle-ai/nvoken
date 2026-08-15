@@ -8,6 +8,7 @@ from typing import Any, AsyncIterator
 import pytest
 
 from nvoken import (
+    TERMINAL_INVOCATION_STATUSES,
     Agent,
     AgentOptions,
     InvocationOptions,
@@ -102,6 +103,7 @@ class FakeHandle:
                         "invocation_id": self.invocation_id,
                         "revision": revision,
                         "status": status,
+                        "terminal": status in TERMINAL_INVOCATION_STATUSES,
                     }],
                     "cursor": f"cursor-{revision}",
                 },

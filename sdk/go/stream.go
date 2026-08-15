@@ -120,11 +120,7 @@ func (r *Reducer) Apply(event StreamEvent) error {
 	for _, change := range update.InvocationChanges {
 		key := fmt.Sprintf("%s:%d", change.InvocationID, change.Revision)
 		r.changes[key] = change
-		switch change.Status {
-		case generated.InvocationStatusCompleted,
-			generated.InvocationStatusIncomplete,
-			generated.InvocationStatusFailed,
-			generated.InvocationStatusCancelled:
+		if IsTurnOver(change) {
 			r.terminalInvocations[change.InvocationID] = struct{}{}
 			r.discardPreviews(change.InvocationID)
 		}

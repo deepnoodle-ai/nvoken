@@ -9,10 +9,10 @@ from nvoken_generated.models.invocation_change import InvocationChange
 from nvoken_generated.models.session_message import SessionMessage
 from nvoken_generated.models.transcript_update_event import TranscriptUpdateEvent
 
+from .invocation_status import is_turn_over
+
 if TYPE_CHECKING:
     from .client import Client, InvocationHandle
-
-TERMINAL_CHANGE_STATUSES = frozenset({"completed", "incomplete", "failed", "cancelled"})
 
 
 @dataclass(frozen=True)
@@ -86,7 +86,7 @@ class Reducer:
                 self._discard_previews(message.invocation_id)
         for change in update.invocation_changes:
             self._changes[(change.invocation_id, change.revision)] = change
-            if change.status.value in TERMINAL_CHANGE_STATUSES:
+            if is_turn_over(change):
                 self._terminal_invocations.add(change.invocation_id)
                 self._discard_previews(change.invocation_id)
         self._cursor = event.id or update.cursor or self._cursor
