@@ -166,7 +166,8 @@ result.
 A change carries the facts a status alone leaves open: `terminal` for whether
 this change is the ending, `stop_reason` for a turn that stopped short,
 `credit_block` for one waiting on an account, and `tool_calls` for where each
-call in the turn got to, with `arguments` on the ones you are expected to run.
+call in the turn got to, with `mode` on every entry and `arguments` on the ones
+you may settle.
 A client can recover from the change stream alone.
 
 Read `terminal` rather than testing `status` against a set of your own. There
@@ -430,11 +431,13 @@ A tool call reaches you four ways at once:
 2. **As a status.** The Invocation moves to `waiting`, which other APIs call
    `requires_action`. Nothing is executing. The turn is parked.
 3. **As lifecycle state.** Every lifecycle change carries `tool_calls`, one
-   entry per call in the turn with `id`, `name`, `status`, and `updated_at`.
-   The ones you are expected to run also carry `arguments` and `deadline_at`;
-   filter on the presence of `arguments`. A call reaching a terminal state
-   reserves a lifecycle revision, so the change is delivered and replayed like
-   any other.
+   entry per call in the turn with `id`, `name`, `mode`, `status`, and
+   `updated_at`. The ones you may settle also carry `arguments` and
+   `deadline_at`; the ones you must run yourself are those with `mode: host`.
+   An acknowledged callback delivery is settleable by a machine credential but
+   is nvoken's to deliver, which is why the mode and not just the arguments
+   decides. A call reaching a terminal state reserves a lifecycle revision, so
+   the change is delivered and replayed like any other.
 4. **As live texture.** `message.delta` frames of kind `tool_arguments` show
    the model writing the call, lossy and disposable like every preview.
 

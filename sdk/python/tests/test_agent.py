@@ -50,6 +50,7 @@ class FakeHandle:
                 SimpleNamespace(
                     id=TOOL_CALL_ID,
                     name=self.waiting_tool,
+                    mode="host",
                     status="pending",
                     arguments={"city": "Paris"},
                 )

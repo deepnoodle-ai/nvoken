@@ -212,15 +212,21 @@ class Agent(Generic[StructuredT]):
             for tool in options.tools
             if not isinstance(tool, BuiltinTool) and tool.mode == "host"
         }
-        # Tools nvoken delivers over HTTPS. They can appear in a waiting
-        # Invocation's pending calls once an endpoint has acknowledged a
-        # delivery without settling it, and are answered by whatever accepted
-        # that acknowledgement rather than from local handlers.
-        self._callback_tools = {
-            tool.name
-            for tool in options.tools
-            if not isinstance(tool, BuiltinTool) and tool.mode == "callback"
-        }
+
+    def _runs_locally(self, call: ToolCallSummary) -> bool:
+        """Whether a pending call is this caller's to execute.
+
+        The call's own mode is the authority, not what this Agent happens to
+        declare: an Invocation running a server-owned Agent Definition can park
+        on callback tools this object never listed, and answering those here
+        would run work nvoken is already delivering elsewhere. That replaced a
+        set of this Agent's own callback tool names, which only ever knew about
+        its own.
+
+        ``mode`` is required on the wire and on the decoded summary, so there is
+        no case where it is missing to accommodate.
+        """
+        return call.mode == "host"
 
     async def invoke(
         self,
@@ -341,7 +347,7 @@ class Agent(Generic[StructuredT]):
         handle = self.client.invocation(invocation_id)
         results: list[ToolResult] = []
         for pending in answerable_tool_calls(invocation):
-            if pending.name in self._callback_tools:
+            if not self._runs_locally(pending):
                 continue
             tool = self._host_tools.get(pending.name)
             if tool is None or tool.handler is None:
@@ -472,7 +478,7 @@ class Agent(Generic[StructuredT]):
         for pending in answerable_tool_calls(invocation):
             if pending.id in submitted:
                 continue
-            if pending.name in self._callback_tools:
+            if not self._runs_locally(pending):
                 continue
             tool = self._host_tools.get(pending.name)
             if tool is None or tool.handler is None:
@@ -658,6 +664,22 @@ def answerable_tool_calls(invocation: Any) -> list[ToolCallSummary]:
     is what replaced the separate pending list.
     """
     return [call for call in (invocation.tool_calls or []) if call.arguments is not None]
+
+
+def host_tool_calls(invocation: Any) -> list[ToolCallSummary]:
+    """The tool calls this caller must run itself.
+
+    Answerable is not the same as yours. Once an App declares callback tools,
+    nvoken delivers those to an endpoint — but a machine credential may still
+    settle one after its receiver acknowledged delivery, so a pending
+    callback-mode call carries arguments and is answerable. Running it here as
+    well would double the side effect.
+
+    Yours is answerable and ``mode`` is ``host``. Partitioning on that beats
+    keeping a list of your own tool names, which goes stale the first time an
+    agent gains a tool and nobody updates the list.
+    """
+    return [call for call in answerable_tool_calls(invocation) if call.mode == "host"]
 
 
 def _waiting_for(event: StreamEvent, invocation_id: str) -> bool:

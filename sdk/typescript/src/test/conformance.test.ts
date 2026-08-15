@@ -39,6 +39,7 @@ import {
   preflightOutputSchema,
   toolInput,
   answerableToolCalls,
+  hostToolCalls,
   verifyCallback,
   type HostTool,
   type ContextItem,
@@ -1449,6 +1450,7 @@ test("schema-bound tool helpers preserve application types", () => {
   const input = toolInput(lookupOrder, {
     id: toolCallId,
     name: "lookup_order",
+    mode: "host",
     status: "pending",
     arguments: { orderId: "order-42" },
     deadlineAt: new Date("2026-07-21T12:05:00Z"),
@@ -1459,6 +1461,7 @@ test("schema-bound tool helpers preserve application types", () => {
     () => toolInput(lookupOrder, {
       id: toolCallId,
       name: "different_tool",
+      mode: "host",
       status: "pending",
       arguments: {},
       deadlineAt: new Date("2026-07-21T12:05:00Z"),
@@ -1553,6 +1556,7 @@ test("agent run converts standard schemas, retries one admission, and dispatches
     tool_calls: status === "waiting" ? [{
       id: toolCallId,
       name: "lookup_order",
+      mode: "host",
       status: "pending",
       arguments: { orderId: "order-42" },
       deadline_at: null,
@@ -1575,6 +1579,7 @@ test("agent run converts standard schemas, retries one admission, and dispatches
     tool_calls: status === "waiting" ? [{
       id: toolCallId,
       name: "lookup_order",
+      mode: "host",
       status: "pending",
       arguments: { orderId: "order-42" },
       updated_at: "2026-07-21T12:00:01Z",
@@ -1740,6 +1745,7 @@ test("missing handlers cancel by default and support explicit handoff", async ()
           tool_calls: [{
             id: toolCallId,
             name: "lookup_order",
+            mode: "host",
             status: "pending",
             arguments: {},
             deadline_at: "2026-07-21T12:05:00Z",
@@ -1766,6 +1772,7 @@ test("missing handlers cancel by default and support explicit handoff", async ()
           toolCalls: [{
             id: toolCallId,
             name: "lookup_order",
+            mode: "host",
             status: "pending",
             arguments: {},
             deadline_at: "2026-07-21T12:05:00Z",
@@ -2167,6 +2174,30 @@ test("shared reducer vector", async () => {
   }
 });
 
+test("shared tool call mode partition", async () => {
+  // Answerable is wider than mine once an App declares callback tools: nvoken
+  // delivers those itself, yet a machine credential may still settle one that a
+  // receiver acknowledged, so it carries arguments like any pending host call.
+  const fixture = JSON.parse(await readFile(
+    new URL("../../../conformance/fixtures/tool-call-modes-v1.json", import.meta.url),
+    "utf8",
+  )) as {
+    tool_calls: Array<Record<string, unknown>>;
+    answerable: string[];
+    host: string[];
+  };
+  const toolCalls = fixture.tool_calls.map((call) => ({
+    id: call.id as string,
+    name: call.name as string,
+    mode: call.mode as ToolCallSummary["mode"],
+    status: call.status as ToolCallSummary["status"],
+    arguments: call.arguments as ToolCallSummary["arguments"],
+    updatedAt: new Date(call.updated_at as string),
+  }));
+  assert.deepEqual(answerableToolCalls({ toolCalls }).map((call) => call.id), fixture.answerable);
+  assert.deepEqual(hostToolCalls({ toolCalls }).map((call) => call.id), fixture.host);
+});
+
 test("shared callback signing and deduplication vector", async () => {
   const vector = JSON.parse(await readFile(
     new URL("../../../../docs/design/callback-signing-v1.json", import.meta.url),
@@ -2174,6 +2205,7 @@ test("shared callback signing and deduplication vector", async () => {
   )) as {
     key: string;
     now: number;
+    tool_name: string;
     headers: Record<string, string>;
     body: string;
   };
@@ -2186,6 +2218,10 @@ test("shared callback signing and deduplication vector", async () => {
     new Date(vector.now * 1_000),
   );
   assert.equal(verified.toolCallId, toolCallId);
+  // The name is inside the signed body, so a receiver dispatches on it without
+  // an authoritative read and without trusting a URL suffix.
+  assert.equal(verified.toolName, vector.tool_name);
+  assert.equal(verified.envelope.nvoken.tool_name, vector.tool_name);
 
   const mutations: Array<(headers: Headers, candidate: Uint8Array) => Uint8Array> = [
     (_headers, candidate) => new Uint8Array([...candidate, 32]),

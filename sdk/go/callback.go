@@ -17,13 +17,18 @@ const CallbackTimestampWindow = 5 * time.Minute
 
 type CallbackEnvelope struct {
 	Nvoken struct {
-		SchemaVersion int     `json:"schema_version"`
-		DeliveryID    string  `json:"delivery_id"`
-		ToolCallID    string  `json:"tool_call_id"`
-		InvocationID  string  `json:"invocation_id"`
-		SessionID     string  `json:"session_id"`
-		AgentKey      string  `json:"agent_key"`
-		TenantKey     *string `json:"tenant_key,omitempty"`
+		SchemaVersion int    `json:"schema_version"`
+		DeliveryID    string `json:"delivery_id"`
+		ToolCallID    string `json:"tool_call_id"`
+		// ToolName is the tool this delivery is for. It is inside the signed
+		// body, so a receiver serving several tools dispatches on it directly.
+		// Any per-tool path or query suffix on the endpoint URL is unsigned and
+		// belongs in logs, not in a dispatch decision.
+		ToolName     string  `json:"tool_name"`
+		InvocationID string  `json:"invocation_id"`
+		SessionID    string  `json:"session_id"`
+		AgentKey     string  `json:"agent_key"`
+		TenantKey    *string `json:"tenant_key,omitempty"`
 	} `json:"nvoken"`
 	Input json.RawMessage `json:"input"`
 }
@@ -33,6 +38,7 @@ type VerifiedCallback struct {
 	RawBody    []byte
 	DeliveryID string
 	ToolCallID string
+	ToolName   string
 	KeyID      string
 	KeyVersion int64
 	Timestamp  time.Time
@@ -84,11 +90,18 @@ func VerifyCallback(key []byte, header http.Header, rawBody []byte, now time.Tim
 	if envelope.Nvoken.DeliveryID != deliveryID || envelope.Nvoken.ToolCallID != toolCallID {
 		return VerifiedCallback{}, fmt.Errorf("callback identity header does not match signed body")
 	}
+	// tool_name is required on the wire, so a missing one is a sender that is
+	// not nvoken or a body that is not a callback. Failing here keeps the
+	// dispatch below it total: no receiver needs a branch for "no name".
+	if envelope.Nvoken.ToolName == "" {
+		return VerifiedCallback{}, fmt.Errorf("callback envelope is missing tool_name")
+	}
 	return VerifiedCallback{
 		Envelope:   envelope,
 		RawBody:    append([]byte(nil), rawBody...),
 		DeliveryID: deliveryID,
 		ToolCallID: toolCallID,
+		ToolName:   envelope.Nvoken.ToolName,
 		KeyID:      keyID,
 		KeyVersion: keyVersion,
 		Timestamp:  when,
@@ -119,8 +132,9 @@ func CallbackResult(content any, isError bool) (CallbackReply, error) {
 }
 
 // AcknowledgeCallback accepts delivery without settling the ToolCall, for work
-// that will outlive the App's callback reply deadline. Settle it later with
-// Client.SubmitToolResults, reusing the delivery's ToolCall ID.
+// that will outlive this tool's reply deadline — its declared
+// timeout_seconds, or the App's default when it declares none. Settle it later
+// with Client.SubmitToolResults, reusing the delivery's ToolCall ID.
 //
 // This trades away the fail-loud guarantee. nvoken marks an unacknowledged
 // delivery failed once its retries are exhausted, so the turn always moves on.

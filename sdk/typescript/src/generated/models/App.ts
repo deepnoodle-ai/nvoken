@@ -84,8 +84,15 @@ export interface App {
      */
     displayName: string | null;
     /**
-     * Resolved deadline for each callback HTTP request. Defaults to 10.
-     * Webhook delivery is unaffected.
+     * Resolved deadline for each callback HTTP request whose tool does
+     * not name one of its own. Defaults to 10. Webhook delivery is
+     * unaffected.
+     *
+     * This ceiling is 60 while a single tool may declare up to 300 in
+     * `callback.timeout_seconds`. The asymmetry is the point: this value
+     * governs every callback the App makes, so raising it to cover one
+     * slow tool would make a hung delivery of a fast one invisible for
+     * just as long. Slow is named per tool.
      *
      * @type {number}
      * @memberof App

@@ -139,9 +139,28 @@ type Agent struct {
 	// names the ones nvoken delivers over HTTPS instead: those can appear in a
 	// waiting Invocation's pending calls once the endpoint has acknowledged a
 	// delivery without settling it, and they are answered by whatever accepted
-	// that acknowledgement, not from here.
+	// that acknowledgement, not from here. It is now a fallback for a server
+	// too old to stamp `mode` on a summary; see runsLocally.
 	hostTools     map[string]Tool
 	callbackTools map[string]struct{}
+}
+
+// runsLocally reports whether a pending call is this caller's to execute.
+//
+// The call's own mode is the authority, not what this Agent happens to
+// declare: an Invocation running a server-owned Agent Definition can park on
+// callback tools this object never listed, and answering those here would run
+// work nvoken is already delivering elsewhere.
+//
+// A server too old to send mode leaves it empty, where a name check is all
+// there is. Fall back to it rather than treating every call as somebody
+// else's, which would leave the turn parked forever.
+func (a *Agent) runsLocally(call ToolCallSummary) bool {
+	if call.Mode != "" {
+		return call.Mode == ToolCallModeHost
+	}
+	_, isCallback := a.callbackTools[call.Name]
+	return !isCallback
 }
 
 func (c *Client) Agent(options AgentOptions) (*Agent, error) {
@@ -440,7 +459,7 @@ func (a *Agent) dispatchWaiting(
 		if _, alreadySubmitted := submitted[pending.ID]; alreadySubmitted {
 			continue
 		}
-		if _, isCallback := a.callbackTools[pending.Name]; isCallback {
+		if !a.runsLocally(pending) {
 			continue
 		}
 		tool, ok := a.hostTools[pending.Name]
@@ -715,7 +734,7 @@ func (a *Agent) AnswerToolCalls(
 	handle := a.client.Invocation(invocationID)
 	results := make([]ToolResult, 0, len(answerable))
 	for _, pending := range answerable {
-		if _, isCallback := a.callbackTools[pending.Name]; isCallback {
+		if !a.runsLocally(pending) {
 			continue
 		}
 		tool, ok := a.hostTools[pending.Name]

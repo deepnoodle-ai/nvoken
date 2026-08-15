@@ -16,10 +16,16 @@ pub struct CallbackTarget {
     /// Public HTTPS endpoint. Userinfo and fragments are rejected. Every dial revalidates resolved addresses and refuses redirects.
     #[serde(rename = "url")]
     pub url: String,
+    /// This tool's own reply deadline, replacing the App's `callback_timeout_seconds` for its deliveries. Omit it and the App value applies unchanged.  The two ceilings differ deliberately. The App value is capped at 60 because it governs every callback the App makes: raising it to cover your slowest tool would make a hung delivery of your fastest one invisible for just as long. Naming a long deadline here says which tool is slow, and leaves loss detection tight everywhere else.  The delivery snapshots this value when the tool call is created, so a definition revision landing mid-flight does not move the deadline an in-flight delivery is already held to.  It is a ceiling on the delivery, not a promise of one: the effective limit is the smallest of this value, the Invocation's deadline, and `limits.waiting_timeout_seconds` when set. A 300-second tool inside a shorter turn never gets 300 seconds.
+    #[serde(rename = "timeout_seconds", skip_serializing_if = "Option::is_none")]
+    pub timeout_seconds: Option<u32>,
 }
 
 impl CallbackTarget {
     pub fn new(url: String) -> CallbackTarget {
-        CallbackTarget { url }
+        CallbackTarget {
+            url,
+            timeout_seconds: None,
+        }
     }
 }

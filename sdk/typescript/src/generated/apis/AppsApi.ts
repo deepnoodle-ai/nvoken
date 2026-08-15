@@ -39,6 +39,26 @@ import {
     AppRegistrationToJSON,
 } from '../models/AppRegistration.js';
 import {
+    type AppSigningKey,
+    AppSigningKeyFromJSON,
+    AppSigningKeyToJSON,
+} from '../models/AppSigningKey.js';
+import {
+    type AppSigningKeyList,
+    AppSigningKeyListFromJSON,
+    AppSigningKeyListToJSON,
+} from '../models/AppSigningKeyList.js';
+import {
+    type AppSigningKeyPurpose,
+    AppSigningKeyPurposeFromJSON,
+    AppSigningKeyPurposeToJSON,
+} from '../models/AppSigningKeyPurpose.js';
+import {
+    type AppSigningKeySecret,
+    AppSigningKeySecretFromJSON,
+    AppSigningKeySecretToJSON,
+} from '../models/AppSigningKeySecret.js';
+import {
     type ClientKey,
     ClientKeyFromJSON,
     ClientKeyToJSON,
@@ -59,6 +79,11 @@ import {
     ErrorResponseToJSON,
 } from '../models/ErrorResponse.js';
 import {
+    type MintAppSigningKeyRequest,
+    MintAppSigningKeyRequestFromJSON,
+    MintAppSigningKeyRequestToJSON,
+} from '../models/MintAppSigningKeyRequest.js';
+import {
     type RegisterAppRequest,
     RegisterAppRequestFromJSON,
     RegisterAppRequestToJSON,
@@ -68,6 +93,12 @@ import {
     UpdateAppRequestFromJSON,
     UpdateAppRequestToJSON,
 } from '../models/UpdateAppRequest.js';
+
+export interface ActivateAppSigningKeyRequest {
+    appId: string;
+    purpose: AppSigningKeyPurpose;
+    version: number;
+}
 
 export interface ArchiveAppRequest {
     appId: string;
@@ -92,9 +123,18 @@ export interface ListAppClientKeysRequest {
     appId: string;
 }
 
+export interface ListAppSigningKeysRequest {
+    appId: string;
+}
+
 export interface ListAppsRequest {
     externalRef?: string;
     status?: ListAppsStatusEnum;
+}
+
+export interface MintAppSigningKeyOperationRequest {
+    appId: string;
+    mintAppSigningKeyRequest: MintAppSigningKeyRequest;
 }
 
 export interface RegisterAppOperationRequest {
@@ -103,6 +143,12 @@ export interface RegisterAppOperationRequest {
 
 export interface RestoreAppRequest {
     appId: string;
+}
+
+export interface RetireAppSigningKeyRequest {
+    appId: string;
+    purpose: AppSigningKeyPurpose;
+    version: number;
 }
 
 export interface RevokeAppClientKeyRequest {
@@ -119,6 +165,77 @@ export interface UpdateAppOperationRequest {
  *
  */
 export class AppsApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for activateAppSigningKey without sending the request
+     */
+    async activateAppSigningKeyRequestOpts(requestParameters: ActivateAppSigningKeyRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['appId'] == null) {
+            throw new runtime.RequiredError(
+                'appId',
+                'Required parameter "appId" was null or undefined when calling activateAppSigningKey().'
+            );
+        }
+
+        if (requestParameters['purpose'] == null) {
+            throw new runtime.RequiredError(
+                'purpose',
+                'Required parameter "purpose" was null or undefined when calling activateAppSigningKey().'
+            );
+        }
+
+        if (requestParameters['version'] == null) {
+            throw new runtime.RequiredError(
+                'version',
+                'Required parameter "version" was null or undefined when calling activateAppSigningKey().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate`;
+        urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
+        urlPath = urlPath.replace('{purpose}', encodeURIComponent(String(requestParameters['purpose'])));
+        urlPath = urlPath.replace('{version}', encodeURIComponent(String(requestParameters['version'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Moves signing to the named version. The delivery transport resolves the key per send, so this takes effect on the next delivery with no cache to invalidate anywhere. Activating the version that is already signing changes nothing.  Do this only once your receiver verifies against the new secret.
+     * Sign with an existing signing key version
+     */
+    async activateAppSigningKeyRaw(requestParameters: ActivateAppSigningKeyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AppSigningKey>> {
+        const requestOptions = await this.activateAppSigningKeyRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AppSigningKeyFromJSON(jsonValue));
+    }
+
+    /**
+     * Moves signing to the named version. The delivery transport resolves the key per send, so this takes effect on the next delivery with no cache to invalidate anywhere. Activating the version that is already signing changes nothing.  Do this only once your receiver verifies against the new secret.
+     * Sign with an existing signing key version
+     */
+    async activateAppSigningKey(requestParameters: ActivateAppSigningKeyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AppSigningKey> {
+        const response = await this.activateAppSigningKeyRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for archiveApp without sending the request
@@ -418,6 +535,61 @@ export class AppsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for listAppSigningKeys without sending the request
+     */
+    async listAppSigningKeysRequestOpts(requestParameters: ListAppSigningKeysRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['appId'] == null) {
+            throw new runtime.RequiredError(
+                'appId',
+                'Required parameter "appId" was null or undefined when calling listAppSigningKeys().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/apps/{app_id}/signing-keys`;
+        urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Lists every receiver-facing version the App holds and marks the one that is signing, so a rotation can be started or resumed from observed state. Key material is never returned: plaintext is delivered exactly once, at registration or at mint.  The internal `anonymous_token` key is not part of this surface. It never leaves nvoken, so there is no receiver to rotate it around.  Like every route here, this one requires the app-less registration-class credential that provisions these keys. An App cannot read, rotate, or retire its own receiver credential.
+     * List an App\'s callback and webhook signing key versions
+     */
+    async listAppSigningKeysRaw(requestParameters: ListAppSigningKeysRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AppSigningKeyList>> {
+        const requestOptions = await this.listAppSigningKeysRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AppSigningKeyListFromJSON(jsonValue));
+    }
+
+    /**
+     * Lists every receiver-facing version the App holds and marks the one that is signing, so a rotation can be started or resumed from observed state. Key material is never returned: plaintext is delivered exactly once, at registration or at mint.  The internal `anonymous_token` key is not part of this surface. It never leaves nvoken, so there is no receiver to rotate it around.  Like every route here, this one requires the app-less registration-class credential that provisions these keys. An App cannot read, rotate, or retire its own receiver credential.
+     * List an App\'s callback and webhook signing key versions
+     */
+    async listAppSigningKeys(requestParameters: ListAppSigningKeysRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AppSigningKeyList> {
+        const response = await this.listAppSigningKeysRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for listApps without sending the request
      */
     async listAppsRequestOpts(requestParameters: ListAppsRequest): Promise<runtime.RequestOpts> {
@@ -469,6 +641,71 @@ export class AppsApi extends runtime.BaseAPI {
      */
     async listApps(requestParameters: ListAppsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AppList> {
         const response = await this.listAppsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for mintAppSigningKey without sending the request
+     */
+    async mintAppSigningKeyRequestOpts(requestParameters: MintAppSigningKeyOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['appId'] == null) {
+            throw new runtime.RequiredError(
+                'appId',
+                'Required parameter "appId" was null or undefined when calling mintAppSigningKey().'
+            );
+        }
+
+        if (requestParameters['mintAppSigningKeyRequest'] == null) {
+            throw new runtime.RequiredError(
+                'mintAppSigningKeyRequest',
+                'Required parameter "mintAppSigningKeyRequest" was null or undefined when calling mintAppSigningKey().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/apps/{app_id}/signing-keys`;
+        urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: MintAppSigningKeyRequestToJSON(requestParameters['mintAppSigningKeyRequest']),
+        };
+    }
+
+    /**
+     * Writes version `n+1` and returns its plaintext exactly once. There is no way to read it again.  Rotation is a sequence rather than a swap, because a receiver\'s rejection of a signature is not retryable: a `401` settles the ToolCall as a delivery failure instead of re-arming it. So mint leaves nvoken signing with version `n`. Add the new secret to your verifier beside the old one — you already select by the delivered `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so holding two entries is configuration, not new code — then activate, then retire. Done in that order, no delivery ever fails verification.  Set `activate` only when there is no working verifier left to protect, which is what makes recovering a lost secret one call instead of three.  A purpose holds at most two versions. Minting a third is refused until the superseded one is retired, because no receiver could tell which pair it is meant to hold.
+     * Mint the next signing key version for one purpose
+     */
+    async mintAppSigningKeyRaw(requestParameters: MintAppSigningKeyOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AppSigningKeySecret>> {
+        const requestOptions = await this.mintAppSigningKeyRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AppSigningKeySecretFromJSON(jsonValue));
+    }
+
+    /**
+     * Writes version `n+1` and returns its plaintext exactly once. There is no way to read it again.  Rotation is a sequence rather than a swap, because a receiver\'s rejection of a signature is not retryable: a `401` settles the ToolCall as a delivery failure instead of re-arming it. So mint leaves nvoken signing with version `n`. Add the new secret to your verifier beside the old one — you already select by the delivered `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so holding two entries is configuration, not new code — then activate, then retire. Done in that order, no delivery ever fails verification.  Set `activate` only when there is no working verifier left to protect, which is what makes recovering a lost secret one call instead of three.  A purpose holds at most two versions. Minting a third is refused until the superseded one is retired, because no receiver could tell which pair it is meant to hold.
+     * Mint the next signing key version for one purpose
+     */
+    async mintAppSigningKey(requestParameters: MintAppSigningKeyOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AppSigningKeySecret> {
+        const response = await this.mintAppSigningKeyRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -581,6 +818,76 @@ export class AppsApi extends runtime.BaseAPI {
      */
     async restoreApp(requestParameters: RestoreAppRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
         await this.restoreAppRaw(requestParameters, initOverrides);
+    }
+
+    /**
+     * Creates request options for retireAppSigningKey without sending the request
+     */
+    async retireAppSigningKeyRequestOpts(requestParameters: RetireAppSigningKeyRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['appId'] == null) {
+            throw new runtime.RequiredError(
+                'appId',
+                'Required parameter "appId" was null or undefined when calling retireAppSigningKey().'
+            );
+        }
+
+        if (requestParameters['purpose'] == null) {
+            throw new runtime.RequiredError(
+                'purpose',
+                'Required parameter "purpose" was null or undefined when calling retireAppSigningKey().'
+            );
+        }
+
+        if (requestParameters['version'] == null) {
+            throw new runtime.RequiredError(
+                'version',
+                'Required parameter "version" was null or undefined when calling retireAppSigningKey().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/apps/{app_id}/signing-keys/{purpose}/{version}`;
+        urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
+        urlPath = urlPath.replace('{purpose}', encodeURIComponent(String(requestParameters['purpose'])));
+        urlPath = urlPath.replace('{version}', encodeURIComponent(String(requestParameters['version'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Deletes one version after signing has moved off it and your receiver has dropped it. The version that is currently signing is refused, so a mistaken retire fails loudly rather than silencing every delivery the App makes.  Nothing expires on a timer. Retirement is always an explicit call.
+     * Retire a superseded signing key version
+     */
+    async retireAppSigningKeyRaw(requestParameters: RetireAppSigningKeyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.retireAppSigningKeyRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Deletes one version after signing has moved off it and your receiver has dropped it. The version that is currently signing is refused, so a mistaken retire fails loudly rather than silencing every delivery the App makes.  Nothing expires on a timer. Retirement is always an explicit call.
+     * Retire a superseded signing key version
+     */
+    async retireAppSigningKey(requestParameters: RetireAppSigningKeyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.retireAppSigningKeyRaw(requestParameters, initOverrides);
     }
 
     /**

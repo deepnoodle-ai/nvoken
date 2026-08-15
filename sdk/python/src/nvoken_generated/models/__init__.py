@@ -35,6 +35,8 @@ from nvoken_generated.models.app import App
 from nvoken_generated.models.app_default_rate_limits import AppDefaultRateLimits
 from nvoken_generated.models.app_list import AppList
 from nvoken_generated.models.app_registration import AppRegistration
+from nvoken_generated.models.app_signing_key import AppSigningKey
+from nvoken_generated.models.app_signing_key_list import AppSigningKeyList
 from nvoken_generated.models.app_signing_key_purpose import AppSigningKeyPurpose
 from nvoken_generated.models.app_signing_key_secret import AppSigningKeySecret
 from nvoken_generated.models.authentication_method import AuthenticationMethod
@@ -120,6 +122,7 @@ from nvoken_generated.models.memory_search_result import MemorySearchResult
 from nvoken_generated.models.message_delta_event import MessageDeltaEvent
 from nvoken_generated.models.message_delta_kind import MessageDeltaKind
 from nvoken_generated.models.message_phase import MessagePhase
+from nvoken_generated.models.mint_app_signing_key_request import MintAppSigningKeyRequest
 from nvoken_generated.models.model import Model
 from nvoken_generated.models.model_call_fact_status import ModelCallFactStatus
 from nvoken_generated.models.model_call_kind import ModelCallKind

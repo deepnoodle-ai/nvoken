@@ -20,17 +20,25 @@ import {
     ToolCallStatusToJSON,
     ToolCallStatusToJSONTyped,
 } from './ToolCallStatus.js';
+import type { ToolCallMode } from './ToolCallMode.js';
+import {
+    ToolCallModeFromJSON,
+    ToolCallModeFromJSONTyped,
+    ToolCallModeToJSON,
+    ToolCallModeToJSONTyped,
+} from './ToolCallMode.js';
 
 /**
- * One tool call as a stream sees it: which call, what tool, what state
- * it is in, and when it reached that state. The `id` is the `id` of the
- * `tool_use` block that opened it, so a client can show a call as failed
- * or still running without waiting for the message that carries its
- * result.
+ * One tool call as a stream sees it: which call, what tool, how it
+ * executes, what state it is in, and when it reached that state. The `id`
+ * is the `id` of the `tool_use` block that opened it, so a client can
+ * show a call as failed or still running without waiting for the message
+ * that carries its result.
  *
- * This is the only tool-call collection. A call you have to run carries
- * `arguments` and `deadline_at`; filter on `status` and their presence
- * rather than reading a second list. Modes, attempts, and delivery
+ * This is the only tool-call collection. A call you may settle carries
+ * `arguments` and `deadline_at`; a call you must run yourself is one of
+ * those with `mode: host`. Filter on those rather than reading a second
+ * list or keeping a list of your own tool names. Attempts and delivery
  * detail live on the ToolCall resource at
  * `GET /v1/invocations/{invocation_id}/tool-calls`.
  *
@@ -54,6 +62,19 @@ export interface ToolCallSummary {
      * @memberof ToolCallSummary
      */
     name: string;
+    /**
+     * How this call executes, present on every entry whatever its mode.
+     *
+     * It is what separates "answerable" from "mine to run". A pending
+     * callback-mode call is answerable to a machine credential, because
+     * you may settle it after acknowledging delivery — but nvoken is the
+     * one delivering it. A call you must run yourself is one that carries
+     * `arguments` **and** has `mode: host`.
+     *
+     * @type {ToolCallMode}
+     * @memberof ToolCallSummary
+     */
+    mode: ToolCallMode;
     /**
      *
      * @type {ToolCallStatus}
@@ -100,6 +121,7 @@ export interface ToolCallSummary {
 export function instanceOfToolCallSummary(value: object): value is ToolCallSummary {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
+    if (!('mode' in value) || value['mode'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('updatedAt' in value) || value['updatedAt'] === undefined) return false;
     return true;
@@ -117,6 +139,7 @@ export function ToolCallSummaryFromJSONTyped(json: any, ignoreDiscriminator: boo
 
         'id': json['id'],
         'name': json['name'],
+        'mode': ToolCallModeFromJSON(json['mode']),
         'status': ToolCallStatusFromJSON(json['status']),
         'arguments': json['arguments'] == null ? undefined : json['arguments'],
         'deadlineAt': json['deadline_at'] == null ? undefined : (new Date(json['deadline_at'])),
@@ -137,6 +160,7 @@ export function ToolCallSummaryToJSONTyped(value?: ToolCallSummary | null, ignor
 
         'id': value['id'],
         'name': value['name'],
+        'mode': ToolCallModeToJSON(value['mode']),
         'status': ToolCallStatusToJSON(value['status']),
         'arguments': value['arguments'],
         'deadline_at': value['deadlineAt'] == null ? value['deadlineAt'] : value['deadlineAt'].toISOString(),

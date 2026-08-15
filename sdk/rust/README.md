@@ -347,14 +347,20 @@ signed delivery with `verify_callback`, then answer with one of two replies.
 `callback_result(content, is_error)` settles the ToolCall inline and the turn
 resumes as soon as nvoken records the reply. `acknowledge_callback()` returns
 `202` with no body instead: it accepts the delivery without settling the call,
-for work that will outlive the App's callback reply deadline. Settle it later
+for work that will outlive this tool's reply deadline — its declared
+`timeout_seconds`, or the App's default when it declares none. Settle it later
 with `Client::submit_tool_results`, reusing the delivery's ToolCall id.
+
+Every delivery names its tool inside the signed body, so one endpoint can serve
+several tools: dispatch on `VerifiedCallback::tool_name` rather than on a path
+suffix nothing signs.
 
 Acknowledging trades away the fail-loud guarantee. nvoken marks an
 unacknowledged delivery failed once its retries are exhausted, so the turn
 always moves on. An acknowledged call instead waits under your responsibility,
 bounded only by the Invocation's `limits.waiting_timeout_seconds`. Acknowledge
 only when something durable will settle the call. Such a call appears in a
-waiting Invocation's pending calls the same way a host call does; an `Agent`
-skips the callback tools its own definition declares rather than dispatching
-them locally.
+waiting Invocation's pending calls the same way a host call does, so
+`answerable_tool_calls` includes it. `host_tool_calls` is the narrower set you
+must run yourself — answerable and `mode` `Host` — and an `Agent` dispatches
+exactly that, whatever its own definition declares.

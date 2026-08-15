@@ -847,6 +847,7 @@ func invocationWithID(id string, status string) map[string]any {
 		value["tool_calls"] = []any{map[string]any{
 			"id":          toolCallID,
 			"name":        "lookup_order",
+			"mode":        "host",
 			"status":      "pending",
 			"arguments":   map[string]any{"order_id": "order-42"},
 			"deadline_at": "2026-07-21T12:05:00Z",

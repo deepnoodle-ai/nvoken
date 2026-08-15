@@ -34,7 +34,7 @@ class UpdateAppRequest(BaseModel):
     """ # noqa: E501
     display_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="New human-facing label for the app.")
     org_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="New owning Org. Supplying this field transfers ownership and is restricted to installation administrators. ")
-    callback_timeout_seconds: Optional[Annotated[int, Field(le=60, strict=True, ge=1)]] = Field(default=None, description="New callback HTTP reply deadline for this App.")
+    callback_timeout_seconds: Optional[Annotated[int, Field(le=60, strict=True, ge=1)]] = Field(default=None, description="New callback HTTP reply deadline for tools that declare none of their own. Still capped at 60; per-tool deadlines up to 300 are declared on the tool. ")
     default_rate_limits: Optional[AppDefaultRateLimits] = Field(default=None, description="Replace the whole member, or send null to restore unlimited machine admission. Clearing is rejected while browser access remains enabled. Omission preserves the stored value. ")
     browser_access: Optional[BrowserAccess] = Field(default=None, description="Replace the complete member, or send null to disable browser access without deleting client keys. Omission preserves the stored value. ")
     anonymous_access: Optional[AnonymousAccess] = Field(default=None, description="Replace the complete anonymous-browser mode, or send null to stop minting and reject new anonymous-token requests. Enabling requires browser access, finite App limits, and `credit_policy: required`. Omission preserves the stored value. ")

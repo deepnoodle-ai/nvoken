@@ -12,57 +12,19 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RegisterAppRequest {
-    /// The unique name identifying this app. Registering a name that already exists is rejected.
-    #[serde(rename = "name")]
-    pub name: String,
-    /// Owning Org. Org-scoped callers may omit this to use their own Org and cannot name another. Installation callers may name any registered Org or omit it during the staged migration.
-    #[serde(rename = "org_id", skip_serializing_if = "Option::is_none")]
-    pub org_id: Option<String>,
-    /// Optional opaque owner reference.
-    #[serde(rename = "external_ref", skip_serializing_if = "Option::is_none")]
-    pub external_ref: Option<String>,
-    /// Optional human-facing label.
-    #[serde(rename = "display_name", skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    /// Callback HTTP reply deadline for tools that declare none of their own. A single tool may declare up to 300 in `callback.timeout_seconds`; this App-wide value stays capped at 60 so one slow tool cannot loosen loss detection for all of them.
-    #[serde(
-        rename = "callback_timeout_seconds",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub callback_timeout_seconds: Option<u64>,
-    /// Optional shared App admission ceilings. Browser access requires a non-null value.
-    #[serde(
-        rename = "default_rate_limits",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub default_rate_limits: Option<Option<Box<models::AppDefaultRateLimits>>>,
-    /// Optional complete browser configuration. Null and omission both create the App with browser access disabled.
-    #[serde(
-        rename = "browser_access",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub browser_access: Option<Option<Box<models::BrowserAccess>>>,
-    /// Defaults to `off`. See the schema for what each value enforces.
-    #[serde(rename = "credit_policy", skip_serializing_if = "Option::is_none")]
-    pub credit_policy: Option<models::CreditPolicy>,
+pub struct MintAppSigningKeyRequest {
+    #[serde(rename = "purpose")]
+    pub purpose: models::AppSigningKeyPurpose,
+    /// Sign with the new version immediately, collapsing the rotation to one call. Correct only when no working verifier is left to protect — recovering a lost secret. Leaving it false is what makes an ordinary rotation cause zero failed verifications.
+    #[serde(rename = "activate", skip_serializing_if = "Option::is_none")]
+    pub activate: Option<bool>,
 }
 
-impl RegisterAppRequest {
-    pub fn new(name: String) -> RegisterAppRequest {
-        RegisterAppRequest {
-            name,
-            org_id: None,
-            external_ref: None,
-            display_name: None,
-            callback_timeout_seconds: None,
-            default_rate_limits: None,
-            browser_access: None,
-            credit_policy: None,
+impl MintAppSigningKeyRequest {
+    pub fn new(purpose: models::AppSigningKeyPurpose) -> MintAppSigningKeyRequest {
+        MintAppSigningKeyRequest {
+            purpose,
+            activate: None,
         }
     }
 }

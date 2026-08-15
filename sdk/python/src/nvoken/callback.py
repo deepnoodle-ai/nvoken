@@ -10,10 +10,19 @@ from typing import Any, Protocol, TypeVar, Generic
 
 @dataclass(frozen=True)
 class VerifiedCallback:
+    """One verified callback delivery.
+
+    ``tool_name`` comes from inside the signed body, so a receiver serving
+    several tools dispatches on it directly. Any per-tool path or query suffix
+    on the endpoint URL is unsigned and belongs in logs, not in a dispatch
+    decision.
+    """
+
     envelope: dict[str, Any]
     raw_body: bytes
     delivery_id: str
     tool_call_id: str
+    tool_name: str
     key_id: str
     key_version: int
     timestamp: datetime
@@ -58,11 +67,18 @@ def verify_callback(
         raise ValueError("unsupported callback schema version")
     if context.get("delivery_id") != delivery_id or context.get("tool_call_id") != tool_call_id:
         raise ValueError("callback identity header does not match signed body")
+    # tool_name is required on the wire, so a missing one is a sender that is
+    # not nvoken or a body that is not a callback. Failing here keeps the
+    # dispatch below it total: no receiver needs a branch for "no name".
+    tool_name = context.get("tool_name")
+    if not tool_name:
+        raise ValueError("callback envelope is missing tool_name")
     return VerifiedCallback(
         envelope=envelope,
         raw_body=bytes(raw_body),
         delivery_id=delivery_id,
         tool_call_id=tool_call_id,
+        tool_name=tool_name,
         key_id=key_id,
         key_version=key_version,
         timestamp=timestamp,
@@ -96,7 +112,8 @@ def callback_result(content: Any, is_error: bool = False) -> CallbackReply:
 def acknowledge_callback() -> CallbackReply:
     """Accept delivery without settling the ToolCall.
 
-    For work that will outlive the App's callback reply deadline. Settle it
+    For work that will outlive this tool's reply deadline — its declared
+    ``timeout_seconds``, or the App's default when it declares none. Settle it
     later with :meth:`Client.submit_tool_results`, reusing the delivery's
     ToolCall id.
 

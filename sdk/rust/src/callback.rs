@@ -39,6 +39,8 @@ pub enum CallbackError {
     UnsupportedSchemaVersion,
     #[error("callback identity header does not match signed body")]
     IdentityMismatch,
+    #[error("callback envelope is missing tool_name")]
+    MissingToolName,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,6 +48,11 @@ pub struct CallbackContext {
     pub schema_version: u32,
     pub delivery_id: String,
     pub tool_call_id: String,
+    /// The tool this delivery is for. It is inside the signed body, so a
+    /// receiver serving several tools dispatches on it directly. Any per-tool
+    /// path or query suffix on the endpoint URL is unsigned and belongs in
+    /// logs, not in a dispatch decision.
+    pub tool_name: String,
     pub invocation_id: String,
     pub session_id: String,
     pub agent_key: String,
@@ -64,6 +71,7 @@ pub struct VerifiedCallback {
     pub raw_body: Vec<u8>,
     pub delivery_id: String,
     pub tool_call_id: String,
+    pub tool_name: String,
     pub key_id: String,
     pub key_version: u64,
     pub timestamp: SystemTime,
@@ -120,11 +128,19 @@ pub fn verify_callback(
     if envelope.nvoken.delivery_id != delivery_id || envelope.nvoken.tool_call_id != tool_call_id {
         return Err(CallbackError::IdentityMismatch);
     }
+    // tool_name is required on the wire, so an empty one is a sender that is
+    // not nvoken or a body that is not a callback. Failing here keeps the
+    // dispatch below it total: no receiver needs a branch for "no name".
+    if envelope.nvoken.tool_name.is_empty() {
+        return Err(CallbackError::MissingToolName);
+    }
+    let tool_name = envelope.nvoken.tool_name.clone();
     Ok(VerifiedCallback {
         envelope,
         raw_body: raw_body.to_vec(),
         delivery_id,
         tool_call_id,
+        tool_name,
         key_id,
         key_version,
         timestamp,
@@ -161,7 +177,8 @@ pub fn callback_result(
 }
 
 /// Accepts delivery without settling the ToolCall, for work that will outlive
-/// the App's callback reply deadline. Settle it later with
+/// this tool's reply deadline — its declared `timeout_seconds`, or the App's
+/// default when it declares none. Settle it later with
 /// `Client::submit_tool_results`, reusing the delivery's ToolCall id.
 ///
 /// This trades away the fail-loud guarantee. nvoken marks an unacknowledged

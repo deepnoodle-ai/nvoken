@@ -63,7 +63,10 @@ export interface UpdateAppRequest {
      */
     orgId?: string;
     /**
-     * New callback HTTP reply deadline for this App.
+     * New callback HTTP reply deadline for tools that declare none of
+     * their own. Still capped at 60; per-tool deadlines up to 300 are
+     * declared on the tool.
+     *
      * @type {number}
      * @memberof UpdateAppRequest
      */

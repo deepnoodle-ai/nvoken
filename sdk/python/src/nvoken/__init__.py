@@ -22,6 +22,7 @@ from .agent import (
     MissingToolHandlerError,
     NoOutputTextError,
     answerable_tool_calls,
+    host_tool_calls,
 )
 from .ask_user import (
     ASK_USER_DESCRIPTION,
@@ -89,6 +90,7 @@ __all__ = [
     "AgentDefinition",
     "TERMINAL_INVOCATION_STATUSES",
     "answerable_tool_calls",
+    "host_tool_calls",
     "is_terminal_status",
     "is_turn_over",
     "__version__",

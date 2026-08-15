@@ -113,6 +113,7 @@
               {
                 "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
                 "name": "lookup_order",
+                "mode": "host",
                 "status": "completed",
                 "updated_at": "2026-07-21T12:00:02Z"
               }

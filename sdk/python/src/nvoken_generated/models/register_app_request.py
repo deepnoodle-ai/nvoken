@@ -35,7 +35,7 @@ class RegisterAppRequest(BaseModel):
     org_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Owning Org. Org-scoped callers may omit this to use their own Org and cannot name another. Installation callers may name any registered Org or omit it during the staged migration. ")
     external_ref: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Optional opaque owner reference.")
     display_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Optional human-facing label.")
-    callback_timeout_seconds: Optional[Annotated[int, Field(le=60, strict=True, ge=1)]] = Field(default=10, description="Callback HTTP reply deadline for this App.")
+    callback_timeout_seconds: Optional[Annotated[int, Field(le=60, strict=True, ge=1)]] = Field(default=10, description="Callback HTTP reply deadline for tools that declare none of their own. A single tool may declare up to 300 in `callback.timeout_seconds`; this App-wide value stays capped at 60 so one slow tool cannot loosen loss detection for all of them. ")
     default_rate_limits: Optional[AppDefaultRateLimits] = Field(default=None, description="Optional shared App admission ceilings. Browser access requires a non-null value. ")
     browser_access: Optional[BrowserAccess] = Field(default=None, description="Optional complete browser configuration. Null and omission both create the App with browser access disabled. ")
     credit_policy: Optional[CreditPolicy] = Field(default=None, description="Defaults to `off`. See the schema for what each value enforces.")

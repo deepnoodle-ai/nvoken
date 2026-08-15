@@ -6,17 +6,18 @@ use futures_util::StreamExt;
 use http::HeaderMap;
 use nvoken::models;
 use nvoken::{
-    ask_user_input_schema, ask_user_tool, ask_user_tool_with, deduplicate_callback_result,
-    fetch_tool, preflight_input_blocks, preflight_output_schema, verify_callback, AgentDefinition,
-    AgentInvocationOptions, AgentOptions, AskUserInput, AskUserKind, AskUserOutput,
-    BudgetExhaustionBehavior, CallbackError, CallbackResultStore, Client, CompactionListOptions,
-    ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier, ErrorCategory,
-    IfActivePolicy, InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions,
-    ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
-    NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
-    Reducer, RetryPolicy, Sampling, SessionOptions, StreamEvent, StreamPreview, Tool,
-    ToolCallListOptions, ToolChoice, ToolMode, ToolResult, WaitCondition, WaitOptions,
-    WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget, ASK_USER_TOOL_NAME,
+    answerable_tool_calls, ask_user_input_schema, ask_user_tool, ask_user_tool_with,
+    deduplicate_callback_result, fetch_tool, host_tool_calls, preflight_input_blocks,
+    preflight_output_schema, verify_callback, AgentDefinition, AgentInvocationOptions,
+    AgentOptions, AskUserInput, AskUserKind, AskUserOutput, BudgetExhaustionBehavior,
+    CallbackError, CallbackResultStore, Client, CompactionListOptions, ContextCompaction,
+    ContextCompactionTrigger, ContextItem, ContextTier, ErrorCategory, IfActivePolicy,
+    InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
+    ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model, NvokenError,
+    ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer,
+    RetryPolicy, Sampling, SessionOptions, StreamEvent, StreamPreview, Tool, ToolCallListOptions,
+    ToolChoice, ToolMode, ToolResult, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool,
+    WebhookEvent, WebhookTarget, ASK_USER_TOOL_NAME,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -1263,6 +1264,10 @@ async fn shared_callback_signing_and_deduplication_vector() {
     let verified =
         verify_callback(vector.key.as_bytes(), &headers, vector.body.as_bytes(), now).unwrap();
     assert_eq!(verified.tool_call_id, TOOL_CALL_ID);
+    // The name is inside the signed body, so a receiver dispatches on it
+    // without an authoritative read and without trusting a URL suffix.
+    assert_eq!(verified.tool_name, vector.tool_name);
+    assert_eq!(verified.envelope.nvoken.tool_name, vector.tool_name);
 
     let signature_error = verify_callback(
         vector.key.as_bytes(),
@@ -1305,8 +1310,42 @@ async fn shared_callback_signing_and_deduplication_vector() {
 struct CallbackVector {
     key: String,
     now: u64,
+    tool_name: String,
     headers: HashMap<String, String>,
     body: String,
+}
+
+#[derive(Deserialize)]
+struct ToolCallModeFixture {
+    tool_calls: Vec<models::ToolCallSummary>,
+    answerable: Vec<String>,
+    host: Vec<String>,
+}
+
+/// Answerable is wider than mine once an App declares callback tools: nvoken
+/// delivers those itself, yet a machine credential may still settle one that a
+/// receiver acknowledged, so it carries arguments like any pending host call.
+/// Every SDK draws the same line at the same place, against one fixture.
+#[test]
+fn shared_tool_call_mode_partition() {
+    let fixture: ToolCallModeFixture = serde_json::from_str(
+        &std::fs::read_to_string("../conformance/fixtures/tool-call-modes-v1.json").unwrap(),
+    )
+    .unwrap();
+    let ids = |calls: Vec<&models::ToolCallSummary>| {
+        calls
+            .into_iter()
+            .map(|call| call.id.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        ids(answerable_tool_calls(Some(&fixture.tool_calls))),
+        fixture.answerable
+    );
+    assert_eq!(
+        ids(host_tool_calls(Some(&fixture.tool_calls))),
+        fixture.host
+    );
 }
 
 fn header_map(values: &HashMap<String, String>) -> HeaderMap {

@@ -44,6 +44,34 @@ func TestSharedFetchBuiltinFixture(t *testing.T) {
 	}
 }
 
+// Answerable is wider than mine once an App declares callback tools: nvoken
+// delivers those itself, yet a machine credential may still settle one that a
+// receiver acknowledged, so it carries arguments like any pending host call.
+// Every SDK draws the same line at the same place, against one fixture.
+func TestSharedToolCallModeFixture(t *testing.T) {
+	var fixture struct {
+		ToolCalls  []ToolCallSummary `json:"tool_calls"`
+		Answerable []string          `json:"answerable"`
+		Host       []string          `json:"host"`
+	}
+	decodeFile(t, "../conformance/fixtures/tool-call-modes-v1.json", &fixture)
+	invocation := &Invocation{ToolCalls: &fixture.ToolCalls}
+	if got := toolCallIDs(AnswerableToolCalls(invocation)); !slices.Equal(got, fixture.Answerable) {
+		t.Fatalf("answerable = %v, want %v", got, fixture.Answerable)
+	}
+	if got := toolCallIDs(HostToolCalls(invocation)); !slices.Equal(got, fixture.Host) {
+		t.Fatalf("host = %v, want %v", got, fixture.Host)
+	}
+}
+
+func toolCallIDs(calls []ToolCallSummary) []string {
+	ids := make([]string, 0, len(calls))
+	for _, call := range calls {
+		ids = append(ids, call.ID)
+	}
+	return ids
+}
+
 // Why a turn stopped is a closed vocabulary the runtime settles against and
 // four SDKs decode. A value added on one side and missed on the other reads as
 // an unknown enum member to every host switching on it, so each SDK pins its
@@ -897,10 +925,11 @@ func TestTransportErrorDistinguishesCancellationAndDeadline(t *testing.T) {
 
 func TestSharedCallbackVector(t *testing.T) {
 	var vector struct {
-		Key     string            `json:"key"`
-		Now     int64             `json:"now"`
-		Headers map[string]string `json:"headers"`
-		Body    string            `json:"body"`
+		Key      string            `json:"key"`
+		Now      int64             `json:"now"`
+		ToolName string            `json:"tool_name"`
+		Headers  map[string]string `json:"headers"`
+		Body     string            `json:"body"`
 	}
 	decodeFile(t, "../../docs/design/callback-signing-v1.json", &vector)
 	header := make(http.Header)
@@ -910,6 +939,11 @@ func TestSharedCallbackVector(t *testing.T) {
 	verified, err := VerifyCallback([]byte(vector.Key), header, []byte(vector.Body), time.Unix(vector.Now, 0))
 	if err != nil || verified.ToolCallID != conformanceToolCallID {
 		t.Fatalf("verify shared callback vector: %#v err=%v", verified, err)
+	}
+	// The name is inside the signed body, so a receiver dispatches on it
+	// without an authoritative read and without trusting a URL suffix.
+	if verified.ToolName != vector.ToolName || verified.Envelope.Nvoken.ToolName != vector.ToolName {
+		t.Fatalf("verified tool name = %q/%q, want %q", verified.ToolName, verified.Envelope.Nvoken.ToolName, vector.ToolName)
 	}
 	for name, mutate := range map[string]func(http.Header, []byte) (http.Header, []byte){
 		"body": func(headers http.Header, body []byte) (http.Header, []byte) {

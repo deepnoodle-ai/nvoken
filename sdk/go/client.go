@@ -1494,6 +1494,119 @@ func (c *Client) RevokeAppClientKey(ctx context.Context, appID, keyID string) er
 	return err
 }
 
+// ListAppSigningKeys returns every receiver-facing signing key version an App
+// holds and marks the one that signs. Key material is never returned.
+func (c *Client) ListAppSigningKeys(ctx context.Context, appID string) (*AppSigningKeyList, error) {
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AppSigningKeyList], error) {
+		response, err := c.raw.ListAppSigningKeysWithResponse(ctx, appID)
+		if err != nil {
+			return callResult[generated.AppSigningKeyList]{}, err
+		}
+		return callResult[generated.AppSigningKeyList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// MintAppSigningKey writes the next version for one purpose and returns its
+// plaintext exactly once. There is no way to read it again.
+//
+// nvoken keeps signing with the current version. Add the returned secret to
+// your verifier beside the one already there, then ActivateAppSigningKey, then
+// RetireAppSigningKey. In that order no delivery ever fails verification, which
+// matters because a receiver's 401 is not retried: it settles the ToolCall as a
+// delivery failure.
+//
+// Set input.Activate only when there is no working verifier left to protect —
+// recovering a lost secret, where the three steps collapse into this one.
+func (c *Client) MintAppSigningKey(
+	ctx context.Context,
+	appID string,
+	input MintAppSigningKeyInput,
+) (*AppSigningKeySecret, error) {
+	if !input.Purpose.Valid() {
+		return nil, &Error{Category: ErrorValidation, Message: "signing key purpose must be callback or webhook"}
+	}
+	body := generated.MintAppSigningKeyRequest{Purpose: input.Purpose}
+	if input.Activate {
+		body.Activate = &input.Activate
+	}
+	// Minting is not replay-safe: a retried mint that the service already
+	// applied would write a second version and return a secret for a version
+	// the caller never saw the first response for.
+	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.AppSigningKeySecret], error) {
+		response, err := c.raw.MintAppSigningKeyWithResponse(ctx, appID, body)
+		if err != nil {
+			return callResult[generated.AppSigningKeySecret]{}, err
+		}
+		return callResult[generated.AppSigningKeySecret]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// ActivateAppSigningKey moves signing to an existing version. The transport
+// resolves the key per send, so it takes effect on the next delivery. Do this
+// only once your receiver verifies against that version's secret.
+func (c *Client) ActivateAppSigningKey(
+	ctx context.Context,
+	appID string,
+	purpose AppSigningKeyPurpose,
+	version int64,
+) (*AppSigningKey, error) {
+	if !purpose.Valid() {
+		return nil, &Error{Category: ErrorValidation, Message: "signing key purpose must be callback or webhook"}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AppSigningKey], error) {
+		response, err := c.raw.ActivateAppSigningKeyWithResponse(ctx, appID, purpose, int(version))
+		if err != nil {
+			return callResult[generated.AppSigningKey]{}, err
+		}
+		return callResult[generated.AppSigningKey]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+// RetireAppSigningKey deletes a superseded version once signing has moved off
+// it and your receiver has dropped it. Retiring the version that is signing is
+// refused rather than silently silencing every delivery the App makes.
+func (c *Client) RetireAppSigningKey(
+	ctx context.Context,
+	appID string,
+	purpose AppSigningKeyPurpose,
+	version int64,
+) error {
+	if !purpose.Valid() {
+		return &Error{Category: ErrorValidation, Message: "signing key purpose must be callback or webhook"}
+	}
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.RetireAppSigningKeyWithResponse(ctx, appID, purpose, int(version))
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
 // UpdateApp changes an app's mutable presentation fields; name and
 // external_ref cannot be changed.
 func (c *Client) UpdateApp(ctx context.Context, appID string, options UpdateAppOptions) (*App, error) {

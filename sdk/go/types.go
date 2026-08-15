@@ -20,6 +20,8 @@ type AppList = generated.AppList
 type AppRegistration = generated.AppRegistration
 type AppSigningKeyPurpose = generated.AppSigningKeyPurpose
 type AppSigningKeySecret = generated.AppSigningKeySecret
+type AppSigningKey = generated.AppSigningKey
+type AppSigningKeyList = generated.AppSigningKeyList
 type ArchiveStatus = generated.ArchiveStatus
 type ClientKey = generated.ClientKey
 
@@ -145,6 +147,12 @@ const (
 	MessagePhaseFinalAnswer                      = generated.FinalAnswer
 	SeedMessageRoleUser                          = generated.SeedMessageRoleUser
 	SeedMessageRoleAssistant                     = generated.SeedMessageRoleAssistant
+	AppSigningKeyPurposeCallback                 = generated.AppSigningKeyPurposeCallback
+	AppSigningKeyPurposeWebhook                  = generated.AppSigningKeyPurposeWebhook
+	ToolCallModeBuiltin                          = generated.ToolCallModeBuiltin
+	ToolCallModeCallback                         = generated.ToolCallModeCallback
+	ToolCallModeHost                             = generated.ToolCallModeHost
+	ToolCallModeMCP                              = generated.ToolCallModeMcp
 	ModelProviderAnthropic         ModelProvider = "anthropic"
 	ModelProviderOpenAI            ModelProvider = "openai"
 	ModelProviderXAI               ModelProvider = "xai"
@@ -318,6 +326,16 @@ type AllocateCreditsInput struct {
 type CreateAppClientKeyInput struct {
 	Name      string
 	PublicKey []byte
+}
+
+// MintAppSigningKeyInput names the purpose to mint the next version for.
+//
+// Activate collapses mint and activate into one call. It is correct only when
+// no verifier still holds the current secret, because it moves signing before
+// any receiver can be configured.
+type MintAppSigningKeyInput struct {
+	Purpose  AppSigningKeyPurpose
+	Activate bool
 }
 
 type TranscriptSnapshot struct {
@@ -1428,6 +1446,28 @@ func AnswerableToolCalls(invocation *Invocation) []ToolCallSummary {
 		}
 	}
 	return answerable
+}
+
+// HostToolCalls returns the tool calls this caller must run itself.
+//
+// Answerable is not the same as yours. Once an App declares callback tools,
+// nvoken delivers those to an endpoint — but a machine credential may still
+// settle one after its receiver acknowledged delivery, so a pending
+// callback-mode call carries arguments and is answerable. Running it here as
+// well would double the side effect.
+//
+// Yours is answerable and mode host. Partitioning on that beats keeping a list
+// of your own tool names, which goes stale the first time an agent gains a tool
+// and nobody updates the list.
+func HostToolCalls(invocation *Invocation) []ToolCallSummary {
+	answerable := AnswerableToolCalls(invocation)
+	mine := make([]ToolCallSummary, 0, len(answerable))
+	for _, call := range answerable {
+		if call.Mode == ToolCallModeHost {
+			mine = append(mine, call)
+		}
+	}
+	return mine
 }
 
 // toolCallArguments hands a handler the arguments as the plain map a tool

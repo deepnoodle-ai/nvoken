@@ -11,58 +11,39 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
+/// AppSigningKey : One stored signing key version without its material. Key rows are immutable; which version signs is separate state, so a rotation never updates key material.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RegisterAppRequest {
-    /// The unique name identifying this app. Registering a name that already exists is rejected.
-    #[serde(rename = "name")]
-    pub name: String,
-    /// Owning Org. Org-scoped callers may omit this to use their own Org and cannot name another. Installation callers may name any registered Org or omit it during the staged migration.
-    #[serde(rename = "org_id", skip_serializing_if = "Option::is_none")]
-    pub org_id: Option<String>,
-    /// Optional opaque owner reference.
-    #[serde(rename = "external_ref", skip_serializing_if = "Option::is_none")]
-    pub external_ref: Option<String>,
-    /// Optional human-facing label.
-    #[serde(rename = "display_name", skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    /// Callback HTTP reply deadline for tools that declare none of their own. A single tool may declare up to 300 in `callback.timeout_seconds`; this App-wide value stays capped at 60 so one slow tool cannot loosen loss detection for all of them.
-    #[serde(
-        rename = "callback_timeout_seconds",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub callback_timeout_seconds: Option<u64>,
-    /// Optional shared App admission ceilings. Browser access requires a non-null value.
-    #[serde(
-        rename = "default_rate_limits",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub default_rate_limits: Option<Option<Box<models::AppDefaultRateLimits>>>,
-    /// Optional complete browser configuration. Null and omission both create the App with browser access disabled.
-    #[serde(
-        rename = "browser_access",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub browser_access: Option<Option<Box<models::BrowserAccess>>>,
-    /// Defaults to `off`. See the schema for what each value enforces.
-    #[serde(rename = "credit_policy", skip_serializing_if = "Option::is_none")]
-    pub credit_policy: Option<models::CreditPolicy>,
+pub struct AppSigningKey {
+    #[serde(rename = "purpose")]
+    pub purpose: models::AppSigningKeyPurpose,
+    /// Value sent in `X-Nvoken-Signing-Key-Id`. It names the App and purpose and does not change across versions, so a receiver keys its verifier table on the pair: this selects the entry, `version` selects the secret within it.
+    #[serde(rename = "key_id")]
+    pub key_id: String,
+    /// Value sent in `X-Nvoken-Signing-Key-Version`.
+    #[serde(rename = "version")]
+    pub version: u64,
+    /// Whether this is the version nvoken signs with. Exactly one version per purpose is active. During an overlapped rotation the other one is minted but not yet signing, and your receiver should already accept both.
+    #[serde(rename = "active")]
+    pub active: bool,
+    #[serde(rename = "created_at")]
+    pub created_at: chrono::DateTime<chrono::FixedOffset>,
 }
 
-impl RegisterAppRequest {
-    pub fn new(name: String) -> RegisterAppRequest {
-        RegisterAppRequest {
-            name,
-            org_id: None,
-            external_ref: None,
-            display_name: None,
-            callback_timeout_seconds: None,
-            default_rate_limits: None,
-            browser_access: None,
-            credit_policy: None,
+impl AppSigningKey {
+    /// One stored signing key version without its material. Key rows are immutable; which version signs is separate state, so a rotation never updates key material.
+    pub fn new(
+        purpose: models::AppSigningKeyPurpose,
+        key_id: String,
+        version: u64,
+        active: bool,
+        created_at: chrono::DateTime<chrono::FixedOffset>,
+    ) -> AppSigningKey {
+        AppSigningKey {
+            purpose,
+            key_id,
+            version,
+            active,
+            created_at,
         }
     }
 }

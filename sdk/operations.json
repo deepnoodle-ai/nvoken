@@ -2,6 +2,11 @@
   "generated_by": "openapi/nvoken.yaml; do not edit",
   "operations": [
     {
+      "operation_id": "activateAppSigningKey",
+      "method": "POST",
+      "path": "/v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate"
+    },
+    {
       "operation_id": "allocateCredits",
       "method": "POST",
       "path": "/v1/credits/allocations"
@@ -207,6 +212,11 @@
       "path": "/v1/apps/{app_id}/client-keys"
     },
     {
+      "operation_id": "listAppSigningKeys",
+      "method": "GET",
+      "path": "/v1/apps/{app_id}/signing-keys"
+    },
+    {
       "operation_id": "listApps",
       "method": "GET",
       "path": "/v1/apps"
@@ -302,6 +312,11 @@
       "path": "/v1/usage/records"
     },
     {
+      "operation_id": "mintAppSigningKey",
+      "method": "POST",
+      "path": "/v1/apps/{app_id}/signing-keys"
+    },
+    {
       "operation_id": "registerApp",
       "method": "POST",
       "path": "/v1/apps"
@@ -330,6 +345,11 @@
       "operation_id": "resumeInvocation",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/resume"
+    },
+    {
+      "operation_id": "retireAppSigningKey",
+      "method": "DELETE",
+      "path": "/v1/apps/{app_id}/signing-keys/{purpose}/{version}"
     },
     {
       "operation_id": "revokeAppClientKey",

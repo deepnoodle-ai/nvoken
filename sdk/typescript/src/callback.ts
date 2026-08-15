@@ -3,6 +3,13 @@ export interface CallbackEnvelope {
     schema_version: number;
     delivery_id: string;
     tool_call_id: string;
+    /**
+     * The tool this delivery is for. It is inside the signed body, so a
+     * receiver serving several tools dispatches on it directly. Any per-tool
+     * path or query suffix on the endpoint URL is unsigned and belongs in
+     * logs, not in a dispatch decision.
+     */
+    tool_name: string;
     invocation_id: string;
     session_id: string;
     agent_key: string;
@@ -16,6 +23,7 @@ export interface VerifiedCallback {
   rawBody: Uint8Array;
   deliveryId: string;
   toolCallId: string;
+  toolName: string;
   keyId: string;
   keyVersion: number;
   timestamp: Date;
@@ -51,7 +59,20 @@ export async function verifyCallback(
   const envelope = JSON.parse(new TextDecoder().decode(rawBody)) as CallbackEnvelope;
   if (envelope.nvoken.schema_version !== 1) throw new Error("unsupported callback schema version");
   if (envelope.nvoken.delivery_id !== deliveryId || envelope.nvoken.tool_call_id !== toolCallId) throw new Error("callback identity header does not match signed body");
-  return { envelope, rawBody: rawBody.slice(), deliveryId, toolCallId, keyId, keyVersion, timestamp };
+  // tool_name is required on the wire, so a missing one is a sender that is not
+  // nvoken or a body that is not a callback. Failing here keeps the dispatch
+  // below it total: no receiver needs a branch for "no name".
+  if (!envelope.nvoken.tool_name) throw new Error("callback envelope is missing tool_name");
+  return {
+    envelope,
+    rawBody: rawBody.slice(),
+    deliveryId,
+    toolCallId,
+    toolName: envelope.nvoken.tool_name,
+    keyId,
+    keyVersion,
+    timestamp,
+  };
 }
 
 /**
@@ -77,7 +98,8 @@ export function callbackResult(content: unknown, isError = false): CallbackReply
 
 /**
  * Accepts delivery without settling the ToolCall, for work that will outlive
- * the App's callback reply deadline. Settle it later with
+ * this tool's reply deadline — its declared `timeout_seconds`, or the App's
+ * default when it declares none. Settle it later with
  * `client.submitToolResults`, reusing the delivery's ToolCall ID.
  *
  * This trades away the fail-loud guarantee. nvoken marks an unacknowledged

@@ -903,6 +903,79 @@ func TestArchiveLifecycleCommands(t *testing.T) {
 	}
 }
 
+// The rotation is a sequence, and the CLI is where an operator walks it. Drive
+// the whole thing — mint, activate, retire — so the commands are pinned to the
+// routes and to the order the runbook prescribes.
+func TestSigningKeyRotationCommands(t *testing.T) {
+	t.Setenv("NVOKEN_API_KEY", "operator-key")
+	const appID = "app_test"
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requests++
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/apps/"+appID+"/signing-keys":
+			_, _ = response.Write([]byte(`{"items":[{"purpose":"callback","key_id":"key_cb","version":1,"active":true,"created_at":"2026-08-12T12:00:00Z"}]}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/apps/"+appID+"/signing-keys":
+			var body struct {
+				Purpose  string `json:"purpose"`
+				Activate *bool  `json:"activate"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Errorf("decode mint request: %v", err)
+			} else if body.Purpose != "callback" || body.Activate != nil {
+				// An ordinary mint must not activate. Sending `activate` at all
+				// here would be the difference between a rotation nobody
+				// notices and one that fails every delivery until the receiver
+				// catches up.
+				t.Errorf("mint body purpose=%q activate=%#v", body.Purpose, body.Activate)
+			}
+			response.WriteHeader(http.StatusCreated)
+			_, _ = response.Write([]byte(`{"purpose":"callback","key_id":"key_cb","version":2,"active":false,"secret":"minted-secret","created_at":"2026-08-12T12:05:00Z"}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/apps/"+appID+"/signing-keys/callback/2/activate":
+			_, _ = response.Write([]byte(`{"purpose":"callback","key_id":"key_cb","version":2,"active":true,"created_at":"2026-08-12T12:05:00Z"}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/v1/apps/"+appID+"/signing-keys/callback/1":
+			response.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+
+	output, err := executeCLI(t, server.URL, false, "signing-key", "list", appID)
+	if err != nil || !strings.Contains(output, "callback\t1\tactive=true\tkey_cb") {
+		t.Fatalf("signing-key list output=%q err=%v", output, err)
+	}
+	output, err = executeCLI(t, server.URL, false, "signing-key", "mint", appID, "--purpose", "callback")
+	if err != nil || !strings.Contains(output, "callback\t2\tactive=false\tkey_cb\tminted-secret") {
+		t.Fatalf("signing-key mint output=%q err=%v", output, err)
+	}
+	output, err = executeCLI(t, server.URL, false, "signing-key", "activate", appID, "callback", "2")
+	if err != nil || !strings.Contains(output, "callback\t2\tactive=true\tkey_cb") {
+		t.Fatalf("signing-key activate output=%q err=%v", output, err)
+	}
+	output, err = executeCLI(t, server.URL, false, "signing-key", "retire", appID, "callback", "1")
+	if err != nil || !strings.Contains(output, "retired\tcallback\t1") {
+		t.Fatalf("signing-key retire output=%q err=%v", output, err)
+	}
+	if requests != 4 {
+		t.Fatalf("requests = %d, want 4", requests)
+	}
+
+	// A bad purpose or version is refused before any request goes out, so a
+	// typo cannot reach a route that would answer 404 and read as "no such
+	// key" instead of "you typed it wrong".
+	if _, err := executeCLI(t, server.URL, false, "signing-key", "activate", appID, "anonymous_token", "2"); err == nil {
+		t.Fatal("activate accepted a purpose outside the receiver-facing pair")
+	}
+	if _, err := executeCLI(t, server.URL, false, "signing-key", "retire", appID, "callback", "0"); err == nil {
+		t.Fatal("retire accepted version 0")
+	}
+	if requests != 4 {
+		t.Fatalf("rejected arguments still reached the service: requests = %d", requests)
+	}
+}
+
 func TestMCPHeadersFromEnvironmentStaySecretSafe(t *testing.T) {
 	t.Setenv("NVOKEN_TEST_MCP_HEADERS", `{"Authorization":"Bearer environment-secret"}`)
 	headers, err := mcpHeaders(nil, "NVOKEN_TEST_MCP_HEADERS")

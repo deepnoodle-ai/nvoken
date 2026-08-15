@@ -17,30 +17,19 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Any, ClassVar, Dict, Optional
-from typing_extensions import Annotated
+from pydantic import BaseModel, ConfigDict
+from typing import Any, ClassVar, Dict, List
+from nvoken_generated.models.app_signing_key import AppSigningKey
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class CallbackTarget(BaseModel):
+class AppSigningKeyList(BaseModel):
     """
-    CallbackTarget
+    AppSigningKeyList
     """ # noqa: E501
-    url: Annotated[str, Field(strict=True, max_length=2048)] = Field(description="Public HTTPS endpoint. Userinfo and fragments are rejected. Every dial revalidates resolved addresses and refuses redirects. ")
-    timeout_seconds: Optional[Annotated[int, Field(le=300, strict=True, ge=1)]] = Field(default=None, description="This tool's own reply deadline, replacing the App's `callback_timeout_seconds` for its deliveries. Omit it and the App value applies unchanged.  The two ceilings differ deliberately. The App value is capped at 60 because it governs every callback the App makes: raising it to cover your slowest tool would make a hung delivery of your fastest one invisible for just as long. Naming a long deadline here says which tool is slow, and leaves loss detection tight everywhere else.  The delivery snapshots this value when the tool call is created, so a definition revision landing mid-flight does not move the deadline an in-flight delivery is already held to.  It is a ceiling on the delivery, not a promise of one: the effective limit is the smallest of this value, the Invocation's deadline, and `limits.waiting_timeout_seconds` when set. A 300-second tool inside a shorter turn never gets 300 seconds. ")
-    __properties: ClassVar[List[str]] = ["url", "timeout_seconds"]
-
-    @field_validator('url')
-    def url_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^https:\/\/", value):
-            raise ValueError(r"must validate the regular expression /^https:\/\//")
-        return value
+    items: List[AppSigningKey]
+    __properties: ClassVar[List[str]] = ["items"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -60,7 +49,7 @@ class CallbackTarget(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of CallbackTarget from a JSON string"""
+        """Create an instance of AppSigningKeyList from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -81,11 +70,18 @@ class CallbackTarget(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of each item in items (list)
+        _items = []
+        if self.items:
+            for _item_items in self.items:
+                if _item_items:
+                    _items.append(_item_items.to_dict())
+            _dict['items'] = _items
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of CallbackTarget from a dict"""
+        """Create an instance of AppSigningKeyList from a dict"""
         if obj is None:
             return None
 
@@ -93,7 +89,6 @@ class CallbackTarget(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "url": obj.get("url"),
-            "timeout_seconds": obj.get("timeout_seconds")
+            "items": [AppSigningKey.from_dict(_item) for _item in obj["items"]] if obj.get("items") is not None else None
         })
         return _obj

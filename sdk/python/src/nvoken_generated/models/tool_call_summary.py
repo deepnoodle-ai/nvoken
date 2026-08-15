@@ -21,6 +21,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
+from nvoken_generated.models.tool_call_mode import ToolCallMode
 from nvoken_generated.models.tool_call_status import ToolCallStatus
 from typing import Optional, Set
 from typing_extensions import Self
@@ -28,16 +29,17 @@ from pydantic_core import to_jsonable_python
 
 class ToolCallSummary(BaseModel):
     """
-    One tool call as a stream sees it: which call, what tool, what state it is in, and when it reached that state. The `id` is the `id` of the `tool_use` block that opened it, so a client can show a call as failed or still running without waiting for the message that carries its result.  This is the only tool-call collection. A call you have to run carries `arguments` and `deadline_at`; filter on `status` and their presence rather than reading a second list. Modes, attempts, and delivery detail live on the ToolCall resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
+    One tool call as a stream sees it: which call, what tool, how it executes, what state it is in, and when it reached that state. The `id` is the `id` of the `tool_use` block that opened it, so a client can show a call as failed or still running without waiting for the message that carries its result.  This is the only tool-call collection. A call you may settle carries `arguments` and `deadline_at`; a call you must run yourself is one of those with `mode: host`. Filter on those rather than reading a second list or keeping a list of your own tool names. Attempts and delivery detail live on the ToolCall resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
     """ # noqa: E501
     id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
     name: StrictStr = Field(description="The tool this call names.")
+    mode: ToolCallMode = Field(description="How this call executes, present on every entry whatever its mode.  It is what separates \"answerable\" from \"mine to run\". A pending callback-mode call is answerable to a machine credential, because you may settle it after acknowledging delivery — but nvoken is the one delivering it. A call you must run yourself is one that carries `arguments` **and** has `mode: host`. ")
     status: ToolCallStatus
     arguments: Optional[Dict[str, Any]] = Field(default=None, description="The arguments the model produced, as a JSON object whose shape is the `input_schema` you declared for this tool. nvoken does not narrow it further, because only your tool declaration knows what belongs there.  Present exactly while this call is yours to run: a host- or callback-mode call that has not settled. Omitted otherwise, including for builtin and MCP calls nvoken runs itself, and for any call that has already settled. The durable record of what every call was given is the `tool_use` block in the transcript. ")
     deadline_at: Optional[datetime] = Field(default=None, description="The Invocation's explicit waiting deadline, or null when external waiting is unbounded. Present under the same rule as `arguments`. ")
     updated_at: datetime = Field(description="When this call last changed state.")
     additional_properties: Dict[str, Any] = {}
-    __properties: ClassVar[List[str]] = ["id", "name", "status", "arguments", "deadline_at", "updated_at"]
+    __properties: ClassVar[List[str]] = ["id", "name", "mode", "status", "arguments", "deadline_at", "updated_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -104,6 +106,7 @@ class ToolCallSummary(BaseModel):
         _obj = cls.model_validate({
             "id": obj.get("id"),
             "name": obj.get("name"),
+            "mode": obj.get("mode"),
             "status": obj.get("status"),
             "arguments": obj.get("arguments"),
             "deadline_at": obj.get("deadline_at"),

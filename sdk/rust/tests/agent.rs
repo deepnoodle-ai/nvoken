@@ -178,6 +178,7 @@ fn invocation_payload(id: &str, status: &str) -> Value {
         value["tool_calls"] = json!([{
             "id": TOOL_CALL_ID,
             "name": "weather",
+            "mode": "host",
             "status": "pending",
             "arguments": {"city": "Paris"},
             "deadline_at": "2026-07-21T12:05:00Z",
