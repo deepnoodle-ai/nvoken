@@ -28,7 +28,7 @@ pub struct App {
     /// Human-facing label; `name` stays the unique handle.
     #[serde(rename = "display_name", deserialize_with = "Option::deserialize")]
     pub display_name: Option<String>,
-    /// Resolved deadline for each callback HTTP request. Defaults to 10. Webhook delivery is unaffected.
+    /// Resolved deadline for each callback HTTP request whose tool does not name one of its own. Defaults to 10. Webhook delivery is unaffected.  This ceiling is 60 while a single tool may declare up to 300 in `callback.timeout_seconds`. The asymmetry is the point: this value governs every callback the App makes, so raising it to cover one slow tool would make a hung delivery of a fast one invisible for just as long. Slow is named per tool.
     #[serde(rename = "callback_timeout_seconds")]
     pub callback_timeout_seconds: u64,
     /// App-wide admission ceilings shared by machine, client-token, and anonymous-token callers. Null means unlimited machine admission; browser access requires finite values.

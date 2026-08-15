@@ -2773,8 +2773,15 @@ type App struct {
 	// is disabled and client JWTs receive no browser CORS permission.
 	BrowserAccess *BrowserAccess `json:"browser_access"`
 
-	// CallbackTimeoutSeconds Resolved deadline for each callback HTTP request. Defaults to 10.
-	// Webhook delivery is unaffected.
+	// CallbackTimeoutSeconds Resolved deadline for each callback HTTP request whose tool does
+	// not name one of its own. Defaults to 10. Webhook delivery is
+	// unaffected.
+	//
+	// This ceiling is 60 while a single tool may declare up to 300 in
+	// `callback.timeout_seconds`. The asymmetry is the point: this value
+	// governs every callback the App makes, so raising it to cover one
+	// slow tool would make a hung delivery of a fast one invisible for
+	// just as long. Slow is named per tool.
 	CallbackTimeoutSeconds int64     `json:"callback_timeout_seconds"`
 	CreatedAt              time.Time `json:"created_at"`
 
@@ -2841,19 +2848,54 @@ type AppRegistration struct {
 	SigningKeys []AppSigningKeySecret `json:"signing_keys"`
 }
 
+// AppSigningKey One stored signing key version without its material. Key rows are
+// immutable; which version signs is separate state, so a rotation never
+// updates key material.
+type AppSigningKey struct {
+	// Active Whether this is the version nvoken signs with. Exactly one version
+	// per purpose is active. During an overlapped rotation the other one
+	// is minted but not yet signing, and your receiver should already
+	// accept both.
+	Active    bool      `json:"active"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// KeyID Value sent in `X-Nvoken-Signing-Key-Id`. It names the App and
+	// purpose and does not change across versions, so a receiver keys its
+	// verifier table on the pair: this selects the entry, `version`
+	// selects the secret within it.
+	KeyID string `json:"key_id"`
+
+	// Purpose The only delivery class this HMAC key may sign.
+	Purpose AppSigningKeyPurpose `json:"purpose"`
+
+	// Version Value sent in `X-Nvoken-Signing-Key-Version`.
+	Version int64 `json:"version"`
+}
+
+// AppSigningKeyList defines model for AppSigningKeyList.
+type AppSigningKeyList struct {
+	Items []AppSigningKey `json:"items"`
+}
+
 // AppSigningKeyPurpose The only delivery class this HMAC key may sign.
 type AppSigningKeyPurpose string
 
 // AppSigningKeySecret defines model for AppSigningKeySecret.
 type AppSigningKeySecret struct {
+	// Active Whether this version is already signing. False after an overlapped
+	// mint: configure your receiver with this secret, then activate.
+	Active bool `json:"active"`
+
 	// KeyID Value sent in `X-Nvoken-Signing-Key-Id`.
 	KeyID string `json:"key_id"`
 
 	// Purpose The only delivery class this HMAC key may sign.
 	Purpose AppSigningKeyPurpose `json:"purpose"`
 
-	// Secret Receiver HMAC secret. This plaintext is returned only during App
-	// registration and is omitted from every later App response.
+	// Secret Receiver HMAC secret. This plaintext is returned only by the
+	// request that created the version — App registration or a mint — and
+	// is irretrievable afterwards. Store it before you discard the
+	// response.
 	Secret string `json:"secret"`
 
 	// Version Value sent in `X-Nvoken-Signing-Key-Version`.
@@ -2939,6 +2981,26 @@ type CallbackDeliveryOutcome string
 
 // CallbackTarget defines model for CallbackTarget.
 type CallbackTarget struct {
+	// TimeoutSeconds This tool's own reply deadline, replacing the App's
+	// `callback_timeout_seconds` for its deliveries. Omit it and the App
+	// value applies unchanged.
+	//
+	// The two ceilings differ deliberately. The App value is capped at 60
+	// because it governs every callback the App makes: raising it to
+	// cover your slowest tool would make a hung delivery of your fastest
+	// one invisible for just as long. Naming a long deadline here says
+	// which tool is slow, and leaves loss detection tight everywhere else.
+	//
+	// The delivery snapshots this value when the tool call is created, so
+	// a definition revision landing mid-flight does not move the deadline
+	// an in-flight delivery is already held to.
+	//
+	// It is a ceiling on the delivery, not a promise of one: the
+	// effective limit is the smallest of this value, the Invocation's
+	// deadline, and `limits.waiting_timeout_seconds` when set. A
+	// 300-second tool inside a shorter turn never gets 300 seconds.
+	TimeoutSeconds *int `json:"timeout_seconds,omitempty"`
+
 	// URL Public HTTPS endpoint. Userinfo and fragments are rejected. Every
 	// dial revalidates resolved addresses and refuses redirects.
 	URL string `json:"url"`
@@ -4565,6 +4627,18 @@ type MessagePhase string
 // forming opinions about a string only the host renders.
 type Metadata map[string]string
 
+// MintAppSigningKeyRequest defines model for MintAppSigningKeyRequest.
+type MintAppSigningKeyRequest struct {
+	// Activate Sign with the new version immediately, collapsing the rotation to
+	// one call. Correct only when no working verifier is left to
+	// protect — recovering a lost secret. Leaving it false is what makes
+	// an ordinary rotation cause zero failed verifications.
+	Activate *bool `json:"activate,omitempty"`
+
+	// Purpose The only delivery class this HMAC key may sign.
+	Purpose AppSigningKeyPurpose `json:"purpose"`
+}
+
 // Model defines model for Model.
 type Model struct {
 	ID string `json:"id"`
@@ -5206,7 +5280,10 @@ type RegisterAppRequest struct {
 	// create the App with browser access disabled.
 	BrowserAccess *BrowserAccess `json:"browser_access,omitempty"`
 
-	// CallbackTimeoutSeconds Callback HTTP reply deadline for this App.
+	// CallbackTimeoutSeconds Callback HTTP reply deadline for tools that declare none of their
+	// own. A single tool may declare up to 300 in
+	// `callback.timeout_seconds`; this App-wide value stays capped at 60
+	// so one slow tool cannot loosen loss detection for all of them.
 	CallbackTimeoutSeconds *int64 `json:"callback_timeout_seconds,omitempty"`
 
 	// CreditPolicy Defaults to `off`. See the schema for what each value enforces.
@@ -5969,15 +6046,16 @@ type ToolCallResultOrigin string
 // host tool, waiting on you. The last three are final.
 type ToolCallStatus string
 
-// ToolCallSummary One tool call as a stream sees it: which call, what tool, what state
-// it is in, and when it reached that state. The `id` is the `id` of the
-// `tool_use` block that opened it, so a client can show a call as failed
-// or still running without waiting for the message that carries its
-// result.
+// ToolCallSummary One tool call as a stream sees it: which call, what tool, how it
+// executes, what state it is in, and when it reached that state. The `id`
+// is the `id` of the `tool_use` block that opened it, so a client can
+// show a call as failed or still running without waiting for the message
+// that carries its result.
 //
-// This is the only tool-call collection. A call you have to run carries
-// `arguments` and `deadline_at`; filter on `status` and their presence
-// rather than reading a second list. Modes, attempts, and delivery
+// This is the only tool-call collection. A call you may settle carries
+// `arguments` and `deadline_at`; a call you must run yourself is one of
+// those with `mode: host`. Filter on those rather than reading a second
+// list or keeping a list of your own tool names. Attempts and delivery
 // detail live on the ToolCall resource at
 // `GET /v1/invocations/{invocation_id}/tool-calls`.
 type ToolCallSummary struct {
@@ -6002,6 +6080,15 @@ type ToolCallSummary struct {
 	// back verbatim as `tool_call_id` when submitting results. The same value
 	// is the `Idempotency-Key` on a callback delivery.
 	ID ToolCallID `json:"id"`
+
+	// Mode How this call executes, present on every entry whatever its mode.
+	//
+	// It is what separates "answerable" from "mine to run". A pending
+	// callback-mode call is answerable to a machine credential, because
+	// you may settle it after acknowledging delivery — but nvoken is the
+	// one delivering it. A call you must run yourself is one that carries
+	// `arguments` **and** has `mode: host`.
+	Mode ToolCallMode `json:"mode"`
 
 	// Name The tool this call names.
 	Name string `json:"name"`
@@ -6040,6 +6127,13 @@ type ToolCallbackContext struct {
 	// back verbatim as `tool_call_id` when submitting results. The same value
 	// is the `Idempotency-Key` on a callback delivery.
 	ToolCallID ToolCallID `json:"tool_call_id"`
+
+	// ToolName The tool this delivery is asking you to run, taken from the durable
+	// ToolCall. It is inside the signed body, so a receiver serving many
+	// tools dispatches on it with no authoritative read — and any
+	// per-tool path suffix you configure stays an unsigned logging
+	// convenience rather than the thing you branch on.
+	ToolName string `json:"tool_name"`
 }
 
 // ToolCallbackContextSchemaVersion defines model for ToolCallbackContext.SchemaVersion.
@@ -6282,7 +6376,9 @@ type UpdateAppRequest struct {
 	// stored value.
 	BrowserAccess *BrowserAccess `json:"browser_access,omitempty"`
 
-	// CallbackTimeoutSeconds New callback HTTP reply deadline for this App.
+	// CallbackTimeoutSeconds New callback HTTP reply deadline for tools that declare none of
+	// their own. Still capped at 60; per-tool deadlines up to 300 are
+	// declared on the tool.
 	CallbackTimeoutSeconds *int64 `json:"callback_timeout_seconds,omitempty"`
 
 	// CreditPolicy Change credit enforcement for turns admitted from now on.
@@ -7097,6 +7193,9 @@ type IssueAnonymousTokenJSONRequestBody = AnonymousTokenRequest
 
 // CreateAppClientKeyJSONRequestBody defines body for CreateAppClientKey for application/json ContentType.
 type CreateAppClientKeyJSONRequestBody = CreateClientKeyRequest
+
+// MintAppSigningKeyJSONRequestBody defines body for MintAppSigningKey for application/json ContentType.
+type MintAppSigningKeyJSONRequestBody = MintAppSigningKeyRequest
 
 // AllocateCreditsJSONRequestBody defines body for AllocateCredits for application/json ContentType.
 type AllocateCreditsJSONRequestBody = AllocateCreditsRequest
@@ -8810,6 +8909,99 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/apps/{app_id}/restore (the `RestoreApp` operationId).
 	RestoreApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAppSigningKeys List an App's callback and webhook signing key versions
+	//
+	// Lists every receiver-facing version the App holds and marks the one
+	// that is signing, so a rotation can be started or resumed from observed
+	// state. Key material is never returned: plaintext is delivered exactly
+	// once, at registration or at mint.
+	//
+	// The internal `anonymous_token` key is not part of this surface. It
+	// never leaves nvoken, so there is no receiver to rotate it around.
+	//
+	// Like every route here, this one requires the app-less
+	// registration-class credential that provisions these keys. An App
+	// cannot read, rotate, or retire its own receiver credential.
+	//
+	// Corresponds with GET /v1/apps/{app_id}/signing-keys (the `ListAppSigningKeys` operationId).
+	ListAppSigningKeys(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MintAppSigningKeyWithBody Mint the next signing key version for one purpose
+	//
+	// Writes version `n+1` and returns its plaintext exactly once. There is
+	// no way to read it again.
+	//
+	// Rotation is a sequence rather than a swap, because a receiver's
+	// rejection of a signature is not retryable: a `401` settles the ToolCall
+	// as a delivery failure instead of re-arming it. So mint leaves nvoken
+	// signing with version `n`. Add the new secret to your verifier beside
+	// the old one — you already select by the delivered
+	// `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so
+	// holding two entries is configuration, not new code — then activate,
+	// then retire. Done in that order, no delivery ever fails verification.
+	//
+	// Set `activate` only when there is no working verifier left to protect,
+	// which is what makes recovering a lost secret one call instead of three.
+	//
+	// A purpose holds at most two versions. Minting a third is refused until
+	// the superseded one is retired, because no receiver could tell which
+	// pair it is meant to hold.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/apps/{app_id}/signing-keys (the `MintAppSigningKey` operationId).
+	MintAppSigningKeyWithBody(ctx context.Context, appID AppID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MintAppSigningKey Mint the next signing key version for one purpose
+	//
+	// Writes version `n+1` and returns its plaintext exactly once. There is
+	// no way to read it again.
+	//
+	// Rotation is a sequence rather than a swap, because a receiver's
+	// rejection of a signature is not retryable: a `401` settles the ToolCall
+	// as a delivery failure instead of re-arming it. So mint leaves nvoken
+	// signing with version `n`. Add the new secret to your verifier beside
+	// the old one — you already select by the delivered
+	// `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so
+	// holding two entries is configuration, not new code — then activate,
+	// then retire. Done in that order, no delivery ever fails verification.
+	//
+	// Set `activate` only when there is no working verifier left to protect,
+	// which is what makes recovering a lost secret one call instead of three.
+	//
+	// A purpose holds at most two versions. Minting a third is refused until
+	// the superseded one is retired, because no receiver could tell which
+	// pair it is meant to hold.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/apps/{app_id}/signing-keys (the `MintAppSigningKey` operationId).
+	MintAppSigningKey(ctx context.Context, appID AppID, body MintAppSigningKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RetireAppSigningKey Retire a superseded signing key version
+	//
+	// Deletes one version after signing has moved off it and your receiver
+	// has dropped it. The version that is currently signing is refused, so a
+	// mistaken retire fails loudly rather than silencing every delivery the
+	// App makes.
+	//
+	// Nothing expires on a timer. Retirement is always an explicit call.
+	//
+	// Corresponds with DELETE /v1/apps/{app_id}/signing-keys/{purpose}/{version} (the `RetireAppSigningKey` operationId).
+	RetireAppSigningKey(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ActivateAppSigningKey Sign with an existing signing key version
+	//
+	// Moves signing to the named version. The delivery transport resolves the
+	// key per send, so this takes effect on the next delivery with no cache
+	// to invalidate anywhere. Activating the version that is already signing
+	// changes nothing.
+	//
+	// Do this only once your receiver verifies against the new secret.
+	//
+	// Corresponds with POST /v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate (the `ActivateAppSigningKey` operationId).
+	ActivateAppSigningKey(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListCreditAccounts List tenant credit accounts
 	//
@@ -10660,6 +10852,149 @@ func (c *Client) RevokeAppClientKey(ctx context.Context, appID AppID, keyID Clie
 // Corresponds with POST /v1/apps/{app_id}/restore (the `RestoreApp` operationId).
 func (c *Client) RestoreApp(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestoreAppRequest(c.Server, appID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAppSigningKeys List an App's callback and webhook signing key versions
+//
+// Lists every receiver-facing version the App holds and marks the one
+// that is signing, so a rotation can be started or resumed from observed
+// state. Key material is never returned: plaintext is delivered exactly
+// once, at registration or at mint.
+//
+// The internal `anonymous_token` key is not part of this surface. It
+// never leaves nvoken, so there is no receiver to rotate it around.
+//
+// Like every route here, this one requires the app-less
+// registration-class credential that provisions these keys. An App
+// cannot read, rotate, or retire its own receiver credential.
+//
+// Corresponds with GET /v1/apps/{app_id}/signing-keys (the `ListAppSigningKeys` operationId).
+func (c *Client) ListAppSigningKeys(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAppSigningKeysRequest(c.Server, appID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// MintAppSigningKeyWithBody Mint the next signing key version for one purpose
+//
+// Writes version `n+1` and returns its plaintext exactly once. There is
+// no way to read it again.
+//
+// Rotation is a sequence rather than a swap, because a receiver's
+// rejection of a signature is not retryable: a `401` settles the ToolCall
+// as a delivery failure instead of re-arming it. So mint leaves nvoken
+// signing with version `n`. Add the new secret to your verifier beside
+// the old one — you already select by the delivered
+// `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so
+// holding two entries is configuration, not new code — then activate,
+// then retire. Done in that order, no delivery ever fails verification.
+//
+// Set `activate` only when there is no working verifier left to protect,
+// which is what makes recovering a lost secret one call instead of three.
+//
+// A purpose holds at most two versions. Minting a third is refused until
+// the superseded one is retired, because no receiver could tell which
+// pair it is meant to hold.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/apps/{app_id}/signing-keys (the `MintAppSigningKey` operationId).
+func (c *Client) MintAppSigningKeyWithBody(ctx context.Context, appID AppID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMintAppSigningKeyRequestWithBody(c.Server, appID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// MintAppSigningKey Mint the next signing key version for one purpose
+//
+// Writes version `n+1` and returns its plaintext exactly once. There is
+// no way to read it again.
+//
+// Rotation is a sequence rather than a swap, because a receiver's
+// rejection of a signature is not retryable: a `401` settles the ToolCall
+// as a delivery failure instead of re-arming it. So mint leaves nvoken
+// signing with version `n`. Add the new secret to your verifier beside
+// the old one — you already select by the delivered
+// `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so
+// holding two entries is configuration, not new code — then activate,
+// then retire. Done in that order, no delivery ever fails verification.
+//
+// Set `activate` only when there is no working verifier left to protect,
+// which is what makes recovering a lost secret one call instead of three.
+//
+// A purpose holds at most two versions. Minting a third is refused until
+// the superseded one is retired, because no receiver could tell which
+// pair it is meant to hold.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/apps/{app_id}/signing-keys (the `MintAppSigningKey` operationId).
+func (c *Client) MintAppSigningKey(ctx context.Context, appID AppID, body MintAppSigningKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMintAppSigningKeyRequest(c.Server, appID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RetireAppSigningKey Retire a superseded signing key version
+//
+// Deletes one version after signing has moved off it and your receiver
+// has dropped it. The version that is currently signing is refused, so a
+// mistaken retire fails loudly rather than silencing every delivery the
+// App makes.
+//
+// Nothing expires on a timer. Retirement is always an explicit call.
+//
+// Corresponds with DELETE /v1/apps/{app_id}/signing-keys/{purpose}/{version} (the `RetireAppSigningKey` operationId).
+func (c *Client) RetireAppSigningKey(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRetireAppSigningKeyRequest(c.Server, appID, purpose, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ActivateAppSigningKey Sign with an existing signing key version
+//
+// Moves signing to the named version. The delivery transport resolves the
+// key per send, so this takes effect on the next delivery with no cache
+// to invalidate anywhere. Activating the version that is already signing
+// changes nothing.
+//
+// Do this only once your receiver verifies against the new secret.
+//
+// Corresponds with POST /v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate (the `ActivateAppSigningKey` operationId).
+func (c *Client) ActivateAppSigningKey(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewActivateAppSigningKeyRequest(c.Server, appID, purpose, version)
 	if err != nil {
 		return nil, err
 	}
@@ -13660,6 +13995,183 @@ func NewRestoreAppRequest(server string, appID AppID) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/v1/apps/%s/restore", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListAppSigningKeysRequest constructs an http.Request for the ListAppSigningKeys method
+func NewListAppSigningKeysRequest(server string, appID AppID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "app_id", appID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/apps/%s/signing-keys", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewMintAppSigningKeyRequest calls the generic MintAppSigningKey builder with application/json body
+func NewMintAppSigningKeyRequest(server string, appID AppID, body MintAppSigningKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewMintAppSigningKeyRequestWithBody(server, appID, "application/json", bodyReader)
+}
+
+// NewMintAppSigningKeyRequestWithBody constructs an http.Request for the MintAppSigningKey method, with any body, and a specified content type
+func NewMintAppSigningKeyRequestWithBody(server string, appID AppID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "app_id", appID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/apps/%s/signing-keys", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRetireAppSigningKeyRequest constructs an http.Request for the RetireAppSigningKey method
+func NewRetireAppSigningKeyRequest(server string, appID AppID, purpose AppSigningKeyPurpose, version int) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "app_id", appID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "purpose", purpose, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/apps/%s/signing-keys/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewActivateAppSigningKeyRequest constructs an http.Request for the ActivateAppSigningKey method
+func NewActivateAppSigningKeyRequest(server string, appID AppID, purpose AppSigningKeyPurpose, version int) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "app_id", appID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "purpose", purpose, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/apps/%s/signing-keys/%s/%s/activate", pathParam0, pathParam1, pathParam2)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -18060,6 +18572,105 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/apps/{app_id}/restore (the `RestoreApp` operationId).
 	RestoreAppWithResponse(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*RestoreAppHTTPResponse, error)
 
+	// ListAppSigningKeysWithResponse List an App's callback and webhook signing key versions
+	//
+	// Lists every receiver-facing version the App holds and marks the one
+	// that is signing, so a rotation can be started or resumed from observed
+	// state. Key material is never returned: plaintext is delivered exactly
+	// once, at registration or at mint.
+	//
+	// The internal `anonymous_token` key is not part of this surface. It
+	// never leaves nvoken, so there is no receiver to rotate it around.
+	//
+	// Like every route here, this one requires the app-less
+	// registration-class credential that provisions these keys. An App
+	// cannot read, rotate, or retire its own receiver credential.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/apps/{app_id}/signing-keys (the `ListAppSigningKeys` operationId).
+	ListAppSigningKeysWithResponse(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*ListAppSigningKeysHTTPResponse, error)
+
+	// MintAppSigningKeyWithBodyWithResponse Mint the next signing key version for one purpose
+	//
+	// Writes version `n+1` and returns its plaintext exactly once. There is
+	// no way to read it again.
+	//
+	// Rotation is a sequence rather than a swap, because a receiver's
+	// rejection of a signature is not retryable: a `401` settles the ToolCall
+	// as a delivery failure instead of re-arming it. So mint leaves nvoken
+	// signing with version `n`. Add the new secret to your verifier beside
+	// the old one — you already select by the delivered
+	// `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so
+	// holding two entries is configuration, not new code — then activate,
+	// then retire. Done in that order, no delivery ever fails verification.
+	//
+	// Set `activate` only when there is no working verifier left to protect,
+	// which is what makes recovering a lost secret one call instead of three.
+	//
+	// A purpose holds at most two versions. Minting a third is refused until
+	// the superseded one is retired, because no receiver could tell which
+	// pair it is meant to hold.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/apps/{app_id}/signing-keys (the `MintAppSigningKey` operationId).
+	MintAppSigningKeyWithBodyWithResponse(ctx context.Context, appID AppID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MintAppSigningKeyHTTPResponse, error)
+
+	// MintAppSigningKeyWithResponse Mint the next signing key version for one purpose
+	//
+	// Writes version `n+1` and returns its plaintext exactly once. There is
+	// no way to read it again.
+	//
+	// Rotation is a sequence rather than a swap, because a receiver's
+	// rejection of a signature is not retryable: a `401` settles the ToolCall
+	// as a delivery failure instead of re-arming it. So mint leaves nvoken
+	// signing with version `n`. Add the new secret to your verifier beside
+	// the old one — you already select by the delivered
+	// `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so
+	// holding two entries is configuration, not new code — then activate,
+	// then retire. Done in that order, no delivery ever fails verification.
+	//
+	// Set `activate` only when there is no working verifier left to protect,
+	// which is what makes recovering a lost secret one call instead of three.
+	//
+	// A purpose holds at most two versions. Minting a third is refused until
+	// the superseded one is retired, because no receiver could tell which
+	// pair it is meant to hold.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/apps/{app_id}/signing-keys (the `MintAppSigningKey` operationId).
+	MintAppSigningKeyWithResponse(ctx context.Context, appID AppID, body MintAppSigningKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*MintAppSigningKeyHTTPResponse, error)
+
+	// RetireAppSigningKeyWithResponse Retire a superseded signing key version
+	//
+	// Deletes one version after signing has moved off it and your receiver
+	// has dropped it. The version that is currently signing is refused, so a
+	// mistaken retire fails loudly rather than silencing every delivery the
+	// App makes.
+	//
+	// Nothing expires on a timer. Retirement is always an explicit call.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/apps/{app_id}/signing-keys/{purpose}/{version} (the `RetireAppSigningKey` operationId).
+	RetireAppSigningKeyWithResponse(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*RetireAppSigningKeyHTTPResponse, error)
+
+	// ActivateAppSigningKeyWithResponse Sign with an existing signing key version
+	//
+	// Moves signing to the named version. The delivery transport resolves the
+	// key per send, so this takes effect on the next delivery with no cache
+	// to invalidate anywhere. Activating the version that is already signing
+	// changes nothing.
+	//
+	// Do this only once your receiver verifies against the new secret.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate (the `ActivateAppSigningKey` operationId).
+	ActivateAppSigningKeyWithResponse(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*ActivateAppSigningKeyHTTPResponse, error)
+
 	// ListCreditAccountsWithResponse List tenant credit accounts
 	//
 	// Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
@@ -21123,6 +21734,380 @@ func (r RestoreAppHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RestoreAppHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListAppSigningKeysHTTPResponse429Headers the declared response headers of an HTTP 429 response for ListAppSigningKeys
+type ListAppSigningKeysHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type ListAppSigningKeysHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AppSigningKeyList
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *ListAppSigningKeysHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAppSigningKeysHTTPResponse) GetJSON200() *AppSigningKeyList {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListAppSigningKeysHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListAppSigningKeysHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListAppSigningKeysHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r ListAppSigningKeysHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListAppSigningKeysHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListAppSigningKeysHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAppSigningKeysHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAppSigningKeysHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAppSigningKeysHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAppSigningKeysHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// MintAppSigningKeyHTTPResponse429Headers the declared response headers of an HTTP 429 response for MintAppSigningKey
+type MintAppSigningKeyHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type MintAppSigningKeyHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *AppSigningKeySecret
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *MintAppSigningKeyHTTPResponse429Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r MintAppSigningKeyHTTPResponse) GetJSON201() *AppSigningKeySecret {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r MintAppSigningKeyHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r MintAppSigningKeyHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r MintAppSigningKeyHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r MintAppSigningKeyHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r MintAppSigningKeyHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r MintAppSigningKeyHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r MintAppSigningKeyHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r MintAppSigningKeyHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r MintAppSigningKeyHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MintAppSigningKeyHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r MintAppSigningKeyHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// RetireAppSigningKeyHTTPResponse429Headers the declared response headers of an HTTP 429 response for RetireAppSigningKey
+type RetireAppSigningKeyHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type RetireAppSigningKeyHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *RetireAppSigningKeyHTTPResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RetireAppSigningKeyHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RetireAppSigningKeyHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RetireAppSigningKeyHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RetireAppSigningKeyHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r RetireAppSigningKeyHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r RetireAppSigningKeyHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r RetireAppSigningKeyHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r RetireAppSigningKeyHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RetireAppSigningKeyHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RetireAppSigningKeyHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RetireAppSigningKeyHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ActivateAppSigningKeyHTTPResponse429Headers the declared response headers of an HTTP 429 response for ActivateAppSigningKey
+type ActivateAppSigningKeyHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type ActivateAppSigningKeyHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AppSigningKey
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *ActivateAppSigningKeyHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ActivateAppSigningKeyHTTPResponse) GetJSON200() *AppSigningKey {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ActivateAppSigningKeyHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ActivateAppSigningKeyHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ActivateAppSigningKeyHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ActivateAppSigningKeyHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r ActivateAppSigningKeyHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ActivateAppSigningKeyHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ActivateAppSigningKeyHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ActivateAppSigningKeyHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ActivateAppSigningKeyHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ActivateAppSigningKeyHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ActivateAppSigningKeyHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -26578,6 +27563,135 @@ func (c *ClientWithResponses) RestoreAppWithResponse(ctx context.Context, appID 
 	return ParseRestoreAppHTTPResponse(rsp)
 }
 
+// ListAppSigningKeysWithResponse List an App's callback and webhook signing key versions
+//
+// Lists every receiver-facing version the App holds and marks the one
+// that is signing, so a rotation can be started or resumed from observed
+// state. Key material is never returned: plaintext is delivered exactly
+// once, at registration or at mint.
+//
+// The internal `anonymous_token` key is not part of this surface. It
+// never leaves nvoken, so there is no receiver to rotate it around.
+//
+// Like every route here, this one requires the app-less
+// registration-class credential that provisions these keys. An App
+// cannot read, rotate, or retire its own receiver credential.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/apps/{app_id}/signing-keys (the `ListAppSigningKeys` operationId).
+func (c *ClientWithResponses) ListAppSigningKeysWithResponse(ctx context.Context, appID AppID, reqEditors ...RequestEditorFn) (*ListAppSigningKeysHTTPResponse, error) {
+	rsp, err := c.ListAppSigningKeys(ctx, appID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAppSigningKeysHTTPResponse(rsp)
+}
+
+// MintAppSigningKeyWithBodyWithResponse Mint the next signing key version for one purpose
+//
+// Writes version `n+1` and returns its plaintext exactly once. There is
+// no way to read it again.
+//
+// Rotation is a sequence rather than a swap, because a receiver's
+// rejection of a signature is not retryable: a `401` settles the ToolCall
+// as a delivery failure instead of re-arming it. So mint leaves nvoken
+// signing with version `n`. Add the new secret to your verifier beside
+// the old one — you already select by the delivered
+// `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so
+// holding two entries is configuration, not new code — then activate,
+// then retire. Done in that order, no delivery ever fails verification.
+//
+// Set `activate` only when there is no working verifier left to protect,
+// which is what makes recovering a lost secret one call instead of three.
+//
+// A purpose holds at most two versions. Minting a third is refused until
+// the superseded one is retired, because no receiver could tell which
+// pair it is meant to hold.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/apps/{app_id}/signing-keys (the `MintAppSigningKey` operationId).
+func (c *ClientWithResponses) MintAppSigningKeyWithBodyWithResponse(ctx context.Context, appID AppID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MintAppSigningKeyHTTPResponse, error) {
+	rsp, err := c.MintAppSigningKeyWithBody(ctx, appID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMintAppSigningKeyHTTPResponse(rsp)
+}
+
+// MintAppSigningKeyWithResponse Mint the next signing key version for one purpose
+//
+// Writes version `n+1` and returns its plaintext exactly once. There is
+// no way to read it again.
+//
+// Rotation is a sequence rather than a swap, because a receiver's
+// rejection of a signature is not retryable: a `401` settles the ToolCall
+// as a delivery failure instead of re-arming it. So mint leaves nvoken
+// signing with version `n`. Add the new secret to your verifier beside
+// the old one — you already select by the delivered
+// `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so
+// holding two entries is configuration, not new code — then activate,
+// then retire. Done in that order, no delivery ever fails verification.
+//
+// Set `activate` only when there is no working verifier left to protect,
+// which is what makes recovering a lost secret one call instead of three.
+//
+// A purpose holds at most two versions. Minting a third is refused until
+// the superseded one is retired, because no receiver could tell which
+// pair it is meant to hold.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/apps/{app_id}/signing-keys (the `MintAppSigningKey` operationId).
+func (c *ClientWithResponses) MintAppSigningKeyWithResponse(ctx context.Context, appID AppID, body MintAppSigningKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*MintAppSigningKeyHTTPResponse, error) {
+	rsp, err := c.MintAppSigningKey(ctx, appID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMintAppSigningKeyHTTPResponse(rsp)
+}
+
+// RetireAppSigningKeyWithResponse Retire a superseded signing key version
+//
+// Deletes one version after signing has moved off it and your receiver
+// has dropped it. The version that is currently signing is refused, so a
+// mistaken retire fails loudly rather than silencing every delivery the
+// App makes.
+//
+// Nothing expires on a timer. Retirement is always an explicit call.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/apps/{app_id}/signing-keys/{purpose}/{version} (the `RetireAppSigningKey` operationId).
+func (c *ClientWithResponses) RetireAppSigningKeyWithResponse(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*RetireAppSigningKeyHTTPResponse, error) {
+	rsp, err := c.RetireAppSigningKey(ctx, appID, purpose, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRetireAppSigningKeyHTTPResponse(rsp)
+}
+
+// ActivateAppSigningKeyWithResponse Sign with an existing signing key version
+//
+// Moves signing to the named version. The delivery transport resolves the
+// key per send, so this takes effect on the next delivery with no cache
+// to invalidate anywhere. Activating the version that is already signing
+// changes nothing.
+//
+// Do this only once your receiver verifies against the new secret.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate (the `ActivateAppSigningKey` operationId).
+func (c *ClientWithResponses) ActivateAppSigningKeyWithResponse(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*ActivateAppSigningKeyHTTPResponse, error) {
+	rsp, err := c.ActivateAppSigningKey(ctx, appID, purpose, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseActivateAppSigningKeyHTTPResponse(rsp)
+}
+
 // ListCreditAccountsWithResponse List tenant credit accounts
 //
 // Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
@@ -29885,6 +30999,347 @@ func ParseRestoreAppHTTPResponse(rsp *http.Response) (*RestoreAppHTTPResponse, e
 	switch {
 	case rsp.StatusCode == 429:
 		var headers RestoreAppHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListAppSigningKeysHTTPResponse parses an HTTP response from a ListAppSigningKeysWithResponse call
+func ParseListAppSigningKeysHTTPResponse(rsp *http.Response) (*ListAppSigningKeysHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAppSigningKeysHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AppSigningKeyList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers ListAppSigningKeysHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseMintAppSigningKeyHTTPResponse parses an HTTP response from a MintAppSigningKeyWithResponse call
+func ParseMintAppSigningKeyHTTPResponse(rsp *http.Response) (*MintAppSigningKeyHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MintAppSigningKeyHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AppSigningKeySecret
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers MintAppSigningKeyHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseRetireAppSigningKeyHTTPResponse parses an HTTP response from a RetireAppSigningKeyWithResponse call
+func ParseRetireAppSigningKeyHTTPResponse(rsp *http.Response) (*RetireAppSigningKeyHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RetireAppSigningKeyHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers RetireAppSigningKeyHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseActivateAppSigningKeyHTTPResponse parses an HTTP response from a ActivateAppSigningKeyWithResponse call
+func ParseActivateAppSigningKeyHTTPResponse(rsp *http.Response) (*ActivateAppSigningKeyHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ActivateAppSigningKeyHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AppSigningKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers ActivateAppSigningKeyHTTPResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {

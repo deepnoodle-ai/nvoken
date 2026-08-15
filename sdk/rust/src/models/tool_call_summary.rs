@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// ToolCallSummary : One tool call as a stream sees it: which call, what tool, what state it is in, and when it reached that state. The `id` is the `id` of the `tool_use` block that opened it, so a client can show a call as failed or still running without waiting for the message that carries its result.  This is the only tool-call collection. A call you have to run carries `arguments` and `deadline_at`; filter on `status` and their presence rather than reading a second list. Modes, attempts, and delivery detail live on the ToolCall resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
+/// ToolCallSummary : One tool call as a stream sees it: which call, what tool, how it executes, what state it is in, and when it reached that state. The `id` is the `id` of the `tool_use` block that opened it, so a client can show a call as failed or still running without waiting for the message that carries its result.  This is the only tool-call collection. A call you may settle carries `arguments` and `deadline_at`; a call you must run yourself is one of those with `mode: host`. Filter on those rather than reading a second list or keeping a list of your own tool names. Attempts and delivery detail live on the ToolCall resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ToolCallSummary {
     /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
@@ -20,6 +20,9 @@ pub struct ToolCallSummary {
     /// The tool this call names.
     #[serde(rename = "name")]
     pub name: String,
+    /// How this call executes, present on every entry whatever its mode.  It is what separates \"answerable\" from \"mine to run\". A pending callback-mode call is answerable to a machine credential, because you may settle it after acknowledging delivery — but nvoken is the one delivering it. A call you must run yourself is one that carries `arguments` **and** has `mode: host`.
+    #[serde(rename = "mode")]
+    pub mode: models::ToolCallMode,
     #[serde(rename = "status")]
     pub status: models::ToolCallStatus,
     /// The arguments the model produced, as a JSON object whose shape is the `input_schema` you declared for this tool. nvoken does not narrow it further, because only your tool declaration knows what belongs there.  Present exactly while this call is yours to run: a host- or callback-mode call that has not settled. Omitted otherwise, including for builtin and MCP calls nvoken runs itself, and for any call that has already settled. The durable record of what every call was given is the `tool_use` block in the transcript.
@@ -39,16 +42,18 @@ pub struct ToolCallSummary {
 }
 
 impl ToolCallSummary {
-    /// One tool call as a stream sees it: which call, what tool, what state it is in, and when it reached that state. The `id` is the `id` of the `tool_use` block that opened it, so a client can show a call as failed or still running without waiting for the message that carries its result.  This is the only tool-call collection. A call you have to run carries `arguments` and `deadline_at`; filter on `status` and their presence rather than reading a second list. Modes, attempts, and delivery detail live on the ToolCall resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
+    /// One tool call as a stream sees it: which call, what tool, how it executes, what state it is in, and when it reached that state. The `id` is the `id` of the `tool_use` block that opened it, so a client can show a call as failed or still running without waiting for the message that carries its result.  This is the only tool-call collection. A call you may settle carries `arguments` and `deadline_at`; a call you must run yourself is one of those with `mode: host`. Filter on those rather than reading a second list or keeping a list of your own tool names. Attempts and delivery detail live on the ToolCall resource at `GET /v1/invocations/{invocation_id}/tool-calls`.
     pub fn new(
         id: String,
         name: String,
+        mode: models::ToolCallMode,
         status: models::ToolCallStatus,
         updated_at: chrono::DateTime<chrono::FixedOffset>,
     ) -> ToolCallSummary {
         ToolCallSummary {
             id,
             name,
+            mode,
             status,
             arguments: None,
             deadline_at: None,

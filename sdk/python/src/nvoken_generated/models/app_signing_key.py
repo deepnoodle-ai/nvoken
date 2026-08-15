@@ -17,30 +17,25 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Any, ClassVar, Dict, Optional
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from typing import Any, ClassVar, Dict
 from typing_extensions import Annotated
+from nvoken_generated.models.app_signing_key_purpose import AppSigningKeyPurpose
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class CallbackTarget(BaseModel):
+class AppSigningKey(BaseModel):
     """
-    CallbackTarget
+    One stored signing key version without its material. Key rows are immutable; which version signs is separate state, so a rotation never updates key material.
     """ # noqa: E501
-    url: Annotated[str, Field(strict=True, max_length=2048)] = Field(description="Public HTTPS endpoint. Userinfo and fragments are rejected. Every dial revalidates resolved addresses and refuses redirects. ")
-    timeout_seconds: Optional[Annotated[int, Field(le=300, strict=True, ge=1)]] = Field(default=None, description="This tool's own reply deadline, replacing the App's `callback_timeout_seconds` for its deliveries. Omit it and the App value applies unchanged.  The two ceilings differ deliberately. The App value is capped at 60 because it governs every callback the App makes: raising it to cover your slowest tool would make a hung delivery of your fastest one invisible for just as long. Naming a long deadline here says which tool is slow, and leaves loss detection tight everywhere else.  The delivery snapshots this value when the tool call is created, so a definition revision landing mid-flight does not move the deadline an in-flight delivery is already held to.  It is a ceiling on the delivery, not a promise of one: the effective limit is the smallest of this value, the Invocation's deadline, and `limits.waiting_timeout_seconds` when set. A 300-second tool inside a shorter turn never gets 300 seconds. ")
-    __properties: ClassVar[List[str]] = ["url", "timeout_seconds"]
-
-    @field_validator('url')
-    def url_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^https:\/\/", value):
-            raise ValueError(r"must validate the regular expression /^https:\/\//")
-        return value
+    purpose: AppSigningKeyPurpose
+    key_id: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Value sent in `X-Nvoken-Signing-Key-Id`. It names the App and purpose and does not change across versions, so a receiver keys its verifier table on the pair: this selects the entry, `version` selects the secret within it. ")
+    version: Annotated[int, Field(strict=True, ge=1)] = Field(description="Value sent in `X-Nvoken-Signing-Key-Version`.")
+    active: StrictBool = Field(description="Whether this is the version nvoken signs with. Exactly one version per purpose is active. During an overlapped rotation the other one is minted but not yet signing, and your receiver should already accept both. ")
+    created_at: datetime
+    __properties: ClassVar[List[str]] = ["purpose", "key_id", "version", "active", "created_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -60,7 +55,7 @@ class CallbackTarget(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of CallbackTarget from a JSON string"""
+        """Create an instance of AppSigningKey from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -85,7 +80,7 @@ class CallbackTarget(BaseModel):
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of CallbackTarget from a dict"""
+        """Create an instance of AppSigningKey from a dict"""
         if obj is None:
             return None
 
@@ -93,7 +88,10 @@ class CallbackTarget(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "url": obj.get("url"),
-            "timeout_seconds": obj.get("timeout_seconds")
+            "purpose": obj.get("purpose"),
+            "key_id": obj.get("key_id"),
+            "version": obj.get("version"),
+            "active": obj.get("active"),
+            "created_at": obj.get("created_at")
         })
         return _obj

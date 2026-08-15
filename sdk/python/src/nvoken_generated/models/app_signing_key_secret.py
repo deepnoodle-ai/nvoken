@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from typing import Any, ClassVar, Dict
 from typing_extensions import Annotated
 from nvoken_generated.models.app_signing_key_purpose import AppSigningKeyPurpose
@@ -32,8 +32,9 @@ class AppSigningKeySecret(BaseModel):
     purpose: AppSigningKeyPurpose
     key_id: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Value sent in `X-Nvoken-Signing-Key-Id`.")
     version: Annotated[int, Field(strict=True, ge=1)] = Field(description="Value sent in `X-Nvoken-Signing-Key-Version`.")
-    secret: Annotated[str, Field(min_length=32, strict=True)] = Field(description="Receiver HMAC secret. This plaintext is returned only during App registration and is omitted from every later App response. ")
-    __properties: ClassVar[List[str]] = ["purpose", "key_id", "version", "secret"]
+    active: StrictBool = Field(description="Whether this version is already signing. False after an overlapped mint: configure your receiver with this secret, then activate. ")
+    secret: Annotated[str, Field(min_length=32, strict=True)] = Field(description="Receiver HMAC secret. This plaintext is returned only by the request that created the version — App registration or a mint — and is irretrievable afterwards. Store it before you discard the response. ")
+    __properties: ClassVar[List[str]] = ["purpose", "key_id", "version", "active", "secret"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -89,6 +90,7 @@ class AppSigningKeySecret(BaseModel):
             "purpose": obj.get("purpose"),
             "key_id": obj.get("key_id"),
             "version": obj.get("version"),
+            "active": obj.get("active"),
             "secret": obj.get("secret")
         })
         return _obj

@@ -500,8 +500,13 @@ return new Response(reply.body, { status: reply.status });
 `callbackResult(content, isError?)` settles the ToolCall inline and the turn
 resumes as soon as nvoken records the reply. `acknowledgeCallback()` returns
 `202` with no body instead: it accepts the delivery without settling the call,
-for work that will outlive the App's callback reply deadline. Settle it later
+for work that will outlive this tool's reply deadline — its declared
+`timeout_seconds`, or the App's default when it declares none. Settle it later
 with `client.submitToolResults()`, reusing the delivery's ToolCall ID.
+
+Every delivery names its tool inside the signed body, so one endpoint can serve
+several tools: dispatch on `delivery.toolName` rather than on a path suffix
+nothing signs.
 
 Acknowledging trades away the fail-loud guarantee. nvoken marks an
 unacknowledged delivery failed once its retries are exhausted, so the turn
@@ -510,8 +515,9 @@ bounded only by the Invocation's `limits.waitingTimeoutSeconds`. Acknowledge
 only when something durable will settle the call.
 
 An acknowledged call appears in a waiting Invocation's pending calls the same
-way a host call does. `Agent` skips the callback tools its own definition
-declares rather than dispatching them locally.
+way a host call does, so `answerableToolCalls` includes it. `hostToolCalls` is
+the narrower set you must run yourself — answerable and `mode: "host"` — and
+`Agent` dispatches exactly that, whatever its own definition declares.
 
 ## Structured output and schema libraries
 

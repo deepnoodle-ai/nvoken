@@ -82,18 +82,24 @@ signed delivery with `nvoken.VerifyCallback`, then answer with one of two
 replies. `nvoken.CallbackResult(content, isError)` settles the ToolCall inline
 and the turn resumes as soon as nvoken records the reply.
 `nvoken.AcknowledgeCallback()` returns `202` with no body instead: it accepts
-the delivery without settling the call, for work that will outlive the App's
-callback reply deadline. Settle it later with `client.SubmitToolResults`,
-reusing the delivery's ToolCall ID.
+the delivery without settling the call, for work that will outlive this tool's
+reply deadline — its declared `timeout_seconds`, or the App's default when it
+declares none. Settle it later with `client.SubmitToolResults`, reusing the
+delivery's ToolCall ID.
+
+Every delivery names its tool inside the signed body, so one endpoint can serve
+several tools: dispatch on `VerifiedCallback.ToolName` rather than on a path
+suffix nothing signs.
 
 Acknowledging trades away the fail-loud guarantee. nvoken marks an
 unacknowledged delivery failed once its retries are exhausted, so the turn
 always moves on. An acknowledged call instead waits under your responsibility,
 bounded only by the Invocation's `Limits.WaitingTimeoutSeconds`. Acknowledge
 only when something durable will settle the call. Such a call appears in a
-waiting Invocation's pending calls the same way a host call does; an `Agent`
-skips the callback tools its own definition declares rather than dispatching
-them locally.
+waiting Invocation's pending calls the same way a host call does, so
+`AnswerableToolCalls` includes it. `HostToolCalls` is the narrower set you must
+run yourself — answerable and `mode` `host` — and an `Agent` dispatches exactly
+that, whatever its own definition declares.
 
 A bound Session serializes admission only within the local client:
 

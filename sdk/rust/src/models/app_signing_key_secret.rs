@@ -21,7 +21,10 @@ pub struct AppSigningKeySecret {
     /// Value sent in `X-Nvoken-Signing-Key-Version`.
     #[serde(rename = "version")]
     pub version: u64,
-    /// Receiver HMAC secret. This plaintext is returned only during App registration and is omitted from every later App response.
+    /// Whether this version is already signing. False after an overlapped mint: configure your receiver with this secret, then activate.
+    #[serde(rename = "active")]
+    pub active: bool,
+    /// Receiver HMAC secret. This plaintext is returned only by the request that created the version — App registration or a mint — and is irretrievable afterwards. Store it before you discard the response.
     #[serde(rename = "secret")]
     pub secret: String,
 }
@@ -31,12 +34,14 @@ impl AppSigningKeySecret {
         purpose: models::AppSigningKeyPurpose,
         key_id: String,
         version: u64,
+        active: bool,
         secret: String,
     ) -> AppSigningKeySecret {
         AppSigningKeySecret {
             purpose,
             key_id,
             version,
+            active,
             secret,
         }
     }

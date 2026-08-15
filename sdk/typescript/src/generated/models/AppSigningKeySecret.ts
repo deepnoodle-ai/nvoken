@@ -46,8 +46,18 @@ export interface AppSigningKeySecret {
      */
     version: number;
     /**
-     * Receiver HMAC secret. This plaintext is returned only during App
-     * registration and is omitted from every later App response.
+     * Whether this version is already signing. False after an overlapped
+     * mint: configure your receiver with this secret, then activate.
+     *
+     * @type {boolean}
+     * @memberof AppSigningKeySecret
+     */
+    active: boolean;
+    /**
+     * Receiver HMAC secret. This plaintext is returned only by the
+     * request that created the version — App registration or a mint — and
+     * is irretrievable afterwards. Store it before you discard the
+     * response.
      *
      * @type {string}
      * @memberof AppSigningKeySecret
@@ -64,6 +74,7 @@ export function instanceOfAppSigningKeySecret(value: object): value is AppSignin
     if (!('purpose' in value) || value['purpose'] === undefined) return false;
     if (!('keyId' in value) || value['keyId'] === undefined) return false;
     if (!('version' in value) || value['version'] === undefined) return false;
+    if (!('active' in value) || value['active'] === undefined) return false;
     if (!('secret' in value) || value['secret'] === undefined) return false;
     return true;
 }
@@ -81,6 +92,7 @@ export function AppSigningKeySecretFromJSONTyped(json: any, ignoreDiscriminator:
         'purpose': AppSigningKeyPurposeFromJSON(json['purpose']),
         'keyId': json['key_id'],
         'version': json['version'],
+        'active': json['active'],
         'secret': json['secret'],
     };
 }
@@ -99,6 +111,7 @@ export function AppSigningKeySecretToJSONTyped(value?: AppSigningKeySecret | nul
         'purpose': AppSigningKeyPurposeToJSON(value['purpose']),
         'key_id': value['keyId'],
         'version': value['version'],
+        'active': value['active'],
         'secret': value['secret'],
     };
 }

@@ -1,0 +1,49 @@
+{
+  "note": "One waiting turn's whole tool-call collection. `answerable` is every call carrying arguments — the calls a machine credential may settle, which after PRD 062 includes an acknowledged callback delivery. `host` is the narrower set this caller must actually run: answerable and `mode: host`. A host that filters only on arguments runs work nvoken is already delivering, and doubles the side effect.",
+  "tool_calls": [
+    {
+      "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+      "name": "lookup_order",
+      "mode": "host",
+      "status": "pending",
+      "arguments": { "order_id": "order-42" },
+      "deadline_at": "2026-07-21T12:05:00Z",
+      "updated_at": "2026-07-21T12:00:03Z"
+    },
+    {
+      "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
+      "name": "open_ticket",
+      "mode": "callback",
+      "status": "pending",
+      "arguments": { "ticket": "A-42" },
+      "deadline_at": "2026-07-21T12:05:00Z",
+      "updated_at": "2026-07-21T12:00:04Z"
+    },
+    {
+      "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
+      "name": "nvoken_fetch",
+      "mode": "builtin",
+      "status": "completed",
+      "updated_at": "2026-07-21T12:00:01Z"
+    },
+    {
+      "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb328",
+      "name": "support__lookup",
+      "mode": "mcp",
+      "status": "running",
+      "updated_at": "2026-07-21T12:00:02Z"
+    },
+    {
+      "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
+      "name": "lookup_order",
+      "mode": "host",
+      "status": "completed",
+      "updated_at": "2026-07-21T12:00:00Z"
+    }
+  ],
+  "answerable": [
+    "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+    "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb326"
+  ],
+  "host": ["tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"]
+}

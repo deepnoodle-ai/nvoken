@@ -24,6 +24,7 @@ from nvoken_generated.models.nudge import Nudge
 from nvoken_generated.models.nudge_status import NudgeStatus
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
 from nvoken_generated.models.tool_declaration import ToolDeclaration as GeneratedToolDeclaration
+from nvoken_generated.models.tool_call_summary import ToolCallSummary
 
 from nvoken_generated.models.reminder_block import ReminderBlock
 from nvoken_generated.models.session_content_block import SessionContentBlock
@@ -80,8 +81,10 @@ from nvoken import (
     StreamEvent,
     ToolResult,
     ToolChoice,
+    answerable_tool_calls,
     ask_user_input_schema,
     ask_user_tool,
+    host_tool_calls,
     SessionRetention,
     WebSearchLocation,
     WebSearchTool,
@@ -796,6 +799,24 @@ async def test_shared_fault_server_semantics() -> None:
     }
 
 
+def test_shared_tool_call_mode_partition() -> None:
+    """Answerable is wider than mine once an App declares callback tools.
+
+    nvoken delivers those itself, yet a machine credential may still settle one
+    that a receiver acknowledged, so it carries arguments like any pending host
+    call. Every SDK draws the same line at the same place.
+    """
+    path = Path(__file__).parents[2] / "conformance/fixtures/tool-call-modes-v1.json"
+    fixture = json.loads(path.read_text())
+    invocation = SimpleNamespace(
+        tool_calls=[ToolCallSummary.from_dict(call) for call in fixture["tool_calls"]],
+    )
+    assert [
+        call.id for call in answerable_tool_calls(invocation)
+    ] == fixture["answerable"]
+    assert [call.id for call in host_tool_calls(invocation)] == fixture["host"]
+
+
 @pytest.mark.asyncio
 async def test_shared_callback_signing_and_deduplication_vector() -> None:
     path = Path(__file__).parents[3] / "docs/design/callback-signing-v1.json"
@@ -805,6 +826,10 @@ async def test_shared_callback_signing_and_deduplication_vector() -> None:
     now = datetime.fromtimestamp(vector["now"], timezone.utc)
     verified = verify_callback(key, vector["headers"], body, now=now)
     assert verified.tool_call_id == TOOL_CALL_ID
+    # The name is inside the signed body, so a receiver dispatches on it without
+    # an authoritative read and without trusting a URL suffix.
+    assert verified.tool_name == vector["tool_name"]
+    assert verified.envelope["nvoken"]["tool_name"] == vector["tool_name"]
 
     mutations = []
     mutations.append((dict(vector["headers"]), body + b" "))

@@ -23,6 +23,9 @@ pub struct ToolCallbackContext {
     /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.
     #[serde(rename = "tool_call_id")]
     pub tool_call_id: String,
+    /// The tool this delivery is asking you to run, taken from the durable ToolCall. It is inside the signed body, so a receiver serving many tools dispatches on it with no authoritative read — and any per-tool path suffix you configure stays an unsigned logging convenience rather than the thing you branch on.
+    #[serde(rename = "tool_name")]
+    pub tool_name: String,
     /// Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
     #[serde(rename = "invocation_id")]
     pub invocation_id: String,
@@ -41,6 +44,7 @@ impl ToolCallbackContext {
         schema_version: SchemaVersion,
         delivery_id: String,
         tool_call_id: String,
+        tool_name: String,
         invocation_id: String,
         session_id: String,
         agent_key: String,
@@ -49,6 +53,7 @@ impl ToolCallbackContext {
             schema_version,
             delivery_id,
             tool_call_id,
+            tool_name,
             invocation_id,
             session_id,
             agent_key,

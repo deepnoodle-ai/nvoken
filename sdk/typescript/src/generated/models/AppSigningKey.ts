@@ -13,138 +13,110 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { AppSigningKeyPurpose } from './AppSigningKeyPurpose.js';
+import {
+    AppSigningKeyPurposeFromJSON,
+    AppSigningKeyPurposeFromJSONTyped,
+    AppSigningKeyPurposeToJSON,
+    AppSigningKeyPurposeToJSONTyped,
+} from './AppSigningKeyPurpose.js';
+
 /**
+ * One stored signing key version without its material. Key rows are
+ * immutable; which version signs is separate state, so a rotation never
+ * updates key material.
  *
  * @export
- * @interface ToolCallbackContext
+ * @interface AppSigningKey
  */
-export interface ToolCallbackContext {
+export interface AppSigningKey {
     /**
      *
-     * @type {ToolCallbackContextSchemaVersionEnum}
-     * @memberof ToolCallbackContext
+     * @type {AppSigningKeyPurpose}
+     * @memberof AppSigningKey
      */
-    schemaVersion: ToolCallbackContextSchemaVersionEnum;
+    purpose: AppSigningKeyPurpose;
     /**
-     * Identifies one delivery nvoken sent you, callback or webhook alike —
-     * both are the same durable record and carry the same `dlvr_` prefix.
-     * Treat it as opaque; it appears in the signed payload and identifies the
-     * attempt when you report a delivery problem.
+     * Value sent in `X-Nvoken-Signing-Key-Id`. It names the App and
+     * purpose and does not change across versions, so a receiver keys its
+     * verifier table on the pair: this selects the entry, `version`
+     * selects the secret within it.
      *
      * @type {string}
-     * @memberof ToolCallbackContext
+     * @memberof AppSigningKey
      */
-    deliveryId: string;
+    keyId: string;
     /**
-     * Identifies one durable ToolCall. Treat it as opaque: read it from a
-     * transcript `tool_use` block or from a turn's `tool_calls`, and pass it
-     * back verbatim as `tool_call_id` when submitting results. The same value
-     * is the `Idempotency-Key` on a callback delivery.
+     * Value sent in `X-Nvoken-Signing-Key-Version`.
+     * @type {number}
+     * @memberof AppSigningKey
+     */
+    version: number;
+    /**
+     * Whether this is the version nvoken signs with. Exactly one version
+     * per purpose is active. During an overlapped rotation the other one
+     * is minted but not yet signing, and your receiver should already
+     * accept both.
      *
-     * @type {string}
-     * @memberof ToolCallbackContext
+     * @type {boolean}
+     * @memberof AppSigningKey
      */
-    toolCallId: string;
-    /**
-     * The tool this delivery is asking you to run, taken from the durable
-     * ToolCall. It is inside the signed body, so a receiver serving many
-     * tools dispatches on it with no authoritative read — and any
-     * per-tool path suffix you configure stays an unsigned logging
-     * convenience rather than the thing you branch on.
-     *
-     * @type {string}
-     * @memberof ToolCallbackContext
-     */
-    toolName: string;
-    /**
-     * Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-     * @type {string}
-     * @memberof ToolCallbackContext
-     */
-    invocationId: string;
-    /**
-     * Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-     * @type {string}
-     * @memberof ToolCallbackContext
-     */
-    sessionId: string;
+    active: boolean;
     /**
      *
-     * @type {string}
-     * @memberof ToolCallbackContext
+     * @type {Date}
+     * @memberof AppSigningKey
      */
-    agentKey: string;
-    /**
-     * Absent for the app's default tenant.
-     * @type {string}
-     * @memberof ToolCallbackContext
-     */
-    tenantKey?: string;
+    createdAt: Date;
 }
 
 
-/**
- * @export
- */
-export const ToolCallbackContextSchemaVersionEnum = {
-    NUMBER_1: 1
-} as const;
-export type ToolCallbackContextSchemaVersionEnum = typeof ToolCallbackContextSchemaVersionEnum[keyof typeof ToolCallbackContextSchemaVersionEnum];
-
 
 /**
- * Check if a given object implements the ToolCallbackContext interface.
+ * Check if a given object implements the AppSigningKey interface.
  */
-export function instanceOfToolCallbackContext(value: object): value is ToolCallbackContext {
-    if (!('schemaVersion' in value) || value['schemaVersion'] === undefined) return false;
-    if (!('deliveryId' in value) || value['deliveryId'] === undefined) return false;
-    if (!('toolCallId' in value) || value['toolCallId'] === undefined) return false;
-    if (!('toolName' in value) || value['toolName'] === undefined) return false;
-    if (!('invocationId' in value) || value['invocationId'] === undefined) return false;
-    if (!('sessionId' in value) || value['sessionId'] === undefined) return false;
-    if (!('agentKey' in value) || value['agentKey'] === undefined) return false;
+export function instanceOfAppSigningKey(value: object): value is AppSigningKey {
+    if (!('purpose' in value) || value['purpose'] === undefined) return false;
+    if (!('keyId' in value) || value['keyId'] === undefined) return false;
+    if (!('version' in value) || value['version'] === undefined) return false;
+    if (!('active' in value) || value['active'] === undefined) return false;
+    if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
     return true;
 }
 
-export function ToolCallbackContextFromJSON(json: any): ToolCallbackContext {
-    return ToolCallbackContextFromJSONTyped(json, false);
+export function AppSigningKeyFromJSON(json: any): AppSigningKey {
+    return AppSigningKeyFromJSONTyped(json, false);
 }
 
-export function ToolCallbackContextFromJSONTyped(json: any, ignoreDiscriminator: boolean): ToolCallbackContext {
+export function AppSigningKeyFromJSONTyped(json: any, ignoreDiscriminator: boolean): AppSigningKey {
     if (json == null) {
         return json;
     }
     return {
 
-        'schemaVersion': json['schema_version'],
-        'deliveryId': json['delivery_id'],
-        'toolCallId': json['tool_call_id'],
-        'toolName': json['tool_name'],
-        'invocationId': json['invocation_id'],
-        'sessionId': json['session_id'],
-        'agentKey': json['agent_key'],
-        'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
+        'purpose': AppSigningKeyPurposeFromJSON(json['purpose']),
+        'keyId': json['key_id'],
+        'version': json['version'],
+        'active': json['active'],
+        'createdAt': (new Date(json['created_at'])),
     };
 }
 
-export function ToolCallbackContextToJSON(json: any): ToolCallbackContext {
-    return ToolCallbackContextToJSONTyped(json, false);
+export function AppSigningKeyToJSON(json: any): AppSigningKey {
+    return AppSigningKeyToJSONTyped(json, false);
 }
 
-export function ToolCallbackContextToJSONTyped(value?: ToolCallbackContext | null, ignoreDiscriminator: boolean = false): any {
+export function AppSigningKeyToJSONTyped(value?: AppSigningKey | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'schema_version': value['schemaVersion'],
-        'delivery_id': value['deliveryId'],
-        'tool_call_id': value['toolCallId'],
-        'tool_name': value['toolName'],
-        'invocation_id': value['invocationId'],
-        'session_id': value['sessionId'],
-        'agent_key': value['agentKey'],
-        'tenant_key': value['tenantKey'],
+        'purpose': AppSigningKeyPurposeToJSON(value['purpose']),
+        'key_id': value['keyId'],
+        'version': value['version'],
+        'active': value['active'],
+        'created_at': value['createdAt'].toISOString(),
     };
 }

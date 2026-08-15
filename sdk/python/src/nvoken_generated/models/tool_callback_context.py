@@ -31,18 +31,29 @@ class ToolCallbackContext(BaseModel):
     schema_version: StrictInt
     delivery_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one delivery nvoken sent you, callback or webhook alike — both are the same durable record and carry the same `dlvr_` prefix. Treat it as opaque; it appears in the signed payload and identifies the attempt when you report a delivery problem. ")
     tool_call_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
+    tool_name: Annotated[str, Field(min_length=1, strict=True, max_length=64)] = Field(description="The tool this delivery is asking you to run, taken from the durable ToolCall. It is inside the signed body, so a receiver serving many tools dispatches on it with no authoritative read — and any per-tool path suffix you configure stays an unsigned logging convenience rather than the thing you branch on. ")
     invocation_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `inv_` prefix. Treat the body as opaque.")
     session_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `sess_` prefix. Treat the body as opaque.")
     agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Absent for the app's default tenant.")
     additional_properties: Dict[str, Any] = {}
-    __properties: ClassVar[List[str]] = ["schema_version", "delivery_id", "tool_call_id", "invocation_id", "session_id", "agent_key", "tenant_key"]
+    __properties: ClassVar[List[str]] = ["schema_version", "delivery_id", "tool_call_id", "tool_name", "invocation_id", "session_id", "agent_key", "tenant_key"]
 
     @field_validator('schema_version')
     def schema_version_validate_enum(cls, value):
         """Validates the enum"""
         if value not in set([1]):
             raise ValueError("must be one of enum values (1)")
+        return value
+
+    @field_validator('tool_name')
+    def tool_name_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^[A-Za-z0-9_-]+$", value):
+            raise ValueError(r"must validate the regular expression /^[A-Za-z0-9_-]+$/")
         return value
 
     model_config = ConfigDict(
@@ -106,6 +117,7 @@ class ToolCallbackContext(BaseModel):
             "schema_version": obj.get("schema_version"),
             "delivery_id": obj.get("delivery_id"),
             "tool_call_id": obj.get("tool_call_id"),
+            "tool_name": obj.get("tool_name"),
             "invocation_id": obj.get("invocation_id"),
             "session_id": obj.get("session_id"),
             "agent_key": obj.get("agent_key"),

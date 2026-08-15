@@ -13,6 +13,20 @@ use crate::{apis::ResponseContent, models};
 use reqwest;
 use serde::{de::Error as _, Deserialize, Serialize};
 
+/// struct for typed errors of method [`activate_app_signing_key`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ActivateAppSigningKeyError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`archive_app`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -78,6 +92,19 @@ pub enum ListAppClientKeysError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`list_app_signing_keys`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ListAppSigningKeysError {
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`list_apps`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -86,6 +113,20 @@ pub enum ListAppsError {
     Status403(models::ErrorResponse),
     Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`mint_app_signing_key`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MintAppSigningKeyError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
     UnknownValue(serde_json::Value),
 }
 
@@ -116,6 +157,20 @@ pub enum RestoreAppError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`retire_app_signing_key`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RetireAppSigningKeyError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status429(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`revoke_app_client_key`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -140,6 +195,65 @@ pub enum UpdateAppError {
     Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
     UnknownValue(serde_json::Value),
+}
+
+/// Moves signing to the named version. The delivery transport resolves the key per send, so this takes effect on the next delivery with no cache to invalidate anywhere. Activating the version that is already signing changes nothing.  Do this only once your receiver verifies against the new secret.
+pub async fn activate_app_signing_key(
+    configuration: &configuration::Configuration,
+    app_id: &str,
+    purpose: models::AppSigningKeyPurpose,
+    version: u32,
+) -> Result<models::AppSigningKey, Error<ActivateAppSigningKeyError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_app_id = app_id;
+    let p_path_purpose = purpose;
+    let p_path_version = version;
+
+    let uri_str = format!(
+        "{}/v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate",
+        configuration.base_path,
+        app_id = crate::apis::urlencode(p_path_app_id),
+        purpose = p_path_purpose.to_string(),
+        version = p_path_version
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::AppSigningKey`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::AppSigningKey`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ActivateAppSigningKeyError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
 }
 
 /// Marks the App out of service. Nothing is destroyed and no other resource's lifecycle changes: the App's credentials keep authenticating, its client keys stay registered, and its Agent Definitions are untouched.  While archived, exactly these operations return `409 app_archived`: Session create and fork, Invocation create, Invocation resume, Agent Definition create and replace, client-key create, App-bound credential issuance, provider-key create, and credit allocation. Everything else behaves as on a live App — reads and lists, cancel, interrupt, nudges, tool-result submission, Session update and erasure, App `PATCH`, and credential, client-key, and provider-key rotation and revocation — so a draining host can let running turns settle and then clean up. Usage reporting keeps counting the App's spend.  Archiving requires the same authority as updating the App: an Org or installation credential. A credential bound to the App cannot archive or restore it. Repeating the call is a successful no-op.
@@ -398,6 +512,57 @@ pub async fn list_app_client_keys(
     }
 }
 
+/// Lists every receiver-facing version the App holds and marks the one that is signing, so a rotation can be started or resumed from observed state. Key material is never returned: plaintext is delivered exactly once, at registration or at mint.  The internal `anonymous_token` key is not part of this surface. It never leaves nvoken, so there is no receiver to rotate it around.  Like every route here, this one requires the app-less registration-class credential that provisions these keys. An App cannot read, rotate, or retire its own receiver credential.
+pub async fn list_app_signing_keys(
+    configuration: &configuration::Configuration,
+    app_id: &str,
+) -> Result<models::AppSigningKeyList, Error<ListAppSigningKeysError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_app_id = app_id;
+
+    let uri_str = format!(
+        "{}/v1/apps/{app_id}/signing-keys",
+        configuration.base_path,
+        app_id = crate::apis::urlencode(p_path_app_id)
+    );
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::AppSigningKeyList`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::AppSigningKeyList`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ListAppSigningKeysError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
 /// Returns the Apps this credential can see. An App-scoped credential sees only that App, an Org-scoped credential sees the Apps contained by its Org, and an installation credential sees every registered App. An exact `external_ref` filter narrows that visible set during the staged console migration. Archived Apps are excluded unless `status` asks for them.
 pub async fn list_apps(
     configuration: &configuration::Configuration,
@@ -445,6 +610,62 @@ pub async fn list_apps(
     } else {
         let content = resp.text().await?;
         let entity: Option<ListAppsError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Writes version `n+1` and returns its plaintext exactly once. There is no way to read it again.  Rotation is a sequence rather than a swap, because a receiver's rejection of a signature is not retryable: a `401` settles the ToolCall as a delivery failure instead of re-arming it. So mint leaves nvoken signing with version `n`. Add the new secret to your verifier beside the old one — you already select by the delivered `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so holding two entries is configuration, not new code — then activate, then retire. Done in that order, no delivery ever fails verification.  Set `activate` only when there is no working verifier left to protect, which is what makes recovering a lost secret one call instead of three.  A purpose holds at most two versions. Minting a third is refused until the superseded one is retired, because no receiver could tell which pair it is meant to hold.
+pub async fn mint_app_signing_key(
+    configuration: &configuration::Configuration,
+    app_id: &str,
+    mint_app_signing_key_request: models::MintAppSigningKeyRequest,
+) -> Result<models::AppSigningKeySecret, Error<MintAppSigningKeyError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_app_id = app_id;
+    let p_body_mint_app_signing_key_request = mint_app_signing_key_request;
+
+    let uri_str = format!(
+        "{}/v1/apps/{app_id}/signing-keys",
+        configuration.base_path,
+        app_id = crate::apis::urlencode(p_path_app_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+    req_builder = req_builder.json(&p_body_mint_app_signing_key_request);
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::AppSigningKeySecret`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::AppSigningKeySecret`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<MintAppSigningKeyError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
@@ -537,6 +758,54 @@ pub async fn restore_app(
     } else {
         let content = resp.text().await?;
         let entity: Option<RestoreAppError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+/// Deletes one version after signing has moved off it and your receiver has dropped it. The version that is currently signing is refused, so a mistaken retire fails loudly rather than silencing every delivery the App makes.  Nothing expires on a timer. Retirement is always an explicit call.
+pub async fn retire_app_signing_key(
+    configuration: &configuration::Configuration,
+    app_id: &str,
+    purpose: models::AppSigningKeyPurpose,
+    version: u32,
+) -> Result<(), Error<RetireAppSigningKeyError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_app_id = app_id;
+    let p_path_purpose = purpose;
+    let p_path_version = version;
+
+    let uri_str = format!(
+        "{}/v1/apps/{app_id}/signing-keys/{purpose}/{version}",
+        configuration.base_path,
+        app_id = crate::apis::urlencode(p_path_app_id),
+        purpose = p_path_purpose.to_string(),
+        version = p_path_version
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::DELETE, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<RetireAppSigningKeyError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,

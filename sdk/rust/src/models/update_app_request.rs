@@ -19,7 +19,7 @@ pub struct UpdateAppRequest {
     /// New owning Org. Supplying this field transfers ownership and is restricted to installation administrators.
     #[serde(rename = "org_id", skip_serializing_if = "Option::is_none")]
     pub org_id: Option<String>,
-    /// New callback HTTP reply deadline for this App.
+    /// New callback HTTP reply deadline for tools that declare none of their own. Still capped at 60; per-tool deadlines up to 300 are declared on the tool.
     #[serde(
         rename = "callback_timeout_seconds",
         skip_serializing_if = "Option::is_none"

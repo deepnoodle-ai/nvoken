@@ -15,8 +15,9 @@ pub mod stream;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub use agent::{
-    Agent, AgentEventStream, AgentInvocationOptions, AgentOptions, AgentResult, AgentSession,
-    AgentStreamEvent, AnswerToolCallsOptions, SessionBinding, ToolCallClaim,
+    answerable_tool_calls, host_tool_calls, Agent, AgentEventStream, AgentInvocationOptions,
+    AgentOptions, AgentResult, AgentSession, AgentStreamEvent, AnswerToolCallsOptions,
+    SessionBinding, ToolCallClaim,
 };
 pub use ask_user::{
     ask_user_input_schema, ask_user_tool, ask_user_tool_with, AskUserInput, AskUserKind,

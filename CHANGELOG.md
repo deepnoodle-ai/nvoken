@@ -6,6 +6,34 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **A callback delivery names its tool inside the signed body.** `tool_name` on
+  the envelope, surfaced as `VerifiedCallback.ToolName` / `.toolName` /
+  `.tool_name` in all four SDKs. One endpoint can now serve several tools
+  without trusting a URL suffix nothing signs. It is required, so verification
+  rejects an envelope without it.
+
+- **Every tool-call summary carries `mode`.** `hostToolCalls` /
+  `HostToolCalls` / `host_tool_calls` sits beside the answerable filter and
+  returns the narrower set: answerable **and** `mode` `host`. An acknowledged
+  callback delivery is answerable to a machine credential but is nvoken's to
+  deliver, so filtering on `arguments` alone runs it twice. `Agent` dispatch now
+  partitions on the mode instead of on its own declared tool names, which never
+  knew about a server-owned Agent Definition's callback tools.
+
+- **A callback tool can declare its own reply deadline.** `timeout_seconds`, 1
+  to 300, on the callback target; absent, the App's default applies. The App
+  ceiling stays 60.
+
+- **Signing keys rotate without a failed verification.** `signing-key
+  list|mint|activate|retire` in the CLI and
+  `ListAppSigningKeys`/`MintAppSigningKey`/`ActivateAppSigningKey`/`RetireAppSigningKey`
+  on the Go client. Mint returns plaintext once and leaves the old version
+  signing; activate moves signing after your receiver holds both; retire deletes
+  the old one. Minting with `activate` collapses the three into one call, for
+  recovering a lost secret.
+
 ## 0.17.0 - 2026-08-15
 
 - **Message pages can start at the newest message.** `order: "desc"` on

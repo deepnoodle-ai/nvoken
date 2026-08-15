@@ -64,6 +64,8 @@ __all__ = [
     "AppDefaultRateLimits",
     "AppList",
     "AppRegistration",
+    "AppSigningKey",
+    "AppSigningKeyList",
     "AppSigningKeyPurpose",
     "AppSigningKeySecret",
     "AuthenticationMethod",
@@ -149,6 +151,7 @@ __all__ = [
     "MessageDeltaEvent",
     "MessageDeltaKind",
     "MessagePhase",
+    "MintAppSigningKeyRequest",
     "Model",
     "ModelCallFactStatus",
     "ModelCallKind",
@@ -323,6 +326,8 @@ from nvoken_generated.models.app import App as App
 from nvoken_generated.models.app_default_rate_limits import AppDefaultRateLimits as AppDefaultRateLimits
 from nvoken_generated.models.app_list import AppList as AppList
 from nvoken_generated.models.app_registration import AppRegistration as AppRegistration
+from nvoken_generated.models.app_signing_key import AppSigningKey as AppSigningKey
+from nvoken_generated.models.app_signing_key_list import AppSigningKeyList as AppSigningKeyList
 from nvoken_generated.models.app_signing_key_purpose import AppSigningKeyPurpose as AppSigningKeyPurpose
 from nvoken_generated.models.app_signing_key_secret import AppSigningKeySecret as AppSigningKeySecret
 from nvoken_generated.models.authentication_method import AuthenticationMethod as AuthenticationMethod
@@ -408,6 +413,7 @@ from nvoken_generated.models.memory_search_result import MemorySearchResult as M
 from nvoken_generated.models.message_delta_event import MessageDeltaEvent as MessageDeltaEvent
 from nvoken_generated.models.message_delta_kind import MessageDeltaKind as MessageDeltaKind
 from nvoken_generated.models.message_phase import MessagePhase as MessagePhase
+from nvoken_generated.models.mint_app_signing_key_request import MintAppSigningKeyRequest as MintAppSigningKeyRequest
 from nvoken_generated.models.model import Model as Model
 from nvoken_generated.models.model_call_fact_status import ModelCallFactStatus as ModelCallFactStatus
 from nvoken_generated.models.model_call_kind import ModelCallKind as ModelCallKind

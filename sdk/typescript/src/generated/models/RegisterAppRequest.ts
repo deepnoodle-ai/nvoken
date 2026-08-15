@@ -71,7 +71,11 @@ export interface RegisterAppRequest {
      */
     displayName?: string;
     /**
-     * Callback HTTP reply deadline for this App.
+     * Callback HTTP reply deadline for tools that declare none of their
+     * own. A single tool may declare up to 300 in
+     * `callback.timeout_seconds`; this App-wide value stays capped at 60
+     * so one slow tool cannot loosen loss detection for all of them.
+     *
      * @type {number}
      * @memberof RegisterAppRequest
      */

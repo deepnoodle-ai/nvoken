@@ -586,6 +586,25 @@ export function answerableToolCalls(invocation: {
   return (invocation.toolCalls ?? []).filter((call) => call.arguments != null);
 }
 
+/**
+ * The tool calls this caller must run itself.
+ *
+ * Answerable is not the same as yours. Once an App declares callback tools,
+ * nvoken delivers those to an endpoint — but a machine credential may still
+ * settle one after its receiver acknowledged delivery, so a pending
+ * callback-mode call carries arguments and is answerable. Running it here as
+ * well would double the side effect.
+ *
+ * Yours is answerable and `mode: "host"`. Partitioning on that beats keeping a
+ * list of your own tool names, which goes stale the first time an agent gains a
+ * tool and nobody updates the list.
+ */
+export function hostToolCalls(invocation: {
+  toolCalls?: ToolCallSummary[];
+}): ToolCallSummary[] {
+  return answerableToolCalls(invocation).filter((call) => call.mode === "host");
+}
+
 export type TypedInvocation<TOutput extends object = JsonObject> =
   Omit<Invocation, "structuredOutput"> & { structuredOutput: TOutput | null };
 
@@ -2183,7 +2202,8 @@ export class Agent<TOutput extends object = JsonObject> {
    * Tools nvoken delivers over HTTPS. They can appear in a waiting Invocation's
    * pending calls once an endpoint has acknowledged a delivery without settling
    * it, and are answered by whatever accepted that acknowledgement rather than
-   * from local handlers.
+   * from local handlers. Kept as a fallback for a server too old to stamp
+   * `mode` on a summary; see {@link Agent.runsLocally}.
    */
   private readonly callbackTools: Set<string>;
 
@@ -2227,6 +2247,23 @@ export class Agent<TOutput extends object = JsonObject> {
         .filter((tool) => tool.mode === "callback")
         .map((tool) => tool.name),
     );
+  }
+
+  /**
+   * Whether a pending call is this caller's to execute.
+   *
+   * The call's own mode is the authority, not what this Agent happens to
+   * declare: an Invocation running a server-owned Agent Definition can park on
+   * callback tools this object never listed, and answering those here would run
+   * work nvoken is already delivering elsewhere.
+   *
+   * A server too old to send `mode` leaves it undefined, where a name check is
+   * all there is. Fall back to it rather than treating every call as somebody
+   * else's, which would leave the turn parked forever.
+   */
+  private runsLocally(call: ToolCallSummary): boolean {
+    if (call.mode) return call.mode === "host";
+    return !this.callbackTools.has(call.name);
   }
 
   session(binding: SessionBinding): AgentSession<TOutput> {
@@ -2451,6 +2488,7 @@ export class Agent<TOutput extends object = JsonObject> {
     if (invocation.status !== "waiting") return 0;
     const results: ToolResult[] = [];
     for (const call of answerableToolCalls(invocation)) {
+      if (!this.runsLocally(call)) continue;
       const tool = this.hostTools.get(call.name);
       if (!tool?.handler) {
         if (options.leaveWaitingOnMissingHandler) {
@@ -2494,6 +2532,7 @@ export class Agent<TOutput extends object = JsonObject> {
     const results: ToolResult[] = [];
     for (const call of calls) {
       if (dispatched?.has(call.id)) continue;
+      if (!this.runsLocally(call)) continue;
       const tool = this.hostTools.get(call.name);
       if (!tool?.handler) {
         if (options.leaveWaitingOnMissingHandler) {

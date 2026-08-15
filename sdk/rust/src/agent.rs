@@ -257,7 +257,20 @@ impl Stream for AgentEventStream {
 struct AgentInner {
     options: AgentOptions,
     host_tools: HashMap<String, Tool>,
-    callback_tools: std::collections::HashSet<String>,
+}
+
+/// Whether a pending call is this caller's to execute.
+///
+/// The call's own mode is the authority, not what the Agent happens to
+/// declare: an Invocation running a server-owned Agent Definition can park on
+/// callback tools the local object never listed, and answering those here would
+/// run work nvoken is already delivering elsewhere. That replaced a set of the
+/// Agent's own callback tool names, which only ever knew about its own.
+///
+/// `mode` is required on the wire and non-optional in the decoded summary, so
+/// there is no case where it is missing to accommodate.
+fn runs_locally(call: &models::ToolCallSummary) -> bool {
+    call.mode == models::ToolCallMode::Host
 }
 
 /// A high-level binding for one Agent identity: `text`/`run`/`invoke`/
@@ -311,23 +324,11 @@ impl Client {
             .filter(|tool| matches!(tool.mode, ToolMode::Host))
             .map(|tool| (tool.name.clone(), tool.clone()))
             .collect();
-        // Tools nvoken delivers over HTTPS. They can appear in a waiting
-        // Invocation's pending calls once an endpoint has acknowledged a
-        // delivery without settling it, and are answered by whatever accepted
-        // that acknowledgement rather than from local handlers.
-        let callback_tools = options
-            .agent_definition
-            .tools
-            .iter()
-            .filter(|tool| matches!(tool.mode, ToolMode::Callback { .. }))
-            .map(|tool| tool.name.clone())
-            .collect();
         Ok(Agent {
             client: self.clone(),
             inner: Arc::new(AgentInner {
                 options,
                 host_tools,
-                callback_tools,
             }),
         })
     }
@@ -576,7 +577,7 @@ impl Agent {
         let handle = self.client.invocation(invocation_id);
         let mut results = Vec::new();
         for pending in pending_calls {
-            if self.inner.callback_tools.contains(&pending.name) {
+            if !runs_locally(pending) {
                 continue;
             }
             let handler = self
@@ -636,7 +637,7 @@ impl Agent {
             if submitted.contains(&pending.id) {
                 continue;
             }
-            if self.inner.callback_tools.contains(&pending.name) {
+            if !runs_locally(pending) {
                 continue;
             }
             let handler = self
@@ -954,6 +955,26 @@ pub fn answerable_tool_calls(
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// The tool calls this caller must run itself.
+///
+/// Answerable is not the same as yours. Once an App declares callback tools,
+/// nvoken delivers those to an endpoint — but a machine credential may still
+/// settle one after its receiver acknowledged delivery, so a pending
+/// callback-mode call carries arguments and is answerable. Running it here as
+/// well would double the side effect.
+///
+/// Yours is answerable and `mode` is `host`. Partitioning on that beats keeping
+/// a list of your own tool names, which goes stale the first time an agent
+/// gains a tool and nobody updates the list.
+pub fn host_tool_calls(
+    tool_calls: Option<&Vec<models::ToolCallSummary>>,
+) -> Vec<&models::ToolCallSummary> {
+    answerable_tool_calls(tool_calls)
+        .into_iter()
+        .filter(|call| call.mode == models::ToolCallMode::Host)
+        .collect()
 }
 
 fn tool_call_arguments(call: &models::ToolCallSummary) -> Value {

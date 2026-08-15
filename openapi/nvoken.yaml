@@ -781,6 +781,173 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
+  /v1/apps/{app_id}/signing-keys:
+    get:
+      tags: [Apps]
+      operationId: listAppSigningKeys
+      summary: List an App's callback and webhook signing key versions
+      description: |
+        Lists every receiver-facing version the App holds and marks the one
+        that is signing, so a rotation can be started or resumed from observed
+        state. Key material is never returned: plaintext is delivered exactly
+        once, at registration or at mint.
+
+        The internal `anonymous_token` key is not part of this surface. It
+        never leaves nvoken, so there is no receiver to rotate it around.
+
+        Like every route here, this one requires the app-less
+        registration-class credential that provisions these keys. An App
+        cannot read, rotate, or retire its own receiver credential.
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppID"
+      responses:
+        "200":
+          description: The App's signing key versions, without key material.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSigningKeyList"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    post:
+      tags: [Apps]
+      operationId: mintAppSigningKey
+      summary: Mint the next signing key version for one purpose
+      description: |
+        Writes version `n+1` and returns its plaintext exactly once. There is
+        no way to read it again.
+
+        Rotation is a sequence rather than a swap, because a receiver's
+        rejection of a signature is not retryable: a `401` settles the ToolCall
+        as a delivery failure instead of re-arming it. So mint leaves nvoken
+        signing with version `n`. Add the new secret to your verifier beside
+        the old one — you already select by the delivered
+        `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so
+        holding two entries is configuration, not new code — then activate,
+        then retire. Done in that order, no delivery ever fails verification.
+
+        Set `activate` only when there is no working verifier left to protect,
+        which is what makes recovering a lost secret one call instead of three.
+
+        A purpose holds at most two versions. Minting a third is refused until
+        the superseded one is retired, because no receiver could tell which
+        pair it is meant to hold.
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MintAppSigningKeyRequest"
+      responses:
+        "201":
+          description: The new version and its one-time plaintext secret.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSigningKeySecret"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/apps/{app_id}/signing-keys/{purpose}/{version}:
+    delete:
+      tags: [Apps]
+      operationId: retireAppSigningKey
+      summary: Retire a superseded signing key version
+      description: |
+        Deletes one version after signing has moved off it and your receiver
+        has dropped it. The version that is currently signing is refused, so a
+        mistaken retire fails loudly rather than silencing every delivery the
+        App makes.
+
+        Nothing expires on a timer. Retirement is always an explicit call.
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppID"
+        - name: purpose
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppSigningKeyPurpose"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "204":
+          description: The version was retired.
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate:
+    post:
+      tags: [Apps]
+      operationId: activateAppSigningKey
+      summary: Sign with an existing signing key version
+      description: |
+        Moves signing to the named version. The delivery transport resolves the
+        key per send, so this takes effect on the next delivery with no cache
+        to invalidate anywhere. Activating the version that is already signing
+        changes nothing.
+
+        Do this only once your receiver verifies against the new secret.
+      parameters:
+        - name: app_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppID"
+        - name: purpose
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AppSigningKeyPurpose"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: The version that is now signing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSigningKey"
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /v1/agents:
     get:
       tags: [Agents]
@@ -3918,6 +4085,7 @@ webhooks:
                 schema_version: 1
                 delivery_id: dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326
                 tool_call_id: call_019b0a12-8d51-7f34-aed2-0e07c1bdb325
+                tool_name: open_ticket
                 invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                 session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                 agent_key: support
@@ -4393,8 +4561,15 @@ components:
           minimum: 1
           maximum: 60
           description: |
-            Resolved deadline for each callback HTTP request. Defaults to 10.
-            Webhook delivery is unaffected.
+            Resolved deadline for each callback HTTP request whose tool does
+            not name one of its own. Defaults to 10. Webhook delivery is
+            unaffected.
+
+            This ceiling is 60 while a single tool may declare up to 300 in
+            `callback.timeout_seconds`. The asymmetry is the point: this value
+            governs every callback the App makes, so raising it to cover one
+            slow tool would make a hung delivery of a fast one invisible for
+            just as long. Slow is named per tool.
         default_rate_limits:
           oneOf:
             - $ref: "#/components/schemas/AppDefaultRateLimits"
@@ -4443,10 +4618,69 @@ components:
       type: string
       enum: [callback, webhook]
       description: The only delivery class this HMAC key may sign.
+    AppSigningKey:
+      type: object
+      additionalProperties: false
+      required: [purpose, key_id, version, active, created_at]
+      properties:
+        purpose:
+          $ref: "#/components/schemas/AppSigningKeyPurpose"
+        key_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: |
+            Value sent in `X-Nvoken-Signing-Key-Id`. It names the App and
+            purpose and does not change across versions, so a receiver keys its
+            verifier table on the pair: this selects the entry, `version`
+            selects the secret within it.
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Value sent in `X-Nvoken-Signing-Key-Version`.
+        active:
+          type: boolean
+          description: |
+            Whether this is the version nvoken signs with. Exactly one version
+            per purpose is active. During an overlapped rotation the other one
+            is minted but not yet signing, and your receiver should already
+            accept both.
+        created_at:
+          type: string
+          format: date-time
+      description: |
+        One stored signing key version without its material. Key rows are
+        immutable; which version signs is separate state, so a rotation never
+        updates key material.
+    AppSigningKeyList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppSigningKey"
+    MintAppSigningKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [purpose]
+      properties:
+        purpose:
+          $ref: "#/components/schemas/AppSigningKeyPurpose"
+        activate:
+          type: boolean
+          default: false
+          description: |
+            Sign with the new version immediately, collapsing the rotation to
+            one call. Correct only when no working verifier is left to
+            protect — recovering a lost secret. Leaving it false is what makes
+            an ordinary rotation cause zero failed verifications.
     AppSigningKeySecret:
       type: object
       additionalProperties: false
-      required: [purpose, key_id, version, secret]
+      required: [purpose, key_id, version, active, secret]
       properties:
         purpose:
           $ref: "#/components/schemas/AppSigningKeyPurpose"
@@ -4460,12 +4694,19 @@ components:
           format: int64
           minimum: 1
           description: Value sent in `X-Nvoken-Signing-Key-Version`.
+        active:
+          type: boolean
+          description: |
+            Whether this version is already signing. False after an overlapped
+            mint: configure your receiver with this secret, then activate.
         secret:
           type: string
           minLength: 32
           description: |
-            Receiver HMAC secret. This plaintext is returned only during App
-            registration and is omitted from every later App response.
+            Receiver HMAC secret. This plaintext is returned only by the
+            request that created the version — App registration or a mint — and
+            is irretrievable afterwards. Store it before you discard the
+            response.
     AppRegistration:
       type: object
       additionalProperties: false
@@ -4512,7 +4753,11 @@ components:
           minimum: 1
           maximum: 60
           default: 10
-          description: Callback HTTP reply deadline for this App.
+          description: |
+            Callback HTTP reply deadline for tools that declare none of their
+            own. A single tool may declare up to 300 in
+            `callback.timeout_seconds`; this App-wide value stays capped at 60
+            so one slow tool cannot loosen loss detection for all of them.
         default_rate_limits:
           oneOf:
             - $ref: "#/components/schemas/AppDefaultRateLimits"
@@ -4550,7 +4795,10 @@ components:
           format: int64
           minimum: 1
           maximum: 60
-          description: New callback HTTP reply deadline for this App.
+          description: |
+            New callback HTTP reply deadline for tools that declare none of
+            their own. Still capped at 60; per-tool deadlines up to 300 are
+            declared on the tool.
         default_rate_limits:
           oneOf:
             - $ref: "#/components/schemas/AppDefaultRateLimits"
@@ -7134,6 +7382,29 @@ components:
           description: |
             Public HTTPS endpoint. Userinfo and fragments are rejected. Every
             dial revalidates resolved addresses and refuses redirects.
+        timeout_seconds:
+          type: integer
+          minimum: 1
+          maximum: 300
+          description: |
+            This tool's own reply deadline, replacing the App's
+            `callback_timeout_seconds` for its deliveries. Omit it and the App
+            value applies unchanged.
+
+            The two ceilings differ deliberately. The App value is capped at 60
+            because it governs every callback the App makes: raising it to
+            cover your slowest tool would make a hung delivery of your fastest
+            one invisible for just as long. Naming a long deadline here says
+            which tool is slow, and leaves loss detection tight everywhere else.
+
+            The delivery snapshots this value when the tool call is created, so
+            a definition revision landing mid-flight does not move the deadline
+            an in-flight delivery is already held to.
+
+            It is a ceiling on the delivery, not a promise of one: the
+            effective limit is the smallest of this value, the Invocation's
+            deadline, and `limits.waiting_timeout_seconds` when set. A
+            300-second tool inside a shorter turn never gets 300 seconds.
     OutputSchema:
       type: object
       additionalProperties: true
@@ -7630,13 +7901,24 @@ components:
     ToolCallSummary:
       type: object
       additionalProperties: false
-      required: [id, name, status, updated_at]
+      required: [id, name, mode, status, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/ToolCallID"
         name:
           type: string
           description: The tool this call names.
+        mode:
+          allOf:
+            - $ref: "#/components/schemas/ToolCallMode"
+          description: |
+            How this call executes, present on every entry whatever its mode.
+
+            It is what separates "answerable" from "mine to run". A pending
+            callback-mode call is answerable to a machine credential, because
+            you may settle it after acknowledging delivery — but nvoken is the
+            one delivering it. A call you must run yourself is one that carries
+            `arguments` **and** has `mode: host`.
         status:
           $ref: "#/components/schemas/ToolCallStatus"
         arguments:
@@ -7666,15 +7948,16 @@ components:
           format: date-time
           description: When this call last changed state.
       description: |
-        One tool call as a stream sees it: which call, what tool, what state
-        it is in, and when it reached that state. The `id` is the `id` of the
-        `tool_use` block that opened it, so a client can show a call as failed
-        or still running without waiting for the message that carries its
-        result.
+        One tool call as a stream sees it: which call, what tool, how it
+        executes, what state it is in, and when it reached that state. The `id`
+        is the `id` of the `tool_use` block that opened it, so a client can
+        show a call as failed or still running without waiting for the message
+        that carries its result.
 
-        This is the only tool-call collection. A call you have to run carries
-        `arguments` and `deadline_at`; filter on `status` and their presence
-        rather than reading a second list. Modes, attempts, and delivery
+        This is the only tool-call collection. A call you may settle carries
+        `arguments` and `deadline_at`; a call you must run yourself is one of
+        those with `mode: host`. Filter on those rather than reading a second
+        list or keeping a list of your own tool names. Attempts and delivery
         detail live on the ToolCall resource at
         `GET /v1/invocations/{invocation_id}/tool-calls`.
     ToolCallResultOrigin:
@@ -7766,8 +8049,8 @@ components:
     ToolCallbackContext:
       type: object
       additionalProperties: false
-      required: [schema_version, delivery_id, tool_call_id, invocation_id,
-                 session_id, agent_key]
+      required: [schema_version, delivery_id, tool_call_id, tool_name,
+                 invocation_id, session_id, agent_key]
       properties:
         schema_version:
           type: integer
@@ -7776,6 +8059,17 @@ components:
           $ref: "#/components/schemas/DeliveryID"
         tool_call_id:
           $ref: "#/components/schemas/ToolCallID"
+        tool_name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: |
+            The tool this delivery is asking you to run, taken from the durable
+            ToolCall. It is inside the signed body, so a receiver serving many
+            tools dispatches on it with no authoritative read — and any
+            per-tool path suffix you configure stays an unsigned logging
+            convenience rather than the thing you branch on.
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
         session_id:

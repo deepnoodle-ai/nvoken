@@ -23,9 +23,14 @@ from nvoken_generated.models.anonymous_token_response import AnonymousTokenRespo
 from nvoken_generated.models.app import App
 from nvoken_generated.models.app_list import AppList
 from nvoken_generated.models.app_registration import AppRegistration
+from nvoken_generated.models.app_signing_key import AppSigningKey
+from nvoken_generated.models.app_signing_key_list import AppSigningKeyList
+from nvoken_generated.models.app_signing_key_purpose import AppSigningKeyPurpose
+from nvoken_generated.models.app_signing_key_secret import AppSigningKeySecret
 from nvoken_generated.models.client_key import ClientKey
 from nvoken_generated.models.client_key_list import ClientKeyList
 from nvoken_generated.models.create_client_key_request import CreateClientKeyRequest
+from nvoken_generated.models.mint_app_signing_key_request import MintAppSigningKeyRequest
 from nvoken_generated.models.register_app_request import RegisterAppRequest
 from nvoken_generated.models.update_app_request import UpdateAppRequest
 
@@ -45,6 +50,318 @@ class AppsApi:
         if api_client is None:
             api_client = ApiClient.get_default()
         self.api_client = api_client
+
+
+    @validate_call
+    async def activate_app_signing_key(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        purpose: AppSigningKeyPurpose,
+        version: Annotated[int, Field(strict=True, ge=1)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AppSigningKey:
+        """Sign with an existing signing key version
+
+        Moves signing to the named version. The delivery transport resolves the key per send, so this takes effect on the next delivery with no cache to invalidate anywhere. Activating the version that is already signing changes nothing.  Do this only once your receiver verifies against the new secret.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param purpose: (required)
+        :type purpose: AppSigningKeyPurpose
+        :param version: (required)
+        :type version: int
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._activate_app_signing_key_serialize(
+            app_id=app_id,
+            purpose=purpose,
+            version=version,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AppSigningKey",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def activate_app_signing_key_with_http_info(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        purpose: AppSigningKeyPurpose,
+        version: Annotated[int, Field(strict=True, ge=1)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AppSigningKey]:
+        """Sign with an existing signing key version
+
+        Moves signing to the named version. The delivery transport resolves the key per send, so this takes effect on the next delivery with no cache to invalidate anywhere. Activating the version that is already signing changes nothing.  Do this only once your receiver verifies against the new secret.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param purpose: (required)
+        :type purpose: AppSigningKeyPurpose
+        :param version: (required)
+        :type version: int
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._activate_app_signing_key_serialize(
+            app_id=app_id,
+            purpose=purpose,
+            version=version,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AppSigningKey",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def activate_app_signing_key_without_preload_content(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        purpose: AppSigningKeyPurpose,
+        version: Annotated[int, Field(strict=True, ge=1)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Sign with an existing signing key version
+
+        Moves signing to the named version. The delivery transport resolves the key per send, so this takes effect on the next delivery with no cache to invalidate anywhere. Activating the version that is already signing changes nothing.  Do this only once your receiver verifies against the new secret.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param purpose: (required)
+        :type purpose: AppSigningKeyPurpose
+        :param version: (required)
+        :type version: int
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._activate_app_signing_key_serialize(
+            app_id=app_id,
+            purpose=purpose,
+            version=version,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AppSigningKey",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _activate_app_signing_key_serialize(
+        self,
+        app_id,
+        purpose,
+        version,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if app_id is not None:
+            _path_params['app_id'] = app_id
+        if purpose is not None:
+            _path_params['purpose'] = purpose.value
+        if version is not None:
+            _path_params['version'] = version
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='POST',
+            resource_path='/v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
 
 
     @validate_call
@@ -1513,6 +1830,285 @@ class AppsApi:
 
 
     @validate_call
+    async def list_app_signing_keys(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AppSigningKeyList:
+        """List an App's callback and webhook signing key versions
+
+        Lists every receiver-facing version the App holds and marks the one that is signing, so a rotation can be started or resumed from observed state. Key material is never returned: plaintext is delivered exactly once, at registration or at mint.  The internal `anonymous_token` key is not part of this surface. It never leaves nvoken, so there is no receiver to rotate it around.  Like every route here, this one requires the app-less registration-class credential that provisions these keys. An App cannot read, rotate, or retire its own receiver credential.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_app_signing_keys_serialize(
+            app_id=app_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AppSigningKeyList",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def list_app_signing_keys_with_http_info(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AppSigningKeyList]:
+        """List an App's callback and webhook signing key versions
+
+        Lists every receiver-facing version the App holds and marks the one that is signing, so a rotation can be started or resumed from observed state. Key material is never returned: plaintext is delivered exactly once, at registration or at mint.  The internal `anonymous_token` key is not part of this surface. It never leaves nvoken, so there is no receiver to rotate it around.  Like every route here, this one requires the app-less registration-class credential that provisions these keys. An App cannot read, rotate, or retire its own receiver credential.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_app_signing_keys_serialize(
+            app_id=app_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AppSigningKeyList",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def list_app_signing_keys_without_preload_content(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """List an App's callback and webhook signing key versions
+
+        Lists every receiver-facing version the App holds and marks the one that is signing, so a rotation can be started or resumed from observed state. Key material is never returned: plaintext is delivered exactly once, at registration or at mint.  The internal `anonymous_token` key is not part of this surface. It never leaves nvoken, so there is no receiver to rotate it around.  Like every route here, this one requires the app-less registration-class credential that provisions these keys. An App cannot read, rotate, or retire its own receiver credential.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._list_app_signing_keys_serialize(
+            app_id=app_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AppSigningKeyList",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _list_app_signing_keys_serialize(
+        self,
+        app_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if app_id is not None:
+            _path_params['app_id'] = app_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='GET',
+            resource_path='/v1/apps/{app_id}/signing-keys',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
     async def list_apps(
         self,
         external_ref: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only apps whose `external_ref` equals this value.")] = None,
@@ -1789,6 +2385,316 @@ class AppsApi:
         return self.api_client.param_serialize(
             method='GET',
             resource_path='/v1/apps',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    async def mint_app_signing_key(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        mint_app_signing_key_request: MintAppSigningKeyRequest,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AppSigningKeySecret:
+        """Mint the next signing key version for one purpose
+
+        Writes version `n+1` and returns its plaintext exactly once. There is no way to read it again.  Rotation is a sequence rather than a swap, because a receiver's rejection of a signature is not retryable: a `401` settles the ToolCall as a delivery failure instead of re-arming it. So mint leaves nvoken signing with version `n`. Add the new secret to your verifier beside the old one — you already select by the delivered `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so holding two entries is configuration, not new code — then activate, then retire. Done in that order, no delivery ever fails verification.  Set `activate` only when there is no working verifier left to protect, which is what makes recovering a lost secret one call instead of three.  A purpose holds at most two versions. Minting a third is refused until the superseded one is retired, because no receiver could tell which pair it is meant to hold.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param mint_app_signing_key_request: (required)
+        :type mint_app_signing_key_request: MintAppSigningKeyRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._mint_app_signing_key_serialize(
+            app_id=app_id,
+            mint_app_signing_key_request=mint_app_signing_key_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '201': "AppSigningKeySecret",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def mint_app_signing_key_with_http_info(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        mint_app_signing_key_request: MintAppSigningKeyRequest,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AppSigningKeySecret]:
+        """Mint the next signing key version for one purpose
+
+        Writes version `n+1` and returns its plaintext exactly once. There is no way to read it again.  Rotation is a sequence rather than a swap, because a receiver's rejection of a signature is not retryable: a `401` settles the ToolCall as a delivery failure instead of re-arming it. So mint leaves nvoken signing with version `n`. Add the new secret to your verifier beside the old one — you already select by the delivered `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so holding two entries is configuration, not new code — then activate, then retire. Done in that order, no delivery ever fails verification.  Set `activate` only when there is no working verifier left to protect, which is what makes recovering a lost secret one call instead of three.  A purpose holds at most two versions. Minting a third is refused until the superseded one is retired, because no receiver could tell which pair it is meant to hold.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param mint_app_signing_key_request: (required)
+        :type mint_app_signing_key_request: MintAppSigningKeyRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._mint_app_signing_key_serialize(
+            app_id=app_id,
+            mint_app_signing_key_request=mint_app_signing_key_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '201': "AppSigningKeySecret",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def mint_app_signing_key_without_preload_content(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        mint_app_signing_key_request: MintAppSigningKeyRequest,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Mint the next signing key version for one purpose
+
+        Writes version `n+1` and returns its plaintext exactly once. There is no way to read it again.  Rotation is a sequence rather than a swap, because a receiver's rejection of a signature is not retryable: a `401` settles the ToolCall as a delivery failure instead of re-arming it. So mint leaves nvoken signing with version `n`. Add the new secret to your verifier beside the old one — you already select by the delivered `X-Nvoken-Signing-Key-Id` and `X-Nvoken-Signing-Key-Version`, so holding two entries is configuration, not new code — then activate, then retire. Done in that order, no delivery ever fails verification.  Set `activate` only when there is no working verifier left to protect, which is what makes recovering a lost secret one call instead of three.  A purpose holds at most two versions. Minting a third is refused until the superseded one is retired, because no receiver could tell which pair it is meant to hold.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param mint_app_signing_key_request: (required)
+        :type mint_app_signing_key_request: MintAppSigningKeyRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._mint_app_signing_key_serialize(
+            app_id=app_id,
+            mint_app_signing_key_request=mint_app_signing_key_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '201': "AppSigningKeySecret",
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _mint_app_signing_key_serialize(
+        self,
+        app_id,
+        mint_app_signing_key_request,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if app_id is not None:
+            _path_params['app_id'] = app_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+        if mint_app_signing_key_request is not None:
+            _body_params = mint_app_signing_key_request
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='POST',
+            resource_path='/v1/apps/{app_id}/signing-keys',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,
@@ -2363,6 +3269,318 @@ class AppsApi:
         return self.api_client.param_serialize(
             method='POST',
             resource_path='/v1/apps/{app_id}/restore',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    async def retire_app_signing_key(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        purpose: AppSigningKeyPurpose,
+        version: Annotated[int, Field(strict=True, ge=1)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> None:
+        """Retire a superseded signing key version
+
+        Deletes one version after signing has moved off it and your receiver has dropped it. The version that is currently signing is refused, so a mistaken retire fails loudly rather than silencing every delivery the App makes.  Nothing expires on a timer. Retirement is always an explicit call.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param purpose: (required)
+        :type purpose: AppSigningKeyPurpose
+        :param version: (required)
+        :type version: int
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._retire_app_signing_key_serialize(
+            app_id=app_id,
+            purpose=purpose,
+            version=version,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    async def retire_app_signing_key_with_http_info(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        purpose: AppSigningKeyPurpose,
+        version: Annotated[int, Field(strict=True, ge=1)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[None]:
+        """Retire a superseded signing key version
+
+        Deletes one version after signing has moved off it and your receiver has dropped it. The version that is currently signing is refused, so a mistaken retire fails loudly rather than silencing every delivery the App makes.  Nothing expires on a timer. Retirement is always an explicit call.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param purpose: (required)
+        :type purpose: AppSigningKeyPurpose
+        :param version: (required)
+        :type version: int
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._retire_app_signing_key_serialize(
+            app_id=app_id,
+            purpose=purpose,
+            version=version,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        await response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    async def retire_app_signing_key_without_preload_content(
+        self,
+        app_id: Annotated[str, Field(min_length=1, strict=True)],
+        purpose: AppSigningKeyPurpose,
+        version: Annotated[int, Field(strict=True, ge=1)],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Retire a superseded signing key version
+
+        Deletes one version after signing has moved off it and your receiver has dropped it. The version that is currently signing is refused, so a mistaken retire fails loudly rather than silencing every delivery the App makes.  Nothing expires on a timer. Retirement is always an explicit call.
+
+        :param app_id: (required)
+        :type app_id: str
+        :param purpose: (required)
+        :type purpose: AppSigningKeyPurpose
+        :param version: (required)
+        :type version: int
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._retire_app_signing_key_serialize(
+            app_id=app_id,
+            purpose=purpose,
+            version=version,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '204': None,
+            '400': "ErrorResponse",
+            '401': "ErrorResponse",
+            '403': "ErrorResponse",
+            '404': "ErrorResponse",
+            '429': "ErrorResponse",
+            '500': "ErrorResponse",
+            '503': "ErrorResponse",
+        }
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _retire_app_signing_key_serialize(
+        self,
+        app_id,
+        purpose,
+        version,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if app_id is not None:
+            _path_params['app_id'] = app_id
+        if purpose is not None:
+            _path_params['purpose'] = purpose.value
+        if version is not None:
+            _path_params['version'] = version
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='DELETE',
+            resource_path='/v1/apps/{app_id}/signing-keys/{purpose}/{version}',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,

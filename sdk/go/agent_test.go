@@ -634,6 +634,7 @@ func agentTestInvocationPayload(id, status string) map[string]any {
 		value["tool_calls"] = []any{map[string]any{
 			"id":          agentTestToolID,
 			"name":        "weather",
+			"mode":        "host",
 			"status":      "pending",
 			"arguments":   map[string]any{"city": "Paris"},
 			"deadline_at": "2026-07-21T12:05:00Z",
