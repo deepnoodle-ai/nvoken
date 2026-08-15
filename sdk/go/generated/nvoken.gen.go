@@ -9498,10 +9498,10 @@ type ClientInterface interface {
 	// above both its old value and what the turn has already used, and still
 	// within what your installation allows.
 	//
-	// If the turn paused on the Session maximum estimated cost rather than
-	// its own limit, raise or remove that Session cap instead — this endpoint
-	// will not resume it. Deadlines never pause a turn, so they never bring
-	// you here.
+	// If the turn paused because the tenant ran out of credits rather than
+	// on a limit of its own, allocate credits to that account instead — this
+	// endpoint refuses it, and funding the account continues the turn on its
+	// own. Deadlines never pause a turn, so they never bring you here.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -9515,10 +9515,10 @@ type ClientInterface interface {
 	// above both its old value and what the turn has already used, and still
 	// within what your installation allows.
 	//
-	// If the turn paused on the Session maximum estimated cost rather than
-	// its own limit, raise or remove that Session cap instead — this endpoint
-	// will not resume it. Deadlines never pause a turn, so they never bring
-	// you here.
+	// If the turn paused because the tenant ran out of credits rather than
+	// on a limit of its own, allocate credits to that account instead — this
+	// endpoint refuses it, and funding the account continues the turn on its
+	// own. Deadlines never pause a turn, so they never bring you here.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -11730,10 +11730,10 @@ func (c *Client) GetInvocationResult(ctx context.Context, invocationID Invocatio
 // above both its old value and what the turn has already used, and still
 // within what your installation allows.
 //
-// If the turn paused on the Session maximum estimated cost rather than
-// its own limit, raise or remove that Session cap instead — this endpoint
-// will not resume it. Deadlines never pause a turn, so they never bring
-// you here.
+// If the turn paused because the tenant ran out of credits rather than
+// on a limit of its own, allocate credits to that account instead — this
+// endpoint refuses it, and funding the account continues the turn on its
+// own. Deadlines never pause a turn, so they never bring you here.
 //
 // Takes any type of body and a specified content type.
 //
@@ -11757,10 +11757,10 @@ func (c *Client) ResumeInvocationWithBody(ctx context.Context, invocationID Invo
 // above both its old value and what the turn has already used, and still
 // within what your installation allows.
 //
-// If the turn paused on the Session maximum estimated cost rather than
-// its own limit, raise or remove that Session cap instead — this endpoint
-// will not resume it. Deadlines never pause a turn, so they never bring
-// you here.
+// If the turn paused because the tenant ran out of credits rather than
+// on a limit of its own, allocate credits to that account instead — this
+// endpoint refuses it, and funding the account continues the turn on its
+// own. Deadlines never pause a turn, so they never bring you here.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -19174,10 +19174,10 @@ type ClientWithResponsesInterface interface {
 	// above both its old value and what the turn has already used, and still
 	// within what your installation allows.
 	//
-	// If the turn paused on the Session maximum estimated cost rather than
-	// its own limit, raise or remove that Session cap instead — this endpoint
-	// will not resume it. Deadlines never pause a turn, so they never bring
-	// you here.
+	// If the turn paused because the tenant ran out of credits rather than
+	// on a limit of its own, allocate credits to that account instead — this
+	// endpoint refuses it, and funding the account continues the turn on its
+	// own. Deadlines never pause a turn, so they never bring you here.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19191,10 +19191,10 @@ type ClientWithResponsesInterface interface {
 	// above both its old value and what the turn has already used, and still
 	// within what your installation allows.
 	//
-	// If the turn paused on the Session maximum estimated cost rather than
-	// its own limit, raise or remove that Session cap instead — this endpoint
-	// will not resume it. Deadlines never pause a turn, so they never bring
-	// you here.
+	// If the turn paused because the tenant ran out of credits rather than
+	// on a limit of its own, allocate credits to that account instead — this
+	// endpoint refuses it, and funding the account continues the turn on its
+	// own. Deadlines never pause a turn, so they never bring you here.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -28329,10 +28329,10 @@ func (c *ClientWithResponses) GetInvocationResultWithResponse(ctx context.Contex
 // above both its old value and what the turn has already used, and still
 // within what your installation allows.
 //
-// If the turn paused on the Session maximum estimated cost rather than
-// its own limit, raise or remove that Session cap instead — this endpoint
-// will not resume it. Deadlines never pause a turn, so they never bring
-// you here.
+// If the turn paused because the tenant ran out of credits rather than
+// on a limit of its own, allocate credits to that account instead — this
+// endpoint refuses it, and funding the account continues the turn on its
+// own. Deadlines never pause a turn, so they never bring you here.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28352,10 +28352,10 @@ func (c *ClientWithResponses) ResumeInvocationWithBodyWithResponse(ctx context.C
 // above both its old value and what the turn has already used, and still
 // within what your installation allows.
 //
-// If the turn paused on the Session maximum estimated cost rather than
-// its own limit, raise or remove that Session cap instead — this endpoint
-// will not resume it. Deadlines never pause a turn, so they never bring
-// you here.
+// If the turn paused because the tenant ran out of credits rather than
+// on a limit of its own, allocate credits to that account instead — this
+// endpoint refuses it, and funding the account continues the turn on its
+// own. Deadlines never pause a turn, so they never bring you here.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

@@ -1084,7 +1084,7 @@ pub async fn list_tool_calls(
     }
 }
 
-/// Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused on the Session maximum estimated cost rather than its own limit, raise or remove that Session cap instead — this endpoint will not resume it. Deadlines never pause a turn, so they never bring you here.
+/// Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused because the tenant ran out of credits rather than on a limit of its own, allocate credits to that account instead — this endpoint refuses it, and funding the account continues the turn on its own. Deadlines never pause a turn, so they never bring you here.
 pub async fn resume_invocation(
     configuration: &configuration::Configuration,
     invocation_id: &str,
