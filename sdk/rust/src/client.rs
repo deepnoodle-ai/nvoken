@@ -1053,6 +1053,31 @@ pub struct ListSessionsOptions {
 pub struct MessageListOptions {
     pub cursor: Option<String>,
     pub limit: Option<u32>,
+    /// Defaults to [`ListOrder::Ascending`], oldest first.
+    pub order: Option<ListOrder>,
+}
+
+/// Sequence order for a message page.
+///
+/// A cursor belongs to the direction that issued it and is refused by the
+/// other, so page one direction to its end rather than turning around
+/// mid-walk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ListOrder {
+    /// Oldest first. The default when no order is requested.
+    #[default]
+    Ascending,
+    /// Newest first.
+    Descending,
+}
+
+impl ListOrder {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ListOrder::Ascending => "asc",
+            ListOrder::Descending => "desc",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2055,6 +2080,7 @@ impl Client {
             session_id,
             options.cursor.as_deref(),
             options.limit,
+            options.order.map(ListOrder::as_str),
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))

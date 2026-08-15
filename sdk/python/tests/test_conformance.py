@@ -708,6 +708,9 @@ async def test_shared_fault_server_semantics() -> None:
         assert sessions.items[0].context.model.id == "gpt-test"
         messages = await client.list_session_messages(SESSION_ID)
         assert messages.next_cursor == "messages-page-2"
+        newest_first = await client.list_session_messages(SESSION_ID, order="desc")
+        assert [message.sequence for message in newest_first.items] == [2]
+        assert newest_first.next_cursor == "messages-page-2-desc"
         compactions = await client.list_session_compactions(SESSION_ID)
         assert compactions.items[0].status == "applied"
         assert compactions.items[0].summary == "The user chose the durable option."

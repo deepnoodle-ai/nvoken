@@ -31,11 +31,11 @@ pub use client::{
     ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier, ErrorCategory,
     HostToolHandler, IfActivePolicy, InvocationHandle, InvokeRequest, Limits,
     ListAgentDefinitionsOptions, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
-    ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model, NvokenError,
-    ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, RetryPolicy,
-    Sampling, SessionOptions, SessionRetention, StreamOptions, Tool, ToolCallListOptions,
-    ToolChoice, ToolHandlerError, ToolMode, ToolResult, WaitCondition, WaitOptions,
-    WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
+    ListOrder, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
+    NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
+    RetryPolicy, Sampling, SessionOptions, SessionRetention, StreamOptions, Tool,
+    ToolCallListOptions, ToolChoice, ToolHandlerError, ToolMode, ToolResult, WaitCondition,
+    WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
 };
 pub use invocation_status::{is_terminal_status, is_turn_over, TERMINAL_INVOCATION_STATUSES};
 pub use media_preflight::{

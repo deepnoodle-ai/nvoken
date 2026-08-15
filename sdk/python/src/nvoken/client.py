@@ -154,6 +154,11 @@ from .schema_preflight import (
 IfActivePolicy = Literal["reject", "supersede", "interrupt"]
 BudgetExhaustionBehavior = Literal["stop", "pause"]
 
+# Sequence order for a message page. A cursor belongs to the direction that
+# issued it and is refused by the other, so page one direction to its end
+# rather than turning around mid-walk.
+ListOrder = Literal["asc", "desc"]
+
 ErrorCategory = Literal[
     "authentication",
     "permission",
@@ -1322,6 +1327,7 @@ class Client:
         *,
         cursor: str | None = None,
         limit: int | None = None,
+        order: ListOrder | None = None,
     ) -> SessionMessageList:
         return _machine_projection(
             await self._replay_safe(
@@ -1329,6 +1335,7 @@ class Client:
                     session_id,
                     cursor=cursor,
                     limit=limit,
+                    order=order,
                 )
             )
         )
@@ -1338,6 +1345,7 @@ class Client:
         session_id: str,
         *,
         limit: int | None = None,
+        order: ListOrder | None = None,
     ) -> AsyncIterator[SessionMessage]:
         cursor: str | None = None
         while True:
@@ -1345,6 +1353,7 @@ class Client:
                 session_id,
                 cursor=cursor,
                 limit=limit,
+                order=order,
             )
             for item in page.items:
                 yield item

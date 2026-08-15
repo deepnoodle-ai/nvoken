@@ -1289,6 +1289,9 @@ test("shared fault server semantics", async (context) => {
   assert.equal(secondPage.hasMore, false);
   const messages = await client.listSessionMessages(sessionId);
   assert.equal(messages.nextCursor, "messages-page-2");
+  const newestFirst = await client.listSessionMessages(sessionId, { order: "desc" });
+  assert.deepEqual(newestFirst.items.map((message) => message.sequence), [2]);
+  assert.equal(newestFirst.nextCursor, "messages-page-2-desc");
   const traversedMessages = [];
   for await (const message of client.messagePages(sessionId, { limit: 1 })) {
     traversedMessages.push(message);

@@ -479,17 +479,19 @@ pub async fn list_session_compactions(
     }
 }
 
-/// Returns persisted SessionMessage rows in ascending sequence order. The opaque forward cursor is bound to the authenticated caller and Session. This history endpoint contains no lifecycle or live-preview copies.
+/// Returns persisted SessionMessage rows in sequence order, ascending by default. The opaque cursor is bound to the authenticated caller, the Session, and the direction it was issued for. This history endpoint contains no lifecycle or live-preview copies.  Use `order=desc` to read the newest messages first. A conversation's interesting end is its recent end, and reaching it ascending costs a walk through every older message: the tail of a three thousand message Session is one page descending and fifteen round trips ascending.
 pub async fn list_session_messages(
     configuration: &configuration::Configuration,
     session_id: &str,
     cursor: Option<&str>,
     limit: Option<u32>,
+    order: Option<&str>,
 ) -> Result<models::SessionMessageList, Error<ListSessionMessagesError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_session_id = session_id;
     let p_query_cursor = cursor;
     let p_query_limit = limit;
+    let p_query_order = order;
 
     let uri_str = format!(
         "{}/v1/sessions/{session_id}/messages",
@@ -503,6 +505,9 @@ pub async fn list_session_messages(
     }
     if let Some(ref param_value) = p_query_limit {
         req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_order {
+        req_builder = req_builder.query(&[("order", &param_value.to_string())]);
     }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());

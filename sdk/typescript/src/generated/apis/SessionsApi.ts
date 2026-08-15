@@ -98,6 +98,7 @@ export interface ListSessionMessagesRequest {
     sessionId: string;
     cursor?: string;
     limit?: number;
+    order?: ListSessionMessagesOrderEnum;
 }
 
 export interface ListSessionsRequest {
@@ -511,6 +512,10 @@ export class SessionsApi extends runtime.BaseAPI {
             queryParameters['limit'] = requestParameters['limit'];
         }
 
+        if (requestParameters['order'] != null) {
+            queryParameters['order'] = requestParameters['order'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
 
         if (this.configuration && this.configuration.accessToken) {
@@ -534,7 +539,7 @@ export class SessionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns persisted SessionMessage rows in ascending sequence order. The opaque forward cursor is bound to the authenticated caller and Session. This history endpoint contains no lifecycle or live-preview copies.
+     * Returns persisted SessionMessage rows in sequence order, ascending by default. The opaque cursor is bound to the authenticated caller, the Session, and the direction it was issued for. This history endpoint contains no lifecycle or live-preview copies.  Use `order=desc` to read the newest messages first. A conversation\'s interesting end is its recent end, and reaching it ascending costs a walk through every older message: the tail of a three thousand message Session is one page descending and fifteen round trips ascending.
      * Page through the canonical Session transcript
      */
     async listSessionMessagesRaw(requestParameters: ListSessionMessagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SessionMessageList>> {
@@ -545,7 +550,7 @@ export class SessionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns persisted SessionMessage rows in ascending sequence order. The opaque forward cursor is bound to the authenticated caller and Session. This history endpoint contains no lifecycle or live-preview copies.
+     * Returns persisted SessionMessage rows in sequence order, ascending by default. The opaque cursor is bound to the authenticated caller, the Session, and the direction it was issued for. This history endpoint contains no lifecycle or live-preview copies.  Use `order=desc` to read the newest messages first. A conversation\'s interesting end is its recent end, and reaching it ascending costs a walk through every older message: the tail of a three thousand message Session is one page descending and fifteen round trips ascending.
      * Page through the canonical Session transcript
      */
     async listSessionMessages(requestParameters: ListSessionMessagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SessionMessageList> {
@@ -769,3 +774,12 @@ export class SessionsApi extends runtime.BaseAPI {
     }
 
 }
+
+/**
+ * @export
+ */
+export const ListSessionMessagesOrderEnum = {
+    ListOrderAscending: 'asc',
+    ListOrderDescending: 'desc'
+} as const;
+export type ListSessionMessagesOrderEnum = typeof ListSessionMessagesOrderEnum[keyof typeof ListSessionMessagesOrderEnum];

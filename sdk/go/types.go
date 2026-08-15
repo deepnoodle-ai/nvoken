@@ -22,6 +22,9 @@ type AppSigningKeyPurpose = generated.AppSigningKeyPurpose
 type AppSigningKeySecret = generated.AppSigningKeySecret
 type ArchiveStatus = generated.ArchiveStatus
 type ClientKey = generated.ClientKey
+
+// ListOrder is the sequence order for a message page.
+type ListOrder = generated.ListSessionMessagesParamsOrder
 type ClientKeyList = generated.ClientKeyList
 type AgentIdentity = generated.Agent
 type AgentDefinitionResourceList = generated.AgentDefinitionResourceList
@@ -165,6 +168,8 @@ const (
 	ArchiveStatusActive                          = generated.ArchiveStatusActive
 	ArchiveStatusAll                             = generated.ArchiveStatusAll
 	ArchiveStatusArchived                        = generated.ArchiveStatusArchived
+	ListOrderAscending                           = generated.ListOrderAscending
+	ListOrderDescending                          = generated.ListOrderDescending
 	OperationCreateInvocation                    = generated.CreateInvocation
 	OperationCreateSession                       = generated.CreateSession
 	OperationGetAgent                            = generated.GetAgent
@@ -922,6 +927,11 @@ type RegisterOrgOptions struct {
 type MessageListOptions struct {
 	Cursor *string
 	Limit  *int
+	// Order defaults to ListOrderAscending, oldest first. ListOrderDescending
+	// starts at the newest message. A cursor belongs to the direction that
+	// issued it and is refused by the other, so page one direction to its end
+	// rather than turning around mid-walk.
+	Order *ListOrder
 }
 
 type CompactionListOptions struct {

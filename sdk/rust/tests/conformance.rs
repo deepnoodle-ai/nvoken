@@ -926,6 +926,28 @@ async fn shared_fault_server_semantics() {
         .await
         .unwrap();
     assert_eq!(messages.next_cursor.as_deref(), Some("messages-page-2"));
+    let newest_first = client
+        .list_session_messages(
+            SESSION_ID,
+            MessageListOptions {
+                order: Some(nvoken::ListOrder::Descending),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        newest_first
+            .items
+            .iter()
+            .map(|message| message.sequence)
+            .collect::<Vec<_>>(),
+        vec![2]
+    );
+    assert_eq!(
+        newest_first.next_cursor.as_deref(),
+        Some("messages-page-2-desc")
+    );
     let compactions = client
         .list_session_compactions(SESSION_ID, CompactionListOptions::default())
         .await

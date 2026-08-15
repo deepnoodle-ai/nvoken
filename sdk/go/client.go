@@ -1893,7 +1893,7 @@ func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, er
 }
 
 func (c *Client) ListSessionMessages(ctx context.Context, sessionID string, options MessageListOptions) (*SessionMessageList, error) {
-	params := &generated.ListSessionMessagesParams{Cursor: options.Cursor, Limit: options.Limit}
+	params := &generated.ListSessionMessagesParams{Cursor: options.Cursor, Limit: options.Limit, Order: options.Order}
 	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionMessageList], error) {
 		response, err := c.raw.ListSessionMessagesWithResponse(ctx, sessionID, params)
 		if err != nil {
