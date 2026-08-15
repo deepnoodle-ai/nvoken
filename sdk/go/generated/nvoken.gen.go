@@ -3244,9 +3244,9 @@ type CreateInvocationRequest struct {
 	// `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
 	// you can raise the limit and continue it.
 	//
-	// Covers the iteration, output-token, per-turn cost, and Session
-	// cost limits. Deadlines are not covered — a turn that runs out of
-	// time always ends and can never be resumed.
+	// Covers the iteration, output-token, and per-turn estimated-cost
+	// limits, and exhausted tenant credits. Deadlines are not covered —
+	// a turn that runs out of time always ends and can never be resumed.
 	OnBudgetExhausted *CreateInvocationRequestOnBudgetExhausted `json:"on_budget_exhausted,omitempty"`
 
 	// ProviderKeys Which key pays for the model on this turn. Names a source; never
@@ -3341,9 +3341,9 @@ type CreateInvocationRequestIfActive string
 // `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
 // you can raise the limit and continue it.
 //
-// Covers the iteration, output-token, per-turn cost, and Session
-// cost limits. Deadlines are not covered — a turn that runs out of
-// time always ends and can never be resumed.
+// Covers the iteration, output-token, and per-turn estimated-cost
+// limits, and exhausted tenant credits. Deadlines are not covered —
+// a turn that runs out of time always ends and can never be resumed.
 type CreateInvocationRequestOnBudgetExhausted string
 
 // CreateNudgeRequest defines model for CreateNudgeRequest.
@@ -9945,14 +9945,9 @@ type ClientInterface interface {
 
 	// UpdateSessionWithBody Update a Session
 	//
-	// Replaces or removes the Session lifetime estimated-cost cap, and merges
-	// host metadata when present. Raising or removing an exhausted cap
-	// requeues a turn paused on its per-Invocation estimated-cost limit. A
-	// credit-paused turn resumes automatically after its account receives
-	// enough credits.
-	//
-	// For metadata, a present key replaces its value, an explicit
-	// `null` deletes that key, and a key the patch does not mention survives.
+	// Merges host metadata into the Session. A present key replaces its
+	// value, an explicit `null` deletes that key, and a key the patch does
+	// not mention survives.
 	//
 	// Merge rather than replace, because independent writers share this map —
 	// a conversation UI writing a title, correlation tooling writing a trace
@@ -9975,14 +9970,9 @@ type ClientInterface interface {
 
 	// UpdateSession Update a Session
 	//
-	// Replaces or removes the Session lifetime estimated-cost cap, and merges
-	// host metadata when present. Raising or removing an exhausted cap
-	// requeues a turn paused on its per-Invocation estimated-cost limit. A
-	// credit-paused turn resumes automatically after its account receives
-	// enough credits.
-	//
-	// For metadata, a present key replaces its value, an explicit
-	// `null` deletes that key, and a key the patch does not mention survives.
+	// Merges host metadata into the Session. A present key replaces its
+	// value, an explicit `null` deletes that key, and a key the patch does
+	// not mention survives.
 	//
 	// Merge rather than replace, because independent writers share this map —
 	// a conversation UI writing a title, correlation tooling writing a trace
@@ -12537,14 +12527,9 @@ func (c *Client) GetSession(ctx context.Context, sessionID SessionID, reqEditors
 
 // UpdateSessionWithBody Update a Session
 //
-// Replaces or removes the Session lifetime estimated-cost cap, and merges
-// host metadata when present. Raising or removing an exhausted cap
-// requeues a turn paused on its per-Invocation estimated-cost limit. A
-// credit-paused turn resumes automatically after its account receives
-// enough credits.
-//
-// For metadata, a present key replaces its value, an explicit
-// `null` deletes that key, and a key the patch does not mention survives.
+// Merges host metadata into the Session. A present key replaces its
+// value, an explicit `null` deletes that key, and a key the patch does
+// not mention survives.
 //
 // Merge rather than replace, because independent writers share this map —
 // a conversation UI writing a title, correlation tooling writing a trace
@@ -12577,14 +12562,9 @@ func (c *Client) UpdateSessionWithBody(ctx context.Context, sessionID SessionID,
 
 // UpdateSession Update a Session
 //
-// Replaces or removes the Session lifetime estimated-cost cap, and merges
-// host metadata when present. Raising or removing an exhausted cap
-// requeues a turn paused on its per-Invocation estimated-cost limit. A
-// credit-paused turn resumes automatically after its account receives
-// enough credits.
-//
-// For metadata, a present key replaces its value, an explicit
-// `null` deletes that key, and a key the patch does not mention survives.
+// Merges host metadata into the Session. A present key replaces its
+// value, an explicit `null` deletes that key, and a key the patch does
+// not mention survives.
 //
 // Merge rather than replace, because independent writers share this map —
 // a conversation UI writing a title, correlation tooling writing a trace
@@ -19679,14 +19659,9 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateSessionWithBodyWithResponse Update a Session
 	//
-	// Replaces or removes the Session lifetime estimated-cost cap, and merges
-	// host metadata when present. Raising or removing an exhausted cap
-	// requeues a turn paused on its per-Invocation estimated-cost limit. A
-	// credit-paused turn resumes automatically after its account receives
-	// enough credits.
-	//
-	// For metadata, a present key replaces its value, an explicit
-	// `null` deletes that key, and a key the patch does not mention survives.
+	// Merges host metadata into the Session. A present key replaces its
+	// value, an explicit `null` deletes that key, and a key the patch does
+	// not mention survives.
 	//
 	// Merge rather than replace, because independent writers share this map —
 	// a conversation UI writing a title, correlation tooling writing a trace
@@ -19709,14 +19684,9 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateSessionWithResponse Update a Session
 	//
-	// Replaces or removes the Session lifetime estimated-cost cap, and merges
-	// host metadata when present. Raising or removing an exhausted cap
-	// requeues a turn paused on its per-Invocation estimated-cost limit. A
-	// credit-paused turn resumes automatically after its account receives
-	// enough credits.
-	//
-	// For metadata, a present key replaces its value, an explicit
-	// `null` deletes that key, and a key the patch does not mention survives.
+	// Merges host metadata into the Session. A present key replaces its
+	// value, an explicit `null` deletes that key, and a key the patch does
+	// not mention survives.
 	//
 	// Merge rather than replace, because independent writers share this map —
 	// a conversation UI writing a title, correlation tooling writing a trace
@@ -29054,14 +29024,9 @@ func (c *ClientWithResponses) GetSessionWithResponse(ctx context.Context, sessio
 
 // UpdateSessionWithBodyWithResponse Update a Session
 //
-// Replaces or removes the Session lifetime estimated-cost cap, and merges
-// host metadata when present. Raising or removing an exhausted cap
-// requeues a turn paused on its per-Invocation estimated-cost limit. A
-// credit-paused turn resumes automatically after its account receives
-// enough credits.
-//
-// For metadata, a present key replaces its value, an explicit
-// `null` deletes that key, and a key the patch does not mention survives.
+// Merges host metadata into the Session. A present key replaces its
+// value, an explicit `null` deletes that key, and a key the patch does
+// not mention survives.
 //
 // Merge rather than replace, because independent writers share this map —
 // a conversation UI writing a title, correlation tooling writing a trace
@@ -29090,14 +29055,9 @@ func (c *ClientWithResponses) UpdateSessionWithBodyWithResponse(ctx context.Cont
 
 // UpdateSessionWithResponse Update a Session
 //
-// Replaces or removes the Session lifetime estimated-cost cap, and merges
-// host metadata when present. Raising or removing an exhausted cap
-// requeues a turn paused on its per-Invocation estimated-cost limit. A
-// credit-paused turn resumes automatically after its account receives
-// enough credits.
-//
-// For metadata, a present key replaces its value, an explicit
-// `null` deletes that key, and a key the patch does not mention survives.
+// Merges host metadata into the Session. A present key replaces its
+// value, an explicit `null` deletes that key, and a key the patch does
+// not mention survives.
 //
 // Merge rather than replace, because independent writers share this map —
 // a conversation UI writing a title, correlation tooling writing a trace

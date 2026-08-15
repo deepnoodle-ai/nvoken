@@ -40,7 +40,7 @@ pub struct CreateInvocationRequest {
     /// What to do when the Session already has a turn running. A Session runs one turn at a time.  - `reject` (the default) refuses this request with   `session_invocation_active` and leaves the running turn alone. - `supersede` cancels the running turn and starts this one in its   place. The cancelled turn's work is discarded and does not carry   forward — \"discard and redo\". - `interrupt` asks the running turn to stop cleanly and starts   this one only once it has, so this turn builds on what the   stopped one produced — \"stop and redo\".  Omitting the field and sending `reject` are the same request for idempotency purposes.
     #[serde(rename = "if_active", skip_serializing_if = "Option::is_none")]
     pub if_active: Option<IfActive>,
-    /// What to do when the turn runs out of one of its spending limits. `stop` ends it as `incomplete`. `pause` leaves it as `paused` so you can raise the limit and continue it.  Covers the iteration, output-token, per-turn cost, and Session cost limits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
+    /// What to do when the turn runs out of one of its spending limits. `stop` ends it as `incomplete`. `pause` leaves it as `paused` so you can raise the limit and continue it.  Covers the iteration, output-token, and per-turn estimated-cost limits, and exhausted tenant credits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
     #[serde(
         rename = "on_budget_exhausted",
         skip_serializing_if = "Option::is_none"
@@ -113,7 +113,7 @@ impl Default for IfActive {
         Self::Reject
     }
 }
-/// What to do when the turn runs out of one of its spending limits. `stop` ends it as `incomplete`. `pause` leaves it as `paused` so you can raise the limit and continue it.  Covers the iteration, output-token, per-turn cost, and Session cost limits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
+/// What to do when the turn runs out of one of its spending limits. `stop` ends it as `incomplete`. `pause` leaves it as `paused` so you can raise the limit and continue it.  Covers the iteration, output-token, and per-turn estimated-cost limits, and exhausted tenant credits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum OnBudgetExhausted {
     #[serde(rename = "stop")]

@@ -193,9 +193,9 @@ export interface CreateInvocationRequest {
      * `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
      * you can raise the limit and continue it.
      *
-     * Covers the iteration, output-token, per-turn cost, and Session
-     * cost limits. Deadlines are not covered — a turn that runs out of
-     * time always ends and can never be resumed.
+     * Covers the iteration, output-token, and per-turn estimated-cost
+     * limits, and exhausted tenant credits. Deadlines are not covered —
+     * a turn that runs out of time always ends and can never be resumed.
      *
      * @type {CreateInvocationRequestOnBudgetExhaustedEnum}
      * @memberof CreateInvocationRequest
