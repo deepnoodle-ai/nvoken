@@ -38,6 +38,8 @@
     "dist/index.js",
     "dist/invocation-error.d.ts",
     "dist/invocation-error.js",
+    "dist/invocation-status.d.ts",
+    "dist/invocation-status.js",
     "dist/media-preflight.d.ts",
     "dist/media-preflight.js",
     "dist/schema-preflight.d.ts",

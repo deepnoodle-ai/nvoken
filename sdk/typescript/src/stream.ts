@@ -8,6 +8,7 @@ import type {
   InvocationChange,
   SessionMessage,
 } from "./generated/models/index.js";
+import { isTurnOver } from "./invocation-status.js";
 import {
   MessageDeltaEventFromJSON,
   StreamEndEventFromJSON,
@@ -83,8 +84,6 @@ export type SessionStreamEvent<TOutput extends object = JsonObject> = StreamMeta
   | StreamEndEvent
 );
 
-const TERMINAL_STATUSES = ["completed", "incomplete", "failed", "cancelled"];
-
 export class Reducer {
   private readonly messages = new Map<number, SessionMessage>();
   private readonly changes = new Map<string, InvocationChange>();
@@ -121,7 +120,7 @@ export class Reducer {
     }
     for (const change of update.invocationChanges) {
       this.changes.set(`${change.invocationId}:${change.revision}`, change);
-      if (TERMINAL_STATUSES.includes(change.status)) {
+      if (isTurnOver(change)) {
         this.terminalInvocations.add(change.invocationId);
         this.discardPreviews(change.invocationId);
       }

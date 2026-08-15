@@ -113,13 +113,7 @@ impl Reducer {
             self.messages.insert(message.sequence, message);
         }
         for change in update.invocation_changes {
-            if matches!(
-                change.status,
-                models::InvocationStatus::Completed
-                    | models::InvocationStatus::Incomplete
-                    | models::InvocationStatus::Failed
-                    | models::InvocationStatus::Cancelled
-            ) {
+            if crate::invocation_status::is_turn_over(&change) {
                 self.terminal_invocations
                     .insert(change.invocation_id.clone());
                 self.discard_previews(&change.invocation_id);

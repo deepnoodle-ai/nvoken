@@ -1,4 +1,5 @@
 export * from "./client.js";
+export * from "./invocation-status.js";
 export * from "./diagnostics.js";
 export * from "./stream.js";
 export * from "./callback.js";
@@ -18,7 +19,6 @@ export type {
   Invocation,
   InvocationChange,
   InvocationResult,
-  InvocationStatus,
   InvocationStopReason,
   ModelCost,
   ModelControlCapabilities,
@@ -51,4 +51,7 @@ export type {
   ToolCallStatus,
   TranscriptSnapshot,
 } from "./generated/models/index.js";
+// The value, not only the type: enumerating the statuses is how a host keeps
+// its own classification honest, and a type alone cannot be iterated.
+export { InvocationStatus } from "./generated/models/index.js";
 export * as raw from "./generated/index.js";

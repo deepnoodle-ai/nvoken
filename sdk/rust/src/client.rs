@@ -2413,17 +2413,12 @@ fn generated_idempotency_key() -> String {
     )
 }
 
-/// Whether an Invocation has stopped for good. `Incomplete` is one of the four:
-/// a turn the runtime cut off at a budget is over, and a wait helper that
-/// treated only `Completed` as an ending would poll it forever.
+/// Whether an Invocation has stopped for good. One encoding, in
+/// [`crate::invocation_status`]; `Incomplete` being one of the four is the part
+/// callers get wrong, and a wait helper that treated only `Completed` as an
+/// ending would poll a budget-stopped turn forever.
 fn terminal(status: models::InvocationStatus) -> bool {
-    matches!(
-        status,
-        models::InvocationStatus::Completed
-            | models::InvocationStatus::Incomplete
-            | models::InvocationStatus::Failed
-            | models::InvocationStatus::Cancelled
-    )
+    crate::invocation_status::is_terminal_status(status)
 }
 
 fn normalize_generated_error<T>(error: apis::Error<T>) -> NvokenError

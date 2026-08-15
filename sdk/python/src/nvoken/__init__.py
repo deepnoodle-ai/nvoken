@@ -21,6 +21,7 @@ from .agent import (
     InvocationOptions,
     MissingToolHandlerError,
     NoOutputTextError,
+    answerable_tool_calls,
 )
 from .ask_user import (
     ASK_USER_DESCRIPTION,
@@ -77,9 +78,18 @@ from .client import (
     preflight_input,
     preflight_output_schema,
 )
+from .invocation_status import (
+    TERMINAL_INVOCATION_STATUSES,
+    is_terminal_status,
+    is_turn_over,
+)
 from .stream import Reducer, ReducedSnapshot, StreamEvent, StreamPreview, stream_session
 __all__ = [
     "AgentDefinition",
+    "TERMINAL_INVOCATION_STATUSES",
+    "answerable_tool_calls",
+    "is_terminal_status",
+    "is_turn_over",
     "__version__",
     "ASK_USER_DESCRIPTION",
     "ASK_USER_TOOL_NAME",

@@ -8,6 +8,7 @@ import {
   MAX_MEDIA_INPUT_BYTES,
   MAX_MEDIA_TITLE_CHARACTERS,
 } from "../client.js";
+import { isTerminalStatus } from "../invocation-status.js";
 import { mediaInputIssue } from "../media-preflight.js";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -1562,6 +1563,7 @@ test("agent run converts standard schemas, retries one admission, and dispatches
     invocation_id: invocationId,
     revision,
     status,
+    terminal: isTerminalStatus(status),
     stop_reason: status === "completed" ? "end_turn" : null,
     through_message_sequence: null,
     error: null,
@@ -1727,6 +1729,7 @@ test("missing handlers cancel by default and support explicit handoff", async ()
           invocation_id: invocationId,
           revision: 1,
           status: "waiting",
+          terminal: isTerminalStatus("waiting"),
           through_message_sequence: null,
           error: null,
           structured_output: null,
@@ -1806,6 +1809,7 @@ test("text reports structured-only completion and stream timeout distinctly", as
           invocation_id: invocationId,
           revision: 1,
           status: "completed",
+          terminal: isTerminalStatus("completed"),
           stop_reason: "end_turn",
           through_message_sequence: null,
           error: null,
@@ -1958,6 +1962,7 @@ test("agent stream exposes the two-frame consumer without a reducer", async () =
           invocation_id: invocationId,
           revision: 2,
           status: "completed",
+          terminal: isTerminalStatus("completed"),
           stop_reason: "end_turn",
           through_message_sequence: 2,
           error: null,

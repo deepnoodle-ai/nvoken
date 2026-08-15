@@ -1338,12 +1338,56 @@ func generatedToolResults(results []ToolResult) (generated.SubmitHostToolResults
 	return request, nil
 }
 
-// terminal reports whether an Invocation has stopped for good. `incomplete` is
-// one of the four: a turn the runtime cut off at a budget is over, and a wait
-// helper that treated only `completed` as an ending would poll it forever.
+// TerminalInvocationStatuses are the statuses that mean a turn has stopped for
+// good. Exported so no caller keeps a copy, for the same reason
+// AnswerableToolCalls is: the classification is part of the protocol, and
+// rediscovering it in every application is how one of them gets it wrong.
+var TerminalInvocationStatuses = []InvocationStatus{
+	InvocationCompleted,
+	InvocationIncomplete,
+	InvocationFailed,
+	InvocationCancelled,
+}
+
+// IsTerminalStatus reports whether a status means the turn is over.
+//
+// There are eight statuses and four of them are terminal, so the interesting
+// mistake is writing the other four out. `queued`, `running`, `waiting`, and
+// `paused` differ only in what unblocks them — a paused turn stopped on
+// spending capacity with its deadlines on hold, and resumes on its own once its
+// account is funded — and a turn wrongly believed finished is one nobody
+// settles, reattaches to, or cancels before erasing its Session.
+//
+// A status this build does not recognize is reported as not terminal, which is
+// the safe direction: you wait on a turn that already ended rather than
+// abandoning one that has not.
+func IsTerminalStatus(status InvocationStatus) bool {
+	for _, candidate := range TerminalInvocationStatuses {
+		if status == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+// IsTurnOver reports whether a change ends the turn. This is the terminal
+// signal, and there is no other.
+//
+// It answers for the change, not for the turn: a replayed `running` change
+// reports false even after the turn has ended, which is what lets a client fold
+// messages before changes and never mark a turn settled before its final
+// message exists.
+//
+// Either witness suffices. The field and the status always agree when both are
+// present — nvoken computes one from the other — so accepting either keeps this
+// correct against a server too old to send the field, where a required bool
+// decodes as false and is indistinguishable from a genuine one.
+func IsTurnOver(change InvocationChange) bool {
+	return change.Terminal || IsTerminalStatus(change.Status)
+}
+
 func terminal(status InvocationStatus) bool {
-	return status == InvocationCompleted || status == InvocationIncomplete ||
-		status == InvocationFailed || status == InvocationCancelled
+	return IsTerminalStatus(status)
 }
 
 func waitSatisfied(status InvocationStatus, until WaitCondition) bool {

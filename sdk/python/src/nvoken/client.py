@@ -132,6 +132,7 @@ from .stream import (
     stream_invocation,
     stream_session,
 )
+from .invocation_status import TERMINAL_INVOCATION_STATUSES
 from .media_preflight import (
     MEDIA_PREFLIGHT_CODE,
     DocumentBlock,
@@ -1981,9 +1982,11 @@ class InvocationHandle:
         return iter_invocation(self.client, self, deltas=deltas)
 
 
-# `incomplete` is terminal: a turn the runtime cut off at a budget is over, and
-# a wait helper that treated only `completed` as an ending would poll it forever.
-TERMINAL_STATUSES = frozenset({"completed", "incomplete", "failed", "cancelled"})
+# One encoding, in `invocation_status`. Re-bound here because this module's wait
+# helpers read it, and because `incomplete` being terminal is the part callers
+# get wrong: a wait that treated only `completed` as an ending would poll a
+# budget-stopped turn forever.
+TERMINAL_STATUSES = TERMINAL_INVOCATION_STATUSES
 
 
 def ended_message(invocation_id: str, invocation: Invocation) -> str:

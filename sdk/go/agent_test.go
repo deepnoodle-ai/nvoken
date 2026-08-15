@@ -469,6 +469,7 @@ func agentTestChange(invocationID, status, cursor string) string {
 			"invocation_id":            invocationID,
 			"revision":                 1,
 			"status":                   status,
+			"terminal":                 IsTerminalStatus(InvocationStatus(status)),
 			"through_message_sequence": nil,
 			"error":                    nil,
 			"structured_output":        nil,

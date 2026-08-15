@@ -1002,11 +1002,24 @@ func secondChange() map[string]any {
 	return change(2, "completed", 2, "2026-07-21T12:00:03Z")
 }
 
+// terminalStatus mirrors the service: `terminal` is exactly the four final
+// statuses, computed rather than written into each fixture so a fixture cannot
+// claim a change is an ending that its own status disagrees with.
+func terminalStatus(status string) bool {
+	switch status {
+	case "completed", "incomplete", "failed", "cancelled":
+		return true
+	default:
+		return false
+	}
+}
+
 func change(revision int, status string, sequence int, occurredAt string) map[string]any {
 	return map[string]any{
 		"invocation_id":                invocationID,
 		"revision":                     revision,
 		"status":                       status,
+		"terminal":                     terminalStatus(status),
 		"through_message_sequence":     sequence,
 		"error":                        nil,
 		"usage":                        nil,
