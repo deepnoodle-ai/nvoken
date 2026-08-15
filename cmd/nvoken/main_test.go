@@ -463,12 +463,19 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 			}`)
 		case "/v1/sessions/" + testSessionID + "/stream":
 			response.Header().Set("Content-Type", "text/event-stream")
+			// Complete frames, as the service sends them. The reader refuses a
+			// payload missing a member the contract requires, so a fixture that
+			// abbreviates one is describing a response that cannot arrive.
 			_, _ = io.WriteString(response, "event: message.delta\n")
-			_, _ = io.WriteString(response, `data: {"kind":"text","delta":"streamed answer"}`+"\n\n")
+			_, _ = io.WriteString(response, `data: {"type":"message.delta","session_id":"`+testSessionID+`",`+
+				`"invocation_id":"`+testInvocationID+`","attempt":1,"message_id":"pmsg_1",`+
+				`"content_index":0,"kind":"text","delta":"streamed answer",`+
+				`"emitted_at":"2026-07-21T12:00:02Z"}`+"\n\n")
 			_, _ = io.WriteString(response, "id: cursor-2\n")
 			_, _ = io.WriteString(response, "event: transcript.update\n")
-			_, _ = io.WriteString(response, `data: {"messages":[],"invocation_changes":[`+
-				`{"invocation_id":"`+testInvocationID+`","revision":1,"status":"completed",`+
+			_, _ = io.WriteString(response, `data: {"type":"transcript.update","session_id":"`+testSessionID+`",`+
+				`"messages":[],"invocation_changes":[`+
+				`{"invocation_id":"`+testInvocationID+`","revision":1,"status":"completed","terminal":true,`+
 				`"through_message_sequence":null,"error":null,"structured_output":null,`+
 				`"occurred_at":"2026-07-21T12:00:03Z"}],"cursor":"cursor-2"}`+"\n\n")
 		default:

@@ -82,6 +82,9 @@ func NewReducer() *Reducer {
 func (r *Reducer) Apply(event StreamEvent) error {
 	switch event.Type {
 	case "message.delta":
+		if err := requireFrameKeys("MessageDeltaEvent", event.Data); err != nil {
+			return err
+		}
 		var delta generated.MessageDeltaEvent
 		if err := json.Unmarshal(event.Data, &delta); err != nil {
 			return fmt.Errorf("decode message delta: %w", err)
@@ -89,6 +92,9 @@ func (r *Reducer) Apply(event StreamEvent) error {
 		r.appendPreview(delta)
 		return nil
 	case "stream.resync":
+		if err := requireFrameKeys("StreamResyncEvent", event.Data); err != nil {
+			return err
+		}
 		var resync generated.StreamResyncEvent
 		if err := json.Unmarshal(event.Data, &resync); err != nil {
 			return fmt.Errorf("decode stream resync: %w", err)
@@ -104,6 +110,9 @@ func (r *Reducer) Apply(event StreamEvent) error {
 	}
 	if event.Type != "transcript.update" {
 		return nil
+	}
+	if err := requireTranscriptUpdateKeys(event.Data); err != nil {
+		return err
 	}
 	var update generated.TranscriptUpdateEvent
 	if err := json.Unmarshal(event.Data, &update); err != nil {
