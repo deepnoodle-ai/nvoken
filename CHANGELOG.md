@@ -6,7 +6,7 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
-## Unreleased
+## 0.17.0 - 2026-08-15
 
 - **Message pages can start at the newest message.** `order: "desc"` on
   `listSessionMessages` / `MessageListOptions` / `list_session_messages`, which
