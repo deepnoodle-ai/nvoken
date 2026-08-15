@@ -8,6 +8,22 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **The TypeScript and Go readers refuse a malformed frame.** Both decoded a
+  stream payload missing a field the contract requires and carried on: the
+  generated TypeScript decoder left it `undefined`, and `encoding/json` left the
+  Go field at its zero value. For a required bool that is a confident wrong
+  answer — a change with no `terminal` read as "not the end of the turn" and was
+  indistinguishable from one that genuinely was not. Rust and Python already
+  rejected it, through serde and pydantic, so this is the other two catching up
+  rather than a new rule.
+
+  TypeScript wires in the generated `instanceOf` guards, which encode the
+  required set from the contract already. Go has no generated validator, so
+  `sdk/go/frame_validation.go` carries a table that `scripts/check_go_frame_keys.py`
+  holds against `openapi/nvoken.yaml` on every `make check`. Both validate the
+  entries of a `transcript.update`, not just the frame around them, and both
+  still ignore fields they do not recognize.
+
 - **Every SDK exports the terminal predicate.** `isTerminalStatus` /
   `isTurnOver` in TypeScript, `IsTerminalStatus` / `IsTurnOver` in Go,
   `is_terminal_status` / `is_turn_over` in Python and Rust, alongside

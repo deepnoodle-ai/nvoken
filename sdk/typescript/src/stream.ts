@@ -10,6 +10,12 @@ import type {
 } from "./generated/models/index.js";
 import { isTurnOver } from "./invocation-status.js";
 import {
+  instanceOfInvocationChange,
+  instanceOfMessageDeltaEvent,
+  instanceOfSessionMessage,
+  instanceOfStreamEndEvent,
+  instanceOfStreamResyncEvent,
+  instanceOfTranscriptUpdateEvent,
   MessageDeltaEventFromJSON,
   StreamEndEventFromJSON,
   StreamResyncEventFromJSON,
@@ -94,11 +100,11 @@ export class Reducer {
 
   apply(event: StreamEvent): void {
     if (event.type === "message.delta") {
-      this.appendPreview(MessageDeltaEventFromJSON(event.data));
+      this.appendPreview(decodeMessageDelta(event.data));
       return;
     }
     if (event.type === "stream.resync") {
-      const resync = StreamResyncEventFromJSON(event.data);
+      const resync = decodeStreamResync(event.data);
       // An absent Invocation is scope: discard previews for the whole Session.
       if (resync.invocationId) {
         this.discardPreviews(resync.invocationId);
@@ -109,7 +115,7 @@ export class Reducer {
       return;
     }
     if (event.type !== "transcript.update") return;
-    const update = TranscriptUpdateEventFromJSON(event.data);
+    const update = decodeTranscriptUpdate(event.data);
     // Messages before changes, so a turn is never marked settled before its
     // final message exists.
     for (const message of update.messages) {
@@ -327,6 +333,73 @@ function streamDelay(
   );
 }
 
+/**
+ * Refuses a frame that is missing a field the contract requires.
+ *
+ * The generated decoders copy whatever is there and leave the rest undefined,
+ * so a required field the server never sent becomes a plausible-looking value
+ * rather than an error — and for a boolean that is a confident wrong answer.
+ * The generated `instanceOf` guards already encode the required set from the
+ * contract, so this wires them in rather than restating it.
+ *
+ * Frames may gain fields over time and a decoder must ignore what it does not
+ * recognize. Requiring what the contract requires is the other half of that
+ * rule, not a contradiction of it.
+ */
+function requireFrameField<T>(
+  what: string,
+  value: T,
+  valid: (candidate: object) => boolean,
+): T {
+  if (!valid(value as object)) {
+    throw new NvokenError(
+      "unexpected_response",
+      `${what} is missing a field the contract requires`,
+    );
+  }
+  return value;
+}
+
+/**
+ * The four frame decoders, each refusing a payload the contract would not
+ * allow. Both readers go through these: `Reducer.apply`, which the Session
+ * subscription folds with, and `decodeStreamEvent`, which produces the typed
+ * value a filtered stream yields.
+ */
+function decodeTranscriptUpdate(data: unknown): TranscriptUpdateEvent {
+  const update = requireFrameField(
+    "transcript.update",
+    TranscriptUpdateEventFromJSON(data),
+    instanceOfTranscriptUpdateEvent,
+  );
+  // The frame guard only proves the two collections are present. Their entries
+  // are what a reader actually folds on, and a change missing `terminal` is the
+  // case worth catching: it decodes as "not the end of the turn".
+  for (const message of update.messages) {
+    requireFrameField("session message", message, instanceOfSessionMessage);
+  }
+  for (const change of update.invocationChanges) {
+    requireFrameField("invocation change", change, instanceOfInvocationChange);
+  }
+  return update;
+}
+
+function decodeMessageDelta(data: unknown): MessageDeltaEvent {
+  return requireFrameField(
+    "message.delta",
+    MessageDeltaEventFromJSON(data),
+    instanceOfMessageDeltaEvent,
+  );
+}
+
+function decodeStreamResync(data: unknown): StreamResyncEvent {
+  return requireFrameField(
+    "stream.resync",
+    StreamResyncEventFromJSON(data),
+    instanceOfStreamResyncEvent,
+  );
+}
+
 function decodeStreamEvent(raw: StreamEvent): object | undefined {
   if (!raw.data || typeof raw.data !== "object") {
     throw new NvokenError(
@@ -336,13 +409,17 @@ function decodeStreamEvent(raw: StreamEvent): object | undefined {
   }
   switch (raw.type) {
   case "transcript.update":
-    return TranscriptUpdateEventFromJSON(raw.data);
+    return decodeTranscriptUpdate(raw.data);
   case "message.delta":
-    return MessageDeltaEventFromJSON(raw.data);
+    return decodeMessageDelta(raw.data);
   case "stream.resync":
-    return StreamResyncEventFromJSON(raw.data);
+    return decodeStreamResync(raw.data);
   case "stream.end":
-    return StreamEndEventFromJSON(raw.data);
+    return requireFrameField(
+      "stream.end",
+      StreamEndEventFromJSON(raw.data),
+      instanceOfStreamEndEvent,
+    );
   default:
     return undefined;
   }
