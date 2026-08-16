@@ -4,6 +4,7 @@
 !.env.example
 
 # Go
+/cmd/nvoken/nvoken
 /nvoken
 bin/
 dist/
