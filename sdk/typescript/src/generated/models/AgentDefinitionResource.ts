@@ -98,6 +98,18 @@ export interface AgentDefinitionResource {
     id: string;
     /**
      *
+     * @type {string}
+     * @memberof AgentDefinitionResource
+     */
+    definitionKey: string;
+    /**
+     *
+     * @type {string}
+     * @memberof AgentDefinitionResource
+     */
+    name: string;
+    /**
+     *
      * @type {number}
      * @memberof AgentDefinitionResource
      */
@@ -214,6 +226,8 @@ export interface AgentDefinitionResource {
  */
 export function instanceOfAgentDefinitionResource(value: object): value is AgentDefinitionResource {
     if (!('id' in value) || value['id'] === undefined) return false;
+    if (!('definitionKey' in value) || value['definitionKey'] === undefined) return false;
+    if (!('name' in value) || value['name'] === undefined) return false;
     if (!('revision' in value) || value['revision'] === undefined) return false;
     if (!('model' in value) || value['model'] === undefined) return false;
     if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
@@ -233,6 +247,8 @@ export function AgentDefinitionResourceFromJSONTyped(json: any, ignoreDiscrimina
     return {
 
         'id': json['id'],
+        'definitionKey': json['definition_key'],
+        'name': json['name'],
         'revision': json['revision'],
         'instructions': json['instructions'] == null ? undefined : json['instructions'],
         'model': ModelFromJSON(json['model']),
@@ -264,6 +280,8 @@ export function AgentDefinitionResourceToJSONTyped(value?: AgentDefinitionResour
     return {
 
         'id': value['id'],
+        'definition_key': value['definitionKey'],
+        'name': value['name'],
         'revision': value['revision'],
         'instructions': value['instructions'],
         'model': ModelToJSON(value['model']),

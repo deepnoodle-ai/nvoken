@@ -16,6 +16,10 @@ pub struct AgentDefinitionResource {
     /// Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
     #[serde(rename = "id")]
     pub id: String,
+    #[serde(rename = "definition_key")]
+    pub definition_key: String,
+    #[serde(rename = "name")]
+    pub name: String,
     #[serde(rename = "revision")]
     pub revision: u64,
     #[serde(rename = "instructions", skip_serializing_if = "Option::is_none")]
@@ -55,6 +59,8 @@ pub struct AgentDefinitionResource {
 impl AgentDefinitionResource {
     pub fn new(
         id: String,
+        definition_key: String,
+        name: String,
         revision: u64,
         model: models::Model,
         created_at: chrono::DateTime<chrono::FixedOffset>,
@@ -63,6 +69,8 @@ impl AgentDefinitionResource {
     ) -> AgentDefinitionResource {
         AgentDefinitionResource {
             id,
+            definition_key,
+            name,
             revision,
             instructions: None,
             model: Box::new(model),

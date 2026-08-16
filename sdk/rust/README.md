@@ -1,9 +1,8 @@
 # nvoken Rust SDK
 
-An Invocation is one durable agent turn. The host supplies `agent_key`,
-optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
-model, and tools travel with the turn as an `AgentDefinition`, either inline or
-referenced by a reusable `agent_definition_id`.
+An Invocation is one durable turn by a deliberately created, tenant-scoped
+Agent. An Agent binds your `agent_key` to one App-owned, versioned Agent
+Definition; a Session is one conversation with that Agent.
 
 The handwritten level covers both transport plus durable handle, and a
 high-level Agent facade on top of it:
@@ -28,26 +27,26 @@ NVOKEN_BASE_URL=http://localhost:8080 NVOKEN_API_KEY=... \
   cargo run --example quickstart
 ```
 
-Resolve the identity-only Agent anchor without admitting work:
+List or read the full Agent instance without admitting work:
 
 ```rust
 let agents = client
-    .list_agent_identities(ListAgentsOptions {
+    .list_agents(ListAgentsOptions {
         agent_key: Some("support".to_owned()),
         ..Default::default()
     })
     .await?;
-let identity = client.get_agent_identity(&agents.items[0].id).await?;
+let instance = client.get_agent(&agents.items[0].id).await?;
 ```
 
-The identity contains only its nvoken ID, host-owned key, and creation time.
-Instructions, models, tools, and provider keys remain per Invocation.
+The Agent records its tenant, key, display name, Definition binding, optional
+revision pin, lifecycle timestamps, and archive state.
 
 Opt into the fixed guarded public-web reader with `fetch_tool()`:
 
 ```rust
-let request = InvokeRequest::new("research", "Summarize the URL.", Model::new("anthropic", "claude-sonnet-5"))
-    .tool(nvoken::fetch_tool());
+// The deliberately created research Agent's Definition declares fetch_tool().
+let request = InvokeRequest::new("research", "Summarize the URL.");
 ```
 
 The Runtime accepts only `{"name":"nvoken_fetch","mode":"builtin"}`. It owns
@@ -67,8 +66,8 @@ request.provider_keys = vec![ProviderKeySelection {
 ```
 
 The other source variants are `InstallationByok`, `TenantByok`, and `Platform`.
-`Model::new`, `InvokeRequest` builders, `fetch_tool`, `Tool::host` /
-`Tool::callback`, and `InvokeRequest` builders cover the core admission path
+`Model::new`, `InvokeRequest` builders, `fetch_tool`, and `Tool::host` /
+`Tool::callback` cover Definition setup and the core admission path
 without generated constructors.
 
 `WaitOptions` configures the condition, overall local timeout, and polling
@@ -101,13 +100,14 @@ Invocation usage as a convenience estimate rather than a billing ledger.
 Install restart-stable compaction on a new or existing Session:
 
 ```rust
-let request = InvokeRequest::new("support", "hello", model)
+let request = InvokeRequest::new("support", "hello")
     .session_key("support:123")
     .session_options(SessionOptions {
         compaction: ContextCompaction {
             trigger_tokens: ContextCompactionTrigger::Auto,
             model: None,
         },
+        ..Default::default()
     });
 ```
 
@@ -126,7 +126,7 @@ the reject default. For an intentional replace/regenerate action, use a new
 idempotency key and the typed builder:
 
 ```rust
-let request = InvokeRequest::new("support", "Try that answer again.", model)
+let request = InvokeRequest::new("support", "Try that answer again.")
     .session_key("customer-123")
     .idempotency_key("customer-123:regenerate-2")
     .if_active(IfActivePolicy::Supersede);
@@ -153,10 +153,7 @@ incomplete turn has none.
 `Agent` fixes one identity and execution controls, and admits through it:
 
 ```rust
-let agent = client.agent(
-    AgentOptions::new("support", Model::new("anthropic", "claude-sonnet-5"))
-        .instructions("Help with billing questions."),
-)?;
+let agent = client.agent(AgentOptions::new("support"))?;
 let answer = agent
     .text("Why was I charged twice?", AgentInvocationOptions::default())
     .await?;
@@ -200,11 +197,15 @@ let selected = client
 The list is curated discovery metadata, not proof of provider-account access.
 Exact inspection also accepts uncataloged IDs.
 
-Set an explicit portable temperature on the request or Agent:
+Set an explicit portable temperature on the Agent Definition or a safe
+per-turn override:
 
 ```rust
-let request = InvokeRequest::new("support", "hello", Model::new("anthropic", "claude-haiku-4-5"))
-    .sampling(Sampling { temperature: 0.0 });
+let request = InvokeRequest::new("support", "hello").overrides(
+    AgentDefinitionOverrides::default()
+        .model(Model::new("anthropic", "claude-haiku-4-5"))
+        .sampling(Sampling { temperature: 0.0 }),
+);
 ```
 
 Omit `sampling` to preserve the provider default. Check
@@ -216,11 +217,14 @@ are intentionally absent; `limits.max_output_tokens` is the output guardrail.
 Reasoning is typed and fail closed:
 
 ```rust
-let request = InvokeRequest::new("support", "hello", Model::new("anthropic", "claude-opus-5"))
-    .reasoning(Reasoning {
-        effort: Some(ReasoningEffort::High),
-        budget_tokens: None,
-    });
+let request = InvokeRequest::new("support", "hello").overrides(
+    AgentDefinitionOverrides::default()
+        .model(Model::new("anthropic", "claude-opus-5"))
+        .reasoning(Reasoning {
+            effort: Some(ReasoningEffort::High),
+            budget_tokens: None,
+        }),
+);
 ```
 
 Check `selected.controls.as_ref().map(|c| &c.reasoning)` first. A manual
@@ -232,43 +236,49 @@ complete continuation representation is durable.
 ## Structured-output schema preflight
 
 `Client::invoke` calls `preflight_output_schema(&schema)` before transport when
-the request's `AgentDefinition::output_schema` is present. Rejection is an `NvokenError` with
+the request's `AgentDefinitionOverrides::output_schema` is present. Rejection is an `NvokenError` with
 code `schema_preflight_failed`; its safe `details` contain the portable issue
 `code`, RFC 6901 `path`, and optional `keyword`. A successful local check means
 eligible for admission. Generated APIs reached through `client.raw()` still
 rely on the authoritative Runtime check.
 
-## Reuse an Agent Definition
+## Define and instantiate an Agent
 
-The convenience builders on `InvokeRequest` write through into an inline
-`AgentDefinition`, which is the ordinary path. Register one instead when many
-turns share a configuration and you would rather send a short ID:
+Every turn runs against an App-owned, versioned Agent Definition. Create a
+tenant-scoped Agent instance that binds to the template before admitting work:
 
 ```rust
 let definition = AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
     .instructions("Help with billing questions.");
 let resource = client
-    .create_agent_definition("support-definition-v1", definition)
+    .create_agent_definition(
+        "support-definition-v1",
+        "support",
+        "Support",
+        definition,
+    )
     .await?;
 
-let request = InvokeRequest::from_agent_definition(
-    "support",
-    "Why was I charged twice?",
-    resource.id,
-);
+let instance = client
+    .create_agent(CreateAgentInput {
+        tenant_key: None,
+        agent_key: "support".to_owned(),
+        name: "Support".to_owned(),
+        agent_definition_id: resource.id,
+        pinned_revision: None,
+    })
+    .await?;
+let request = InvokeRequest::from_agent_id(instance.id, "Why was I charged twice?");
 ```
 
-Creating a definition starts no turn and creates no Agent, Session, or message.
-The resource has a stable ID and an increasing revision. Use
-`get_agent_definition` and `update_agent_definition` to read and replace it. An
-idempotency key makes create retries safe; equal content under another key
-creates an independent resource.
-
-Exactly one of the inline definition and the ID may be set. Calling a
-write-through builder on a request that names an ID grows an inline definition,
-so the exclusivity check reports the conflict rather than silently dropping the
-field. `AgentOptions::from_definition_id` selects a reusable resource; host tool
-handlers attached to the options remain local.
+Creating a Definition starts no turn. It has an immutable `definition_key`, a
+stable ID, and an increasing revision; `get_agent_definition_revision` reads
+historical revisions. Updating a Definition does not rewrite an Agent's
+binding. An Agent or Session may pin a revision, while an Invocation may select
+one revision for that turn. Safe overrides cover model, sampling, reasoning,
+tool choice, limits, and output schema; they cannot expand tools, data access,
+memory authority, or instructions. Host tool handlers remain local to the SDK
+facade.
 
 ## Record changing application state
 
@@ -329,8 +339,9 @@ let headers = HashMap::from([
 ]);
 
 let catalog = client.list_mcp_tools(&server, Some(headers.clone())).await?;
-let request = InvokeRequest::new("support", "hello", Model::new("anthropic", "claude-sonnet-5"))
-    .mcp_server(server)
+// The support Agent's Definition stores `server`; the one-turn request stores
+// only the secret headers.
+let request = InvokeRequest::new("support", "hello")
     .mcp_server_headers(McpServerHeaders::new("support", headers));
 ```
 

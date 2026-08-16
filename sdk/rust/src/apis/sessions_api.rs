@@ -153,7 +153,7 @@ pub enum UpdateSessionError {
     UnknownValue(serde_json::Value),
 }
 
-/// Creates an empty Session, optionally seeded with history you already have. Use this when you want a conversation to exist before the first turn runs — to show it in a UI, or to import messages from elsewhere.  Every field is optional. Leave out `agent_key` and the Session starts unbound: `agent_id` stays null until the first turn binds it permanently.
+/// Creates an empty Session, optionally seeded with history you already have. Use this when you want a conversation to exist before the first turn runs — to show it in a UI, or to import messages from elsewhere.  Every field is optional. Leave out both `agent_id` and `agent_key` and the Session starts unbound: `agent_id` stays null until the first turn binds it permanently. A supplied Agent must already exist in the selected tenant.
 pub async fn create_session(
     configuration: &configuration::Configuration,
     create_session_request: models::CreateSessionRequest,

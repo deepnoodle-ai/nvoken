@@ -22,6 +22,8 @@ from nvoken_generated.models.admission_summary import AdmissionSummary
 from nvoken_generated.models.admission_tenant_count import AdmissionTenantCount
 from nvoken_generated.models.agent import Agent
 from nvoken_generated.models.agent_definition import AgentDefinition
+from nvoken_generated.models.agent_definition_create import AgentDefinitionCreate
+from nvoken_generated.models.agent_definition_overrides import AgentDefinitionOverrides
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
 from nvoken_generated.models.agent_definition_resource_list import AgentDefinitionResourceList
 from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite
@@ -55,6 +57,7 @@ from nvoken_generated.models.client_key_list import ClientKeyList
 from nvoken_generated.models.compaction_policy import CompactionPolicy
 from nvoken_generated.models.compaction_policy_trigger_tokens import CompactionPolicyTriggerTokens
 from nvoken_generated.models.cost_metrics import CostMetrics
+from nvoken_generated.models.create_agent_request import CreateAgentRequest
 from nvoken_generated.models.create_client_key_request import CreateClientKeyRequest
 from nvoken_generated.models.create_credential_request import CreateCredentialRequest
 from nvoken_generated.models.create_invocation_request import CreateInvocationRequest
@@ -228,6 +231,7 @@ from nvoken_generated.models.trace_summary import TraceSummary
 from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot
 from nvoken_generated.models.transcript_update_event import TranscriptUpdateEvent
 from nvoken_generated.models.url_citation import URLCitation
+from nvoken_generated.models.update_agent_request import UpdateAgentRequest
 from nvoken_generated.models.update_app_request import UpdateAppRequest
 from nvoken_generated.models.update_org_request import UpdateOrgRequest
 from nvoken_generated.models.update_session_request import UpdateSessionRequest

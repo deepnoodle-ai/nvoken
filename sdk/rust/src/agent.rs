@@ -14,27 +14,24 @@ use futures_util::{pin_mut, StreamExt};
 use serde_json::{json, Value};
 
 use crate::client::{
-    AgentDefinition, BudgetExhaustionBehavior, Client, ContextItem, ErrorCategory, IfActivePolicy,
-    InvocationHandle, InvokeRequest, Limits, McpServer, McpServerHeaders, Model, NvokenError,
-    ProviderKeySelection, ProviderTool, Reasoning, Sampling, SessionOptions, Tool, ToolChoice,
-    ToolMode, ToolResult, WaitCondition, WaitOptions, WebhookTarget,
+    AgentDefinitionOverrides, BudgetExhaustionBehavior, Client, ContextItem, ErrorCategory,
+    IfActivePolicy, InvocationHandle, InvokeRequest, McpServerHeaders, NvokenError,
+    ProviderKeySelection, SessionOptions, Tool, ToolMode, ToolResult, WaitCondition, WaitOptions,
+    WebhookTarget,
 };
 use crate::models;
 use crate::stream::StreamEvent;
 
-/// Fixed identity and the Agent Definition every call through an `Agent`
-/// admits with. Built with `Client::agent`.
+/// Fixed tenant-scoped Agent identity and local execution defaults. Built with
+/// `Client::agent`.
 #[derive(Clone)]
 pub struct AgentOptions {
-    pub agent_key: String,
+    pub agent_id: Option<String>,
+    pub agent_key: Option<String>,
     pub tenant_key: Option<String>,
-    /// The inline configuration every turn from this Agent runs with. When
-    /// `agent_definition_id` is set, only its host tool handlers are used
-    /// locally; nvoken resolves the reusable definition resource.
-    pub agent_definition: AgentDefinition,
-    /// An App-owned reusable Agent Definition. Exactly one of this ID or the
-    /// inline configuration is sent on every Invocation.
-    pub agent_definition_id: Option<String>,
+    /// Local handlers for host-mode tools declared by the selected Agent
+    /// Definition. Only the handler runs here; the service owns declarations.
+    pub tools: Vec<Tool>,
     /// Per-turn secret headers for the MCP servers the definition declares.
     pub mcp_server_headers: Vec<McpServerHeaders>,
     pub provider_keys: Vec<ProviderKeySelection>,
@@ -45,12 +42,12 @@ pub struct AgentOptions {
 }
 
 impl AgentOptions {
-    pub fn new(agent_key: impl Into<String>, model: Model) -> Self {
+    pub fn new(agent_key: impl Into<String>) -> Self {
         Self {
-            agent_key: agent_key.into(),
+            agent_id: None,
+            agent_key: Some(agent_key.into()),
             tenant_key: None,
-            agent_definition: AgentDefinition::new(model),
-            agent_definition_id: None,
+            tools: Vec::new(),
             mcp_server_headers: Vec::new(),
             provider_keys: Vec::new(),
             webhook: None,
@@ -58,67 +55,21 @@ impl AgentOptions {
         }
     }
 
-    /// Builds an Agent backed by an App-owned reusable Agent Definition.
-    /// Host tool handlers may still be attached with `tool`; the matching
-    /// declarations must already exist on the resource.
-    pub fn from_definition_id(
-        agent_key: impl Into<String>,
-        agent_definition_id: impl Into<String>,
-    ) -> Self {
+    pub fn from_agent_id(agent_id: impl Into<String>) -> Self {
         Self {
-            agent_key: agent_key.into(),
+            agent_id: Some(agent_id.into()),
+            agent_key: None,
             tenant_key: None,
-            agent_definition: AgentDefinition::default(),
-            agent_definition_id: Some(agent_definition_id.into()),
+            tools: Vec::new(),
             mcp_server_headers: Vec::new(),
             provider_keys: Vec::new(),
             webhook: None,
             on_budget_exhausted: None,
         }
-    }
-
-    pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
-        self.agent_definition.instructions = Some(instructions.into());
-        self
-    }
-
-    pub fn limits(mut self, limits: Limits) -> Self {
-        self.agent_definition.limits = Some(limits);
-        self
-    }
-
-    pub fn sampling(mut self, sampling: Sampling) -> Self {
-        self.agent_definition.sampling = Some(sampling);
-        self
-    }
-
-    pub fn reasoning(mut self, reasoning: Reasoning) -> Self {
-        self.agent_definition.reasoning = Some(reasoning);
-        self
-    }
-
-    pub fn tool_choice(mut self, tool_choice: ToolChoice) -> Self {
-        self.agent_definition.tool_choice = Some(tool_choice);
-        self
     }
 
     pub fn tool(mut self, tool: Tool) -> Self {
-        self.agent_definition.tools.push(tool);
-        self
-    }
-
-    pub fn mcp_server(mut self, server: McpServer) -> Self {
-        self.agent_definition.mcp_servers.push(server);
-        self
-    }
-
-    pub fn provider_tool(mut self, tool: ProviderTool) -> Self {
-        self.agent_definition.provider_tools.push(tool);
-        self
-    }
-
-    pub fn output_schema(mut self, schema: HashMap<String, Value>) -> Self {
-        self.agent_definition.output_schema = Some(schema);
+        self.tools.push(tool);
         self
     }
 
@@ -142,13 +93,6 @@ impl AgentOptions {
         self
     }
 
-    /// Replaces the whole inline Agent Definition.
-    pub fn agent_definition(mut self, definition: AgentDefinition) -> Self {
-        self.agent_definition = definition;
-        self.agent_definition_id = None;
-        self
-    }
-
     pub fn mcp_server_headers(mut self, headers: McpServerHeaders) -> Self {
         self.mcp_server_headers.push(headers);
         self
@@ -159,13 +103,14 @@ impl AgentOptions {
 #[derive(Clone, Default)]
 pub struct AgentInvocationOptions {
     pub idempotency_key: Option<String>,
-    pub tenant_key: Option<String>,
     pub session_id: Option<String>,
     pub session_key: Option<String>,
     pub session_options: Option<SessionOptions>,
     pub if_active: Option<IfActivePolicy>,
     pub on_budget_exhausted: Option<BudgetExhaustionBehavior>,
     pub webhook: Option<WebhookTarget>,
+    pub agent_revision: Option<u32>,
+    pub overrides: Option<AgentDefinitionOverrides>,
     pub wait: WaitOptions,
     /// Application state snapshots to record ahead of this turn's input.
     /// Per-call rather than per-Agent, because a snapshot is what changes
@@ -284,41 +229,14 @@ pub struct Agent {
 }
 
 impl Client {
-    /// Builds a high-level Agent. Inline definitions resolve an unset `model`
-    /// from the client's default model once. Reusable definitions are selected
-    /// by ID and may still carry local host tool handlers.
-    pub fn agent(&self, mut options: AgentOptions) -> Result<Agent, NvokenError> {
-        if options.agent_key.is_empty() {
-            return Err(NvokenError::validation("agent_key is required"));
-        }
-        if let Some(definition_id) = options.agent_definition_id.as_ref() {
-            if definition_id.is_empty() {
-                return Err(NvokenError::validation(
-                    "agent_definition_id must not be empty",
-                ));
-            }
-            let definition = &options.agent_definition;
-            if !definition.model.is_unset()
-                || definition.instructions.is_some()
-                || definition.sampling.is_some()
-                || definition.reasoning.is_some()
-                || definition.tool_choice.is_some()
-                || definition.limits.is_some()
-                || !definition.mcp_servers.is_empty()
-                || !definition.provider_tools.is_empty()
-                || definition.output_schema.is_some()
-            {
-                return Err(NvokenError::validation(
-                    "agent_definition_id cannot be combined with inline Agent Definition fields",
-                ));
-            }
-        } else if options.agent_definition.model.is_unset() {
-            options.agent_definition.model = self
-                .default_model()
-                .ok_or_else(|| NvokenError::validation("model is required"))?;
+    /// Builds a high-level Agent bound by exactly one stable Agent identity.
+    pub fn agent(&self, options: AgentOptions) -> Result<Agent, NvokenError> {
+        if options.agent_id.is_some() == options.agent_key.is_some() {
+            return Err(NvokenError::validation(
+                "supply exactly one of agent_id and agent_key",
+            ));
         }
         let host_tools = options
-            .agent_definition
             .tools
             .iter()
             .filter(|tool| matches!(tool.mode, ToolMode::Host))
@@ -342,11 +260,9 @@ impl Agent {
     pub fn request(&self, input: String, options: &AgentInvocationOptions) -> InvokeRequest {
         let agent_options = &self.inner.options;
         InvokeRequest {
+            agent_id: agent_options.agent_id.clone(),
             agent_key: agent_options.agent_key.clone(),
-            tenant_key: options
-                .tenant_key
-                .clone()
-                .or_else(|| agent_options.tenant_key.clone()),
+            tenant_key: agent_options.tenant_key.clone(),
             session_id: options.session_id.clone(),
             session_key: options.session_key.clone(),
             session_options: options.session_options.clone(),
@@ -357,11 +273,8 @@ impl Agent {
                 .or(agent_options.on_budget_exhausted),
             input,
             input_blocks: Vec::new(),
-            agent_definition: agent_options
-                .agent_definition_id
-                .is_none()
-                .then(|| agent_options.agent_definition.clone()),
-            agent_definition_id: agent_options.agent_definition_id.clone(),
+            agent_revision: options.agent_revision,
+            overrides: options.overrides.clone(),
             mcp_server_headers: agent_options.mcp_server_headers.clone(),
             context: options.context.clone(),
             provider_keys: agent_options.provider_keys.clone(),
@@ -426,7 +339,7 @@ impl Agent {
         }
         let result_kind = if result.structured_output.is_some() {
             "structured output"
-        } else if !self.inner.options.agent_definition.tools.is_empty() {
+        } else if !self.inner.options.tools.is_empty() {
             "tool-only output"
         } else {
             "no assistant output"
@@ -485,14 +398,15 @@ impl Agent {
                 "exactly one of session_id or session_key is required",
             ));
         }
-        let tenant_key = binding
-            .tenant_key
-            .or_else(|| self.inner.options.tenant_key.clone());
         let key = match &binding.session_id {
             Some(session_id) => format!("id:{session_id}"),
             None => format!(
                 "key:{}:{}",
-                tenant_key.as_deref().unwrap_or("default"),
+                self.inner
+                    .options
+                    .tenant_key
+                    .as_deref()
+                    .unwrap_or("default"),
                 binding.session_key.as_deref().unwrap_or_default(),
             ),
         };
@@ -502,7 +416,6 @@ impl Agent {
             lock,
             session_id: binding.session_id,
             session_key: binding.session_key,
-            tenant_key,
         })
     }
 
@@ -803,7 +716,6 @@ fn invocation_ended_error(invocation_id: &str, invocation: &models::Invocation) 
 pub struct SessionBinding {
     pub session_id: Option<String>,
     pub session_key: Option<String>,
-    pub tenant_key: Option<String>,
 }
 
 impl SessionBinding {
@@ -811,7 +723,6 @@ impl SessionBinding {
         Self {
             session_id: Some(session_id.into()),
             session_key: None,
-            tenant_key: None,
         }
     }
 
@@ -819,13 +730,7 @@ impl SessionBinding {
         Self {
             session_id: None,
             session_key: Some(session_key.into()),
-            tenant_key: None,
         }
-    }
-
-    pub fn tenant_key(mut self, tenant_key: impl Into<String>) -> Self {
-        self.tenant_key = Some(tenant_key.into());
-        self
     }
 }
 
@@ -839,7 +744,6 @@ pub struct AgentSession {
     lock: Arc<tokio::sync::Mutex<()>>,
     session_id: Option<String>,
     session_key: Option<String>,
-    tenant_key: Option<String>,
 }
 
 impl AgentSession {
@@ -849,7 +753,6 @@ impl AgentSession {
                 "bound Session calls cannot override their Session",
             ));
         }
-        options.tenant_key = self.tenant_key.clone();
         options.session_id = self.session_id.clone();
         options.session_key = self.session_key.clone();
         Ok(())

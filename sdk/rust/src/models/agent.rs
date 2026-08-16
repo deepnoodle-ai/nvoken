@@ -11,30 +11,56 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// Agent : App-scoped identity anchor only. Agent behavior is not registered; instructions, model, tools, and provider keys travel per Invocation.
+/// Agent : One tenant's deliberately created instance of an Agent Definition. It owns that tenant's keyed Sessions and durable memory. The Definition pointer and key are immutable; name, revision pin, and archive state are mutable.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Agent {
     /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
     #[serde(rename = "id")]
     pub id: String,
-    /// Stable host-owned key, unique within the App.
+    /// Tenant that owns this Agent, or null for the App's default tenant.
+    #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
+    pub tenant_key: Option<String>,
+    /// Stable host-owned key, unique within this tenant.
     #[serde(rename = "agent_key")]
     pub agent_key: String,
+    #[serde(rename = "name")]
+    pub name: String,
+    /// Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+    #[serde(rename = "agent_definition_id")]
+    pub agent_definition_id: String,
+    #[serde(rename = "pinned_revision", deserialize_with = "Option::deserialize")]
+    pub pinned_revision: Option<u64>,
     #[serde(rename = "created_at")]
     pub created_at: chrono::DateTime<chrono::FixedOffset>,
+    #[serde(rename = "updated_at")]
+    pub updated_at: chrono::DateTime<chrono::FixedOffset>,
+    #[serde(rename = "archived_at", deserialize_with = "Option::deserialize")]
+    pub archived_at: Option<chrono::DateTime<chrono::FixedOffset>>,
 }
 
 impl Agent {
-    /// App-scoped identity anchor only. Agent behavior is not registered; instructions, model, tools, and provider keys travel per Invocation.
+    /// One tenant's deliberately created instance of an Agent Definition. It owns that tenant's keyed Sessions and durable memory. The Definition pointer and key are immutable; name, revision pin, and archive state are mutable.
     pub fn new(
         id: String,
+        tenant_key: Option<String>,
         agent_key: String,
+        name: String,
+        agent_definition_id: String,
+        pinned_revision: Option<u64>,
         created_at: chrono::DateTime<chrono::FixedOffset>,
+        updated_at: chrono::DateTime<chrono::FixedOffset>,
+        archived_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     ) -> Agent {
         Agent {
             id,
+            tenant_key,
             agent_key,
+            name,
+            agent_definition_id,
+            pinned_revision,
             created_at,
+            updated_at,
+            archived_at,
         }
     }
 }

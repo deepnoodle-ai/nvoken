@@ -40,11 +40,21 @@ export NVOKEN_API_KEY='<your API key>'
 ```ts
 import { Client } from "@deepnoodle/nvoken";
 
-const agent = new Client().agent({
-  agentKey: "support",
-  instructions: "Be concise and helpful.",
-  model: { provider: "openai", id: "<model-id>" },
+const client = new Client();
+const definition = await client.createAgentDefinition({
+  definitionKey: "support",
+  name: "Support",
+  definition: {
+    instructions: "Be concise and helpful.",
+    model: { provider: "openai", id: "<model-id>" },
+  },
 });
+const instance = await client.createAgent({
+  agentKey: "support",
+  name: "Support",
+  agentDefinitionId: definition.id,
+});
+const agent = client.agent({ agentId: instance.id });
 
 console.log(await agent.text("Summarize the latest customer request."));
 ```
@@ -65,7 +75,11 @@ uses `NVOKEN_BASE_URL` and `NVOKEN_API_KEY`, or named credential profiles:
 ```bash
 nvoken auth login --profile work --default
 nvoken model list
-nvoken invoke --agent support --provider openai --model <model-id> "Hello"
+nvoken agent-definition create --definition-key support --name Support \
+  --instructions "Be concise and helpful." --provider openai --model <model-id> \
+  --idempotency-key support-definition-v1
+nvoken agent create --agent-key support --name Support --agent-definition-id <definition-id>
+nvoken invoke --agent-key support "Hello"
 ```
 
 Use `nvoken --help` for the exact command surface.

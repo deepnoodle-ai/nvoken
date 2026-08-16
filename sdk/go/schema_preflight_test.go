@@ -59,6 +59,8 @@ func TestCreateAgentDefinitionPreflightsOutputSchemaBeforeTransport(t *testing.T
 	}
 	for _, test := range loadOutputSchemaFixture(t).Rejected {
 		_, err = client.CreateAgentDefinition(context.Background(), CreateAgentDefinitionInput{
+			DefinitionKey:  "schema-preflight",
+			Name:           "Schema preflight",
 			IdempotencyKey: "schema-preflight",
 			Definition: AgentDefinition{
 				Model: Model{

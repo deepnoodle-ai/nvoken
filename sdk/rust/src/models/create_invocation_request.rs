@@ -13,9 +13,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CreateInvocationRequest {
-    /// Stable caller-controlled Agent key, unique within the authenticated App. The resulting Agent anchor stores identity only and is shared across that App's tenant partitions.
-    #[serde(rename = "agent_key")]
-    pub agent_key: String,
+    /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+    #[serde(rename = "agent_id", skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    /// Stable caller-controlled Agent key, unique within the effective tenant. Mutually exclusive with `agent_id`.
+    #[serde(rename = "agent_key", skip_serializing_if = "Option::is_none")]
+    pub agent_key: Option<String>,
     /// Optional tenant partition. For Session-key resolution or a new Session, precedence is credential constraint, this explicit value, then the default partition. For Session-ID resolution, an App credential without a tenant constraint may omit it and use the stored partition.
     #[serde(rename = "tenant_key", skip_serializing_if = "Option::is_none")]
     pub tenant_key: Option<String>,
@@ -34,7 +37,7 @@ pub struct CreateInvocationRequest {
     /// Your own data to attach to this turn — a ticket number, a trace ID, whatever helps you tie it back to your system. nvoken stores it and hands it back untouched.  It is fixed once the turn is created and counts as part of the request for idempotency. Retrying with the same `idempotency_key` but different metadata is treated as a different request and returns a conflict rather than updating it. A genuine retry of the same original request carries the same values anyway.  Session metadata is a separate thing and can be changed — see `session_options.metadata` and `PATCH /v1/sessions/{session_id}`.
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
     pub metadata: Option<std::collections::HashMap<String, String>>,
-    /// Your key for making retries safe. Send the same unchanged request again after a 5xx, a timeout, a dropped connection, or any case where you never saw the response, and you get the original turn back instead of starting a second one.  Keys are scoped to the tenant and `agent_key`, so the same key under a different tenant is a different request. Deduplication lasts as long as the original turn still exists.
+    /// Your key for making retries safe. Send the same unchanged request again after a 5xx, a timeout, a dropped connection, or any case where you never saw the response, and you get the original turn back instead of starting a second one.  Keys are scoped to the tenant and resolved Agent, so the same key under a different tenant or Agent is a different request. Deduplication lasts as long as the original turn still exists.
     #[serde(rename = "idempotency_key")]
     pub idempotency_key: String,
     /// What to do when the Session already has a turn running. A Session runs one turn at a time.  - `reject` (the default) refuses this request with   `session_invocation_active` and leaves the running turn alone. - `supersede` cancels the running turn and starts this one in its   place. The cancelled turn's work is discarded and does not carry   forward — \"discard and redo\". - `interrupt` asks the running turn to stop cleanly and starts   this one only once it has, so this turn builds on what the   stopped one produced — \"stop and redo\".  Omitting the field and sending `reject` are the same request for idempotency purposes.
@@ -53,15 +56,11 @@ pub struct CreateInvocationRequest {
     pub input: Box<models::InvocationInput>,
     #[serde(rename = "webhook", skip_serializing_if = "Option::is_none")]
     pub webhook: Option<Box<models::WebhookTarget>>,
-    /// Stable resource ID to resolve for this turn. IDs from another App, or IDs that do not exist, return `agent_definition_not_found`. Idempotent replay compares this stable ID and returns the original admitted revision even when the resource has advanced.
-    #[serde(
-        rename = "agent_definition_id",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub agent_definition_id: Option<String>,
-    /// Full definition for this turn. nvoken records an immutable snapshot and returns its generated `agent_definition_id` and revision on the Invocation. Mutually exclusive with `agent_definition_id`.
-    #[serde(rename = "agent_definition", skip_serializing_if = "Option::is_none")]
-    pub agent_definition: Option<Box<models::AgentDefinitionWrite>>,
+    /// Optional one-turn revision pin, ahead of Session and Agent pins.
+    #[serde(rename = "agent_revision", skip_serializing_if = "Option::is_none")]
+    pub agent_revision: Option<u64>,
+    #[serde(rename = "overrides", skip_serializing_if = "Option::is_none")]
+    pub overrides: Option<Box<models::AgentDefinitionOverrides>>,
     /// Per-Invocation secret headers keyed to MCP server names in the selected Agent Definition. Encrypted for this turn and never stored in, hashed into, or returned with the Agent Definition.
     #[serde(rename = "mcp_server_headers", skip_serializing_if = "Option::is_none")]
     pub mcp_server_headers: Option<Vec<models::McpServerHeaders>>,
@@ -71,13 +70,10 @@ pub struct CreateInvocationRequest {
 }
 
 impl CreateInvocationRequest {
-    pub fn new(
-        agent_key: String,
-        idempotency_key: String,
-        input: models::InvocationInput,
-    ) -> CreateInvocationRequest {
+    pub fn new(idempotency_key: String, input: models::InvocationInput) -> CreateInvocationRequest {
         CreateInvocationRequest {
-            agent_key,
+            agent_id: None,
+            agent_key: None,
             tenant_key: None,
             user_key: None,
             session_id: None,
@@ -90,8 +86,8 @@ impl CreateInvocationRequest {
             context: None,
             input: Box::new(input),
             webhook: None,
-            agent_definition_id: None,
-            agent_definition: None,
+            agent_revision: None,
+            overrides: None,
             mcp_server_headers: None,
             provider_keys: None,
         }

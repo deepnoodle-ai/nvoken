@@ -51,7 +51,6 @@
     "note": "The complete request body each SDK's high-level Agent binding produces from an App-owned Agent Definition, agent_key `support`, input `hello`, and idempotency key `conformance`.",
     "web_search_metadata_unbound": {
       "agent_key": "support",
-      "agent_definition_id": "def_conformance",
       "idempotency_key": "conformance",
       "on_budget_exhausted": "pause",
       "input": "hello",

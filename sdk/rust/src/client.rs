@@ -477,6 +477,8 @@ pub struct SessionOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retention: Option<SessionRetention>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned_revision: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
 }
 
@@ -488,6 +490,11 @@ impl SessionOptions {
 
     pub fn retention(mut self, ttl_seconds: u32) -> Self {
         self.retention = Some(SessionRetention { ttl_seconds });
+        self
+    }
+
+    pub fn pinned_revision(mut self, revision: u32) -> Self {
+        self.pinned_revision = Some(revision);
         self
     }
 
@@ -587,8 +594,7 @@ pub enum ToolChoice {
     Named(String),
 }
 
-/// The execution configuration a turn runs with. Send it inline on an
-/// Invocation or create an App-owned reusable resource.
+/// Reusable App-owned execution configuration.
 #[derive(Debug, Clone, Default)]
 pub struct AgentDefinition {
     pub model: Model,
@@ -601,6 +607,50 @@ pub struct AgentDefinition {
     pub mcp_servers: Vec<McpServer>,
     pub provider_tools: Vec<ProviderTool>,
     pub output_schema: Option<HashMap<String, Value>>,
+}
+
+/// Safe per-turn replacements. These cannot expand tools, data access, memory,
+/// browser authority, or instructions.
+#[derive(Debug, Clone, Default)]
+pub struct AgentDefinitionOverrides {
+    pub model: Option<Model>,
+    pub sampling: Option<Sampling>,
+    pub reasoning: Option<Reasoning>,
+    pub tool_choice: Option<ToolChoice>,
+    pub limits: Option<Limits>,
+    pub output_schema: Option<HashMap<String, Value>>,
+}
+
+impl AgentDefinitionOverrides {
+    pub fn model(mut self, model: Model) -> Self {
+        self.model = Some(model);
+        self
+    }
+
+    pub fn sampling(mut self, sampling: Sampling) -> Self {
+        self.sampling = Some(sampling);
+        self
+    }
+
+    pub fn reasoning(mut self, reasoning: Reasoning) -> Self {
+        self.reasoning = Some(reasoning);
+        self
+    }
+
+    pub fn tool_choice(mut self, tool_choice: ToolChoice) -> Self {
+        self.tool_choice = Some(tool_choice);
+        self
+    }
+
+    pub fn limits(mut self, limits: Limits) -> Self {
+        self.limits = Some(limits);
+        self
+    }
+
+    pub fn output_schema(mut self, schema: HashMap<String, Value>) -> Self {
+        self.output_schema = Some(schema);
+        self
+    }
 }
 
 impl AgentDefinition {
@@ -730,7 +780,8 @@ impl ContextItem {
 
 #[derive(Debug, Clone)]
 pub struct InvokeRequest {
-    pub agent_key: String,
+    pub agent_id: Option<String>,
+    pub agent_key: Option<String>,
     pub tenant_key: Option<String>,
     pub session_id: Option<String>,
     pub session_key: Option<String>,
@@ -742,11 +793,8 @@ pub struct InvokeRequest {
     /// Ordered blocks mixing text, images, and documents. Supply exactly one of
     /// `input` and `input_blocks`.
     pub input_blocks: Vec<models::InputBlock>,
-    /// The configuration this turn runs with, sent inline. Supply exactly one
-    /// of `agent_definition` and `agent_definition_id`.
-    pub agent_definition: Option<AgentDefinition>,
-    /// Reuse an App-owned Agent Definition resource.
-    pub agent_definition_id: Option<String>,
+    pub agent_revision: Option<u32>,
+    pub overrides: Option<AgentDefinitionOverrides>,
     /// Per-turn secret headers, keyed to MCP server names in the selected
     /// Agent Definition. They live here rather than on `McpServer` because an
     /// Agent Definition may be reused across turns.
@@ -770,9 +818,10 @@ pub struct InvokeRequest {
 }
 
 impl InvokeRequest {
-    pub fn new(agent_key: impl Into<String>, input: impl Into<String>, model: Model) -> Self {
+    pub fn new(agent_key: impl Into<String>, input: impl Into<String>) -> Self {
         Self {
-            agent_key: agent_key.into(),
+            agent_id: None,
+            agent_key: Some(agent_key.into()),
             tenant_key: None,
             session_id: None,
             session_key: None,
@@ -782,8 +831,8 @@ impl InvokeRequest {
             on_budget_exhausted: None,
             input: input.into(),
             input_blocks: Vec::new(),
-            agent_definition: Some(AgentDefinition::new(model)),
-            agent_definition_id: None,
+            agent_revision: None,
+            overrides: None,
             mcp_server_headers: Vec::new(),
             context: Vec::new(),
             provider_keys: Vec::new(),
@@ -792,31 +841,11 @@ impl InvokeRequest {
         }
     }
 
-    /// Builds a request without naming a model, resolved from the client's
-    /// default model at `invoke` time. The server keeps requiring exact
-    /// selection; this is client-side ergonomics only.
-    pub fn without_model(agent_key: impl Into<String>, input: impl Into<String>) -> Self {
-        Self::new(agent_key, input, Model::default())
-    }
-
-    /// Builds a request that reuses an App-owned Agent Definition resource.
-    pub fn from_agent_definition(
-        agent_key: impl Into<String>,
-        input: impl Into<String>,
-        agent_definition_id: impl Into<String>,
-    ) -> Self {
-        let mut request = Self::without_model(agent_key, input);
-        request.agent_definition = None;
-        request.agent_definition_id = Some(agent_definition_id.into());
+    pub fn from_agent_id(agent_id: impl Into<String>, input: impl Into<String>) -> Self {
+        let mut request = Self::new("", input);
+        request.agent_key = None;
+        request.agent_id = Some(agent_id.into());
         request
-    }
-
-    /// Replaces the whole inline Agent Definition, for a definition built
-    /// separately and shared across inline calls.
-    pub fn agent_definition(mut self, definition: AgentDefinition) -> Self {
-        self.agent_definition = Some(definition);
-        self.agent_definition_id = None;
-        self
     }
 
     pub fn mcp_server_headers(mut self, headers: McpServerHeaders) -> Self {
@@ -829,14 +858,6 @@ impl InvokeRequest {
     pub fn context(mut self, item: ContextItem) -> Self {
         self.context.push(item);
         self
-    }
-
-    /// The inline definition these convenience builders write through. A
-    /// request that already names an ID grows one here, so the exclusivity
-    /// check reports the conflict rather than silently dropping the field.
-    fn definition_mut(&mut self) -> &mut AgentDefinition {
-        self.agent_definition
-            .get_or_insert_with(AgentDefinition::default)
     }
 
     pub fn tenant_key(mut self, tenant_key: impl Into<String>) -> Self {
@@ -881,48 +902,49 @@ impl InvokeRequest {
         self
     }
 
-    pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
-        self.definition_mut().instructions = Some(instructions.into());
-        self
-    }
-
     pub fn limits(mut self, limits: Limits) -> Self {
-        self.definition_mut().limits = Some(limits);
+        self.overrides.get_or_insert_with(Default::default).limits = Some(limits);
         self
     }
 
     pub fn sampling(mut self, sampling: Sampling) -> Self {
-        self.definition_mut().sampling = Some(sampling);
+        self.overrides.get_or_insert_with(Default::default).sampling = Some(sampling);
         self
     }
 
     pub fn reasoning(mut self, reasoning: Reasoning) -> Self {
-        self.definition_mut().reasoning = Some(reasoning);
+        self.overrides
+            .get_or_insert_with(Default::default)
+            .reasoning = Some(reasoning);
         self
     }
 
     pub fn tool_choice(mut self, tool_choice: ToolChoice) -> Self {
-        self.definition_mut().tool_choice = Some(tool_choice);
+        self.overrides
+            .get_or_insert_with(Default::default)
+            .tool_choice = Some(tool_choice);
         self
     }
 
-    pub fn tool(mut self, tool: Tool) -> Self {
-        self.definition_mut().tools.push(tool);
-        self
-    }
-
-    pub fn mcp_server(mut self, server: McpServer) -> Self {
-        self.definition_mut().mcp_servers.push(server);
-        self
-    }
-
-    pub fn provider_tool(mut self, tool: ProviderTool) -> Self {
-        self.definition_mut().provider_tools.push(tool);
+    pub fn model(mut self, model: Model) -> Self {
+        self.overrides.get_or_insert_with(Default::default).model = Some(model);
         self
     }
 
     pub fn output_schema(mut self, schema: HashMap<String, Value>) -> Self {
-        self.definition_mut().output_schema = Some(schema);
+        self.overrides
+            .get_or_insert_with(Default::default)
+            .output_schema = Some(schema);
+        self
+    }
+
+    pub fn agent_revision(mut self, revision: u32) -> Self {
+        self.agent_revision = Some(revision);
+        self
+    }
+
+    pub fn overrides(mut self, overrides: AgentDefinitionOverrides) -> Self {
+        self.overrides = Some(overrides);
         self
     }
 
@@ -1000,9 +1022,28 @@ pub struct ToolResult {
 
 #[derive(Debug, Clone, Default)]
 pub struct ListAgentsOptions {
+    pub tenant_key: Option<String>,
     pub agent_key: Option<String>,
+    pub agent_definition_id: Option<String>,
+    pub include_archived: Option<bool>,
     pub cursor: Option<String>,
     pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateAgentInput {
+    pub tenant_key: Option<String>,
+    pub agent_key: String,
+    pub name: String,
+    pub agent_definition_id: String,
+    pub pinned_revision: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct UpdateAgentInput {
+    pub name: Option<String>,
+    pub pinned_revision: Option<u32>,
+    pub clear_pinned_revision: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1177,16 +1218,11 @@ impl Client {
         })
     }
 
-    /// Sets the model an `invoke` call uses when its request does not name
-    /// one itself. Resolved client-side into `model` before the
-    /// request; the server keeps requiring exact selection, always.
+    /// Sets the model used when rendering an Agent Definition whose model is
+    /// left unset.
     pub fn with_default_model(mut self, model: Model) -> Self {
         self.default_model = Some(model);
         self
-    }
-
-    pub(crate) fn default_model(&self) -> Option<Model> {
-        self.default_model.clone()
     }
 
     /// Returns the shared lock for one Agent Session key, creating it on
@@ -1269,7 +1305,7 @@ impl Client {
             invocation_id: invocation.id,
             idempotency_key: Some(idempotency_key),
             session_id: Some(invocation.session_id),
-            agent_id: invocation.agent_id,
+            agent_id: Some(invocation.agent_id),
             status: Some(invocation.status),
             deduplicated: Some(invocation.deduplicated.unwrap_or(false)),
             deadline_at: invocation.deadline_at,
@@ -1281,13 +1317,12 @@ impl Client {
     /// admission will carry without making one.
     /// Renders one Agent Definition.
     ///
-    /// Invocation creation and resource creation both send exactly this object, so a
-    /// field either reaches the wire for both or neither. Only the definition's
-    /// own content is checked here; installation state, App signing keys,
-    /// credits, provider keys, and model lifecycle are checked again when a turn
-    /// is admitted.
+    /// Only the definition's own content is checked here; installation state,
+    /// App signing keys, credits, provider keys, and model lifecycle are checked
+    /// again when a turn is admitted.
     pub fn agent_definition_body(
         &self,
+        name: &str,
         mut definition: AgentDefinition,
     ) -> Result<models::AgentDefinitionWrite, NvokenError> {
         if definition.model.is_unset() {
@@ -1372,7 +1407,7 @@ impl Client {
             };
             tools.push(mode);
         }
-        let mut body = models::AgentDefinitionWrite::new(model);
+        let mut body = models::AgentDefinitionWrite::new(name.to_string(), model);
         body.instructions = definition.instructions;
         body.sampling = sampling;
         body.reasoning = reasoning;
@@ -1397,10 +1432,69 @@ impl Client {
         Ok(body)
     }
 
+    fn agent_definition_overrides_body(
+        &self,
+        overrides: AgentDefinitionOverrides,
+    ) -> Result<models::AgentDefinitionOverrides, NvokenError> {
+        if let Some(schema) = &overrides.output_schema {
+            preflight_output_schema(schema)?;
+        }
+        let model = overrides
+            .model
+            .map(|model| {
+                if model.is_unset() {
+                    return Err(NvokenError::validation("override model is required"));
+                }
+                let provider = model_provider(&model.provider)?;
+                Ok::<_, NvokenError>(Box::new(models::ModelInput::Model(Box::new(
+                    models::Model::new(provider, model.id),
+                ))))
+            })
+            .transpose()?;
+        let sampling = overrides
+            .sampling
+            .map(|value| Box::new(models::Sampling::new(value.temperature)));
+        let reasoning = overrides.reasoning.map(|value| {
+            let effort = value.effort.map(|effort| match effort {
+                ReasoningEffort::Low => models::ReasoningEffort::EffortLow,
+                ReasoningEffort::Medium => models::ReasoningEffort::EffortMedium,
+                ReasoningEffort::High => models::ReasoningEffort::EffortHigh,
+                ReasoningEffort::XHigh => models::ReasoningEffort::EffortXHigh,
+                ReasoningEffort::Max => models::ReasoningEffort::EffortMax,
+            });
+            Box::new(models::Reasoning {
+                effort,
+                budget_tokens: value.budget_tokens,
+            })
+        });
+        let tool_choice = overrides.tool_choice.map(|value| {
+            let (mode, name) = match value {
+                ToolChoice::Auto => (models::ModelToolChoiceMode::ChoiceAuto, None),
+                ToolChoice::None => (models::ModelToolChoiceMode::ChoiceNone, None),
+                ToolChoice::Required => (models::ModelToolChoiceMode::ChoiceRequired, None),
+                ToolChoice::Named(name) => (models::ModelToolChoiceMode::ChoiceNamed, Some(name)),
+            };
+            Box::new(models::ToolChoice { mode, name })
+        });
+        let limits = overrides
+            .limits
+            .map(|value| serde_json::from_value(json!(value)))
+            .transpose()
+            .map_err(|error| NvokenError::validation(error.to_string()))?
+            .map(Box::new);
+        Ok(models::AgentDefinitionOverrides {
+            model,
+            sampling,
+            reasoning,
+            tool_choice,
+            limits,
+            output_schema: overrides.output_schema,
+        })
+    }
+
     /// Checks the per-turn MCP secret headers.
     ///
-    /// With an inline definition every entry must name a server it declares; a
-    /// referenced definition is opaque here, so those names are left to the
+    /// Server names are resolved against the selected Agent Definition by the
     /// service.
     fn mcp_server_headers_body(
         request: &InvokeRequest,
@@ -1424,18 +1518,6 @@ impl Client {
                     "mcp server headers name {} is repeated",
                     entry.name
                 )));
-            }
-            if let Some(definition) = &request.agent_definition {
-                if !definition
-                    .mcp_servers
-                    .iter()
-                    .any(|server| server.name == entry.name)
-                {
-                    return Err(NvokenError::validation(format!(
-                        "mcp server headers name {} matches no declared mcp server",
-                        entry.name
-                    )));
-                }
             }
             entries.push(models::McpServerHeaders::new(
                 entry.name.clone(),
@@ -1509,13 +1591,15 @@ impl Client {
         &self,
         request: InvokeRequest,
     ) -> Result<models::CreateInvocationRequest, NvokenError> {
-        if request.agent_key.is_empty() {
-            return Err(NvokenError::validation("agent key and input are required"));
-        }
-        if request.agent_definition.is_some() == request.agent_definition_id.is_some() {
+        if request.agent_id.is_some() == request.agent_key.is_some() {
             return Err(NvokenError::validation(
-                "supply exactly one of agent definition and agent definition id",
+                "supply exactly one of agent_id and agent_key",
             ));
+        }
+        if request.agent_id.as_ref().is_some_and(String::is_empty)
+            || request.agent_key.as_ref().is_some_and(String::is_empty)
+        {
+            return Err(NvokenError::validation("agent identity must not be empty"));
         }
         if request.input.is_empty() == request.input_blocks.is_empty() {
             return Err(NvokenError::validation(
@@ -1527,9 +1611,9 @@ impl Client {
         }
         let mcp_server_headers = Self::mcp_server_headers_body(&request)?;
         let context = Self::context_body(&request)?;
-        let agent_definition = request
-            .agent_definition
-            .map(|definition| self.agent_definition_body(definition))
+        let overrides = request
+            .overrides
+            .map(|overrides| self.agent_definition_overrides_body(overrides))
             .transpose()?
             .map(Box::new);
         let input = if request.input_blocks.is_empty() {
@@ -1538,14 +1622,15 @@ impl Client {
             models::InvocationInput::ArrayVecInputBlock(request.input_blocks)
         };
         let mut body = models::CreateInvocationRequest::new(
-            request.agent_key,
             request
                 .idempotency_key
                 .unwrap_or_else(generated_idempotency_key),
             input,
         );
-        body.agent_definition_id = request.agent_definition_id;
-        body.agent_definition = agent_definition;
+        body.agent_id = request.agent_id;
+        body.agent_key = request.agent_key;
+        body.agent_revision = request.agent_revision.map(u64::from);
+        body.overrides = overrides;
         body.mcp_server_headers = mcp_server_headers;
         body.context = context;
         body.tenant_key = request.tenant_key;
@@ -1556,6 +1641,7 @@ impl Client {
             .map(|value| {
                 if value.compaction.is_none()
                     && value.retention.is_none()
+                    && value.pinned_revision.is_none()
                     && value.metadata.is_none()
                 {
                     return Err(NvokenError::validation(
@@ -1592,6 +1678,7 @@ impl Client {
                 options.retention = value
                     .retention
                     .map(|retention| Box::new(models::RetentionPolicy::new(retention.ttl_seconds)));
+                options.pinned_revision = value.pinned_revision.map(u64::from);
                 options.metadata = value.metadata;
                 Ok::<_, NvokenError>(Box::new(options))
             })
@@ -1713,9 +1800,27 @@ impl Client {
     pub async fn create_agent_definition(
         &self,
         idempotency_key: &str,
+        definition_key: &str,
+        name: &str,
         definition: AgentDefinition,
     ) -> Result<models::AgentDefinitionResource, NvokenError> {
-        let body = self.agent_definition_body(definition)?;
+        let write = self.agent_definition_body(name, definition)?;
+        let body = models::AgentDefinitionCreate {
+            definition_key: definition_key.to_string(),
+            name: write.name,
+            instructions: write.instructions,
+            model: write.model,
+            sampling: write.sampling,
+            reasoning: write.reasoning,
+            tool_choice: write.tool_choice,
+            limits: write.limits,
+            output_schema: write.output_schema,
+            tools: write.tools,
+            mcp_servers: write.mcp_servers,
+            provider_tools: write.provider_tools,
+            memory: write.memory,
+            client_interface: write.client_interface,
+        };
         apis::agent_definitions_api::create_agent_definition(
             &self.configuration,
             idempotency_key,
@@ -1748,13 +1853,28 @@ impl Client {
         .map_err(|error| self.normalize_generated_error(error))
     }
 
+    pub async fn get_agent_definition_revision(
+        &self,
+        agent_definition_id: &str,
+        revision: u32,
+    ) -> Result<models::AgentDefinitionResource, NvokenError> {
+        apis::agent_definitions_api::get_agent_definition_revision(
+            &self.configuration,
+            agent_definition_id,
+            u64::from(revision),
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
     pub async fn update_agent_definition(
         &self,
         agent_definition_id: &str,
         expected_revision: u32,
+        name: &str,
         definition: AgentDefinition,
     ) -> Result<models::AgentDefinitionResource, NvokenError> {
-        let body = self.agent_definition_body(definition)?;
+        let body = self.agent_definition_body(name, definition)?;
         apis::agent_definitions_api::update_agent_definition(
             &self.configuration,
             &format!("\"{expected_revision}\""),
@@ -1808,24 +1928,76 @@ impl Client {
             .map_err(|error| self.normalize_generated_error(error))
     }
 
-    pub async fn get_agent_identity(&self, agent_id: &str) -> Result<models::Agent, NvokenError> {
+    pub async fn create_agent(
+        &self,
+        input: CreateAgentInput,
+    ) -> Result<models::Agent, NvokenError> {
+        let mut body =
+            models::CreateAgentRequest::new(input.agent_key, input.name, input.agent_definition_id);
+        body.tenant_key = input.tenant_key;
+        body.pinned_revision = input.pinned_revision.map(u64::from);
+        apis::agents_api::create_agent(&self.configuration, body)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn get_agent(&self, agent_id: &str) -> Result<models::Agent, NvokenError> {
         apis::agents_api::get_agent(&self.configuration, agent_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
     }
 
-    pub async fn list_agent_identities(
+    pub async fn list_agents(
         &self,
         options: ListAgentsOptions,
     ) -> Result<models::AgentList, NvokenError> {
         apis::agents_api::list_agents(
             &self.configuration,
+            options.tenant_key.as_deref(),
             options.agent_key.as_deref(),
+            options.agent_definition_id.as_deref(),
+            options.include_archived,
             options.cursor.as_deref(),
             options.limit,
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn update_agent(
+        &self,
+        agent_id: &str,
+        input: UpdateAgentInput,
+    ) -> Result<models::Agent, NvokenError> {
+        if input.pinned_revision.is_some() && input.clear_pinned_revision {
+            return Err(NvokenError::validation(
+                "pinned_revision and clear_pinned_revision are mutually exclusive",
+            ));
+        }
+        let mut body = models::UpdateAgentRequest::new();
+        body.name = input.name;
+        body.pinned_revision = if input.clear_pinned_revision {
+            Some(None)
+        } else {
+            input
+                .pinned_revision
+                .map(|revision| Some(u64::from(revision)))
+        };
+        apis::agents_api::update_agent(&self.configuration, agent_id, body)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn archive_agent(&self, agent_id: &str) -> Result<(), NvokenError> {
+        apis::agents_api::archive_agent(&self.configuration, agent_id)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn restore_agent(&self, agent_id: &str) -> Result<(), NvokenError> {
+        apis::agents_api::restore_agent(&self.configuration, agent_id)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn get_invocation_result(
@@ -2195,7 +2367,7 @@ impl InvocationHandle {
 
     fn apply(&mut self, invocation: &models::Invocation) {
         self.session_id = Some(invocation.session_id.clone());
-        self.agent_id = invocation.agent_id.clone();
+        self.agent_id = Some(invocation.agent_id.clone());
         self.status = Some(invocation.status);
         self.deadline_at = invocation.deadline_at;
     }

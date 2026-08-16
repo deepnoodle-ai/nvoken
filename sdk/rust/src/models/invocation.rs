@@ -18,8 +18,10 @@ pub struct Invocation {
     #[serde(rename = "id")]
     pub id: String,
     /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-    #[serde(rename = "agent_id", skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
+    #[serde(rename = "agent_id")]
+    pub agent_id: String,
+    #[serde(rename = "agent_key")]
+    pub agent_key: String,
     /// Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
     #[serde(rename = "session_id")]
     pub session_id: String,
@@ -129,6 +131,8 @@ impl Invocation {
     /// One turn.  Some fields are audience-restricted: they are present for a machine credential and omitted for a browser grant, which is why they are not required. Omission is the whole mechanism, so one schema decodes every response and nothing has to be guessed from the payload. The omitted set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`, `usage`, `provenance`, `structured_output_provenance`, `metadata`, and `limits`.
     pub fn new(
         id: String,
+        agent_id: String,
+        agent_key: String,
         session_id: String,
         agent_definition_id: String,
         agent_definition_revision: u64,
@@ -145,7 +149,8 @@ impl Invocation {
     ) -> Invocation {
         Invocation {
             id,
-            agent_id: None,
+            agent_id,
+            agent_key,
             session_id,
             user_key: None,
             agent_definition_id,

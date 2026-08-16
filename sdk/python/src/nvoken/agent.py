@@ -10,7 +10,7 @@ from nvoken_generated.models.invocation_result import InvocationResult
 from nvoken_generated.models.tool_call_summary import ToolCallSummary
 
 from .client import (
-    AgentDefinition,
+    AgentDefinitionOverrides,
     BuiltinTool,
     BudgetExhaustionBehavior,
     Client,
@@ -18,19 +18,12 @@ from .client import (
     IfActivePolicy,
     InvocationHandle,
     InvokeRequest,
-    Limits,
-    MCPServer,
     MCPServerHeaders,
-    Model,
     WebhookTarget,
     NvokenError,
     ProviderKeySelection,
-    ProviderTool,
-    Reasoning,
-    Sampling,
     SessionOptions,
     Tool,
-    ToolChoice,
     ToolResult,
     ended_message,
 )
@@ -79,26 +72,11 @@ class NoOutputTextError(NvokenError):
 
 @dataclass(frozen=True)
 class AgentOptions(Generic[StructuredT]):
-    """One identity and the Agent Definition every turn from this Agent runs with.
+    """Workflow binding for one deliberately created Agent instance."""
 
-    Set ``agent_definition_id`` for a reusable resource, or leave it unset and
-    provide the flat inline definition fields. ``tools`` registers local host
-    handlers in either form. Inline ``model`` may be omitted when the Client
-    carries a default.
-    """
-
-    agent_key: str
-    agent_definition_id: str | None = None
-    model: Model | None = None
-    instructions: str | None = None
-    sampling: Sampling | None = None
-    reasoning: Reasoning | None = None
-    tool_choice: ToolChoice | None = None
-    limits: Limits | None = None
+    agent_id: str | None = None
+    agent_key: str | None = None
     tools: tuple[Tool | BuiltinTool, ...] = ()
-    mcp_servers: tuple[MCPServer, ...] = ()
-    provider_tools: tuple[ProviderTool, ...] = ()
-    output_schema: dict[str, Any] | None = None
     mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
     """Per-turn secret headers for the MCP servers this Agent declares.
 
@@ -115,9 +93,10 @@ class AgentOptions(Generic[StructuredT]):
 @dataclass(frozen=True)
 class InvocationOptions:
     idempotency_key: str | None = None
+    agent_revision: int | None = None
+    overrides: AgentDefinitionOverrides | None = None
     if_active: IfActivePolicy | None = None
     on_budget_exhausted: BudgetExhaustionBehavior | None = None
-    tenant_key: str | None = None
     session_id: str | None = None
     session_key: str | None = None
     session_options: SessionOptions | None = None
@@ -169,44 +148,13 @@ class AgentStreamEvent:
 
 class Agent(Generic[StructuredT]):
     def __init__(self, client: Client, options: AgentOptions[StructuredT]) -> None:
-        if not options.agent_key:
-            raise NvokenError("validation", "agent_key is required")
-        has_inline_fields = any((
-            options.model is not None,
-            options.instructions is not None,
-            options.sampling is not None,
-            options.reasoning is not None,
-            options.tool_choice is not None,
-            options.limits is not None,
-            bool(options.mcp_servers),
-            bool(options.provider_tools),
-            options.output_schema is not None,
-        ))
-        if options.agent_definition_id is not None and has_inline_fields:
+        if bool(options.agent_id) == bool(options.agent_key):
             raise NvokenError(
                 "validation",
-                "supply agent_definition_id or inline definition fields, not both",
-            )
-        definition: AgentDefinition | None = None
-        if options.agent_definition_id is None:
-            model = options.model or client.default_model
-            if model is None:
-                raise NvokenError("validation", "model is required for inline definition")
-            definition = AgentDefinition(
-                model=model,
-                instructions=options.instructions,
-                sampling=options.sampling,
-                reasoning=options.reasoning,
-                tool_choice=options.tool_choice,
-                limits=options.limits,
-                tools=options.tools,
-                mcp_servers=options.mcp_servers,
-                provider_tools=options.provider_tools,
-                output_schema=options.output_schema,
+                "supply exactly one of agent_id and agent_key",
             )
         self.client = client
         self.options = options
-        self.definition = definition
         self._host_tools = {
             tool.name: tool
             for tool in options.tools
@@ -390,18 +338,16 @@ class Agent(Generic[StructuredT]):
         *,
         session_id: str | None = None,
         session_key: str | None = None,
-        tenant_key: str | None = None,
     ) -> BoundSession[StructuredT]:
         if (session_id is None) == (session_key is None):
             raise NvokenError(
                 "validation",
                 "exactly one of session_id or session_key is required",
             )
-        effective_tenant = tenant_key or self.options.tenant_key
         lock_key = (
             f"id:{session_id}"
             if session_id is not None
-            else f"key:{effective_tenant or 'default'}:{session_key}"
+            else f"key:{self.options.tenant_key or 'default'}:{session_key}"
         )
         lock = self.client._session_locks.setdefault(lock_key, asyncio.Lock())
         return BoundSession(
@@ -409,22 +355,22 @@ class Agent(Generic[StructuredT]):
             lock,
             session_id=session_id,
             session_key=session_key,
-            tenant_key=effective_tenant,
         )
 
     def _request(self, input: str, options: InvocationOptions) -> InvokeRequest:
         return InvokeRequest(
+            agent_id=self.options.agent_id,
             agent_key=self.options.agent_key,
             input=input,
-            agent_definition=self.definition,
-            agent_definition_id=self.options.agent_definition_id,
+            agent_revision=options.agent_revision,
+            overrides=options.overrides,
             mcp_server_headers=self.options.mcp_server_headers,
             idempotency_key=options.idempotency_key,
             if_active=options.if_active,
             on_budget_exhausted=(
                 options.on_budget_exhausted or self.options.on_budget_exhausted
             ),
-            tenant_key=options.tenant_key or self.options.tenant_key,
+            tenant_key=self.options.tenant_key,
             session_id=options.session_id,
             session_key=options.session_key,
             session_options=options.session_options,
@@ -539,13 +485,11 @@ class BoundSession(Generic[StructuredT]):
         *,
         session_id: str | None,
         session_key: str | None,
-        tenant_key: str | None,
     ) -> None:
         self.agent = agent
         self._lock = lock
         self.session_id = session_id
         self.session_key = session_key
-        self.tenant_key = tenant_key
 
     async def invoke(
         self,
@@ -604,7 +548,6 @@ class BoundSession(Generic[StructuredT]):
             )
         return replace(
             call,
-            tenant_key=self.tenant_key,
             session_id=self.session_id,
             session_key=self.session_key,
         )

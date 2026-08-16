@@ -67,11 +67,11 @@ export interface CurrentIdentityAuthentication {
      */
     agentKey?: string;
     /**
-     * Browser grants only.
+     * Browser grants only. The Agent this grant is pinned to.
      * @type {string}
      * @memberof CurrentIdentityAuthentication
      */
-    agentDefinitionId?: string;
+    agentId?: string;
     /**
      * Browser grants only.
      * @type {number}
@@ -163,7 +163,7 @@ export function CurrentIdentityAuthenticationFromJSONTyped(json: any, ignoreDisc
         'orgId': json['org_id'] == null ? undefined : json['org_id'],
         'effectiveProfile': json['effective_profile'] == null ? undefined : CredentialProfileFromJSON(json['effective_profile']),
         'agentKey': json['agent_key'] == null ? undefined : json['agent_key'],
-        'agentDefinitionId': json['agent_definition_id'] == null ? undefined : json['agent_definition_id'],
+        'agentId': json['agent_id'] == null ? undefined : json['agent_id'],
         'agentDefinitionRevision': json['agent_definition_revision'] == null ? undefined : json['agent_definition_revision'],
         'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
         'sessionId': json['session_id'] == null ? undefined : json['session_id'],
@@ -189,7 +189,7 @@ export function CurrentIdentityAuthenticationToJSONTyped(value?: CurrentIdentity
         'org_id': value['orgId'],
         'effective_profile': CredentialProfileToJSON(value['effectiveProfile']),
         'agent_key': value['agentKey'],
-        'agent_definition_id': value['agentDefinitionId'],
+        'agent_id': value['agentId'],
         'agent_definition_revision': value['agentDefinitionRevision'],
         'tenant_key': value['tenantKey'],
         'session_id': value['sessionId'],

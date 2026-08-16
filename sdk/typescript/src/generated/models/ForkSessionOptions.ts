@@ -31,6 +31,12 @@ import {
 export interface ForkSessionOptions {
     /**
      *
+     * @type {number}
+     * @memberof ForkSessionOptions
+     */
+    pinnedRevision?: number;
+    /**
+     *
      * @type {RetentionPolicy}
      * @memberof ForkSessionOptions
      */
@@ -71,6 +77,7 @@ export function ForkSessionOptionsFromJSONTyped(json: any, ignoreDiscriminator: 
     }
     return {
 
+        'pinnedRevision': json['pinned_revision'] == null ? undefined : json['pinned_revision'],
         'retention': json['retention'] == null ? undefined : RetentionPolicyFromJSON(json['retention']),
         'metadata': json['metadata'] == null ? undefined : json['metadata'],
     };
@@ -87,6 +94,7 @@ export function ForkSessionOptionsToJSONTyped(value?: ForkSessionOptions | null,
 
     return {
 
+        'pinned_revision': value['pinnedRevision'],
         'retention': RetentionPolicyToJSON(value['retention']),
         'metadata': value['metadata'],
     };

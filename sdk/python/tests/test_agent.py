@@ -13,7 +13,6 @@ from nvoken import (
     AgentOptions,
     InvocationOptions,
     MissingToolHandlerError,
-    Model,
     NoOutputTextError,
     NvokenError,
     StreamEvent,
@@ -35,7 +34,7 @@ class FakeHandle:
     ) -> None:
         self.invocation_id = INVOCATION_ID
         self.session_id = SESSION_ID
-        self.agent_id = "agnt_test"
+        self.agent_id = "agent_test"
         self.status = "queued"
         self.waiting_tool = waiting_tool
         self.output_text_value = output_text
@@ -148,9 +147,7 @@ def agent_options(*tools: Tool) -> AgentOptions[Answer]:
     return AgentOptions(
         agent_key="support",
         structured_output_decoder=lambda value: Answer(**value),
-        model=Model(provider="openai", id="gpt-test"),
         tools=tools,
-        output_schema={"type": "object"},
     )
 
 

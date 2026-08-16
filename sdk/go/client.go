@@ -236,6 +236,9 @@ func (c *Client) CreateAgentDefinition(
 	if input.IdempotencyKey == "" {
 		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition idempotency key is required"}
 	}
+	if input.DefinitionKey == "" || input.Name == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition key and name are required"}
+	}
 	encoded, err := input.Definition.encoded()
 	if err != nil {
 		if sdkError, ok := err.(*Error); ok {
@@ -243,6 +246,8 @@ func (c *Client) CreateAgentDefinition(
 		}
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
 	}
+	encoded["definition_key"] = input.DefinitionKey
+	encoded["name"] = input.Name
 	body, err := json.Marshal(encoded)
 	if err != nil {
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
@@ -290,6 +295,28 @@ func (c *Client) GetAgentDefinition(ctx context.Context, id string) (*AgentDefin
 	})
 }
 
+func (c *Client) GetAgentDefinitionRevision(
+	ctx context.Context,
+	id string,
+	revision int64,
+) (*AgentDefinitionResource, error) {
+	if revision < 1 {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition revision must be positive"}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResource], error) {
+		response, err := c.raw.GetAgentDefinitionRevisionWithResponse(ctx, id, revision)
+		if err != nil {
+			return callResult[generated.AgentDefinitionResource]{}, err
+		}
+		return callResult[generated.AgentDefinitionResource]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
 func (c *Client) ListAgentDefinitions(
 	ctx context.Context,
 	options ListAgentDefinitionsOptions,
@@ -321,6 +348,9 @@ func (c *Client) UpdateAgentDefinition(
 	if input.ExpectedRevision < 1 {
 		return nil, &Error{Category: ErrorValidation, Message: "expected Agent Definition revision must be positive"}
 	}
+	if input.Name == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition name is required"}
+	}
 	encoded, err := input.Definition.encoded()
 	if err != nil {
 		if sdkError, ok := err.(*Error); ok {
@@ -328,6 +358,7 @@ func (c *Client) UpdateAgentDefinition(
 		}
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
 	}
+	encoded["name"] = input.Name
 	body, err := json.Marshal(encoded)
 	if err != nil {
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
@@ -1762,11 +1793,121 @@ func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentIdentity, 
 	})
 }
 
+// CreateAgent deliberately creates or resolves one tenant-scoped Agent
+// instance. Repeating the same tenant/key/Definition tuple is a safe upsert.
+func (c *Client) CreateAgent(ctx context.Context, input CreateAgentInput) (*AgentIdentity, error) {
+	if input.AgentKey == "" || input.Name == "" || input.AgentDefinitionID == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent key, name, and Agent Definition ID are required"}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
+		response, err := c.raw.CreateAgentWithResponse(ctx, generated.CreateAgentJSONRequestBody{
+			TenantKey:         input.TenantKey,
+			AgentKey:          input.AgentKey,
+			Name:              input.Name,
+			AgentDefinitionID: input.AgentDefinitionID,
+			PinnedRevision:    input.PinnedRevision,
+		})
+		if err != nil {
+			return callResult[generated.Agent]{}, err
+		}
+		value := response.JSON201
+		if value == nil {
+			value = response.JSON200
+		}
+		return callResult[generated.Agent]{
+			Value:  value,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) UpdateAgent(ctx context.Context, agentID string, input UpdateAgentInput) (*AgentIdentity, error) {
+	if input.Name == nil && input.PinnedRevision == nil && !input.ClearPinnedRevision {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent update requires a name or revision pin"}
+	}
+	if input.PinnedRevision != nil && input.ClearPinnedRevision {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent revision pin cannot be set and cleared together"}
+	}
+	body := make(map[string]any)
+	if input.Name != nil {
+		body["name"] = *input.Name
+	}
+	if input.PinnedRevision != nil {
+		body["pinned_revision"] = *input.PinnedRevision
+	} else if input.ClearPinnedRevision {
+		body["pinned_revision"] = nil
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	}
+	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
+		response, err := c.raw.UpdateAgentWithBodyWithResponse(
+			ctx,
+			agentID,
+			"application/json",
+			bytes.NewReader(encoded),
+		)
+		if err != nil {
+			return callResult[generated.Agent]{}, err
+		}
+		return callResult[generated.Agent]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+}
+
+func (c *Client) ArchiveAgent(ctx context.Context, agentID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.ArchiveAgentWithResponse(ctx, agentID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
+func (c *Client) RestoreAgent(ctx context.Context, agentID string) error {
+	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
+		response, err := c.raw.RestoreAgentWithResponse(ctx, agentID)
+		if err != nil {
+			return callResult[struct{}]{}, err
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
 func (c *Client) ListAgents(ctx context.Context, options ListAgentsOptions) (*AgentList, error) {
 	params := &generated.ListAgentsParams{
-		AgentKey: options.AgentKey,
-		Cursor:   options.Cursor,
-		Limit:    options.Limit,
+		TenantKey:         options.TenantKey,
+		AgentKey:          options.AgentKey,
+		AgentDefinitionID: options.AgentDefinitionID,
+		IncludeArchived:   options.IncludeArchived,
+		Cursor:            options.Cursor,
+		Limit:             options.Limit,
 	}
 	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentList], error) {
 		response, err := c.raw.ListAgentsWithResponse(ctx, params)
@@ -1861,6 +2002,7 @@ func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) 
 // safe.
 func (c *Client) CreateSession(ctx context.Context, options CreateSessionOptions) (*Session, error) {
 	body := generated.CreateSessionJSONRequestBody{
+		AgentID:    options.AgentID,
 		AgentKey:   options.AgentKey,
 		TenantKey:  options.TenantKey,
 		UserKey:    options.UserKey,
@@ -2461,14 +2603,6 @@ func generatedIdempotencyKey() string {
 	return "nvoken-" + hex.EncodeToString(value[:])
 }
 
-// agentIDOrEmpty reads an Invocation's Agent, which is audience-restricted: a
-// machine credential receives it and a browser grant does not, so the field is
-// optional on the one Invocation schema. This SDK authenticates as a machine
-// client and expects it, and reports absence as the empty string rather than
-// panicking if it ever talks to an endpoint that withholds it.
-func agentIDOrEmpty(value *generated.AgentID) string {
-	if value == nil {
-		return ""
-	}
-	return string(*value)
+func agentIDOrEmpty(value generated.AgentID) string {
+	return string(value)
 }

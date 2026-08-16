@@ -27,7 +27,6 @@ const client = new Client({
 
 const agent = client.agent({
   agentKey: "invoice-review",
-	agentDefinitionId: process.env.NVOKEN_AGENT_DEFINITION_ID ?? "",
 });
 
 // Bytes are inlined, so nvoken never fetches a URL. Public message reads later

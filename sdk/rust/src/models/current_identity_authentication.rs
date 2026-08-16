@@ -33,12 +33,9 @@ pub struct CurrentIdentityAuthentication {
     /// Browser grants only. The Agent this grant is pinned to.
     #[serde(rename = "agent_key", skip_serializing_if = "Option::is_none")]
     pub agent_key: Option<String>,
-    /// Browser grants only.
-    #[serde(
-        rename = "agent_definition_id",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub agent_definition_id: Option<String>,
+    /// Browser grants only. The Agent this grant is pinned to.
+    #[serde(rename = "agent_id", skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
     /// Browser grants only.
     #[serde(
         rename = "agent_definition_revision",
@@ -83,7 +80,7 @@ impl CurrentIdentityAuthentication {
             org_id: None,
             effective_profile: None,
             agent_key: None,
-            agent_definition_id: None,
+            agent_id: None,
             agent_definition_revision: None,
             tenant_key: None,
             session_id: None,

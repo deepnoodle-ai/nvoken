@@ -1,9 +1,8 @@
 # nvoken Python SDK
 
-An Invocation is one durable agent turn. The host supplies `agent_key`,
-optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
-model, and tools travel with the turn as an `agent_definition`, either inline or
-referenced by a reusable `agent_definition_id`.
+An Invocation is one durable turn by a deliberately created, tenant-scoped
+Agent. An Agent binds your `agent_key` to one App-owned, versioned Agent
+Definition; a Session is one conversation with that Agent.
 
 The package has three deliberate levels:
 
@@ -25,26 +24,36 @@ cursor iterators, resumable SSE, composed result reads (`result`,
 `list_messages`, `output_text`), and callback verification. Session-scoped
 messages use `Client.list_session_messages`.
 
-Resolve the identity-only Agent anchor without admitting work:
+List or read the full Agent instance without admitting work:
 
 ```python
-agents = await client.list_agent_identities(agent_key="support")
-identity = await client.get_agent_identity(agents.items[0].id)
+agents = await client.list_agents(agent_key="support")
+instance = await client.get_agent(agents.items[0].id)
 ```
 
-The identity contains only its nvoken ID, host-owned key, and creation time.
-Instructions, models, tools, and provider keys remain per Invocation.
+The Agent records its tenant, key, display name, Definition binding, optional
+revision pin, lifecycle timestamps, and archive state.
 
 Opt into the fixed guarded public-web reader with `fetch_tool()`:
 
 ```python
-from nvoken import AgentOptions, Model, fetch_tool
+from nvoken import AgentDefinition, AgentOptions, Model, fetch_tool
 
-options = AgentOptions(
-    agent_key="research",
-    model=Model(provider="anthropic", id="claude-sonnet-5"),
-    tools=(fetch_tool(),),
+definition = await client.create_agent_definition(
+    "research",
+    "Research",
+    AgentDefinition(
+        instructions="Use nvoken_fetch for public URLs, then summarize the source.",
+        model=Model(provider="anthropic", id="claude-sonnet-5"),
+        tools=(fetch_tool(),),
+    ),
 )
+instance = await client.create_agent(
+    agent_key="research",
+    name="Research",
+    agent_definition_id=definition.id,
+)
+options = AgentOptions(agent_id=instance.id)
 ```
 
 The Runtime accepts only `{"name":"nvoken_fetch","mode":"builtin"}`. It owns
@@ -57,8 +66,6 @@ Use an Agent for the common path:
 ```python
 agent = client.agent(AgentOptions(
     agent_key="support",
-    instructions="Help with billing questions.",
-    model=Model(provider="anthropic", id="claude-sonnet-5"),
 ))
 
 print(await agent.text("Why was I charged twice?"))
@@ -136,9 +143,6 @@ request = InvokeRequest(
         compaction=ContextCompaction(trigger_tokens="auto"),
     ),
     input="hello",
-    agent_definition=AgentDefinition(
-        model=Model(provider="anthropic", id="claude-sonnet-5"),
-    ),
 )
 ```
 
@@ -163,9 +167,6 @@ Pass a stored or one-turn provider key directly through
 request = InvokeRequest(
     agent_key="support",
     input="hello",
-    agent_definition=AgentDefinition(
-        model=Model(provider="openai", id="gpt-test"),
-    ),
     provider_keys=(
         ProviderKeySelection(
             provider="openai",
@@ -195,15 +196,16 @@ print(selected.cataloged, selected.pricing.status)
 The list is curated discovery metadata, not proof of provider-account access.
 Exact inspection also accepts uncataloged IDs.
 
-Set an explicit portable temperature on the request or Agent:
+Set an explicit portable temperature on the Agent Definition or a safe
+per-turn override:
 
 ```python
-from nvoken import AgentDefinition, InvokeRequest, Model, Sampling
+from nvoken import AgentDefinitionOverrides, InvokeRequest, Model, Sampling
 
 request = InvokeRequest(
     agent_key="support",
     input="hello",
-    agent_definition=AgentDefinition(
+    overrides=AgentDefinitionOverrides(
         model=Model(provider="anthropic", id="claude-haiku-4-5"),
         sampling=Sampling(temperature=0),
     ),
@@ -219,12 +221,12 @@ portable range is `[0,1]`. `top_p` and stop sequences are intentionally absent;
 Reasoning is typed and fail closed:
 
 ```python
-from nvoken import AgentDefinition, InvokeRequest, Model, Reasoning
+from nvoken import AgentDefinitionOverrides, InvokeRequest, Model, Reasoning
 
 request = InvokeRequest(
     agent_key="support",
     input="hello",
-    agent_definition=AgentDefinition(
+    overrides=AgentDefinitionOverrides(
         model=Model(provider="anthropic", id="claude-opus-5"),
         reasoning=Reasoning(effort="high"),
     ),
@@ -241,40 +243,47 @@ is durable.
 
 `Client.invoke` and Agent operations call
 `preflight_output_schema(schema)` before transport when
-`InvokeRequest.agent_definition.output_schema` is present. Rejection is an `NvokenError` with
+`InvokeRequest.overrides.output_schema` is present. Rejection is an `NvokenError` with
 code `schema_preflight_failed`; its safe `details` contain the portable issue
 `code`, RFC 6901 `path`, and optional `keyword`. A successful local check means
 eligible for admission. Generated APIs reached through `client.raw()` still
 rely on the authoritative Runtime check.
 
-## Reuse an Agent Definition
+## Define and instantiate an Agent
 
-Sending the definition inline is the ordinary path. Register it instead when
-many turns share one configuration and you would rather send a short ID:
+Every turn runs against an App-owned, versioned Agent Definition. Create a
+tenant-scoped Agent instance that binds to the template before admitting work:
 
 ```python
-resource = await client.create_agent_definition(AgentDefinition(
-    instructions="Help with billing questions.",
-    model=Model(provider="anthropic", id="claude-sonnet-5"),
-), idempotency_key="support-definition-v1")
+resource = await client.create_agent_definition(
+    "support",
+    "Support",
+    AgentDefinition(
+        instructions="Help with billing questions.",
+        model=Model(provider="anthropic", id="claude-sonnet-5"),
+    ),
+    idempotency_key="support-definition-v1",
+)
+instance = await client.create_agent(
+    agent_key="support",
+    name="Support",
+    agent_definition_id=resource.id,
+)
 
 handle = await client.invoke(InvokeRequest(
-    agent_key="support",
+    agent_id=instance.id,
     input="Why was I charged twice?",
-    agent_definition_id=resource.id,
 ))
 ```
 
-Creating a definition starts no turn and creates no Agent, Session, or message.
-The resource has a stable ID and an increasing revision. Use
-`get_agent_definition()` and `update_agent_definition()` to read and replace
-it. An idempotency key makes create retries safe; equal content under another
-key creates an independent resource.
-
-Supply exactly one of `agent_definition` and `agent_definition_id`; the facade
-rejects a request carrying both or neither before it reaches the network.
-`AgentOptions` supports the same choice; host tool handlers remain local when a
-reusable resource supplies the declarations.
+Creating a Definition starts no turn. It has an immutable `definition_key`, a
+stable ID, and an increasing revision; `get_agent_definition_revision()` reads
+historical revisions. Updating a Definition does not rewrite an Agent's
+binding. An Agent or Session may pin a revision, while an Invocation may select
+one revision for that turn. Safe `overrides` cover model, sampling, reasoning,
+tool choice, limits, and output schema; they cannot expand tools, data access,
+memory authority, or instructions. Host tool handlers remain local to the SDK
+facade.
 
 ## Record changing application state
 
@@ -320,7 +329,8 @@ it with a short current value such as `"ticket: closed"`.
 
 ## Remote MCP tools
 
-Use the handwritten declaration for discovery and Invocation admission:
+Use the handwritten declaration for discovery. Store the same declaration on
+the Agent Definition, then pass only its one-turn secret headers at admission:
 
 ```python
 server = MCPServer(
@@ -335,10 +345,6 @@ catalog = await client.list_mcp_tools(server, headers)
 request = InvokeRequest(
     agent_key="support",
     input="hello",
-    agent_definition=AgentDefinition(
-        model=Model(provider="anthropic", id="claude-sonnet-5"),
-        mcp_servers=(server,),
-    ),
     mcp_server_headers=(MCPServerHeaders(name="support", headers=headers),),
 )
 ```

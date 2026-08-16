@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CreateSessionRequest {
-    /// Your own name for the agent, handled exactly as it is when starting a turn: nvoken finds the matching Agent or creates one. Leave it out and the Session starts with no Agent — `agent_id` stays null until the first turn binds it.
+    /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+    #[serde(rename = "agent_id", skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    /// Your own key for a deliberately created Agent in the effective tenant. Unknown Agents are refused and never created. Mutually exclusive with `agent_id`. Leave both out for an unbound Session.
     #[serde(rename = "agent_key", skip_serializing_if = "Option::is_none")]
     pub agent_key: Option<String>,
     /// Optional tenant partition. Precedence is credential constraint, this explicit value, then the default partition.
@@ -22,12 +25,12 @@ pub struct CreateSessionRequest {
     /// Optional host-owned end-user label recorded on the Session. Filtering only; not an isolation boundary.
     #[serde(rename = "user_key", skip_serializing_if = "Option::is_none")]
     pub user_key: Option<String>,
-    /// Optional caller key resolved within (effective tenant partition, Agent, session_key). Requires agent_key. Makes creation an upsert: an existing keyed Session is returned unchanged.
+    /// Optional caller key resolved within (effective tenant partition, Agent, session_key). Requires an Agent. Makes creation an upsert: an existing keyed Session is returned unchanged.
     #[serde(rename = "session_key", skip_serializing_if = "Option::is_none")]
     pub session_key: Option<String>,
     #[serde(rename = "session_options", skip_serializing_if = "Option::is_none")]
     pub session_options: Option<Box<models::SessionOptions>>,
-    /// Host-asserted starting history, accepted only while a new Session is created. Requires `agent_key`. A keyed request that resolves an existing Session returns it unchanged and never appends these messages. The UTF-8 text across the array may total at most 524288 bytes.
+    /// Host-asserted starting history, accepted only while a new Session is created. Requires an Agent. A keyed request that resolves an existing Session returns it unchanged and never appends these messages. The UTF-8 text across the array may total at most 524288 bytes.
     #[serde(rename = "seed_messages", skip_serializing_if = "Option::is_none")]
     pub seed_messages: Option<Vec<models::SeedMessage>>,
 }
@@ -35,6 +38,7 @@ pub struct CreateSessionRequest {
 impl CreateSessionRequest {
     pub fn new() -> CreateSessionRequest {
         CreateSessionRequest {
+            agent_id: None,
             agent_key: None,
             tenant_key: None,
             user_key: None,

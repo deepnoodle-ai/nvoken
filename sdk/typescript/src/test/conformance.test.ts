@@ -67,7 +67,7 @@ import {
   type TypedInvocation,
 } from "../index.js";
 
-const agentId = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
+const agentId = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
 const invocationId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
 const sessionId = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const toolCallId = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
@@ -255,10 +255,10 @@ test("shared agent-definition-reuse fixture is expressible", async () => {
 	agentKey: "support",
     idempotencyKey: "agent-definition-reference",
     input: "hello",
-    agentDefinitionId: fixture.agent_definition_id,
   });
-  assert.equal(body?.agent_definition_id, fixture.agent_definition_id);
+  assert.equal(body?.agent_key, "support");
   assert.equal(body?.agent_definition, undefined);
+  assert.equal(body?.agent_definition_id, undefined);
 });
 
 test("Agent Definition creation returns a stable resource used by Invocation ID", async () => {
@@ -289,7 +289,12 @@ test("Agent Definition creation returns a stable resource used by Invocation ID"
     instructions: "You are a concise billing support agent.",
     model: { provider: "anthropic", id: "claude-sonnet-5" },
   };
-	const resource = await client.createAgentDefinition(definition, "definition-create");
+	const resource = await client.createAgentDefinition({
+	  definitionKey: "support",
+	  name: "Billing support",
+	  definition,
+	  idempotencyKey: "definition-create",
+	});
 	assert.equal(resource.id, fixture.agent_definition_id);
   assert.deepEqual(bodies[0], fixture.creation.request);
 
@@ -297,10 +302,10 @@ test("Agent Definition creation returns a stable resource used by Invocation ID"
     agentKey: "support",
     idempotencyKey: "agent-definition-inline",
     input: "hello",
-	  agentDefinitionId: resource.id,
   });
-	assert.equal(bodies[1]?.agent_definition_id, resource.id);
+	assert.equal(bodies[1]?.agent_key, "support");
 	assert.equal(bodies[1]?.agent_definition, undefined);
+	assert.equal(bodies[1]?.agent_definition_id, undefined);
 });
 
 test("Agent Definition lifecycle facade lists, archives, and restores", async () => {
@@ -368,7 +373,6 @@ test("mcp secrets stay outside the Agent Definition", async () => {
     agentKey: "support",
     idempotencyKey: "mcp-secret-placement",
     input: "hello",
-	  agentDefinitionId: "def_conformance",
     mcpServerHeaders: [{
       name: "support",
       headers: { Authorization: "Bearer secret" },
@@ -926,7 +930,6 @@ test("session options, metadata and provider tools match the shared fixture", as
   });
   await client.invoke({
     agentKey: "support",
-	agentDefinitionId: "def_conformance",
     sessionKey: "conformance",
     sessionOptions: { retention: { ttlSeconds: 86400 } },
     metadata: fixture.invocation_metadata,
@@ -935,11 +938,10 @@ test("session options, metadata and provider tools match the shared fixture", as
   const wire = body as Record<string, any>;
   assert.deepEqual(wire.session_options, fixture.session_options.retention_only);
   assert.deepEqual(wire.metadata, fixture.invocation_metadata);
-	assert.equal(wire.agent_definition_id, "def_conformance");
+	assert.equal(wire.agent_key, "support");
 
   await client.invoke({
 	agentKey: "support",
-	agentDefinitionId: "def_conformance",
     sessionKey: "conformance",
     sessionOptions: {
       compaction: { triggerTokens: 32768 },
@@ -950,14 +952,13 @@ test("session options, metadata and provider tools match the shared fixture", as
   });
   const configured = body as Record<string, any>;
   assert.deepEqual(configured.session_options, fixture.session_options.every_member);
-	assert.equal(configured.agent_definition_id, "def_conformance");
+	assert.equal(configured.agent_key, "support");
 
   // Session options with no members would serialize to `{}`, which the Runtime
   // rejects for minProperties — catching it locally names the field.
   await assert.rejects(
 	client.invoke({
 	  agentKey: "support",
-	  agentDefinitionId: "def_conformance",
       sessionKey: "conformance",
       sessionOptions: {},
       input: "hello",
@@ -988,7 +989,6 @@ test("agent-issued requests carry every field the shared fixture pins", async ()
   });
   await client.agent({
 	agentKey: "support",
-	agentDefinitionId: "def_conformance",
   }).invoke("hello", {
     idempotencyKey: "conformance",
     onBudgetExhausted: "pause",
@@ -1005,7 +1005,6 @@ test("agent-issued requests carry every field the shared fixture pins", async ()
   // reconciliation instead of rejecting the pairing in the SDK.
   await client.agent({
 	agentKey: "support",
-	agentDefinitionId: "def_conformance",
   }).invoke("hello", {
     sessionId,
     sessionOptions: { retention: { ttlSeconds: 86400 } },
@@ -1032,8 +1031,12 @@ test("Agent Definition creation preflights converted output schemas once before 
   for (const testCase of fixture.rejected) {
     await assert.rejects(
 	  client.createAgentDefinition({
-		  model: { provider: "anthropic", id: "test-model" },
-		  outputSchema: expandOutputSchemaFixture(testCase),
+		  definitionKey: "schema-test",
+		  name: "Schema test",
+		  definition: {
+		    model: { provider: "anthropic", id: "test-model" },
+		    outputSchema: expandOutputSchemaFixture(testCase),
+		  },
 	  }),
       (error: unknown) => {
         assert.ok(error instanceof NvokenError, testCase.id);
@@ -1061,8 +1064,12 @@ test("Agent Definition creation preflights converted output schemas once before 
   };
   await assert.rejects(
 	client.createAgentDefinition({
-		model: { provider: "anthropic", id: "test-model" },
-		outputSchema: schema,
+		definitionKey: "schema-test",
+		name: "Schema test",
+		definition: {
+		  model: { provider: "anthropic", id: "test-model" },
+		  outputSchema: schema,
+		},
 	}),
     (error: unknown) => {
       assert.ok(error instanceof NvokenError);
@@ -1124,6 +1131,8 @@ test("InvocationError is actionable without a formatter", () => {
   const invocation = {
     id: invocationId,
     agentId,
+    agentKey: "support",
+    agentDefinitionId: "def_conformance",
     sessionId,
     userKey: null,
     context: null,
@@ -1141,7 +1150,6 @@ test("InvocationError is actionable without a formatter", () => {
     structuredOutput: null,
     structuredOutputProvenance: null,
     metadata: null,
-	agentDefinitionId: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
 	agentDefinitionRevision: 1,
     agentDefinition: null,
     limits: {
@@ -1188,9 +1196,9 @@ test("shared fault server semantics", async (context) => {
     apiKey: "test-key",
     retry: { maxAttempts: 3, minDelayMs: 1, maxDelayMs: 5 },
   });
-  const agents = await client.listAgentIdentities({ agentKey: "support" });
+  const agents = await client.listAgents({ agentKey: "support" });
   assert.equal(agents.items[0]?.id, agentId);
-  const agentIdentity = await client.getAgentIdentity(agentId);
+  const agentIdentity = await client.getAgent(agentId);
   assert.equal(agentIdentity.agentKey, "support");
   const models = await client.listModels();
   assert.equal(models.catalogVersion, "conformance-catalog-v1");
@@ -1233,7 +1241,6 @@ test("shared fault server semantics", async (context) => {
       source: "caller_ephemeral",
       key: { apiKey: "conformance-secret" },
     }],
-	agentDefinitionId: "def_conformance",
     mcpServerHeaders: [{
       name: "support",
       headers: { Authorization: "Bearer conformance-mcp-secret" },
@@ -1651,7 +1658,6 @@ test("agent run converts standard schemas, retries one admission, and dispatches
   });
   const result = await client.agent({
 	agentKey: "support",
-	agentDefinitionId: "def_conformance",
 	tools: [lookup],
   }).run("Where is my order?", { ifActive: "supersede" });
 
@@ -1665,7 +1671,8 @@ test("agent run converts standard schemas, retries one admission, and dispatches
   );
   assert.match(String(admissionBodies[0]?.idempotency_key), /^nvoken-/);
   assert.equal(admissionBodies[0]?.if_active, "supersede");
-	assert.equal(admissionBodies[0]?.agent_definition_id, "def_conformance");
+	assert.equal(admissionBodies[0]?.agent_key, "support");
+	assert.equal(admissionBodies[0]?.agent_definition_id, undefined);
 });
 
 test("agent run falls back from a broken stream to authoritative reads", async () => {
@@ -1707,7 +1714,7 @@ test("agent run falls back from a broken stream to authoritative reads", async (
     retry: { maxAttempts: 1 },
   });
 
-	const result = await client.agent({ agentKey: "support", agentDefinitionId: "def_conformance" }).run("hello");
+	const result = await client.agent({ agentKey: "support" }).run("hello");
   assert.equal(result.text, "authoritative");
   assert.equal(result.handle.sessionId, sessionId);
   assert.equal(result.handle.agentId, agentId);
@@ -1790,14 +1797,14 @@ test("missing handlers cancel by default and support explicit handoff", async ()
   });
 
   await assert.rejects(
-	makeClient().agent({ agentKey: "support", agentDefinitionId: "def_conformance", tools: [missingTool] }).run("hello"),
+	makeClient().agent({ agentKey: "support", tools: [missingTool] }).run("hello"),
     (error: unknown) => error instanceof MissingToolHandlerError
       && error.invocationCancelled,
   );
   assert.equal(cancellations, 1);
 
   await assert.rejects(
-	makeClient().agent({ agentKey: "support", agentDefinitionId: "def_conformance", tools: [missingTool] }).run("hello", {
+	makeClient().agent({ agentKey: "support", tools: [missingTool] }).run("hello", {
       leaveWaitingOnMissingHandler: true,
     }),
     (error: unknown) => error instanceof MissingToolHandlerError
@@ -1854,7 +1861,7 @@ test("text reports structured-only completion and stream timeout distinctly", as
     retry: { maxAttempts: 1 },
   });
   await assert.rejects(
-	structuredClient.agent<Answer>({ agentKey: "support", agentDefinitionId: "def_conformance" }).text("hello"),
+	structuredClient.agent<Answer>({ agentKey: "support" }).text("hello"),
     (error: unknown) => error instanceof NoOutputTextError
       && error.code === "no_output_text"
       && /structured output/.test(error.message),
@@ -1871,7 +1878,7 @@ test("text reports structured-only completion and stream timeout distinctly", as
     }),
     retry: { maxAttempts: 1 },
   });
-	const iterator = blockedClient.agent({ agentKey: "support", agentDefinitionId: "def_conformance" }).stream("hello", {
+	const iterator = blockedClient.agent({ agentKey: "support" }).stream("hello", {
     timeoutMs: 5,
   });
   await assert.rejects(
@@ -1936,7 +1943,6 @@ test("session conflicts normalize to SessionBusyError with active work", async (
   await assert.rejects(
 	client.invoke({
 	  agentKey: "support",
-	  agentDefinitionId: "def_conformance",
 	  input: "hello",
     }),
     (error: unknown) => error instanceof SessionBusyError
@@ -2023,7 +2029,7 @@ test("agent stream exposes the two-frame consumer without a reducer", async () =
   let text = "";
   let settled: string | undefined;
   const observed: string[] = [];
-	for await (const event of client.agent({ agentKey: "support", agentDefinitionId: "def_conformance" }).stream("hello")) {
+	for await (const event of client.agent({ agentKey: "support" }).stream("hello")) {
     observed.push(event.type);
     if (event.type === "message.delta" && event.kind === "text") text += event.delta;
     if (event.type === "transcript.update") {
@@ -2103,7 +2109,7 @@ test("bound session serializes invoke admission until the prior turn ends", asyn
       throw new Error(`unexpected request ${init?.method} ${url.pathname}`);
     },
   });
-	const chat = client.agent({ agentKey: "support", agentDefinitionId: "def_conformance" }).session({ sessionKey: "ticket-42" });
+	const chat = client.agent({ agentKey: "support" }).session({ sessionKey: "ticket-42" });
 
   const first = await chat.invoke("first");
   const secondPromise = chat.invoke("second");
@@ -2494,7 +2500,6 @@ test("shared recorded-context fixture is expressible", async () => {
     sessionKey: accepted.session_key,
     idempotencyKey: accepted.idempotency_key,
     input: accepted.input,
-    agentDefinitionId: accepted.agent_definition_id,
     context: accepted.context,
   });
   assert.deepEqual(body?.context, accepted.context);
@@ -2514,7 +2519,6 @@ test("shared recorded-context fixture is expressible", async () => {
       await client.invoke({
         agentKey: "support",
         input: "hello",
-        agentDefinitionId: accepted.agent_definition_id,
         context,
       });
       return false;

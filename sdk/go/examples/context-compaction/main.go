@@ -22,10 +22,6 @@ func main() {
 	}
 	agent, err := client.Agent(nvoken.AgentOptions{
 		AgentKey: "context-compaction-example",
-		Model: nvoken.Model{
-			Provider: "anthropic",
-			ID:       "claude-sonnet-5",
-		},
 	})
 	if err != nil {
 		log.Fatal(err)

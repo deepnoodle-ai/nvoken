@@ -20,16 +20,26 @@ pub enum Operation {
     CreateAgentDefinition,
     #[serde(rename = "get_agent_definition")]
     GetAgentDefinition,
+    #[serde(rename = "get_agent_definition_revision")]
+    GetAgentDefinitionRevision,
     #[serde(rename = "list_agent_definitions")]
     ListAgentDefinitions,
     #[serde(rename = "update_agent_definition")]
     UpdateAgentDefinition,
-    #[serde(rename = "create_session")]
-    CreateSession,
+    #[serde(rename = "create_agent")]
+    CreateAgent,
     #[serde(rename = "get_agent")]
     GetAgent,
     #[serde(rename = "list_agents")]
     ListAgents,
+    #[serde(rename = "update_agent")]
+    UpdateAgent,
+    #[serde(rename = "archive_agent")]
+    ArchiveAgent,
+    #[serde(rename = "restore_agent")]
+    RestoreAgent,
+    #[serde(rename = "create_session")]
+    CreateSession,
     #[serde(rename = "get_invocation")]
     GetInvocation,
     #[serde(rename = "submit_tool_results")]
@@ -114,11 +124,16 @@ impl std::fmt::Display for Operation {
             Self::CreateInvocation => write!(f, "create_invocation"),
             Self::CreateAgentDefinition => write!(f, "create_agent_definition"),
             Self::GetAgentDefinition => write!(f, "get_agent_definition"),
+            Self::GetAgentDefinitionRevision => write!(f, "get_agent_definition_revision"),
             Self::ListAgentDefinitions => write!(f, "list_agent_definitions"),
             Self::UpdateAgentDefinition => write!(f, "update_agent_definition"),
-            Self::CreateSession => write!(f, "create_session"),
+            Self::CreateAgent => write!(f, "create_agent"),
             Self::GetAgent => write!(f, "get_agent"),
             Self::ListAgents => write!(f, "list_agents"),
+            Self::UpdateAgent => write!(f, "update_agent"),
+            Self::ArchiveAgent => write!(f, "archive_agent"),
+            Self::RestoreAgent => write!(f, "restore_agent"),
+            Self::CreateSession => write!(f, "create_session"),
             Self::GetInvocation => write!(f, "get_invocation"),
             Self::SubmitToolResults => write!(f, "submit_tool_results"),
             Self::CancelInvocation => write!(f, "cancel_invocation"),

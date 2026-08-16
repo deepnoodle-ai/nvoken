@@ -11,24 +11,14 @@ import (
 	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
-// AgentOptions fixes one identity and Agent Definition every turn from this
-// Agent runs with. Supply AgentDefinitionID to reuse a resource, or leave it
-// empty and provide the flat inline definition fields. Tools always register
-// local handlers; for inline definitions they are also sent as declarations.
+// AgentOptions binds the workflow facade to one deliberately created Agent.
+// Supply exactly one of AgentID and AgentKey. Tools register local handlers;
+// their declarations live on the Agent's versioned Agent Definition.
 type AgentOptions struct {
-	AgentKey          string
-	AgentDefinitionID string
-	TenantKey         *string
-	Instructions      string
-	Model             Model
-	Sampling          *Sampling
-	Reasoning         *Reasoning
-	ToolChoice        *ToolChoice
-	Limits            *Limits
-	Tools             []Tool
-	MCPServers        []MCPServer
-	ProviderTools     []ProviderTool
-	OutputSchema      map[string]any
+	AgentID   string
+	AgentKey  string
+	TenantKey *string
+	Tools     []Tool
 	// MCPServerHeaders carries per-turn secret headers for the MCP servers this
 	// Agent declares. They stay outside the Agent Definition so no reusable
 	// revision depends on a secret.
@@ -38,30 +28,10 @@ type AgentOptions struct {
 	OnBudgetExhausted BudgetExhaustionBehavior
 }
 
-func (o AgentOptions) agentDefinition() AgentDefinition {
-	return AgentDefinition{
-		Instructions:  o.Instructions,
-		Model:         o.Model,
-		Sampling:      o.Sampling,
-		Reasoning:     o.Reasoning,
-		ToolChoice:    o.ToolChoice,
-		Limits:        o.Limits,
-		Tools:         o.Tools,
-		MCPServers:    o.MCPServers,
-		ProviderTools: o.ProviderTools,
-		OutputSchema:  o.OutputSchema,
-	}
-}
-
-func (o AgentOptions) hasInlineDefinitionFields() bool {
-	return o.Instructions != "" || o.Model != (Model{}) || o.Sampling != nil ||
-		o.Reasoning != nil || o.ToolChoice != nil || o.Limits != nil ||
-		len(o.MCPServers) != 0 || len(o.ProviderTools) != 0 || o.OutputSchema != nil
-}
-
 type AgentInvocationOptions struct {
 	IdempotencyKey    string
-	TenantKey         *string
+	AgentRevision     *int64
+	Overrides         *AgentDefinitionOverrides
 	SessionID         *string
 	SessionKey        *string
 	SessionOptions    *SessionOptions
@@ -174,26 +144,11 @@ func NewAgent(client *Client, options AgentOptions) (*Agent, error) {
 			Message:  "Agent client is required",
 		}
 	}
-	if options.AgentKey == "" {
+	if (options.AgentID == "") == (options.AgentKey == "") {
 		return nil, &Error{
 			Category: ErrorValidation,
-			Message:  "Agent key is required",
+			Message:  "Supply exactly one of Agent ID and Agent key",
 		}
-	}
-	if options.AgentDefinitionID != "" && options.hasInlineDefinitionFields() {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  "Supply an Agent Definition ID or inline definition fields, not both",
-		}
-	}
-	if options.AgentDefinitionID == "" && options.Model == (Model{}) {
-		if client.DefaultModel == nil {
-			return nil, &Error{
-				Category: ErrorValidation,
-				Message:  "Agent model is required for an inline definition",
-			}
-		}
-		options.Model = *client.DefaultModel
 	}
 	hostTools := make(map[string]Tool)
 	callbackTools := make(map[string]struct{})
@@ -221,25 +176,24 @@ func (a *Agent) Invoke(
 	return a.client.Invoke(ctx, a.request(input, options))
 }
 
-// request composes the Agent identity and definition with one call's overrides. It
+// request composes the Agent identity with one call's steering and secrets. It
 // is the single place a per-call option reaches the wire, so the conformance
 // suite can pin the whole admitted body without a server.
 func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequest {
-	tenantKey := options.TenantKey
-	if tenantKey == nil {
-		tenantKey = a.options.TenantKey
-	}
 	onBudgetExhausted := options.OnBudgetExhausted
 	if onBudgetExhausted == "" {
 		onBudgetExhausted = a.options.OnBudgetExhausted
 	}
 	request := InvokeRequest{
+		AgentID:           a.options.AgentID,
 		AgentKey:          a.options.AgentKey,
-		TenantKey:         tenantKey,
+		TenantKey:         a.options.TenantKey,
 		SessionID:         options.SessionID,
 		SessionKey:        options.SessionKey,
 		SessionOptions:    options.SessionOptions,
 		IdempotencyKey:    options.IdempotencyKey,
+		AgentRevision:     options.AgentRevision,
+		Overrides:         options.Overrides,
 		IfActive:          options.IfActive,
 		OnBudgetExhausted: onBudgetExhausted,
 		Input:             input,
@@ -250,12 +204,6 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		Webhook:  webhookTarget(options.Webhook, a.options.Webhook),
 		Context:  options.Context,
 		Metadata: options.Metadata,
-	}
-	if a.options.AgentDefinitionID != "" {
-		request.AgentDefinitionID = a.options.AgentDefinitionID
-	} else {
-		definition := a.options.agentDefinition()
-		request.AgentDefinition = &definition
 	}
 	return request
 }
@@ -371,15 +319,11 @@ func (a *Agent) Session(binding SessionBinding) (*AgentSession, error) {
 			Message:  "exactly one of SessionID or SessionKey is required",
 		}
 	}
-	tenantKey := binding.TenantKey
-	if tenantKey == nil {
-		tenantKey = a.options.TenantKey
-	}
 	key := "id:" + binding.SessionID
 	if binding.SessionID == "" {
 		tenant := "default"
-		if tenantKey != nil {
-			tenant = *tenantKey
+		if a.options.TenantKey != nil {
+			tenant = *a.options.TenantKey
 		}
 		key = "key:" + tenant + ":" + binding.SessionKey
 	}
@@ -395,7 +339,6 @@ func (a *Agent) Session(binding SessionBinding) (*AgentSession, error) {
 		lock:       lock,
 		sessionID:  binding.SessionID,
 		sessionKey: binding.SessionKey,
-		tenantKey:  tenantKey,
 	}, nil
 }
 
@@ -503,7 +446,6 @@ func (a *Agent) dispatchWaiting(
 type SessionBinding struct {
 	SessionID  string
 	SessionKey string
-	TenantKey  *string
 }
 
 type AgentSession struct {
@@ -511,7 +453,6 @@ type AgentSession struct {
 	lock       *sync.Mutex
 	sessionID  string
 	sessionKey string
-	tenantKey  *string
 }
 
 func (s *AgentSession) Invoke(
@@ -588,7 +529,6 @@ func (s *AgentSession) bind(options *AgentInvocationOptions) error {
 			Message:  "bound Session calls cannot override their Session",
 		}
 	}
-	options.TenantKey = s.tenantKey
 	if s.sessionID != "" {
 		options.SessionID = &s.sessionID
 	} else {

@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	testAgentID      = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
+	testAgentID      = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
 	testInvocationID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
 	testSessionID    = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
 	testToolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
@@ -32,10 +32,9 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	output, err := executeCLI(t, baseURL, true,
 		"invoke",
 		"hello",
-		"--agent", "support",
+		"--agent-key", "support",
 		"--idempotency-key", "cli-lost-ack",
 		"--if-active", "supersede",
-		"--instructions", "help",
 		"--provider", "openai",
 		"--model", "gpt-test",
 	)
@@ -56,10 +55,9 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	output, err = executeCLI(t, baseURL, false,
 		"invoke",
 		"hello again",
-		"--agent", "support",
+		"--agent-key", "support",
 		"--idempotency-key", "cli-answer",
 		"--if-active", "supersede",
-		"--instructions", "help",
 		"--provider", "openai",
 		"--model", "gpt-test",
 	)
@@ -165,7 +163,7 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 	}
 
 	output, err = executeCLI(t, baseURL, false, "agent", "list", "--agent-key", "support")
-	if err != nil || output != testAgentID+"\tsupport\n" {
+	if err != nil || output != testAgentID+"\tsupport\tSupport\n" {
 		t.Fatalf("Agent list output=%q err=%v", output, err)
 	}
 	output, err = executeCLI(t, baseURL, true, "agent", "get", testAgentID)
@@ -406,10 +404,9 @@ func TestObservationCommandsSurfaceCorrelationAndNextCursor(t *testing.T) {
 	}
 }
 
-// The CLI's invoke flags are flat, but the admitted body nests every execution
-// field under agent_definition. Pinning both halves keeps a flag from silently
-// landing at the top level, where the Runtime would reject it.
-func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
+// Invocation admission selects one tenant-scoped Agent and never carries its
+// reusable Definition inline.
+func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 	t.Setenv("NVOKEN_API_KEY", "test-key")
 	var admission map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -440,9 +437,11 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 			response.WriteHeader(http.StatusAccepted)
 			_, _ = io.WriteString(response, `{
 				"id":"invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-				"agent_id":"agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
+				"agent_id":"agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
+				"agent_key":"support",
 				"session_id":"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
 				"agent_definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+				"agent_definition_revision":1,
 				"agent_definition":null,
 				"status":"queued",
 				"stop_reason":null,
@@ -490,23 +489,21 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 		true,
 		"invoke",
 		"hello",
-		"--agent",
+		"--agent-key",
 		"support",
 		"--idempotency-key",
 		"flat-admission-test",
-		"--agent-definition-id",
-		"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
 	)
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("flat admission output=%q err=%v", output, err)
 	}
-	for _, leaked := range []string{"instructions", "model", "limits", "tools"} {
+	for _, leaked := range []string{"instructions", "model", "limits", "tools", "agent_definition", "agent_definition_id"} {
 		if admission[leaked] != nil {
 			t.Fatalf("execution field %q leaked to the top level: %#v", leaked, admission)
 		}
 	}
-	if admission["agent_definition_id"] != "def_019b0a12-8d51-7f34-aed2-0e07c1bdb330" || admission["agent_definition"] != nil {
-		t.Fatalf("admission did not carry only the Agent Definition ID: %#v", admission)
+	if admission["agent_key"] != "support" || admission["agent_id"] != nil {
+		t.Fatalf("admission did not carry only the Agent key: %#v", admission)
 	}
 
 	output, err = executeCLI(
@@ -515,12 +512,10 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 		true,
 		"invoke",
 		"inspect these",
-		"--agent",
+		"--agent-key",
 		"support",
 		"--idempotency-key",
 		"definition-url-test",
-		"--agent-definition-id",
-		"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
 		"--image-url",
 		"https://media.example.test/chart.png",
 		"--document-url",
@@ -529,8 +524,7 @@ func TestNestedAgentDefinitionAdmissionAndDeltaRendering(t *testing.T) {
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("definition URL admission output=%q err=%v", output, err)
 	}
-	if admission["agent_definition_id"] != "def_019b0a12-8d51-7f34-aed2-0e07c1bdb330" ||
-		admission["agent_definition"] != nil {
+	if admission["agent_key"] != "support" || admission["agent_id"] != nil {
 		t.Fatalf("definition URL admission=%#v", admission)
 	}
 	content, ok := admission["input"].([]any)
@@ -582,9 +576,12 @@ func TestModelCheckProbeCarriesAUsableOutputBudget(t *testing.T) {
 			response.Header().Set("Content-Type", "application/json")
 			response.WriteHeader(http.StatusAccepted)
 			_, _ = io.WriteString(response, `{
-				"agent_id":"agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
+				"agent_id":"agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
+				"agent_key":"support",
 				"session_id":"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
 				"id":"`+testInvocationID+`",
+				"agent_definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+				"agent_definition_revision":1,
 				"status":"queued",
 				"deduplicated":false,
 				"deadline_at":"2026-07-21T12:05:00Z"
@@ -605,9 +602,9 @@ func TestModelCheckProbeCarriesAUsableOutputBudget(t *testing.T) {
 		t.Fatalf("model check: %v", err)
 	}
 
-	definition, ok := admission["agent_definition"].(map[string]any)
+	definition, ok := admission["overrides"].(map[string]any)
 	if !ok {
-		t.Fatalf("probe request carried no inline Agent Definition: %#v", admission)
+		t.Fatalf("probe request carried no safe overrides: %#v", admission)
 	}
 	limits, ok := definition["limits"].(map[string]any)
 	if !ok {
@@ -655,7 +652,7 @@ func TestInvokeRejectsInvalidIfActiveBeforeNetwork(t *testing.T) {
 		false,
 		"invoke",
 		"hello",
-		"--agent",
+		"--agent-key",
 		"support",
 		"--provider",
 		"openai",
@@ -674,17 +671,17 @@ func TestInvokeRejectsInvalidIfActiveBeforeNetwork(t *testing.T) {
 		false,
 		"invoke",
 		"hello",
-		"--agent",
+		"--agent-key",
 		"support",
-		"--agent-definition-id",
-		"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+		"--agent-id",
+		testAgentID,
 		"--provider",
 		"openai",
 		"--model",
 		"gpt-test",
 	)
 	if err == nil || called {
-		t.Fatalf("mixed definition error = %v, network called = %t", err, called)
+		t.Fatalf("mixed Agent identity error = %v, network called = %t", err, called)
 	}
 }
 

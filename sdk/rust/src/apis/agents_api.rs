@@ -13,6 +13,32 @@ use crate::{apis::ResponseContent, models};
 use reqwest;
 use serde::{de::Error as _, Deserialize, Serialize};
 
+/// struct for typed errors of method [`archive_agent`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ArchiveAgentError {
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`create_agent`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CreateAgentError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status409(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`get_agent`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -38,6 +64,122 @@ pub enum ListAgentsError {
     Status500(models::ErrorResponse),
     Status503(models::ErrorResponse),
     UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`restore_agent`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RestoreAgentError {
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`update_agent`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum UpdateAgentError {
+    Status400(models::ErrorResponse),
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status409(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
+pub async fn archive_agent(
+    configuration: &configuration::Configuration,
+    agent_id: &str,
+) -> Result<(), Error<ArchiveAgentError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_agent_id = agent_id;
+
+    let uri_str = format!(
+        "{}/v1/agents/{agent_id}",
+        configuration.base_path,
+        agent_id = crate::apis::urlencode(p_path_agent_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::DELETE, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<ArchiveAgentError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+pub async fn create_agent(
+    configuration: &configuration::Configuration,
+    create_agent_request: models::CreateAgentRequest,
+) -> Result<models::Agent, Error<CreateAgentError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_body_create_agent_request = create_agent_request;
+
+    let uri_str = format!("{}/v1/agents", configuration.base_path);
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+    req_builder = req_builder.json(&p_body_create_agent_request);
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::Agent`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::Agent`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<CreateAgentError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
 }
 
 /// Reads identity without creating work. Out-of-scope and undisclosable constrained resources use `not_found`.
@@ -91,23 +233,38 @@ pub async fn get_agent(
     }
 }
 
-/// Returns newest-first identity anchors scoped to the caller's app. An Agent belongs to one app and stores only its nvoken ID, the host-owned `agent_key`, and creation time; instructions, models, tools, and provider keys still travel on each Invocation. An exact `agent_key` filter returns zero or one item within that app.  Unconstrained credentials see their app's anchors. Tenant-constrained credentials see only anchors referenced by a Session in their effective partition. Session-constrained credentials see only that Session's anchor. The opaque cursor is bound to the authenticated caller, credential constraint, and exact key filter.
+/// Returns newest-first Agents scoped to the caller's App. Filters combine with AND. Archived Agents are excluded unless requested.
 pub async fn list_agents(
     configuration: &configuration::Configuration,
+    tenant_key: Option<&str>,
     agent_key: Option<&str>,
+    agent_definition_id: Option<&str>,
+    include_archived: Option<bool>,
     cursor: Option<&str>,
     limit: Option<u32>,
 ) -> Result<models::AgentList, Error<ListAgentsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_tenant_key = tenant_key;
     let p_query_agent_key = agent_key;
+    let p_query_agent_definition_id = agent_definition_id;
+    let p_query_include_archived = include_archived;
     let p_query_cursor = cursor;
     let p_query_limit = limit;
 
     let uri_str = format!("{}/v1/agents", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_tenant_key {
+        req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
+    }
     if let Some(ref param_value) = p_query_agent_key {
         req_builder = req_builder.query(&[("agent_key", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_agent_definition_id {
+        req_builder = req_builder.query(&[("agent_definition_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_include_archived {
+        req_builder = req_builder.query(&[("include_archived", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_cursor {
         req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
@@ -143,6 +300,102 @@ pub async fn list_agents(
     } else {
         let content = resp.text().await?;
         let entity: Option<ListAgentsError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+pub async fn restore_agent(
+    configuration: &configuration::Configuration,
+    agent_id: &str,
+) -> Result<(), Error<RestoreAgentError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_agent_id = agent_id;
+
+    let uri_str = format!(
+        "{}/v1/agents/{agent_id}/restore",
+        configuration.base_path,
+        agent_id = crate::apis::urlencode(p_path_agent_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        Ok(())
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<RestoreAgentError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+pub async fn update_agent(
+    configuration: &configuration::Configuration,
+    agent_id: &str,
+    update_agent_request: models::UpdateAgentRequest,
+) -> Result<models::Agent, Error<UpdateAgentError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_agent_id = agent_id;
+    let p_body_update_agent_request = update_agent_request;
+
+    let uri_str = format!(
+        "{}/v1/agents/{agent_id}",
+        configuration.base_path,
+        agent_id = crate::apis::urlencode(p_path_agent_id)
+    );
+    let mut req_builder = configuration
+        .client
+        .request(reqwest::Method::PATCH, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+    req_builder = req_builder.json(&p_body_update_agent_request);
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::Agent`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::Agent`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<UpdateAgentError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,

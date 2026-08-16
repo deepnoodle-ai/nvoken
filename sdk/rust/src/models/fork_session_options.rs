@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 /// ForkSessionOptions : Creation-only options for a forked child. The child never inherits the source Session's compaction policy, retention, or metadata.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ForkSessionOptions {
+    #[serde(rename = "pinned_revision", skip_serializing_if = "Option::is_none")]
+    pub pinned_revision: Option<u64>,
     #[serde(rename = "retention", skip_serializing_if = "Option::is_none")]
     pub retention: Option<Box<models::RetentionPolicy>>,
     /// Opaque host correlation data. nvoken stores it, returns it verbatim, and never interprets it — it exists so a support engineer holding an Invocation id can get back to the board, ticket, or surface the turn came from, which nvoken deliberately knows nothing about.  At most 16 entries. Keys are 1–64 bytes of letters, digits, `_`, `.`, `:`, and `-`; values are at most 512 bytes of UTF-8.  There is no `title` field on a Session by design. A title is one of these entries (`{\"title\": \"Refund policy\"}`), which keeps nvoken from forming opinions about a string only the host renders.
@@ -25,6 +27,7 @@ impl ForkSessionOptions {
     /// Creation-only options for a forked child. The child never inherits the source Session's compaction policy, retention, or metadata.
     pub fn new() -> ForkSessionOptions {
         ForkSessionOptions {
+            pinned_revision: None,
             retention: None,
             metadata: None,
         }

@@ -205,7 +205,7 @@ security:
   - bearerAuth: []
 tags:
   - name: Agents
-    description: App-scoped identity anchors; behavior remains per Invocation.
+    description: Tenant-scoped instances of App-owned Agent Definitions.
   - name: Invocations
     description: One agent turn — what OpenAI calls a Response and Cursor calls a Run. Starting one queues background work and returns immediately.
   - name: Models
@@ -639,7 +639,7 @@ paths:
         that appears in the App's browser allowlist. Omit `visitor_token` on a
         first visit; persist the returned visitor token in browser storage and
         present it on renewal to preserve the same opaque visitor partition,
-        App-scoped Agent, and canonical Session. The response returns that
+        tenant-scoped Agent, and canonical Session. The response returns that
         Session ID once the visitor has completed a first turn, allowing the
         page to load its transcript immediately.
 
@@ -952,27 +952,24 @@ paths:
     get:
       tags: [Agents]
       operationId: listAgents
-      summary: List Agent identity anchors
+      summary: List tenant-scoped Agents
       description: |
-        Returns newest-first identity anchors scoped to the caller's app. An
-        Agent belongs to one app and stores only its nvoken ID, the host-owned
-        `agent_key`, and creation time; instructions, models, tools, and
-        provider keys still travel on each Invocation. An exact `agent_key`
-        filter returns zero or one item within that app.
-
-        Unconstrained credentials see their app's anchors. Tenant-constrained
-        credentials see only anchors referenced by a Session in their
-        effective partition.
-        Session-constrained credentials see only that Session's anchor. The
-        opaque cursor is bound to the authenticated caller, credential
-        constraint, and exact key filter.
+        Returns newest-first Agents scoped to the caller's App. Filters combine
+        with AND. Archived Agents are excluded unless requested.
       parameters:
+        - $ref: "#/components/parameters/TenantKeyFilter"
         - $ref: "#/components/parameters/AgentKeyFilter"
+        - name: agent_definition_id
+          in: query
+          schema: { $ref: "#/components/schemas/AgentDefinitionID" }
+        - name: include_archived
+          in: query
+          schema: { type: boolean, default: false }
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: One bounded page of Agent identity anchors.
+          description: One bounded page of tenant-scoped Agents.
           content:
             application/json:
               schema:
@@ -983,19 +980,46 @@ paths:
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
+    post:
+      tags: [Agents]
+      operationId: createAgent
+      summary: Create or resolve a tenant-scoped Agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAgentRequest" }
+      responses:
+        "200":
+          description: The existing Agent with the same immutable Definition pointer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "201":
+          description: The newly created Agent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /v1/agents/{agent_id}:
     parameters:
       - $ref: "#/components/parameters/AgentID"
     get:
       tags: [Agents]
       operationId: getAgent
-      summary: Read one Agent identity anchor
+      summary: Read one tenant-scoped Agent
       description: |
         Reads identity without creating work. Out-of-scope and undisclosable
         constrained resources use `not_found`.
       responses:
         "200":
-          description: One Agent identity anchor.
+          description: One tenant-scoped Agent.
           content:
             application/json:
               schema:
@@ -1005,6 +1029,53 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    patch:
+      tags: [Agents]
+      operationId: updateAgent
+      summary: Rename or revision-pin an Agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAgentRequest" }
+      responses:
+        "200":
+          description: The updated Agent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    delete:
+      tags: [Agents]
+      operationId: archiveAgent
+      summary: Archive an Agent
+      responses:
+        "204": { description: The Agent is archived. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v1/agents/{agent_id}/restore:
+    parameters:
+      - $ref: "#/components/parameters/AgentID"
+    post:
+      tags: [Agents]
+      operationId: restoreAgent
+      summary: Restore an archived Agent
+      responses:
+        "204": { description: The Agent is live. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
   /v1/mcp/list-tools:
@@ -1104,10 +1175,12 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AgentDefinitionWrite"
+              $ref: "#/components/schemas/AgentDefinitionCreate"
             examples:
               supportDefinition:
                 value:
+                  definition_key: billing-support
+                  name: Billing support
                   instructions: You are a concise billing support agent.
                   model:
                     provider: anthropic
@@ -1126,6 +1199,8 @@ paths:
                 $ref: "#/components/schemas/AgentDefinitionResource"
               example:
                 id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                definition_key: billing-support
+                name: Billing support
                 revision: 1
                 instructions: You are a concise billing support agent.
                 model:
@@ -1227,7 +1302,7 @@ paths:
       summary: Archive an Agent Definition
       description: |
         Marks the resource retired. Invocation admission that resolves it —
-        by `agent_definition_id` or by a pinned revision, on every admission
+        through an Agent or a pinned revision, on every admission
         path including browser-direct client tokens — is then refused with
         `409 agent_definition_archived`.
 
@@ -1244,6 +1319,31 @@ paths:
         "404": {$ref: "#/components/responses/NotFound"}
         "500": {$ref: "#/components/responses/Internal"}
         "503": {$ref: "#/components/responses/Unavailable"}
+  /v1/agent-definitions/{agent_definition_id}/revisions/{revision}:
+    parameters:
+      - name: agent_definition_id
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/AgentDefinitionID" }
+      - name: revision
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    get:
+      tags: [Agent Definitions]
+      operationId: getAgentDefinitionRevision
+      summary: Get one immutable Agent Definition revision
+      responses:
+        "200":
+          description: The requested revision before any per-turn overrides.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentDefinitionResource" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   /v1/agent-definitions/{agent_definition_id}/restore:
     parameters:
       - name: agent_definition_id
@@ -1335,10 +1435,10 @@ paths:
       summary: Start one background agent turn
       description: |
         Starts one agent turn and returns immediately. In a single database
-        transaction nvoken finds or creates the Agent and Session, resolves
-        either the inline `agent_definition` or the current revision of the
-        referenced `agent_definition_id`, appends your input as one message,
-        and queues the turn. You get a
+        transaction nvoken resolves the deliberately created Agent, selects
+        its Agent Definition revision, finds or creates the Session, appends
+        your input as one message, and queues the turn. Admission never creates
+        an Agent or reusable configuration. You get a
         response only after that transaction commits, so a `202` means the
         work is safely recorded and will run even if nvoken restarts. The
         model does not run on this request — it runs in the background, and
@@ -1358,15 +1458,16 @@ paths:
         Send `idempotency_key` and you can retry this request without risking
         a second turn. A repeat with the same key returns the original turn
         and does not add your input again, even if that turn has already
-        finished. Keys are scoped to the tenant and `agent_key`.
+        finished. Keys are scoped to the tenant and Agent.
 
         A repeat counts as the same request only if the Session selector, the
-        stable Agent Definition ID, and the input all match. The original
-        admitted revision is returned even if that resource has advanced. Limits are compared
-        as you sent them, so sending a value that happens to equal the default
-        is not the same as omitting it. Key order inside JSON objects does not
-        matter; array order does. Change anything that matters and you get
-        `idempotency_conflict` rather than a surprise second turn.
+        Agent, explicit revision, per-turn overrides, and input all match. The
+        original admitted revision is returned even if its Definition has
+        advanced. Values are compared as sent, so omitting an override is not
+        the same as supplying one that happens to equal the Definition. Key
+        order inside JSON objects does not matter; array order does. Change
+        anything material and you get `idempotency_conflict` rather than a
+        surprise second turn.
 
         ## When the Session is already busy
 
@@ -1460,17 +1561,12 @@ paths:
               $ref: "#/components/schemas/CreateInvocationRequest"
             examples:
               newSession:
-                summary: First use creates the Agent anchor and a new Session
+                summary: First turn creates a new Session for an existing Agent
                 value:
                   agent_key: support-triage
                   tenant_key: tenant-acme
                   idempotency_key: ticket-483:first-reply
                   input: Why was I charged twice?
-                  agent_definition:
-                    instructions: You are a concise billing support agent.
-                    model:
-                      provider: anthropic
-                      id: claude-sonnet-5
               keyedSession:
                 summary: Resolve or create a tenant-partitioned host Session key
                 value:
@@ -1481,7 +1577,6 @@ paths:
                   input:
                     - type: text
                       text: Can you show me the two charge dates?
-                  agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
               existingSession:
                 summary: Continue an existing Session by durable ID
                 value:
@@ -1491,14 +1586,13 @@ paths:
                   input:
                     - type: text
                       text: Please summarize what happened.
-                  agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
-              reusedDefinition:
-                summary: Use an Agent Definition resource already created for this App
+              explicitRevision:
+                summary: Pin this turn to one revision of the Agent's Definition
                 value:
                   agent_key: support-triage
                   session_key: ticket-483
                   idempotency_key: ticket-483:follow-up-4
-                  agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                  agent_revision: 3
                   input: Please draft the reply.
               outputSchema:
                 summary: Require one validated machine-readable object
@@ -1509,7 +1603,12 @@ paths:
                   input:
                     - type: text
                       text: Classify the billing problem.
-                  agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb324
+                  overrides:
+                    output_schema:
+                      type: object
+                      required: [category]
+                      properties:
+                        category: { type: string }
       responses:
         "202":
           description: |
@@ -1528,6 +1627,7 @@ paths:
                   summary: New queued Invocation
                   value:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    agent_key: support-triage
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
@@ -1560,6 +1660,7 @@ paths:
                   summary: Lost acknowledgement followed by equal replay
                   value:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    agent_key: support-triage
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
@@ -1592,6 +1693,7 @@ paths:
                   summary: Equal replay of an ended Invocation still returns 202
                   value:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    agent_key: support-triage
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
@@ -1756,6 +1858,7 @@ paths:
                   value:
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                    agent_key: support-triage
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     agent_definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
@@ -1831,6 +1934,7 @@ paths:
                     invocation:
                       id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                       agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                      agent_key: support-triage
                       session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                       user_key: null
                       agent_definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
@@ -3269,9 +3373,10 @@ paths:
         have. Use this when you want a conversation to exist before the first
         turn runs — to show it in a UI, or to import messages from elsewhere.
 
-        Every field is optional. Leave out `agent_key` and the Session starts
-        unbound: `agent_id` stays null until the first turn binds it
-        permanently.
+        Every field is optional. Leave out both `agent_id` and `agent_key` and
+        the Session starts unbound: `agent_id` stays null until the first turn
+        binds it permanently. A supplied Agent must already exist in the
+        selected tenant.
       requestBody:
         required: true
         content:
@@ -3381,6 +3486,7 @@ paths:
                     session_key: ticket-483
                     user_key: null
                     forked_from: null
+                    pinned_revision: null
                     active_invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     active_invocation_status: running
                     credit_block: null
@@ -4124,9 +4230,10 @@ components:
 
         Browser-direct calls use a separate App-signed Ed25519 JWT trust class:
         `iss` is the App ID, `kid` names one active registered client key,
-        `aud` is `nvoken`, and `sub`, `tenant_key`, `agent_key`,
-        `agent_definition_id`, `agent_definition_revision`, `iat`, and `exp` are required. `session_id` and
-        `ops` are optional. Lifetime is at most 15 minutes. Client tokens are
+        `aud` is `nvoken`, and `sub`, exactly one of `agent_id` or
+        `agent_key` (with optional `tenant_key`), `iat`, and `exp` are required.
+        `agent_definition_revision`, `session_id`, and `ops` are optional.
+        Lifetime is at most 15 minutes. Client tokens are
         accepted only in this header, never in a query parameter, and expose
         only the documented Client-prefixed response schemas and public routes.
   headers:
@@ -4398,21 +4505,78 @@ components:
     Agent:
       type: object
       additionalProperties: false
-      required: [id, agent_key, created_at]
+      required: [id, tenant_key, agent_key, name, agent_definition_id, pinned_revision, created_at, updated_at, archived_at]
       properties:
         id:
           $ref: "#/components/schemas/AgentID"
+        tenant_key:
+          type: [string, "null"]
+          description: Tenant that owns this Agent, or null for the App's default tenant.
         agent_key:
           type: string
           minLength: 1
           maxLength: 255
-          description: Stable host-owned key, unique within the App.
+          description: Stable host-owned key, unique within this tenant.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        agent_definition_id:
+          $ref: "#/components/schemas/AgentDefinitionID"
+        pinned_revision:
+          type: [integer, "null"]
+          format: int64
+          minimum: 1
         created_at:
           type: string
           format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        archived_at:
+          type: [string, "null"]
+          format: date-time
       description: |
-        App-scoped identity anchor only. Agent behavior is not registered;
-        instructions, model, tools, and provider keys travel per Invocation.
+        One tenant's deliberately created instance of an Agent Definition. It
+        owns that tenant's keyed Sessions and durable memory. The Definition
+        pointer and key are immutable; name, revision pin, and archive state
+        are mutable.
+    CreateAgentRequest:
+      type: object
+      additionalProperties: false
+      required: [agent_key, name, agent_definition_id]
+      properties:
+        tenant_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+        agent_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        agent_definition_id:
+          $ref: "#/components/schemas/AgentDefinitionID"
+        pinned_revision:
+          type: integer
+          format: int64
+          minimum: 1
+    UpdateAgentRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        pinned_revision:
+          type: [integer, "null"]
+          format: int64
+          minimum: 1
     MemoryID:
       type: string
       minLength: 1
@@ -4929,20 +5093,10 @@ components:
     AnonymousAccess:
       type: object
       additionalProperties: false
-      required: [tenant_key, agent_key, agent_definition_id, visitor_allowance, max_admissions_per_minute]
+      required: [agent_id, visitor_allowance, max_admissions_per_minute]
       properties:
-        tenant_key:
-          type: string
-          minLength: 1
-          maxLength: 255
-          description: App-local tenant partition funded for public traffic.
-        agent_key:
-          type: string
-          minLength: 1
-          maxLength: 255
-          description: Stable Agent identity used for every anonymous turn.
-        agent_definition_id:
-          $ref: "#/components/schemas/AgentDefinitionID"
+        agent_id:
+          $ref: "#/components/schemas/AgentID"
         visitor_allowance:
           $ref: "#/components/schemas/Money"
         max_admissions_per_minute:
@@ -4951,8 +5105,8 @@ components:
           minimum: 1
           description: Admission ceiling shared across all anonymous visitor subjects in this tenant.
       description: |
-        Complete managed-anonymous mode. The Definition must be live,
-        App-owned, client-capable, and either have no memory or explicitly use
+        Complete managed-anonymous mode. The Agent and its Definition must be
+        live and App-owned; the Definition must be client-capable and either have no memory or explicitly use
         user-scoped memory. The positive USD allowance is a lifetime retained-
         cost ceiling for one opaque visitor subject. Clearing browser storage
         can create a new subject, so the anonymous admission ceiling, tenant
@@ -5370,32 +5524,32 @@ components:
     CreateInvocationRequest:
       type: object
       additionalProperties: false
-      required: [agent_key, idempotency_key, input]
+      required: [idempotency_key, input]
       description: |
-        Carries exactly one Agent Definition form. Use `agent_definition` for
-        an inline definition owned by this Invocation, or
-        `agent_definition_id` to reuse an App-owned resource. Admission always
-        pins immutable definition bytes; later resource updates affect only
-        future Invocations.
+        Names one deliberately created Agent and carries no reusable
+        configuration. Admission resolves and pins the Agent's Definition
+        revision atomically; an unknown Agent is `agent_not_found` and nothing
+        is created as a side effect.
       oneOf:
-        - required: [agent_definition]
+        - required: [agent_id]
           not:
-            required: [agent_definition_id]
-        - required: [agent_definition_id]
+            required: [agent_key]
+        - required: [agent_key]
           not:
-            required: [agent_definition]
+            required: [agent_id]
       allOf:
         - not:
             required: [session_id, session_key]
       properties:
+        agent_id:
+          $ref: "#/components/schemas/AgentID"
         agent_key:
           type: string
           minLength: 1
           maxLength: 255
           description: |
-            Stable caller-controlled Agent key, unique within the
-            authenticated App. The resulting Agent anchor stores identity
-            only and is shared across that App's tenant partitions.
+            Stable caller-controlled Agent key, unique within the effective
+            tenant. Mutually exclusive with `agent_id`.
         tenant_key:
           type: string
           minLength: 1
@@ -5470,9 +5624,9 @@ components:
             where you never saw the response, and you get the original turn
             back instead of starting a second one.
 
-            Keys are scoped to the tenant and `agent_key`, so the same key
-            under a different tenant is a different request. Deduplication
-            lasts as long as the original turn still exists.
+            Keys are scoped to the tenant and resolved Agent, so the same key
+            under a different tenant or Agent is a different request.
+            Deduplication lasts as long as the original turn still exists.
         if_active:
           type: string
           enum: [reject, supersede, interrupt]
@@ -5525,19 +5679,13 @@ components:
           $ref: "#/components/schemas/InvocationInput"
         webhook:
           $ref: "#/components/schemas/WebhookTarget"
-        agent_definition_id:
-          $ref: "#/components/schemas/AgentDefinitionID"
-          description: |
-            Stable resource ID to resolve for this turn. IDs from another App,
-            or IDs that do not exist, return `agent_definition_not_found`.
-            Idempotent replay compares this stable ID and returns the original
-            admitted revision even when the resource has advanced.
-        agent_definition:
-          $ref: "#/components/schemas/AgentDefinitionWrite"
-          description: |
-            Full definition for this turn. nvoken records an immutable snapshot
-            and returns its generated `agent_definition_id` and revision on the
-            Invocation. Mutually exclusive with `agent_definition_id`.
+        agent_revision:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Optional one-turn revision pin, ahead of Session and Agent pins.
+        overrides:
+          $ref: "#/components/schemas/AgentDefinitionOverrides"
         mcp_server_headers:
           type: array
           maxItems: 8
@@ -5639,6 +5787,10 @@ components:
       additionalProperties: false
       minProperties: 1
       properties:
+        pinned_revision:
+          type: integer
+          format: int64
+          minimum: 1
         retention:
           $ref: "#/components/schemas/RetentionPolicy"
         metadata:
@@ -5649,19 +5801,20 @@ components:
     CreateSessionRequest:
       type: object
       additionalProperties: false
-      dependentRequired:
-        session_key: [agent_key]
-        seed_messages: [agent_key]
+      allOf:
+        - not:
+            required: [agent_id, agent_key]
       properties:
+        agent_id:
+          $ref: "#/components/schemas/AgentID"
         agent_key:
           type: string
           minLength: 1
           maxLength: 255
           description: |
-            Your own name for the agent, handled exactly as it is when starting a
-            turn: nvoken finds the matching Agent or creates one. Leave it out and
-            the Session starts with no Agent — `agent_id` stays null until the
-            first turn binds it.
+            Your own key for a deliberately created Agent in the effective
+            tenant. Unknown Agents are refused and never created. Mutually
+            exclusive with `agent_id`. Leave both out for an unbound Session.
         tenant_key:
           type: string
           minLength: 1
@@ -5682,7 +5835,7 @@ components:
           maxLength: 255
           description: |
             Optional caller key resolved within (effective tenant partition,
-            Agent, session_key). Requires agent_key. Makes creation an
+            Agent, session_key). Requires an Agent. Makes creation an
             upsert: an existing keyed Session is returned unchanged.
         session_options:
           $ref: "#/components/schemas/SessionOptions"
@@ -5694,7 +5847,7 @@ components:
             $ref: "#/components/schemas/SeedMessage"
           description: |
             Host-asserted starting history, accepted only while a new Session
-            is created. Requires `agent_key`. A keyed request that resolves an
+            is created. Requires an Agent. A keyed request that resolves an
             existing Session returns it unchanged and never appends these
             messages. The UTF-8 text across the array may total at most 524288
             bytes.
@@ -6076,6 +6229,12 @@ components:
     ProviderKeySource:
       type: string
       enum: [caller_ephemeral, app_byok, tenant_byok, platform, config_byok]
+      description: |
+        Which account pays for a model call. Installations choose which
+        sources they enable: a BYOK-disabled installation (nvoken Cloud
+        today) refuses `caller_ephemeral`, `app_byok`, and `tenant_byok`
+        selections and provider key storage, and every call runs on its
+        system provider keys.
     AuthenticationMethod:
       type: string
       enum: [api_key, issuer_token, client_token, anonymous_token, unknown]
@@ -6614,8 +6773,17 @@ components:
     AgentDefinitionWrite:
       type: object
       additionalProperties: false
-      required: [model]
+      required: [name, model]
       properties:
+        definition_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Caller-chosen immutable key. Required on creation and omitted on replacement.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
         instructions:
           type: string
           minLength: 1
@@ -6655,6 +6823,11 @@ components:
       description: |
         Complete writable Agent Definition fields. The model string shorthand
         is accepted on write. Identity, revision, and timestamps are read-only.
+    AgentDefinitionCreate:
+      allOf:
+        - $ref: "#/components/schemas/AgentDefinitionWrite"
+        - type: object
+          required: [definition_key]
     AgentDefinition:
       type: object
       additionalProperties: false
@@ -6750,10 +6923,18 @@ components:
     AgentDefinitionResource:
       type: object
       additionalProperties: false
-      required: [id, revision, model, created_at, updated_at, archived_at]
+      required: [id, definition_key, name, revision, model, created_at, updated_at, archived_at]
       properties:
         id:
           $ref: "#/components/schemas/AgentDefinitionID"
+        definition_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
         revision:
           type: integer
           format: int64
@@ -6881,6 +7062,11 @@ components:
           $ref: "#/components/schemas/CompactionPolicy"
         retention:
           $ref: "#/components/schemas/RetentionPolicy"
+        pinned_revision:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Immutable Session-level Agent Definition revision pin.
         metadata:
           $ref: "#/components/schemas/Metadata"
       description: |
@@ -6898,6 +7084,24 @@ components:
         `PATCH /v1/sessions/{session_id}`: a present key replaces, an absent key
         survives, and it never conflicts. Deleting a key stays a PATCH, since a
         null value is not accepted here.
+    AgentDefinitionOverrides:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        model:
+          $ref: "#/components/schemas/ModelInput"
+        sampling:
+          $ref: "#/components/schemas/Sampling"
+        reasoning:
+          $ref: "#/components/schemas/Reasoning"
+        tool_choice:
+          $ref: "#/components/schemas/ToolChoice"
+        limits:
+          $ref: "#/components/schemas/Limits"
+        output_schema:
+          $ref: "#/components/schemas/OutputSchema"
+      description: Per-turn replacements that cannot expand tools, data access, memory, or browser authority.
     UpdateSessionRequest:
       type: object
       additionalProperties: false
@@ -7565,7 +7769,7 @@ components:
         set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
         `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
         `limits`.
-      required: [id, session_id, agent_definition_id, agent_definition_revision,
+      required: [id, agent_id, agent_key, session_id, agent_definition_id, agent_definition_revision,
                  status, stop_reason, attempt, error, structured_output,
                  active_execution_ms, deadline_at,
                  created_at, updated_at, ended_at]
@@ -7574,6 +7778,10 @@ components:
           $ref: "#/components/schemas/InvocationID"
         agent_id:
           $ref: "#/components/schemas/AgentID"
+        agent_key:
+          type: string
+          minLength: 1
+          maxLength: 255
         session_id:
           $ref: "#/components/schemas/SessionID"
         user_key:
@@ -8289,7 +8497,7 @@ components:
         set here is `agent_id`, `tenant_key`, `session_key`, `user_key`, `forked_from`,
         `compaction`, `retention`, `expires_at`, `metadata`, `credit_block`,
         `context`, and `usage`.
-      required: [id, active_invocation_id, active_invocation_status, created_at, updated_at]
+      required: [id, pinned_revision, active_invocation_id, active_invocation_status, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/SessionID"
@@ -8341,6 +8549,11 @@ components:
             when it is retained until deleted explicitly. A window outside the
             supported range is refused at creation rather than clamped, so
             what is read back is always exactly what applies.
+        pinned_revision:
+          type: [integer, "null"]
+          format: int64
+          minimum: 1
+          description: Immutable Session-level Definition revision pin, or null to follow the Agent.
         expires_at:
           oneOf:
             - type: string
@@ -9483,6 +9696,10 @@ components:
       type: string
       enum:
         - invalid_request
+        - agent_not_found
+        - agent_archived
+        - agent_key_conflict
+        - agent_pin_invalid
         - agent_definition_not_found
         - agent_definition_revision_conflict
         - precondition_required
@@ -9535,7 +9752,7 @@ components:
         execution and cannot be selected for an Org credential.
     Operation:
       type: string
-      enum: [create_invocation, create_agent_definition, get_agent_definition, list_agent_definitions, update_agent_definition, create_session, get_agent, list_agents, get_invocation, submit_tool_results, cancel_invocation, interrupt_invocation, manage_invocation_nudges, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, read_memories, delete_memory, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_credits, allocate_credits, delete_tenant, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
+      enum: [create_invocation, create_agent_definition, get_agent_definition, get_agent_definition_revision, list_agent_definitions, update_agent_definition, create_agent, get_agent, list_agents, update_agent, archive_agent, restore_agent, create_session, get_invocation, submit_tool_results, cancel_invocation, interrupt_invocation, manage_invocation_nudges, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, read_memories, delete_memory, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_credits, allocate_credits, delete_tenant, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
     CredentialStatus:
       type: string
       enum: [active, revoked]
@@ -9670,9 +9887,9 @@ components:
         Who nvoken thinks you are. `method` says how you authenticated, and it
         is the only thing you need to read to know which of the optional fields
         below are present: a machine credential carries `credential_id`,
-        `org_id`, and `effective_profile`; a browser grant carries `agent_key`,
-        `agent_definition_id`, and `agent_definition_revision`, and pins
-        `app_id` and `tenant_key` to real values.
+        `org_id`, and `effective_profile`; a browser grant carries `agent_id`,
+        `agent_key`, and `agent_definition_revision`, and is pinned to one
+        App and Agent.
       type: object
       required: [authentication]
       properties:
@@ -9701,9 +9918,9 @@ components:
             agent_key:
               type: string
               description: Browser grants only. The Agent this grant is pinned to.
-            agent_definition_id:
-              $ref: "#/components/schemas/AgentDefinitionID"
-              description: Browser grants only.
+            agent_id:
+              $ref: "#/components/schemas/AgentID"
+              description: Browser grants only. The Agent this grant is pinned to.
             agent_definition_revision:
               type: integer
               minimum: 1

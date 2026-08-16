@@ -15,14 +15,14 @@ use nvoken::{
     InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
     ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model, NvokenError,
     ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer,
-    RetryPolicy, Sampling, SessionOptions, StreamEvent, StreamPreview, Tool, ToolCallListOptions,
-    ToolChoice, ToolMode, ToolResult, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool,
+    RetryPolicy, SessionOptions, StreamEvent, StreamPreview, ToolCallListOptions, ToolChoice,
+    ToolMode, ToolResult, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool,
     WebhookEvent, WebhookTarget, ASK_USER_TOOL_NAME,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-const AGENT_ID: &str = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
+const AGENT_ID: &str = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
 const INVOCATION_ID: &str = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
 const SESSION_ID: &str = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const TOOL_CALL_ID: &str = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
@@ -154,7 +154,7 @@ fn shared_agent_request_fixture_is_expressible() {
     .unwrap();
     let expected = &fixture["agent_request"]["web_search_metadata_unbound"];
     let client = Client::new("https://runtime.example.test", "key").unwrap();
-    let options = AgentOptions::from_definition_id("support", "def_conformance");
+    let options = AgentOptions::new("support");
     let agent = client.agent(options).unwrap();
 
     // Durable options apply on a new anonymous Session too, which is where a
@@ -402,21 +402,14 @@ fn shared_agent_definition_reuse_fixture_is_expressible() {
     .unwrap();
     let client = Client::new("https://runtime.example.test", "key").unwrap();
     let body = client
-        .invocation_body(InvokeRequest::from_agent_definition(
-            "support",
-            "hello",
-            fixture["agent_definition_id"].as_str().unwrap(),
-        ))
+        .invocation_body(InvokeRequest::new("support", "hello"))
         .unwrap();
-    assert_eq!(
-        body.agent_definition_id.as_deref(),
-        fixture["agent_definition_id"].as_str()
-    );
-    assert!(body.agent_definition.is_none());
+    assert_eq!(body.agent_key.as_deref(), Some("support"));
+    assert!(body.agent_id.is_none());
+    assert_eq!(fixture["agent"]["agent_key"], "support");
 }
 
-// Resource creation and inline invocation must render the same writable
-// object, or one SDK path could silently drop configuration.
+// Resource creation must render the complete writable definition.
 #[test]
 fn resource_creation_matches_the_agent_definition_an_invocation_nests() {
     let fixture: Value = serde_json::from_str(include_str!(
@@ -426,20 +419,12 @@ fn resource_creation_matches_the_agent_definition_an_invocation_nests() {
     let client = Client::new("https://runtime.example.test", "key").unwrap();
     let definition = AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
         .instructions("You are a concise billing support agent.");
-    let creation = client.agent_definition_body(definition.clone()).unwrap();
-    assert_eq!(
-        serde_json::to_value(&creation).unwrap(),
-        fixture["creation"]["request"]
-    );
-    let body = client
-        .invocation_body(
-            InvokeRequest::without_model("support", "hello").agent_definition(definition),
-        )
+    let creation = client
+        .agent_definition_body("Billing support", definition)
         .unwrap();
-    assert_eq!(
-        serde_json::to_value(body.agent_definition.unwrap()).unwrap(),
-        serde_json::to_value(&creation).unwrap()
-    );
+    let mut expected = fixture["creation"]["request"].clone();
+    expected.as_object_mut().unwrap().remove("definition_key");
+    assert_eq!(serde_json::to_value(&creation).unwrap(), expected);
 }
 
 // A reusable definition is durable configuration, so MCP headers must ride
@@ -447,29 +432,11 @@ fn resource_creation_matches_the_agent_definition_an_invocation_nests() {
 #[test]
 fn mcp_secrets_stay_outside_the_agent_definition() {
     let client = Client::new("https://runtime.example.test", "key").unwrap();
-    let server = McpServer::new("support", "https://mcp.example.test/rpc").allowed_tool("lookup");
     let headers = HashMap::from([("Authorization".to_owned(), "Bearer secret".to_owned())]);
-    let request = InvokeRequest::new(
-        "support",
-        "hello",
-        Model::new("anthropic", "claude-sonnet-5"),
-    )
-    .mcp_server(server.clone())
-    .mcp_server_headers(McpServerHeaders::new("support", headers.clone()));
+    let request = InvokeRequest::new("support", "hello")
+        .mcp_server_headers(McpServerHeaders::new("support", headers.clone()));
     let body = client.invocation_body(request).unwrap();
-    let definition = serde_json::to_value(body.agent_definition.unwrap()).unwrap();
-    assert!(definition["mcp_servers"][0].get("headers").is_none());
     assert_eq!(body.mcp_server_headers.unwrap()[0].headers, headers);
-
-    // A header naming no declared server is a typo the SDK can catch locally.
-    let mismatched = InvokeRequest::new(
-        "support",
-        "hello",
-        Model::new("anthropic", "claude-sonnet-5"),
-    )
-    .mcp_server(server)
-    .mcp_server_headers(McpServerHeaders::new("typo", headers));
-    assert!(client.invocation_body(mismatched).is_err());
 }
 
 // fixture_blocks decodes fixture wire blocks into generated input blocks.
@@ -550,7 +517,7 @@ async fn invoke_preflights_output_schema_before_transport() {
     .unwrap();
     for test_case in fixture.rejected {
         let id = test_case.id.clone();
-        let request = InvokeRequest::new("support", "help", Model::new("openai", "gpt-test"))
+        let request = InvokeRequest::new("support", "help")
             .output_schema(expand_output_schema_fixture(test_case));
         let error = match client.invoke(request).await {
             Ok(_) => panic!("{id}: invalid schema was admitted"),
@@ -567,17 +534,14 @@ async fn invoke_preflights_output_schema_before_transport() {
 
 #[test]
 fn request_builders_cover_core_admission_types() {
-    let mut input_schema = HashMap::new();
-    input_schema.insert("type".to_owned(), json!("object"));
     let mut output_schema = HashMap::new();
     output_schema.insert("type".to_owned(), json!("object"));
-    let request = InvokeRequest::new("support", "hello", Model::new("openai", "gpt-test"))
-        .instructions("help")
+    let request = InvokeRequest::new("support", "hello")
+        .model(Model::new("openai", "gpt-test"))
         .limits(Limits {
             max_iterations: Some(4),
             ..Limits::default()
         })
-        .tool(Tool::host("lookup", "Look up a value", input_schema))
         .output_schema(output_schema)
         .tenant_key("acme")
         .session_key("ticket-42")
@@ -587,10 +551,9 @@ fn request_builders_cover_core_admission_types() {
             source: ProviderKeySource::AppByok,
         });
 
-    let definition = request.agent_definition.as_ref().unwrap();
-    assert_eq!(definition.model.id, "gpt-test");
-    assert_eq!(definition.instructions.as_deref(), Some("help"));
-    assert_eq!(definition.tools.len(), 1);
+    let overrides = request.overrides.as_ref().unwrap();
+    assert_eq!(overrides.model.as_ref().unwrap().id, "gpt-test");
+    assert_eq!(overrides.limits.as_ref().unwrap().max_iterations, Some(4));
     assert_eq!(request.session_key.as_deref(), Some("ticket-42"));
     assert_eq!(request.session_id, None);
     assert_eq!(request.provider_keys.len(), 1);
@@ -684,14 +647,14 @@ async fn shared_fault_server_semantics() {
         .as_str()
         .unwrap();
     let agents = client
-        .list_agent_identities(ListAgentsOptions {
+        .list_agents(ListAgentsOptions {
             agent_key: Some("support".to_owned()),
             ..Default::default()
         })
         .await
         .unwrap();
     assert_eq!(agents.items[0].id, AGENT_ID);
-    let agent = client.get_agent_identity(AGENT_ID).await.unwrap();
+    let agent = client.get_agent(AGENT_ID).await.unwrap();
     assert_eq!(agent.agent_key, "support");
     let models = client
         .list_models(ListModelsOptions::default())
@@ -776,7 +739,8 @@ async fn shared_fault_server_semantics() {
     assert_eq!(allocations.items[0].id, credits_fixture["allocation"]["id"]);
     let handle = client
         .invoke(InvokeRequest {
-            agent_key: "support".to_owned(),
+            agent_id: None,
+            agent_key: Some("support".to_owned()),
             tenant_key: None,
             session_id: None,
             session_key: None,
@@ -787,25 +751,8 @@ async fn shared_fault_server_semantics() {
             metadata: None,
             input: "hello".to_owned(),
             input_blocks: Vec::new(),
-            agent_definition: Some(AgentDefinition {
-                model: Model {
-                    provider: "openai".to_owned(),
-                    id: "gpt-test".to_owned(),
-                },
-                instructions: Some("help".to_owned()),
-                sampling: Some(Sampling { temperature: 0.0 }),
-                reasoning: Some(Reasoning {
-                    effort: Some(ReasoningEffort::High),
-                    budget_tokens: None,
-                }),
-                tool_choice: Some(ToolChoice::Required),
-                limits: None,
-                tools: Vec::new(),
-                mcp_servers: vec![server],
-                provider_tools: Vec::new(),
-                output_schema: None,
-            }),
-            agent_definition_id: None,
+            agent_revision: None,
+            overrides: None,
             mcp_server_headers: vec![McpServerHeaders::new("support", mcp_secret)],
             context: Vec::new(),
             provider_keys: vec![ProviderKeySelection {
@@ -1623,10 +1570,9 @@ fn shared_recorded_context_fixture_is_expressible() {
 
     let client = Client::new("https://runtime.example.test", "key").unwrap();
     let accepted = &fixture["accepted"]["request"];
-    let mut request = InvokeRequest::from_agent_definition(
+    let mut request = InvokeRequest::new(
         accepted["agent_key"].as_str().unwrap(),
         accepted["input"].as_str().unwrap(),
-        accepted["agent_definition_id"].as_str().unwrap(),
     )
     .session_key(accepted["session_key"].as_str().unwrap())
     .idempotency_key(accepted["idempotency_key"].as_str().unwrap());
@@ -1638,7 +1584,7 @@ fn shared_recorded_context_fixture_is_expressible() {
         serde_json::to_value(body.context.as_ref().unwrap()).unwrap(),
         accepted["context"]
     );
-    assert!(body.agent_definition.is_none());
+    assert!(body.overrides.is_none());
 
     // The transcript stores each snapshot as a typed reminder block whose name
     // carries the reserved prefix the request omits.
@@ -1653,11 +1599,7 @@ fn shared_recorded_context_fixture_is_expressible() {
     }
 
     let refused = |context: Vec<ContextItem>| {
-        let mut request = InvokeRequest::from_agent_definition(
-            "support",
-            "hello",
-            accepted["agent_definition_id"].as_str().unwrap(),
-        );
+        let mut request = InvokeRequest::new("support", "hello");
         request.context = context;
         matches!(
             client.invocation_body(request),

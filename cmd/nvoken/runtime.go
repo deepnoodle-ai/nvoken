@@ -35,88 +35,93 @@ const probeMaxOutputTokens = 2048
 var version = "devel"
 
 var operationCommands = map[string]string{
-	"cancelInvocation":       "invocation cancel",
-	"interruptInvocation":    "invocation interrupt",
-	"resumeInvocation":       "invocation resume",
-	"createNudge":            "invocation nudge",
-	"listNudges":             "invocation nudges",
-	"listToolCalls":          "invocation tool-calls",
-	"cancelNudge":            "invocation cancel-nudge",
-	"createCredential":       "credentials create",
-	"createInvocation":       "invoke",
-	"createAgentDefinition":  "agent-definition create",
-	"listAgentDefinitions":   "agent-definition list",
-	"getAgentDefinition":     "agent-definition get",
-	"updateAgentDefinition":  "agent-definition update",
-	"archiveAgentDefinition": "agent-definition archive",
-	"restoreAgentDefinition": "agent-definition restore",
-	"createAppClientKey":     "client-key create",
-	"listAppClientKeys":      "client-key list",
-	"revokeAppClientKey":     "client-key revoke",
-	"listAppSigningKeys":     "signing-key list",
-	"mintAppSigningKey":      "signing-key mint",
-	"activateAppSigningKey":  "signing-key activate",
-	"retireAppSigningKey":    "signing-key retire",
-	"createSession":          "session create",
-	"deleteTenant":           "tenant delete",
-	"forkSession":            "session fork",
-	"createProviderKey":      "provider-key create",
-	"allocateCredits":        "credits allocate",
-	"listCreditAccounts":     "credits accounts",
-	"listCreditAllocations":  "credits allocations",
-	"getCredential":          "credentials get",
-	"getCurrentIdentity":     "auth status",
-	"getAgent":               "agent get",
-	"getApp":                 "app get",
-	"listApps":               "app list",
-	"registerApp":            "app register",
-	"updateApp":              "app update",
-	"archiveApp":             "app archive",
-	"restoreApp":             "app restore",
-	"getInvocation":          "invocation get",
-	"getInvocationResult":    "invocation result",
-	"getInvocationTimeline":  "invocation timeline",
-	"getMemory":              "memory get",
-	"getTrace":               "trace get",
-	"getModel":               "model get",
-	"getOrg":                 "org get",
-	"archiveOrg":             "org archive",
-	"restoreOrg":             "org restore",
-	"getProviderKey":         "provider-key get",
-	"getUsageBreakdown":      "usage breakdown",
-	"getUsageTimeseries":     "usage timeseries",
-	"getProviderKeyUsage":    "provider-key usage",
-	"getSession":             "session get",
-	"deleteSession":          "session delete",
-	"updateSession":          "session set-metadata",
-	"getSessionTranscript":   "session transcript",
-	"listAgents":             "agent list",
-	"listCredentials":        "credentials list",
-	"listInvocations":        "invocation list",
-	"listAdmissions":         "admission list",
-	"listInvocationLogs":     "invocation logs",
-	"listInvocationTraces":   "invocation traces",
-	"listMCPTools":           "mcp list-tools",
-	"listMemories":           "memory list",
-	"listModels":             "model list",
-	"listOrgs":               "org list",
-	"listProviderKeys":       "provider-key list",
-	"listSessionCompactions": "session compactions",
-	"listSessionMessages":    "session messages",
-	"listSessions":           "session list",
-	"listTenants":            "tenant list",
-	"listUsageRecords":       "usage records",
-	"registerOrg":            "org register",
-	"revokeProviderKey":      "provider-key revoke",
-	"revokeCredential":       "credentials revoke",
-	"rotateCredential":       "credentials rotate",
-	"rotateProviderKey":      "provider-key rotate",
-	"streamSession":          "session stream",
-	"submitHostToolResults":  "tool-result submit",
-	"summarizeAdmissions":    "admission summary",
-	"deleteMemory":           "memory delete",
-	"issueAnonymousToken":    "app anonymous-token",
-	"updateOrg":              "org update",
+	"cancelInvocation":           "invocation cancel",
+	"interruptInvocation":        "invocation interrupt",
+	"resumeInvocation":           "invocation resume",
+	"createNudge":                "invocation nudge",
+	"listNudges":                 "invocation nudges",
+	"listToolCalls":              "invocation tool-calls",
+	"cancelNudge":                "invocation cancel-nudge",
+	"createCredential":           "credentials create",
+	"createInvocation":           "invoke",
+	"createAgentDefinition":      "agent-definition create",
+	"getAgentDefinitionRevision": "agent-definition revision",
+	"listAgentDefinitions":       "agent-definition list",
+	"getAgentDefinition":         "agent-definition get",
+	"updateAgentDefinition":      "agent-definition update",
+	"archiveAgentDefinition":     "agent-definition archive",
+	"restoreAgentDefinition":     "agent-definition restore",
+	"createAppClientKey":         "client-key create",
+	"listAppClientKeys":          "client-key list",
+	"revokeAppClientKey":         "client-key revoke",
+	"listAppSigningKeys":         "signing-key list",
+	"mintAppSigningKey":          "signing-key mint",
+	"activateAppSigningKey":      "signing-key activate",
+	"retireAppSigningKey":        "signing-key retire",
+	"createSession":              "session create",
+	"deleteTenant":               "tenant delete",
+	"forkSession":                "session fork",
+	"createProviderKey":          "provider-key create",
+	"allocateCredits":            "credits allocate",
+	"listCreditAccounts":         "credits accounts",
+	"listCreditAllocations":      "credits allocations",
+	"getCredential":              "credentials get",
+	"getCurrentIdentity":         "auth status",
+	"getAgent":                   "agent get",
+	"createAgent":                "agent create",
+	"updateAgent":                "agent update",
+	"archiveAgent":               "agent archive",
+	"restoreAgent":               "agent restore",
+	"getApp":                     "app get",
+	"listApps":                   "app list",
+	"registerApp":                "app register",
+	"updateApp":                  "app update",
+	"archiveApp":                 "app archive",
+	"restoreApp":                 "app restore",
+	"getInvocation":              "invocation get",
+	"getInvocationResult":        "invocation result",
+	"getInvocationTimeline":      "invocation timeline",
+	"getMemory":                  "memory get",
+	"getTrace":                   "trace get",
+	"getModel":                   "model get",
+	"getOrg":                     "org get",
+	"archiveOrg":                 "org archive",
+	"restoreOrg":                 "org restore",
+	"getProviderKey":             "provider-key get",
+	"getUsageBreakdown":          "usage breakdown",
+	"getUsageTimeseries":         "usage timeseries",
+	"getProviderKeyUsage":        "provider-key usage",
+	"getSession":                 "session get",
+	"deleteSession":              "session delete",
+	"updateSession":              "session set-metadata",
+	"getSessionTranscript":       "session transcript",
+	"listAgents":                 "agent list",
+	"listCredentials":            "credentials list",
+	"listInvocations":            "invocation list",
+	"listAdmissions":             "admission list",
+	"listInvocationLogs":         "invocation logs",
+	"listInvocationTraces":       "invocation traces",
+	"listMCPTools":               "mcp list-tools",
+	"listMemories":               "memory list",
+	"listModels":                 "model list",
+	"listOrgs":                   "org list",
+	"listProviderKeys":           "provider-key list",
+	"listSessionCompactions":     "session compactions",
+	"listSessionMessages":        "session messages",
+	"listSessions":               "session list",
+	"listTenants":                "tenant list",
+	"listUsageRecords":           "usage records",
+	"registerOrg":                "org register",
+	"revokeProviderKey":          "provider-key revoke",
+	"revokeCredential":           "credentials revoke",
+	"rotateCredential":           "credentials rotate",
+	"rotateProviderKey":          "provider-key rotate",
+	"streamSession":              "session stream",
+	"submitHostToolResults":      "tool-result submit",
+	"summarizeAdmissions":        "admission summary",
+	"deleteMemory":               "memory delete",
+	"issueAnonymousToken":        "app anonymous-token",
+	"updateOrg":                  "org update",
 }
 
 type runtimeConfig struct {
@@ -128,12 +133,12 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Admit a durable turn; text mode streams and prints its answer").
 		Args("input").
 		Flags(
-			cli.String("agent", "a").Required().Help("Stable Agent key"),
+			cli.String("agent-key", "a").Help("Stable Agent key within the effective tenant"),
+			cli.String("agent-id").Help("Opaque Agent ID; mutually exclusive with --agent-key"),
 			cli.String("idempotency-key", "i").Help("Stable admission identity; reuse it unchanged after any uncertain acknowledgement"),
-			cli.String("agent-definition-id").Help("App-owned Agent Definition resource to run instead of inline fields"),
-			cli.String("instructions").Help("Inline Agent instructions"),
-			cli.String("provider").Help("Inline model provider; required without --agent-definition-id"),
-			cli.String("model", "m").Help("Inline exact model ID; required without --agent-definition-id"),
+			cli.Int("agent-revision").Help("One-turn Agent Definition revision pin"),
+			cli.String("provider").Help("Safe one-turn model provider override; requires --model"),
+			cli.String("model", "m").Help("Safe one-turn exact model ID override; requires --provider"),
 			cli.String("tenant").Help("Tenant partition"),
 			cli.String("user").Help("End-user label recorded on this Invocation and its messages; filtering only"),
 			cli.String("session-id").Help("Existing Session ID"),
@@ -156,6 +161,8 @@ func registerRuntimeCommands(app *cli.App) {
 	agentDefinitions.Command("create").
 		Description("Create one Agent Definition resource without starting a turn").
 		Flags(
+			cli.String("definition-key").Required().Help("Immutable caller-owned Definition key"),
+			cli.String("name").Required().Help("Human-facing Definition name"),
 			cli.String("file", "f").Help("JSON Agent Definition to create; - reads stdin"),
 			cli.String("instructions").Help("Agent instructions; ignored with --file"),
 			cli.String("provider").Help("Model provider; required without --file"),
@@ -164,6 +171,9 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runCreateAgentDefinition)
 	agentDefinitions.Command("get").Args("agent-definition-id").Run(runGetAgentDefinition)
+	agentDefinitions.Command("revision").
+		Args("agent-definition-id", "revision").
+		Run(runGetAgentDefinitionRevision)
 	agentDefinitions.Command("list").
 		Flags(
 			cli.Bool("include-archived").Help("Include archived Agent Definitions"),
@@ -175,6 +185,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Replace one Agent Definition at an expected revision").
 		Args("agent-definition-id").
 		Flags(
+			cli.String("name").Required().Help("Replacement human-facing Definition name"),
 			cli.String("file", "f").Help("Replacement JSON Agent Definition; - reads stdin"),
 			cli.String("instructions").Help("Agent instructions; ignored with --file"),
 			cli.String("provider").Help("Model provider; required without --file"),
@@ -224,18 +235,40 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runAppAnonymousToken)
 
-	agents := app.Group("agent").Description("Read installation-wide Agent identity anchors")
+	agents := app.Group("agent").Description("Manage tenant-scoped Agent instances")
+	agents.Command("create").
+		Flags(
+			cli.String("agent-key").Required().Help("Stable key unique within the tenant"),
+			cli.String("name").Required().Help("Human-facing Agent name"),
+			cli.String("agent-definition-id").Required().Help("Immutable Agent Definition binding"),
+			cli.String("tenant-key").Help("Tenant partition; omit for the default tenant"),
+			cli.Int("pinned-revision").Help("Optional default Agent Definition revision pin"),
+		).
+		Run(runAgentCreate)
 	agents.Command("get").
-		Description("Read identity only; behavior remains per Invocation").
+		Description("Read one Agent instance").
 		Args("agent-id").
 		Run(runAgentGet)
 	agents.Command("list").
 		Flags(
+			cli.String("tenant-key").Help("Filter by tenant partition"),
 			cli.String("agent-key").Help("Filter by exact host-owned Agent key"),
+			cli.String("agent-definition-id").Help("Filter by Agent Definition"),
+			cli.Bool("include-archived").Help("Include archived Agents"),
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
 		).
 		Run(runAgentList)
+	agents.Command("update").
+		Args("agent-id").
+		Flags(
+			cli.String("name").Help("Replacement human-facing name"),
+			cli.Int("pinned-revision").Help("Replacement revision pin"),
+			cli.Bool("clear-pinned-revision").Help("Remove the revision pin"),
+		).
+		Run(runAgentUpdate)
+	agents.Command("archive").Args("agent-id").Run(runAgentArchive)
+	agents.Command("restore").Args("agent-id").Run(runAgentRestore)
 
 	invocations := app.Group("invocation").Description("Inspect and control Invocations")
 	invocations.Command("get").Args("invocation-id").Run(runInvocationGet)
@@ -569,9 +602,8 @@ func runModelCheck(command *cli.Context) error {
 		TenantKey:      optionalString(command.String("tenant")),
 		Input:          "Reply with exactly OK.",
 		IdempotencyKey: fmt.Sprintf("model-check:%s:%s:%d", provider, modelID, time.Now().UnixNano()),
-		AgentDefinition: &nvoken.AgentDefinition{
-			Instructions: "Reply with exactly OK and no other text.",
-			Model: nvoken.Model{
+		Overrides: &nvoken.AgentDefinitionOverrides{
+			Model: &nvoken.Model{
 				Provider: provider,
 				ID:       modelID,
 			},
@@ -690,6 +722,8 @@ func runCreateAgentDefinition(command *cli.Context) error {
 		return err
 	}
 	resource, err := client.CreateAgentDefinition(command.Context(), nvoken.CreateAgentDefinitionInput{
+		DefinitionKey:  command.String("definition-key"),
+		Name:           command.String("name"),
 		Definition:     *definition,
 		IdempotencyKey: command.String("idempotency-key"),
 	})
@@ -698,6 +732,25 @@ func runCreateAgentDefinition(command *cli.Context) error {
 	}
 	return writeOutput(command, resource, func(writer io.Writer) error {
 		_, err := fmt.Fprintf(writer, "%s\trevision=%d\n", resource.ID, resource.Revision)
+		return err
+	})
+}
+
+func runGetAgentDefinitionRevision(command *cli.Context) error {
+	revision, err := strconv.ParseInt(command.Arg(1), 10, 64)
+	if err != nil || revision < 1 {
+		return errors.New("revision must be a positive integer")
+	}
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	resource, err := client.GetAgentDefinitionRevision(command.Context(), command.Arg(0), revision)
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, resource, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(writer, "%s\trevision=%d\t%s/%s\n", resource.ID, resource.Revision, resource.Model.Provider, resource.Model.ID)
 		return err
 	})
 }
@@ -751,6 +804,7 @@ func runUpdateAgentDefinition(command *cli.Context) error {
 		return err
 	}
 	resource, err := client.UpdateAgentDefinition(command.Context(), command.Arg(0), nvoken.UpdateAgentDefinitionInput{
+		Name:             command.String("name"),
 		Definition:       *definition,
 		ExpectedRevision: int64(command.Int("revision")),
 	})
@@ -871,16 +925,15 @@ func runInvoke(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	agentID := command.String("agent-id")
+	agentKey := command.String("agent-key")
+	if (agentID == "") == (agentKey == "") {
+		return errors.New("supply exactly one of --agent-id and --agent-key")
+	}
 	provider := command.String("provider")
 	model := command.String("model")
-	agentDefinitionID := command.String("agent-definition-id")
-	instructions := command.String("instructions")
-	if agentDefinitionID != "" {
-		if provider != "" || model != "" || instructions != "" {
-			return errors.New("--agent-definition-id is mutually exclusive with --provider, --model, and --instructions")
-		}
-	} else if provider == "" || model == "" {
-		return errors.New("--provider and --model are required without --agent-definition-id")
+	if (provider == "") != (model == "") {
+		return errors.New("--provider and --model must be supplied together")
 	}
 	blocks, err := attachedInputBlocks(command)
 	if err != nil {
@@ -891,21 +944,24 @@ func runInvoke(command *cli.Context) error {
 		input = ""
 	}
 	request := nvoken.InvokeRequest{
-		AgentKey:          command.String("agent"),
-		IdempotencyKey:    command.String("idempotency-key"),
-		IfActive:          nvoken.IfActivePolicy(command.String("if-active")),
-		Input:             input,
-		InputBlocks:       blocks,
-		AgentDefinitionID: agentDefinitionID,
+		AgentID:        agentID,
+		AgentKey:       agentKey,
+		IdempotencyKey: command.String("idempotency-key"),
+		IfActive:       nvoken.IfActivePolicy(command.String("if-active")),
+		Input:          input,
+		InputBlocks:    blocks,
 	}
-	if agentDefinitionID == "" {
-		request.AgentDefinition = &nvoken.AgentDefinition{
-			Instructions: instructions,
-			Model: nvoken.Model{
+	if provider != "" {
+		request.Overrides = &nvoken.AgentDefinitionOverrides{
+			Model: &nvoken.Model{
 				Provider: provider,
 				ID:       model,
 			},
 		}
+	}
+	if revision := command.Int("agent-revision"); revision > 0 {
+		value := int64(revision)
+		request.AgentRevision = &value
 	}
 	request.TenantKey = optionalString(command.String("tenant"))
 	request.UserKey = optionalString(command.String("user"))
@@ -1483,7 +1539,32 @@ func runAgentGet(command *cli.Context) error {
 		return err
 	}
 	return writeOutput(command, agent, func(writer io.Writer) error {
-		_, err := fmt.Fprintf(writer, "%s\t%s\n", agent.ID, agent.AgentKey)
+		_, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", agent.ID, agent.AgentKey, agent.Name)
+		return err
+	})
+}
+
+func runAgentCreate(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	input := nvoken.CreateAgentInput{
+		TenantKey:         optionalString(command.String("tenant-key")),
+		AgentKey:          command.String("agent-key"),
+		Name:              command.String("name"),
+		AgentDefinitionID: command.String("agent-definition-id"),
+	}
+	if revision := command.Int("pinned-revision"); revision > 0 {
+		value := int64(revision)
+		input.PinnedRevision = &value
+	}
+	agent, err := client.CreateAgent(command.Context(), input)
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, agent, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", agent.ID, agent.AgentKey, agent.Name)
 		return err
 	})
 }
@@ -1494,21 +1575,63 @@ func runAgentList(command *cli.Context) error {
 		return err
 	}
 	page, err := client.ListAgents(command.Context(), nvoken.ListAgentsOptions{
-		AgentKey: optionalString(command.String("agent-key")),
-		Cursor:   optionalString(command.String("cursor")),
-		Limit:    optionalInt(command.Int("limit")),
+		TenantKey:         optionalString(command.String("tenant-key")),
+		AgentKey:          optionalString(command.String("agent-key")),
+		AgentDefinitionID: optionalString(command.String("agent-definition-id")),
+		IncludeArchived:   optionalBool(command.Bool("include-archived")),
+		Cursor:            optionalString(command.String("cursor")),
+		Limit:             optionalInt(command.Int("limit")),
 	})
 	if err != nil {
 		return err
 	}
 	return writeOutput(command, page, func(writer io.Writer) error {
 		for _, agent := range page.Items {
-			if _, err := fmt.Fprintf(writer, "%s\t%s\n", agent.ID, agent.AgentKey); err != nil {
+			if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", agent.ID, agent.AgentKey, agent.Name); err != nil {
 				return err
 			}
 		}
 		return writeNextCursor(writer, page.NextCursor)
 	})
+}
+
+func runAgentUpdate(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	input := nvoken.UpdateAgentInput{
+		Name:                optionalString(command.String("name")),
+		ClearPinnedRevision: command.Bool("clear-pinned-revision"),
+	}
+	if revision := command.Int("pinned-revision"); revision > 0 {
+		value := int64(revision)
+		input.PinnedRevision = &value
+	}
+	agent, err := client.UpdateAgent(command.Context(), command.Arg(0), input)
+	if err != nil {
+		return err
+	}
+	return writeOutput(command, agent, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", agent.ID, agent.AgentKey, agent.Name)
+		return err
+	})
+}
+
+func runAgentArchive(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	return client.ArchiveAgent(command.Context(), command.Arg(0))
+}
+
+func runAgentRestore(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	return client.RestoreAgent(command.Context(), command.Arg(0))
 }
 
 func runInvocationList(command *cli.Context) error {

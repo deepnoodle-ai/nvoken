@@ -98,10 +98,9 @@ func TestProviderKeyLifecycleMethods(t *testing.T) {
 
 func TestInvokeProviderKeySelections(t *testing.T) {
 	base := InvokeRequest{
-		AgentKey:          "support",
-		AgentDefinitionID: "def_test",
-		IdempotencyKey:    "credential-selection",
-		Input:             "hello",
+		AgentKey:       "support",
+		IdempotencyKey: "credential-selection",
+		Input:          "hello",
 	}
 
 	for _, test := range []struct {

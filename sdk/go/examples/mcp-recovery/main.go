@@ -131,11 +131,11 @@ func run(ctx context.Context) error {
 	var handle *nvoken.InvocationHandle
 	if invocationID == "" {
 		maxIterations := 3
-		handle, err = client.Invoke(ctx, nvoken.InvokeRequest{
-			AgentKey:       "mcp-recovery-example",
-			IdempotencyKey: "mcp-recovery-" + strconv.FormatInt(time.Now().UnixNano(), 10),
-			Input:          "Look up fixture 42 and report its value.",
-			AgentDefinition: &nvoken.AgentDefinition{
+		definition, createErr := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionInput{
+			DefinitionKey:  "mcp-recovery-example",
+			Name:           "MCP recovery example",
+			IdempotencyKey: "mcp-recovery-definition",
+			Definition: nvoken.AgentDefinition{
 				Instructions: "Always call scripted__lookup with id 42 before answering.",
 				Model: nvoken.Model{
 					Provider: requiredEnvironment("NVOKEN_PROVIDER"),
@@ -144,6 +144,22 @@ func run(ctx context.Context) error {
 				Limits:     &nvoken.Limits{MaxIterations: &maxIterations},
 				MCPServers: []nvoken.MCPServer{server},
 			},
+		})
+		if createErr != nil {
+			return fmt.Errorf("create MCP Agent Definition: %w", createErr)
+		}
+		agent, createErr := client.CreateAgent(ctx, nvoken.CreateAgentInput{
+			AgentKey:          "mcp-recovery-example",
+			Name:              "MCP recovery example",
+			AgentDefinitionID: definition.ID,
+		})
+		if createErr != nil {
+			return fmt.Errorf("create MCP Agent: %w", createErr)
+		}
+		handle, err = client.Invoke(ctx, nvoken.InvokeRequest{
+			AgentID:        agent.ID,
+			IdempotencyKey: "mcp-recovery-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+			Input:          "Look up fixture 42 and report its value.",
 			MCPServerHeaders: []nvoken.MCPServerHeaders{
 				{Name: server.Name, Headers: headers},
 			},

@@ -15,8 +15,11 @@ import {
 } from "./generated/apis/index.js";
 import type {
   Agent as AgentIdentity,
+  CreateAgentRequest,
+  UpdateAgentRequest,
   AgentDefinitionResource,
   AgentDefinitionResourceList,
+  AgentDefinitionCreate,
   AgentDefinitionWrite,
   AgentList,
   AllocateCreditsResult,
@@ -668,11 +671,13 @@ export interface SessionOptions {
   compaction?: ContextCompaction;
   retention?: SessionRetention;
   metadata?: Metadata;
+  /** Immutable Agent Definition revision pin for a newly created Session. */
+  pinnedRevision?: number;
 }
 
 /**
- * The execution configuration a turn runs with. Send it inline on an
- * Invocation or create an App-owned resource and reuse its stable ID.
+ * Reusable execution configuration stored as an App-owned versioned resource.
+ * Invocations name an Agent instance rather than carrying this object.
  */
 export interface AgentDefinition<TOutput extends object = JsonObject> {
   instructions?: string;
@@ -812,8 +817,11 @@ export interface WebhookTarget {
 }
 
 interface InvokeRequestBase {
-  agentKey: string;
   tenantKey?: string;
+  /** Optional one-turn revision pin, ahead of Session and Agent pins. */
+  agentRevision?: number;
+  /** Safe per-turn replacements that cannot expand Agent authority. */
+  overrides?: AgentDefinitionOverrides;
   idempotencyKey?: string;
   ifActive?: IfActivePolicy;
   onBudgetExhausted?: BudgetExhaustionBehavior;
@@ -842,19 +850,21 @@ interface InvokeRequestBase {
   metadata?: Metadata;
 }
 
-type ReferencedAgentDefinitionRequest = {
-  agentDefinitionId: string;
-  agentDefinition?: never;
-};
+export interface AgentDefinitionOverrides<TOutput extends object = JsonObject> {
+  model?: Model;
+  sampling?: Sampling;
+  reasoning?: Reasoning;
+  toolChoice?: ToolChoice;
+  limits?: Limits;
+  outputSchema?: OutputSchema<TOutput>;
+}
 
-type InlineAgentDefinitionRequest<TOutput extends object> = {
-  agentDefinition: AgentDefinition<TOutput>;
-  agentDefinitionId?: never;
-};
+type AgentIdentityRequest =
+  | { agentId: string; agentKey?: never }
+  | { agentKey: string; agentId?: never };
 
-export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBase & (
-  ReferencedAgentDefinitionRequest | InlineAgentDefinitionRequest<TOutput>
-) & (
+export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBase
+  & AgentIdentityRequest & (
   | { sessionId: string; sessionKey?: never; sessionOptions?: SessionOptions }
   | { sessionKey: string; sessionId?: never; sessionOptions?: SessionOptions }
   | { sessionId?: never; sessionKey?: never; sessionOptions?: SessionOptions }
@@ -885,36 +895,12 @@ export interface ClientOptions {
   retry?: RetryPolicy;
 }
 
-/**
- * Use `agentDefinitionId` for a reusable resource, or provide the Agent
- * Definition fields inline. Inline `model` may be omitted when the Client has
- * a default. `tools` also registers local host handlers in either form.
- */
-type ReferencedAgentOptions = {
-  agentDefinitionId: string;
-  instructions?: never;
-  model?: never;
-  sampling?: never;
-  reasoning?: never;
-  toolChoice?: never;
-  limits?: never;
-  mcpServers?: never;
-  providerTools?: never;
-  outputSchema?: never;
-  tools?: Array<Tool<object>>;
-};
-
-type InlineAgentOptions<TOutput extends object> =
-  & Omit<AgentDefinition<TOutput>, "model">
-  & {
-    model?: Model;
-    agentDefinitionId?: never;
-  };
-
 export type AgentOptions<TOutput extends object = JsonObject> =
-  & (ReferencedAgentOptions | InlineAgentOptions<TOutput>)
+  & AgentIdentityRequest
   & {
-    agentKey: string;
+    tenantKey?: string;
+    /** Local handlers for host tools declared by the Agent Definition. */
+    tools?: Array<Tool<object>>;
     /**
      * Per-turn secret headers for the MCP servers this Agent declares. They
      * stay outside the Agent Definition so no reusable revision contains a
@@ -927,11 +913,12 @@ export type AgentOptions<TOutput extends object = JsonObject> =
   };
 
 export interface InvocationOptions {
-  tenantKey?: string;
   sessionId?: string;
   sessionKey?: string;
   sessionOptions?: SessionOptions;
   idempotencyKey?: string;
+  agentRevision?: number;
+  overrides?: AgentDefinitionOverrides;
   ifActive?: IfActivePolicy;
   onBudgetExhausted?: BudgetExhaustionBehavior;
   webhook?: WebhookTarget;
@@ -960,12 +947,11 @@ export interface SessionBindingByID {
 
 export interface SessionBindingByKey {
   sessionKey: string;
-  tenantKey?: string;
   sessionId?: never;
 }
 
 export type SessionBinding = SessionBindingByID | SessionBindingByKey;
-export type BoundInvocationOptions = Omit<InvocationOptions, "sessionId" | "sessionKey" | "tenantKey">;
+export type BoundInvocationOptions = Omit<InvocationOptions, "sessionId" | "sessionKey">;
 
 export interface AgentResult<TOutput extends object = JsonObject> {
   handle: EndedInvocationHandle<TOutput>;
@@ -1118,10 +1104,26 @@ export type SessionKeyScope = (
   }
 );
 
-export interface ListAgentIdentityOptions {
+export interface ListAgentOptions {
+  tenantKey?: string;
   agentKey?: string;
+  agentDefinitionId?: string;
+  includeArchived?: boolean;
   cursor?: string;
   limit?: number;
+}
+
+export interface CreateAgentDefinitionOptions<TOutput extends object = JsonObject> {
+  definitionKey: string;
+  name: string;
+  definition: AgentDefinition<TOutput>;
+  idempotencyKey?: string;
+}
+
+export interface UpdateAgentDefinitionOptions<TOutput extends object = JsonObject> {
+  expectedRevision: number;
+  name: string;
+  definition: AgentDefinition<TOutput>;
 }
 
 export interface TranscriptPageOptions {
@@ -1246,15 +1248,44 @@ export class Client {
     return new Agent(this, options);
   }
 
-  listAgentIdentities(
-    options: ListAgentIdentityOptions = {},
+  createAgent(
+    request: CreateAgentRequest,
+    signal?: AbortSignal,
+  ): Promise<AgentIdentity> {
+    return this.replaySafe(
+      () => this.agents.createAgent({ createAgentRequest: request }, { signal }),
+      signal,
+    );
+  }
+
+  listAgents(
+    options: ListAgentOptions = {},
     signal?: AbortSignal,
   ): Promise<AgentList> {
     return this.replaySafe(() => this.agents.listAgents(options, { signal }), signal);
   }
 
-  getAgentIdentity(agentId: string, signal?: AbortSignal): Promise<AgentIdentity> {
+  getAgent(agentId: string, signal?: AbortSignal): Promise<AgentIdentity> {
     return this.replaySafe(() => this.agents.getAgent({ agentId }, { signal }), signal);
+  }
+
+  updateAgent(
+    agentId: string,
+    request: UpdateAgentRequest,
+    signal?: AbortSignal,
+  ): Promise<AgentIdentity> {
+    return this.replaySafe(
+      () => this.agents.updateAgent({ agentId, updateAgentRequest: request }, { signal }),
+      signal,
+    );
+  }
+
+  archiveAgent(agentId: string, signal?: AbortSignal): Promise<void> {
+    return this.replaySafe(() => this.agents.archiveAgent({ agentId }, { signal }), signal);
+  }
+
+  restoreAgent(agentId: string, signal?: AbortSignal): Promise<void> {
+    return this.replaySafe(() => this.agents.restoreAgent({ agentId }, { signal }), signal);
   }
 
   listModels(options: ListModelsOptions = {}, signal?: AbortSignal): Promise<ModelList> {
@@ -1579,8 +1610,16 @@ export class Client {
     request: InvokeRequest<TOutput>,
     signal?: AbortSignal,
   ): Promise<InvocationHandle<TOutput>> {
-    if (!request.agentKey || !validInvokeInput(request.input)) {
-      throw new NvokenError("validation", "agentKey and input are required");
+    if (!validInvokeInput(request.input)) {
+      throw new NvokenError("validation", "input is required");
+    }
+    const hasAgentId = "agentId" in request && Boolean(request.agentId);
+    const hasAgentKey = "agentKey" in request && Boolean(request.agentKey);
+    if (hasAgentId === hasAgentKey) {
+      throw new NvokenError(
+        "validation",
+        "supply exactly one of agentId and agentKey",
+      );
     }
     if (request.sessionId && request.sessionKey) {
       throw new NvokenError(
@@ -1605,18 +1644,7 @@ export class Client {
         "onBudgetExhausted must be stop or pause",
       );
     }
-    const hasInlineDefinition = request.agentDefinition !== undefined;
-    const hasDefinitionId = request.agentDefinitionId !== undefined
-      && request.agentDefinitionId.length > 0;
-    if (hasInlineDefinition === hasDefinitionId) {
-      throw new NvokenError(
-        "validation",
-        "supply exactly one of agentDefinition and agentDefinitionId",
-      );
-    }
-    if (request.agentDefinition !== undefined) {
-      validateAgentDefinition(request.agentDefinition);
-    }
+    validateAgentDefinitionOverrides(request.overrides);
     validateMCPServerHeaders(request.mcpServerHeaders);
     const idempotencyKey = request.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
     const generatedRequest = invocationRequestToWire(request, idempotencyKey);
@@ -1646,14 +1674,25 @@ export class Client {
    * independent resource IDs.
    */
   async createAgentDefinition<TOutput extends object = JsonObject>(
-    definition: AgentDefinition<TOutput>,
-    idempotencyKey = `nvoken-${globalThis.crypto.randomUUID()}`,
+    options: CreateAgentDefinitionOptions<TOutput>,
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
-    validateAgentDefinition(definition);
+    validateAgentDefinition(options.definition);
+    if (!options.definitionKey || !options.name) {
+      throw new NvokenError("validation", "definitionKey and name are required");
+    }
+    const idempotencyKey = options.idempotencyKey
+      ?? `nvoken-${globalThis.crypto.randomUUID()}`;
     return await this.replaySafe(
       () => this.agentDefinitions.createAgentDefinition(
-        { idempotencyKey, agentDefinitionWrite: agentDefinitionToWire(definition) },
+        {
+          idempotencyKey,
+          agentDefinitionCreate: agentDefinitionToWire(
+            options.definition,
+            options.name,
+            options.definitionKey,
+          ) as AgentDefinitionCreate,
+        },
         { signal },
       ),
       signal,
@@ -1670,6 +1709,20 @@ export class Client {
     );
   }
 
+  getAgentDefinitionRevision(
+    agentDefinitionId: string,
+    revision: number,
+    signal?: AbortSignal,
+  ): Promise<AgentDefinitionResource> {
+    return this.replaySafe(
+      () => this.agentDefinitions.getAgentDefinitionRevision(
+        { agentDefinitionId, revision },
+        { signal },
+      ),
+      signal,
+    );
+  }
+
   listAgentDefinitions(
     options: ListAgentDefinitionsOptions = {},
     signal?: AbortSignal,
@@ -1682,16 +1735,18 @@ export class Client {
 
   updateAgentDefinition<TOutput extends object = JsonObject>(
     agentDefinitionId: string,
-    expectedRevision: number,
-    definition: AgentDefinition<TOutput>,
+    options: UpdateAgentDefinitionOptions<TOutput>,
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
-    validateAgentDefinition(definition);
+    validateAgentDefinition(options.definition);
+    if (!options.name) {
+      throw new NvokenError("validation", "name is required");
+    }
     return this.replaySafe(
       () => this.agentDefinitions.updateAgentDefinition({
         agentDefinitionId,
-        ifMatch: `"${expectedRevision}"`,
-        agentDefinitionWrite: agentDefinitionToWire(definition),
+        ifMatch: `"${options.expectedRevision}"`,
+        agentDefinitionWrite: agentDefinitionToWire(options.definition, options.name),
       }, { signal }),
       signal,
     );
@@ -2194,9 +2249,6 @@ export interface AnswerToolCallsOptions {
 }
 
 export class Agent<TOutput extends object = JsonObject> {
-  readonly model?: Model;
-  private readonly definition?: AgentDefinition<TOutput>;
-  private readonly definitionId?: string;
   private readonly hostTools: Map<string, HostTool<object>>;
   /**
    * Tools nvoken delivers over HTTPS. They can appear in a waiting Invocation's
@@ -2211,31 +2263,13 @@ export class Agent<TOutput extends object = JsonObject> {
     readonly client: Client,
     readonly options: AgentOptions<TOutput>,
   ) {
-    if (!options.agentKey) {
-      throw new NvokenError("validation", "agentKey is required");
-    }
-    if ("agentDefinitionId" in options && options.agentDefinitionId !== undefined) {
-      if (!options.agentDefinitionId) {
-        throw new NvokenError("validation", "agentDefinitionId cannot be empty");
-      }
-      this.definitionId = options.agentDefinitionId;
-    } else {
-      const {
-        agentKey: _agentKey,
-        agentDefinitionId: _agentDefinitionId,
-        model,
-        mcpServerHeaders: _mcpServerHeaders,
-        providerKeys: _providerKeys,
-        webhook: _webhook,
-        onBudgetExhausted: _onBudgetExhausted,
-        ...execution
-      } = options;
-      if (execution.instructions !== undefined && !execution.instructions.trim()) {
-        throw new NvokenError("validation", "instructions cannot be blank");
-      }
-      this.model = model ?? client.defaultModel ?? missingModel();
-      validateModel(this.model);
-      this.definition = { ...execution, model: this.model } as AgentDefinition<TOutput>;
+    const hasAgentId = "agentId" in options && Boolean(options.agentId);
+    const hasAgentKey = "agentKey" in options && Boolean(options.agentKey);
+    if (hasAgentId === hasAgentKey) {
+      throw new NvokenError(
+        "validation",
+        "supply exactly one of agentId and agentKey",
+      );
     }
     this.hostTools = new Map(
       (options.tools ?? [])
@@ -2282,20 +2316,18 @@ export class Agent<TOutput extends object = JsonObject> {
     options: InvocationOptions,
     idempotencyKey = options.idempotencyKey,
   ): InvokeRequest<TOutput> {
-    const definitionSelection: ReferencedAgentDefinitionRequest | InlineAgentDefinitionRequest<TOutput> =
-      this.definitionId !== undefined
-        ? { agentDefinitionId: this.definitionId }
-        : { agentDefinition: this.definition! };
-    const request: InvokeRequestBase & (
-      ReferencedAgentDefinitionRequest | InlineAgentDefinitionRequest<TOutput>
-    ) = {
-      agentKey: this.options.agentKey,
-      tenantKey: options.tenantKey,
+    const identity: AgentIdentityRequest = "agentId" in this.options
+      ? { agentId: this.options.agentId! }
+      : { agentKey: this.options.agentKey };
+    const request: InvokeRequestBase & AgentIdentityRequest = {
+      ...identity,
+      tenantKey: this.options.tenantKey,
       idempotencyKey,
+      agentRevision: options.agentRevision,
+      overrides: options.overrides,
       ifActive: options.ifActive,
       onBudgetExhausted: options.onBudgetExhausted ?? this.options.onBudgetExhausted,
       input,
-      ...definitionSelection,
       mcpServerHeaders: this.options.mcpServerHeaders,
       providerKeys: this.options.providerKeys,
       // A per-call target overrides the agent default so one Agent can webhook
@@ -2877,8 +2909,8 @@ function sessionOptionsToWire(
   options: SessionOptions | undefined,
 ): GeneratedSessionOptions | undefined {
   if (options === undefined) return undefined;
-	if (options.compaction === undefined && options.retention === undefined
-	  && options.metadata === undefined) {
+  if (options.compaction === undefined && options.retention === undefined
+    && options.metadata === undefined && options.pinnedRevision === undefined) {
     throw new NvokenError("validation", "sessionOptions requires at least one member");
   }
   return {
@@ -2891,7 +2923,8 @@ function sessionOptionsToWire(
     retention: options.retention === undefined
       ? undefined
       : { ttlSeconds: options.retention.ttlSeconds },
-	metadata: options.metadata === undefined ? undefined : { ...options.metadata },
+    metadata: options.metadata === undefined ? undefined : { ...options.metadata },
+    pinnedRevision: options.pinnedRevision,
   };
 }
 
@@ -2901,12 +2934,16 @@ function sessionOptionsToWire(
  */
 function agentDefinitionToWire<TOutput extends object>(
   definition: AgentDefinition<TOutput>,
+  name: string,
+  definitionKey?: string,
 ): AgentDefinitionWrite {
   const outputSchema = definition.outputSchema
     ? schemaToJSON(definition.outputSchema, "output")
     : undefined;
   if (outputSchema) preflightOutputSchema(outputSchema);
   return {
+    definitionKey,
+    name,
     instructions: definition.instructions,
     model: definition.model,
     sampling: definition.sampling === undefined
@@ -2973,8 +3010,13 @@ function invocationRequestToWire<TOutput extends object>(
   // renders its own wire request, gets the same bounds.
   validateContext(request.context);
   return {
-    agentKey: request.agentKey,
+    agentId: "agentId" in request ? request.agentId : undefined,
+    agentKey: "agentKey" in request ? request.agentKey : undefined,
     tenantKey: request.tenantKey,
+    agentRevision: request.agentRevision,
+    overrides: request.overrides === undefined
+      ? undefined
+      : agentDefinitionOverridesToWire(request.overrides),
     sessionId: request.sessionId,
     sessionKey: request.sessionKey,
     sessionOptions: sessionOptionsToWire(request.sessionOptions),
@@ -2985,10 +3027,6 @@ function invocationRequestToWire<TOutput extends object>(
     input: typeof request.input === "string"
       ? request.input
       : request.input.map((block) => inputBlockToWire(block)),
-    agentDefinitionId: request.agentDefinitionId,
-    agentDefinition: request.agentDefinition === undefined
-      ? undefined
-      : agentDefinitionToWire(request.agentDefinition),
     mcpServerHeaders: request.mcpServerHeaders?.map((entry) => ({
       name: entry.name,
       headers: { ...entry.headers },
@@ -3020,11 +3058,38 @@ function validateAgentDefinition<TOutput extends object>(
   }
 }
 
-/**
- * Checks the per-turn MCP secret headers. With an inline definition every entry
- * must name a server it declares; a referenced definition is opaque here, so
- * those names are left to the service.
- */
+function validateAgentDefinitionOverrides<TOutput extends object>(
+  overrides: AgentDefinitionOverrides<TOutput> | undefined,
+): void {
+  if (overrides === undefined) return;
+  if (Object.keys(overrides).length === 0) {
+    throw new NvokenError("validation", "overrides require at least one member");
+  }
+  if (overrides.model !== undefined) validateModel(overrides.model);
+  if (overrides.outputSchema !== undefined) {
+    preflightOutputSchema(schemaToJSON(overrides.outputSchema, "output"));
+  }
+}
+
+function agentDefinitionOverridesToWire<TOutput extends object>(
+  overrides: AgentDefinitionOverrides<TOutput>,
+): CreateInvocationRequest["overrides"] {
+  const outputSchema = overrides.outputSchema === undefined
+    ? undefined
+    : schemaToJSON(overrides.outputSchema, "output");
+  if (outputSchema !== undefined) preflightOutputSchema(outputSchema);
+  return {
+    model: overrides.model,
+    sampling: overrides.sampling === undefined ? undefined : { ...overrides.sampling },
+    reasoning: overrides.reasoning === undefined ? undefined : { ...overrides.reasoning },
+    toolChoice: overrides.toolChoice === undefined ? undefined : { ...overrides.toolChoice },
+    limits: overrides.limits,
+    outputSchema,
+  };
+}
+
+/** Checks the shape and uniqueness of per-turn MCP secret headers. The service
+ * validates each name against the selected Agent Definition revision. */
 function validateMCPServerHeaders(
   entries: readonly MCPServerHeaders[] | undefined,
 ): void {

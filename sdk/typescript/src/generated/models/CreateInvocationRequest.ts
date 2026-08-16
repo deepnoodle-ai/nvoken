@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { AgentDefinitionOverrides } from './AgentDefinitionOverrides.js';
+import {
+    AgentDefinitionOverridesFromJSON,
+    AgentDefinitionOverridesFromJSONTyped,
+    AgentDefinitionOverridesToJSON,
+    AgentDefinitionOverridesToJSONTyped,
+} from './AgentDefinitionOverrides.js';
 import type { WebhookTarget } from './WebhookTarget.js';
 import {
     WebhookTargetFromJSON,
@@ -48,13 +55,6 @@ import {
     SessionOptionsToJSON,
     SessionOptionsToJSONTyped,
 } from './SessionOptions.js';
-import type { AgentDefinitionWrite } from './AgentDefinitionWrite.js';
-import {
-    AgentDefinitionWriteFromJSON,
-    AgentDefinitionWriteFromJSONTyped,
-    AgentDefinitionWriteToJSON,
-    AgentDefinitionWriteToJSONTyped,
-} from './AgentDefinitionWrite.js';
 import type { MCPServerHeaders } from './MCPServerHeaders.js';
 import {
     MCPServerHeadersFromJSON,
@@ -70,14 +70,19 @@ import {
  */
 export interface CreateInvocationRequest {
     /**
-     * Stable caller-controlled Agent key, unique within the
-     * authenticated App. The resulting Agent anchor stores identity
-     * only and is shared across that App's tenant partitions.
+     * Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+     * @type {string}
+     * @memberof CreateInvocationRequest
+     */
+    agentId?: string;
+    /**
+     * Stable caller-controlled Agent key, unique within the effective
+     * tenant. Mutually exclusive with `agent_id`.
      *
      * @type {string}
      * @memberof CreateInvocationRequest
      */
-    agentKey: string;
+    agentKey?: string;
     /**
      * Optional tenant partition. For Session-key resolution or a new
      * Session, precedence is credential constraint, this explicit value,
@@ -160,9 +165,9 @@ export interface CreateInvocationRequest {
      * where you never saw the response, and you get the original turn
      * back instead of starting a second one.
      *
-     * Keys are scoped to the tenant and `agent_key`, so the same key
-     * under a different tenant is a different request. Deduplication
-     * lasts as long as the original turn still exists.
+     * Keys are scoped to the tenant and resolved Agent, so the same key
+     * under a different tenant or Agent is a different request.
+     * Deduplication lasts as long as the original turn still exists.
      *
      * @type {string}
      * @memberof CreateInvocationRequest
@@ -230,24 +235,17 @@ export interface CreateInvocationRequest {
      */
     webhook?: WebhookTarget;
     /**
-     * Stable resource ID to resolve for this turn. IDs from another App,
-     * or IDs that do not exist, return `agent_definition_not_found`.
-     * Idempotent replay compares this stable ID and returns the original
-     * admitted revision even when the resource has advanced.
-     *
-     * @type {string}
+     * Optional one-turn revision pin, ahead of Session and Agent pins.
+     * @type {number}
      * @memberof CreateInvocationRequest
      */
-    agentDefinitionId?: string;
+    agentRevision?: number;
     /**
-     * Full definition for this turn. nvoken records an immutable snapshot
-     * and returns its generated `agent_definition_id` and revision on the
-     * Invocation. Mutually exclusive with `agent_definition_id`.
      *
-     * @type {AgentDefinitionWrite}
+     * @type {AgentDefinitionOverrides}
      * @memberof CreateInvocationRequest
      */
-    agentDefinition?: AgentDefinitionWrite;
+    overrides?: AgentDefinitionOverrides;
     /**
      * Per-Invocation secret headers keyed to MCP server names in the
      * selected Agent Definition. Encrypted for this turn and never stored
@@ -301,7 +299,6 @@ export type CreateInvocationRequestOnBudgetExhaustedEnum = typeof CreateInvocati
  * Check if a given object implements the CreateInvocationRequest interface.
  */
 export function instanceOfCreateInvocationRequest(value: object): value is CreateInvocationRequest {
-    if (!('agentKey' in value) || value['agentKey'] === undefined) return false;
     if (!('idempotencyKey' in value) || value['idempotencyKey'] === undefined) return false;
     if (!('input' in value) || value['input'] === undefined) return false;
     return true;
@@ -317,7 +314,8 @@ export function CreateInvocationRequestFromJSONTyped(json: any, ignoreDiscrimina
     }
     return {
 
-        'agentKey': json['agent_key'],
+        'agentId': json['agent_id'] == null ? undefined : json['agent_id'],
+        'agentKey': json['agent_key'] == null ? undefined : json['agent_key'],
         'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
         'userKey': json['user_key'] == null ? undefined : json['user_key'],
         'sessionId': json['session_id'] == null ? undefined : json['session_id'],
@@ -330,8 +328,8 @@ export function CreateInvocationRequestFromJSONTyped(json: any, ignoreDiscrimina
         'context': json['context'] == null ? undefined : ((json['context'] as Array<any>).map(InvocationContextItemFromJSON)),
         'input': InvocationInputFromJSON(json['input']),
         'webhook': json['webhook'] == null ? undefined : WebhookTargetFromJSON(json['webhook']),
-        'agentDefinitionId': json['agent_definition_id'] == null ? undefined : json['agent_definition_id'],
-        'agentDefinition': json['agent_definition'] == null ? undefined : AgentDefinitionWriteFromJSON(json['agent_definition']),
+        'agentRevision': json['agent_revision'] == null ? undefined : json['agent_revision'],
+        'overrides': json['overrides'] == null ? undefined : AgentDefinitionOverridesFromJSON(json['overrides']),
         'mcpServerHeaders': json['mcp_server_headers'] == null ? undefined : ((json['mcp_server_headers'] as Array<any>).map(MCPServerHeadersFromJSON)),
         'providerKeys': json['provider_keys'] == null ? undefined : ((json['provider_keys'] as Array<any>).map(ProviderKeySelectionFromJSON)),
     };
@@ -348,6 +346,7 @@ export function CreateInvocationRequestToJSONTyped(value?: CreateInvocationReque
 
     return {
 
+        'agent_id': value['agentId'],
         'agent_key': value['agentKey'],
         'tenant_key': value['tenantKey'],
         'user_key': value['userKey'],
@@ -361,8 +360,8 @@ export function CreateInvocationRequestToJSONTyped(value?: CreateInvocationReque
         'context': value['context'] == null ? undefined : ((value['context'] as Array<any>).map(InvocationContextItemToJSON)),
         'input': InvocationInputToJSON(value['input']),
         'webhook': WebhookTargetToJSON(value['webhook']),
-        'agent_definition_id': value['agentDefinitionId'],
-        'agent_definition': AgentDefinitionWriteToJSON(value['agentDefinition']),
+        'agent_revision': value['agentRevision'],
+        'overrides': AgentDefinitionOverridesToJSON(value['overrides']),
         'mcp_server_headers': value['mcpServerHeaders'] == null ? undefined : ((value['mcpServerHeaders'] as Array<any>).map(MCPServerHeadersToJSON)),
         'provider_keys': value['providerKeys'] == null ? undefined : ((value['providerKeys'] as Array<any>).map(ProviderKeySelectionToJSON)),
     };

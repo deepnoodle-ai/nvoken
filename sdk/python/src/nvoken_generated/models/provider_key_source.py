@@ -20,7 +20,7 @@ from typing_extensions import Self
 
 class ProviderKeySource(str, Enum):
     """
-    ProviderKeySource
+    Which account pays for a model call. Installations choose which sources they enable: a BYOK-disabled installation (nvoken Cloud today) refuses `caller_ephemeral`, `app_byok`, and `tenant_byok` selections and provider key storage, and every call runs on its system provider keys.
     """
 
     """

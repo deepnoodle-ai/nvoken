@@ -14,6 +14,11 @@ use serde::{Deserialize, Serialize};
 /// AgentDefinitionWrite : Complete writable Agent Definition fields. The model string shorthand is accepted on write. Identity, revision, and timestamps are read-only.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AgentDefinitionWrite {
+    /// Caller-chosen immutable key. Required on creation and omitted on replacement.
+    #[serde(rename = "definition_key", skip_serializing_if = "Option::is_none")]
+    pub definition_key: Option<String>,
+    #[serde(rename = "name")]
+    pub name: String,
     /// Optional model instructions. Omission adds no hidden default.
     #[serde(rename = "instructions", skip_serializing_if = "Option::is_none")]
     pub instructions: Option<String>,
@@ -45,8 +50,10 @@ pub struct AgentDefinitionWrite {
 
 impl AgentDefinitionWrite {
     /// Complete writable Agent Definition fields. The model string shorthand is accepted on write. Identity, revision, and timestamps are read-only.
-    pub fn new(model: models::ModelInput) -> AgentDefinitionWrite {
+    pub fn new(name: String, model: models::ModelInput) -> AgentDefinitionWrite {
         AgentDefinitionWrite {
+            definition_key: None,
+            name,
             instructions: None,
             model: Box::new(model),
             sampling: None,

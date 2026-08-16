@@ -22,6 +22,7 @@ type onboardingSession struct {
 	id       string
 	key      string
 	agentID  string
+	agentKey string
 	messages []map[string]any
 	facts    map[string]string
 }
@@ -189,9 +190,10 @@ func (s *onboardingState) resolveSession(input onboardingCreateRequest) (*onboar
 	}
 	if input.SessionKey == nil || *input.SessionKey == "" {
 		session := &onboardingSession{
-			id:      onboardingID("sesn", s.next+1),
-			agentID: onboardingID("agnt", s.next+1),
-			facts:   map[string]string{},
+			id:       onboardingID("sesn", s.next+1),
+			agentID:  onboardingID("agent", s.next+1),
+			agentKey: input.AgentKey,
+			facts:    map[string]string{},
 		}
 		s.sessionsByID[session.id] = session
 		return session, true
@@ -200,10 +202,11 @@ func (s *onboardingState) resolveSession(input onboardingCreateRequest) (*onboar
 		return session, true
 	}
 	session := &onboardingSession{
-		id:      onboardingID("sesn", s.next+1),
-		key:     *input.SessionKey,
-		agentID: onboardingID("agnt", s.next+1),
-		facts:   map[string]string{},
+		id:       onboardingID("sesn", s.next+1),
+		key:      *input.SessionKey,
+		agentID:  onboardingID("agent", s.next+1),
+		agentKey: input.AgentKey,
+		facts:    map[string]string{},
 	}
 	s.sessionsByID[session.id] = session
 	s.sessionsByKey[session.key] = session
@@ -355,6 +358,7 @@ func (s *onboardingState) getSession(response http.ResponseWriter, request *http
 	writeJSON(response, http.StatusOK, map[string]any{
 		"id":                       session.id,
 		"agent_id":                 session.agentID,
+		"pinned_revision":          nil,
 		"tenant_key":               nil,
 		"session_key":              session.key,
 		"user_key":                 nil,
@@ -403,9 +407,11 @@ func onboardingInvocation(
 	return map[string]any{
 		"id":                           id,
 		"agent_id":                     session.agentID,
+		"agent_key":                    session.agentKey,
 		"session_id":                   session.id,
 		"user_key":                     nil,
 		"agent_definition_id":          onboardingID("def", 1),
+		"agent_definition_revision":    1,
 		"agent_definition":             nil,
 		"context":                      nil,
 		"status":                       status,

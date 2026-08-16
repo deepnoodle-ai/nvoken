@@ -11,7 +11,8 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-///
+/// ProviderKeySource : Which account pays for a model call. Installations choose which sources they enable: a BYOK-disabled installation (nvoken Cloud today) refuses `caller_ephemeral`, `app_byok`, and `tenant_byok` selections and provider key storage, and every call runs on its system provider keys.
+/// Which account pays for a model call. Installations choose which sources they enable: a BYOK-disabled installation (nvoken Cloud today) refuses `caller_ephemeral`, `app_byok`, and `tenant_byok` selections and provider key storage, and every call runs on its system provider keys.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum ProviderKeySource {
     #[serde(rename = "caller_ephemeral")]

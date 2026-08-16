@@ -44,6 +44,7 @@ class Session(BaseModel):
     forked_from: Optional[SessionForkLineage] = Field(default=None, description="Durable source prefix lineage, or null for an original Session.")
     compaction: Optional[CompactionPolicy] = Field(default=None, description="The automatic compaction policy this Session actually applies, or null when it compacts nothing. It is echoed resolved: a request that asked for `trigger_tokens: auto` reads back the integer that resolved to, and a request that named no model reads back the model the policy bound. Nothing here is ever the unresolved request. ")
     retention: Optional[RetentionPolicy] = Field(default=None, description="The idle retention window this Session was created with, or null when it is retained until deleted explicitly. A window outside the supported range is refused at creation rather than clamped, so what is read back is always exactly what applies. ")
+    pinned_revision: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(description="Immutable Session-level Definition revision pin, or null to follow the Agent.")
     expires_at: Optional[datetime] = Field(default=None, description="When nvoken may automatically delete this Session, or null if it has no retention window. The date moves forward every time a turn starts and every time one finishes, so a Session in active use never reaches it. ")
     metadata: Optional[Dict[str, Annotated[str, Field(strict=True, max_length=512)]]] = Field(default=None, description="Host correlation data, returned verbatim. Set at creation through `session_options.metadata` and changed with `PATCH /v1/sessions/{session_id}`. ")
     active_invocation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="The queued, running, waiting, or paused Invocation, if one exists.")
@@ -54,7 +55,7 @@ class Session(BaseModel):
     created_at: datetime
     updated_at: datetime
     tool_calls: Optional[List[ToolCallSummary]] = Field(default=None, description="Tool calls of the active Invocation, with their current status. The ones still yours to run carry `arguments` and `deadline_at`. Omitted when no Invocation is active. ")
-    __properties: ClassVar[List[str]] = ["id", "agent_id", "tenant_key", "session_key", "user_key", "forked_from", "compaction", "retention", "expires_at", "metadata", "active_invocation_id", "active_invocation_status", "credit_block", "context", "usage", "created_at", "updated_at", "tool_calls"]
+    __properties: ClassVar[List[str]] = ["id", "agent_id", "tenant_key", "session_key", "user_key", "forked_from", "compaction", "retention", "pinned_revision", "expires_at", "metadata", "active_invocation_id", "active_invocation_status", "credit_block", "context", "usage", "created_at", "updated_at", "tool_calls"]
 
     @field_validator('active_invocation_status')
     def active_invocation_status_validate_enum(cls, value):
@@ -165,6 +166,11 @@ class Session(BaseModel):
         if self.retention is None and "retention" in self.model_fields_set:
             _dict['retention'] = None
 
+        # set to None if pinned_revision (nullable) is None
+        # and model_fields_set contains the field
+        if self.pinned_revision is None and "pinned_revision" in self.model_fields_set:
+            _dict['pinned_revision'] = None
+
         # set to None if expires_at (nullable) is None
         # and model_fields_set contains the field
         if self.expires_at is None and "expires_at" in self.model_fields_set:
@@ -220,6 +226,7 @@ class Session(BaseModel):
             "forked_from": SessionForkLineage.from_dict(obj["forked_from"]) if obj.get("forked_from") is not None else None,
             "compaction": CompactionPolicy.from_dict(obj["compaction"]) if obj.get("compaction") is not None else None,
             "retention": RetentionPolicy.from_dict(obj["retention"]) if obj.get("retention") is not None else None,
+            "pinned_revision": obj.get("pinned_revision"),
             "expires_at": obj.get("expires_at"),
             "metadata": obj.get("metadata"),
             "active_invocation_id": obj.get("active_invocation_id"),

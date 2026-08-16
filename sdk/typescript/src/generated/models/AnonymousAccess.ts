@@ -22,8 +22,8 @@ import {
 } from './Money.js';
 
 /**
- * Complete managed-anonymous mode. The Definition must be live,
- * App-owned, client-capable, and either have no memory or explicitly use
+ * Complete managed-anonymous mode. The Agent and its Definition must be
+ * live and App-owned; the Definition must be client-capable and either have no memory or explicitly use
  * user-scoped memory. The positive USD allowance is a lifetime retained-
  * cost ceiling for one opaque visitor subject. Clearing browser storage
  * can create a new subject, so the anonymous admission ceiling, tenant
@@ -34,23 +34,11 @@ import {
  */
 export interface AnonymousAccess {
     /**
-     * App-local tenant partition funded for public traffic.
+     * Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
      * @type {string}
      * @memberof AnonymousAccess
      */
-    tenantKey: string;
-    /**
-     * Stable Agent identity used for every anonymous turn.
-     * @type {string}
-     * @memberof AnonymousAccess
-     */
-    agentKey: string;
-    /**
-     * Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-     * @type {string}
-     * @memberof AnonymousAccess
-     */
-    agentDefinitionId: string;
+    agentId: string;
     /**
      *
      * @type {Money}
@@ -69,9 +57,7 @@ export interface AnonymousAccess {
  * Check if a given object implements the AnonymousAccess interface.
  */
 export function instanceOfAnonymousAccess(value: object): value is AnonymousAccess {
-    if (!('tenantKey' in value) || value['tenantKey'] === undefined) return false;
-    if (!('agentKey' in value) || value['agentKey'] === undefined) return false;
-    if (!('agentDefinitionId' in value) || value['agentDefinitionId'] === undefined) return false;
+    if (!('agentId' in value) || value['agentId'] === undefined) return false;
     if (!('visitorAllowance' in value) || value['visitorAllowance'] === undefined) return false;
     if (!('maxAdmissionsPerMinute' in value) || value['maxAdmissionsPerMinute'] === undefined) return false;
     return true;
@@ -87,9 +73,7 @@ export function AnonymousAccessFromJSONTyped(json: any, ignoreDiscriminator: boo
     }
     return {
 
-        'tenantKey': json['tenant_key'],
-        'agentKey': json['agent_key'],
-        'agentDefinitionId': json['agent_definition_id'],
+        'agentId': json['agent_id'],
         'visitorAllowance': MoneyFromJSON(json['visitor_allowance']),
         'maxAdmissionsPerMinute': json['max_admissions_per_minute'],
     };
@@ -106,9 +90,7 @@ export function AnonymousAccessToJSONTyped(value?: AnonymousAccess | null, ignor
 
     return {
 
-        'tenant_key': value['tenantKey'],
-        'agent_key': value['agentKey'],
-        'agent_definition_id': value['agentDefinitionId'],
+        'agent_id': value['agentId'],
         'visitor_allowance': MoneyToJSON(value['visitorAllowance']),
         'max_admissions_per_minute': value['maxAdmissionsPerMinute'],
     };

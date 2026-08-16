@@ -19,6 +19,10 @@
  */
 export const ErrorCode = {
     InvalidRequest: 'invalid_request',
+    AgentNotFound: 'agent_not_found',
+    AgentArchived: 'agent_archived',
+    AgentKeyConflict: 'agent_key_conflict',
+    AgentPinInvalid: 'agent_pin_invalid',
     AgentDefinitionNotFound: 'agent_definition_not_found',
     AgentDefinitionRevisionConflict: 'agent_definition_revision_conflict',
     PreconditionRequired: 'precondition_required',

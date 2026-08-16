@@ -11,18 +11,12 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// AnonymousAccess : Complete managed-anonymous mode. The Definition must be live, App-owned, client-capable, and either have no memory or explicitly use user-scoped memory. The positive USD allowance is a lifetime retained- cost ceiling for one opaque visitor subject. Clearing browser storage can create a new subject, so the anonymous admission ceiling, tenant Credits, and App admission limits remain aggregate hard caps.
+/// AnonymousAccess : Complete managed-anonymous mode. The Agent and its Definition must be live and App-owned; the Definition must be client-capable and either have no memory or explicitly use user-scoped memory. The positive USD allowance is a lifetime retained- cost ceiling for one opaque visitor subject. Clearing browser storage can create a new subject, so the anonymous admission ceiling, tenant Credits, and App admission limits remain aggregate hard caps.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AnonymousAccess {
-    /// App-local tenant partition funded for public traffic.
-    #[serde(rename = "tenant_key")]
-    pub tenant_key: String,
-    /// Stable Agent identity used for every anonymous turn.
-    #[serde(rename = "agent_key")]
-    pub agent_key: String,
-    /// Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-    #[serde(rename = "agent_definition_id")]
-    pub agent_definition_id: String,
+    /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+    #[serde(rename = "agent_id")]
+    pub agent_id: String,
     #[serde(rename = "visitor_allowance")]
     pub visitor_allowance: Box<models::Money>,
     /// Admission ceiling shared across all anonymous visitor subjects in this tenant.
@@ -31,18 +25,14 @@ pub struct AnonymousAccess {
 }
 
 impl AnonymousAccess {
-    /// Complete managed-anonymous mode. The Definition must be live, App-owned, client-capable, and either have no memory or explicitly use user-scoped memory. The positive USD allowance is a lifetime retained- cost ceiling for one opaque visitor subject. Clearing browser storage can create a new subject, so the anonymous admission ceiling, tenant Credits, and App admission limits remain aggregate hard caps.
+    /// Complete managed-anonymous mode. The Agent and its Definition must be live and App-owned; the Definition must be client-capable and either have no memory or explicitly use user-scoped memory. The positive USD allowance is a lifetime retained- cost ceiling for one opaque visitor subject. Clearing browser storage can create a new subject, so the anonymous admission ceiling, tenant Credits, and App admission limits remain aggregate hard caps.
     pub fn new(
-        tenant_key: String,
-        agent_key: String,
-        agent_definition_id: String,
+        agent_id: String,
         visitor_allowance: models::Money,
         max_admissions_per_minute: u64,
     ) -> AnonymousAccess {
         AnonymousAccess {
-            tenant_key,
-            agent_key,
-            agent_definition_id,
+            agent_id,
             visitor_allowance: Box::new(visitor_allowance),
             max_admissions_per_minute,
         }
